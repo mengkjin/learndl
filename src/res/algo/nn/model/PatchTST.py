@@ -2,6 +2,8 @@
 import torch
 
 from torch import nn , Tensor
+
+from src.proj import Logger
 from .. import layer as Layer
 
 __all__ = ['PatchTST']
@@ -393,10 +395,10 @@ if __name__ == '__main__' :
                                    patch_len = patch_len, stride = stride, 
                                    res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
                                    head_dropout = 0, head_type = 'pretrain', individual = False, verbose=True)
-    print(model_pretrain(x).shape , model_pretrain.pretrain_label(x).shape)
+    Logger.stdout(model_pretrain(x).shape , model_pretrain.pretrain_label(x).shape)
     
     model_predict = ModelPredict(nvars = n_inputs, seq_len = seq_len , d_model = d_model, 
                                  patch_len = patch_len,  stride = stride, predict_steps = predict_steps ,
                                  res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
                                  head_dropout = 0, head_type = 'prediction', individual = False, verbose=True)
-    print(model_predict(x).shape , y.shape)
+    Logger.stdout(model_predict(x).shape , y.shape)

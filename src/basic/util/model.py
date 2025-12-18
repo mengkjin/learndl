@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import MACHINE , PATH
+from src.proj import MACHINE , PATH , Logger
 from src.basic import DB
 from .version import torch_load
 from .calendar import CALENDAR
@@ -365,7 +365,7 @@ class RegisteredModel(ModelPath):
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             if verbose: 
-                print(f'{path} does not exist')
+                Logger.warn(f'{path} does not exist')
             return pd.DataFrame()
         return pd.read_feather(path , **kwargs)
     

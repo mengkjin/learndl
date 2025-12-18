@@ -186,7 +186,7 @@ class MetricCalculator:
                 nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             if print_all_nan and nanpos.all(): 
                 Logger.error('Encountered all nan inputs in metric calculation!')
-                [print(arg) for arg in args]
+                [Logger.stdout(arg) for arg in args]
             args = [None if arg is None else arg[~nanpos] for arg in args]
         return args
 

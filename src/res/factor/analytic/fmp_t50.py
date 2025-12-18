@@ -3,7 +3,7 @@ from typing import Any , Type
 
 from src.proj import Timer
 
-from src.res.factor.util import StockFactor , Universe
+from src.res.factor.util import StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.top_pf import Plotter
 from src.res.factor.util.stat import top_pf as Stat
@@ -79,12 +79,13 @@ class T50FMPTest(BaseFactorAnalyticTest):
         Perf_Year ,
     ]
 
-    def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2 , **kwargs):
+    def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2):
         alpha_models = factor.alpha_models()
-        universe = Universe('top-1000')
-        benchmarks = [universe.to_portfolio(factor.date).rename('univ')]
+        benchmarks = [factor.universe(load = True).to_portfolio().rename('univ')]
         self.update_kwargs(verbosity = verbosity)
-        self.portfolio_group = PortfolioGroupBuilder('top' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , resume = self.resume , resume_path = self.resume_path , caller = self , **self.kwargs)
+        self.portfolio_group = PortfolioGroupBuilder(
+            'top' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 
+            resume = self.resume , resume_path = self.resume_path , caller = self , start_dt = self.start_dt , end_dt = self.end_dt , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):
@@ -96,7 +97,7 @@ class T50FMPTest(BaseFactorAnalyticTest):
     
     def update_kwargs(self , **kwargs):
         self.kwargs.update({
-            'n_best' : 50 ,
+            'n_best' : 50 , 
         })
         self.kwargs.update(kwargs)
         return self

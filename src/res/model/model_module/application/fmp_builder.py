@@ -93,7 +93,7 @@ class ModelPortfolioBuilder:
         for date in dates:
             self.fmp_tables[date] = self.build_day(date) 
             if not SILENT: 
-                print(f'Finished build fmps for {self.reg_model} at date {date}')
+                Logger.stdout(f'Finished build fmps for {self.reg_model} at date {date}')
             if deploy:
                 self.reg_model.save_fmp(self.fmp_tables[date] , date , False)
             self._update_fmps_record.append(date)
@@ -109,7 +109,7 @@ class ModelPortfolioBuilder:
         if resume: 
             self.accountant.load_dir()
         if verbose: 
-            print(f'accounts include names: {self.accountant.account_names}')
+            Logger.stdout(f'accounts include names: {self.accountant.account_names}')
         return self
     
     def account_last_model_dates(self , fmp_names : list[str] | None = None):
@@ -163,13 +163,13 @@ class ModelPortfolioBuilder:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)
             if md._update_fmps_record:
-                print(f'  -->  Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}')
+                Logger.stdout(f'  -->  Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}')
             else:
-                print(f'  -->  No new updating model portfolios for {model}')
+                Logger.stdout(f'  -->  No new updating model portfolios for {model}')
 
             md.accounting(resume = True)
             if md._update_account_record:
-                print(f'  -->  Finish updating model accounting for {model} , len={len(md._update_account_record)}')
+                Logger.stdout(f'  -->  Finish updating model accounting for {model} , len={len(md._update_account_record)}')
             else:
-                print(f'  -->  No new updating model accounting for {model}')
+                Logger.stdout(f'  -->  No new updating model accounting for {model}')
         return md

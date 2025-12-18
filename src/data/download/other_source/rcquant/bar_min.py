@@ -63,7 +63,7 @@ def rcquant_init():
                 rqdatac.init(uri = rcquant_uri)
             output = catcher.contents
             if _print := output['stdout']:
-                print(_print)
+                Logger.stdout(_print)
             if _error := output['stderr']:
                 key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
                 if key_info:
@@ -203,9 +203,9 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
     if len(dts) == 0: 
-        print(f'Skipping: rcquant {data_type} bar min has no date to download')
+        Logger.stdout(f'Skipping: rcquant {data_type} bar min has no date to download')
     for dt in dts:
-        print(f'Download: rcquant {data_type} bar min update date {dt}')
+        Logger.stdout(f'Download: rcquant {data_type} bar min update date {dt}')
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
             Logger.fail(f'rcquant {data_type} bar min {dt} failed')
@@ -213,7 +213,7 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
             Logger.success(f'rcquant {data_type} bar min {dt} success')
 
     for dt in x_mins_target_dates(data_type , date):
-        print(f'Transform: {data_type} X-min bars at {dt} from source rcquant')
+        Logger.stdout(f'Transform: {data_type} X-min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
             min_df = DB.load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'

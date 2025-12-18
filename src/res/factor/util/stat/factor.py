@@ -10,8 +10,8 @@ from .basic import eval_stats , eval_ic_stats , eval_qtile_by_day
 from ..classes import StockFactor , Benchmark
 
 def calc_frontface(factor : StockFactor , benchmark : Benchmark | str | None = None , 
-                          nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                          ret_type : Literal['close' , 'vwap'] = 'close'):
+                   nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
+                   ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
     ic_stats = eval_ic_stats(ic_table , nday = nday)

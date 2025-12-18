@@ -1,4 +1,5 @@
 class Silence:
+    """Silence manager, used to silence most of the project's output"""
     _instance = None
     def __new__(cls):
         if cls._instance is None:
@@ -7,6 +8,8 @@ class Silence:
     def __init__(self): 
         self._silent : bool = False
         self._enable : bool = True
+    def __repr__(self):
+        return f'Silence(silent={self._silent} , enable={self._enable})'
     @property
     def silent(self): 
         return self._silent and self._enable

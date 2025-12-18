@@ -60,9 +60,9 @@ class AutoRunTask:
         4. send email with attachment if in server and email is True
     example:
         with AutoRunTask('daily_update' , 'CALENDAR.update_to()'):
-            print('This is the task...')
+            Logger.stdout('This is the task...')
         with AutoRunTask('daily_update' , '@source'):
-            print('This is the task...')
+            Logger.stdout('This is the task...')
     """
     task_name = TaskName()
     task_key = TaskKey()

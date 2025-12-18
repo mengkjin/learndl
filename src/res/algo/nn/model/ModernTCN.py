@@ -3,6 +3,7 @@ import torch.nn.functional as F
 
 from torch import nn , Tensor
 
+from src.proj import Logger
 from .. import layer as Layer
 
 class ModernTCN(nn.Module):
@@ -345,8 +346,8 @@ if __name__ == '__main__':
 
     x = torch.rand(batch_size , seq_len , nvars)
     y = torch.rand(batch_size , predict_steps)
-    print(x.shape , y.shape)
+    Logger.stdout(x.shape , y.shape)
     embed = ModernTCNEmbed(nvars , d_model , patch_len=patch_len , stride=stride, shared=True)
-    print(embed(x).shape)
+    Logger.stdout(embed(x).shape)
     mtcn = ModernTCN(nvars ,seq_len , d_model , patch_len, stride , predict_steps=predict_steps , head_type='pretrain')
-    print(x.shape , mtcn(x).shape)
+    Logger.stdout(x.shape , mtcn(x).shape)

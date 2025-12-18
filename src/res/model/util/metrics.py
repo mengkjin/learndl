@@ -152,7 +152,7 @@ class Metrics:
             self.output.add_losses(kwargs , prefix = ('penalty_' , 'loss_'))
 
         #if self.output.loss.isnan():
-        #    print(self.output)
+        #    Logger.error(self.output)
         #    raise Exception('nan loss here')
         return self
 

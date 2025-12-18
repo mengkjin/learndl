@@ -51,6 +51,7 @@ class PATH:
     logs        = main.joinpath('logs')
     log_main    = logs.joinpath('main')
     log_catcher = logs.joinpath('catcher')
+    log_profile = logs.joinpath('profile')
 
     # models folder and subfolders
     model       = main.joinpath('models')

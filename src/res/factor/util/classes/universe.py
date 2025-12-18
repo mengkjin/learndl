@@ -72,7 +72,9 @@ class Universe:
     def get_port(self , date : int , safety = True , exclude_bse = True) -> Port:
         return self.get(date , safety , exclude_bse).get(date)
     
-    def to_portfolio(self , dates : list[int] | np.ndarray = []) -> Portfolio:
+    def to_portfolio(self , dates : list[int] | np.ndarray | None = None) -> Portfolio:
+        if dates is None:
+            dates = []
         port = self.get_cache_portfolio(self.name)
         for date in np.setdiff1d(dates, port.port_date):
             port.append(self.get_port(date) , ignore_name = True)

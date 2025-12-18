@@ -39,7 +39,7 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
         main_str += f' applied\n'
         subprocess.run(['powerprofilesctl', 'set', mode])
     if verbose: 
-        print(main_str , end = '')
+        Logger.stdout(main_str , end = '')
     if log_path is not None:
         log_path.parent.mkdir(parents = True , exist_ok = True)
         with open(log_path, 'a') as log_file:
@@ -130,8 +130,8 @@ class ScriptCmd:
         args_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in self.params.items() if v != ''])
         py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         if MACHINE.is_windows:
-            py_cmd = f'{MACHINE.python_path} -c {self.script} {args_str}'
-            py_cmd = py_cmd.replace("'", "'\"'\"'")
+            py_cmd = f'"{MACHINE.python_path}" -c "{self.script} {args_str}"'
+            py_cmd = py_cmd.replace("'" , "\\'").replace('"' , '\\"')
         else:
             py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         self.py_cmd = py_cmd
@@ -145,7 +145,8 @@ class ScriptCmd:
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; echo \'Task complete. Press any key to exit...\'; read -n 1 -s"'
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
         elif MACHINE.is_windows:
-            self.shell_cmd = f'start cmd /c {self.py_cmd} && pause'
+            # self.shell_cmd = f'start cmd /c "{self.py_cmd} && echo. && echo "Task complete. Press any key to exit..." && pause >nul"'
+            self.shell_cmd = f'start cmd /c "{self.py_cmd} && echo. && echo "Task complete. Press any key to exit..." && timeout /t -1 >nul"'
         elif MACHINE.is_macos:
             self.shell_cmd = ["osascript"] if self.macos_tempfile_method else ["osascript", "-"]
             self.apple_script_cmd = f'''

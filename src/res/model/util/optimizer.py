@@ -5,6 +5,7 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any
 
+from src.proj import Logger
 from src.res.algo.nn.optimizer import sam
 
 from .metrics import BatchMetric
@@ -111,18 +112,18 @@ class Optimizer:
             if param.grad is not None and torch.isnan(param.grad).any():
                 return True
             
-        from src.res import api
+        from src import api
         setattr(api , 'mod', self.trainer)
-        print('total loss has nan gradients: ' , metric.loss)
+        Logger.stdout('total loss has nan gradients: ' , metric.loss)
 
         for key , loss in metric.losses.items():
-            print(key , loss)
+            Logger.stdout(key , loss)
             self.optimizer.zero_grad()
             # if loss.grad_fn is None: continue
             loss.backward(retain_graph = True)
             for name , param in self.net.named_parameters():
                 if param.grad is not None and torch.isnan(param.grad).any():
-                    print(name , param , param.grad)
+                    Logger.stdout(name , param , param.grad)
 
         raise KeyError
 

@@ -3,6 +3,7 @@ import torch
 from torch import nn , Tensor
 from torch.nn.utils.parametrizations import weight_norm
 
+from src.proj import Logger
 from .. import layer as Layer
 
 # 1-d conv resnet
@@ -76,7 +77,7 @@ class _resnet_block_1d(nn.Module):
 
     def forward(self , x : Tensor) -> Tensor:
         if x.shape[-2] != self.dim_in and x.shape[-1] == self.dim_in: 
-            print('auto permute!')
+            Logger.warn('auto permute!')
             x = x.permute(0,2,1) 
         x1 = torch.clip(self.downsample(x) , -self.clip_value , self.clip_value)
         x2 = self.conv(x)
@@ -127,7 +128,7 @@ class _resnet_block_2d(nn.Module):
 
     def forward(self , x : Tensor) -> Tensor:
         if x.shape[1] != self.dim_in and self.dim_in == 1: 
-            print('auto add dim 1 in index 1!')
+            Logger.warn('auto add dim 1 in index 1!')
             x = x.unsqueeze(1)
         x1 = torch.clip(self.downsample(x) , -self.clip_value , self.clip_value)
         x2 = self.conv(x)
@@ -166,9 +167,9 @@ if __name__ == '__main__':
             self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
         def forward(self , x):
             hidden = self.resnet(x)
-            print("hidden shape :" , hidden.shape)
+            Logger.stdout("hidden shape :" , hidden.shape)
             output = self.gru(hidden)[:,-1,:]
-            print("output shape :" , output.shape)
+            Logger.stdout("output shape :" , output.shape)
             return output
         
     class resnet2d_gru(nn.Module):
@@ -179,8 +180,8 @@ if __name__ == '__main__':
         def forward(self , x):
             hidden = self.resnet(x)
             output = self.gru(hidden)[:,-1,:]
-            print("hidden shape :" , hidden.shape)
-            print("output shape :" , output.shape)
+            Logger.stdout("hidden shape :" , hidden.shape)
+            Logger.stdout("output shape :" , output.shape)
             return output
         
 

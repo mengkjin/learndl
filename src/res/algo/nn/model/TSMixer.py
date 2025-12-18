@@ -2,6 +2,7 @@ import torch
 
 from torch import nn , Tensor
 
+from src.proj import Logger
 from .. import layer as Layer
 
 __all__ = ['TSMixer']
@@ -448,10 +449,10 @@ if __name__ == '__main__':
     x = torch.rand(batch_size , seq_len , nvars)
     y = torch.rand(batch_size , predict_steps)
 
-    print(x.shape , y.shape)
+    Logger.stdout(x.shape , y.shape)
     embed = TSMixerEmbed(nvars,d_model,patch_len,stride,mask_ratio=0.4,shared=shared_embedding)
-    print(embed(x).shape , (batch_size , nvars , num_patch , d_model))
+    Logger.stdout(embed(x).shape , (batch_size , nvars , num_patch , d_model))
     net = TSMixer(nvars , seq_len , d_model , patch_len , stride , shared_embedding=shared_embedding , head_type='pretrain' , predict_steps = predict_steps)
-    print(net(x).shape)
+    Logger.stdout(net(x).shape)
 
 

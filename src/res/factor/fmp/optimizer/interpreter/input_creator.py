@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Any
 
+from src.proj import Logger
 from src.data import DATAVENDOR
 from src.res.factor.util import Benchmark , Port , RISK_MODEL
 
@@ -113,7 +114,7 @@ def append_bound_limit(opt_input : Any):
 
     if ld := limitation.get('list_days'):
         df = DATAVENDOR.all_stocks
-        latest_list_dt = DATAVENDOR.td(model_date , -ld).td # noqa
+        latest_list_dt = DATAVENDOR.td(model_date , -ld) # noqa
         pool = df.query('list_dt > @latest_list_dt')['secid'].to_numpy()
         bound_limit.intersect(StockPool.bnd_ub(secid , pool , 0))
 
@@ -140,7 +141,7 @@ def append_bound_range(opt_input : Any):
         elif valname == 'cp':
             value = DATAVENDOR.get_cp(secid , model_date)
         elif valname in ['amt' , 'bv']:
-            print('Warning! [amt] and [bv] not yet define in [get_bound_range]!')
+            Logger.warn('Warning! [amt] and [bv] not yet define in [get_bound_range]!')
             continue
         else:
             raise KeyError(valname)

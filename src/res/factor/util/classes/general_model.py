@@ -48,6 +48,7 @@ class GeneralModel(ABC):
             dates = self.available_dates()
         dates = dates[(dates >= start) & (dates <= end)]
         [self.append(self.load_day_model(date)) for date in dates if date not in self.models]
+        return self
     def copy(self): return deepcopy(self)
     def item(self):
         assert len(self.models) == 1 , f'expect 1 model , but got {len(self.models)}'

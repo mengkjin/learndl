@@ -24,7 +24,7 @@ def all_path_convert():
     file_list = list(PATH.trade_port.glob("**/*.csv"))
     if not file_list:
         return
-    print(f'Converting {len(file_list)} csv files to feather files')
+    Logger.stdout(f'Converting {len(file_list)} csv files to feather files')
     for path in file_list:
         new_path = path.with_suffix('.feather')
         df = pd.read_csv(path)
@@ -150,7 +150,7 @@ class TradingPort:
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
         if reset_port:
-            print(f'Beware: reset port for new build! {self.name}')
+            Logger.warning(f'Beware: reset port for new build! {self.name}')
             port = Portfolio(self.name)
         else:
             if date in self.last_ports:
@@ -220,7 +220,7 @@ class TradingPort:
         if len(date_list) == 0: 
             return pd.DataFrame()
         
-        print(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
+        Logger.stdout(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
         pf = None
         for d in date_list:
             pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf))
@@ -271,7 +271,7 @@ class TradingPort:
 
         if display:
             for name , fig in figs.items():
-                print(f'Figure: {name}:')
+                Logger.stdout(f'Figure: {name}:')
                 Display(fig)
 
         self.analyze_results = rslts

@@ -619,8 +619,8 @@ class TrainConfig(TrainParam):
         stage = -1 , resume = -1 , selection = -1 , makedir = True , start : int | None = None , end : int | None = None , **kwargs
     ):
         
-        self.start  = start
-        self.end    = end
+        self.start  = int(start) if start is not None else None
+        self.end    = int(end) if end is not None else None
         self.Train  = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model  = self.Train.generate_model_param()
 
@@ -948,7 +948,7 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Verbosity    : {self.verbosity}')
 
         
-        print('\n'.join(info_strs))
+        Logger.stdout('\n'.join(info_strs))
         return self
 
     @property

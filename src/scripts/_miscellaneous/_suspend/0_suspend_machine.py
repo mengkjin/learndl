@@ -8,7 +8,7 @@
 
 import subprocess
 from datetime import datetime
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Logger
 from src.app import get_running_scripts
 
 default_log_path = PATH.log_main.joinpath('suspend','suspend_check.log')
@@ -26,7 +26,7 @@ def suspend_this_machine(log_path = default_log_path):
         else:
             main_str = f'{time_str} : Suspension applied\n'
         log_file.write(main_str)
-        print(main_str , end = '')
+        Logger.stdout(main_str , end = '')
     if do_suspend:
         subprocess.run(['systemctl', 'suspend'])
 

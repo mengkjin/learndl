@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from src.proj import Logger
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
 
 __all__ = ['SolverInput' , 'Relaxer' , 'SolveCond' , 'SolveVars']
@@ -149,7 +150,7 @@ class Relaxer:
         for dup_rows in dup_groups:
             if lin_con.lb[dup_rows].max() <= lin_con.ub[dup_rows].min(): 
                 continue
-            print('Deal with conflicted duplicated linear constraints!')
+            Logger.stdout('Deal with conflicted duplicated linear constraints!')
             fx_b = lin_con.lb[dup_rows].max()
             lin_con.lb[dup_rows] = fx_b - 1e-6
             lin_con.ub[dup_rows] = fx_b + 1e-6
@@ -159,26 +160,26 @@ class Relaxer:
         rows = lin_con.A.min(axis = 1) >= 0 # all positive rows
         if np.any(lin_con.ub[rows] < lin_con.A[rows].dot(bnd_con.lb)):
             # bnd lower bound > lin upper bound
-            print('Lift up conflicted linear upper bound to weight bound!')
+            Logger.stdout('Lift up conflicted linear upper bound to weight bound!')
             lin_con.ub[rows] = np.maximum(lin_con.ub[rows] , lin_con.A[rows].dot(bnd_con.lb)) 
             relaxed = True
 
         if np.any(lin_con.lb[rows] > lin_con.A[rows].dot(bnd_con.ub)):
             # bnd upper bound < lin lower bound
-            print('Draw down conflicted linear lower bound to weight bound!')
+            Logger.stdout('Draw down conflicted linear lower bound to weight bound!')
             lin_con.lb[rows] = np.minimum(lin_con.lb[rows] , lin_con.A[rows].dot(bnd_con.ub)) 
             relaxed = True
 
         rows = lin_con.A.max(axis = 1) <= 0 # all negatvie rows
         if np.any(lin_con.ub[rows] < lin_con.A[rows].dot(bnd_con.ub)):
             # bnd lower bound > lin upper bound
-            print('Lift up conflicted linear upper bound to weight bound!')
+            Logger.stdout('Lift up conflicted linear upper bound to weight bound!')
             lin_con.ub[rows] = np.maximum(lin_con.ub[rows] , lin_con.A[rows].dot(bnd_con.ub))
             relaxed = True
 
         if np.any(lin_con.lb[rows] > lin_con.A[rows].dot(bnd_con.lb)):
             # bnd upper bound < lin lower bound
-            print('Draw down conflicted linear lower bound to weight bound!')
+            Logger.stdout('Draw down conflicted linear lower bound to weight bound!')
             lin_con.lb[rows] = np.minimum(lin_con.lb[rows] , lin_con.A[rows].dot(bnd_con.lb))
             relaxed = True
 
@@ -188,7 +189,7 @@ class Relaxer:
         relaxed = False
         if cov_con.te is not None:
             cov_con.te = None
-            print(f'Free turnover constraint!')
+            Logger.stdout(f'Free turnover constraint!')
             relaxed = True
         return relaxed
     
@@ -196,7 +197,7 @@ class Relaxer:
         relaxed = False
         if turn_con.dbl is not None:
             turn_con.dbl = turn_con.dbl * 2
-            print(f'Double turnover constraint to {turn_con.dbl :.2%}!')
+            Logger.stdout(f'Double turnover constraint to {turn_con.dbl :.2%}!')
             relaxed = True
         return relaxed
     
@@ -206,7 +207,7 @@ class Relaxer:
         rng = (lin_con.ub - lin_con.lb) * 0.5
         rows = ((lin_con.A.min(axis = 1) >= 0) + (lin_con.A.max(axis = 1) <= 0)) * (lin_con.type == 'ra')
         if rows.any() > 0:
-            print(f'Expand {rows.sum():d} portional constraint 2 times!')
+            Logger.stdout(f'Expand {rows.sum():d} portional constraint 2 times!')
             lin_con.ub[rows] = lin_con.ub[rows] + rng[rows]
             lin_con.lb[rows] = lin_con.lb[rows] - rng[rows]
             relaxed = True
@@ -219,7 +220,7 @@ class Relaxer:
         rng = (lin_con.ub - lin_con.lb) * (lin_con.type == 'ra') * 0.5
         rows = (lin_con.A.min(axis = 1) < 0) * (lin_con.A.max(axis = 1) > 0) * (lin_con.type == 'ra')
         if rows.any() > 0:
-            print(f'Expand {rows.sum():d} numerial constraint 2 times!')
+            Logger.stdout(f'Expand {rows.sum():d} numerial constraint 2 times!')
             lin_con.ub[rows] = lin_con.ub[rows] + rng[rows]
             lin_con.lb[rows] = lin_con.lb[rows] - rng[rows]
             relaxed = True
@@ -230,7 +231,7 @@ class Relaxer:
         relaxed = False
         if turn_con.dbl is not None:
             turn_con.dbl = None
-            print(f'Free turnover constraint!')
+            Logger.stdout(f'Free turnover constraint!')
             relaxed = True
         return relaxed
 

@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Literal
 
 from src.data.util import trade_min_fillna
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.basic import DB
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
@@ -51,7 +51,7 @@ def extract_js_min(date):
     try:
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
-        print(e)
+        Logger.error(e)
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
 

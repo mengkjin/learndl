@@ -3,6 +3,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Any
 
+from src.proj import Logger
 from ...util import Port , PortCreateResult , PortCreator
 
 DEFAULT_N_BEST = 50
@@ -30,9 +31,9 @@ class TopStocksPortfolioCreatorConfig:
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if print_info:
             if use_kwargs : 
-                print(f'  --> In initializing {cls.__name__}, used kwargs: {use_kwargs}')
+                Logger.stdout(f'  --> In initializing {cls.__name__}, used kwargs: {use_kwargs}')
             if drop_kwargs: 
-                print(f'  --> In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
+                Logger.stdout(f'  --> In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
         return cls(**use_kwargs)
     
     @property

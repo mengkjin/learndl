@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal
 
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Logger
 from src.basic import CALENDAR , DB
 from src.data.util import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 
@@ -295,7 +295,7 @@ class JSFetcher:
         paths_not_exists = {k:p.exists()==0 for k,p in paths.items()}
         if any(paths_not_exists.values()): 
             # something wrong
-            print(f'Something wrong at date {date} on {cls.__name__}.trade_day')
+            Logger.error(f'Something wrong at date {date} on {cls.__name__}.trade_day')
             return FailedData('day' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
@@ -500,7 +500,7 @@ def kline_download(verbose = True):
         _file_list_2 = [f for f in _file_list_2 if filedate(f) > 20230328 and filedate(f) <= end]
         file_list = _file_list_1 + _file_list_2
 
-    # print(f'{len(file_list)} files to download:')
+    # Logger.stdout(f'{len(file_list)} files to download:')
     files = dict(sorted({filedate(f): f for f in file_list}.items()))
     files = {k:v for k,v in files.items() if k in dates}
 
@@ -522,6 +522,6 @@ def kline_download(verbose = True):
             if (path := future.result()) is not None: 
                 paths.append(path)
             if verbose: 
-                print(f'{datetime.datetime.now()} : {date} minute kline download done!')
+                Logger.success(f'{datetime.datetime.now()} : {date} minute kline download done!')
             
     return paths

@@ -46,8 +46,8 @@ class JSDataUpdater():
         paths.sort()
         if del_after_dumping and paths:
             Logger.divider()
-            print(f'Delete {len(paths)} updaters after completion')
-            print(paths)
+            Logger.stdout(f'Delete {len(paths)} updaters after completion')
+            Logger.stdout(paths)
             # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
 
         for tar_filename in paths:
@@ -199,7 +199,7 @@ class JSDataUpdater():
         return paths
 
     def print_unfetch(self):
-        [print(fail) for fail in self.Failed]
+        [Logger.stdout(fail) for fail in self.Failed]
 
     @classmethod
     def update_hfm_terminal(cls):

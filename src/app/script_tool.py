@@ -3,6 +3,7 @@ from pathlib import Path
 
 from typing import Any, Callable
 
+from src.proj import Logger
 from src.basic import AutoRunTask
 from src.app.script_lock import ScriptLockMultiple
 from src.app.backend import BackendTaskRecorder , ScriptHeader
@@ -31,7 +32,7 @@ def _get_caller_path(depth : int = 2):
         caller_info = inspect.getframeinfo(caller_frame)
         path = Path(caller_info.filename).absolute()
     except Exception as e:
-        print(f'get caller directory failed: {e}')
+        Logger.warning(f'get caller directory failed: {e}')
     finally:
         del frame
     return path
@@ -42,14 +43,14 @@ class ScriptTool:
     example:
         @ScriptTool('test_streamlit')
         def test_streamlit(port_name : str , **kwargs):
-            print(port_name)
+            Logger.stdout(port_name)
 
         # equivalent to:
         @BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
         @ScriptLockMultiple('test_streamlit' , lock_num = 2 , timeout = 2)
         @AutoRunTask('test_streamlit' , '@port_name')
         def test_streamlit(port_name : str , **kwargs):
-            print(port_name)
+            Logger.stdout(port_name)
     """
     def __init__(
         self , 

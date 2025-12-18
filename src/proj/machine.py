@@ -30,6 +30,7 @@ def _get_python_path(machine_name : str , main_path : Path):
         return 'python'
 
 def _get_best_device():
+    """Get the best device for the machine: CUDA, MPS, or CPU"""
     if torch.cuda.is_available():
         return torch.cuda.get_device_name(0).upper()
     elif torch.mps.is_available():

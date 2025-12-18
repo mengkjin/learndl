@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Timer , Duration
+from src.proj import Timer , Duration , Logger
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator
@@ -75,7 +75,7 @@ class PortfolioBuilder:
 
         self.creations : list[PortCreateResult] = []
 
-        self.set_build_on(build_on , overwrite)
+        self.set_build_on(build_on ,overwrite)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name=\'{self.full_name}\',kwargs={self.kwargs},'+\
@@ -85,17 +85,15 @@ class PortfolioBuilder:
         path = Path(path)
         if path.exists():
             if path.is_dir():
-                return path.joinpath(f'{self.full_name.lower()}.feather')
+                path = path.joinpath(f'{self.full_name.lower()}.feather')
             else:
                 assert path.suffix == '.feather' , f'{path} is not a feather file'
-                return path
         else:
-            if path.suffix == '.feather':
-                return path
-            else:
-                return path.joinpath(f'{self.full_name.lower()}.feather')
+            if path.suffix != '.feather':
+                path = path.joinpath(f'{self.full_name.lower()}.feather')
+        return path
 
-    def set_build_on(self , build_on : Portfolio | Path | str | None , overwrite : bool = False):
+    def set_build_on(self , build_on : Portfolio | Path | str | None , build_on_start : int = -1 , overwrite : bool = False):
         if build_on is None:
             self.portfolio = Portfolio(self.full_name)
             return self
@@ -106,17 +104,19 @@ class PortfolioBuilder:
         else:
             raise ValueError(f'Unknown build_on type: {type(build_on)}')
         port = port.rename(self.full_name)
+        if build_on_start >= 0:
+            port = port.filter_dates(dates = port.port_date[port.port_date >= build_on_start])
         if not overwrite and port is not None and not port.is_empty:
-            port = port.filter_dates(dates = port.port_date[port.port_date < self.alpha.available_dates().min()] , inplace = True)
+            dates = self.alpha.available_dates()
+            if len(dates) > 0:
+                port = port.filter_dates(dates = port.port_date[port.port_date < dates.min()])
         self.portfolio = port
         return self
 
-    def export_portfolio(self , path : Path | str | None = None):
+    def export_portfolio(self , path : Path | str | None = None , append = False):
         if path is None:
-            return
-        path = self.build_on_path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.portfolio.save(path , overwrite = True)
+            return self
+        self.portfolio.save(self.build_on_path(path) , overwrite = True , append = append)
         return self
     
     @property
@@ -227,6 +227,8 @@ class PortfolioGroupBuilder:
         verbosity : int = 1 ,
         resume : bool = False ,
         resume_path : Path | str | None = None ,
+        start_dt : int = -1 ,
+        end_dt : int = 99991231 ,
         caller = None ,
         **kwargs
     ):
@@ -236,6 +238,7 @@ class PortfolioGroupBuilder:
         assert alpha_models , f'alpha_models must has elements!'
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
         self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([])).astype(int)
+        self.relevant_dates = self.relevant_dates[(self.relevant_dates >= start_dt) & (self.relevant_dates <= end_dt)]
         self.benchmarks = Benchmark.get_benchmarks(benchmarks)
 
         assert add_lag >= 0 , add_lag
@@ -251,6 +254,8 @@ class PortfolioGroupBuilder:
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None else None
         self.caller = caller
+        self.start_dt = start_dt
+        self.end_dt = end_dt
 
         self.builders : list[PortfolioBuilder] = []
         self.accounted = False
@@ -275,7 +280,7 @@ class PortfolioGroupBuilder:
                f'{len(self.lags)}lag,{len(self.param_groups)}kwgs] & {len(self.relevant_dates)} dates, totaling {self.n_builds} builds)'
 
     def builders_info(self):
-        print(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs) and {self.n_builds} (x {len(self.relevant_dates)} dates)')\
+        Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs) and {self.n_builds} (x {len(self.relevant_dates)} dates)')
     
     def builders_setup(self):
         with Timer(f'{self.class_name}.setup' , silent = self.verbosity < 1):
@@ -300,7 +305,7 @@ class PortfolioGroupBuilder:
             return
         with Timer(f'{self.class_name}.export' , silent = self.verbosity < 1):
             for builder in self.builders:
-                builder.export_portfolio(self.resume_path)
+                builder.export_portfolio(self.resume_path , append = self.resume)
         return self
     
     @property
@@ -332,7 +337,7 @@ class PortfolioGroupBuilder:
         _t0 = datetime.now()
         _opt_count = 0
         if self.verbosity > 1:
-            print(f'{self.class_name}.building start')
+            Logger.stdout(f'{self.class_name}.building start')
             
         for self._date in self.relevant_dates:
             for self._builder in self.builders:
@@ -342,19 +347,19 @@ class PortfolioGroupBuilder:
                 _opt_count += 1
                 if self.verbosity > 2 and _opt_count % 100 == 0: 
                     time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].timecost.items()}
-                    print(f'building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
+                    Logger.stdout(f'building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
         if self.verbosity > 0:
             secs = (datetime.now() - _t0).total_seconds()
-            print(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building')
+            Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building')
         self.export_portfolio()
         return self
     
-    def accounting(self , start : int = -1 , end : int = 99991231):
-        with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1):
+    def accounting(self):
+        with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1) , Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv'):
             for builder in self.builders:
                 with Timer(f'  --> {builder.portfolio.name} accounting' , silent = self.verbosity < 2):
-                    builder.accounting(start , end , **self.acc_kwargs)
+                    builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
         self.accounted = True
         return self
     

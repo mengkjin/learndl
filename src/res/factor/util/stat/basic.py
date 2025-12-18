@@ -115,7 +115,6 @@ def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5 , **kwargs):
     n_periods  = 243 / nday
     
     ic_stats   = eval_stats(ic_table).reset_index(drop=False)
-
     ic_stats['direction'] = np.sign(ic_stats['avg'])
     ic_stats['year_ret'] = ic_stats['avg'] * n_periods
     ic_stats['std']      = ic_stats['std'] * np.sqrt(n_periods)

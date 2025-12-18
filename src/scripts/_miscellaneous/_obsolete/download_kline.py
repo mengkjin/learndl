@@ -3,7 +3,7 @@ import zipfile , os
 import pandas as pd
 from pathlib import Path
 
-from src.proj import MACHINE
+from src.proj import MACHINE , Logger
 
 aws_info = MACHINE.local_settings('aws')
 aws_access_key_id = aws_info['aws_access_key_id']
@@ -40,7 +40,7 @@ def kline_download(start = 20100104 , end = 20241226):
         return int(re.findall(r'(\d{8})', x.key)[-1])
     def filefilter(x):
         return x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin')
-    print(start , end)
+
     if start <= 20230328 and end <= 20230328:
         file_list = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
         file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
@@ -54,9 +54,9 @@ def kline_download(start = 20100104 , end = 20241226):
         _file_list_2 = [f for f in _file_list_2 if filedate(f) > 20230328 and filedate(f) <= end]
         file_list = _file_list_1 + _file_list_2
 
-    # print(f'{len(file_list)} files to download:')
+    # Logger.info(f'{len(file_list)} files to download:')
     files = dict(sorted({filedate(f): f for f in file_list}.items()))
-    print(files.keys())
+    Logger.stdout(files.keys())
     import concurrent.futures
     from concurrent.futures import as_completed
 

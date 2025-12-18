@@ -42,11 +42,12 @@ class _Calendars:
 _CLD = _Calendars()
 
 class TradeDate(int):
-    def __init__(self , date : int | Any , force_trade_date = False):
+    def __new__(cls , date : int | Any , *args , **kwargs):
         if isinstance(date , TradeDate):
-            self.cd = date.cd
-            self.td = date.td
-        else:
+            return date
+        return super().__new__(cls , date , *args , **kwargs)
+    def __init__(self , date : int | Any , force_trade_date = False):
+        if not isinstance(date , TradeDate):
             self.cd = int(date)
             if force_trade_date or self.cd < _CLD.min_date or self.cd > _CLD.max_date:
                 self.td : int = self.cd 
@@ -93,7 +94,7 @@ class TradeDate(int):
     def _cls_offset(cls , td0 , n : int):
         td0 = cls(td0)
         if n == 0: 
-            return cls(td0)
+            return td0
         elif td0 < _CLD.min_date or td0 > _CLD.max_date:
             return td0
         cld = _CLD.full.copy()
@@ -179,8 +180,8 @@ class CALENDAR:
     
     @staticmethod
     def cd(date : int | TradeDate , offset : int = 0):
-        d = date.cd if isinstance(date , TradeDate) else date
-        if offset == 0: 
+        d = date.cd if isinstance(date , TradeDate) else int(date)
+        if offset == 0 or d <= _CLD.min_date or d >= _CLD.max_date: 
             return d
         d = datetime.strptime(str(d) , '%Y%m%d') + timedelta(days=offset)
         return int(d.strftime('%Y%m%d'))

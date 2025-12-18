@@ -7,6 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from src.proj import Logger
 from src.func import match_values , index_union , index_stack
 
 from .nd import NdData
@@ -20,6 +21,12 @@ class Stock4DData:
     feature : Any = None
 
     def __post_init__(self) -> None:
+        if isinstance(self.secid , (int , float , str)):
+            self.secid = np.array([self.secid])
+        if isinstance(self.date , (int , float , str)):
+            self.date = np.array([self.date])
+        if isinstance(self.feature , (int , float , str)):
+            self.feature = np.array([self.feature])
         if self.values is not None: 
             if isinstance(self.feature , str): 
                 self.feature = np.array([self.feature])
@@ -38,7 +45,7 @@ class Stock4DData:
         self.feature = None
 
     def asserted(self):
-        if self.shape:
+        if self.initiate:
             assert isinstance(self.values , (np.ndarray , torch.Tensor)) , self.values
             assert self.ndim == 4 , self.shape
             assert self.shape[0] == len(self.secid) , (self.shape[0] , len(self.secid))
@@ -61,6 +68,12 @@ class Stock4DData:
     def ndim(self): return None if self.values is None else self.values.ndim
     @property
     def empty(self): return self.values is None or self.values.size == 0
+    @property
+    def dates(self): return self.date if not self.empty else np.array([])
+    @property
+    def max_date(self): return -1 if self.empty else self.date.max()
+    @property
+    def min_date(self): return 99991231 if self.empty else self.date.min()
 
     def update(self , **kwargs):
         [setattr(self,k,v) for k,v in kwargs.items() if k in ['values','secid','date','feature']]
@@ -71,7 +84,7 @@ class Stock4DData:
     
     @classmethod
     def merge(cls , block_list):
-        blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiate]
+        blocks = [blk for blk in block_list if isinstance(blk , cls) and not blk.empty]
         if len(blocks) == 0: 
             return cls()
         elif len(blocks) == 1: 
@@ -188,28 +201,28 @@ class Stock4DData:
         self.feature = feature.astype(str)
         return self
     
-    def loc(self , fillna : Any = None , **kwargs):
+    def loc(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
         values : np.ndarray | torch.Tensor | Any = self.values
-        for k,v in kwargs.items():  
-            if isinstance(v , (str,int,float)): 
-                kwargs[k] = [v]
-        if 'feature' in kwargs.keys(): 
-            index  = match_values(kwargs['feature'] , self.feature)
+
+        if feature is not None: 
+            index  = match_values(feature , self.feature)
             values = values[:,:,:,index]
-        if 'inday'   in kwargs.keys(): 
-            index  = match_values(kwargs['inday'] , range(values.shape[2]))
+        if inday is not None: 
+            index  = match_values(inday , range(values.shape[2]))
             values = values[:,:,index]
-        if 'date'    in kwargs.keys(): 
-            index  = match_values(kwargs['date'] , self.date)
+        if date is not None: 
+            index  = match_values(date , self.date)
             values = values[:,index]
-        if 'secid'   in kwargs.keys(): 
-            index  = match_values(kwargs['secid'] , self.secid)
+        if secid is not None: 
+            index  = match_values(secid , self.secid)
             values = values[index,:]
         if fillna is not None: 
             if isinstance(values , torch.Tensor): 
                 values = values.nan_to_num(fillna)
-            else: 
-                values[np.isnan(values)] = fillna
+            elif isinstance(values , np.ndarray): 
+                values = np.nan_to_num(values,fillna)
+            else:
+                raise TypeError(f'Unsupported type: {type(values)} for {self.__class__.__name__} values')
         return values
 
 
@@ -233,15 +246,15 @@ class Stock4DData:
         try:
             xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         except Exception as e:
-            print(e)
-            print(df[df.index.duplicated()])
+            Logger.error(e)
+            Logger.stdout(df[df.index.duplicated()])
             raise e
         try:
             value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
         except:
             import src
             setattr(src , 'xarr' , xarr)
-            print(xarr)
+            Logger.stdout(xarr)
             raise
         return value
 

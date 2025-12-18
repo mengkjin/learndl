@@ -2,6 +2,8 @@ import psutil , torch
 from torch.nn import Module
 from typing import Any
 
+from src.proj import Logger
+
 # MPS memory management
 if torch.backends.mps.is_available() == 'mps':
     # clear MPS cache
@@ -65,21 +67,20 @@ class Device:
     def cuda(self , x): return send_to(x , 'cuda')
     def mps(self , x): return send_to(x , 'mps')
     
-    def print(self):
+    def status(self):
         if self.is_cuda:
-            print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
+            Logger.stdout(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
                   f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
         elif self.is_mps:
-            print(f'Allocated {torch.mps.current_allocated_memory() / 1024**3:.1f}G, '+\
+            Logger.stdout(f'Allocated {torch.mps.current_allocated_memory() / 1024**3:.1f}G, '+\
                   f'Driver Allocated {torch.mps.driver_allocated_memory() / 1024**3:.1f}G')
         else:
-            print(f'Not using cuda or mps {self.device}')
+            Logger.stdout(f'Not using cuda or mps {self.device}')
         
 class MemoryPrinter:
     def __repr__(self) -> str:
         return 'Used: {:.2f}G; Free {:.2f}G'.format(
             float(psutil.virtual_memory().used)/1024**3,
             float(psutil.virtual_memory().free)/1024**3)
-    def print(self): print(self.__repr__())
         
         

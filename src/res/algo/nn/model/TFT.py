@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from typing import Any
 import math
 
+from src.proj import Logger
 from src.basic import CONF
 class GatedResidualNetwork(nn.Module):
     """门控残差网络"""
@@ -237,7 +238,7 @@ class TemporalFusionTransformer(nn.Module):
     def show_shape(self , name : str , x : Any , print_shape : bool = False):
         if not print_shape: 
             return
-        print(f"{name}: {x.shape}")
+        Logger.stdout(f"{name}: {x.shape}")
 
     def forward(
         self, x : tuple[torch.Tensor,...] | Any

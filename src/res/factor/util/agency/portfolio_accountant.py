@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Sequence , Any
 
-from src.proj import InstanceRecord
+from src.proj import InstanceRecord , Logger
 from src.basic import CONF
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
@@ -96,9 +96,10 @@ class PortfolioAccountant:
         
         port_min , port_max = self.port_dates.min() , self.port_dates.max()
         start = np.max([port_min , self.config.start])
-        end   = np.min([DATAVENDOR.td(port_max,5).td , self.config.end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1).td])
+        end   = np.min([DATAVENDOR.td(port_max,5) , self.config.end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1)])
 
         model_dates = DATAVENDOR.td_within(start , end)
+
         if len(model_dates) == 0:
             self.account = pd.DataFrame()
             return self
@@ -109,7 +110,7 @@ class PortfolioAccountant:
         else:
             model_dates = np.intersect1d(model_dates , self.port_dates)
             period_st = DATAVENDOR.td_array(model_dates , 1)
-            period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1).td]])
+            period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1)]])
 
         assert np.all(model_dates < period_st) , (model_dates , period_st)
         assert np.all(period_st <= period_ed) , (period_st , period_ed)
@@ -301,7 +302,7 @@ class PortfolioAccountManager:
                 plot = True , display = True , **kwargs):
         dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}
         if not dfs: 
-            print(f'No {category} accounts to account!')
+            Logger.stdout(f'No {category} accounts to account!')
         account = PortfolioAccountant.total_account(dfs)
         
         if account.empty: 

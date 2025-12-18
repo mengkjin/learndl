@@ -4,6 +4,7 @@ import pandas as pd
 
 from typing import Any
 
+from src.proj import Logger
 from src.res.algo.boost.util import BasicBoosterModel , BoosterInput , load_xingye_data
 
 class AdaBoost(BasicBoosterModel):
@@ -101,7 +102,7 @@ class StrongLearner:
                     txt += f', F_idx: {learner.feat_idx}'
                 else:
                     txt += f', F_name: {feature[learner.feat_idx]}'
-                print(txt)
+                Logger.stdout(txt)
         return self
     
     def predict(self , x : np.ndarray | torch.Tensor):
@@ -215,4 +216,4 @@ if __name__ == '__main__':
         ada.fit(BoosterInput.from_dataframe(input_df['train']) , silent = True)
         ic_dfs.append(ada.calc_ic(input_df['test']))
     df = pd.concat([d for d in ic_dfs if not d.empty])
-    print(df)
+    Logger.stdout(df)

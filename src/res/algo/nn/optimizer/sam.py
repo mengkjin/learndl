@@ -17,6 +17,8 @@ from torch.distributed import ReduceOp
 from torch.nn.modules.batchnorm import _BatchNorm
 import torch.distributed
 
+from src.proj import Logger
+
 def disable_running_stats(model):
     def _disable(module):
         if isinstance(module, _BatchNorm):
@@ -160,7 +162,7 @@ class SSAMF(SAM):
         with torch.enable_grad():
             for idx, sample_idx in enumerate(sampled_idxs):
                 if idx % (self.num_samples // 10) == 0:
-                    print(f'Updating Mask: [{idx}/{self.num_samples}]..')
+                    Logger.stdout(f'Updating Mask: [{idx}/{self.num_samples}]..')
 
                 (feature, label) = train_data.dataset[sample_idx]
                 feature = torch.from_numpy(feature).to(self.device).float()
@@ -221,9 +223,9 @@ class SSAMF(SAM):
         assert epoch is not None , f'{self.__class__.__name__} epoch is None'
         assert batch_idx is not None , f'{self.__class__.__name__} batch_idx is None'
         if (epoch % self.update_freq == 0) and (batch_idx == 0):
-            print('\nUpdate Mask!')
+            Logger.stdout('\nUpdate Mask!')
             self.update_mask(model, train_data)
-            print(f'Mask Lived Weight: {self.mask_info():.4f}')
+            Logger.stdout(f'Mask Lived Weight: {self.mask_info():.4f}')
 
     @torch.no_grad()
     def mask_info(self):
@@ -795,7 +797,7 @@ class FriendlySAM(torch.optim.Optimizer):
         self.lmbda = lmbda
         self.adaptive = adaptive
         self.rho = rho
-        print('FriendlySAM sigma:', self.sigma, 'lambda:', self.lmbda)
+        Logger.stdout('FriendlySAM sigma:', self.sigma, 'lambda:', self.lmbda)
 
     @torch.no_grad()
     def first_step(self, zero_grad=False):

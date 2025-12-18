@@ -242,6 +242,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
     ]
 
     def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , verbosity = 1):
+        factor = factor.filter_dates_between(self.start_dt , self.end_dt)
         with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
             for task in self.tasks.values(): 
                 task.calc(factor , benchmarks , verbosity = verbosity - 1)

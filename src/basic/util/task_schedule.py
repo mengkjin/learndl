@@ -105,7 +105,7 @@ class ScheduledTask:
                 env = env,
                 check = True,
             )
-            # print the result
+            # printout the result
             Logger.info(f"command {self.cmdline} executed successfully, return code: {result.returncode}\n")
             self.complete()
         except subprocess.CalledProcessError as e:
@@ -144,7 +144,7 @@ class TaskScheduler:
 
     @classmethod
     def print_machine_tasks(cls):
-        """print all the tasks of the machine"""
+        """printout all the tasks of the machine"""
         tasks = cls.get_machine_tasks()
         for task in tasks.values():
             Logger.warning(f'{task} awaits to be executed')

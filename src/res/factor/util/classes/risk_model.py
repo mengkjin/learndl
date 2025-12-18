@@ -33,7 +33,7 @@ class Rmodel:
         self.C = self.C.loc[comfac , comfac]
         self.S.fillna(self.S.quantile(0.95) , inplace=True)
         self.regressed : int | Any = None
-        self.next_date = DATAVENDOR.td(self.date , 1).td
+        self.next_date = DATAVENDOR.td(self.date , 1)
 
     def assert_valid(self):
         assert self.F.shape[-1] == self.C.shape[0] == self.S.shape[0] == self.C.shape[1], (self.F.shape , self.C.shape , self.S.shape)

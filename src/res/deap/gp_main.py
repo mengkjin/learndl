@@ -11,6 +11,7 @@ from torch.multiprocessing import Pool
 from tqdm import tqdm
 from typing import Literal
 
+from src.proj import Logger
 from src.basic import torch_load
 from . import gp_math_func as MF
 from . import gp_factor_func as FF
@@ -82,20 +83,20 @@ def gp_job_dir(job_id = None , train = True , continuation = False , test_code =
             else:
                 job_id = old_job_id.max()
         job_dir = f'{defaults.DIR_pop}/{job_id}'
-    print(f'**Job Directory is : "{job_dir}"')
+    Logger.stdout(f'**Job Directory is : "{job_dir}"')
     if train:
         if os.path.exists(job_dir) and not continuation: 
             if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
                 raise Exception(f'Deletion Denied!')
             shutil.rmtree(job_dir)
-            print(f'  -->  Start New Training in "{job_dir}"')
+            Logger.stdout(f'  -->  Start New Training in "{job_dir}"')
         #elif os.path.exists(job_dir):
         #    if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Continuation:')[0].lower() == 'y':
         #        raise Exception(f'Continuation Denied!')
         elif not os.path.exists(job_dir) and continuation:
             raise Exception(f'No existing "{job_dir}" for Continuation!')
         else:
-            print(f'  -->  Continue Training in "{job_dir}"')
+            Logger.stdout(f'  -->  Continue Training in "{job_dir}"')
     return job_dir , test_code
 
 def gp_parameters(job_id = None , train = True , continuation = False , test_code = False , **kwargs):
@@ -115,9 +116,9 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
 
     job_dir , test_code = gp_job_dir(job_id , train , continuation , test_code)
     if train and defaults.device.type == 'cpu':
-        print('**Cuda not available')
+        Logger.stdout('**Cuda not available')
     elif train:
-        print('**Device name:', torch.cuda.get_device_name(defaults.device))
+        Logger.stdout('**Device name:', torch.cuda.get_device_name(defaults.device))
 
     gp_params = gpContainer(
         job_dir = job_dir ,           # the main directory
@@ -197,14 +198,14 @@ def gp_namespace(gp_params):
 
         if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all():
             if gp_space.param.verbose: 
-                print(f'  -->  Exists "{package_path}" but Lack Required Data!')
+                Logger.stdout(f'  -->  Exists "{package_path}" but Lack Required Data!')
         else:
             assert np.isin(package_require , list(package_data.keys())).all() , np.setdiff1d(package_require , list(package_data.keys()))
             assert np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all() , np.setdiff1d(gp_space.gp_argnames , package_data['gp_argnames'])
             assert package_data['df_index'] is not None
 
             if gp_space.param.verbose: 
-                print(f'  -->  Directly load "{package_path}"')
+                Logger.stdout(f'  -->  Directly load "{package_path}"')
             for gp_key in gp_space.gp_argnames:
                 gp_val = package_data['gp_inputs'][package_data['gp_argnames'].index(gp_key)]
                 gp_val = df2ts(gp_val , gp_key , gp_space.device)
@@ -223,12 +224,12 @@ def gp_namespace(gp_params):
 
         if not load_finished:
             if gp_space.param.verbose: 
-                print(f'  -->  Load from Parquet Files:')
+                Logger.stdout(f'  -->  Load from Parquet Files:')
             gp_filename = gp_filename_converter()
             nrowchar = 0
             for i , gp_key in enumerate(gp_space.gp_argnames):
                 if gp_space.param.verbose and nrowchar == 0: 
-                    print('  -->  ' , end='')
+                    Logger.stdout('  -->  ' , end='')
                 gp_val = read_gp_data(gp_filename(gp_key),gp_space.param.slice_date,gp_space.records.get('df_columns'))
                 if i == 0: 
                     gp_space.records.update(df_columns = gp_val.columns.values , df_index = gp_val.index.values)
@@ -236,10 +237,10 @@ def gp_namespace(gp_params):
                 gp_space.gp_inputs.append(gp_val)
                 
                 if gp_space.param.verbose:
-                    print(gp_key , end=',')
+                    Logger.stdout(gp_key , end=',')
                     nrowchar += len(gp_key) + 1
                     if nrowchar >= 100 or i == len(gp_space.gp_argnames):
-                        print()
+                        Logger.stdout()
                         nrowchar = 0
 
             for gp_key in ['size' , 'indus']: 
@@ -260,7 +261,7 @@ def gp_namespace(gp_params):
             torch.save(saved_data , package_path)
 
     if gp_space.param.verbose: 
-        print(f'  -->  {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')
+        Logger.stdout(f'  -->  {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')
 
     gp_space.mgr_file.save_state(gp_space.param.__dict__, 'params', i_iter = 0) # useful to assert same index as package data
     gp_space.mgr_file.save_state(gp_space.records.subset(['df_index' , 'df_columns']),'df_axis' , i_iter = 0) # useful to assert same index as package data
@@ -380,7 +381,7 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
     if timer    is None: 
         timer    = gpTimer()
 
-    #print(individual)
+    #Logger.stdout(individual)
     with timer.acc_timer('compile'):
         func = compiler(individual)
         
@@ -549,11 +550,11 @@ def gp_residual(param , tensors : gpContainer, i_iter = 0, device = None ,
         else:
             elites_mat = FF.factor_coef_with_y(elites[tensors.insample], labels_res[tensors.insample].unsqueeze(-1), corr_dim=1, dim=-1)
         neutra = FF.top_svd_factors(elites_mat, elites, top_n = param.svd_top_n ,top_ratio=param.svd_top_ratio, dim=-1 , inplace = True) # use svd factors instead
-        print(f'  -> Elites({elites.shape[-1]}) Shrink to SvdElites({neutra.shape[-1]})')
+        Logger.stdout(f'  -> Elites({elites.shape[-1]}) Shrink to SvdElites({neutra.shape[-1]})')
 
     if isinstance(neutra , torch.Tensor) and neutra.numel(): 
         tensors.update(neutra = neutra.cpu())
-        print(f'  -> Neutra has {neutra.shape[-1]} Elements')
+        Logger.stdout(f'  -> Neutra has {neutra.shape[-1]} Elements')
 
     assert isinstance(labels_res , torch.Tensor) , type(labels_res)
     labels_res = MF.neutralize_2d(labels_res, neutra , inplace = True) 
@@ -629,13 +630,13 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
 
     for i_gen in range(start_gen, param.n_gen):
         if verbose and i_gen > 0: 
-            print(f'  -->  Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones')
+            Logger.stdout(f'  -->  Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones')
         population = gp_population(toolbox , param.pop_num , last_gen = population , forbidden = forbidden + [ind for ind in halloffame])
-        #print([str(ind) for ind in population[:20]])
+        #Logger.stdout([str(ind) for ind in population[:20]])
         population = toolbox.indpop2syxpop(population)
-        #print([str(ind) for ind in population[:20]])
+        #Logger.stdout([str(ind) for ind in population[:20]])
         if verbose and i_gen == 0: 
-            print(f'**A Population({len(population)}) has been Initialized')
+            Logger.stdout(f'**A Population({len(population)}) has been Initialized')
 
         # Evaluate the new population
         population = toolbox.evaluate_pop(population , i_iter = i_iter, i_gen = i_gen , pool_num = param.pool_num , **kwargs)
@@ -664,7 +665,7 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
         # Dump population , halloffame , forbidden in logbooks of this generation
         mgr_file.dump_generation(population, halloffame, forbidden , i_iter , i_gen , **(stats.compile(survivors) if stats else {}))
 
-    print(f'**A HallofFame({len(halloffame)}) has been ' + ('Loaded' if start_gen >= param.n_gen else 'Evolutionized'))
+    Logger.stdout(f'**A HallofFame({len(halloffame)}) has been ' + ('Loaded' if start_gen >= param.n_gen else 'Evolutionized'))
     return population, halloffame, forbidden
 
 # %%
@@ -708,11 +709,11 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         (new_log.rankir_in_res.abs() > ir_floor) & # higher rankir_res than threshold
         (new_log.rankir_in_raw.abs() > ir_floor) & # higher rankir_res than threshold
         (new_log.rankir_out_res != 0.))
-    print(f'**HallofFame({len(halloffame)}) Contains {new_log.elite.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}')
+    Logger.stdout(f'**HallofFame({len(halloffame)}) Contains {new_log.elite.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}')
     if new_log.elite.sum() <= 0.1 * len(halloffame):
         # Failure of finding promising offspring , check if code has bug
-        print(f'  -->  Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
-        print(f'  -->  Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
+        Logger.stdout(f'  -->  Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
+        Logger.stdout(f'  -->  Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
 
     for i , hof in enumerate(halloffame):
         # 若超过了本次循环的精英上限数,则后面的都不算,等到下一个循环再来(避免内存溢出)
@@ -757,11 +758,11 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
     elites = hof_elites.compile_elite_tensor(device=device)
     if elites is not None:
         mgr_file.save_state(elites , 'elt' , i_iter)
-        print(f'**An EliteGroup({elites.shape[-1]}) has been Selected')
+        Logger.stdout(f'**An EliteGroup({elites.shape[-1]}) has been Selected')
     if True: 
-        print(f'  -->  Cuda Memories of "gp_inputs" take {MemoryManager.object_memory(gp_inputs):.4f}G')
-        print(f'  -->  Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G')
-        print(f'  -->  Cuda Memories of "tensors"   take {MemoryManager.object_memory(tensors):.4f}G')
+        Logger.stdout(f'  -->  Cuda Memories of "gp_inputs" take {MemoryManager.object_memory(gp_inputs):.4f}G')
+        Logger.stdout(f'  -->  Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G')
+        Logger.stdout(f'  -->  Cuda Memories of "tensors"   take {MemoryManager.object_memory(tensors):.4f}G')
 
 # %%
 def outer_loop(i_iter , gp_space , start_gen = 0):
@@ -850,7 +851,7 @@ class gpGenerator:
         if as_df and not factor.isnull():
             factor.value = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
         if print_info: 
-            print(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
+            Logger.stdout(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
         return factor
 
     def entire_elites(self , verbose = True , block_len = 50 , process_key = None):
@@ -863,7 +864,7 @@ class gpGenerator:
         for elite in elite_log.syntax: 
             hof_elites.append(self(elite , process_key = process_key , print_info = verbose))
         hof_elites.cat_all()
-        print(f'Load {hof_elites.total_len()} Elites')
+        Logger.stdout(f'Load {hof_elites.total_len()} Elites')
         return hof_elites
 
     def load_elite(self , i_elite : int , factor = False):
@@ -939,11 +940,11 @@ def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , no
         gp_space = gp_namespace(gp_params)
 
         for i_iter in range(start_iter , gp_space.param.n_iter):
-            print('=' * 20 + f' Iteration {i_iter} start from Generation {start_gen * (i_iter == start_iter)} ' + '=' * 20)
+            Logger.stdout('=' * 20 + f' Iteration {i_iter} start from Generation {start_gen * (i_iter == start_iter)} ' + '=' * 20)
             outer_loop(i_iter , gp_space , start_gen = start_gen * (i_iter == start_iter))
 
     hours, secs = divmod((datetime.now() - time0).total_seconds(), 3600)
-    print('=' * 20 + f' Total Time Cost :{hours:.0f} hours {secs/60:.1f} ' + '=' * 20)
+    Logger.stdout('=' * 20 + f' Total Time Cost :{hours:.0f} hours {secs/60:.1f} ' + '=' * 20)
     gp_space.mgr_file.save_state(gp_space.timer.time_table(showoff=True) , 'runtime' , 0)
     gp_space.mgr_mem.print_memeory_record()
     pfr.get_df(output = kwargs.get('profiler_out' , 'cprofile.csv')) 

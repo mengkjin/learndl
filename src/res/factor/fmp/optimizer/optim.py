@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from src.proj import MACHINE
+from src.proj import MACHINE , Logger
 from src.res.factor.util import PortCreator , PortCreateResult , Port
 
 from .interpreter import OptimizedPortfolioInput
@@ -29,9 +29,9 @@ class OptimizedPortfolioCreatorConfig:
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if print_info:
             if use_kwargs : 
-                print(f'  --> In initializing {cls.__name__}, used kwargs: {use_kwargs}')
+                Logger.stdout(f'  --> In initializing {cls.__name__}, used kwargs: {use_kwargs}')
             if drop_kwargs: 
-                print(f'  --> In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
+                Logger.stdout(f'  --> In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
         return cls(**use_kwargs)
 
     @property
@@ -69,7 +69,7 @@ class OptimizedPortfolioCreator(PortCreator):
                 break
 
         if not is_success and self.conf.opt_relax:
-            print(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')
+            Logger.warn(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')
             assert self.solver_input.w0 is not None , 'In this failed-with-relax case, w0 must not be None'
             w = self.solver_input.w0
 
@@ -84,8 +84,8 @@ class OptimizedPortfolioCreator(PortCreator):
             self.create_result.utility  = self.solver_input.utility(w , self.conf.prob_type , **self.conf.opt_cond) 
             self.create_result.accuracy = self.solver_input.accuracy(w)
             if not self.create_result.accuracy and is_success:
-                print(f'Not accurate but assessed as success at {self.model_date} for [{self.opt_input.alpha_model.name}]!')
-                print(self.create_result.accuracy)
+                Logger.warn(f'Not accurate but assessed as success at {self.model_date} for [{self.opt_input.alpha_model.name}]!')
+                Logger.stdout(self.create_result.accuracy)
             self.create_result.analyze(self.bench_port , self.init_port)
         return self
     
@@ -96,4 +96,4 @@ if __name__ == '__main__':
     optim = OptimizedPortfolioCreator('test').setup(config_path = config_path , prob_type='socp')
 
     s = optim.create(20240606)
-    print(s)
+    Logger.stdout(s)

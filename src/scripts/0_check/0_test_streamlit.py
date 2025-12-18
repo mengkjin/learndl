@@ -47,7 +47,7 @@ from src.app import ScriptTool
 def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
     catcher = LogWriter('log.txt')
     with catcher:
-        print('This will be caught')
+        Logger.stdout('This will be caught')
         with Logger.ParagraphIII('main part'):
             with Timer('abc'):
                 Logger.critical('critical message')
@@ -67,9 +67,9 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 ScriptTool.warning(f'this is a warning: {txt}')
                 ScriptTool.debug(f'this is a debug: {txt}')
                 ScriptTool.critical(f'this is a critical: {txt}')
-                print(f'email: {ScriptTool.get_value('email')}')
-                print(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}')
-                print(f'task_key: {ScriptTool.get_value('task_key')}')
+                Logger.stdout(f'email: {ScriptTool.get_value('email')}')
+                Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}')
+                Logger.stdout(f'task_key: {ScriptTool.get_value('task_key')}')
                 if (rnd := random.random()) < 0.5:
                     ScriptTool.error(f'this is an error: {rnd}')
                 else:

@@ -48,12 +48,12 @@ _deprecated_db_by_name  : list[str] = ['information_js']
 _deprecated_db_by_date  : list[str] = ['trade' , 'labels' , 'benchmark' , 'trade_js' , 'labels_js' , 'benchmark_js'] 
 
 def _db_src_deprecated(i : int):
-    """print deprecated db_src information , i is the index of the db_src"""
+    """printing deprecated db_src information , i is the index of the db_src"""
     def wrapper(func):
         def inner(*args , **kwargs):
             db_src = args[i]
             if db_src in _deprecated_db_by_name or db_src in _deprecated_db_by_date:
-                print(f'at {func.__name__} , {db_src} will be deprecated soon, please update your code')
+                Logger.warning(f'at {func.__name__} , {db_src} will be deprecated soon, please update your code')
             return func(*args , **kwargs)
         return inner
     return wrapper
@@ -121,7 +121,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , ve
         else:
             df.to_parquet(path , engine='fastparquet')
         if verbose: 
-            print(f'{prefix}{status}: {path}')
+            Logger.stdout(f'{prefix}{status}: {path}')
         return True
     else:
         status = 'File Exists'
@@ -190,13 +190,13 @@ def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_
 
     if df_syntax:
         if df.empty:
-            print(f'{df_syntax} is empty')
+            Logger.stdout(f'{df_syntax} is empty')
         else:
             na_cols : pd.Series | Any = df.isna().all()
             if na_cols.all():
-                print(f'{df_syntax} is all-NA')
+                Logger.warn(f'{df_syntax} is all-NA')
             elif check_na_cols and na_cols.any():
-                print(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
+                Logger.warn(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
 
     if reset_index and len(df.index.names) > 1 or df.index.name: 
         df = df.reset_index()
@@ -366,8 +366,6 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
     df = _load_df_multi(paths , date_colname , parallel)
-    if df.empty and df_syntax == 'models/tushare_cne5_exp/multi-dates':
-        print(dates)
     df = _process_df(df , df_syntax = df_syntax , **kwargs)
     return df
 

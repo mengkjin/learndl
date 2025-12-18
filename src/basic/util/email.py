@@ -7,7 +7,7 @@ from email import encoders
 from pathlib import Path
 from typing import Literal
 
-from src.proj import MACHINE , PATH
+from src.proj import MACHINE , PATH , Logger
 class _EmailSettings:
     def __init__(
         self , 
@@ -118,7 +118,7 @@ class Email:
              confirmation_message = '' , attachment_group : str | list[str] = 'default'):
         
         if not MACHINE.server:
-            print('not in my server , skip sending email')
+            Logger.warn('not in my server , skip sending email')
             return
 
         message = cls.message(title , body , recipient , attachment_group = attachment_group)
@@ -128,9 +128,9 @@ class Email:
                 smtp.starttls()
                 smtp.login(cls.settings.sender, cls.settings.password)
                 smtp.sendmail(cls.settings.sender, cls.recipient(recipient), message.as_string())
-            print(f'sending email success {confirmation_message}')
+            Logger.success(f'sending email success {confirmation_message}')
         except Exception as e:
-            print('sending email went wrong:', e)
+            Logger.fail(f'sending email went wrong: {e}')
 
 def send_email(title : str  , 
                body : str = 'This is test! Hello, World!' ,
@@ -139,7 +139,7 @@ def send_email(title : str  ,
                server : Literal['netease'] = 'netease' , 
                confirmation_message : str = ''):
     if not MACHINE.server:
-        print('not in my server , skip sending email')
+        Logger.warn('not in my server , skip sending email')
         return
     
     settings = _EmailSettings(server)
@@ -178,6 +178,6 @@ def send_email(title : str  ,
             smtp_connection.starttls()
             smtp_connection.login(settings.sender, settings.password)
             smtp_connection.sendmail(settings.sender, recipient, message.as_string())
-        print(f'sending email success {confirmation_message}')
+        Logger.success(f'sending email success {confirmation_message}')
     except Exception as e:
-        print('sending email went wrong:', e)
+        Logger.fail(f'sending email went wrong: {e}')

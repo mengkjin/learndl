@@ -20,13 +20,168 @@ __all__ = [
     'HtmlCatcher' , 'MarkdownCatcher' , 'WarningCatcher' ,
 ]
 
+def _stdout(*args, **kwargs):
+    """Write stdout message to stdout , same as Logger.stdout, redefine to avoid circular import"""
+    print(*args, **kwargs)
+
+def _error(*messages: str | Any):
+    """Write error message to stderr , same as Logger.critical, redefine to avoid circular import"""
+    red_bg_white_bold = "\u001b[41m\u001b[1m\u001b[37m"  # red backgroud , white bold
+    reset_all = "\u001b[0m"
+    red_text = "\u001b[31m\u001b[1m"  # red text (no background) , bold
+    message = ' '.join(messages)
+
+    level_name = 'ERROR'
+    prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level_name:9s}|'
+    
+    output = f"{red_bg_white_bold}{prefix}{reset_all}: {red_text}{message}{reset_all}\n"
+    sys.stderr.write(output)
+    return output
+
+def _critical(*messages: str | Any):
+    """Write critical message to stderr , same as Logger.critical, redefine to avoid circular import"""
+    purple_bg_white_bold = "\u001b[45m\u001b[1m\u001b[37m"  # purple backgroud , white bold
+    reset_all = "\u001b[0m"
+    # purple_text = "\u001b[35m\u001b[1m"  # purple text (no background) , bold
+    message = ' '.join(messages)
+
+    level_name = 'CRITICAL'
+    prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level_name:9s}|'
+    
+    output = f"{purple_bg_white_bold}{prefix}{reset_all}: {purple_bg_white_bold}{message}{reset_all}\n"
+    sys.stderr.write(output)
+    return output
+
+def _str_to_html(text: str | Any):
+    """capture string to html"""
+    
+    assert isinstance(text, str) , f"text must be a string , but got {type(text)}"
+    if re.match(r"^(?!100%\|)\d{1,2}%\|", text): 
+        return None  # skip unfinished progress bar
+    text = html.escape(text)
+    text = re.sub(r'(?:\u001b\[[\d;]*m)+', replace_ansi_sequences, text)
+    
+    return text
+
+def replace_ansi_sequences(match):
+    """replace ANSI sequences to html span tag"""
+    # match.group(0) contains all continuous ANSI sequences
+    sequences = match.group(0)
+    all_codes = []
+
+    for seq_match in re.finditer(r'\u001b\[([\d;]*)m', sequences):
+        codes_str = seq_match.group(1)
+        if codes_str:
+            all_codes.extend(codes_str.split(';'))
+    
+    return _convert_ansi_codes_to_span(all_codes)
+
+def _convert_ansi_codes_to_span(codes):
+    """convert ANSI codes list to a single span tag"""
+    styles = []
+    bg_color = None
+    fg_color = None
+    
+    for code_str in codes:
+        if not code_str:
+            continue
+        code = int(code_str)
+        if code == 0:
+            return '</span>'
+        elif code == 1:
+            styles.append('font-weight: bold')
+        elif 30 <= code <= 37:  # foreground color
+            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
+            fg_color = colors[code - 30]
+        elif 40 <= code <= 47:  # background color
+            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
+            bg_color = colors[code - 40]
+    
+    if fg_color:
+        styles.append(f'color: {fg_color}')
+    if bg_color:
+        styles.append(f'background-color: {bg_color}')
+        if not fg_color:
+            styles.append('color: white')
+    
+    if styles:
+        return f'<span style="{"; ".join(styles)};">'
+    return ''
+
+def _figure_to_base64(fig : Figure | Any):
+    """convert matplotlib figure to base64 string"""
+    try:
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        buffer.close()
+        return image_base64
+    except Exception as e:
+        _critical(f"Error converting figure to base64: {e}")
+        return None
+    
+def _ansi_to_css(ansi_string: str) -> str:
+    """convert ANSI color codes to CSS"""
+    mapping =  {
+        #'\u001b[0m': '</span>',  # reset
+        '\u001b[0m': '</span>',  # reset
+        '\u001b[1m': '<span style="font-weight: bold;">',  # bold
+        '\u001b[31m': '<span style="color: red;">',  # red
+        '\u001b[32m': '<span style="color: green;">',  # green
+        '\u001b[33m': '<span style="color: yellow;">',  # yellow
+        '\u001b[34m': '<span style="color: blue;">',  # blue
+        '\u001b[35m': '<span style="color: purple;">',  # purple
+        '\u001b[36m': '<span style="color: cyan;">',  # cyan
+        '\u001b[37m': '<span style="color: white;">',  # white
+        '\u001b[41m': '<span style="background-color: red; color: white;">',  # red background
+        '\u001b[42m': '<span style="background-color: green; color: white;">',  # green background
+        '\u001b[43m': '<span style="background-color: yellow; color: black;">',  # yellow background
+        '\u001b[44m': '<span style="background-color: blue; color: white;">',  # blue background
+        '\u001b[45m': '<span style="background-color: purple; color: white;">',  # purple background
+        '\u001b[46m': '<span style="background-color: cyan; color: black;">',  # cyan background
+        '\u001b[47m': '<span style="background-color: white; color: black;">',  # white background
+        '\u001b[91m': '<span style="color: lightred">', # 亮红色
+        '\u001b[92m': '<span style="color: lightgreen">', # 亮绿色
+        '\u001b[93m': '<span style="color: lightyellow">', # 亮黄色
+        '\u001b[94m': '<span style="color: lightblue">', # 亮蓝色
+        '\u001b[95m': '<span style="color: lightpurple">', # 亮洋红色
+        '\u001b[96m': '<span style="color: lightcyan">', # 亮青色
+    }
+    for ansi_code, html_code in mapping.items():
+        ansi_string = ansi_string.replace(ansi_code, html_code)
+    return ansi_string
+
+def _dataframe_to_html(df: pd.DataFrame | pd.Series | Any):
+    """capture display object (dataframe or other object)"""
+    assert isinstance(df, (pd.DataFrame , pd.Series)) , f"obj must be a dataframe or series , but got {type(df)}"
+    try:
+        # get dataframe html representation
+        html_table = getattr(df , '_repr_html_')() if hasattr(df, '_repr_html_') else df.to_html(classes='dataframe')
+        content = f'<div class="dataframe">{html_table}</div>'
+    except Exception:
+        # downgrade to text format
+        content = f'<div class="df-fallback"><pre>{html.escape(df.to_string())}</pre></div>'
+    return content
+    
+def _figure_to_html(fig: Figure | Any):
+    """capture matplotlib figure"""
+    assert isinstance(fig, Figure) , f"fig must be a matplotlib figure , but got {type(fig)}"
+    content = None
+    try:
+        if fig.get_axes():  # check if figure has content
+            if image_base64 := _figure_to_base64(fig):
+                content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">'
+    except Exception as e:
+        _critical(f"Error capturing matplotlib figure: {e}")
+    return content
 class OutputDeflector:
     """
     double output stream: deflect output to catcher and original output stream (optional)
     example:
         catcher = IOCatcher()
         with OutputDeflector('stdout', catcher, keep_original=True):
-            print('This will be deflected to catcher')
+            Logger.stdout('This will be deflected to catcher')
         with OutputDeflector('stderr', catcher, keep_original=False):
             Logger.info('This will be deflected to catcher')
     """
@@ -144,7 +299,7 @@ class OutputDeflector:
             try:
                 getattr(self.catcher, 'close')()
             except Exception as e:
-                print(f"Error closing catcher: {e}")
+                _error(f"Error closing catcher: {e}")
                 raise e
 
 class OutputCatcher(ABC):
@@ -160,26 +315,32 @@ class OutputCatcher(ABC):
         self.stderr_catcher = None
     
     def __enter__(self):
+        """Enter the output catcher , start stdout and stderr redirection"""
         self.stdout_deflector = OutputDeflector('stdout', self.stdout_catcher , self.keep_original).start_catching()
         self.stderr_deflector = OutputDeflector('stderr', self.stderr_catcher , self.keep_original).start_catching()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the output catcher , end stdout and stderr redirection"""
         self.stdout_deflector.end_catching()
         self.stderr_deflector.end_catching()
 
     def write(self, text : str | Any):
+        """Write to the output catcher"""
         ...
     
     def flush(self):
+        """Flush the output catcher"""
         ...
 
     @abstractmethod
     def get_contents(self) -> Any:
+        """Get the contents of the output catcher"""
         ...
 
     @property
     def contents(self) -> Any:
+        """Get the contents of the output catcher"""
         return self.get_contents()
     
 class IOCatcher(OutputCatcher):
@@ -188,7 +349,7 @@ class IOCatcher(OutputCatcher):
     example:
         catcher = IOCatcher()
         with catcher:
-            print('This will be caught')
+            Logger.stdout('This will be caught')
         contents = catcher.contents
     """
     keep_original = False
@@ -208,6 +369,7 @@ class IOCatcher(OutputCatcher):
         return self._contents
     
     def clear(self):
+        """Clear the contents of the output catcher"""
         self.stdout_catcher.seek(0)
         self.stdout_catcher.truncate(0)
         
@@ -220,7 +382,7 @@ class LogWriter(OutputCatcher):
     example:
         catcher = LogWriter('log.txt')
         with catcher:
-            print('This will be caught')
+            Logger.stdout('This will be caught')
         contents = catcher.contents
     """
     def __init__(self, log_path : str | Path | None = None):
@@ -245,27 +407,26 @@ class WarningCatcher:
     catch specific warnings and show call stack
     example:
         with WarningCatcher(['This will raise an exception']):
-            print('This will raise an exception')
+            raise Exception('This will raise an exception')
     """
     def __init__(self , catch_warnings : list[str] | None = None):
         self.warnings_caught = []
         self.original_showwarning = warnings.showwarning
         warnings.filterwarnings('always')
         self.catch_warnings = [] if catch_warnings is None else [c.lower() for c in catch_warnings]
-        
     
     def custom_showwarning(self, message, category, filename, lineno, file=None, line=None) -> None:
         """Custom warning show function to catch specific warnings and show call stack"""
         # only catch the warnings we care about
         if any(c in str(message).lower() for c in self.catch_warnings):
             stack = traceback.extract_stack()
-            print(f"\n caught warning: {message}")
-            print(f"warning location: {filename}:{lineno}")
-            print("call stack:")
+            _stdout(f"\n caught warning: {message}")
+            _stdout(f"warning location: {filename}:{lineno}")
+            _stdout("call stack:")
             for i, frame in enumerate(stack[:-1]):  # exclude current frame
-                print(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}")
-                print(f"     {frame.line}")
-            print("-" * 80)
+                _stdout(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}")
+                _stdout(f"     {frame.line}")
+            _stdout("-" * 80)
             
             raise Exception(message)
         
@@ -278,141 +439,6 @@ class WarningCatcher:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         warnings.showwarning = self.original_showwarning
-
-def _critical(message: str):
-    purple_bg_white_bold = "\u001b[45m\u001b[1m\u001b[37m"  # purple backgroud , white bold
-    reset_all = "\u001b[0m"
-    # purple_text = "\u001b[35m\u001b[1m"  # purple text (no background) , bold
-
-    level_name = 'CRITICAL'
-    prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level_name:9s}|'
-    
-    output = f"{purple_bg_white_bold}{prefix}{reset_all}: {purple_bg_white_bold}{message}{reset_all}\n"
-    sys.stderr.write(output)
-    return output
-
-def _str_to_html(text: str | Any):
-    """capture string"""
-    
-    assert isinstance(text, str) , f"text must be a string , but got {type(text)}"
-    if re.match(r"^(?!100%\|)\d{1,2}%\|", text): 
-        return None  # skip unfinished progress bar
-    text = html.escape(text)
-    text = re.sub(r'(?:\u001b\[[\d;]*m)+', replace_ansi_sequences, text)
-    
-    return text
-
-def replace_ansi_sequences(match):
-    # match.group(0) contains all continuous ANSI sequences
-    sequences = match.group(0)
-    all_codes = []
-
-    for seq_match in re.finditer(r'\u001b\[([\d;]*)m', sequences):
-        codes_str = seq_match.group(1)
-        if codes_str:
-            all_codes.extend(codes_str.split(';'))
-    
-    return _convert_ansi_codes_to_span(all_codes)
-
-def _convert_ansi_codes_to_span(codes):
-    """convert ANSI codes list to a single span tag"""
-    styles = []
-    bg_color = None
-    fg_color = None
-    
-    for code_str in codes:
-        if not code_str:
-            continue
-        code = int(code_str)
-        if code == 0:
-            return '</span>'
-        elif code == 1:
-            styles.append('font-weight: bold')
-        elif 30 <= code <= 37:  # foreground color
-            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
-            fg_color = colors[code - 30]
-        elif 40 <= code <= 47:  # background color
-            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
-            bg_color = colors[code - 40]
-    
-    if fg_color:
-        styles.append(f'color: {fg_color}')
-    if bg_color:
-        styles.append(f'background-color: {bg_color}')
-        if not fg_color:
-            styles.append('color: white')
-    
-    if styles:
-        return f'<span style="{"; ".join(styles)};">'
-    return ''
-
-def _figure_to_base64(fig : Figure | Any):
-    """convert matplotlib figure to base64 string"""
-    try:
-        buffer = io.BytesIO()
-        fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
-        buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-        buffer.close()
-        return image_base64
-    except Exception as e:
-        _critical(f"Error converting figure to base64: {e}")
-        return None
-    
-def _ansi_to_css(ansi_string: str) -> str:
-    """convert ANSI color codes to CSS"""
-    mapping =  {
-        #'\u001b[0m': '</span>',  # reset
-        '\u001b[0m': '</span>',  # reset
-        '\u001b[1m': '<span style="font-weight: bold;">',  # bold
-        '\u001b[31m': '<span style="color: red;">',  # red
-        '\u001b[32m': '<span style="color: green;">',  # green
-        '\u001b[33m': '<span style="color: yellow;">',  # yellow
-        '\u001b[34m': '<span style="color: blue;">',  # blue
-        '\u001b[35m': '<span style="color: purple;">',  # purple
-        '\u001b[36m': '<span style="color: cyan;">',  # cyan
-        '\u001b[37m': '<span style="color: white;">',  # white
-        '\u001b[41m': '<span style="background-color: red; color: white;">',  # red background
-        '\u001b[42m': '<span style="background-color: green; color: white;">',  # green background
-        '\u001b[43m': '<span style="background-color: yellow; color: black;">',  # yellow background
-        '\u001b[44m': '<span style="background-color: blue; color: white;">',  # blue background
-        '\u001b[45m': '<span style="background-color: purple; color: white;">',  # purple background
-        '\u001b[46m': '<span style="background-color: cyan; color: black;">',  # cyan background
-        '\u001b[47m': '<span style="background-color: white; color: black;">',  # white background
-        '\u001b[91m': '<span style="color: lightred">', # 亮红色
-        '\u001b[92m': '<span style="color: lightgreen">', # 亮绿色
-        '\u001b[93m': '<span style="color: lightyellow">', # 亮黄色
-        '\u001b[94m': '<span style="color: lightblue">', # 亮蓝色
-        '\u001b[95m': '<span style="color: lightpurple">', # 亮洋红色
-        '\u001b[96m': '<span style="color: lightcyan">', # 亮青色
-    }
-    for ansi_code, html_code in mapping.items():
-        ansi_string = ansi_string.replace(ansi_code, html_code)
-    return ansi_string
-
-def _dataframe_to_html(df: pd.DataFrame | pd.Series | Any):
-    """capture display object (dataframe or other object)"""
-    assert isinstance(df, (pd.DataFrame , pd.Series)) , f"obj must be a dataframe or series , but got {type(df)}"
-    try:
-        # get dataframe html representation
-        html_table = getattr(df , '_repr_html_')() if hasattr(df, '_repr_html_') else df.to_html(classes='dataframe')
-        content = f'<div class="dataframe">{html_table}</div>'
-    except Exception:
-        # downgrade to text format
-        content = f'<div class="df-fallback"><pre>{html.escape(df.to_string())}</pre></div>'
-    return content
-    
-def _figure_to_html(fig: Figure | Any):
-    """capture matplotlib figure"""
-    assert isinstance(fig, Figure) , f"fig must be a matplotlib figure , but got {type(fig)}"
-    content = None
-    try:
-        if fig.get_axes():  # check if figure has content
-            if image_base64 := _figure_to_base64(fig):
-                content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">'
-    except Exception as e:
-        _critical(f"Error capturing matplotlib figure: {e}")
-    return content
 
 @dataclass
 class TimedOutput:
@@ -429,16 +455,17 @@ class TimedOutput:
         return self.valid
     
     @property
-    def format_type(self):
-        return {
+    def format_type(self) -> Literal['stdout' , 'stderr' , 'dataframe' , 'image'] | str:
+        ft = {
             'stdout' : 'stdout',
             'stderr' : 'stderr',
             'data_frame' : 'dataframe',
             'figure' : 'image',
         }[self.type]
+        return ft
     
     @property
-    def type_str(self):
+    def type_str(self) -> Literal['STDERR' , 'STDOUT' , 'TABLE' , 'IMAGE'] | str:
         if self.type == 'stderr':
             return 'STDERR'
         elif self.type == 'stdout':
@@ -447,21 +474,27 @@ class TimedOutput:
             return 'TABLE'
         elif self.type == 'figure':
             return 'IMAGE'
+        else:
+            raise ValueError(f"Unknown output type: {self.type}")
 
     @property
     def create_time(self):
+        """Get the creation time of the output item"""
         return self._time.timestamp()
 
     @property
     def sort_key(self):
+        """Get the sort key of the output item : timestamp"""
         return self._time.timestamp()
 
     @property
     def time_str(self) -> str:
+        """Get the time string of the output item"""
         return self._time.strftime('%H:%M:%S.%f')[:-3]
     
     @classmethod
     def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
+        """Create a timed output item"""
         infos = {}
         valid = True
         if output_type is None:
@@ -489,6 +522,10 @@ class TimedOutput:
         return cls(output_type, content , infos , valid)
     
     def equivalent(self, other: 'TimedOutput') -> bool:
+        """
+        Check if the output item is equivalent to the other item
+        equivalent means the content is very similar , or the progress bar is the same
+        """
         if self.type in ['data_frame' , 'figure']:
             return False
         if self.type == other.type:
@@ -502,6 +539,7 @@ class TimedOutput:
         return False
     
     def to_html(self , index: int = 0):
+        """Convert the output item to html"""
         if self.content is None: 
             return None
         if self.type in ['stdout' , 'stderr']:
@@ -527,12 +565,18 @@ class TimedOutput:
         return text
 
 class HtmlCatcher(OutputCatcher):
+    """
+    Html catcher for stdout, stderr, dataframe, and image (use proj.display.Display to display), export to html file at exit
+    example:
+        catcher = HtmlCatcher()
+        with catcher:
+            Logger.stdout('This will be caught')
+        contents = catcher.contents
+    """
     ExportDIR = PATH.log_catcher.joinpath('html')
     Instance : 'HtmlCatcher | None' = None
     InstanceList : list['HtmlCatcher'] = []
     Capturing : bool = True
-
-    '''catch message from stdout and stderr, and display module'''
     def __init__(self, title: str | bool | None = None , category : str = 'miscelaneous', init_time: datetime | None = None , 
                  add_time_to_title: bool = True, **kwargs):
         if isinstance(title , bool) and not title:
@@ -559,19 +603,23 @@ class HtmlCatcher(OutputCatcher):
     
     @property
     def enabled(self):
+        """Check if the catcher is enabled"""
         return self._enable_catcher
     
     @property
     def is_running(self):
+        """Check if the catcher is running"""
         return self.Instance is not None
 
     @property
     def export_file_list(self) -> list[Path]:
+        """Get the export file list, usually the default path and the user provided path"""
         if not hasattr(self , '_export_file_list'):
             self._export_file_list : list[Path] = []
         return self._export_file_list
 
     def add_export_file(self , export_path : Path | str | None = None):
+        """Add an path to the export file list"""
         if export_path is None:
             return
         export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
@@ -579,6 +627,12 @@ class HtmlCatcher(OutputCatcher):
         self.export_file_list.append(export_path)
     
     def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , category : str | None = None):
+        """
+        Set the attributes of the catcher even after initialization
+        title : str , the title of the catcher
+        export_path : Path | str , the path to add to the export file list
+        category : str , the category of the catcher
+        """
         instance = self.Instance if self.Instance is not None else self
         if title: 
             instance.title = title
@@ -589,6 +643,7 @@ class HtmlCatcher(OutputCatcher):
         return self
 
     def SetInstance(self):
+        """Set the instance of the catcher, if the catcher is already running, block the new instance"""
         if self.Instance is not None:
             _critical(f"{self.Instance} is already running, blocking {self}")
             self._enable_catcher = False
@@ -598,6 +653,7 @@ class HtmlCatcher(OutputCatcher):
         return self
 
     def ClearInstance(self):
+        """Clear the instance of the catcher if the catcher is the current instance"""
         if self.Instance is self:
             self.__class__.Instance = None
         return self
@@ -620,6 +676,7 @@ class HtmlCatcher(OutputCatcher):
         self.ClearInstance()
 
     def export(self , export_path: Path | None = None , add_to_email: bool = True):
+        """Export the catcher to all paths in the export file list"""
         self.add_export_file(export_path)
         if not self.export_file_list:
             return
@@ -627,13 +684,13 @@ class HtmlCatcher(OutputCatcher):
         # log first and then export
         _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
         for export_path in self.export_file_list:
-            print(f"  --> {self.__class__.__name__} result saved to {export_path}")
+            _stdout(f"  --> {self.__class__.__name__} result saved to {export_path}")
 
         if add_to_email:
             from src.basic.util.email import Email
             Email.Attach(self.export_file_list[-1])
             if MACHINE.server:
-                print(f"  --> {self.__class__.__name__} attached to email {self.export_file_list[-1]}")
+                _stdout(f"  --> {self.__class__.__name__} attached to email {self.export_file_list[-1]}")
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:
@@ -679,26 +736,32 @@ class HtmlCatcher(OutputCatcher):
 
     @classmethod
     def stop_capturing(cls , *args, **kwargs):
+        """Stop the capturing of the catcher , class level (stop all catchers)"""
         cls.Capturing = False
         return cls
 
     @classmethod
     def start_capturing(cls , *args, **kwargs):
+        """Start the capturing of the catcher , class level (start all catchers)"""
         cls.Capturing = True
         return cls
 
     def write_stdout(self, text: str):
+        """Write stdout to the catcher"""
         if text := text.strip():
             self.add_output(text, 'stdout')
 
     def write_stderr(self, text: str):
+        """Write stderr to the catcher"""
         if text := text.strip():
             self.add_output(text, 'stderr')
 
     def get_contents(self):
+        """Get the contents of the html catcher"""
         return self.generate_html()
        
     def _html_head(self):
+        """Generate the html head , including the styles of the html file, and basic information of the catcher"""
         key_width = 80
         if self.kwargs:
             key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , key_width)
@@ -950,6 +1013,7 @@ class HtmlCatcher(OutputCatcher):
 
     @staticmethod
     def _html_tail():
+        """Generate the html tail , including the end of the html file"""
         tail = """
             </tbody>
         </table>
@@ -960,6 +1024,14 @@ class HtmlCatcher(OutputCatcher):
         return tail
     
 class MarkdownCatcher(OutputCatcher):
+    """
+    Markdown catcher for stdout and stderr, export to running markdown file in runtime, and then export to markdown file at exit
+    example:
+        catcher = MarkdownCatcher()
+        with catcher:
+            Logger.stdout('This will be caught')
+        contents = catcher.contents
+    """
     ExportDIR = PATH.log_catcher.joinpath('markdown')
     InstanceList : list['OutputCatcher'] = []
 
@@ -1011,15 +1083,18 @@ class MarkdownCatcher(OutputCatcher):
 
     @property
     def export_file_list(self) -> list[Path]:
+        """Get the export file list, usually the default path and the user provided path"""
         if not hasattr(self , '_export_file_list'):
             self._export_file_list : list[Path] = []
         return self._export_file_list
 
     @property
     def enabled(self) -> bool:
+        """Check if the catcher is enabled"""
         return self._enable_catcher
 
     def add_export_file(self , export_path : Path | str | None = None):
+        """Add an path to the export file list"""
         if export_path is None:
             return
         export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
@@ -1056,6 +1131,7 @@ class MarkdownCatcher(OutputCatcher):
         return False
     
     def _open_markdown_file(self):
+        """Open the running markdown file"""
         i = 0
         running_filename = self.export_file_list[-1].with_suffix('.running.md')
         while running_filename.exists():
@@ -1065,6 +1141,7 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file = open(self.running_filename, 'w', encoding='utf-8')
         
     def export(self):
+        """Export the running markdown file to the export file list, and then delete the running file"""
         self.markdown_file.close()
         if not self.enabled or not self.export_file_list:
             return
@@ -1074,10 +1151,11 @@ class MarkdownCatcher(OutputCatcher):
                 filename.unlink()
             filename.parent.mkdir(exist_ok=True,parents=True)
             shutil.copy(self.running_filename, filename)
-            print(f"  --> {self.__class__.__name__} result saved to {filename}")
+            _stdout(f"  --> {self.__class__.__name__} result saved to {filename}")
         self.running_filename.unlink()
     
     def _markdown_header(self):
+        """Generate the markdown header , including the title, start time, and basic information of the catcher"""
         self.markdown_file.write(f"# {self.title.title()}\n")
         self.markdown_file.write(f"## Log Start \n")
         self.markdown_file.write(f"- *Machine: {MACHINE.name}*  \n")
@@ -1086,6 +1164,7 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file.write(f"## Log Main \n")
 
     def _markdown_footer(self):
+        """Generate the markdown footer , including the finish time, duration, and stats of the catcher"""
         finish_time = datetime.now()
         self.markdown_file.write(f"## Log End \n")
         self.markdown_file.write(f"- *Finish at: {finish_time}*  \n")
@@ -1096,6 +1175,7 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file.flush()
 
     def _markdown_seperator(self):
+        """Generate the markdown seperator , including the seperator time and the seperator text"""
         if self.seperating_by is None: 
             return
         seperator = self._seperator_time_str(self.last_time)
@@ -1114,6 +1194,7 @@ class MarkdownCatcher(OutputCatcher):
         return text
     
     def write_std(self , text: str , type: Literal['stdout' , 'stderr']):
+        """Write stdout or stderr to the markdown file"""
         if self.is_catching and (text := text.strip()):
             self.last_time = datetime.now()
             self.stats[f'{type}_lines'] += 1
@@ -1124,9 +1205,11 @@ class MarkdownCatcher(OutputCatcher):
             self.markdown_file.flush()
     
     def write_stdout(self, text):
+        """Write stdout to the markdown file"""
         self.write_std(text , 'stdout')
 
     def write_stderr(self, text):
+        """Write stderr to the markdown file"""
         self.write_std(text , 'stderr')
 
     def get_contents(self):

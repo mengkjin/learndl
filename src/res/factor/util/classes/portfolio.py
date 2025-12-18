@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
+from src.basic import DB
 from src.data import DataBlock
 from .port import Port
 
@@ -138,17 +139,25 @@ class Portfolio:
     def load(cls , path : Path | str) -> 'Portfolio':
         path = Path(path)
         if path.exists():
-            return cls.from_dataframe(pd.read_feather(path))
+            return cls.from_dataframe(DB.load_df(path))
         else:
             return cls(path.stem)
         
 
-    def save(self , path : Path | str , overwrite = False):
+    def save(self , path : Path | str , overwrite = False , append = True):
         path = Path(path)
         if path.exists() and not overwrite:
             raise FileExistsError(f'{path} already exists')
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.to_dataframe().to_feather(path)
+        if append:
+            prev_port = DB.load_df(path)
+            if not prev_port.empty:
+                prev_port = prev_port.query('date not in @self.port_date')
+            new_port = self.to_dataframe()
+            port = pd.concat([prev_port , new_port]).sort_values(by=['date' , 'secid'])
+        else:
+            port = self.to_dataframe()
+        DB.save_df(port , path , overwrite = True)
     
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         if secid is None: 

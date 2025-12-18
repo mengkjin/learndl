@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
+from src.proj import Logger
 from src.basic import ModelDict , ModelPath , torch_load
 
 class MemFileStorage:
@@ -154,7 +155,7 @@ class Checkpoint(MemFileStorage):
         record_str = f'DISJOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
         
         if epoch >= len(self.epoch_queue):
-            [print(record_str) for record_str in self.join_record]
+            [Logger.stdout(record_str) for record_str in self.join_record]
             
         self.epoch_queue[epoch] = [s for s in self.epoch_queue[epoch] if s is not src]
         
@@ -170,7 +171,7 @@ class Checkpoint(MemFileStorage):
         if self.epoch_queue[epoch]:
             return self.load(self.epoch_path(epoch))
         else:
-            [print(record_str) for record_str in self.join_record]
+            [Logger.stdout(record_str) for record_str in self.join_record]
             raise Exception(f'no checkpoint of epoch {epoch}')
     
     def epoch_path(self , epoch): 

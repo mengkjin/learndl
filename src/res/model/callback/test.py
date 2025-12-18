@@ -6,7 +6,7 @@ from matplotlib.figure import Figure
 from src.proj import Logger , Timer , Display
 from src.basic import DB
 from src.func import dfs_to_excel , figs_to_pdf
-from src.res.factor.util import StockFactor , Universe , RISK_MODEL
+from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
 
@@ -30,7 +30,7 @@ class BasicTestResult(BaseCallBack):
         df = self.get_test_df(all_dates = True)
         DB.save_df(df , self.path_test_df , overwrite = True , verbose = False)
         if verbose:
-            print(f'Basic Test Result saved to {self.path_test_df}') 
+            Logger.stdout(f'Basic Test Result saved to {self.path_test_df}') 
 
     def get_test_df(self , all_dates = False) -> pd.DataFrame:
         df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date])
@@ -65,7 +65,7 @@ class BasicTestResult(BaseCallBack):
             self.save_test_df()
 
             df_date = self.get_test_df(False)
-            print(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
+            Logger.stdout(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
 
             if df_date['model_date'].nunique() == 1 or self.config.module_type in ['factor' , 'db']:
                 # only one model_date, calculate by year
@@ -114,7 +114,7 @@ class BasicTestResult(BaseCallBack):
                 df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
                 rslt[f'{model_num}'] = df
             dfs_to_excel(rslt , self.path_summary)
-            print(f'Test Summary saved to {self.path_summary}')
+            Logger.stdout(f'Test Summary saved to {self.path_summary}')
 
 
 class DetailedAlphaAnalysis(BaseCallBack):
@@ -147,9 +147,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def display_tables(self) -> list[str]: return [name for name in self.DISPLAY_TABLES if name in self.test_results]
     @property
     def display_figures(self) -> list[str]: return [name for name in self.DISPLAY_FIGURES if name in self.test_figures]
+    @property
+    def factor_names(self) -> list[str] | Any: 
+        return self.trainer.model_submodels
 
-    def get_factor(self , include_resume = True , interval = 5 , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
-        df = self.trainer.record.get_preds(include_resume=include_resume , interval = interval)
+    def get_factor(self , tested_only = True , interval = 5 , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
+        df = self.trainer.record.get_preds(tested_only=tested_only , interval = interval)
         if which == 'first' or self.trainer.config.Model.n_model == 1:
             df['factor_name'] = df['submodel']
             df = df.query('model_num == 0')
@@ -159,19 +162,23 @@ class DetailedAlphaAnalysis(BaseCallBack):
         else:
             raise ValueError(f'Invalid which: {which}')
         df = df.pivot_table('pred',['secid','date'],'factor_name').reset_index()
-        return StockFactor(df)
+        factor = StockFactor(df , factor_names = self.factor_names)
+        return factor
 
     def factor_test(self):
         with Logger.ParagraphIII('Factor Perf Test'):
             with Timer(f'FactorPerfTest.get_factor' , silent = self.verbosity < 1):
-                factor = self.get_factor(include_resume=True , interval = 5)
-            
+                factor = self.get_factor(tested_only=False , interval = 5)
+            with Timer(f'FactorPerfTest.load_day_quotes' , silent = self.verbosity < 1):
+                factor.day_quotes()
+
             for task in self.factor_tasks:
                 if self.verbosity > 0:
                     Logger.divider()
                 results = FactorTestAPI.run_test(task , factor , test_path = self.test_path , 
-                                                 resume = self.config.is_resuming , save_resumable = True , 
-                                                 title_prefix=self.config.model_name , verbosity = self.verbosity)
+                                                 resume = self.config.is_resuming , save_resumable = True , verbosity = self.verbosity , 
+                                                 start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date ,
+                                                 title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
@@ -179,19 +186,22 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def fmp_test(self):
         with Logger.ParagraphIII('Factor FMP Test'):
             with Timer(f'FactorFMPTest.get_factor' , silent = self.verbosity < 1):
-                factor = self.get_factor(include_resume=False , interval = 1)
+                factor = self.get_factor(tested_only=True , interval = 1)
             with Timer(f'FactorFMPTest.get_alpha_models' , silent = self.verbosity < 1):
                 factor.alpha_models()
-            with Timer(f'FactorFMPTest.get_universe' , silent = self.verbosity < 1):
-                Universe('top-1000').to_portfolio(factor.date)
             with Timer(f'FactorFMPTest.load_risk_models' , silent = self.verbosity < 1):
-                RISK_MODEL.load_models(factor.date)
+                factor.risk_model()
+            with Timer(f'FactorFMPTest.load_universe' , silent = self.verbosity < 1):
+                factor.universe(load = True)
+            with Timer(f'FactorFMPTest.load_day_quotes' , silent = self.verbosity < 1):
+                factor.day_quotes()
             for task in self.fmp_tasks:
                 if self.verbosity > 0:
                     Logger.divider()
                 results = FactorTestAPI.run_test(task , factor , test_path = self.test_path , 
-                                                 resume = self.config.is_resuming , save_resumable = True , 
-                                                 title_prefix=self.config.model_name , verbosity = self.verbosity)
+                                                 resume = self.config.is_resuming , save_resumable = True , verbosity = self.verbosity ,
+                                                 start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date,
+                                                 title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
@@ -199,7 +209,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def display_export(self):
         with Logger.ParagraphIII('Display Analytic Results'):
             for name in self.display_tables:
-                print(f'Table: {name}:')
+                Logger.stdout(f'Table: {name}:')
                 df = self.test_results[name].copy()
                 df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
                 for col in df.columns:
@@ -212,7 +222,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 Display(df)
 
             for name in self.display_figures:
-                print(f'Figure: {name}:')
+                Logger.stdout(f'Figure: {name}:')
                 Display(self.test_figures[name])
 
             dfs_to_excel(self.test_results , self.path_data , print_prefix='Analytic datas')

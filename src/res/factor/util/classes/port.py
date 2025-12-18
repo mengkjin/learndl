@@ -61,40 +61,41 @@ class Port:
             return self if inplace else self.copy()
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
         assert n > 0 , f'n must be non-negative! ({n})'
-        return self.evolve_to_date(DATAVENDOR.td(self.date , n).td , inplace)
+        return self.evolve_to_date(DATAVENDOR.td(self.date , n) , inplace)
 
     def backward(self , n : int = -1 , inplace = True):
         if n == 0: 
             return self if inplace else self.copy()
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
         assert n < 0 , f'n must be non-positive! ({n})'
-        return self.evolve_to_date(DATAVENDOR.td(self.date , n).td , inplace)
+        return self.evolve_to_date(DATAVENDOR.td(self.date , n) , inplace)
     
     def evolve_to_date(self , date : int | Any , inplace = False , rebalance = False):
         rslt = self if inplace else self.copy()
         if date == rslt.date: 
             return rslt
 
-        old_date = DATAVENDOR.td(self.date).td
-        new_date = DATAVENDOR.td(date).td
+        old_date = DATAVENDOR.td(self.date)
+        new_date = DATAVENDOR.td(date)
         if old_date == new_date: 
             rslt.date = date
             return rslt
 
-        old_pos   = rslt.long_position , rslt.short_position
-        old_value = rslt.value
+        long , short , value = rslt.long_position , rslt.short_position , rslt.value
 
         q = DATAVENDOR.get_quote_ret(old_date , new_date)
         assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
-        port = rslt.port.merge(q , on = 'secid')
+
+        # port = rslt.port.assign(ret = q['ret'].values)
+        port = rslt.port.merge(q , on = 'secid').fillna(0)
         port['new_weight'] = port['weight'] * (1 + port['ret'])
 
         rslt.date = date
-        rslt.value = old_value * (1. + port['new_weight'].sum() - port['weight'].sum())
-        port['weight'] = port['new_weight'] * old_value / rslt.value
+        rslt.value = value * (1. + port['new_weight'].sum() - port['weight'].sum())
+        port['weight'] = port['new_weight'] * value / rslt.value
         rslt.port = port.loc[:,['secid' , 'weight']].sort_values('weight' , ascending=False)
         if rebalance: 
-            rslt.rebalance(*old_pos)
+            rslt.rebalance(long , short)
         return rslt
     
     def fut_ret(self , new_date : int | None = None ,
@@ -102,12 +103,12 @@ class Port:
                 price1 : Literal['close' , 'vwap' , 'open'] = 'close') -> float:
         if not self: 
             return 0.
-        old_date = DATAVENDOR.td(self.date).td
+        old_date = DATAVENDOR.td(self.date)
         if new_date is None: 
-            new_date = DATAVENDOR.td(old_date , 1).td
-        
+            new_date = DATAVENDOR.td(old_date , 1)
         q = DATAVENDOR.get_quote_ret(old_date , new_date , price0 , price1)
-        assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
+        assert q is not None, f'Ret Quote (at {new_date}) is does not exists' 
+        # return (self.port['weight'] * q['ret'].values).sum()       
         port = self.port.merge(q , on = 'secid').fillna(0)
         return (port['weight'] * port['ret']).to_numpy().sum()
     

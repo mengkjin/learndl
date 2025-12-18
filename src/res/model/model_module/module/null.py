@@ -1,6 +1,7 @@
 import torch
 from typing import Any
 
+from src.proj import Logger
 from src.res.model.util import BasePredictorModel , BatchData
 
 class NullPredictor(BasePredictorModel):
@@ -44,7 +45,7 @@ class NullPredictor(BasePredictorModel):
     def test(self):
         '''test the model inside'''
         if self.trainer.verbosity > 10:
-            print('model test start')
+            Logger.stdout('model test start')
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -53,7 +54,7 @@ class NullPredictor(BasePredictorModel):
                 self.batch_metrics()
 
         if self.trainer.verbosity > 10: 
-            print('model test done')
+            Logger.stdout('model test done')
 
     def collect(self , *args):
         return self.model_dict

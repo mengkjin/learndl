@@ -144,8 +144,10 @@ class AlphaModel(GeneralModel):
             data = data.reset_index()
         assert 'secid' in data and 'date' in data , data.columns
         models = [Amodel.from_dataframe(date , sub_data) for date , sub_data in data.groupby('date')]
-        assert models , f'no models created'
-        return cls(name if name else models[0].name , models)
+        assert models or name , f'no models created, name must be submitted too!'
+        if name is None:
+            name = models[0].name
+        return cls(name , models)
 
     def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] , override = True):
         if isinstance(model , Amodel):

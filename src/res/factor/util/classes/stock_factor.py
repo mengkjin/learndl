@@ -12,7 +12,9 @@ from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
 from .alpha_model import AlphaModel
+from .risk_model import RISK_MODEL
 from .benchmark import Benchmark
+from .universe import Universe
 
 __all__ = ['StockFactor']
 
@@ -222,8 +224,10 @@ class StockFactor:
         else:
             return super().__new__(cls)
 
-    def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' = None , normalized = False):
-        self.update(factor if factor is not None else pd.DataFrame() , normalized)
+    def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' = None , normalized = False , factor_names : list[str] | None = None):
+        if factor is None:
+            factor = pd.DataFrame()
+        self.update(factor , normalized , factor_names)
         InstanceRecord.update_factor(self)
 
     def __repr__(self):
@@ -243,13 +247,25 @@ class StockFactor:
         """
         return self.prior_input.empty
 
-    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' , normalized = False):
+    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , factor_names : list[str] | None = None):
         """
         update the factor data
         """
+        factor_names = factor_names or []
         if isinstance(factor , StockFactor):
             assert factor.normalized == normalized , f'normalized must be the same as the original factor : {factor.normalized} != {normalized}'
             return factor
+
+        if isinstance(factor , dict):
+            if not factor:
+                factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
+            else:
+                factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
+                                    for d , f in factor.items() if not f.empty])
+        elif isinstance(factor , pd.Series):
+            factor = factor.to_frame()
+            
+        assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or DataBlock , but got {type(factor)} : {factor}'
 
         self._df  : pd.DataFrame | Any = None
         self._blk : DataBlock | Any = None
@@ -257,18 +273,10 @@ class StockFactor:
         self.normalized = normalized
         self.subsets : dict[str,StockFactor] = {}
         self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
-        if isinstance(factor , StockFactor):
-            factor = factor.prior_input
-        elif isinstance(factor , dict):
-            factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
-                                for d , f in factor.items() if not f.empty])
-        elif isinstance(factor , pd.Series):
-            factor = factor.to_frame()
 
-        assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or a DataBlock , but got {type(factor)} : {factor}'
         if isinstance(factor , pd.DataFrame):
             if factor.empty:
-                factor = pd.DataFrame(columns=['date' , 'secid'])
+                factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
             factor = factor.reset_index().drop(columns=['index'] , errors='ignore')
             if 'date' in factor.columns: 
                 factor = factor.set_index('date' , append=True)
@@ -277,8 +285,12 @@ class StockFactor:
             if None in factor.index.names:
                 factor = factor.reset_index([None] , drop=True)
             self._df = factor
-        else:
+        elif isinstance(factor , DataBlock):
+            if factor.empty:
+                factor = factor.align_feature(factor_names)
             self._blk = factor
+        else:
+            raise TypeError(f'Unknown factor type: {type(factor)}')
 
         return self
 
@@ -296,6 +308,14 @@ class StockFactor:
             return self
         df = self._df.query('date not in @dates' if exclude else 'date in @dates')
         return self.update(df , normalized = self.normalized) if inplace else StockFactor(df , normalized = self.normalized)
+
+    def filter_dates_between(self , start_dt : int , end_dt : int , inplace = False):
+        """
+        filter the factor data by dates between start_dt and end_dt
+        """
+        dates = self.date
+        dates = dates[(dates >= start_dt) & (dates <= end_dt)]
+        return self.filter_dates(dates , inplace = inplace)
 
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         if secid is None: 
@@ -482,6 +502,26 @@ class StockFactor:
                 self._alpha_models[name] = self._get_alpha_model(name)
             models.append(self._alpha_models[name])
         return models
+
+    def risk_model(self , load = True):
+        """
+        load the risk model for the factor
+        """
+        return RISK_MODEL.load_models(self.date if load else None)
+
+    def universe(self , name : str = 'top-1000' , load = True):
+        """
+        get the universe for the factor
+        """
+        univ = Universe(name)
+        univ.to_portfolio(self.date if load else None)
+        return univ
+
+    def day_quotes(self , load = True):
+        """
+        get the daily quotes for the factor
+        """
+        return DATAVENDOR.get_quotes(self.date if load else None , extend = 60)
 
     def _get_alpha_model(self , name : str):
         """

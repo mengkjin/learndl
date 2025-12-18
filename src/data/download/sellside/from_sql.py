@@ -174,7 +174,7 @@ class SellsideSQLDownloader:
         if not date_intervals: 
             return 
         
-        print(f'Download: {self.DB_SRC}/{self.db_key} from ' + 
+        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} from ' + 
             f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
@@ -281,7 +281,7 @@ class SellsideSQLDownloader:
             df0 = pd.DataFrame(columns = pd.Index(['date','code'])).astype(int)
             for k,subdf in df.items():
                 subdf.rename(columns = {'factor':k})
-                # print(subdf.iloc[:5])
+                # Logger.stdout(subdf.iloc[:5])
                 df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','code'])
             df = secid_adjust(df0 , ['code'] , drop_old=True)
             df['date']  = df['date'].astype(int)
@@ -400,8 +400,8 @@ class SellsideSQLDownloader:
     def update_allaround(cls):
 
         prompt = f'Download: {cls.__name__} allaround!'
-        assert (x := input(prompt + ', print "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        assert (x := input(prompt + ', print "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
+        assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
+        assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
         Logger.info(prompt)
 
         for factor , connection in cls.factors_and_conns():  

@@ -122,7 +122,8 @@ class TopFMPTest(BaseFactorAnalyticTest):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(n_bests = n_bests , verbosity = verbosity)
-        self.portfolio_group = PortfolioGroupBuilder('top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , **self.kwargs)
+        self.portfolio_group = PortfolioGroupBuilder(
+            'top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , start_dt = self.start_dt , end_dt = self.end_dt , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
@@ -137,7 +138,8 @@ class TopFMPTest(BaseFactorAnalyticTest):
         self.kwargs.update({
             'add_lag': 0 ,# 1 if any([task in self.tasks for task in ['perf_lag']]) else 0 ,
             'analytic':any([task in self.tasks for task in ['exp_style' , 'exp_indus']]) ,
-            'attribution':any([task in self.tasks for task in ['attrib_source' , 'attrib_style']])})
+            'attribution':any([task in self.tasks for task in ['attrib_source' , 'attrib_style']]) ,
+        })
         self.kwargs['param_groups'] = {f'Top{n:3d}':{'n_best':n} for n in n_bests}
         self.kwargs.update(kwargs)
         return self

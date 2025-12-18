@@ -5,6 +5,8 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
+from src.proj import Logger
+
 def add_multiloss_params(module : torch.nn.Module , num_of_heads : int):
     if num_of_heads > 1:
         module.multiloss_alpha = torch.nn.Parameter((torch.ones(num_of_heads) + 1e-4).requires_grad_())
@@ -203,6 +205,6 @@ class MultiHeadLosses:
             ax2.set_title('Weight for Epoch')
             ax2.legend()
         else:
-            print(f'Unknow multi_type : {multi_type}')
+            Logger.warning(f'Unknow multi_type : {multi_type}')
         plt.show()
         #plt.close(fig)

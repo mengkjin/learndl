@@ -87,7 +87,11 @@ class BaseFactorAnalyticTest(ABC):
     TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
     TEST_TITLE = TestTitle()
 
-    def __init__(self , test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False, save_resumable : bool = False , which : str | list[str] | Literal['all'] = 'all' , **kwargs):
+    def __init__(
+        self , test_name : str | None = None , test_path : Path | str | None = None , 
+        resume : bool = False, save_resumable : bool = False , start_dt : int = -1 , end_dt : int = 99991231 , 
+        which : str | list[str] | Literal['all'] = 'all' , **kwargs
+    ):
         candidates = {task.task_name():task for task in self.TASK_LIST}
             
         self.kwargs = kwargs
@@ -95,6 +99,8 @@ class BaseFactorAnalyticTest(ABC):
         self.test_path = test_path
         self.resume = resume
         self.save_resumable = save_resumable
+        self.start_dt = start_dt
+        self.end_dt = end_dt
         if which == 'all':
             self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:
@@ -110,8 +116,9 @@ class BaseFactorAnalyticTest(ABC):
 
     @classmethod
     def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , verbosity = 2 , which = 'all' , save_resumable : bool = False , **kwargs):
-        pm = cls(test_name , test_path , resume , save_resumable , which , **kwargs)
+                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
+                 verbosity = 2 , start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
+        pm = cls(test_name , test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
         pm.calc(StockFactor(factor) , benchmark , verbosity = verbosity)
         pm.plot(show = False , verbosity = verbosity)
         return pm

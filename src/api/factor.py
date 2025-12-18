@@ -27,11 +27,11 @@ def get_factor(names = None , factor_type : Literal['factor' , 'pred'] = 'factor
                start_dt = 20240101 , end_dt = 20240331 , step = 5 , verbosity = 1):
     if not names or names == 'random':
         if verbosity > 0: 
-            print(f'Getting random factor values...')
+            Logger.info(f'Getting random factor values...')
         return get_random_factor(start_dt , end_dt , step)
     else:
         if verbosity > 0: 
-            print(f'Getting factor values for {names}...')
+            Logger.info(f'Getting factor values for {names}...')
         return get_real_factor(names , factor_type , start_dt , end_dt , step)
 
 class FactorAPI:

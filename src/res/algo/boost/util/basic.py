@@ -9,7 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.basic import DB
 from src.func import ic_2d , rankic_2d
 
@@ -93,7 +93,7 @@ class BasicBoosterModel(ABC):
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
                 if not self.silent: 
-                    print(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
+                    Logger.warn(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
             n_bins = min(n_bins , self.DEFAULT_CATEGORICAL_MAX_BINS)            
         train_param['n_bins'] = n_bins
 

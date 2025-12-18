@@ -8,7 +8,7 @@
 # mode: os
 
 from datetime import datetime
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.app import change_power_mode , get_running_scripts
 
 def main():
@@ -18,7 +18,7 @@ def main():
     if running_scripts:
         main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to saver'
         main_str += f' aborted due to running scripts: {running_scripts}\n'
-        print(main_str , end = '')
+        Logger.stdout(main_str , end = '')
         with open(log_path, 'a') as log_file:
             log_file.write(main_str)
     else:

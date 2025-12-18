@@ -10,6 +10,7 @@ from deap import base , creator , tools , gp
 from copy import deepcopy
 from tqdm import tqdm
 
+from src.proj import Logger
 from src.basic import torch_load
 from . import gp_math_func as MF
 from . import gp_factor_func as FF
@@ -508,7 +509,7 @@ class gpFileManager:
             start_time_sku = datetime.now()
             output_path = f'{self.dir.sku}/z_{pool_skuname}.txt'
             with open(output_path, 'w', encoding='utf-8') as file1:
-                print(gpHandler.syx2str(individual),'\n start_time',str(start_time_sku),file=file1)
+                Logger.stdout(gpHandler.syx2str(individual),'\n start_time',str(start_time_sku),file=file1)
 
     def record_basename(self , i_iter = 0 , i_gen = 0):
         iter_str = 'iteration' if i_iter < 0 else f'iter{i_iter}'
@@ -580,16 +581,16 @@ class gpTimer:
         self.df_cols = {}
 
     class PTimer:
-        def __init__(self , key , record = False , target_dict : dict | None = None , print = True , print_str = None , memory_check = False):
+        def __init__(self , key , record = False , target_dict : dict | None = None , printing = True , print_str = None , memory_check = False):
             self.key = key
             self.record = record
             self.target_dict = target_dict or {}
-            self.print = print
+            self.printing = printing
             self.print_str = key if print_str is None else print_str
             self.memory_check = memory_check and torch.cuda.is_available()
         def __enter__(self):
-            if self.print: 
-                print('-' * 20 + f' {self.key} ' + '-' * 20)
+            if self.printing: 
+                Logger.stdout('-' * 20 + f' {self.key} ' + '-' * 20)
             self._init_time = datetime.now()
             if self.memory_check and torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -597,7 +598,7 @@ class gpTimer:
             return self
         def __exit__(self, type, value, trace):
             if type is not None:
-                print(f'Error in PTimer {self.key}' , type , value)
+                Logger.error(f'Error in PTimer {self.key}' , type , value)
                 traceback.print_exc()
             else:
                 time_cost = (datetime.now() - self._init_time).total_seconds()
@@ -609,8 +610,8 @@ class gpTimer:
                     mem_info = ''
                 if self.record: 
                     self.append_time(self.target_dict , self.key , time_cost)
-                if self.print: 
-                    print(f'{self.print_str} Done, Cost {time_cost:.2f} Secs' + mem_info)
+                if self.printing: 
+                    Logger.success(f'{self.print_str} Done, Cost {time_cost:.2f} Secs' + mem_info)
                 return self
         def add_string(self , new_str):
             self.print_str = self.print_str + new_str
@@ -629,7 +630,7 @@ class gpTimer:
             self._init_time = datetime.now()
         def __exit__(self, type, value, trace):
             if type is not None:
-                print(f'Error in AccTimer {self.key}' , type , value)
+                Logger.error(f'Error in AccTimer {self.key}' , type , value)
                 traceback.print_exc()
             else:
                 self.time  += (datetime.now() - self._init_time).total_seconds()
@@ -650,13 +651,13 @@ class gpTimer:
             pass
         def __exit__(self, type, value, trace):
             if type is not None:
-                print(f'Error in EmptyTimer ' , type , value)
+                Logger.error(f'Error in EmptyTimer ' , type , value)
                 traceback.print_exc()
         
-    def __call__(self , key , print = True , df_cols = True , print_str = None , memory_check = False):
+    def __call__(self , key , printing = True , df_cols = True , print_str = None , memory_check = False):
         if df_cols: 
             self.df_cols.update({key:True})
-        return self.PTimer(key , self.recording , self.recorder , print = print , print_str = print_str , memory_check = memory_check)
+        return self.PTimer(key , self.recording , self.recorder , printing = printing , print_str = print_str , memory_check = memory_check)
     def __repr__(self):
         return self.recorder.__repr__()
     def __bool__(self): 
@@ -677,7 +678,7 @@ class gpTimer:
             df = pd.DataFrame(data = {k:self.recorder[k] for k in columns} , dtype=dtype) 
         if showoff: 
             with pd.option_context('display.width' , 160 ,  'display.max_colwidth', 10 , 'display.precision', 4,):
-                print(df)
+                Logger.stdout(df)
         return df.round(6)
 
 class MemoryManager():
@@ -699,7 +700,8 @@ class MemoryManager():
         gmem_free = torch.cuda.mem_get_info(self.device)[0] / self.unit
         torch.cuda.empty_cache()
         if gmem_free > critical_ratio * self.gmem_total and not showoff: 
-            # if showoff: print(f'**Cuda Memory: Free {gmem_free:.1f}G') 
+            # if showoff: 
+            #     Logger.stdout(f'**Cuda Memory: Free {gmem_free:.1f}G') 
             return gmem_free
         
         gmem_freed = torch.cuda.mem_get_info(self.device)[0] / self.unit - gmem_free
@@ -712,7 +714,7 @@ class MemoryManager():
                 self.record[key] = []
             self.record[key].append(gmem_freed)
         if showoff: 
-            print(f'{starter}{datetime.now()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+            Logger.stdout(f'{starter}{datetime.now()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
         
         return gmem_free
     
@@ -745,9 +747,9 @@ class MemoryManager():
     
     def print_memeory_record(self):
         if self.cuda_avail:
-            print(f' Avg Freed Cuda Memory: ')
+            Logger.stdout(f' Avg Freed Cuda Memory: ')
             for key , value in self.record.items():
-                print(f'  -->  {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
+                Logger.stdout(f'  -->  {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
     
     @classmethod
     def clear_and_check(cls , silent = True):
@@ -758,7 +760,7 @@ class MemoryManager():
             gmem_free += gmem_freed
             gmem_allo  = torch.cuda.memory_allocated() / cls.unit
             gmem_rsrv  = torch.cuda.memory_reserved() / cls.unit
-            print(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+            Logger.stdout(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
 
     @staticmethod
     def except_MemoryError(func , out = None , print_str = ''):
@@ -766,7 +768,7 @@ class MemoryManager():
             try:
                 value = func(*args , **kwargs)
             except torch.cuda.OutOfMemoryError:
-                print(f'OutOfMemoryError on {print_str}')
+                Logger.warning(f'OutOfMemoryError on {print_str}')
                 torch.cuda.empty_cache()
                 value = out
             return value
@@ -819,7 +821,7 @@ class gpEliteGroup:
             self.container.append(gpEliteBlock(self.block_len).append(factor , **kwargs))
         self.position.append((len(self.container)-1,self.container[-1].len()-1))
         if isinstance(starter,str): 
-            print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
+            Logger.stdout(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
         self.i_elite += 1
         return self
     
@@ -837,7 +839,7 @@ class gpEliteGroup:
             try:
                 new_tensor = torch.cat([block.data_to_device(device) for block in self.container] , dim = -1)
             except torch.cuda.OutOfMemoryError:
-                print('OutofMemory when compiling elite tensor, try use cpu to concat')
+                Logger.warning('OutofMemory when compiling elite tensor, try use cpu to concat')
                 new_tensor = torch.cat([block.data_to_device('cpu') for block in self.container] , dim = -1)
                 new_tensor = new_tensor.to(device)
         else:
@@ -863,7 +865,7 @@ class gpEliteGroup:
         iterator = [(i,*self.position[i],j,*self.position[j]) for i in range(total) for j in range(i+1,total)]
         iter_df = pd.DataFrame(iterator , columns = pd.Index(['ii','ib','ik','jj','jb','jk']))
         iter_df = iter_df.sort_values(['ib' , 'jb' , 'ik' , 'jk'])
-        print(f'Total Correlation Counts : {len(iter_df)}')
+        Logger.stdout(f'Total Correlation Counts : {len(iter_df)}')
         for grp , sub_df in iter_df.groupby(['ib' , 'jb']):
             ib , jb = grp # type: ignore
             Blk_i = self.container[ib].data_to_device(self.device)
@@ -894,7 +896,7 @@ class gpEliteBlock:
                 if isinstance(data , torch.Tensor): 
                     self.data = data.cpu()
             except MemoryError:
-                print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
+                Logger.warning('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                 gc.collect()
                 self.data = MF.concat_factors(*self.data , device=torch.device('cpu')) # to cpu first
         assert self.data is not None , f'{self} has data None'

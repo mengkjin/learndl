@@ -89,9 +89,9 @@ class DataModule(BaseDataModule):
         self.data_dates = dates
 
         if self.config.module_type in ['factor' , 'db']:
-            # first day's previous day and every month end
+            # previos month end (use calendar date)
             self.test_full_dates = dates
-            self.model_date_list = np.concatenate([self.datas.date[self.datas.date < self.beg_date][-1:] , dates[np.where(np.diff(dates // 100) != 0)[0]]])
+            self.model_date_list = CALENDAR.td_array(CALENDAR.cd_array(np.unique(dates // 100) * 100 + 1 , -1))
         else:
             self.test_full_dates = dates[1:]
             if self.use_data == 'predict':

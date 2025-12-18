@@ -1,6 +1,7 @@
 import torch
 from torch import nn , Tensor
 
+from src.proj import Logger
 from .Recurrent import get_rnn_mod
 
 class block_tra(nn.Module):
@@ -46,13 +47,13 @@ class block_tra(nn.Module):
             else:
                 temporal_pred_error = torch.randn(router_out[:, -1].shape).to(x)
 
-            # print(x.shape , preds.shape , latent_representation.shape, temporal_pred_error.shape)
+            # Logger.stdout(x.shape , preds.shape , latent_representation.shape, temporal_pred_error.shape)
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
             if probs.isnan().any():
-                print(preds , x)
-                print(probs)
-                print(latent_representation , temporal_pred_error)
-                from src.res import api
+                Logger.stdout(preds , x)
+                Logger.stdout(probs)
+                Logger.stdout(latent_representation , temporal_pred_error)
+                from src import api
                 setattr(api , 'net' , self)
                 setattr(api , 'x' , x)
                 setattr(api , 'hist_loss' , hist_loss)
@@ -61,8 +62,8 @@ class block_tra(nn.Module):
 
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
             if probs.isnan().any():
-                print(probs)
-                from src.res import api
+                Logger.stdout(probs)
+                from src import api
                 setattr(api , 'net' , self)
                 setattr(api , 'x' , x)
                 setattr(api , 'hist_loss' , hist_loss)
@@ -102,12 +103,12 @@ class block_tra(nn.Module):
 
         loss = - lamb * reg
         if loss.isnan().any():
-            print(label.isnan().any())
-            print(square_error)
-            print(lamb , self.gamma , self.rho , self.global_steps)
-            print(self.probs.isnan().any())
-            print((self.probs + 1e-4).log().isnan().any())
-            from src.res import api
+            Logger.stdout(int(label.isnan().any()))
+            Logger.stdout(square_error)
+            Logger.stdout(lamb , self.gamma , self.rho , self.global_steps)
+            Logger.stdout(self.probs.isnan().any())
+            Logger.stdout((self.probs + 1e-4).log().isnan().any())
+            from src import api
             setattr(api , 'net' , self)
             raise ValueError
         return loss

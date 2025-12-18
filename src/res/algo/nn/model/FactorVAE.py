@@ -2,6 +2,7 @@ import torch
 from torch import nn,Tensor
 from torch.distributions import Normal , kl_divergence
 
+from src.proj import Logger
 from ..layer.MLP import MLP
 
 class FactorVAE(nn.Module):
@@ -56,7 +57,7 @@ class FactorVAE(nn.Module):
             y_hat, mu_alpha, sigma_alpha, beta = self.factor_decoder(latent_features , factors_post , alpha_noise)
             
             mu_prior, sigma_prior = self.factor_predictor(latent_features)
-            #print(mu_post, sigma_post , mu_prior, sigma_prior)
+            #Logger.stdout(mu_post, sigma_post , mu_prior, sigma_prior)
             loss_KL = kl_divergence(Normal(mu_post, sigma_post) , Normal(mu_prior, sigma_prior)).sum()
             y_hat = self.bn(y_hat)
             assert ~loss_KL.isnan().any() and abs(loss_KL <= 1.0e20) , loss_KL
@@ -75,7 +76,7 @@ class FactorVAE(nn.Module):
 
     def get_decoder_distribution(self, mu_alpha : Tensor, sigma_alpha : Tensor, mu_factor : Tensor,
                                  sigma_factor : Tensor, beta : Tensor):
-        # print(mu_alpha.shape, mu_factor.shape, sigma_factor.shape, beta.shape)
+        # Logger.stdout(mu_alpha.shape, mu_factor.shape, sigma_factor.shape, beta.shape)
         mu_dec = mu_alpha + torch.mm(beta, mu_factor.reshape(beta.shape[-1] , -1))
         sigma_dec = (sigma_alpha.square() + torch.mm(beta.square(), sigma_factor.square().reshape(beta.shape[-1] , -1))).sqrt()
         return mu_dec, sigma_dec
@@ -249,40 +250,40 @@ if __name__ == '__main__':
 
     extractor = FeatureExtractor()
     h : Tensor = extractor(x)
-    print(f'Hidden Features shape : {h.shape}') 
+    Logger.stdout(f'Hidden Features shape : {h.shape}') 
 
     portfolio = PortfolioLayer()
     p = portfolio(h)
-    print(f'Portoflio shape : {p.shape}') 
+    Logger.stdout(f'Portoflio shape : {p.shape}') 
 
     encoder = FactorEncoder()
     mu_post, sigma_post = encoder(h , f)
-    print(f'mu_post shape : {mu_post.shape} , sigma_post shape : {sigma_post.shape}') 
+    Logger.stdout(f'mu_post shape : {mu_post.shape} , sigma_post shape : {sigma_post.shape}') 
 
     factor_sampling = VAESampling()
     factors = factor_sampling(mu_post , sigma_post)
-    print(f'A post factor sample : {factors} ') 
+    Logger.stdout(f'A post factor sample : {factors} ') 
 
     beta = BetaLayer()
-    print(f'Beta shape : {beta(h).shape}') 
+    Logger.stdout(f'Beta shape : {beta(h).shape}') 
 
     alpha = AlphaLayer()
     mu_alpha, sigma_alpha = alpha(h)
-    print(f'mu_alpha shape : {mu_alpha.shape} , sigma_alpha shape : {sigma_alpha.shape}') 
+    Logger.stdout(f'mu_alpha shape : {mu_alpha.shape} , sigma_alpha shape : {sigma_alpha.shape}') 
 
     decorder = FactorDecoder()
     stock_returns, mu_alpha, sigma_alpha, beta = decorder(h , factors)
-    print(f'stock_returns shape : {stock_returns.shape} , mu_alpha shape : {mu_alpha.shape} , sigma_alpha shape : {sigma_alpha.shape}') 
+    Logger.stdout(f'stock_returns shape : {stock_returns.shape} , mu_alpha shape : {mu_alpha.shape} , sigma_alpha shape : {sigma_alpha.shape}') 
 
     predictor = FactorPredictor()
     mu_prior, sigma_prior = predictor(h)
-    print(f'mu_prior shape : {mu_prior.shape} , sigma_prior shape : {sigma_prior.shape}') 
+    Logger.stdout(f'mu_prior shape : {mu_prior.shape} , sigma_prior shape : {sigma_prior.shape}') 
 
     factor_vae = FactorVAE()
     factor_vae.train()
     y_hat , loss_KL = factor_vae(x , f)
-    print(f'y_hat for training shape : {y_hat.shape} , loss_KL is : {loss_KL}') 
+    Logger.stdout(f'y_hat for training shape : {y_hat.shape} , loss_KL is : {loss_KL}') 
     
     factor_vae.eval()
     y_hat = factor_vae(x , f)
-    print(f'y_hat for eval shape : {y_hat.shape}') 
+    Logger.stdout(f'y_hat for eval shape : {y_hat.shape}') 

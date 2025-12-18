@@ -58,6 +58,7 @@ def log_config() -> dict[str, Any]:
     return log_config
 
 def new_log(config : dict[str, Any]) -> logging.Logger:
+    """create a new logger with the config"""
     log = logging.getLogger(config['name'])
     log.setLevel(getattr(logging , config['level']))
     reset_logger(log , config)
@@ -106,6 +107,11 @@ class Logger:
         cls.dump_to_logwriter(*args)
 
     @classmethod
+    def stdout(cls , *args , **kwargs):
+        """custom stdout message"""
+        print(*args , **kwargs)
+
+    @classmethod
     def success(cls , *args , **kwargs):
         """custom green colored Mark level message"""
         sys.stdout.write(f"\u001b[32m{' '.join(args)}\u001b[0m" + '\n')
@@ -114,6 +120,11 @@ class Logger:
     def fail(cls , *args , **kwargs):
         """custom red colored Fail level message"""
         sys.stderr.write(f"\u001b[31m{' '.join(args)}\u001b[0m" + '\n')
+
+    @classmethod
+    def warn(cls , *args , **kwargs):
+        """custom yellow colored Warning level message"""
+        sys.stderr.write(f"\u001b[33m{' '.join(args)}\u001b[0m" + '\n')
 
     @classmethod
     def highlight(cls , *args , default_prefix = False , **kwargs):
@@ -188,7 +199,7 @@ class Logger:
 
     class ParagraphI:
         """
-        Format Enclosed process to print out time
+        Format Enclosed process to count time
         example:
             with Logger.ParagraphI('Process Name'):
                 Logger.info('This is the enclosed process...')
@@ -206,7 +217,7 @@ class Logger:
 
     class ParagraphII:
         """
-        Format Enclosed process to print out time
+        Format Enclosed process to count time
         example:
             with Logger.ParagraphII('Process Name'):
                 Logger.info('This is the enclosed process...')
@@ -251,8 +262,9 @@ class Logger:
                 Logger.highlight(' '.join([padding_left , message , padding_right]))
 
     class Profiler(cProfile.Profile):
-        def __init__(self, profiling = False , builtins = True , display = True , n_head = 20 , 
-                     columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where' , 'caller'] , sort_on = 'cumtime' , highlight = None , output = None ,
+        """Profiler class for profiling the code, show the profile result in the best way"""
+        def __init__(self, profiling = True , builtins = False , display = True , n_head = 20 , 
+                     columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where'] , sort_on = 'cumtime' , highlight = None , output = None ,
                      **kwargs) -> None:
             self.profiling = profiling
             if self.profiling: 
@@ -281,6 +293,7 @@ class Logger:
                 return super().__exit__(type , value , trace)
 
         def get_df(self , sort_on = 'cumtime' , highlight = None , output = None):
+            """Get the profile result as a pandas dataframe"""
             if not self.profiling: 
                 return pd.DataFrame()
             # highlight : 'gp_math_func.py'
@@ -300,12 +313,17 @@ class Logger:
             if isinstance(highlight , str): 
                 df = df[df.full_name.str.find(highlight) > 0]
             if isinstance(output , str): 
-                df.to_csv(output)
+                path = PATH.log_profile.joinpath(output).with_suffix('.csv')
+                df.to_csv(path)
+                print(f'Profile result saved to {path}')
             return df.reset_index(drop=True)
 
         @staticmethod
         def decompose_func_str(func_string):
-            # Define the regular expression pattern to extract information
+            """
+            Decompose the function string into a list of information
+            return: type , name , where , memory
+            """
             pattern = {
                 r'<code object (.+) at (.+), file (.+), line (\d+)>' : ['function' , (0,) , (2,3) , (1,)] ,
                 r'<function (.+) at (.+)>' : ['function' , (0,) , () , ()] ,
@@ -328,4 +346,5 @@ class Logger:
             if data is None: 
                 print(func_string)
                 data = [''] * 4
+            data[2] = data[2].replace(str(PATH.main) , '')
             return data

@@ -2,6 +2,7 @@ import torch
 from torch import set_grad_enabled
 from typing import Any
 
+from src.proj import Logger
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
@@ -65,7 +66,7 @@ class NNPredictor(BasePredictorModel):
 
     def fit(self):
         if self.trainer.verbosity > 10: 
-            print('model fit start')
+            Logger.stdout('model fit start')
 
         self.new_model()
         for _ in self.trainer.iter_fit_epoches():
@@ -79,12 +80,12 @@ class NNPredictor(BasePredictorModel):
                 self.batch_metrics()
 
         if self.trainer.verbosity > 10: 
-            print('model fit done')
+            Logger.stdout('model fit done')
 
     def test(self):
         '''test the model inside'''
         if self.trainer.verbosity > 10:
-            print('model test start')
+            Logger.stdout('model test start')
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -93,7 +94,7 @@ class NNPredictor(BasePredictorModel):
                 self.batch_metrics()
 
         if self.trainer.verbosity > 10: 
-            print('model test done')
+            Logger.stdout('model test done')
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)

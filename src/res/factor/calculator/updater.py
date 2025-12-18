@@ -88,7 +88,7 @@ class _JobFactorDate(_BaseJob):
     
     def preview(self) -> None:
         """preview the job"""
-        print(f'{self.level} : {self.factor_name} at {self.date}')
+        Logger.stdout(f'{self.level} : {self.factor_name} at {self.date}')
 
 class _JobFactorAll(_BaseJob):
     """single factor update all job"""
@@ -117,7 +117,7 @@ class _JobFactorAll(_BaseJob):
 
     def preview(self) -> None:
         """preview the job"""
-        print(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}')
+        Logger.stdout(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}')
 
 class _JobFactorStats(_BaseJob):
     """single factor stats update all job"""
@@ -153,7 +153,7 @@ class _JobFactorStats(_BaseJob):
     
     def preview(self) -> None:
         """preview the job"""
-        print(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}')
+        Logger.stdout(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}')
 
 class BaseFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
@@ -233,7 +233,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         if cls.jobs:
             Logger.info(f'Finish Collecting {len(cls.jobs)} Jobs for {cls.__name__}')
         else:
-            print(f'Skipping: There is no {cls.__name__} Jobs to Proceed...')
+            Logger.stdout(f'Skipping: There is no {cls.__name__} Jobs to Proceed...')
         
     @classmethod
     def before_process_jobs(cls , start : int | None = None , end : int | None = None , 
@@ -318,7 +318,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         assert factors , 'factors are required for fix'
         factors = [factor for factor in cls.factors() if factor in factors]
         if factors:
-            print(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
+            Logger.stdout(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
             cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
 
     @classmethod
@@ -374,18 +374,18 @@ class StockFactorUpdater(BaseFactorUpdater):
         """process a group of stock factor update jobs"""
         DATAVENDOR.data_storage_control()
         if verbosity > 1:
-            print(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)))
+            Logger.stdout(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)))
         parallel({job:job.do for job in jobs} , method = cls.multi_thread)
         if verbosity > 0:
-            print(f'Stock Factor Update of {group} Done: {sum(job.done for job in jobs)} / {len(jobs)}')
+            Logger.success(f'Stock Factor Update of {group} Done: {sum(job.done for job in jobs)} / {len(jobs)}')
         if failed_jobs := [job for job in jobs if not job.done]: 
-            print(f'Failed Stock Factors: {failed_jobs}')
+            Logger.warn(f'Failed Stock Factors: {failed_jobs}')
             if cls.multi_thread:
                 # if multi_thread is True, auto retry failed jobs
-                print(f'Auto Retry Failed Stock Factors...')
+                Logger.stdout(f'Auto Retry Failed Stock Factors...')
                 parallel({job:job.do for job in failed_jobs} , method = cls.multi_thread)
                 if failed_jobs := [job for job in jobs if not job.done]:
-                    print(f'Failed Stock Factors Again: {failed_jobs}')
+                    Logger.warn(f'Failed Stock Factors Again: {failed_jobs}')
 
 class MarketFactorUpdater(BaseFactorUpdater):
     """manager of market factor update jobs"""
@@ -456,7 +456,7 @@ class FactorStatsUpdater(BaseFactorUpdater):
     def process_group_jobs(cls , group : Any , jobs : list[_BaseJob] , 
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of factor stats update jobs"""
-        print(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates')
+        Logger.stdout(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates')
         if verbosity > 1 and len(jobs) <= 10:
-            print(f'Jobs included: {jobs}')
+            Logger.stdout(f'Jobs included: {jobs}')
         parallel({job:job.do for job in jobs} , method = cls.multi_thread)

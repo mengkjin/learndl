@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal , Any
 from dataclasses import dataclass , asdict , field
 
-from src.proj import PATH , MACHINE , Options # noqa
+from src.proj import PATH , Logger , MACHINE , Options # noqa
 from src.app.abc import ScriptCmd
 from .task import TaskItem , TaskQueue
     
@@ -110,30 +110,28 @@ class ScriptHeader:
                         break
 
             yaml_str = '\n'.join(line.removeprefix(include_starter) for line in yaml_lines)
-            header = cls(**(yaml.safe_load(yaml_str) or {}))
+            kwargs = yaml.safe_load(yaml_str) or {}
+            kwargs['description'] = kwargs.get('description') or path.name
         except FileNotFoundError:
-            header = cls(
-                disabled = True, 
-                content = f'file not found : {path}', 
-                description = 'file not found'
-            )
+            kwargs = {
+                'disabled': True, 
+                'content': f'file not found : {path}', 
+                'description': 'file not found'
+            }
         except yaml.YAMLError as e:
-            header = cls(
-                disabled = True, 
-                content = f'YAML parsing error : {e}', 
-                description = 'YAML parsing error'
-            )
+            kwargs = {
+                'disabled': True, 
+                'content': f'YAML parsing error : {e}', 
+                'description': 'YAML parsing error'
+            }
         except Exception as e:
-            header = cls(
-                disabled = True, 
-                content = f'read file error : {e}', 
-                description = 'read file error'
-            )
-
-        if not header.description: 
-            header.description = path.name
+            kwargs = {
+                'disabled': True, 
+                'content': f'read file error : {e}', 
+                'description': 'read file error'
+            }
             
-        return header
+        return cls(**kwargs)
 
     @property
     def ready(self):
@@ -177,8 +175,8 @@ class ScriptParamInput:
                 try:
                     ptype = eval(self.type)
                 except Exception as e:
-                    print(e)
-                    print(f'Invalid type: {self.type} , using str as default')
+                    Logger.warning(e)
+                    Logger.warning(f'Invalid type: {self.type} , using str as default')
                     ptype = str
         elif isinstance(self.type, (list, tuple)):
             ptype = list(self.type)

@@ -3,6 +3,7 @@ from dataclasses import dataclass , field
 import torch
 import pandas as pd
 
+from src.proj import Logger
 from . import gp_math_func as MF
 
 @dataclass
@@ -139,12 +140,12 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
         torch.cuda.empty_cache()
         tscorr = []
         for i in range(x.shape[dim]):
-            # print(x.select(dim , i).shape , y.select(dim , 0).shape)
+            # Logger.stdout(x.select(dim , i).shape , y.select(dim , 0).shape)
             tscorr.append(MF.corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
         tscorr = torch.stack(tscorr , dim = new_dim)
     x = tscorr.transpose(-1 , new_dim)
     x = torch.corrcoef(x[~x.isnan().any(-1)].T)
-    assert len(x) == len(ij) , print(x)
+    assert len(x) == len(ij) , (x , ij)
     x[ij,ij] = 1
     return x
 
@@ -182,7 +183,7 @@ def top_svd_factors(mat , raw_factor , top_n = 1 , top_ratio = 0. , dim = -1 , i
     vector , svd = svd_factors(mat , raw_factor , dim = dim , inplace = inplace)
     where  = svd.S.cumsum(0) / svd.S.sum() <= top_ratio
     where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum() + 1)
-    print(svd.S.cumsum(0) / svd.S.sum())
+    Logger.stdout(svd.S.cumsum(0) / svd.S.sum())
     return vector[...,where]
 
 @dataclass
@@ -253,7 +254,7 @@ class MultiFactor:
         try:
             multi = (factor * weight).nanmean(-1)
         except torch.cuda.OutOfMemoryError:
-            print(f'OutOfMemoryError on multi factor calculation')
+            Logger.warning(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
         multi = MF.zscore(multi , -1)
         return MultiFactorValue(value = multi , weight = weight , inputs = factor)

@@ -27,7 +27,7 @@ class ScriptLock:
         self.LOCK_DIR.mkdir(parents=True, exist_ok=True)
 
     def _log(self, message: str):
-        """print out message"""
+        """printing out message"""
         if self.verbose:
             Logger.info(f"[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] {message}")
 
@@ -122,7 +122,7 @@ class ScriptLockMultiple:
         return self.LOCK_DIR.joinpath(f"{self.lock_name}")
 
     def _log(self, message: str):
-        """print out message"""
+        """printing out message"""
         if self.verbose:
             Logger.info(f"[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] {message}")
 

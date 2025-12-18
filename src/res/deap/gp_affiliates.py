@@ -3,6 +3,8 @@ import pandas as pd
 import cProfile
 import traceback
 
+from src.proj import Logger
+
 class EmptyTM():
     def __init__(self , obj):
         methods = [method for method in dir(obj) if callable(getattr(obj, method))]
@@ -15,7 +17,7 @@ class EmptyTM():
         return self
     def __exit__(self, type, value, trace):
         if type is not None:
-            print(f'Error in EmptyTM ' , type , value)
+            Logger.error(f'Error in EmptyTM ' , type , value)
             traceback.print_exc()
 
 class Profiler(cProfile.Profile):
@@ -32,7 +34,7 @@ class Profiler(cProfile.Profile):
 
     def __exit__(self, type , value , trace):
         if type is not None:
-            print(f'Error in Profiler ' , type , value)
+            Logger.error(f'Error in Profiler ' , type , value)
             traceback.print_exc()
         else:
             if self.doso: 
@@ -79,9 +81,9 @@ def func_str_decompose(func_string):
             #try:
             #    data = [use[0] , ','.join(match.group(i+1) for i in use[1]) , ','.join(match.group(i+1) for i in use[2])]
             #except:
-            #    print(func_string)
+            #    Logger.stdout(func_string)
             break
     if data is None: 
-        print(func_string)
+        Logger.stdout(func_string)
         data = [''] * 4
     return data

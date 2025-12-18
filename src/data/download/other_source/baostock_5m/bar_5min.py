@@ -118,7 +118,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 bs.logout()
                 break
             
-            print(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
+            Logger.stdout(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
                                                   start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
@@ -184,7 +184,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
                 Logger.success(f'baostock 5min {last_dt} - {dt} success')
 
     for dt in x_mins_update_dates(date):
-        print(f'Transform: sec X-min bars at {dt} from source baostock')
+        Logger.stdout(f'Transform: sec X-min bars at {dt} from source baostock')
         for x_min in x_mins_to_update(dt):
             five_min_df = DB.load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)

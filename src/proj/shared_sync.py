@@ -3,6 +3,7 @@ from pathlib import Path
 from .path import PATH
 
 class SharedSync:
+    """Shared folder sync manager, used to sync the shared folder to the local folder and vice versa"""
     SYNC_DIRS = ['schedule_model']
 
     shared_folder = PATH.get_share_folder_path()

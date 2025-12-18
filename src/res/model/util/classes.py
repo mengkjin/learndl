@@ -21,6 +21,7 @@ from .config import TrainConfig
 from .storage import MemFileStorage
 
 class ModelStreamLine(ABC):
+    """Base class for all model stream lines , e.g. trainer, predictor, data module, etc."""
     def on_configure_model(self): ...
     def on_summarize_model(self): ...
     def stage_data(self): ...
@@ -65,14 +66,17 @@ class ModelStreamLine(ABC):
     
 
 def possible_hooks() -> list[str]: 
+    """Get the possible hooks for the model stream line"""
     return [x for x in dir(ModelStreamLine) if not x.startswith('_')]
 
 @dataclass
 class _EndEpochStamp:
+    """End epoch stamp class, used to store the end epoch of the model stream line"""
     name  : str
     epoch : int # epoch of trigger
 
 class _FitLoopBreaker:
+    """Fit loop breaker class, used to break the fit loop when the epoch is too large or meet some conditions"""
     def __init__(self , max_epoch : int = 200):
         self.max_epoch = max_epoch
         self.status : list[_EndEpochStamp] = []
@@ -101,6 +105,7 @@ class _FitLoopBreaker:
         return self.status[self.trigger_i].name
 
 class TrainerStatus(ModelStreamLine):
+    """Trainer status class, used to store the status of the trainer"""
     def __init__(self , max_epoch : int = 200):
         self.max_epoch : int = max_epoch
         self.stage   : Literal['data' , 'fit' , 'test'] = 'data'
@@ -177,6 +182,7 @@ class TrainerStatus(ModelStreamLine):
             self.epoch_event.append(event)
 
 class TrainerPredRecorder(ModelStreamLine):
+    """Trainer predictor recorder class, used to record the predictor results"""
     PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
     PRED_IDXS = ['secid' , 'date']
     PRED_COLS = ['pred' , 'label']
@@ -187,31 +193,26 @@ class TrainerPredRecorder(ModelStreamLine):
         return f'{self.__class__.__name__}(trainer={self.trainer})'
 
     @property
-    def batch_data(self):
-        return self.trainer.batch_data
-        
-    @property
     def pred_idx(self):
+        """unique index for each prediction batch"""
         return f'{self.trainer.model_num}.{self.trainer.model_submodel}.{self.trainer.model_date}.{self.trainer.batch_idx}'
 
     @property
-    def dates(self):
-        return self.trainer.data.test_full_dates
+    def pred_dict(self) -> dict[str,pd.DataFrame]:
+        """stored predictions for each batch"""
+        if not hasattr(self , '_preds_dict'):
+            self._preds_dict = {}
+        return self._preds_dict
 
-    @property
-    def preds(self) -> dict[str,pd.DataFrame]:
-        if not hasattr(self , '_preds'):
-            self._preds = {}
-        return self._preds
-
-    @preds.setter
-    def preds(self , value : dict[str,pd.DataFrame]):
-        self._preds = value
+    @pred_dict.setter
+    def pred_dict(self , value : dict[str,pd.DataFrame]):
+        self._preds_dict = value
 
     @property
     def tested_preds(self) -> pd.DataFrame:
+        """concatenated predictions for all tested batches"""
         if not hasattr(self , '_tested_preds'):
-            self._tested_preds = pd.DataFrame()
+            self._tested_preds = self.empty_preds()
         return self._tested_preds
 
     @tested_preds.setter
@@ -219,61 +220,113 @@ class TrainerPredRecorder(ModelStreamLine):
         self._tested_preds = value
 
     @property
-    def resume_preds(self) -> pd.DataFrame:
-        if not hasattr(self , '_resume_preds'):
-            self._resume_preds = pd.DataFrame()
-            self._resume_preds_models = pd.DataFrame()
-        return self._resume_preds
+    def resumed_preds(self) -> pd.DataFrame:
+        """predictions for resumed testing"""
+        if not hasattr(self , '_resumed_preds'):
+            self._resumed_preds = self.empty_preds()
+            self._resumed_preds_models = pd.DataFrame(columns = ['model_num' , 'model_date' , 'submodel'])
+        return self._resumed_preds
 
-    @resume_preds.setter
-    def resume_preds(self , value : pd.DataFrame):
-        self._resume_preds = value
-        if not value.empty:
-            self._resume_preds_models = value.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
-        else:
-            self._resume_preds_models = pd.DataFrame()
+    @resumed_preds.setter
+    def resumed_preds(self , value : pd.DataFrame):
+        self._resumed_preds = value
 
     @property
-    def resume_preds_models(self) -> pd.DataFrame:
-        if not hasattr(self , '_resume_preds_models'):
-            self._resume_preds_models = pd.DataFrame()
-        return self._resume_preds_models
+    def resumed_preds_models(self) -> pd.DataFrame:
+        """models dataframe for resumed testing"""
+        if not hasattr(self , '_resumed_preds_models'):
+            self._resumed_preds_models = pd.DataFrame(columns = ['model_num' , 'model_date' , 'submodel'])
+        return self._resumed_preds_models
+
+    @resumed_preds_models.setter
+    def resumed_preds_models(self , value : pd.DataFrame):
+        self._resumed_preds_models = value
 
     @property
     def path_pred(self) -> Path: 
+        """path to save predictions"""
         return self.trainer.config.model_base_path.snapshot('pred_df.feather')
 
-    def tested_models(self):
-        models = []
-        if not self.resume_preds.empty:
-            for (model_num , model_date) , subdf in self.resume_preds_models.groupby(['model_num' , 'model_date']):
-                if np.isin(self.trainer.model_submodels , subdf['submodel']).all():
-                    models.append((model_date , model_num))
-        return models
+    @property
+    def retrained_models(self) -> list[tuple[int,int]]:
+        """retrained models for resumed testing , must be tested"""
+        if not hasattr(self , '_retrained_models'):
+            self._retrained_models = []
+        return self._retrained_models
 
-    def get_preds(self , include_resume : bool = False , interval : int = 1) -> pd.DataFrame:
-        df = pd.concat([self.resume_preds , self.tested_preds]) if include_resume else self.tested_preds
+    def empty_preds(self) -> pd.DataFrame:
+        """empty predictions dataframe"""
+        return pd.DataFrame(columns = self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS)
+
+    def resume_preds(self , verbose : bool = True):
+        """
+        resume previous saved predictions
+        notes:
+        - only resume predictions before the last model date (in case of not completed testing)
+        - exclude retrained models (in case of some models are retrained and get different predictions)
+        """
+        df = self.load_saved_preds()
+        resume_info = f'Resume testing'
+        if not df.empty:
+            last_model_date = df['model_date'].max()
+            df = df.query('date in @self.trainer.data.test_full_dates & model_date < @last_model_date')
+            if not df.empty:
+                resume_info += f', recognize past saved preds before model date {last_model_date}'
+
+            model_groups = list(df.groupby(['model_date' , 'model_num']).groups)
+            if retrained_models := [key for key in model_groups if key in self.retrained_models]:
+                keep_models = pd.DataFrame([key for key in model_groups if key not in retrained_models] , columns = ['model_date' , 'model_num'])
+                df = df.merge(keep_models , on = keep_models.columns.tolist() , how = 'inner')
+                resume_info += f', exclude {len(retrained_models)} retrained models'
+
+        if not df.empty:
+            df = df.reset_index(drop=True)
+            
+            resumed_preds_models = []
+            for (model_num , model_date) , subdf in df.groupby(['model_num' , 'model_date']):
+                if np.isin(self.trainer.model_submodels , subdf['submodel']).all():
+                    resumed_preds_models.append((model_date , model_num))
+
+            self.resumed_preds = df
+            self.resumed_preds_models = pd.DataFrame(resumed_preds_models , columns = ['model_date' , 'model_num'])
+
+            if verbose:
+                Logger.stdout(resume_info)
+
+    def get_preds(self , tested_only : bool = True , interval : int = 1) -> pd.DataFrame:
+        df = self.tested_preds
+        if self.resumed_preds.empty:
+            ...
+        else:
+            if tested_only and df.empty:
+                df_resume = self.empty_preds()
+            elif tested_only and not df.empty:
+                df_resume = self.resumed_preds.query('model_date > @df_tested.model_date.min() & model_date < @df_tested.model_date.max()')
+            else:
+                df_resume = self.resumed_preds
+            if not df_resume.empty:
+                df = df_resume if df.empty else pd.concat([df , df_resume])
+            df = df.drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
         if df.empty:
-            return pd.DataFrame(columns = self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS)
-        df = df.query('date in @self.trainer.data.test_full_dates')
+            return df
+
         if interval > 1:
             dates = df['date'].unique()[::interval] # noqa: F841
             df = df.query('date in @dates')
         return df.reset_index(drop=True)
     
     def append_batch_values(self):
-        if self.pred_idx in self.preds.keys(): 
+        if self.pred_idx in self.pred_dict.keys(): 
             return
         if self.trainer.batch_idx < self.trainer.batch_warm_up: 
             return
         
         which_output = self.trainer.model_param.get('which_output' , 0)
         
-        secid = self.trainer.data.batch_secid(self.batch_data)
-        date  = self.trainer.data.batch_date(self.batch_data)
-        
+        secid = self.trainer.data.batch_secid(self.trainer.batch_data)
+        date  = self.trainer.data.batch_date(self.trainer.batch_data)
         pred = self.trainer.batch_output.pred_df(secid , date).dropna()
-        pred = pred.query('date in @self.dates')
+        pred = pred.query('date in @self.trainer.data.test_full_dates')
         if len(pred) == 0: 
             return
 
@@ -287,29 +340,28 @@ class TrainerPredRecorder(ModelStreamLine):
         df = df.assign(model_num = self.trainer.model_num , submodel = self.trainer.model_submodel , model_date = self.trainer.model_date , batch_idx = self.trainer.batch_idx)
         df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
 
-        self.preds[self.pred_idx] = df
+        self.pred_dict[self.pred_idx] = df
 
     def collect_preds(self):
-        if not self.preds:
+        if not self.pred_dict:
             return
-        self._tested_preds = pd.concat(self.preds.values())
-        self.preds.clear()
+        self.tested_preds = pd.concat(self.pred_dict.values())
+        self.pred_dict.clear()
 
     def load_saved_preds(self) -> pd.DataFrame:
         df = DB.load_df(self.path_pred)
         if self.path_pred.exists() and not np.isin(self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS , df.columns).all():
             Logger.warning(f'{self.path_pred} is not valid , removed automatically')
             self.path_pred.unlink()
-            return pd.DataFrame()
+            return self.empty_preds()
         return df
+
+    def on_fit_model_end(self):
+        self.retrained_models.append((self.trainer.model_date , self.trainer.model_num))
 
     def on_test_start(self):
         if self.trainer.config.is_resuming:
-            df = self.load_saved_preds()
-            if not df.empty:
-                last_model_date = df['model_date'].max()
-                print(f'Resume testing, recognize past saved preds before model date {last_model_date}')
-                self.resume_preds = df.query('model_date < @last_model_date')
+            self.resume_preds(verbose = self.trainer.verbosity > 0)
                 
     def on_test_batch_end(self): 
         self.append_batch_values()
@@ -323,7 +375,7 @@ class TrainerPredRecorder(ModelStreamLine):
             new_df = new_df.drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
         DB.save_df(new_df , self.path_pred , overwrite = True , verbose = False)
         if self.trainer.verbosity >= 10:
-            print(f'Test Predictions saved to {self.path_pred}')
+            Logger.stdout(f'Test Predictions saved to {self.path_pred}')
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -365,13 +417,11 @@ class BaseDataModule(ABC):
         self.loader_dict  = {}
         self.loader_param = self.LoaderParam()
     def prev_model_date(self , model_date):
-        prev_dates = [d for d in self.model_date_list if d < model_date]
-        return max(prev_dates) if prev_dates else -1
+        prev_dates = self.model_date_list[self.model_date_list < model_date]
+        return max(prev_dates) if len(prev_dates) > 0 else -1
     def next_model_date(self , model_date):
-        if model_date < max(self.model_date_list):
-            return min(self.model_date_list[self.model_date_list > model_date])
-        else:
-            return max(self.test_full_dates) + 1
+        late_dates = self.model_date_list[self.model_date_list > model_date]
+        return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
         
     def batch_date(self , batch_data : BatchData):
         return self.y_date[batch_data.i.cpu()[:,1]]
@@ -479,7 +529,7 @@ class BaseTrainer(ModelStreamLine):
         action_record  = getattr(trainer.record , hook)
         def wrapper() -> None:
             if verbosity > 10: 
-                print(f'{hook} of stage {trainer.status.stage} start')
+                Logger.stdout(f'{hook} of stage {trainer.status.stage} start')
             trainer.callback.at_enter(hook , verbosity)
             action_status()
             action_trainer()
@@ -487,7 +537,7 @@ class BaseTrainer(ModelStreamLine):
             action_record()
             trainer.callback.at_exit(hook , verbosity)
             if verbosity > 10: 
-                print(f'{hook} of stage {trainer.status.stage} end')
+                Logger.stdout(f'{hook} of stage {trainer.status.stage} end')
         return wrapper
 
     @abstractmethod
@@ -616,7 +666,7 @@ class BaseTrainer(ModelStreamLine):
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
         num_all_models = len(model_iter)
-        iter_info = f'In stage [{self.status.stage}], # of all models is {num_all_models}, '
+        iter_info = f'In stage [{self.status.stage}], number of all models (model_date x model_num) is {num_all_models}, '
         if self.config.is_resuming:
             if self.status.stage == 'fit':
                 models_trained = np.full(len(model_iter) , True , dtype = bool)
@@ -627,15 +677,15 @@ class BaseTrainer(ModelStreamLine):
                 condition = ~models_trained
                 model_iter = Filtered(model_iter , ~condition)
             elif self.status.stage == 'test':
-                tested_models = self.record.tested_models()
-                condition = [(model_date , model_num) not in tested_models or model_date == self.data.model_date_list[-1] for model_date , model_num in model_iter]
+                resumed_models = self.record.resumed_preds_models.groupby(['model_date' , 'model_num']).groups
+                condition = [(model_date , model_num) not in resumed_models for model_date , model_num in model_iter]
                 model_iter = Filtered(model_iter , condition)
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
         #    model_iter = []
         else:
             iter_info += f'{num_all_models} to go!'
-        print(iter_info)
+        Logger.stdout(iter_info)
         return model_iter
 
     def iter_model_submodels(self):
@@ -798,7 +848,7 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         info = f'Callback {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
         if self.__class__.__doc__: 
             info += f' , {self.__class__.__doc__}'
-        print(info)
+        Logger.stdout(info)
         return self
 
     def __enter__(self): 
@@ -808,11 +858,11 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.at_exit(self.__hook_stack.pop())
     def at_enter(self , hook : str , verbosity : int = 0):  
         if verbosity > 10: 
-            print(f'{hook} of callback {self.__class__.__name__} start')
+            Logger.stdout(f'{hook} of callback {self.__class__.__name__} start')
     def at_exit(self , hook : str , verbosity : int = 0): 
         getattr(self , hook)()
         if verbosity > 10: 
-            print(f'{hook} of callback {self.__class__.__name__} end')
+            Logger.stdout(f'{hook} of callback {self.__class__.__name__} end')
 
     def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')

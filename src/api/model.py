@@ -111,7 +111,7 @@ class ModelAPI:
             str : use the model name , must be in ModelAPI.Trainer.available_models(short_test = False)
         verbosity :
             None: use default verbosity
-            int : use the verbosity level , if above 10 will print more details
+            int : use the verbosity level , if above 10 will printout more details
         '''
         return cls.Trainer.test(model_name , resume = int(resume) , start = start , end = end , verbosity = verbosity , **kwargs)
 

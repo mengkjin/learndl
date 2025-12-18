@@ -2,7 +2,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from src.proj import PATH , DBConnHandler
+from src.proj import PATH , DBConnHandler , Logger
 
 class TaskRecorder:
     def __init__(self , type : str , name : str | None = None , key : str | None = None):
@@ -187,20 +187,20 @@ if __name__ == "__main__":
     recorder.mark_finished("data_processing", "task_002", False, "数据清洗完成")
     
     # 检查任务是否完成
-    print(f"task_001 是否完成: {recorder.is_finished('data_processing', 'task_001')}")
-    print(f"task_003 是否完成: {recorder.is_finished('data_processing', 'task_003')}")
+    Logger.stdout(f"task_001 是否完成: {recorder.is_finished('data_processing', 'task_001')}")
+    Logger.stdout(f"task_003 是否完成: {recorder.is_finished('data_processing', 'task_003')}")
     
     # 获取任务信息
     task_info = recorder.get_task_info("data_processing", "task_001")
-    print(f"任务信息: {task_info}")
+    Logger.stdout(f"任务信息: {task_info}")
     
     # 获取所有已完成任务
     finished_tasks = recorder.get_finished_tasks("data_processing")
-    print(f"已完成任务: {finished_tasks}")
+    Logger.stdout(f"已完成任务: {finished_tasks}")
     
     # 获取所有任务组
     groups = recorder.get_task_types()
-    print(f"所有任务组: {groups}")
+    Logger.stdout(f"所有任务组: {groups}")
     
     # 删除任务
     recorder.delete_task("data_processing", "task_002")

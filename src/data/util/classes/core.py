@@ -296,6 +296,13 @@ class DataBlock(Stock4DData):
                   step_day = 5 , **kwargs):
         return DataBlockNorm.calculate(self , key , predict , start_dt , end_dt , step_day , **kwargs)
 
+    def subset(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
+        values  = self.loc(secid , date , feature , inday , fillna)
+        secid = self.secid if secid is None else secid
+        date = self.date if date is None else date
+        feature = self.feature if feature is None else feature
+        return DataBlock(values , secid , date , feature)
+
 @dataclass(slots=True)
 class DataBlockNorm:
     avg : torch.Tensor
@@ -495,7 +502,7 @@ class ModuleData:
             try:
                 cache_key_dict = json.load(f)
             except json.JSONDecodeError as e:
-                print(f'cache_key.json is corrupted, reset it: {e}')
+                Logger.fail(f'cache_key.json is corrupted, reset it: {e}')
                 cache_key_dict = {}
         for key , value in cache_key_dict.items():
             if value['type'] != 'dataset':
@@ -534,7 +541,7 @@ class ModuleData:
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
                 if not SILENT: 
-                    print(f'Loading Module Data, Try \'{path}\', success!')
+                    Logger.success(f'Loading Module Data, Try \'{path}\', success!')
             else:
                 if not SILENT: 
                     Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')

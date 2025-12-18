@@ -3,7 +3,10 @@ import zipfile
 import shutil
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
+
 import numpy as np
+
+from src.proj import Logger
 
 FONT_DIR = Path(__file__).parent.parent / "fonts"
 IMAGE_DIR = Path(__file__).parent.parent / "images"
@@ -29,8 +32,8 @@ def get_font() -> Path:
         with open(zip_path, 'wb') as f:
             f.write(response.content)
     else:
-        print(f"download failed: {response.status_code}")
-        print("please download the font file and put it in the fonts directory")
+        Logger.error(f"download failed: {response.status_code}")
+        Logger.error("please download the font file and put it in the fonts directory")
         raise Exception("download failed")
     
     # 2. unzip

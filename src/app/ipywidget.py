@@ -5,6 +5,7 @@ from typing import Any , Literal
 from pathlib import Path
 from IPython.display import display
 
+from src.proj import Logger
 from src.app.abc import ScriptCmd
 
 class OutOfRange(Exception): 
@@ -14,7 +15,7 @@ class Unspecified(Exception):
 
 def run_script(script : str | Path , close_after_run = False , **kwargs):
     cmd = ScriptCmd(script , kwargs , mode = 'os' if close_after_run else 'shell')
-    print(f'Script cmd : {cmd}')
+    Logger.stdout(f'Script cmd : {cmd}')
     
     cmd.run()
     cmd.process.communicate()
@@ -221,24 +222,22 @@ class ScriptRunner:
             header_dict['disabled'] = True
             header_dict['description'] = 'file not found'
             header_dict['content'] = f'file not found : {self.script}'
-            if verbose: 
-                print(f'file not found : {self.script}')
+            Logger.warning(f'file not found : {self.script}')
         except yaml.YAMLError as e:
             header_dict['disabled'] = True
             header_dict['description'] = 'YAML parsing error'
             header_dict['content'] = f'error info : {e}'
-            if verbose: 
-                print(f'YAML parsing error : {e}')
+            Logger.warning(f'YAML parsing error : {e}')
         except Exception as e:
             header_dict['disabled'] = True
             header_dict['description'] = 'read file error'
             header_dict['content'] = f'error info : {e}'
-            if verbose: 
-                print(f'read file error : {e}')
+            Logger.warning(f'read file error : {e}')
 
         if header_dict is None:
-            print(self.script)
-            print(yaml_str)
+            Logger.warning(self.script)
+            Logger.warning(yaml_str)
+
         if 'description' not in header_dict:
             header_dict['description'] = self.script
         return header_dict
@@ -258,7 +257,7 @@ class ScriptRunner:
             try:
                 params.update({input_area.pname : input_area.get_value() for input_area in input_areas})
                 cmd = ScriptCmd(self.script , params , mode='os' if params.get('close_after_run' , False) else 'shell')
-                print(f'Script cmd : {cmd}')
+                Logger.stdout(f'Script cmd : {cmd}')
                 cmd.run()
                 cmd.process.communicate()
             except (OutOfRange , Unspecified) as e:
@@ -370,9 +369,9 @@ def get_folder_box(folder : str | Path , level : int , use_script_levels = [1,2]
     return layout_vertical(*dir_boxes)
 
 def main():
-    print('Initiating project interface...')
+    Logger.stdout('Initiating project interface...')
     project = get_folder_box('src/scripts' , 0)
-    print('Project interface initiated successfully.')
+    Logger.success('Project interface initiated successfully.')
     display(project)
     return project
 

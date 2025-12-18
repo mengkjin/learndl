@@ -6,6 +6,7 @@ from typing import Callable
 from .silence import SILENT
 
 class Duration:
+    """Duration class, used to calculate the duration of the input or the start time"""
     def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None):
         assert duration is not None or since is not None , "duration or since must be provided"
         assert duration is None or since is None , f"duration and since cannot be provided at the same time, got duration = {duration} and since = {since}"
@@ -25,18 +26,23 @@ class Duration:
         return self.fmtstr
     @property
     def hours(self):
+        """Get the duration in hours"""
         return self.duration / 3600
     @property
     def minutes(self):
+        """Get the duration in minutes"""
         return self.duration / 60
     @property
     def seconds(self):
+        """Get the duration in seconds"""
         return self.duration
     @property
     def days(self):
+        """Get the duration in days"""
         return self.duration / 86400
     @property
     def fmtstr(self):
+        """Get the duration in a human-readable string"""
         # Calculate time components
         
         # Store components in a dictionary for f-string formatting
@@ -61,7 +67,7 @@ class Duration:
             return ' '.join(fmtstrs)
     
 class Timer:
-    '''simple timer to print out time'''
+    """simple timer to count time"""
     def __init__(self , *args , newline = False , exit_only = True , silent = False): 
         self.newline = newline
         self.exit_only = exit_only
@@ -77,9 +83,11 @@ class Timer:
 
     @property
     def enter_str(self):
+        """Get the enter string"""
         return f'{self.key} start ... '
     @property
     def exit_str(self):
+        """Get the exit string"""
         text = f'finished! Cost {Duration(since = self._init_time)}'
         if self.exit_only:
             return f'{self.key} {text}'
@@ -87,11 +95,12 @@ class Timer:
             return text
 
 class PTimer:
-    '''process timer , call to record and .summarize() to print out summary'''
+    """process timer , call to record and .summarize() to display the summary"""
     def __init__(self , record = True) -> None:
         self.recording = record
         self.recorder = {} if record else None
     class ptimer:
+        """process timer class, used to record the time of the input function"""
         def __init__(self , target : dict[str,list[float]] | None , key):
             self.target , self.key = target , key
             if self.target is not None and key not in self.target.keys(): 
@@ -104,6 +113,7 @@ class PTimer:
                 self.target[self.key].append((datetime.now() - self._init_time).total_seconds())
 
     def func_timer(self , func : Callable):
+        """timer wrapper for a function"""
         def wrapper(*args , **kwargs):
             with self.ptimer(self.recorder , func.__name__):
                 return func(*args , **kwargs)
@@ -113,6 +123,7 @@ class PTimer:
         return self.ptimer(self.recorder , '/'.join(args))
     
     def summarize(self):
+        """summarize the recorded time"""
         if self.recorder is not None:
             tb = pd.DataFrame([[k , len(self.recorder[k]) , np.sum(self.recorder[k])] for k in self.recorder.keys()] ,
                                 columns = pd.Index(['keys' , 'num_calls', 'total_time']))

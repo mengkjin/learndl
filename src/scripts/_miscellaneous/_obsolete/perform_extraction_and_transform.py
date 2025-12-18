@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Logger
 from src.data.util import trade_min_fillna
 from src.basic import DB
 
@@ -36,7 +36,7 @@ def extract_js_min(date):
         try:
             df = pd.read_feather(target_path)
         except Exception as e:
-            print(e)
+            Logger.error(e)
             target_path.unlink()
     if df is None:
         zip_file_path = zip_path.joinpath(f'min.{date}.zip')
@@ -49,7 +49,7 @@ def extract_js_min(date):
     try:
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
-        print(e)
+        Logger.error(e)
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
     df.to_feather(target_path)

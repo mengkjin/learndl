@@ -45,4 +45,4 @@ class SellsideFTPDownloader(object):
 def main():
     connector = SellsideFTPDownloader()
     df = connector.open_file('/StockFactor_cier/cier.csv')
-    print(df)
+    Logger.stdout(df)

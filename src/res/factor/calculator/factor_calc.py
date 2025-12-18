@@ -323,7 +323,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             df = self._df
             assert df is not None and not df.empty , f'factor {self.factor_name} is not calculated at {date}'
             if verbose: 
-                print(f'{self.factor_name} at {date} recalculated')
+                Logger.stdout(f'{self.factor_name} at {date} recalculated')
         return df
 
     def eval_factor_series(self ,  date : int , verbose : bool = False) -> pd.Series:
@@ -491,12 +491,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def update_day_factor(self , date : int , overwrite = False , show_success = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         if show_warning and date not in CONF.Factor.UPDATE.target_dates:
-            print(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
+            Logger.warn(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
         prefix = f'{self.factor_string} at date {date}'
         try:
             done = self.calc_and_deploy(date , overwrite = overwrite , verbose = show_success)
         except catch_errors as e:
-            print(f'{prefix} failed: {e}')
+            Logger.error(f'{prefix} failed: {e}')
             traceback.print_exc()
             return False
         return done
@@ -517,7 +517,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , cls.db_key , verbose = False)
         if verbose:
-            print(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates')
+            Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates')
 
     @classmethod
     def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:

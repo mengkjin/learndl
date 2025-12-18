@@ -34,7 +34,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
-            print('Table: Callback Time costs:')
+            Logger.stdout('Table: Callback Time costs:')
             Display(df)
 
 class BatchDisplay(BaseCallBack):
@@ -50,7 +50,7 @@ class BatchDisplay(BaseCallBack):
     def on_train_batch_end(self):  
         if self.show_info: 
             self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
-            #self.device.print()
+            # self.device.status()
     def on_train_batch_start(self):
         if self.show_info: 
             self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')

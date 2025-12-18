@@ -8,17 +8,18 @@
 # mode: shell
 
 import subprocess 
+from src.proj import Logger
 from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    print("🧹 Clean local changes...")
+    Logger.critical("🧹 Clean local changes...")
     subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
     subprocess.run(['git', 'clean', '-fd'], check=True)
     
-    print("⬇️ Pull latest code...")
+    Logger.critical("⬇️ Pull latest code...")
     result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
-    print(f"✅ Done: {result.stdout}")
+    Logger.success(f"✅ Done: {result.stdout}")
 
     return f'Finish pull: {result.stdout}'
 

@@ -299,18 +299,17 @@ class TaskDatabase:
                 cursor.execute('SELECT * FROM task_records WHERE task_id = ?', (task_id,))
                 task = cursor.fetchone()
                 if task is not None and task['status'] not in ['error' , 'killed']:
-                    print(task)
                     if not force:
                         raise ValueError(f"Task ID {task_id} is not an error task , cannot be deleted")
                     else:
-                        print(f"Task ID {task_id} is not an error task , but force is True , so it will be deleted")
+                        Logger.warning(f"Task ID {task_id} is not an error task , but force is True , so it will be deleted")
             cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))
             cursor.execute("DELETE FROM task_records WHERE task_id = ?", (task_id,))
             if verbose:
                 if cursor.rowcount == 0:
-                    print(f"Task ID {task_id} not found, nothing to delete")
+                    Logger.warning(f"Task ID {task_id} not found, nothing to delete")
                 else:
-                    print(f"Task ID {task_id} successfully deleted")
+                    Logger.success(f"Task ID {task_id} successfully deleted")
 
     def del_queue(self, queue_id: str , verbose: bool = False):
         """Delete queue and related tasks"""
@@ -320,9 +319,9 @@ class TaskDatabase:
             cursor.execute("DELETE FROM queue_records WHERE queue_id = ?", (queue_id,))
             if verbose:
                 if cursor.rowcount == 0:
-                    print(f"Queue ID {queue_id} not found, nothing to delete")
+                    Logger.warning(f"Queue ID {queue_id} not found, nothing to delete")
                 else:
-                    print(f"Queue ID {queue_id} successfully deleted")
+                    Logger.success(f"Queue ID {queue_id} successfully deleted")
     
     def get_backup_paths(self):
         return self.conn_handler.all_backup_paths()

@@ -1,5 +1,6 @@
 import torch
 
+from src.proj import Logger
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
@@ -58,7 +59,7 @@ class BoostPredictor(BasePredictorModel):
     
     def fit(self):
         if self.trainer.verbosity > 10: 
-            print('model fit start')
+            Logger.stdout('model fit start')
 
         self.new_model()
 
@@ -73,11 +74,11 @@ class BoostPredictor(BasePredictorModel):
             self.batch_metrics()
 
         if self.trainer.verbosity > 10: 
-            print('model fit done')
+            Logger.stdout('model fit done')
 
     def test(self):
         if self.trainer.verbosity > 10: 
-            print('model test start')
+            Logger.stdout('model test start')
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -86,7 +87,7 @@ class BoostPredictor(BasePredictorModel):
                 self.batch_metrics()
 
         if self.trainer.verbosity > 10: 
-            print('model test done')
+            Logger.stdout('model test done')
 
     def collect(self , submodel = 'best' , *args):
         self.model_dict.booster_dict = self.booster.to_dict()

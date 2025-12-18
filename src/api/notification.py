@@ -22,9 +22,9 @@ class TempFile:
 
 def check_cuda_status():
     if not MACHINE.server:
-        print(f'Skipping: {MACHINE.name} is not a server, skip checking cuda status')
+        Logger.stdout(f'Skipping: {MACHINE.name} is not a server, skip checking cuda status')
     elif torch.cuda.is_available(): 
-        print(f'Success : Server {MACHINE.name} CUDA is available')
+        Logger.success(f'Success : Server {MACHINE.name} CUDA is available')
     else:
         Logger.error(f'Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution:')
     
@@ -47,12 +47,12 @@ def check_cuda_status():
 
 def email_to_fanghan(test = False):
     if not MACHINE.server:
-        print(f'Skipping: {MACHINE.name} is not a server, skip emailing to fanghan')
+        Logger.stdout(f'Skipping: {MACHINE.name} is not a server, skip emailing to fanghan')
         return
     today = CALENDAR.updated()
     task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))
     if task_recorder.is_finished():
-        print(f'Skipping: email_to_fanghan at {today} already done')
+        Logger.stdout(f'Skipping: email_to_fanghan at {today} already done')
         return
     
     pred_dates = DB.dates('pred' , 'gru_day_V1')
@@ -80,12 +80,12 @@ def email_to_fanghan(test = False):
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')
             return
-    print(f'Success : email_to_fanghan at {today} sent')
+    Logger.success(f'Success : email_to_fanghan at {today} sent')
     return
 
 def reset_options_cache():
     Options.cache.clear()
-    print(f'Success : reset options cache')
+    Logger.success(f'Success : reset options cache')
 
 class NotificationAPI:
     @classmethod

@@ -5,6 +5,8 @@ from typing import Any, Callable, Iterable
 from pytimedinput import timedInput
 from scipy import stats
 
+from src.proj import Logger
+
 DIV_TOL = 1e-4
 
 def average_params(params_list : tuple[dict] | list[dict]):
@@ -19,13 +21,6 @@ def average_params(params_list : tuple[dict] | list[dict]):
             else:
                 new_params[k] += v / n
     return new_params
-
-def emphasize_header(header=''):
-    print('{: ^100}'.format(''))
-    print('{:*^100}'.format(''))
-    print('{:*^100}'.format('    '+header+'    '))
-    print('{:*^100}'.format(''))
-    print('{: ^100}'.format(''))
         
 def tensor_nancount(x : torch.Tensor , dim=None, keepdim=False):  
     return x.isfinite().sum(dim = dim , keepdim = keepdim)
@@ -285,8 +280,10 @@ def to_numpy(values):
     if not isinstance(values , np.ndarray): 
         if isinstance(values , torch.Tensor): 
             values = values.cpu().numpy()
-        else: 
+        elif isinstance(values , list):
             values = np.asarray(values)
+        else: 
+            values = np.asarray(values).reshape(1)
     return values
 
 def match_values(values , src_arr , ambiguous = 0):
@@ -309,7 +306,6 @@ def merge_data_2d(data_tuple , row_tuple , col_tuple , row_all = None , col_all 
     assert len(data_tuple) == len(row_tuple) == len(col_tuple) , \
         (len(data_tuple) , len(row_tuple) , len(col_tuple))
     for i in range(len(data_tuple)):
-        #print(i , data_tuple[i].shape , (len(row_tuple[i]) , len(col_tuple[i])))
         assert data_tuple[i].shape == (len(row_tuple[i]) , len(col_tuple[i])) , \
             (data_tuple[i].shape , (len(row_tuple[i]) , len(col_tuple[i])))
     
@@ -429,7 +425,7 @@ def index_stack(idxs , min_value = None , max_value = None) -> tuple[np.ndarray 
     pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
     return new_idx , pos_new , pos_old
 
-def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = print):
+def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = Logger.stdout):
     assert isinstance(prompt , str) , prompt
     userText_list , userText_cond = [] , []
     for t in range(recurrent):

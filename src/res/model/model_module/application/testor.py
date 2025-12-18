@@ -1,5 +1,6 @@
 import torch
 
+from src.proj import Logger
 from src.res.model.data_module import DataModule , get_realistic_batch_data
 from src.res.model.util import TrainConfig
 from src.res.model.model_module.module import get_predictor_module
@@ -33,12 +34,12 @@ class ModelTestor:
     def try_forward(self) :
         '''as name says, try to forward'''
         if isinstance(self.batch_data.x , torch.Tensor):
-            print(f'x shape is {self.batch_data.x.shape}')
+            Logger.stdout(f'x shape is {self.batch_data.x.shape}')
         else:
-            print(f'multiple x of {len(self.batch_data.x)}')
+            Logger.stdout(f'multiple x of {len(self.batch_data.x)}')
         self.output = self.model(self.batch_data.x)
-        print(f'y shape is {self.output.pred.shape}')
-        print(f'Test Forward Success')
+        Logger.stdout(f'y shape is {self.output.pred.shape}')
+        Logger.stdout(f'Test Forward Success')
         return self
 
     def try_metrics(self):
@@ -46,8 +47,8 @@ class ModelTestor:
         if not hasattr(self , 'outputs'): 
             self.try_forward()
         metrics = self.metrics.calculate('train' , self.batch_data.y , self.output.pred , self.batch_data.w)
-        print('metric output : ' , metrics.output)
-        print(f'Test Metrics Success')
+        Logger.stdout('metric output : ' , metrics.output)
+        Logger.stdout(f'Test Metrics Success')
         return self
     
     def get_realistic_batch_data(self):

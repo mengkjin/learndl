@@ -125,7 +125,8 @@ class OptimFMPTest(BaseFactorAnalyticTest):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(add_lag = add_lag , optim_config = optim_config , verbosity = verbosity)
-        self.portfolio_group = PortfolioGroupBuilder('optim' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , **self.kwargs)
+        self.portfolio_group = PortfolioGroupBuilder(
+            'optim' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , start_dt = self.start_dt , end_dt = self.end_dt , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,

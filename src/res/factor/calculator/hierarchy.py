@@ -5,7 +5,7 @@ from typing import Generator , Iterator , Type , Literal
 
 from .factor_calc import FactorCalculator
 
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Logger
 from src.func.parallel import parallel
 
 class StockFactorHierarchy:
@@ -184,7 +184,7 @@ class StockFactorHierarchy:
             factor_value = obj.calc_factor(date)
             valid_ratio = len(factor_value.dropna()) / len(factor_value)
             if verbose or valid_ratio < 0.3: 
-                print(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
+                Logger.stdout(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
             return factor_value
 
         kwargs = kwargs
@@ -204,9 +204,9 @@ class StockFactorHierarchy:
                 if std <= 1e-4 or abs(box) <= 1e-4: 
                     abnormal_vars[fn] = {'std':std , 'box':box}
             if len(abnormal_vars) == 0: 
-                print('no abnormal factor variation')
+                Logger.stdout('no abnormal factor variation')
             else:
-                print(f'abnormal factor variation: {abnormal_vars}')
+                Logger.stdout(f'abnormal factor variation: {abnormal_vars}')
 
         if check_duplicates and len(factor_values) <= 100:
             abnormal_diffs = {}
@@ -219,9 +219,9 @@ class StockFactorHierarchy:
                 if diff <= 0.01 or abs(corr) >= 0.999: 
                     abnormal_diffs[f'{fn1}.{fn2}'] = {'diff_std':diff , 'corr' : corr}
             if len(abnormal_diffs) == 0: 
-                print('no abnormal factor diffs')
+                Logger.stdout('no abnormal factor diffs')
             else:
-                print(f'abnormal factor diffs: {abnormal_diffs}')
+                Logger.stdout(f'abnormal factor diffs: {abnormal_diffs}')
         return factor_values
 
     

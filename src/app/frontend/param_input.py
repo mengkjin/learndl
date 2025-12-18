@@ -1,6 +1,8 @@
 from typing import Literal , Any , Callable
 import streamlit as st
 import re
+
+from src.proj import Logger
 from src.app.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 class ParamInputsForm:
@@ -116,9 +118,9 @@ class ParamInputsForm:
             try:
                 param_name , param_value = pstr.replace('=' , ' ').split(' ' , 1)
             except Exception as e:
-                print(cmd)
-                print(pstr)
-                print(f"Error parsing param: {pstr} - {e}")
+                Logger.stdout(cmd)
+                Logger.stdout(pstr)
+                Logger.error(f"Error parsing param: {pstr} - {e}")
                 raise e
 
             value = param_value.strip()

@@ -6,7 +6,7 @@ from typing import Any , ClassVar
 from pathlib import Path
 from datetime import datetime
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.app.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.app.frontend import YAMLFileEditorState , ActionLogger , action_confirmation
 
@@ -283,13 +283,13 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-        print(f'run script: {item.id}')
+        Logger.stdout(f'run script: {item.id}')
         item.run_script()
 
     @ActionLogger.log_action()
     def click_file_preview(self , path : Path):
         """click file previewer"""
-        print('click file previewer')
+        Logger.stdout('click file previewer')
         if self.running_report_file_previewer == path:
             self.running_report_file_previewer = None
         else:   
