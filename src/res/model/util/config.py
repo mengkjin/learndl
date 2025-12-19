@@ -911,31 +911,31 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Model Module : {self.model_module}')
             if self.module_type == 'booster':
                 if self.model_module != self.model_booster_type:
-                    info_strs.append(f'  -->  Booster Type   : {self.model_booster_type}')
+                    info_strs.append(f'  --> Booster Type   : {self.model_booster_type}')
                 if self.model_booster_optuna:
-                    info_strs.append(f'  -->  Booster Params :  Optuna for {self.model_booster_optuna_n_trials} trials')
+                    info_strs.append(f'  --> Booster Params :  Optuna for {self.model_booster_optuna_n_trials} trials')
                 else:
-                    info_strs.append(f'  -->  Booster Params :')
+                    info_strs.append(f'  --> Booster Params :')
                     for k , v in self.Model.Param.items():
-                        info_strs.append(f'    -->  {k} : {v}')
+                        info_strs.append(f'    --> {k} : {v}')
             else:
                 if self.model_booster_head:
-                    info_strs.append(f'  -->  Use Booster Head : {self.model_booster_head}')
-                info_strs.append(f'  -->  Model Params :')
+                    info_strs.append(f'  --> Use Booster Head : {self.model_booster_head}')
+                info_strs.append(f'  --> Model Params :')
                 for k , v in self.Model.Param.items():
-                    info_strs.append(f'    -->  {k} : {v}')
+                    info_strs.append(f'    --> {k} : {v}')
             info_strs.append(f'Model Num    : {self.Model.n_model}')
             info_strs.append(f'Model Inputs : {self.model_input_type}')
             if self.model_input_type == 'data':
-                info_strs.append(f'  -->  Data Types : {self.model_data_types}')
+                info_strs.append(f'  --> Data Types : {self.model_data_types}')
             elif self.model_input_type == 'hidden':
-                info_strs.append(f'  -->  Hidden Models : {self.model_hidden_types}')
+                info_strs.append(f'  --> Hidden Models : {self.model_hidden_types}')
             elif self.model_input_type == 'factor':
-                info_strs.append(f'  -->  Factor Types : {self.model_factor_types}')
+                info_strs.append(f'  --> Factor Types : {self.model_factor_types}')
                 if self.input_factor_names:
-                    info_strs.append(f'  -->  Factor Names : {self.input_factor_names}')
+                    info_strs.append(f'  --> Factor Names : {self.input_factor_names}')
             elif self.model_input_type == 'combo':
-                info_strs.append(f'  -->  Combo Types : {self.model_combo_types}')
+                info_strs.append(f'  --> Combo Types : {self.model_combo_types}')
             info_strs.append(f'Model Labels : {self.model_labels}')
             info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
             info_strs.append(f'Interval     : {self.model_interval} days')

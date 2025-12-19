@@ -49,10 +49,9 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 
               start : int | None = None , end : int | None = None , **kwargs):
-        with HtmlCatcher(True) as catcher:
-            trainer = cls.initialize(module = module , short_test = short_test , start = start , end = end , **kwargs)
-            trainer.go()
-            catcher.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
+        trainer = cls.initialize(module = module , short_test = short_test , start = start , end = end , **kwargs)
+        trainer.go()
+        HtmlCatcher.SetAttrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
         Email.Attach(trainer.result_package)
         return trainer
     
@@ -62,12 +61,12 @@ class ModelTrainer(BaseTrainer):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
-        with HtmlCatcher(True) as catcher:
-            trainer = cls.initialize(
-                base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , 
-                selection = selection , start = start , end = end , **kwargs)
-            trainer.go()
-            catcher.set_attrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
+        
+        trainer = cls.initialize(
+            base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , 
+            selection = selection , start = start , end = end , **kwargs)
+        trainer.go()
+        HtmlCatcher.SetAttrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
         Email.Attach(trainer.result_package)
         return trainer
     
@@ -77,12 +76,11 @@ class ModelTrainer(BaseTrainer):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
-        with HtmlCatcher(True) as catcher:
-            trainer = cls.initialize(
-                base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , 
-                selection = selection, start = start , end = end , **kwargs)
-            trainer.go()
-            catcher.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
+        trainer = cls.initialize(
+            base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , 
+            selection = selection, start = start , end = end , **kwargs)
+        trainer.go()
+        HtmlCatcher.SetAttrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
         Email.Attach(trainer.result_package)
         return trainer
     
@@ -90,12 +88,11 @@ class ModelTrainer(BaseTrainer):
     def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , 
                  stage = 0 , resume = 0 , selection = 0 , start : int | None = None , end : int | None = None , **kwargs):
         assert schedule_name, 'schedule_name is required'
-        with HtmlCatcher(True) as catcher:
-            trainer = cls.initialize(
-                schedule_name = schedule_name , short_test = short_test , stage = stage , resume = resume , 
-                selection = selection , start = start , end = end , **kwargs)
-            trainer.go()
-            catcher.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
+        trainer = cls.initialize(
+            schedule_name = schedule_name , short_test = short_test , stage = stage , resume = resume , 
+            selection = selection , start = start , end = end , **kwargs)
+        HtmlCatcher.SetAttrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
+        trainer.go()
         Email.Attach(trainer.result_package)
         return trainer
 
@@ -104,12 +101,12 @@ class ModelTrainer(BaseTrainer):
                         stage = 2 , resume = 0 , selection = 0 , 
                         start : int | None = None , end : int | None = None , **kwargs):
         assert mapping_name, 'model_name is required'
-        with HtmlCatcher(True) as catcher:
-            trainer = cls.initialize(
-                module = f'db@{mapping_name}' , short_test = False , stage = stage , resume = resume , 
-                selection = selection, start = start , end = end , **kwargs)
-            trainer.go()
-            catcher.set_attrs(f'Test DB Mapping of {mapping_name}' , trainer.path_training_output)
+        trainer = cls.initialize(
+            module = f'db@{mapping_name}' , short_test = False , stage = stage , resume = resume , 
+            selection = selection, start = start , end = end , **kwargs)
+        HtmlCatcher.SetAttrs(f'Test DB Mapping of {mapping_name}' , trainer.path_training_output)
+        trainer.go()
+        
         Email.Attach(trainer.result_package)
         return trainer
 
@@ -118,11 +115,10 @@ class ModelTrainer(BaseTrainer):
                     stage = 2 , resume = 0 , selection = 0 , 
                     start : int | None = None , end : int | None = None , **kwargs):
         assert factor_name, 'factor_name is required'
-        with HtmlCatcher(True) as catcher:
-            trainer = cls.initialize(
-                module = f'factor@{factor_name}' , short_test = False , stage = stage , resume = resume , 
-                selection = selection, start = start , end = end , **kwargs)
-            trainer.go()
-            catcher.set_attrs(f'Test Factor of {factor_name}' , trainer.path_training_output)
+        trainer = cls.initialize(
+            module = f'factor@{factor_name}' , short_test = False , stage = stage , resume = resume , 
+            selection = selection, start = start , end = end , **kwargs)
+        HtmlCatcher.SetAttrs(f'Test Factor of {factor_name}' , trainer.path_training_output)
+        trainer.go()
         Email.Attach(trainer.result_package)
         return trainer

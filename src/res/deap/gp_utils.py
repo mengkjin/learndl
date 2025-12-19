@@ -749,7 +749,7 @@ class MemoryManager():
         if self.cuda_avail:
             Logger.stdout(f' Avg Freed Cuda Memory: ')
             for key , value in self.record.items():
-                Logger.stdout(f'  -->  {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
+                Logger.stdout(f'  --> {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
     
     @classmethod
     def clear_and_check(cls , silent = True):

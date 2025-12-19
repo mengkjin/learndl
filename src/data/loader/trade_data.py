@@ -10,17 +10,17 @@ from .access import DateDataAccess
 db_key_dict = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
 @singleton
 class TradeDataAccess(DateDataAccess):
-    MAX_LEN = 2000
+    MAX_LEN = 3000
     DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
     
-    def data_loader(self , date , data_type):
+    def data_loader(self , date , data_type) -> pd.DataFrame:
         if data_type in db_key_dict: 
             df = DB.load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
         else:
             raise KeyError(data_type)
         return df
     
-    def latest_date(self , data_type : str , date : int | None = None):
+    def latest_date(self , data_type : str , date : int | None = None) -> int:
         if data_type in db_key_dict:
             dates = DB.dates('trade_ts' , db_key_dict[data_type])
             if date: 
@@ -29,16 +29,16 @@ class TradeDataAccess(DateDataAccess):
         else:
             raise KeyError(data_type)
 
-    def get_val(self , date , field = None):
+    def get_val(self , date , field = None) -> pd.DataFrame:
         return self.get(date , 'val' , field)
     
-    def get_trd(self , date , field = None):
+    def get_trd(self , date , field = None) -> pd.DataFrame:
         return self.get(date , 'trd' , field)
     
-    def get_mf(self , date , field = None):
+    def get_mf(self , date , field = None) -> pd.DataFrame:
         return self.get(date , 'mf' , field)
     
-    def get_limit(self , date , field = None):
+    def get_limit(self , date , field = None) -> pd.DataFrame:
         return self.get(date , 'limit' , field)
 
     def get_quotes(

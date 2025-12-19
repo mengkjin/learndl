@@ -3,10 +3,9 @@ import numpy as np
 import pandas as pd
 
 from collections.abc import Iterable
-from contextlib import nullcontext
 from typing import Any
 
-from src.proj import SILENT , Logger
+from src.proj import Silence , Logger
 from src.basic import CALENDAR , RegisteredModel
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
@@ -83,7 +82,7 @@ class ModelPortfolioBuilder:
         '''get update dates and build portfolios'''
         assert update != overwrite , 'update and overwrite must be different here'
         self._update_fmps_record = []
-        with SILENT if silent else nullcontext():   
+        with Silence(silent):   
             dates = CALENDAR.diffs(self.reg_model.fmp_target_dates , self.reg_model.fmp_dates if update else [])
             dates = [d for d in dates if d in self.reg_model.pred_dates]
             self.build_fmps(dates , deploy = True)
@@ -92,7 +91,7 @@ class ModelPortfolioBuilder:
     def build_fmps(self , dates : list[int] | np.ndarray , deploy = True):
         for date in dates:
             self.fmp_tables[date] = self.build_day(date) 
-            if not SILENT: 
+            if not Silence.silent: 
                 Logger.stdout(f'Finished build fmps for {self.reg_model} at date {date}')
             if deploy:
                 self.reg_model.save_fmp(self.fmp_tables[date] , date , False)
@@ -163,13 +162,13 @@ class ModelPortfolioBuilder:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)
             if md._update_fmps_record:
-                Logger.stdout(f'  -->  Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}')
+                Logger.stdout(f'  --> Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}')
             else:
-                Logger.stdout(f'  -->  No new updating model portfolios for {model}')
+                Logger.stdout(f'  --> No new updating model portfolios for {model}')
 
             md.accounting(resume = True)
             if md._update_account_record:
-                Logger.stdout(f'  -->  Finish updating model accounting for {model} , len={len(md._update_account_record)}')
+                Logger.stdout(f'  --> Finish updating model accounting for {model} , len={len(md._update_account_record)}')
             else:
-                Logger.stdout(f'  -->  No new updating model accounting for {model}')
+                Logger.stdout(f'  --> No new updating model accounting for {model}')
         return md

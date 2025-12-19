@@ -169,8 +169,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
         with Logger.ParagraphIII('Factor Perf Test'):
             with Timer(f'FactorPerfTest.get_factor' , silent = self.verbosity < 1):
                 factor = self.get_factor(tested_only=False , interval = 5)
-            with Timer(f'FactorPerfTest.load_day_quotes' , silent = self.verbosity < 1):
-                factor.day_quotes()
+            with Timer(f'FactorPerfTest.load_day_rets' , silent = self.verbosity < 1):
+                factor.day_returns()
 
             for task in self.factor_tasks:
                 if self.verbosity > 0:

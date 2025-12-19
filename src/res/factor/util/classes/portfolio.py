@@ -212,10 +212,10 @@ class Portfolio:
                    start : int = -1 , end : int = 99991231 , 
                    analytic = True , attribution = True , 
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-                   daily = False , store = False):
+                   daily = False , store = False , verbosity : int = 1):
         if not hasattr(self , 'accountant'): 
             self.activate_accountant()
-        self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store)
+        self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store , verbosity)
         return self
     
     def account_with_index(self , add_index : dict[str,Any] | None = None):

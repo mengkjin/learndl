@@ -2,10 +2,9 @@ import torch
 import numpy as np
 import pandas as pd
 
-from contextlib import nullcontext
 from typing import Any , ClassVar , Literal
 
-from src.proj import MACHINE , SILENT , Logger
+from src.proj import MACHINE , Silence , Logger
 from src.basic import CALENDAR , RegisteredModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
@@ -48,7 +47,7 @@ class ModelPredictor:
     def update_preds(self , update = True , overwrite = False , start_dt = None , end_dt = None , silent = True):
         '''get update dates and predict these dates'''
         assert update != overwrite , 'update and overwrite must be different here'
-        with SILENT if silent else nullcontext():   
+        with Silence(silent):   
             dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
             self.predict_dates(dates)
             self.save_preds()
@@ -162,14 +161,14 @@ class ModelPredictor:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt , silent = silent)
             if md._current_update_dates:
-                Logger.stdout(f'  -->  Finish updating model prediction for {model} , len={len(md._current_update_dates)}')
+                Logger.stdout(f'  --> Finish updating model prediction for {model} , len={len(md._current_update_dates)}')
             else:
-                Logger.stdout(f'  -->  No new updating model prediction for {model}')
+                Logger.stdout(f'  --> No new updating model prediction for {model}')
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.stdout(f'  -->  Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+                    Logger.stdout(f'  --> Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
                 else:
-                    Logger.stdout(f'  -->  No new deploying model prediction for {model}')
+                    Logger.stdout(f'  --> No new deploying model prediction for {model}')
         return md
 
     @classmethod
@@ -182,12 +181,12 @@ class ModelPredictor:
             md = cls(model)
             md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt , silent = silent)
             if md._current_update_dates:
-                Logger.stdout(f'  -->  Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}')
+                Logger.stdout(f'  --> Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}')
             else:
-                Logger.stdout(f'  -->  No new recalculating model prediction for {model}')
+                Logger.stdout(f'  --> No new recalculating model prediction for {model}')
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.stdout(f'  -->  Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+                    Logger.stdout(f'  --> Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
                 else:
-                    Logger.stdout(f'  -->  No new deploying model prediction for {model}')
+                    Logger.stdout(f'  --> No new deploying model prediction for {model}')
         return md

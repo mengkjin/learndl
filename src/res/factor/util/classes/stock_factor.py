@@ -517,11 +517,17 @@ class StockFactor:
         univ.to_portfolio(self.date if load else None)
         return univ
 
+    def day_returns(self , load = True):
+        """
+        get the daily quotes for the factor
+        """
+        return DATAVENDOR.get_quotes_block(self.date if load else None , extend = 60)
+
     def day_quotes(self , load = True):
         """
         get the daily quotes for the factor
         """
-        return DATAVENDOR.get_quotes(self.date if load else None , extend = 60)
+        return DATAVENDOR.TRADE.loads(self.date if load else None , 'trd')
 
     def _get_alpha_model(self , name : str):
         """

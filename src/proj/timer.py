@@ -3,7 +3,7 @@ import numpy as np
 
 from datetime import datetime , timedelta
 from typing import Callable
-from .silence import SILENT
+from .silence import Silence
 
 class Duration:
     """Duration class, used to calculate the duration of the input or the start time"""
@@ -75,10 +75,10 @@ class Timer:
         self.key = '/'.join(args)
     def __enter__(self):
         self._init_time = datetime.now()
-        if not self.silent and not SILENT and not self.exit_only: 
+        if not self.silent and not Silence.silent and not self.exit_only: 
             print(self.enter_str , end='\n' if self.newline else '')
     def __exit__(self, type, value, trace):
-        if not self.silent and not SILENT:
+        if not self.silent and not Silence.silent:
             print(self.exit_str)
 
     @property

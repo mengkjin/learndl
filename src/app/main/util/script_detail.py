@@ -191,9 +191,15 @@ def show_param_settings(runner : ScriptRunner):
     subheader = expander_subheader(wkey , header , icon , True , help = help)
 
     with subheader:
+        reset_param = st.empty()
         SC.param_inputs_form = ParamInputsForm(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
         if is_empty: 
             return
+
+        if reset_param.button(":blue-badge[:material/refresh: **Reset Parameters**]", key = f"param-inputs-form-reset-param-button" , help = "Reset Parameters to Default" , type = 'tertiary'):
+            SC.script_params_cache.clear()
+            SC.current_task_item = None
+            st.rerun()
 
         params = SC.param_inputs_form.param_values
         if runner.header.file_editor:

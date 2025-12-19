@@ -145,6 +145,8 @@ class AutoRunTask:
             self.status = 'Success'
         
         for catcher in self._catchers[::-1]:
+            if isinstance(catcher , HtmlCatcher) and catcher.export_file_list:
+                self.attach_exit_files(catcher.export_file_list[-1])
             catcher.__exit__(exc_type, exc_value, exc_traceback)
         
         self.attach_exit_files(Email.Attachments.get('default' , []))

@@ -642,24 +642,29 @@ class HtmlCatcher(OutputCatcher):
             instance.add_export_file(export_path)
         return self
 
-    def SetInstance(self):
+    @classmethod
+    def SetAttrs(cls , title : str | None = None , export_path : Path | str | None = None , category : str | None = None):
+        """Set the attributes of the catcher, class level (set all catchers)"""
+        if cls.Instance is not None:
+            cls.Instance.set_attrs(title , export_path , category)
+
+    @classmethod
+    def SetInstance(cls , instance : 'HtmlCatcher'):
         """Set the instance of the catcher, if the catcher is already running, block the new instance"""
-        if self.Instance is not None:
-            _critical(f"{self.Instance} is already running, blocking {self}")
-            self._enable_catcher = False
+        if cls.Instance is not None:
+            _critical(f"{cls.Instance} is already running, blocking {instance}")
+            instance._enable_catcher = False
         else:
-            self.__class__.Instance = self
+            cls.Instance = instance
 
-        return self
-
-    def ClearInstance(self):
+    @classmethod
+    def ClearInstance(cls , instance : 'HtmlCatcher'):
         """Clear the instance of the catcher if the catcher is the current instance"""
-        if self.Instance is self:
-            self.__class__.Instance = None
-        return self
+        if cls.Instance is instance:
+            cls.Instance = None
 
     def __enter__(self):
-        self.SetInstance()
+        self.SetInstance(self)
  
         if not self.enabled: 
             return self
@@ -673,7 +678,7 @@ class HtmlCatcher(OutputCatcher):
             return
         self.export()   
         self.restore_display_function()
-        self.ClearInstance()
+        self.ClearInstance(self)
 
     def export(self , export_path: Path | None = None , add_to_email: bool = True):
         """Export the catcher to all paths in the export file list"""

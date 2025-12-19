@@ -89,14 +89,14 @@ def gp_job_dir(job_id = None , train = True , continuation = False , test_code =
             if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
                 raise Exception(f'Deletion Denied!')
             shutil.rmtree(job_dir)
-            Logger.stdout(f'  -->  Start New Training in "{job_dir}"')
+            Logger.stdout(f'  --> Start New Training in "{job_dir}"')
         #elif os.path.exists(job_dir):
         #    if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Continuation:')[0].lower() == 'y':
         #        raise Exception(f'Continuation Denied!')
         elif not os.path.exists(job_dir) and continuation:
             raise Exception(f'No existing "{job_dir}" for Continuation!')
         else:
-            Logger.stdout(f'  -->  Continue Training in "{job_dir}"')
+            Logger.stdout(f'  --> Continue Training in "{job_dir}"')
     return job_dir , test_code
 
 def gp_parameters(job_id = None , train = True , continuation = False , test_code = False , **kwargs):
@@ -198,14 +198,14 @@ def gp_namespace(gp_params):
 
         if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all():
             if gp_space.param.verbose: 
-                Logger.stdout(f'  -->  Exists "{package_path}" but Lack Required Data!')
+                Logger.stdout(f'  --> Exists "{package_path}" but Lack Required Data!')
         else:
             assert np.isin(package_require , list(package_data.keys())).all() , np.setdiff1d(package_require , list(package_data.keys()))
             assert np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all() , np.setdiff1d(gp_space.gp_argnames , package_data['gp_argnames'])
             assert package_data['df_index'] is not None
 
             if gp_space.param.verbose: 
-                Logger.stdout(f'  -->  Directly load "{package_path}"')
+                Logger.stdout(f'  --> Directly load "{package_path}"')
             for gp_key in gp_space.gp_argnames:
                 gp_val = package_data['gp_inputs'][package_data['gp_argnames'].index(gp_key)]
                 gp_val = df2ts(gp_val , gp_key , gp_space.device)
@@ -224,12 +224,12 @@ def gp_namespace(gp_params):
 
         if not load_finished:
             if gp_space.param.verbose: 
-                Logger.stdout(f'  -->  Load from Parquet Files:')
+                Logger.stdout(f'  --> Load from Parquet Files:')
             gp_filename = gp_filename_converter()
             nrowchar = 0
             for i , gp_key in enumerate(gp_space.gp_argnames):
                 if gp_space.param.verbose and nrowchar == 0: 
-                    Logger.stdout('  -->  ' , end='')
+                    Logger.stdout('  --> ' , end='')
                 gp_val = read_gp_data(gp_filename(gp_key),gp_space.param.slice_date,gp_space.records.get('df_columns'))
                 if i == 0: 
                     gp_space.records.update(df_columns = gp_val.columns.values , df_index = gp_val.index.values)
@@ -261,7 +261,7 @@ def gp_namespace(gp_params):
             torch.save(saved_data , package_path)
 
     if gp_space.param.verbose: 
-        Logger.stdout(f'  -->  {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')
+        Logger.stdout(f'  --> {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')
 
     gp_space.mgr_file.save_state(gp_space.param.__dict__, 'params', i_iter = 0) # useful to assert same index as package data
     gp_space.mgr_file.save_state(gp_space.records.subset(['df_index' , 'df_columns']),'df_axis' , i_iter = 0) # useful to assert same index as package data
@@ -630,7 +630,7 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
 
     for i_gen in range(start_gen, param.n_gen):
         if verbose and i_gen > 0: 
-            Logger.stdout(f'  -->  Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones')
+            Logger.stdout(f'  --> Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones')
         population = gp_population(toolbox , param.pop_num , last_gen = population , forbidden = forbidden + [ind for ind in halloffame])
         #Logger.stdout([str(ind) for ind in population[:20]])
         population = toolbox.indpop2syxpop(population)
@@ -712,8 +712,8 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
     Logger.stdout(f'**HallofFame({len(halloffame)}) Contains {new_log.elite.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}')
     if new_log.elite.sum() <= 0.1 * len(halloffame):
         # Failure of finding promising offspring , check if code has bug
-        Logger.stdout(f'  -->  Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
-        Logger.stdout(f'  -->  Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
+        Logger.stdout(f'  --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
+        Logger.stdout(f'  --> Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
 
     for i , hof in enumerate(halloffame):
         # 若超过了本次循环的精英上限数,则后面的都不算,等到下一个循环再来(避免内存溢出)
@@ -742,10 +742,10 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         # 通过检验,加入因子库
         new_log.loc[i,'i_elite'] = hof_elites.i_elite
         forbidden.append(halloffame[i])
-        hof_elites.append(factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  -->  Hof{i:_>3d}/')
+        hof_elites.append(factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  --> Hof{i:_>3d}/')
         if False and test_code: 
             mgr_file.save_state(factor_value.to_dataframe(index = records.df_index , columns = records.df_columns) , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
-        mgr_mem.check(showoff = verbose and test_code, starter = '  -->  ')
+        mgr_mem.check(showoff = verbose and test_code, starter = '  --> ')
 
     mgr_file.dump_generation(population, halloffame, forbidden , i_iter = i_iter , i_gen = -1)
     records.update(forbidden = forbidden)
@@ -760,9 +760,9 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         mgr_file.save_state(elites , 'elt' , i_iter)
         Logger.stdout(f'**An EliteGroup({elites.shape[-1]}) has been Selected')
     if True: 
-        Logger.stdout(f'  -->  Cuda Memories of "gp_inputs" take {MemoryManager.object_memory(gp_inputs):.4f}G')
-        Logger.stdout(f'  -->  Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G')
-        Logger.stdout(f'  -->  Cuda Memories of "tensors"   take {MemoryManager.object_memory(tensors):.4f}G')
+        Logger.stdout(f'  --> Cuda Memories of "gp_inputs" take {MemoryManager.object_memory(gp_inputs):.4f}G')
+        Logger.stdout(f'  --> Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G')
+        Logger.stdout(f'  --> Cuda Memories of "tensors"   take {MemoryManager.object_memory(tensors):.4f}G')
 
 # %%
 def outer_loop(i_iter , gp_space , start_gen = 0):

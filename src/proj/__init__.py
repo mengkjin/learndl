@@ -7,7 +7,7 @@ from .catcher import (
 from .sqlite import DBConnHandler
 from .debug import InstanceRecord
 from .shared_sync import SharedSync
-from .silence import SILENT
+from .silence import SILENT , Silence
 from .timer import Duration , Timer , PTimer
 from .options import Options
 from .display import Display

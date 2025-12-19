@@ -14,6 +14,7 @@ class ParamInputsForm:
         self.target = target
 
     def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized'):
+        self.type = type
         cmd = self.trigger_item.cmd if self.trigger_item is not None else ''
         if type == 'customized':
             self.init_customized_container(cmd)

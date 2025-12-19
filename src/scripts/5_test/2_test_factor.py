@@ -15,14 +15,16 @@
 #   resume : 
 #       type : [True , False]
 #       prefix : "resume/"
-#       default : "resume/False"
+#       default : "resume/True"
 #       desc : resume training , if change schedule file, set to False
 #       required : False
 #   start : 
 #       type : int
+#       default : -1
 #       desc : start date
 #   end : 
 #       type : int
+#       default : 99991231
 #       desc : end date
 
 from src.api import ModelAPI

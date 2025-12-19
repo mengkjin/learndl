@@ -733,5 +733,17 @@ def style():
             padding-bottom: 0px !important;
         }
     }
+    .stElementContainer[class*="param-inputs-form-reset-param"] {
+        button {
+            height: 20px !important;
+            width: 100% !important;
+            border-radius: 5% !important;
+            span {
+                font-weight: bold !important;
+                justify-content: center !important;
+            }
+            margin-top: -10px !important;
+        }
+    }
     """)
     css.apply()

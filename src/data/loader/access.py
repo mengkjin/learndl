@@ -37,6 +37,14 @@ class DateDataAccess(ABC):
             if data_type in self.pl_collections: 
                 self.pl_collections[data_type].truncate()
 
+    def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str , rename_date_key = None):
+        if dates is None:
+            return pd.DataFrame()
+        if isinstance(dates , int):
+            dates = [dates]
+        for date in self.collections[data_type].date_diffs(dates , True):
+            self.collections[data_type].add(date , self.data_loader(date , data_type))
+
     def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         if overwrite or int(date) not in self.collections[data_type]:
             self.collections[data_type].add(date , self.data_loader(date , data_type))

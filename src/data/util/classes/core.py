@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar
 
-from src.proj import PATH , Logger , SILENT , Timer
+from src.proj import PATH , Logger , Silence , Timer
 from src.basic import CALENDAR , DB , torch_load
 from src.func import index_union , index_intersect , forward_fillna
 
@@ -540,10 +540,10 @@ class ModuleData:
             data = cls(**torch_load(path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
-                if not SILENT: 
+                if not Silence.silent: 
                     Logger.success(f'Loading Module Data, Try \'{path}\', success!')
             else:
-                if not SILENT: 
+                if not Silence.silent: 
                     Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None
         except ModuleNotFoundError:

@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from src.proj import SILENT
+from src.proj import Silence
 from src.res.model.util import BaseDataModule , BatchData
     
 class BatchDataLoader:
@@ -40,7 +40,7 @@ class BatchDataLoader:
     def enable_tqdm(self , disable = False):
         if not isinstance(self.loader , tqdm): 
             self.loader = tqdm(self.loader , total=len(self.loader))
-        self.loader.disable = disable or SILENT
+        self.loader.disable = disable or Silence.silent
         return self
 
     def display(self , text : str):

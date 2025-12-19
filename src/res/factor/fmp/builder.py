@@ -175,7 +175,7 @@ class PortfolioBuilder:
         '''Accounting portfolio through date, require at least portfolio'''
         self.portfolio.accounting(self.benchmark , start , end , 
                                   analytic and self.lag == 0 , attribution and self.lag == 0 ,
-                                  trade_engine , daily)
+                                  trade_engine , daily , verbosity = self.verbosity)
         self.account = self.portfolio.account_with_index(self.port_index)
         return self
 

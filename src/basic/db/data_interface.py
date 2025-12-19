@@ -107,7 +107,7 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True , prefix = '  -->  '):
+def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True , prefix = '  --> '):
     """save dataframe to path"""
     prefix = prefix or ''
     path = Path(path)

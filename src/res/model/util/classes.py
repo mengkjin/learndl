@@ -301,7 +301,7 @@ class TrainerPredRecorder(ModelStreamLine):
             if tested_only and df.empty:
                 df_resume = self.empty_preds()
             elif tested_only and not df.empty:
-                df_resume = self.resumed_preds.query('model_date > @df_tested.model_date.min() & model_date < @df_tested.model_date.max()')
+                df_resume = self.resumed_preds.query('model_date > @df.model_date.min() & model_date < @df.model_date.max()')
             else:
                 df_resume = self.resumed_preds
             if not df_resume.empty:
@@ -598,7 +598,7 @@ class BaseTrainer(ModelStreamLine):
     def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('test_analytic_plot.pdf')
     @property
     def result_package(self) -> list[Path]: 
-        return [self.path_training_output , self.path_analytical_plot , self.path_analytical_data]
+        return [self.path_analytical_plot , self.path_analytical_data]
     
     def main_process(self):
         '''Main stage of data & fit & test'''

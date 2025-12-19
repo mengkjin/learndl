@@ -99,7 +99,7 @@ class _df_collection(ABC):
         reform a DataFrame with given fields and set_index
         rename_date_key : if not None , rename the date_key column to the given name
         '''
-        if field is not None: 
+        if len(df) > 0 and field is not None: 
             if isinstance(field , str): 
                 field = [field]
             assert np.isin(field , df.columns).all() , f'{field} should be in df.columns : {df.columns}'
