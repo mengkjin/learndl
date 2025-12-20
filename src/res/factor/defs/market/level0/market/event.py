@@ -39,7 +39,7 @@ class high_level_switch(MarketEventFactor):
         }
 
         for index , df in index_quotes.items():
-            df = slice_quote(df , start , end).copy()
+            df = slice_quote(df , start , end)
             df['52week_high'] = df['close'].rolling(243).max()
             df['peaked'] = 1 * (df['close'] >= df['52week_high']).shift(1)
             df['peaking'] = 1 * (df['close'] >= df['52week_high'].shift(1))

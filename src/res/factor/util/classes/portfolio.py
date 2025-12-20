@@ -160,7 +160,7 @@ class Portfolio:
         DB.save_df(port , path , overwrite = True)
     
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
-        if secid is None: 
+        if secid is None or self.is_empty: 
             return self
         if not inplace:
             self = self.copy()
@@ -169,7 +169,7 @@ class Portfolio:
         return self
 
     def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
-        if dates is None: 
+        if dates is None or self.is_empty: 
             return self
         if not inplace:
             self = self.copy()

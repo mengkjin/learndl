@@ -1,6 +1,7 @@
 import shutil
 from pathlib import Path
-from .path import PATH
+
+from src.proj.env import PATH
 
 class SharedSync:
     """Shared folder sync manager, used to sync the shared folder to the local folder and vice versa"""

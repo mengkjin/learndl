@@ -10,7 +10,6 @@ from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
 
-
 class BasicTestResult(BaseCallBack):
     '''basic test result summary'''
     
@@ -33,7 +32,7 @@ class BasicTestResult(BaseCallBack):
             Logger.stdout(f'Basic Test Result saved to {self.path_test_df}') 
 
     def get_test_df(self , all_dates = False) -> pd.DataFrame:
-        df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date])
+        df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date]) if self.config.is_resuming else self.test_df_date
         df = df.drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True)
         if not all_dates:
@@ -52,8 +51,6 @@ class BasicTestResult(BaseCallBack):
             'date' : self.model_test_dates ,
             'value' : self.metrics.scores[-len(self.model_test_dates):]
         })
-        df_model = df_date.groupby(['model_num' , 'model_date' , 'submodel'])['value'].mean().reset_index()
-        df_model['model_date'] = df_model['model_date'].astype(str)
         self.test_df_date = pd.concat([self.test_df_date , df_date])
 
     def on_test_end(self): 
@@ -187,7 +184,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         with Logger.ParagraphIII('Factor FMP Test'):
             with Timer(f'FactorFMPTest.get_factor' , silent = self.verbosity < 1):
                 factor = self.get_factor(tested_only=True , interval = 1)
-            with Timer(f'FactorFMPTest.get_alpha_models' , silent = self.verbosity < 1):
+            with Timer(f'FactorFMPTest.load_alpha_models' , silent = self.verbosity < 1):
                 factor.alpha_models()
             with Timer(f'FactorFMPTest.load_risk_models' , silent = self.verbosity < 1):
                 factor.risk_model()

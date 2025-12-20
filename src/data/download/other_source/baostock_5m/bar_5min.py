@@ -30,14 +30,14 @@ def tmp_file_path(start_dt : int , end_dt : int , code : str):
 def baostock_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
     if path.exists():
-        return pd.read_feather(path)
+        return DB.load_df(path)
     end_date_str = f'{date // 10000}-{(date // 100) % 100}-{date % 100}'
     secdf = bs.query_all_stock(end_date_str).get_data()
     secdf['market'] = secdf['code'].str.slice(0,2)
     secdf['secid'] = secdf['code'].str.slice(3).astype(int)
     secdf['is_sec'] = ((secdf['market'] == 'sh') * (secdf['secid'] >= 600000) + \
         (secdf['market'] == 'sz') * (secdf['secid'] < 600000)) * (~secdf['code_name'].str.contains('指数'))
-    secdf.to_feather(path)
+    DB.save_df(secdf , path , verbose = False)
     return secdf
 
 def baostock_past_dates(file_type : Literal['secdf' , '5min']):
@@ -125,7 +125,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 assert rs is not None , f'{rs} is None , corrupted data'
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
-                    result.to_feather(tmp_file_path(start_dt , end_dt , code))
+                    DB.save_df(result , tmp_file_path(start_dt , end_dt , code) , verbose = False)
 
                 if i % 100 == 0:
                     Logger.success(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
@@ -137,16 +137,16 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
         else:
             break
 
-    df_list = [pd.read_feather(d) for d in tmp_dir.iterdir()]
+    df_list = [DB.load_df(d) for d in tmp_dir.iterdir()]
     if len(df_list) == 0: 
         return False
-    df_all = pd.concat([pd.read_feather(d) for d in tmp_dir.iterdir()])
+    df_all = pd.concat([DB.load_df(d) for d in tmp_dir.iterdir()])
 
     for date_str in df_all['date'].unique():
         df : pd.DataFrame = df_all.query('date == @date_str')
         date = int(str(date_str).replace('-', ''))
         df = df.copy().reset_index(drop = True).assign(date = date)
-        df.to_feather(final_path.joinpath(f'5min_bar_{date}.feather'))
+        DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , verbose = False)
 
         df = baostock_5min_to_normal_5min(df)
         DB.save(df , 'trade_ts' , '5min' , date = date , verbose = True)

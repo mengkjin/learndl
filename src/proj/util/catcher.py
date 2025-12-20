@@ -9,11 +9,9 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from matplotlib.figure import Figure
 
-from .path import PATH
+from src.proj.env import PATH , MACHINE , ProjStates
+from src.proj.func import Duration , Display
 from .logger import Logger
-from .machine import MACHINE
-from .timer import Duration
-from .display import Display
 
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 
@@ -626,11 +624,10 @@ class HtmlCatcher(OutputCatcher):
         assert export_path.suffix == '.html' , f"export_path must be a html file , but got {export_path}"
         self.export_file_list.append(export_path)
     
-    def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , category : str | None = None):
+    def set_attrs(self , title : str | None = None , category : str | None = None):
         """
         Set the attributes of the catcher even after initialization
         title : str , the title of the catcher
-        export_path : Path | str , the path to add to the export file list
         category : str , the category of the catcher
         """
         instance = self.Instance if self.Instance is not None else self
@@ -638,15 +635,19 @@ class HtmlCatcher(OutputCatcher):
             instance.title = title
         if category: 
             instance.category = category
-        if export_path: 
-            instance.add_export_file(export_path)
         return self
 
     @classmethod
-    def SetAttrs(cls , title : str | None = None , export_path : Path | str | None = None , category : str | None = None):
+    def AddExportFile(cls , export_path : Path | str | None = None):
+        """Add an path to the export file list"""
+        if cls.Instance is not None:
+            cls.Instance.add_export_file(export_path)
+
+    @classmethod
+    def SetAttrs(cls , title : str | None = None , category : str | None = None):
         """Set the attributes of the catcher, class level (set all catchers)"""
         if cls.Instance is not None:
-            cls.Instance.set_attrs(title , export_path , category)
+            cls.Instance.set_attrs(title , category)
 
     @classmethod
     def SetInstance(cls , instance : 'HtmlCatcher'):
@@ -691,11 +692,10 @@ class HtmlCatcher(OutputCatcher):
         for export_path in self.export_file_list:
             _stdout(f"  --> {self.__class__.__name__} result saved to {export_path}")
 
+        
         if add_to_email:
-            from src.basic.util.email import Email
-            Email.Attach(self.export_file_list[-1])
-            if MACHINE.server:
-                _stdout(f"  --> {self.__class__.__name__} attached to email {self.export_file_list[-1]}")
+            ProjStates.email_attachments.append(self.export_file_list[-1])
+        ProjStates.app_attachments.append(self.export_file_list[-1])
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:

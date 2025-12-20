@@ -65,7 +65,7 @@ class BaseFactorAnalyticCalculator(ABC):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
     def plot(self , show = False , verbosity = 0): 
-        with Timer(f'  --> {self.__class__.__name__} plot' , silent = verbosity < 1):
+        with Timer(f'  --> {self.__class__.__name__} plot' , silent = verbosity < 1 , exit_only = verbosity < 2):
             if self.calc_rslt.empty: 
                 self.figs = {}
                 return self
@@ -125,13 +125,13 @@ class BaseFactorAnalyticTest(ABC):
 
     @abstractmethod
     def calc(self , factor : StockFactor , *args , verbosity = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
             for task in self.tasks.values():  
                 task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
         return self
 
     def plot(self , show = False , verbosity = 1):
-        with Timer(f'{self.__class__.__name__}.plot' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.plot' , silent = verbosity < 1 , exit_only = verbosity < 2):
             for task in self.tasks.values(): 
                 task.plot(show = show , verbosity = verbosity - 1)
         return self

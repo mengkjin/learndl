@@ -97,7 +97,7 @@ class Stock4DData:
         assert np.all([blk.shape[2] == len_inday for blk in blocks]) , 'blocks with different inday cannot be merged'
         p0i = p1i = np.arange(len_inday)
 
-        new_blk = blocks[0].copy().align(secid , date , feature)
+        new_blk = blocks[0].align(secid , date , feature , False)
         for i , blk in enumerate(blocks[1:] , start = 1): 
             new_blk.values[np.ix_(p0s[i],p0d[i],p0i,p0f[i])] = blk.values[np.ix_(p1s[i],p1d[i],p1i,p1f[i])]
 
@@ -123,67 +123,67 @@ class Stock4DData:
     def copy(self): return deepcopy(self)
 
     def align(self , secid = None , date = None , feature = None , inplace = True):
-        obj = self if inplace else self.copy()
-        obj = obj.align_secid_date(secid , date)
-        obj = obj.align_feature(feature)
-        return obj    
+        return self.align_secid_date(secid , date , inplace = inplace).align_feature(feature , inplace = True)
 
     def align_secid(self , secid , inplace = True):
-        obj = self if inplace else self.copy()
         if secid is None or len(secid) == 0: 
-            return obj
-        asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
-        values = np.full((len(secid) , *obj.shape[1:]) , np.nan)
-        _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
-        values[p0s] = obj.values[p1s]
-        obj.values  = torch.tensor(values).to(self.values) if asTensor else values
-        obj.secid  = secid
-        return obj.as_type(dtype)
-    
+            return self if inplace else self.copy()
+        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
+        values = np.full((len(secid) , *self.shape[1:]) , np.nan)
+        _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
+        values[p0s] = self.values[p1s]
+        values = torch.tensor(values).to(self.values) if asTensor else values
+        if inplace:
+            return self.update(values = values , secid = secid).as_type(dtype)
+        else:
+            return self.__class__(values = values , secid = secid , date = self.date , feature = self.feature).as_type(dtype)
+
     def align_date(self , date , inplace = True):
-        obj = self if inplace else self.copy()
         if date is None or len(date) == 0: 
-            return obj
-        asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
-        values = np.full((obj.shape[0] , len(date) , *obj.shape[2:]) , np.nan)
-        _ , p0d , p1d = np.intersect1d(date , obj.date , return_indices=True)
-        values[:,p0d] = obj.values[:,p1d]
-        obj.values  = torch.tensor(values).to(self.values) if asTensor else values
-        obj.date    = date
-        return obj.as_type(dtype)
+            return self if inplace else self.copy()
+        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
+        values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
+        _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
+        values[:,p0d] = self.values[:,p1d]
+        values  = torch.tensor(values).to(self.values) if asTensor else values
+        if inplace:
+            return self.update(values = values , date = date).as_type(dtype)
+        else:
+            return self.__class__(values = values , secid = self.secid , date = date , feature = self.feature).as_type(dtype)
     
     def align_secid_date(self , secid = None , date = None , inplace = True):
-        obj = self if inplace else self.copy()
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
-            return obj
+            return self if inplace else self.copy()
         elif secid is None or len(secid) == 0:
-            return obj.align_date(date = date)
+            return self.align_date(date = date, inplace = inplace)
         elif date is None or len(date) == 0:
-            return obj.align_secid(secid = secid)
+            return self.align_secid(secid = secid, inplace = inplace)
         else:
-            asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
-            values = np.full((len(secid),len(date),*obj.shape[2:]) , np.nan)
-            _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
-            _ , p0d , p1d = np.intersect1d(date  , obj.date  , return_indices=True)
-            values[np.ix_(p0s,p0d)] = obj.values[np.ix_(p1s,p1d)] 
+            asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
+            values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
+            _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
+            _ , p0d , p1d = np.intersect1d(date  , self.date  , return_indices=True)
+            values[np.ix_(p0s,p0d)] = self.values[np.ix_(p1s,p1d)] 
 
-            obj.values  = torch.tensor(values).to(self.values) if asTensor else values
-            obj.secid   = secid
-            obj.date    = date
+            values = torch.tensor(values).to(self.values) if asTensor else values
 
-            return obj.as_type(dtype)
+            if inplace:
+                return self.update(values = values , secid = secid , date = date).as_type(dtype)
+            else:
+                return self.__class__(values = values , secid = secid , date = date , feature = self.feature).as_type(dtype)
     
     def align_feature(self , feature , inplace = True):
-        obj = self if inplace else self.copy()
         if feature is None or len(feature) == 0: 
-            return obj
-        asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
-        values = np.full((*obj.shape[:-1],len(feature)) , np.nan)
-        _ , p0f , p1f = np.intersect1d(feature , obj.feature , return_indices=True)
-        values[...,p0f] = obj.values[...,p1f]
-        obj.values  = torch.tensor(values).to(self.values) if asTensor else values
-        obj.feature = feature
-        return obj.as_type(dtype)
+            return self if inplace else self.copy()
+        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
+        values = np.full((*self.shape[:-1],len(feature)) , np.nan)
+        _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
+        values[...,p0f] = self.values[...,p1f]
+        values  = torch.tensor(values).to(self.values) if asTensor else values
+        if inplace:
+            return self.update(values = values , feature = feature).as_type(dtype)
+        else:
+            return self.__class__(values = values , secid = self.secid , date = self.date , feature = feature).as_type(dtype)
     
     def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
         assert new_value.shape == self.shape[:-1] , (new_value.shape , self.shape[:-1])
@@ -215,6 +215,10 @@ class Stock4DData:
             values = values[:,index]
         if secid is not None: 
             index  = match_values(secid , self.secid)
+            if max(index) >= len(self.secid):
+                print(secid , index , self.secid)
+                print(secid[index == max(index)])
+                raise Exception('test')
             values = values[index,:]
         if fillna is not None: 
             if isinstance(values , torch.Tensor): 

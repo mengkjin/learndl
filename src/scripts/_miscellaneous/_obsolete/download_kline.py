@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from src.proj import MACHINE , Logger
+from src.basic import DB
 
 aws_info = MACHINE.local_settings('aws')
 aws_access_key_id = aws_info['aws_access_key_id']
@@ -31,7 +32,7 @@ def transform_one_day(date):
     with zipfile.ZipFile(zip_file_path, 'r') as zip_ref: 
         zip_ref.extract(txt_file_path , download_path)
     df = pd.read_csv(download_path.joinpath(txt_file_path) , sep = '\t')
-    df.to_feather(target_path)
+    DB.save_df(df , target_path , verbose = False)
 
 def kline_download(start = 20100104 , end = 20241226):
     os.makedirs(download_path , exist_ok=True)

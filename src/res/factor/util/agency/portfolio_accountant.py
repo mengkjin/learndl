@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Sequence , Any
 
-from src.proj import InstanceRecord , Logger
+from src.proj import ProjStates , Logger
 from src.basic import CONF
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
@@ -133,7 +133,7 @@ class PortfolioAccountant:
             
         port_old = Port.none_port(self.account.index.values[1])
         if self.config.verbosity > 0:
-            Logger.stdout(f'  --> {self.config.name} has {len(self.account) - 1} account dates from {self.account.index.values[0]} to {self.account.index.values[-1]}')
+            Logger.stdout(f'  --> {self.config.name} has {len(self.account) - 1} account dates from {self.account['start'].values[1]} to {self.account['end'].values[-1]}')
         for i , (date , ed) in enumerate(zip(self.account.index.values[1:] , self.account['end'].values[1:])):
             port_new = self.portfolio.get(date) if self.portfolio.has(date) else port_old
             bench = self.config.benchmark.get(date , True)
@@ -149,7 +149,7 @@ class PortfolioAccountant:
                 self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
             if self.config.verbosity > 1 and (i % 100 == 0 or i == len(self.account) - 2):
-                Logger.stdout(f'  --> {self.config.name} accounting {i} / {len(self.account) - 1} at {ed}')
+                Logger.stdout(f'  --> {self.config.name} accounting {i} / {len(self.account) - 1} at {date}')
 
         self.account['pf']  = self.account['pf'] - self.account['turn'] * self.config.trade_cost
         self.account['excess'] = self.account['pf'] - self.account['bm']
@@ -225,7 +225,7 @@ class PortfolioAccountant:
         df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.Factor.BENCH.categories + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
-        InstanceRecord.update_account(df)    
+        ProjStates.account = df    
         return df
     
 class PortfolioAccountManager:   

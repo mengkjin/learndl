@@ -130,7 +130,7 @@ class DataVendor:
             with Silence():
                 pre_start_dt = CALENDAR.cd(start_dt , -20)
                 extend_td_within = self.td_within(pre_start_dt , end_dt)
-                blk = self.get_quotes_block(extend_td_within).subset(date = extend_td_within , feature = ['close' , 'vwap']).as_tensor()
+                blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).as_tensor()
                 values = blk.values[:,1:] / blk.values[:,:-1] - 1
                 secid  = blk.secid
                 date   = blk.date[1:]
@@ -276,17 +276,17 @@ class DataVendor:
     def ffmv(self , secid : np.ndarray , date : np.ndarray , prev = True):
         if prev : 
             date = self.td_array(date , -1)
-        blk = self.get_risk_exp(date).subset(secid , date , ['weight']).as_tensor()
+        blk = self.get_risk_exp(date).align(secid , date , ['weight'])
         if prev : 
             blk.date = self.td_array(blk.date , 1)
         return blk
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).subset(secid , date , CONF.Factor.RISK.style).as_tensor()
+        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.style)
         return blk
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).subset(secid , date , CONF.Factor.RISK.indus).as_tensor()
+        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.indus)
         return blk
     
     def get_ffmv(self , secid : np.ndarray , d : int):

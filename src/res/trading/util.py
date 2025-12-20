@@ -28,7 +28,7 @@ def all_path_convert():
     for path in file_list:
         new_path = path.with_suffix('.feather')
         df = pd.read_csv(path)
-        df.to_feather(new_path)
+        DB.save_df(df , new_path , verbose = False)
         path.unlink()
 
 all_path_convert()
@@ -144,7 +144,7 @@ class TradingPort:
     def load_port(self , date : int) -> pd.DataFrame:
         path = self.port_path(date)
         if path.exists():
-            return pd.read_feather(path).assign(date = date , name = self.name)
+            return DB.load_df(path).assign(date = date , name = self.name)
         else:
             return pd.DataFrame()
 
@@ -162,6 +162,7 @@ class TradingPort:
                     port = Portfolio.from_dataframe(df)
                 else:
                     port = Portfolio(self.name)
+        assert port.is_empty or max(port.port_date) < date , f'last port date {max(port.port_date)} should be less than date {date}'
         return port
     
     def build(self , date : int , reset = False , export = True):
@@ -179,7 +180,7 @@ class TradingPort:
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , overwrite = True ,
+        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
@@ -195,8 +196,7 @@ class TradingPort:
         if export:
             path = self.port_path(date)
             path.parent.mkdir(parents=True, exist_ok=True)
-            pf.loc[:,['secid' , 'weight' , 'value']].to_feather(path)
-
+            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path)
 
         # add columns to include alpha and universe
         if alpha_details:
@@ -229,7 +229,7 @@ class TradingPort:
     def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:
         dates = self.existing_dates(start , end)
         paths = [self.port_path(date) for date in dates]
-        dfs = [pd.read_feather(path).assign(date = date) for date , path in zip(dates , paths)]
+        dfs = [DB.load_df(path).assign(date = date) for date , path in zip(dates , paths)]
         df = pd.concat(dfs).assign(name = self.name)
         return Portfolio.from_dataframe(df , name = self.name)
     

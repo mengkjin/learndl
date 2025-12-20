@@ -34,7 +34,7 @@ def extract_js_min(date):
     df = None
     if target_path.exists(): 
         try:
-            df = pd.read_feather(target_path)
+            df = DB.load_df(target_path)
         except Exception as e:
             Logger.error(e)
             target_path.unlink()
@@ -52,7 +52,7 @@ def extract_js_min(date):
         Logger.error(e)
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
-    df.to_feather(target_path)
+    DB.save_df(df , target_path , verbose = False)
     return df
 
 def add_sec_type(df : pd.DataFrame):

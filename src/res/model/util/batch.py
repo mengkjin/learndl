@@ -5,7 +5,7 @@ import torch.nn as nn
 from dataclasses import dataclass , field
 from typing import Any
 
-from src.basic.util.device import Device , send_to , get_device
+from src.proj import Device
 
 def _object_shape(obj : Any) -> Any:
     if obj is None: 
@@ -39,7 +39,7 @@ class BatchData:
         else:
             if isinstance(device , Device): 
                 device = device.device
-            inputs = {name:send_to(getattr(self , name) , device) for name in self.__slots__}
+            inputs = {name:Device.send_to(getattr(self , name) , device) for name in self.__slots__}
             return BatchData(**inputs)
         
     def cpu(self):  
@@ -243,7 +243,7 @@ class BatchOutput:
     def nn_module(cls , module : nn.Module , inputs : Any | BatchData , **kwargs):
         if isinstance(inputs , BatchData): 
             inputs = inputs.x
-        device0 = get_device(module)
-        device1 = get_device(inputs)
+        device0 = Device.get_device(module)
+        device1 = Device.get_device(inputs)
         assert device0 == device1 , (device0 , device1)
         return cls(module(inputs ,  **kwargs))

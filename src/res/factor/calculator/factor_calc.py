@@ -806,7 +806,7 @@ class MarketFactorCalculator(FactorCalculator):
         """load factor values of a given date range"""
         df = DB.load(cls.db_src , cls.db_key , verbose = False)
         if start is not None or end is not None:
-            df = df.loc[df['date'].isin(CALENDAR.td_within(start , end))].reset_index(drop = True).copy()
+            df = df.loc[df['date'].isin(CALENDAR.td_within(start , end))].reset_index(drop = True)
         return df
 
     @classmethod
@@ -1004,8 +1004,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
             return
         if after is not None:
             Logger.warning(f'Dropping pooling weight of {self.factor_name} after {after}!')
-            df = self.load_pooling_weight()
-            df = df.query('date < @after').copy()
+            df = self.load_pooling_weight().query('date < @after')
             DB.save(df , 'pooling_weight' , self.db_key , verbose = False)
         else:
             self.purge_pooling_weight(confirm = True)
@@ -1025,7 +1024,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
             self._loaded_weight = self.load_pooling_weight()
         if self._loaded_weight.empty:
             return pd.DataFrame()
-        weight = self._loaded_weight.query('date == @date').copy().set_index('date')
+        weight = self._loaded_weight.query('date == @date').set_index('date')
         if weight.empty:
             Logger.warning(f'pooling weight is empty for {date} , has dates: {self._loaded_weight["date"].unique()}')
             raise ValueError(f'pooling weight is empty for {date}')

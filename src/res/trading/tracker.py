@@ -3,8 +3,8 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.proj import PATH , Logger
-from src.basic import CALENDAR , Email
+from src.proj import PATH , Logger , ProjStates
+from src.basic import CALENDAR
 from src.res.trading.util import TradingPort
 
 FOCUSED_PORTS = ['use_daily']
@@ -44,7 +44,7 @@ class TradingPortfolioTracker:
 
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
-            Email.Attach(path)
+            ProjStates.email_attachments.append(path)
 
     @classmethod
     def attachment_path(cls , date : int) -> Path:

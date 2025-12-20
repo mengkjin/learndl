@@ -128,7 +128,7 @@ class TopFMPTest(BaseFactorAnalyticTest):
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              n_bests = [20,30,50,100] , verbosity = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
             self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 

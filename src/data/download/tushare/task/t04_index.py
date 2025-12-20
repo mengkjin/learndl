@@ -84,7 +84,7 @@ class IndexDaily(TimeSeriesFetcher):
             old_df = pd.DataFrame()
             start_date = self.START_DATE
             if path.exists():
-                _df = pd.read_feather(path)
+                _df = DB.load_df(path)
                 if 'trade_date' in old_df.columns:
                     start_date = int(old_df['trade_date'].max()) + 1
                     old_df = _df

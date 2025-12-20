@@ -90,7 +90,7 @@ class RevScreenFMPTest(BaseFactorAnalyticTest):
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):
         self.generate(factor , benchmark , verbosity = verbosity)
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 
         return self

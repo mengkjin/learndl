@@ -92,8 +92,11 @@ class ScheduledTask:
         """return the time key : distribution_time.time_index of the task"""
         return f'{self.distribution_time}.{self.time_index:02d}'
 
-    def run(self):
+    def run(self , exclude_script : str | None = None):
         """run the task"""
+        if exclude_script and Path(exclude_script).name in self.cmdline:
+            Logger.info(f"skipping task {self.cmdline} because it contains {exclude_script}")
+            return self
         try:
             env = os.environ.copy()
             env['PYTHONPATH'] = str(MACHINE.main_path)
@@ -151,12 +154,12 @@ class TaskScheduler:
         return tasks
 
     @classmethod
-    def run_machine_tasks(cls):
+    def run_machine_tasks(cls , exclude_script : str | None = None):
         """run all the tasks of the machine"""
         SharedSync.sync()
         tasks = cls.get_machine_tasks()
         for task in tasks.values():
-            task.run()
+            task.run(exclude_script = exclude_script)
 
     @classmethod
     def add_run_script(cls, script : str | Path , kwargs : dict | None = None , machine_name : str = 'mengkjin-server'):

@@ -59,7 +59,7 @@ class PortfolioBuilder:
     def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
-                 build_on : Portfolio | None = None , overwrite : bool = False , verbosity : int = 1 , **kwargs):
+                 build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
         self.category  = category
         self.alpha     = alpha
         self.benchmark = get_benchmark(benchmark)
@@ -75,11 +75,16 @@ class PortfolioBuilder:
 
         self.creations : list[PortCreateResult] = []
 
-        self.set_build_on(build_on ,overwrite)
+        self.set_build_on(build_on)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name=\'{self.full_name}\',kwargs={self.kwargs},'+\
             f'{len(self.portfolio)} fmps,'+'not '* (not hasattr(self , 'account')) + 'accounted)'
+
+    @property
+    def min_alpha_date(self) -> int:
+        dates = self.alpha.available_dates()
+        return dates.min() if len(dates) > 0 else 99991231
 
     def build_on_path(self , path : Path | str):
         path = Path(path)
@@ -93,7 +98,7 @@ class PortfolioBuilder:
                 path = path.joinpath(f'{self.full_name.lower()}.feather')
         return path
 
-    def set_build_on(self , build_on : Portfolio | Path | str | None , build_on_start : int = -1 , overwrite : bool = False):
+    def set_build_on(self , build_on : Portfolio | Path | str | None , build_on_start : int = -1):
         if build_on is None:
             self.portfolio = Portfolio(self.full_name)
             return self
@@ -103,14 +108,8 @@ class PortfolioBuilder:
             port = Portfolio.load(self.build_on_path(build_on))
         else:
             raise ValueError(f'Unknown build_on type: {type(build_on)}')
-        port = port.rename(self.full_name)
-        if build_on_start >= 0:
-            port = port.filter_dates(dates = port.port_date[port.port_date >= build_on_start])
-        if not overwrite and port is not None and not port.is_empty:
-            dates = self.alpha.available_dates()
-            if len(dates) > 0:
-                port = port.filter_dates(dates = port.port_date[port.port_date < dates.min()])
-        self.portfolio = port
+        dates = port.port_date
+        self.portfolio = port.filter_dates(dates = dates[(dates >= build_on_start) & (dates < self.min_alpha_date)]).rename(self.full_name)
         return self
 
     def export_portfolio(self , path : Path | str | None = None , append = False):
@@ -131,7 +130,7 @@ class PortfolioBuilder:
     def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
         elements = parse_full_name(full_name)
         assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
-        return cls(alpha = alpha , verbosity = verbosity , **elements , **kwargs).set_build_on(build_on , False)
+        return cls(alpha = alpha , verbosity = verbosity , **elements , **kwargs).set_build_on(build_on)
     
     @staticmethod
     def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen'] , alpha : AlphaModel | str , 
@@ -336,8 +335,6 @@ class PortfolioGroupBuilder:
 
         _t0 = datetime.now()
         _opt_count = 0
-        if self.verbosity > 1:
-            Logger.stdout(f'{self.class_name}.building start')
             
         for self._date in self.relevant_dates:
             for self._builder in self.builders:
@@ -347,7 +344,7 @@ class PortfolioGroupBuilder:
                 _opt_count += 1
                 if self.verbosity > 2 and _opt_count % 100 == 0: 
                     time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].timecost.items()}
-                    Logger.stdout(f'building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
+                    Logger.stdout(f'  --> building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
         if self.verbosity > 0:
             secs = (datetime.now() - _t0).total_seconds()
@@ -356,7 +353,7 @@ class PortfolioGroupBuilder:
         return self
     
     def accounting(self):
-        with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1) , Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv'):
+        with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1 , exit_only = self.verbosity < 2) , Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv'):
             for builder in self.builders:
                 with Timer(f'  --> {builder.portfolio.name} accounting' , silent = self.verbosity < 2):
                     builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)

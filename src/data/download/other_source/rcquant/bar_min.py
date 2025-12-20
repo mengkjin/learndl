@@ -36,24 +36,24 @@ def src_key(data_type : DATA_TYPES , x_min : int = 1):
 def load_list(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     if path.exists(): 
-        return pd.read_feather(path)
+        return DB.load_df(path)
     return None
 
 def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    df.to_feather(path)
+    DB.save_df(df , path , verbose = False)
 
 def load_min(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     if path.exists(): 
-        return pd.read_feather(path)
+        return DB.load_df(path)
     return None
 
 def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    df.to_feather(path)
+    DB.save_df(df , path , verbose = False)
 
 def rcquant_init():
     if not rqdatac.initialized(): 

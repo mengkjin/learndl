@@ -1,29 +1,20 @@
-from .machine import MACHINE
-from .path import PATH
-from .logger import Logger
-from .catcher import (
-    IOCatcher , LogWriter , OutputCatcher , OutputDeflector , 
-    HtmlCatcher , MarkdownCatcher , WarningCatcher)
-from .sqlite import DBConnHandler
-from .debug import InstanceRecord
-from .shared_sync import SharedSync
-from .silence import SILENT , Silence
-from .timer import Duration , Timer , PTimer
-from .options import Options
-from .display import Display
+from .env import MACHINE , PATH , ProjStates , Options
+from .func import Timer , PTimer , Duration , Display , Silence
+from .util import (
+    Logger , IOCatcher , LogWriter , OutputCatcher , OutputDeflector , 
+    HtmlCatcher , MarkdownCatcher , WarningCatcher , DBConnHandler , 
+    SharedSync , Email , send_email , Device , MemoryPrinter)
 
 def print_project_info():
     import torch , os
     identifier = 'project_initialized'
     if identifier in os.environ:
         return
-
+    
     Logger.highlight(f'Project Initialized Successfully!')
-    [Logger.success(info) for info in MACHINE.machine_info()]
+    [Logger.success(info) for info in MACHINE.info() + ProjStates.info()]
     if MACHINE.server and not torch.cuda.is_available():
         Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
-
-    # Logger.debug(f'src.proj.InstanceRecord can be accessed to check {InstanceRecord._slots}')
     os.environ[identifier] = "1"
 
 print_project_info()

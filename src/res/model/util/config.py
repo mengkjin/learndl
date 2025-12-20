@@ -4,8 +4,8 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , MACHINE , Logger
-from src.basic import Device , ModelPath , ModelDBMapping , DB
+from src.proj import PATH , MACHINE , Logger , Device
+from src.basic import ModelPath , ModelDBMapping , DB
 from src.func import recur_update
 from src.res.algo import AlgoModule
 

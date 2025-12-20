@@ -2,7 +2,9 @@ import psutil , torch
 from torch.nn import Module
 from typing import Any
 
-from src.proj import Logger
+from .logger import Logger
+
+__all__ = ['Device' , 'MemoryPrinter']
 
 # MPS memory management
 if torch.backends.mps.is_available() == 'mps':
@@ -76,6 +78,14 @@ class Device:
                   f'Driver Allocated {torch.mps.driver_allocated_memory() / 1024**3:.1f}G')
         else:
             Logger.stdout(f'Not using cuda or mps {self.device}')
+
+    @staticmethod
+    def send_to(x : Any , device = None) -> Any:
+        return send_to(x , device)
+
+    @staticmethod
+    def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch.device:
+        return get_device(obj)
         
 class MemoryPrinter:
     def __repr__(self) -> str:

@@ -4,10 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal , Callable
 
-from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher
+from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , Email , ProjStates
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
-from .email import Email
 
 _catch_warnings = [
     'must accept context and return_scalar arguments' ,
@@ -145,11 +144,9 @@ class AutoRunTask:
             self.status = 'Success'
         
         for catcher in self._catchers[::-1]:
-            if isinstance(catcher , HtmlCatcher) and catcher.export_file_list:
-                self.attach_exit_files(catcher.export_file_list[-1])
             catcher.__exit__(exc_type, exc_value, exc_traceback)
         
-        self.attach_exit_files(Email.Attachments.get('default' , []))
+        self.attach_exit_files()
 
         # send email if not forfeit task
         if not self.forfeit_task:
@@ -294,12 +291,12 @@ class AutoRunTask:
             getattr(Logger , log_type)(message)
             self.logged_messages.append(f'{log_type.upper()} : {message}')
 
-    def attach_exit_files(self , file : Path | str | list[Path] | list[str]):
-        """attach the file to the task"""
-        if not isinstance(file , list): 
-            file = [Path(file)]
-        file = [Path(f) for f in file]
-        self.exit_files.extend([f for f in file if f not in self.exit_files])
+    def attach_exit_files(self, clear_list = True):
+        """attach the app_attachments to the task"""
+        files = [Path(f) for f in ProjStates.app_attachments]
+        self.exit_files = list(set(self.exit_files + files))
+        if clear_list:
+            ProjStates.app_attachments.clear()
 
     @classmethod
     def get_value(cls , key : str) -> Any:
@@ -331,17 +328,6 @@ class AutoRunTask:
     def critical(cls , message : str):
         """log the critical message to the logger cache"""
         Logger.cache_message('critical', message)
-
-    @classmethod
-    def Attach(cls , file : Path | str | list[Path] | list[str] , streamlit = True , email = True):
-        """attach the file to the task , can select to streamlit app or email"""
-        if not isinstance(file , list): 
-            file = [Path(file)]
-        file = [Path(f) for f in file]
-        if streamlit and cls._instances: 
-            cls._instances[-1].attach_exit_files(file)
-        if email: 
-            Email.Attach(file , group = 'autorun')
 
     @classmethod
     def update_to(cls) -> int:

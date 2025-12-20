@@ -19,7 +19,7 @@ def main(**kwargs):
     TaskScheduler.print_machine_tasks()
             
 def run_schedulers():
-    TaskScheduler.run_machine_tasks()
+    TaskScheduler.run_machine_tasks(exclude_script = __file__)
         
 if __name__ == '__main__':
     main()

@@ -9,7 +9,7 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import InstanceRecord , PATH , Logger
+from src.proj import ProjStates , PATH , Logger
 from src.basic import ModelDict , DB
 from src.func import Filtered
 from src.res.algo import AlgoModule
@@ -268,16 +268,22 @@ class TrainerPredRecorder(ModelStreamLine):
         df = self.load_saved_preds()
         resume_info = f'Resume testing'
         if not df.empty:
-            last_model_date = df['model_date'].max()
-            df = df.query('date in @self.trainer.data.test_full_dates & model_date < @last_model_date')
-            if not df.empty:
-                resume_info += f', recognize past saved preds before model date {last_model_date}'
+            if len(self.trainer.data.test_full_dates) > 0 and self.trainer.data.test_full_dates.min() < df['date'].min():
+                resume_info += f', but new test range is earlier than saved preds, forfeiting resume preds'
+                df = self.empty_preds()
+            else:
+                last_model_date = df['model_date'].max()
+                df = df.query('date in @self.trainer.data.test_full_dates & model_date < @last_model_date')
+                if not df.empty:
+                    resume_info += f', recognize past saved preds before model date {last_model_date}'
 
             model_groups = list(df.groupby(['model_date' , 'model_num']).groups)
             if retrained_models := [key for key in model_groups if key in self.retrained_models]:
                 keep_models = pd.DataFrame([key for key in model_groups if key not in retrained_models] , columns = ['model_date' , 'model_num'])
                 df = df.merge(keep_models , on = keep_models.columns.tolist() , how = 'inner')
                 resume_info += f', exclude {len(retrained_models)} retrained models'
+        else:
+            resume_info += f', no saved preds found'
 
         if not df.empty:
             df = df.reset_index(drop=True)
@@ -290,8 +296,8 @@ class TrainerPredRecorder(ModelStreamLine):
             self.resumed_preds = df
             self.resumed_preds_models = pd.DataFrame(resumed_preds_models , columns = ['model_date' , 'model_num'])
 
-            if verbose:
-                Logger.stdout(resume_info)
+        if verbose:
+            Logger.stdout(resume_info)
 
     def get_preds(self , tested_only : bool = True , interval : int = 1) -> pd.DataFrame:
         df = self.tested_preds
@@ -370,12 +376,15 @@ class TrainerPredRecorder(ModelStreamLine):
         self.collect_preds()
         if self.tested_preds.empty:
             return
-        new_df = pd.concat([self.load_saved_preds() , self.tested_preds])
+        if self.trainer.config.is_resuming:
+            new_df = pd.concat([self.load_saved_preds() , self.tested_preds])
+        else:
+            new_df = self.tested_preds
         if not new_df.empty:
             new_df = new_df.drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
         DB.save_df(new_df , self.path_pred , overwrite = True , verbose = False)
         if self.trainer.verbosity >= 10:
-            Logger.stdout(f'Test Predictions saved to {self.path_pred}')
+            Logger.stdout(f'Test Predictions from {new_df["date"].min()} to {new_df["date"].max()} saved to {self.path_pred}')
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -507,7 +516,7 @@ class BaseTrainer(ModelStreamLine):
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
             self.wrap_callbacks()
-            InstanceRecord.update_trainer(self)
+            ProjStates.trainer = self
         
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:

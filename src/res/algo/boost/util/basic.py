@@ -210,7 +210,7 @@ class BasicBoosterModel(ABC):
         return self.cuda and torch.cuda.is_available()
 
 def load_xingye_data():
-    factor_data = pd.read_feather(f'{PATH.miscel}/CombStdByZXMkt_All_TrainLabel.feather') # 训练集，带Label
+    factor_data = DB.load_df(PATH.miscel.joinpath('CombStdByZXMkt_All_TrainLabel.feather')) # 训练集，带Label
     factor_data['date'] = factor_data['date'].astype(str).str.replace('-','').astype(int)
     factor_data['secid'] = DB.code_to_secid(factor_data['StockID'])
 

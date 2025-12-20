@@ -1,4 +1,4 @@
-import smtplib , shutil
+import smtplib
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -7,7 +7,9 @@ from email import encoders
 from pathlib import Path
 from typing import Literal
 
-from src.proj import MACHINE , PATH , Logger
+from src.proj.env import MACHINE , ProjStates
+from .logger import Logger
+
 class _EmailSettings:
     def __init__(
         self , 
@@ -31,10 +33,14 @@ class _EmailSettings:
         return self.email_conf['password']
 
 class Email:
-    Attachments : dict[str , list[Path]] = {}
-    Attachment_dir = PATH.temp.joinpath('email_attachments')
+    """
+    Email class for sending email with attachment
+    example:
+        Email.Attach(attachment = 'path/to/attachment.txt' , group = 'default')
+        Email.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'test@example.com')
+    """
+    Attachments : dict[str , list[Path]] = {} # attachments for each group : {'default' : [path1, path2, ...] , 'autorun' : [path3, path4, ...]}
     _instance = None
-
     settings = _EmailSettings()
 
     def __new__(cls , *args , **kwargs):
@@ -44,22 +50,17 @@ class Email:
 
     @classmethod
     def Attach(cls , attachment : str | Path | list[str] | list[Path] | None = None , 
-               group : str = 'default' , copy = False):
-        if attachment is None: 
+               group : str = 'default'):
+        if attachment is None or (isinstance(attachment , list) and not attachment): 
             return
         if not isinstance(attachment , list): 
             attachment = [Path(attachment)]
+        else:
+            attachment = [Path(f) for f in attachment]
         if group not in cls.Attachments:
-            cls.Attachments[group] = []
-        for f in attachment:
-            old_path = Path(f)
-            if copy:
-                new_path = cls.Attachment_dir.joinpath(old_path.name)
-                shutil.copy(old_path , new_path)
-            else:
-                new_path = old_path
-            if new_path not in cls.Attachments[group]:
-                cls.Attachments[group].append(new_path)
+            cls.Attachments[group] = attachment
+        else:
+            cls.Attachments[group] = list(set(cls.Attachments[group] + attachment))
 
     @classmethod
     def recipient(cls , recipient : str | None = None):
@@ -71,7 +72,7 @@ class Email:
     
     @classmethod
     def message(cls , title : str  , body : str | None = None , recipient : str | None = None , 
-                attachment_group : str | list[str] = 'default' , 
+                attachment_group : list[str] = ['default'] , 
                 clear_attachments : bool = True ,
                 title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
@@ -80,14 +81,14 @@ class Email:
         message['Subject'] = f'{title_prefix} {title}'
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
-        if not isinstance(attachment_group , list): 
-            attachment_group = [attachment_group]
-        attachments = []
+        attachments : list[Path] = []
         for group in attachment_group:
             if group in cls.Attachments:
                 attachments.extend(cls.Attachments[group])
                 if clear_attachments: 
                     cls.Attachments[group] = []
+        attachments.extend([Path(f) for f in ProjStates.email_attachments])
+        ProjStates.email_attachments.clear()
         attachments = list(set(attachments))
 
         for attachment in attachments:
@@ -101,13 +102,6 @@ class Email:
         return message
     
     @classmethod
-    def clear_unused_attachments(cls):
-        attachments = [f for group in cls.Attachments.values() for f in group]
-        for f in cls.Attachment_dir.iterdir():
-            if f not in attachments: 
-                f.unlink()
-    
-    @classmethod
     def connection(cls):
         return smtplib.SMTP(cls.settings.smtp_server, cls.settings.smtp_port)
 
@@ -115,7 +109,7 @@ class Email:
     def send(cls , title : str  , 
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None , 
-             confirmation_message = '' , attachment_group : str | list[str] = 'default'):
+             confirmation_message = '' , attachment_group : list[str] = ['default']):
         
         if not MACHINE.server:
             Logger.warn('not in my server , skip sending email')
@@ -148,13 +142,6 @@ def send_email(title : str  ,
         recipient = str(settings.sender)
     assert recipient , 'recipient is required'
     assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
-
-    '''
-    message = MIMEText(body , 'plain', 'utf-8')
-    message['From'] = settings.sender
-    message['To'] = recipient 
-    message['Subject'] = title 
-    '''
 
     message = MIMEMultipart()
     message['From'] = settings.sender

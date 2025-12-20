@@ -10,9 +10,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , Generator , Literal , Type
 
-from .path import PATH
-from .timer import Duration
-from .display import Display
+from src.proj.env import PATH
+from src.proj.func import Duration , Display
 
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""

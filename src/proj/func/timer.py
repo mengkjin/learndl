@@ -68,15 +68,15 @@ class Duration:
     
 class Timer:
     """simple timer to count time"""
-    def __init__(self , *args , newline = False , exit_only = True , silent = False): 
-        self.newline = newline
+    def __init__(self , *args , exit_only = True , silent = False): 
+        self.key = '/'.join(args)
         self.exit_only = exit_only
         self.silent = silent
-        self.key = '/'.join(args)
+        
     def __enter__(self):
         self._init_time = datetime.now()
         if not self.silent and not Silence.silent and not self.exit_only: 
-            print(self.enter_str , end='\n' if self.newline else '')
+            print(self.enter_str)
     def __exit__(self, type, value, trace):
         if not self.silent and not Silence.silent:
             print(self.exit_str)
@@ -88,11 +88,7 @@ class Timer:
     @property
     def exit_str(self):
         """Get the exit string"""
-        text = f'finished! Cost {Duration(since = self._init_time)}'
-        if self.exit_only:
-            return f'{self.key} {text}'
-        elif self.newline:
-            return text
+        return f'{self.key} finished! Cost {Duration(since = self._init_time)}'
 
 class PTimer:
     """process timer , call to record and .summarize() to display the summary"""

@@ -36,8 +36,7 @@ class EventSignal:
                 df['event'] = event
             df = df.loc[:,['event' , 'event_date' , 'start' , 'end' , 'date']]
             event_dfs.append(df)
-        event_df = pd.concat([d for d in event_dfs if not d.empty]).reset_index(drop = True)
-        self.df = event_df.copy()
+        self.df = pd.concat([d for d in event_dfs if not d.empty]).reset_index(drop = True)
         self.loaded = True
         return self
 

@@ -2,8 +2,8 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.proj import MACHINE , Logger , Options
-from src.basic import send_email , CALENDAR , TaskRecorder , DB
+from src.proj import MACHINE , Logger , Options , send_email
+from src.basic import CALENDAR , TaskRecorder , DB
 
 from .util import wrap_update
 

@@ -367,7 +367,7 @@ class RegisteredModel(ModelPath):
             if verbose: 
                 Logger.warn(f'{path} does not exist')
             return pd.DataFrame()
-        return pd.read_feather(path , **kwargs)
+        return DB.load_df(path)
     
     @property
     def account_dir(self) -> Path:

@@ -1,8 +1,6 @@
-from .version import torch_load 
-from .device import Device , get_device 
+from .version import torch_load
 from .model import *
 from .calendar import CALENDAR , TradeDate 
-from .email import send_email , Email
 from .task_record import TaskRecorder 
 
 from .autorun import AutoRunTask 
