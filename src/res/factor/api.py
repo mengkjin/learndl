@@ -27,8 +27,8 @@ class FactorCalculatorAPI:
 
     @classmethod
     def update(cls , **kwargs):
-        cls.Stock.update(**kwargs)
         cls.Market.update(**kwargs)
+        cls.Stock.update(**kwargs)
         cls.Risk.update(**kwargs)
         cls.Pooling.update(**kwargs)
         cls.Stats.update(**kwargs)
@@ -36,8 +36,8 @@ class FactorCalculatorAPI:
 
     @classmethod
     def rollback(cls , rollback_date : int , **kwargs):
-        cls.Stock.rollback(rollback_date , **kwargs)
         cls.Market.rollback(rollback_date , **kwargs)
+        cls.Stock.rollback(rollback_date , **kwargs)
         cls.Risk.rollback(rollback_date , **kwargs)
         cls.Pooling.rollback(rollback_date , **kwargs)
         cls.Stats.rollback(rollback_date , **kwargs)
@@ -45,8 +45,8 @@ class FactorCalculatorAPI:
 
     @classmethod
     def recalculate(cls , **kwargs):
-        cls.Stock.recalculate(**kwargs)
         cls.Market.recalculate(**kwargs)
+        cls.Stock.recalculate(**kwargs)
         cls.Risk.recalculate(**kwargs)
         cls.Pooling.recalculate(**kwargs)
         cls.Stats.recalculate(**kwargs)
@@ -54,8 +54,8 @@ class FactorCalculatorAPI:
 
     @classmethod
     def fix(cls , factors : list[str] , **kwargs):
-        cls.Stock.fix(factors , **kwargs)
         cls.Market.fix(factors , **kwargs)
+        cls.Stock.fix(factors , **kwargs)
         cls.Risk.fix(factors , **kwargs)
         cls.Pooling.fix(factors , **kwargs)
         cls.Stats.fix(factors , **kwargs)

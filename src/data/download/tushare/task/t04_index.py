@@ -127,7 +127,7 @@ class ZXIndexDaily(DayFetcher):
             return
         if not self.db_by_name:
             assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
-        assert step > 1 , f'step must be larger than 1 , got {step}'
+        assert step > 0 , f'step must be larger than 0 , got {step}'
         si = dates[np.arange(len(dates))[::step]]
         ei = dates[np.arange(len(dates))[step-1::step]]
         if len(si) != len(ei):
