@@ -107,7 +107,7 @@ class DataVendor:
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
         else:
-            Logger.fail(f'None of {names} found in {start_dt} ~ {end_dt}')
+            Logger.failure(f'None of {names} found in {start_dt} ~ {end_dt}')
             return DataBlock()
 
     @classmethod

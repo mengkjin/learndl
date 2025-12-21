@@ -126,7 +126,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , ve
     else:
         status = 'File Exists'
         if verbose: 
-            Logger.fail(f'{prefix}{status}: {path}')
+            Logger.failure(f'{prefix}{status}: {path}')
         return False
 
 def load_df(path : Path , raise_if_not_exist = False):
@@ -194,9 +194,9 @@ def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_
         else:
             na_cols : pd.Series | Any = df.isna().all()
             if na_cols.all():
-                Logger.warn(f'{df_syntax} is all-NA')
+                Logger.attention(f'{df_syntax} is all-NA')
             elif check_na_cols and na_cols.any():
-                Logger.warn(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
+                Logger.attention(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
 
     if reset_index and len(df.index.names) > 1 or df.index.name: 
         df = df.reset_index()

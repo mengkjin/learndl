@@ -38,9 +38,9 @@ class TradingPortfolioTracker:
                 if port_name in FOCUSED_PORTS:
                     in_detail = f'include new secids: {in_secids}'
                     out_detail = f'exclude old secids: {out_secids}'
-                    Logger.cache_message('critical' , message)
-                    Logger.cache_message('critical' , in_detail)
-                    Logger.cache_message('critical' , out_detail)
+                    Logger.conclude(message)
+                    Logger.conclude(in_detail)
+                    Logger.conclude(out_detail)
 
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)

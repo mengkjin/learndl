@@ -86,7 +86,7 @@ class Logger:
     _instance : 'Logger | Any' = None
     _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
     _levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
-    _cached_messages : dict[_type_levels , list[str]] = {level : [] for level in _levels}
+    _conclusions : dict[_type_levels , list[str]] = {level : [] for level in _levels}
     _config = log_config()
     log = new_log(_config)
 
@@ -101,29 +101,55 @@ class Logger:
         reset_logger(cls.log , cls._config)
 
     @classmethod
-    def mark(cls , *args , **kwargs):
+    def log_only(cls , *args , **kwargs):
         """dump to log writer with no display"""
         cls.dump_to_logwriter(*args)
 
     @classmethod
-    def stdout(cls , *args , **kwargs):
+    def stdout(cls , *args , color = None , **kwargs):
         """custom stdout message"""
-        print(*args , **kwargs)
+        if color is not None:
+            prefix = {
+                'red' : '\u001b[31m',
+                'lightred' : '\u001b[91m',
+                'green' : '\u001b[32m',
+                'lightgreen' : '\u001b[92m',
+                'yellow' : '\u001b[33m',
+                'lightyellow' : '\u001b[93m',
+                'blue' : '\u001b[34m',
+                'lightblue' : '\u001b[94m',
+                'purple' : '\u001b[35m',
+                'lightpurple' : '\u001b[95m',
+                'cyan' : '\u001b[36m',
+                'lightcyan' : '\u001b[96m',
+                'white' : '\u001b[37m',
+                'gray' : '\u001b[90m',
+            }
+            prefix = prefix[color]
+            msg = prefix + ' '.join(args) + '\u001b[0m'
+        else:
+            msg = ' '.join(args)
+        print(msg , **kwargs)
 
     @classmethod
     def success(cls , *args , **kwargs):
-        """custom green colored Mark level message"""
-        sys.stdout.write(f"\u001b[32m{' '.join(args)}\u001b[0m" + '\n')
+        """custom success message"""
+        cls.stdout(*args , color = 'lightgreen')
 
     @classmethod
-    def fail(cls , *args , **kwargs):
-        """custom red colored Fail level message"""
-        sys.stderr.write(f"\u001b[31m{' '.join(args)}\u001b[0m" + '\n')
+    def failure(cls , *args , **kwargs):
+        """custom failure message"""
+        cls.stdout(*args , color = 'lightred')
 
     @classmethod
-    def warn(cls , *args , **kwargs):
-        """custom yellow colored Warning level message"""
-        sys.stderr.write(f"\u001b[33m{' '.join(args)}\u001b[0m" + '\n')
+    def marking(cls , *args , **kwargs):
+        """custom marking message"""
+        cls.stdout(*args , color = 'lightblue')
+
+    @classmethod
+    def attention(cls , *args , **kwargs):
+        """custom attention message"""
+        cls.stdout(*args , color = 'lightyellow')
 
     @classmethod
     def highlight(cls , *args , default_prefix = False , **kwargs):
@@ -180,21 +206,39 @@ class Logger:
             write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def cache_message(cls , type : _type_levels , message : str):
-        """Add the message to the cache for later use"""
-        cls._cached_messages[type].append(message)
+    def conclude(cls , message : str , level : _type_levels = 'critical'):
+        """Add the message to the conclusions for later use"""
+        cls._conclusions[level].append(message)
 
     @classmethod
-    def iter_cached_messages(cls) -> Generator[tuple[_type_levels , str] , None , None]:
-        """Iterate the cached messages"""
-        for type in cls._cached_messages:
-            while cls._cached_messages[type]:
-                yield type , cls._cached_messages[type].pop(0)
+    def iter_conclusions(cls) -> Generator[tuple[_type_levels , str] , None , None]:
+        """Iterate the conclusions"""
+        for type in cls._conclusions:
+            while cls._conclusions[type]:
+                yield type , cls._conclusions[type].pop(0)
 
     @classmethod
-    def get_cached_messages(cls , type : _type_levels) -> list[str]:
-        """Get the cached messages"""
-        return cls._cached_messages[type]
+    def iter_level_conclusions(cls) -> Generator[tuple[_type_levels , list[str]] , None , None]:
+        """Clear the conclusions"""
+        for level in cls._conclusions:
+            if cls._conclusions[level]:
+                yield level , cls._conclusions[level]
+
+    @classmethod
+    def print_conclusions(cls):
+        """print the conclusions and clear them"""
+        for level in cls._conclusions:
+            if not cls._conclusions[level]:
+                continue
+            getattr(cls , level)(f'There are {len(cls._conclusions[level])} {level} level conclusions:')
+            for conclusion in cls._conclusions[level]:
+                cls.stdout(f'  --> {conclusion}')
+            cls._conclusions[level].clear()
+
+    @classmethod
+    def get_conclusions(cls , type : _type_levels) -> list[str]:
+        """Get the conclusions"""
+        return cls._conclusions[type]
 
     class ParagraphI:
         """

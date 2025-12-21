@@ -283,7 +283,7 @@ def to_numpy(values):
         elif isinstance(values , list):
             values = np.asarray(values)
         else: 
-            values = np.asarray(values).reshape(1)
+            values = np.asarray(values).reshape(-1)
     return values
 
 def match_values(values , src_arr , ambiguous = 0):

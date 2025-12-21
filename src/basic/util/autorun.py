@@ -2,7 +2,7 @@ import traceback , sys
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any , Literal , Callable
+from typing import Any , Callable
 
 from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , Email , ProjStates
 from .calendar import CALENDAR
@@ -90,7 +90,7 @@ class AutoRunTask:
         self.kwargs = kwargs
         
         self.exit_files = []
-        self.logged_messages = []
+        self.logged_messages : dict[str , list[str]] = {}
         self.error_messages = []
         
         self.status = 'Starting'
@@ -125,16 +125,13 @@ class AutoRunTask:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.end_time = datetime.now()
-        
-        for error_message in Logger.get_cached_messages('error'):
+
+        for error_message in Logger.get_conclusions('error'):
             self.error_messages.append(error_message)
 
         if not self.error_messages:
-            self.critical(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed successfully')
-
-        for log_type , message in Logger.iter_cached_messages():
-            getattr(Logger , log_type)(message)
-            self.logged_messages.append(f'{log_type.upper()} : {message}')
+            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed successfully')
+        Logger.print_conclusions()
 
         if exc_type is not None:
             traceback.print_exc()
@@ -146,7 +143,8 @@ class AutoRunTask:
         for catcher in self._catchers[::-1]:
             catcher.__exit__(exc_type, exc_value, exc_traceback)
         
-        self.attach_exit_files()
+        self.exit_files = list(set(self.exit_files + [Path(f) for f in ProjStates.exit_files]))
+        ProjStates.exit_files.clear()
 
         # send email if not forfeit task
         if not self.forfeit_task:
@@ -155,7 +153,7 @@ class AutoRunTask:
         if self.execution_success: 
             self.task_recorder.mark_finished(
                 remark = ' | '.join([f'source: {self.source}' , 
-                                    f'exit_code: {len(self.error_messages)}']))
+                                     f'exit_code: {len(self.error_messages)}']))
         # change_power_mode('power-saver')
 
     def __call__(self , func : Callable):
@@ -164,7 +162,7 @@ class AutoRunTask:
             self.kwargs.update(kwargs)
             with self:
                 if self.forfeit_if_done and self.forfeit_task:
-                    self.error(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update')
+                    Logger.conclude(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update' , level = 'error')
                 else:
                     self.func_return = func(*args , **self.kwargs)
             return self
@@ -251,7 +249,7 @@ class AutoRunTask:
     def exit_message(self) -> str:
         """return the aggregated exit message of the task"""
         return '\n'.join(self.logged_messages)
-    
+   
     @property
     def error_message(self) -> str:
         """return the aggregated error message of the task"""
@@ -282,50 +280,11 @@ class AutoRunTask:
 
             Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , additional_attachments = self.exit_files)
 
-    def log(self , log_type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , message : str , cached = True):
-        """log the message to the logger if cached is False , otherwise cache the message"""
-        if cached:
-            Logger.cache_message(log_type, message)
-        else:
-            getattr(Logger , log_type)(message)
-            self.logged_messages.append(f'{log_type.upper()} : {message}')
-
-    def attach_exit_files(self):
-        """attach the app_attachments to the task"""
-        files = [Path(f) for f in ProjStates.exit_files]
-        self.exit_files = list(set(self.exit_files + files))
-        ProjStates.exit_files.clear()
-
     @classmethod
     def get_value(cls , key : str) -> Any:
         """get the value of the key from the object or kwargs"""
         obj = cls._instances[-1]
         return obj[key]
-
-    @classmethod
-    def info(cls , message : str):
-        """log the info message to the logger cache"""
-        Logger.cache_message('info', message)
-    
-    @classmethod
-    def error(cls , message : str):
-        """log the error message to the logger cache , will add the message to the error messages"""
-        Logger.cache_message('error', message)
-
-    @classmethod
-    def warning(cls , message : str):
-        """log the warning message to the logger cache"""
-        Logger.cache_message('warning', message)
-
-    @classmethod
-    def debug(cls , message : str):
-        """log the debug message to the logger cache"""
-        Logger.cache_message('debug', message)
-
-    @classmethod
-    def critical(cls , message : str):
-        """log the critical message to the logger cache"""
-        Logger.cache_message('critical', message)
 
     @classmethod
     def update_to(cls) -> int:

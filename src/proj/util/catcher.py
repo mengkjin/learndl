@@ -79,6 +79,48 @@ def _convert_ansi_codes_to_span(codes):
     styles = []
     bg_color = None
     fg_color = None
+
+    color_map = {
+        # regular foreground colors (30-37)
+        30: 'black',
+        31: 'red',
+        32: 'green',
+        33: 'yellow',
+        34: 'blue',
+        35: 'magenta',  # more standard than 'purple'
+        36: 'cyan',
+        37: 'white',
+        
+        # regular background colors (40-47)
+        40: 'black',
+        41: 'red',
+        42: 'green',
+        43: 'yellow',
+        44: 'blue',
+        45: 'magenta',
+        46: 'cyan',
+        47: 'white',
+        
+        # bright colors (90-97)
+        90: '#7f7f7f',      # bright black / gray
+        91: '#ff5555',      # bright red
+        92: '#55ff55',      # bright green
+        93: '#ffff55',      # bright yellow
+        94: '#5555ff',      # bright blue
+        95: '#ff55ff',      # bright magenta
+        96: '#55ffff',      # bright cyan
+        97: '#ffffff',      # bright white
+        
+        # bright background colors (100-107)
+        100: '#7f7f7f',      # bright black
+        101: '#ff5555',      # bright red
+        102: '#55ff55',      # bright green
+        103: '#ffff55',      # bright yellow
+        104: '#5555ff',      # bright blue
+        105: '#ff55ff',      # bright magenta
+        106: '#55ffff',      # bright cyan
+        107: '#ffffff',      # bright white
+    }
     
     for code_str in codes:
         if not code_str:
@@ -88,13 +130,12 @@ def _convert_ansi_codes_to_span(codes):
             return '</span>'
         elif code == 1:
             styles.append('font-weight: bold')
-        elif 30 <= code <= 37:  # foreground color
-            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
-            fg_color = colors[code - 30]
-        elif 40 <= code <= 47:  # background color
-            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
-            bg_color = colors[code - 40]
-    
+        elif code in color_map:
+            if 30 <= code <= 37 or 90 <= code <= 97:  # foreground colors
+                fg_color = color_map[code]
+            elif 40 <= code <= 47 or 100 <= code <= 107:  # background colors
+                bg_color = color_map[code]
+            
     if fg_color:
         styles.append(f'color: {fg_color}')
     if bg_color:
@@ -125,6 +166,7 @@ def _ansi_to_css(ansi_string: str) -> str:
         #'\u001b[0m': '</span>',  # reset
         '\u001b[0m': '</span>',  # reset
         '\u001b[1m': '<span style="font-weight: bold;">',  # bold
+        '\u001b[30m': '<span style="color: black;">',  # black
         '\u001b[31m': '<span style="color: red;">',  # red
         '\u001b[32m': '<span style="color: green;">',  # green
         '\u001b[33m': '<span style="color: yellow;">',  # yellow
@@ -132,6 +174,7 @@ def _ansi_to_css(ansi_string: str) -> str:
         '\u001b[35m': '<span style="color: purple;">',  # purple
         '\u001b[36m': '<span style="color: cyan;">',  # cyan
         '\u001b[37m': '<span style="color: white;">',  # white
+        '\u001b[40m': '<span style="background-color: black; color: white;">',  # black background
         '\u001b[41m': '<span style="background-color: red; color: white;">',  # red background
         '\u001b[42m': '<span style="background-color: green; color: white;">',  # green background
         '\u001b[43m': '<span style="background-color: yellow; color: black;">',  # yellow background
@@ -139,12 +182,14 @@ def _ansi_to_css(ansi_string: str) -> str:
         '\u001b[45m': '<span style="background-color: purple; color: white;">',  # purple background
         '\u001b[46m': '<span style="background-color: cyan; color: black;">',  # cyan background
         '\u001b[47m': '<span style="background-color: white; color: black;">',  # white background
+        '\u001b[90m': '<span style="color: gray">', # 灰色
         '\u001b[91m': '<span style="color: lightred">', # 亮红色
         '\u001b[92m': '<span style="color: lightgreen">', # 亮绿色
         '\u001b[93m': '<span style="color: lightyellow">', # 亮黄色
         '\u001b[94m': '<span style="color: lightblue">', # 亮蓝色
         '\u001b[95m': '<span style="color: lightpurple">', # 亮洋红色
         '\u001b[96m': '<span style="color: lightcyan">', # 亮青色
+        '\u001b[97m': '<span style="color: white">', # 白色
     }
     for ansi_code, html_code in mapping.items():
         ansi_string = ansi_string.replace(ansi_code, html_code)

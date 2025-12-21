@@ -208,7 +208,7 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
         Logger.stdout(f'Download: rcquant {data_type} bar min update date {dt}')
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            Logger.fail(f'rcquant {data_type} bar min {dt} failed')
+            Logger.failure(f'rcquant {data_type} bar min {dt} failed')
         elif verbosity > 1 :
             Logger.success(f'rcquant {data_type} bar min {dt} success')
 

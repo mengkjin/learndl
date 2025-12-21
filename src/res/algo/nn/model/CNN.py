@@ -77,7 +77,7 @@ class _resnet_block_1d(nn.Module):
 
     def forward(self , x : Tensor) -> Tensor:
         if x.shape[-2] != self.dim_in and x.shape[-1] == self.dim_in: 
-            Logger.warn('auto permute!')
+            Logger.attention('auto permute!')
             x = x.permute(0,2,1) 
         x1 = torch.clip(self.downsample(x) , -self.clip_value , self.clip_value)
         x2 = self.conv(x)
@@ -128,7 +128,7 @@ class _resnet_block_2d(nn.Module):
 
     def forward(self , x : Tensor) -> Tensor:
         if x.shape[1] != self.dim_in and self.dim_in == 1: 
-            Logger.warn('auto add dim 1 in index 1!')
+            Logger.attention('auto add dim 1 in index 1!')
             x = x.unsqueeze(1)
         x1 = torch.clip(self.downsample(x) , -self.clip_value , self.clip_value)
         x2 = self.conv(x)

@@ -146,7 +146,7 @@ def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
             else:
                 replaced_vals[nan_ind == ind] = np.nanmean(y_[ind_risk_ == ind])
         if np.isnan(replaced_vals).any():
-            Logger.warn('warning>>patched_by_industry>>all nan encountered.')
+            Logger.attention('warning>>patched_by_industry>>all nan encountered.')
             replaced_vals[np.isnan(replaced_vals)] = np.nanmedian(replaced_vals)
         assert not np.isnan(replaced_vals).any() , replaced_vals
         y = y_.copy()

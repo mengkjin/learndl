@@ -100,7 +100,7 @@ class StatusDisplay(BaseCallBack):
         if (self.show_info_step or self.initial_models):
             return Logger.info(*args , **kwargs)
         else:
-            return Logger.mark(*args , **kwargs)
+            return Logger.log_only(*args , **kwargs)
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
             sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'

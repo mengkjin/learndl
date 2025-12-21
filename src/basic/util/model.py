@@ -365,7 +365,7 @@ class RegisteredModel(ModelPath):
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             if verbose: 
-                Logger.warn(f'{path} does not exist')
+                Logger.attention(f'{path} does not exist')
             return pd.DataFrame()
         return DB.load_df(path)
     

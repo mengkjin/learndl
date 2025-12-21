@@ -1,18 +1,19 @@
 This will be caught
-[36m[1m******************************* MAIN PART START ********************************[0m
-[1m[37m[45m25-11-26 00:26:04|LEVEL:CRITICAL |[0m: [1m[37m[45mcritical message[0m
-[1m[37m[41m25-11-26 00:26:04|LEVEL:ERROR    |[0m: [1m[31merror message[0m
-[1m[30m[43m25-11-26 00:26:04|LEVEL:WARNING  |[0m: [1m[33mwarning message[0m
+[36m[1m***************************************** MAIN PART START ******************************************[0m
+[1m[37m[45m25-12-21 13:05:21|LEVEL:CRITICAL |[0m: [1m[37m[45mcritical message[0m
+[1m[37m[41m25-12-21 13:05:21|LEVEL:ERROR    |[0m: [1m[31merror message[0m
+[1m[30m[43m25-12-21 13:05:21|LEVEL:WARNING  |[0m: [1m[33mwarning message[0m
 [1m[32minfo message[0m
 [0mdebug message[0m
 [36m[1mhighlight message[0m
-[46m[1m[30m25-11-26 00:26:04|LEVEL:HIGHLIGHT|[0m: [36m[1mhighlight message with default prefix[0m
-[0m********************************************************************************[0m
-[0m================================================================================[0m
-[32msuccess message[0m
-[31mfail message[0m
+[46m[1m[30m25-12-21 13:05:21|LEVEL:HIGHLIGHT|[0m: [36m[1mhighlight message with default prefix[0m
+----------------------------------------------------------------------------------------------------
+[92msuccess message[0m
+[91mfailure message[0m
+[94mmarking message[0m
+[93mattention message[0m
 email: True
 forfeit_task: False
 task_key: a
 abc finished! Cost <1 Sec
-[36m[1m************************* MAIN PART FINISHED IN <1 SEC *************************[0m
+[36m[1m*********************************** MAIN PART FINISHED IN <1 SEC ***********************************[0m

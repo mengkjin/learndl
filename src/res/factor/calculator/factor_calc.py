@@ -491,7 +491,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def update_day_factor(self , date : int , overwrite = False , show_success = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         if show_warning and date not in CONF.Factor.UPDATE.target_dates:
-            Logger.warn(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
+            Logger.attention(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
         prefix = f'{self.factor_string} at date {date}'
         try:
             done = self.calc_and_deploy(date , overwrite = overwrite , verbose = show_success)

@@ -86,25 +86,5 @@ class ScriptTool:
         return f'ScriptTool(task_name={self.task_name},task_key={self.task_key},lock_name={self.lock_name})'
 
     @classmethod
-    def info(cls , message : str):
-        return AutoRunTask.info(message)
-
-    @classmethod
-    def error(cls , message : str):
-        return AutoRunTask.error(message)
-
-    @classmethod
-    def warning(cls , message : str):
-        return AutoRunTask.warning(message)
-
-    @classmethod
-    def debug(cls , message : str):
-        return AutoRunTask.debug(message)
-
-    @classmethod
-    def critical(cls , message : str):
-        return AutoRunTask.critical(message)
-
-    @classmethod
     def get_value(cls , key : str):
         return AutoRunTask.get_value(key)

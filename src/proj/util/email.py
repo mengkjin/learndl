@@ -109,7 +109,7 @@ class Email:
              confirmation_message = ''):
         
         if not MACHINE.server:
-            Logger.warn('not in my server , skip sending email')
+            Logger.attention('not in my server , skip sending email')
             return
 
         cls.setup_settings(server)
@@ -122,4 +122,4 @@ class Email:
                 smtp.sendmail(cls._settings.sender, cls.recipient(recipient), message.as_string())
             Logger.success(f'sending email success {confirmation_message}')
         except Exception as e:
-            Logger.fail(f'sending email went wrong: {e}')
+            Logger.failure(f'sending email went wrong: {e}')

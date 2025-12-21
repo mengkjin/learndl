@@ -192,7 +192,7 @@ class SellsideSQLDownloader:
         if self.save_data(df):
             Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(since = t0)}')
         else:
-            Logger.fail(f'Failure : No data')
+            Logger.failure(f'Failure : No data')
         return True
 
     def query_start_dt(self , connection : Connection):
