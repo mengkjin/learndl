@@ -54,10 +54,11 @@ class DataAPI:
         wrap_update(DataPreProcessor.main , 'reconstruct historical data' , predict = False , confirm = confirm)
     
     @classmethod
-    def is_updated(cls , verbose = False):
+    def is_updated(cls , verbose = True):
         """return True if the data is updated to the latest date"""
         updated = CALENDAR.updated()
-        update_to = CALENDAR.update_to()
-        if verbose:
+        update_to = CALENDAR.td(CALENDAR.update_to()) # use trade date to compare
+        is_updated = updated >= CALENDAR.td(update_to)
+        if verbose and not is_updated:
             Logger.info(f'updated: {updated}, update_to: {update_to}')
-        return updated >= CALENDAR.td(update_to)
+        return is_updated
