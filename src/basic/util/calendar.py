@@ -38,14 +38,16 @@ class _Calendars:
 
         self.min_date = calendar.index.min()
         self.max_date = calendar.index.max()
+
+        self.max_td_index : int = int(cal_trd.index.max())
     
 _CLD = _Calendars()
 
-class TradeDate(int):
+class TradeDate:
     def __new__(cls , date : int | Any , *args , **kwargs):
         if isinstance(date , TradeDate):
             return date
-        return super().__new__(cls , date , *args , **kwargs)
+        return super().__new__(cls)
     def __init__(self , date : int | Any , force_trade_date = False):
         if not isinstance(date , TradeDate):
             self.cd = int(date)
@@ -97,10 +99,10 @@ class TradeDate(int):
             return td0
         elif td0 < _CLD.min_date or td0 > _CLD.max_date:
             return td0
-        cld = _CLD.full.copy()
-        d_index = cld['td_index'].loc[td0.td] + n
-        d_index = np.maximum(np.minimum(d_index , len(cld) - 1) , 0)
-        new_date = cld[cld['td_index'] == d_index].iloc[0]['td']
+        assert isinstance(n , (int , np.integer)) , f'n must be a integer, got {type(n)}'
+        d_index = _CLD.full['td_index'].loc[td0.td] + n
+        d_index = np.maximum(np.minimum(d_index , _CLD.max_td_index) , 0)
+        new_date = _CLD.trd.loc[d_index,'td']
         return cls(new_date) 
 
     @staticmethod

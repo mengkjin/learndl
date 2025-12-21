@@ -276,7 +276,7 @@ def min_date(db_src , db_key , use_alt = False):
             paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
             dates = _paths_to_dates(paths)
             mdate = min(mdate , min(dates) if len(dates) else 99991231)
-    return mdate
+    return int(mdate)
 
 def max_date(db_src , db_key , use_alt = False):
     """get maximum date from any database data"""
@@ -296,7 +296,7 @@ def max_date(db_src , db_key , use_alt = False):
             paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
             dates = _paths_to_dates(paths)
             mdate = max(mdate , max(dates) if len(dates) else 0)
-    return mdate
+    return int(mdate)
 
 # @_db_src_deprecated(1)
 def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True , prefix : str | None = None):

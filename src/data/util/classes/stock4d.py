@@ -215,10 +215,6 @@ class Stock4DData:
             values = values[:,index]
         if secid is not None: 
             index  = match_values(secid , self.secid)
-            if max(index) >= len(self.secid):
-                print(secid , index , self.secid)
-                print(secid[index == max(index)])
-                raise Exception('test')
             values = values[index,:]
         if fillna is not None: 
             if isinstance(values , torch.Tensor): 
