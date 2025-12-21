@@ -681,7 +681,7 @@ class HtmlCatcher(OutputCatcher):
         self.restore_display_function()
         self.ClearInstance(self)
 
-    def export(self , export_path: Path | None = None , add_to_email: bool = True):
+    def export(self , export_path: Path | None = None):
         """Export the catcher to all paths in the export file list"""
         self.add_export_file(export_path)
         if not self.export_file_list:
@@ -691,11 +691,8 @@ class HtmlCatcher(OutputCatcher):
         _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
         for export_path in self.export_file_list:
             _stdout(f"  --> {self.__class__.__name__} result saved to {export_path}")
-
-        
-        if add_to_email:
-            ProjStates.email_attachments.append(self.export_file_list[-1])
-        ProjStates.app_attachments.append(self.export_file_list[-1])
+            
+        ProjStates.exit_files.append(self.export_file_list[-1])
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:

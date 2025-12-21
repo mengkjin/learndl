@@ -3,7 +3,7 @@ from .func import Timer , PTimer , Duration , Display , Silence
 from .util import (
     Logger , IOCatcher , LogWriter , OutputCatcher , OutputDeflector , 
     HtmlCatcher , MarkdownCatcher , WarningCatcher , DBConnHandler , 
-    SharedSync , Email , send_email , Device , MemoryPrinter)
+    SharedSync , Email , Device , MemoryPrinter)
 
 def print_project_info():
     import torch , os

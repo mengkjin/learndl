@@ -280,8 +280,7 @@ class AutoRunTask:
                 self.exit_message ,
             ]
 
-            Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , 
-                       attachment_group = ['default' , 'autorun'])
+            Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , additional_attachments = self.exit_files)
 
     def log(self , log_type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , message : str , cached = True):
         """log the message to the logger if cached is False , otherwise cache the message"""
@@ -291,12 +290,11 @@ class AutoRunTask:
             getattr(Logger , log_type)(message)
             self.logged_messages.append(f'{log_type.upper()} : {message}')
 
-    def attach_exit_files(self, clear_list = True):
+    def attach_exit_files(self):
         """attach the app_attachments to the task"""
-        files = [Path(f) for f in ProjStates.app_attachments]
+        files = [Path(f) for f in ProjStates.exit_files]
         self.exit_files = list(set(self.exit_files + files))
-        if clear_list:
-            ProjStates.app_attachments.clear()
+        ProjStates.exit_files.clear()
 
     @classmethod
     def get_value(cls , key : str) -> Any:

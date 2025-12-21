@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.proj import MACHINE , Logger , Options , send_email
+from src.proj import MACHINE , Logger , Options , Email
 from src.basic import CALENDAR , TaskRecorder , DB
 
 from .util import wrap_update
@@ -28,7 +28,7 @@ def check_cuda_status():
     else:
         Logger.error(f'Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution:')
     
-        title = f'Learndl: Server CUDA Failed'
+        title = f'Server CUDA Failed'
         body = f"""Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution: 
         sudo apt purge nvidia-*
         sudo apt install nvidia-driver-535
@@ -40,7 +40,7 @@ def check_cuda_status():
         recipient = 'mengkjin@163.com'
         
         try:
-            send_email(title , body , recipient , confirmation_message='CUDA Status')
+            Email.send(title , body , recipient , send_attachments = False , confirmation_message='CUDA Status')
         except Exception:
             pass
 
@@ -75,7 +75,7 @@ def email_to_fanghan(test = False):
         df = pd.merge(df1 , df2 , on='secid' , how='left')
         df.to_csv(temp_file)
         try:
-            send_email(title , body , recipient , attachments , confirmation_message='Fanghan')
+            Email.send(title , body , recipient , send_attachments = False , additional_attachments = attachments , confirmation_message='Fanghan')
             task_recorder.mark_finished(success = True)
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')

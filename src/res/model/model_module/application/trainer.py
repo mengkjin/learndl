@@ -36,7 +36,7 @@ class ModelTrainer(BaseTrainer):
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , selection = selection , 
                   schedule_name = schedule_name , start = start , end = end , **kwargs)
         HtmlCatcher.AddExportFile(app.path_training_output)
-        ProjStates.email_attachments.extend(app.result_package)
+        ProjStates.exit_files.extend(app.result_package)
         return app
 
     @classmethod

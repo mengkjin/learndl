@@ -4,5 +4,5 @@ from .catcher import (
     HtmlCatcher , MarkdownCatcher , WarningCatcher)
 from .sqlite import DBConnHandler
 from .shared_sync import SharedSync
-from .email import Email , send_email
+from .email import Email
 from .device import Device , MemoryPrinter
