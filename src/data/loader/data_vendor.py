@@ -130,7 +130,7 @@ class DataVendor:
             with Silence():
                 pre_start_dt = CALENDAR.cd(start_dt , -20)
                 extend_td_within = self.td_within(pre_start_dt , end_dt)
-                blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).as_tensor()
+                blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap'] , inplace = False).as_tensor()
                 values = blk.values[:,1:] / blk.values[:,:-1] - 1
                 secid  = blk.secid
                 date   = blk.date[1:]

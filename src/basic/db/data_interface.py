@@ -352,9 +352,9 @@ def load(db_src , db_key , date = None , date_colname = None , verbose = True , 
 
 # @_db_src_deprecated(0)
 def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , 
-                  date_colname = 'date' , 
-                  verbose = True , use_alt = False , 
-                  parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
+               date_colname = 'date' , 
+               verbose = True , use_alt = False , all_dates = False ,
+               parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
     """load multiple dates from database"""
     if db_src in DB_BY_NAME + EXPORT_BY_NAME:
         return load(db_src , db_key , dates = dates , start_dt = start_dt , end_dt = end_dt , 
@@ -362,6 +362,11 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
                     parallel = parallel , **kwargs)
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
+        if all_dates:
+            from src.basic import CALENDAR
+            dates = CALENDAR.td_within(start_dt , end_dt)
+            path_exists = np.array([_db_path(db_src , db_key , date , use_alt = use_alt).exists() for date in dates])
+            assert all(path_exists) , f'{db_src}/{db_key} does not exist for {dates[~path_exists]}'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
