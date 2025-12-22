@@ -276,17 +276,17 @@ class DataVendor:
     def ffmv(self , secid : np.ndarray , date : np.ndarray , prev = True):
         if prev : 
             date = self.td_array(date , -1)
-        blk = self.get_risk_exp(date).align(secid , date , ['weight'])
+        blk = self.get_risk_exp(date).align(secid , date , ['weight'] , inplace = False)
         if prev : 
             blk.date = self.td_array(blk.date , 1)
         return blk
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.style)
+        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.style , inplace = False)
         return blk
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.indus)
+        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.indus , inplace = False)
         return blk
     
     def get_ffmv(self , secid : np.ndarray , d : int):
