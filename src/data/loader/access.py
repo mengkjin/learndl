@@ -51,6 +51,7 @@ class DateDataAccess(ABC):
         return self.collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
     def gets(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+        dates = np.array([int(d) for d in dates])
         for date in self.collections[data_type].date_diffs(dates , overwrite):
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
@@ -60,7 +61,8 @@ class DateDataAccess(ABC):
             self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
         return self.pl_collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
-    def gets_pl(self , dates: list[int] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets_pl(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+        dates = np.array([int(d) for d in dates])
         for date in self.pl_collections[data_type].date_diffs(dates , overwrite):
             self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
         return self.pl_collections[data_type].gets(dates , field , rename_date_key = rename_date_key)

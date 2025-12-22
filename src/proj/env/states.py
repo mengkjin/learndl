@@ -105,7 +105,7 @@ class ProjStates(metaclass=_ProjStatesMeta):
 
     @classmethod
     def info(cls) -> list[str]:
-        """Print the machine info"""
+        """return the machine info list"""
         names = ', '.join(cls._meta_slots)
         return [
             f'Proj States  : {names}', 
@@ -113,7 +113,7 @@ class ProjStates(metaclass=_ProjStatesMeta):
 
     @classmethod
     def status(cls) -> dict:
-        """Print the machine info"""
+        """return the machine status dict"""
         status = {}
         for name in cls._meta_slots:
             obj = getattr(cls, name)

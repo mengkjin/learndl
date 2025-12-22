@@ -10,7 +10,7 @@ from datetime import datetime
 from matplotlib.figure import Figure
 
 from src.proj.env import PATH , MACHINE , ProjStates
-from src.proj.func import Duration , Display
+from src.proj.func import Duration , Display , stdout , stderr
 from .logger import Logger
 
 __all__ = [
@@ -18,37 +18,24 @@ __all__ = [
     'HtmlCatcher' , 'MarkdownCatcher' , 'WarningCatcher' ,
 ]
 
-def _stdout(*args, **kwargs):
-    """Write stdout message to stdout , same as Logger.stdout, redefine to avoid circular import"""
-    print(*args, **kwargs)
-
 def _error(*messages: str | Any):
     """Write error message to stderr , same as Logger.critical, redefine to avoid circular import"""
-    red_bg_white_bold = "\u001b[41m\u001b[1m\u001b[37m"  # red backgroud , white bold
-    reset_all = "\u001b[0m"
-    red_text = "\u001b[31m\u001b[1m"  # red text (no background) , bold
-    message = ' '.join(messages)
+    # prefix = level_prefix('ERROR' , color = 'white' , bg_color = 'red' , bold = True)
+    # message = full_content(' '.join(messages) , color = 'red' , bold = True) 
+    # msg = f"{prefix}: {message}"
+    # sys.stderr.write(msg + '\n')
 
-    level_name = 'ERROR'
-    prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level_name:9s}|'
-    
-    output = f"{red_bg_white_bold}{prefix}{reset_all}: {red_text}{message}{reset_all}\n"
-    sys.stderr.write(output)
-    return output
+    stderr(*messages , color = 'red' , bg_color = 'red' , bold = True , 
+                     level_prefix = {'level' : 'ERROR' , 'color' : 'white' , 'bg_color' : 'red'})
 
 def _critical(*messages: str | Any):
     """Write critical message to stderr , same as Logger.critical, redefine to avoid circular import"""
-    purple_bg_white_bold = "\u001b[45m\u001b[1m\u001b[37m"  # purple backgroud , white bold
-    reset_all = "\u001b[0m"
-    # purple_text = "\u001b[35m\u001b[1m"  # purple text (no background) , bold
-    message = ' '.join(messages)
-
-    level_name = 'CRITICAL'
-    prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level_name:9s}|'
-    
-    output = f"{purple_bg_white_bold}{prefix}{reset_all}: {purple_bg_white_bold}{message}{reset_all}\n"
-    sys.stderr.write(output)
-    return output
+    # prefix = level_prefix('CRITICAL' , color = 'white' , bg_color = 'purple' , bold = True)
+    # message = full_content(' '.join(messages) , color = 'white' , bg_color = 'purple' , bold = True) 
+    # msg = f"{prefix}: {message}"
+    # sys.stderr.write(msg + '\n')
+    stderr(*messages , color = 'white' , bg_color = 'purple' , bold = True , 
+           level_prefix = {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'purple'})
 
 def _str_to_html(text: str | Any):
     """capture string to html"""
@@ -157,7 +144,8 @@ def _figure_to_base64(fig : Figure | Any):
         buffer.close()
         return image_base64
     except Exception as e:
-        _critical(f"Error converting figure to base64: {e}")
+        # _critical(f"Error converting figure to base64: {e}")
+        Logger.critical(f"Error converting figure to base64: {e}")
         return None
     
 def _ansi_to_css(ansi_string: str) -> str:
@@ -216,7 +204,8 @@ def _figure_to_html(fig: Figure | Any):
             if image_base64 := _figure_to_base64(fig):
                 content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">'
     except Exception as e:
-        _critical(f"Error capturing matplotlib figure: {e}")
+        # _critical(f"Error capturing matplotlib figure: {e}")
+        Logger.error(f"Error capturing matplotlib figure: {e}")
     return content
 class OutputDeflector:
     """
@@ -342,7 +331,8 @@ class OutputDeflector:
             try:
                 getattr(self.catcher, 'close')()
             except Exception as e:
-                _error(f"Error closing catcher: {e}")
+                # _error(f"Error closing catcher: {e}")
+                Logger.error(f"Error closing catcher: {e}")
                 raise e
 
 class OutputCatcher(ABC):
@@ -463,13 +453,13 @@ class WarningCatcher:
         # only catch the warnings we care about
         if any(c in str(message).lower() for c in self.catch_warnings):
             stack = traceback.extract_stack()
-            _stdout(f"\n caught warning: {message}")
-            _stdout(f"warning location: {filename}:{lineno}")
-            _stdout("call stack:")
+            stderr(f"\n caught warning: {message}" , color = 'yellow')
+            stderr(f"warning location: {filename}:{lineno}" , color = 'yellow')
+            stderr("call stack:" , color = 'yellow')
             for i, frame in enumerate(stack[:-1]):  # exclude current frame
-                _stdout(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}")
-                _stdout(f"     {frame.line}")
-            _stdout("-" * 80)
+                stderr(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}" , color = 'yellow')
+                stderr(f"     {frame.line}" , color = 'yellow')
+            stderr("-" * 80 , color = 'yellow')
             
             raise Exception(message)
         
@@ -698,7 +688,8 @@ class HtmlCatcher(OutputCatcher):
     def SetInstance(cls , instance : 'HtmlCatcher'):
         """Set the instance of the catcher, if the catcher is already running, block the new instance"""
         if cls.Instance is not None:
-            _critical(f"{cls.Instance} is already running, blocking {instance}")
+            # _critical(f"{cls.Instance} is already running, blocking {instance}")
+            Logger.critical(f"{cls.Instance} is already running, blocking {instance}")
             instance._enable_catcher = False
         else:
             cls.Instance = instance
@@ -716,7 +707,8 @@ class HtmlCatcher(OutputCatcher):
             return self
         self.start_time = datetime.now()
         self.redirect_display_function()
-        _critical(f"{self} Capturing Start")
+        # _critical(f"{self} Capturing Start")
+        Logger.critical(f"{self} Capturing Start")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -733,9 +725,10 @@ class HtmlCatcher(OutputCatcher):
             return
 
         # log first and then export
-        _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        # _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        Logger.critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
         for export_path in self.export_file_list:
-            _stdout(f"  --> {self.__class__.__name__} result saved to {export_path}")
+            stdout(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
             
         ProjStates.exit_files.append(self.export_file_list[-1])
         
@@ -1189,16 +1182,18 @@ class MarkdownCatcher(OutputCatcher):
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
-        self.markdown_file.close()
         if not self.enabled or not self.export_file_list:
+            self.markdown_file.close()
             return
-        _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        # _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        Logger.critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        self.markdown_file.close()
         for filename in self.export_file_list:
             if filename.exists(): 
                 filename.unlink()
             filename.parent.mkdir(exist_ok=True,parents=True)
             shutil.copy(self.running_filename, filename)
-            _stdout(f"  --> {self.__class__.__name__} result saved to {filename}")
+            stdout(f"{self.__class__.__name__} result saved to {filename}" , indent = 1)
         self.running_filename.unlink()
     
     def _markdown_header(self):

@@ -200,7 +200,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         dates = self.target_dates()
 
         if len(dates) == 0: 
-            Logger.stdout(f'Skipping: {self.__class__.__name__} already updated!')
+            Logger.skipping(f'{self.__class__.__name__} already updated!' , indent = 1)
             return
         
         Logger.stdout(f'Download: {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')

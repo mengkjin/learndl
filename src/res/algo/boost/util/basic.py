@@ -93,7 +93,7 @@ class BasicBoosterModel(ABC):
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
                 if not self.silent: 
-                    Logger.attention(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
+                    Logger.alert(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
             n_bins = min(n_bins , self.DEFAULT_CATEGORICAL_MAX_BINS)            
         train_param['n_bins'] = n_bins
 

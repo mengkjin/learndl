@@ -45,8 +45,8 @@ class BaseFactorAnalyticCalculator(ABC):
         return name.lower() in [cls.__name__.lower() , cls.task_name()]
 
     class calc_manager:
-        def __init__(self , *args , verbosity = 0):
-            self.timer = Timer(*args , silent = verbosity < 1)
+        def __init__(self , *args , verbosity = 0 , **kwargs):
+            self.timer = Timer(*args , silent = verbosity < 1 , **kwargs)
         def __enter__(self):
             self.timer.__enter__()
             warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
@@ -65,7 +65,7 @@ class BaseFactorAnalyticCalculator(ABC):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
     def plot(self , show = False , verbosity = 0): 
-        with Timer(f'  --> {self.__class__.__name__} plot' , silent = verbosity < 1 , exit_only = verbosity < 2):
+        with Timer(f'{self.__class__.__name__} plot' , silent = verbosity < 1 , exit_only = verbosity < 2 , indent = 1):
             if self.calc_rslt.empty: 
                 self.figs = {}
                 return self

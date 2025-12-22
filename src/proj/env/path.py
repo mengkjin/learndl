@@ -1,5 +1,5 @@
 # please check this path before running the code
-import shutil , yaml , os
+import shutil , yaml , os , sys
 
 from datetime import datetime
 from pathlib import Path
@@ -107,7 +107,7 @@ class PATH:
             yaml_file = yaml_file.with_name(f'{yaml_file.name}.yaml')
         if not yaml_file.exists():
             if yaml_file.parent.stem == 'nn':
-                print(f'{yaml_file} does not exist, trying default.yaml')
+                sys.stderr.write(f'\u001b[31m\u001b[1m{yaml_file} does not exist, trying default.yaml\u001b[0m\n')
                 yaml_file = yaml_file.with_name(f'default.yaml')
         with open(yaml_file ,'r' , **kwargs) as f:
             d = yaml.load(f , Loader = yaml.FullLoader)
@@ -134,7 +134,7 @@ class PATH:
         """Delete sub folders in the directory"""
         for base in bases:
             if verbose: 
-                print(f'Deleting {base} in {dir}')
+                sys.stderr.write(f'\u001b[31m\u001b[1mDeleting {base} in {dir}\u001b[0m\n')
             shutil.rmtree(f'{dir}/{base}')
 
     @staticmethod

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any , Generator , Literal , Type
 
 from src.proj.env import PATH
-from src.proj.func import Duration , Display
+from src.proj.func import Duration , Display , stdout , stderr
 
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""
@@ -106,61 +106,64 @@ class Logger:
         cls.dump_to_logwriter(*args)
 
     @classmethod
-    def stdout(cls , *args , color = None , **kwargs):
-        """custom stdout message"""
-        if color is not None:
-            prefix = {
-                'red' : '\u001b[31m',
-                'lightred' : '\u001b[91m',
-                'green' : '\u001b[32m',
-                'lightgreen' : '\u001b[92m',
-                'yellow' : '\u001b[33m',
-                'lightyellow' : '\u001b[93m',
-                'blue' : '\u001b[34m',
-                'lightblue' : '\u001b[94m',
-                'purple' : '\u001b[35m',
-                'lightpurple' : '\u001b[95m',
-                'cyan' : '\u001b[36m',
-                'lightcyan' : '\u001b[96m',
-                'white' : '\u001b[37m',
-                'gray' : '\u001b[90m',
-            }
-            prefix = prefix[color]
-            msg = prefix + ' '.join(args) + '\u001b[0m'
-        else:
-            msg = ' '.join(args)
-        print(msg , **kwargs)
+    def stdout(cls , *args , indent = 0 , color = None , **kwargs):
+        """
+        custom stdout message
+        kwargs:
+            indent: add prefix '  --> ' before the message
+            color , bg_color , bold: color the message
+            sep , end , file , flush: same as print
+        """
+        stdout(*args , indent = indent , color = color , **kwargs)
 
+    @classmethod
+    def stderr(cls , *args , **kwargs):
+        """custom stderr message
+        kwargs:
+            indent: add prefix '  --> ' before the message
+            color , bg_color , bold: color the message
+            sep , end , file , flush: same as print
+            level_prefix: None or dict[str, Any] = {'level' : 'AnyStr' , 'color' : 'white' , 'bg_color' : 'blue'}
+        """
+        stderr(*args , **kwargs)
+        
     @classmethod
     def success(cls , *args , **kwargs):
         """custom success message"""
-        cls.stdout(*args , color = 'lightgreen')
+        stdout(*args , color = 'lightgreen' , **kwargs)
 
     @classmethod
-    def failure(cls , *args , **kwargs):
+    def alert(cls , *args , **kwargs):
+        """custom alert message"""
+        stdout(*args , color = 'lightyellow' , **kwargs)
+
+    @classmethod
+    def danger(cls , *args , **kwargs):
         """custom failure message"""
-        cls.stdout(*args , color = 'lightred')
+        stdout(*args , color = 'lightred' , **kwargs)
 
     @classmethod
     def marking(cls , *args , **kwargs):
         """custom marking message"""
-        cls.stdout(*args , color = 'lightblue')
+        stdout(*args , color = 'lightblue' , **kwargs)
 
     @classmethod
-    def attention(cls , *args , **kwargs):
-        """custom attention message"""
-        cls.stdout(*args , color = 'lightyellow')
+    def skipping(cls , *args , **kwargs):
+        """custom error message"""
+        stdout('Skipping:' , *args , color = 'gray' , **kwargs)
 
     @classmethod
-    def highlight(cls , *args , default_prefix = False , **kwargs):
+    def highlight(cls , *args , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):
         """custom cyan colored Highlight level message"""
-        msg = ' '.join(args)
-        msg = f'\u001b[36m\u001b[1m{msg}\u001b[0m'
-        if default_prefix:
-            prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{"HIGHLIGHT":9s}|'
-            prefix = f'\u001b[46m\u001b[1m\u001b[30m{prefix}\u001b[0m'
-            msg = f'{prefix}: {msg}'
-        sys.stderr.write(msg + '\n')
+        assert not prefix or not padding_char , 'prefix and padding_char cannot be used together'
+        msg = ' '.join([str(s) for s in args])
+        if prefix:
+            kwargs['level_prefix'] = {'level' : 'HIGHLIGHT' , 'color' : 'white' , 'bg_color' : 'cyan'}
+        if padding_char and len(msg) < padding_width:
+            padding_left = padding_char * max(0 , (padding_width - len(msg) - 2) // 2)
+            padding_right = padding_char * max(0 , padding_width - len(msg) - 2 - len(padding_left))
+            msg = ' '.join([padding_left , msg , padding_right])
+        stderr(msg , color = 'cyan' , bold = True , **kwargs)
 
     @classmethod
     def debug(cls , *args , **kwargs):
@@ -195,7 +198,7 @@ class Logger:
     @classmethod
     def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-'):
         """Divider message , use info level"""
-        print(char * width)
+        stdout(char * width)
         
     @staticmethod
     def dump_to_logwriter(*args):
@@ -206,9 +209,15 @@ class Logger:
             write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def conclude(cls , message : str , level : _type_levels = 'critical'):
+    def conclude(cls , *args : str , level : _type_levels = 'critical'):
         """Add the message to the conclusions for later use"""
-        cls._conclusions[level].append(message)
+        msg = ' '.join([str(s) for s in args])
+        cls._conclusions[level].append(msg)
+
+    @classmethod
+    def failure(cls , *args):
+        """custom warning message"""
+        cls.conclude(*args , level = 'error')
 
     @classmethod
     def iter_conclusions(cls) -> Generator[tuple[_type_levels , str] , None , None]:
@@ -225,15 +234,18 @@ class Logger:
                 yield level , cls._conclusions[level]
 
     @classmethod
-    def print_conclusions(cls):
-        """print the conclusions and clear them"""
+    def wrap_conclusions(cls):
+        """wrap the conclusions: printout , merge into a single string and clear them"""
+        conclusion_strs = []
         for level in cls._conclusions:
             if not cls._conclusions[level]:
                 continue
             getattr(cls , level)(f'There are {len(cls._conclusions[level])} {level} level conclusions:')
             for conclusion in cls._conclusions[level]:
-                cls.stdout(f'  --> {conclusion}')
+                stdout(conclusion , indent = 1)
+                conclusion_strs.append(f'{level.upper()}: {conclusion}')
             cls._conclusions[level].clear()
+        return '\n'.join(conclusion_strs)
 
     @classmethod
     def get_conclusions(cls , type : _type_levels) -> list[str]:
@@ -296,13 +308,7 @@ class Logger:
             self.write(f'{self.title} Finished in {Duration(self._end_time - self._init_time)}'.upper())
 
         def write(self , message : str):
-            txt_len = len(message)
-            if txt_len >= self.width:
-                Logger.highlight(message)
-            else:
-                padding_left = self.char * max(0 , (self.width - txt_len - 2) // 2)
-                padding_right = self.char * max(0 , self.width - txt_len - 2 - len(padding_left))
-                Logger.highlight(' '.join([padding_left , message , padding_right]))
+            Logger.highlight(message , padding_char = self.char , padding_width = self.width)
 
     class Profiler(cProfile.Profile):
         """Profiler class for profiling the code, show the profile result in the best way"""
@@ -327,7 +333,7 @@ class Logger:
 
         def __exit__(self, type , value , trace):
             if type is not None:
-                print(f'Error in Profiler ' , type , value)
+                Logger.error(f'Error in Profiler ' , type , value)
                 traceback.print_exc()
             elif self.profiling:
                 if self.display:
@@ -358,7 +364,7 @@ class Logger:
             if isinstance(output , str): 
                 path = PATH.log_profile.joinpath(output).with_suffix('.csv')
                 df.to_csv(path)
-                print(f'Profile result saved to {path}')
+                stdout(f'Profile result saved to {path}')
             return df.reset_index(drop=True)
 
         @staticmethod
@@ -384,10 +390,10 @@ class Logger:
                     #try:
                     #    data = [use[0] , ','.join(match.group(i+1) for i in use[1]) , ','.join(match.group(i+1) for i in use[2])]
                     #except:
-                    #    print(func_string)
+                    #    Logger.error(func_string)
                     break
             if data is None: 
-                print(func_string)
+                Logger.warning(f'Failed to decompose function string: {func_string}')
                 data = [''] * 4
             data[2] = data[2].replace(str(PATH.main) , '')
             return data

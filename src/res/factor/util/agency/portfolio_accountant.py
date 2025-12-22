@@ -133,7 +133,7 @@ class PortfolioAccountant:
             
         port_old = Port.none_port(self.account.index.values[1])
         if self.config.verbosity > 0:
-            Logger.stdout(f'  --> {self.config.name} has {len(self.account) - 1} account dates from {self.account['start'].values[1]} to {self.account['end'].values[-1]}')
+            Logger.stdout(f'{self.config.name} has {len(self.account) - 1} account dates from {self.account['start'].values[1]} to {self.account['end'].values[-1]}' , indent = 1)
         for i , (date , ed) in enumerate(zip(self.account.index.values[1:] , self.account['end'].values[1:])):
             port_new = self.portfolio.get(date) if self.portfolio.has(date) else port_old
             bench = self.config.benchmark.get(date , True)
@@ -149,7 +149,7 @@ class PortfolioAccountant:
                 self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
             if self.config.verbosity > 1 and (i % 100 == 0 or i == len(self.account) - 2):
-                Logger.stdout(f'  --> {self.config.name} accounting {i} / {len(self.account) - 1} at {date}')
+                Logger.stdout(f'{self.config.name} accounting {i} / {len(self.account) - 1} at {date}' , indent = 1)
 
         self.account['pf']  = self.account['pf'] - self.account['turn'] * self.config.trade_cost
         self.account['excess'] = self.account['pf'] - self.account['bm']

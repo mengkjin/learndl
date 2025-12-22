@@ -76,7 +76,7 @@ class DataPreProcessor:
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
                 time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                Logger.stdout(f'Skipping: [{key.upper()}] already preprocessing at {time_str}!')
+                Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = 1)
                 continue
             if verbosity >= 2:
                 Logger.stdout(f'Preprocessing: [{key.upper()}] start...')

@@ -151,7 +151,7 @@ class DFCollection(_df_collection):
         if date not in self.dates: 
             return pd.DataFrame()
         if date in self.data_frames: 
-            df = self.data_frames[date]
+            df = self.data_frames[int(date)]
         else: 
             df = self.long_frame.loc[date:date]
         return df

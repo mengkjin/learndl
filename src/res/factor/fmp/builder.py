@@ -344,8 +344,8 @@ class PortfolioGroupBuilder:
                 _opt_count += 1
                 if self.verbosity > 2 and _opt_count % 100 == 0: 
                     time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].timecost.items()}
-                    Logger.stdout(f'  --> building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
-                          f' Finished at {self._date} , time cost (ms) : {time_cost}')
+                    Logger.stdout(f'Building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
+                          f' Finished at {self._date} , time cost (ms) : {time_cost}' , indent = 1)
         if self.verbosity > 0:
             secs = (datetime.now() - _t0).total_seconds()
             Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building')
@@ -355,7 +355,7 @@ class PortfolioGroupBuilder:
     def accounting(self):
         with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1 , exit_only = self.verbosity < 2) , Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv'):
             for builder in self.builders:
-                with Timer(f'  --> {builder.portfolio.name} accounting' , silent = self.verbosity < 2):
+                with Timer(f'{builder.portfolio.name} accounting' , silent = self.verbosity < 2 , indent = 1):
                     builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
         self.accounted = True
         return self

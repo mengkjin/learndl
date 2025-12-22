@@ -60,7 +60,7 @@ class ModelHiddenExtractor:
             with Silence():
                 self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
-            Logger.stdout(f'  --> Loaded model data for {self.hidden_name} successfully!')
+            Logger.stdout(f'Loaded model data for {self.hidden_name} successfully!' , indent = 1)
 
     def model_iter(self , model_dates : list | np.ndarray | int | None = None , update = True):
         if model_dates is None: 
@@ -88,7 +88,7 @@ class ModelHiddenExtractor:
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
                     time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                    Logger.stdout(f'  --> Skipping: {hidden_path.hidden_key} already updated at {time_str}!')
+                    Logger.skipping(f'{hidden_path.hidden_key} already updated at {time_str}!' , indent = 1)
                     continue
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)
@@ -141,7 +141,7 @@ class ModelHiddenExtractor:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)
             if extractor._current_update_dates:
-                Logger.stdout(f'  --> Finish updating hidden feature extraction for {model} , len={len(extractor._current_update_dates)}')
+                Logger.stdout(f'Finish updating hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = 1)
             else:
-                Logger.stdout(f'  --> No new updating hidden feature extraction for {model}')
+                Logger.stdout(f'No new updating hidden feature extraction for {model}' , indent = 1)
         return extractor

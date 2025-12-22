@@ -1,4 +1,4 @@
-import json
+import json , sys
 
 from datetime import datetime
 from .path import PATH
@@ -13,7 +13,7 @@ class OptionsDefinition:
     @classmethod
     def available_modules(cls) -> list[str]:
         """Get the available nn/booster modules in the src/res/algo directory"""
-        print(f'redefine available modules at {datetime.now()}')
+        sys.stderr.write(f'Redefine available modules at {datetime.now()}\n')
         from src.res.algo import AlgoModule
         return [f'{module_type.replace("booster" , "boost")}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
 
@@ -35,7 +35,7 @@ class OptionsDefinition:
     @classmethod
     def available_factors(cls) -> list[str]:
         """Get the available factors in the of pooling and sellside categories"""
-        print(f'redefine available factors at {datetime.now()}')
+        sys.stderr.write(f'Redefine available factors at {datetime.now()}\n')
         from src.res.factor.calculator import FactorCalculator
         return [p.factor_name for p in FactorCalculator.iter(meta_type = 'pooling' , updatable = True)] + \
             [p.factor_name for p in FactorCalculator.iter(category1 = 'sellside' , updatable = True)]

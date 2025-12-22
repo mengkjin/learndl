@@ -22,7 +22,7 @@ class TempFile:
 
 def check_cuda_status():
     if not MACHINE.server:
-        Logger.stdout(f'Skipping: {MACHINE.name} is not a server, skip checking cuda status')
+        Logger.skipping(f'{MACHINE.name} is not a server, skip checking cuda status')
     elif torch.cuda.is_available(): 
         Logger.success(f'Success : Server {MACHINE.name} CUDA is available')
     else:
@@ -47,12 +47,12 @@ def check_cuda_status():
 
 def email_to_fanghan(test = False):
     if not MACHINE.server:
-        Logger.stdout(f'Skipping: {MACHINE.name} is not a server, skip emailing to fanghan')
+        Logger.skipping(f'{MACHINE.name} is not a server, skip emailing to fanghan')
         return
     today = CALENDAR.updated()
     task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))
     if task_recorder.is_finished():
-        Logger.stdout(f'Skipping: email_to_fanghan at {today} already done')
+        Logger.skipping(f'email_to_fanghan at {today} already done')
         return
     
     pred_dates = DB.dates('pred' , 'gru_day_V1')

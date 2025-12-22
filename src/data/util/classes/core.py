@@ -502,7 +502,7 @@ class ModuleData:
             try:
                 cache_key_dict = json.load(f)
             except json.JSONDecodeError as e:
-                Logger.failure(f'cache_key.json is corrupted, reset it: {e}')
+                Logger.alert(f'cache_key.json is corrupted, reset it: {e}')
                 cache_key_dict = {}
         for key , value in cache_key_dict.items():
             if value['type'] != 'dataset':

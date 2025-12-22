@@ -19,7 +19,7 @@ class OptimCalc(BaseFactorAnalyticCalculator):
     DEFAULT_BENCHMARKS = 'defaults'
 
     def calc(self , account : pd.DataFrame , verbosity = 0):
-        with self.calc_manager(f'  --> {self.__class__.__name__} calc' , verbosity = verbosity): 
+        with self.calc_manager(f'{self.__class__.__name__} calc' , verbosity = verbosity , indent = 1): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account)
         return self
     

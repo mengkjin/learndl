@@ -40,9 +40,9 @@ class ScreeningPortfolioCreatorConfig:
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if print_info:
             if use_kwargs : 
-                Logger.stdout(f'  --> In initializing {cls.__name__}, used kwargs: {use_kwargs}')
+                Logger.stdout(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}' , indent = 1)
             if drop_kwargs: 
-                Logger.stdout(f'  --> In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
+                Logger.stdout(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}' , indent = 1)
         return cls(**use_kwargs)
 
     def get_sorting_alpha(self , model_date : int , indus = True) -> pd.DataFrame:

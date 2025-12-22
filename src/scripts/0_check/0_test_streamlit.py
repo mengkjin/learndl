@@ -56,12 +56,16 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.info('info message')
                 Logger.debug('debug message')
                 Logger.highlight('highlight message')
-                Logger.highlight('highlight message with default prefix' , default_prefix = True)
+                Logger.highlight('highlight message with default prefix' , prefix = True)
                 Logger.divider()
                 Logger.success('success message')
-                Logger.failure('failure message')
+                Logger.alert('attention message')
+                Logger.danger('danger message')
                 Logger.marking('marking message')
-                Logger.attention('attention message')
+                Logger.skipping('skipping message')
+                # Logger.exception
+                # Logger.fatal
+                #Logger.skip
                 Logger.conclude(f'cmd is: {" ".join(sys.argv)}' , level = 'info')
                 Logger.conclude(f'this is kwargs: {str(kwargs)}' , level = 'info')
                 Logger.conclude(f'this is an info: {txt}' , level = 'info')

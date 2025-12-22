@@ -95,7 +95,7 @@ class ScheduledTask:
     def run(self , exclude_script : str | None = None):
         """run the task"""
         if exclude_script and Path(exclude_script).name in self.cmdline:
-            Logger.info(f"skipping task {self.cmdline} because it contains {exclude_script}")
+            Logger.warning(f"Skipping task {self.cmdline} because it contains {exclude_script}")
             return self
         try:
             env = os.environ.copy()

@@ -115,7 +115,7 @@ class ModelPortfolioBuilder:
         last_dates = self.accountant.account_last_model_dates()
         if fmp_names is None: 
             fmp_names = list(self.iter_fmp_names())
-        ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start_dt , -1)) for name in fmp_names}
+        ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start_dt , -1).as_int()) for name in fmp_names}
         return ret
     
     def account_last_end_dates(self , fmp_names : list[str] | None = None):
@@ -162,13 +162,13 @@ class ModelPortfolioBuilder:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)
             if md._update_fmps_record:
-                Logger.stdout(f'  --> Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}')
+                Logger.stdout(f'Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}' , indent = 1)
             else:
-                Logger.stdout(f'  --> No new updating model portfolios for {model}')
+                Logger.stdout(f'No new updating model portfolios for {model}' , indent = 1)
 
             md.accounting(resume = True)
             if md._update_account_record:
-                Logger.stdout(f'  --> Finish updating model accounting for {model} , len={len(md._update_account_record)}')
+                Logger.stdout(f'Finish updating model accounting for {model} , len={len(md._update_account_record)}' , indent = 1)
             else:
-                Logger.stdout(f'  --> No new updating model accounting for {model}')
+                Logger.stdout(f'No new updating model accounting for {model}' , indent = 1)
         return md

@@ -8,11 +8,6 @@ from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningC
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 
-_catch_warnings = [
-    'must accept context and return_scalar arguments' ,
-    'an item of incompatible dtype' ,
-]
-
 class TaskName:
     def __init__(self):
         self._name = None
@@ -49,6 +44,33 @@ class TaskKey:
     def __set__(self , instance, value):
         self._key = value
 
+class AutoRunCatchers:
+    _catch_warnings = [
+        'must accept context and return_scalar arguments' ,
+        'an item of incompatible dtype' ,
+    ]
+    def __init__(self , catchers : list[str] = ['html' , 'markdown' , 'warning']):
+        self.catchers = catchers
+
+    def enter(self , title : str , category : str , init_time : datetime):
+        self._catchers = []
+        if 'html' in self.catchers:
+            self._catchers.append(HtmlCatcher(title , category , init_time))
+        if 'markdown' in self.catchers:
+            self._catchers.append(MarkdownCatcher(title , category , init_time , 
+                                  to_share_folder=True , add_time_to_title=False))
+        if 'warning' in self.catchers:
+            self._catchers.append(WarningCatcher(self._catch_warnings))
+
+        for catcher in self._catchers:
+            catcher.__enter__()
+        return self
+
+    def exit(self, *args):
+        for catcher in self._catchers[::-1]:
+            catcher.__exit__(*args)
+        return self
+
 class AutoRunTask:
     """
     AutoRunTask manager for common tasks
@@ -84,13 +106,12 @@ class AutoRunTask:
         self.task_key = task_key
         self.init_time = datetime.now()
         
-        self.catchers = catchers
+        self.catchers = AutoRunCatchers(catchers)
         self.forfeit_if_done = forfeit_if_done
 
         self.kwargs = kwargs
         
         self.exit_files = []
-        self.logged_messages : dict[str , list[str]] = {}
         self.error_messages = []
         
         self.status = 'Starting'
@@ -105,33 +126,12 @@ class AutoRunTask:
     def __enter__(self):
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.already_done = self.task_recorder.is_finished()
-        # change_power_mode('balanced')
-
-        self._catchers : list[HtmlCatcher | MarkdownCatcher | WarningCatcher] = []
-        
-        if 'html' in self.catchers:
-            self._catchers.append(HtmlCatcher(self.task_full_name , self.task_name , self.init_time))
-        if 'markdown' in self.catchers:
-            self._catchers.append(MarkdownCatcher(self.task_full_name , self.task_name , self.init_time , 
-                                  to_share_folder=True , add_time_to_title=False))
-        if 'warning' in self.catchers:
-            self._catchers.append(WarningCatcher(_catch_warnings))
-
-        for catcher in self._catchers:
-            catcher.__enter__()
-
+        self.catchers.enter(self.task_full_name , self.task_name , self.init_time , )
         self.status = 'Running'
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.end_time = datetime.now()
-
-        for error_message in Logger.get_conclusions('error'):
-            self.error_messages.append(error_message)
-
-        if not self.error_messages:
-            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed successfully')
-        Logger.print_conclusions()
 
         if exc_type is not None:
             traceback.print_exc()
@@ -139,9 +139,13 @@ class AutoRunTask:
             self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
             self.status = 'Success'
+
+        self.error_messages.extend(Logger.get_conclusions('error'))
+        if not self.error_messages:
+            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed successfully')
+        self.exit_message = Logger.wrap_conclusions()
         
-        for catcher in self._catchers[::-1]:
-            catcher.__exit__(exc_type, exc_value, exc_traceback)
+        self.catchers.exit(exc_type, exc_value, exc_traceback)
         
         self.exit_files = list(set(self.exit_files + [Path(f) for f in ProjStates.exit_files]))
         ProjStates.exit_files.clear()
@@ -154,7 +158,6 @@ class AutoRunTask:
             self.task_recorder.mark_finished(
                 remark = ' | '.join([f'source: {self.source}' , 
                                      f'exit_code: {len(self.error_messages)}']))
-        # change_power_mode('power-saver')
 
     def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
@@ -244,11 +247,6 @@ class AutoRunTask:
         more strict than status
         """
         return not self.error_messages
-
-    @property
-    def exit_message(self) -> str:
-        """return the aggregated exit message of the task"""
-        return '\n'.join(self.logged_messages)
    
     @property
     def error_message(self) -> str:

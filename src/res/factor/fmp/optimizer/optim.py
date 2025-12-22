@@ -29,9 +29,9 @@ class OptimizedPortfolioCreatorConfig:
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if print_info:
             if use_kwargs : 
-                Logger.stdout(f'  --> In initializing {cls.__name__}, used kwargs: {use_kwargs}')
+                Logger.stdout(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}' , indent = 1)
             if drop_kwargs: 
-                Logger.stdout(f'  --> In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
+                Logger.stdout(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}' , indent = 1)
         return cls(**use_kwargs)
 
     @property
@@ -69,7 +69,7 @@ class OptimizedPortfolioCreator(PortCreator):
                 break
 
         if not is_success and self.conf.opt_relax:
-            Logger.attention(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')
+            Logger.alert(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')
             assert self.solver_input.w0 is not None , 'In this failed-with-relax case, w0 must not be None'
             w = self.solver_input.w0
 
@@ -84,7 +84,7 @@ class OptimizedPortfolioCreator(PortCreator):
             self.create_result.utility  = self.solver_input.utility(w , self.conf.prob_type , **self.conf.opt_cond) 
             self.create_result.accuracy = self.solver_input.accuracy(w)
             if not self.create_result.accuracy and is_success:
-                Logger.attention(f'Not accurate but assessed as success at {self.model_date} for [{self.opt_input.alpha_model.name}]!')
+                Logger.alert(f'Not accurate but assessed as success at {self.model_date} for [{self.opt_input.alpha_model.name}]!')
                 Logger.stdout(self.create_result.accuracy)
             self.create_result.analyze(self.bench_port , self.init_port)
         return self

@@ -90,7 +90,7 @@ class DataVendor:
     def td_array(date , offset : int = 0): return CALENDAR.td_array(date , offset)
     
     @staticmethod
-    def td(date , offset : int = 0): return CALENDAR.td(date , offset).td
+    def td(date , offset : int = 0): return CALENDAR.td(date , offset).as_int()
 
     @staticmethod
     def cd(date , offset : int = 0): return CALENDAR.cd(date , offset)
@@ -107,7 +107,7 @@ class DataVendor:
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
         else:
-            Logger.failure(f'None of {names} found in {start_dt} ~ {end_dt}')
+            Logger.alert(f'EmptyData: None of {names} found in {start_dt} ~ {end_dt}')
             return DataBlock()
 
     @classmethod

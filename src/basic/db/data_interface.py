@@ -107,7 +107,7 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True , prefix = '  --> '):
+def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True , prefix = '' , stdout_indent = 1):
     """save dataframe to path"""
     prefix = prefix or ''
     path = Path(path)
@@ -121,12 +121,12 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , ve
         else:
             df.to_parquet(path , engine='fastparquet')
         if verbose: 
-            Logger.stdout(f'{prefix}{status}: {path}')
+            Logger.stdout(f'{prefix}{status}: {path}' , indent = stdout_indent)
         return True
     else:
         status = 'File Exists'
         if verbose: 
-            Logger.failure(f'{prefix}{status}: {path}')
+            Logger.alert(f'{prefix}{status}: {path}' , indent = stdout_indent)
         return False
 
 def load_df(path : Path , raise_if_not_exist = False):
@@ -194,9 +194,9 @@ def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_
         else:
             na_cols : pd.Series | Any = df.isna().all()
             if na_cols.all():
-                Logger.attention(f'{df_syntax} is all-NA')
+                Logger.alert(f'{df_syntax} is all-NA')
             elif check_na_cols and na_cols.any():
-                Logger.attention(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
+                Logger.alert(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
 
     if reset_index and len(df.index.names) > 1 or df.index.name: 
         df = df.reset_index()

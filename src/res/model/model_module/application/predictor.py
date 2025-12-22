@@ -161,14 +161,14 @@ class ModelPredictor:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt , silent = silent)
             if md._current_update_dates:
-                Logger.stdout(f'  --> Finish updating model prediction for {model} , len={len(md._current_update_dates)}')
+                Logger.stdout(f'Finish updating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
             else:
-                Logger.stdout(f'  --> No new updating model prediction for {model}')
+                Logger.stdout(f'No new updating model prediction for {model}' , indent = 1)
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.stdout(f'  --> Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
                 else:
-                    Logger.stdout(f'  --> No new deploying model prediction for {model}')
+                    Logger.stdout(f'No new deploying model prediction for {model}' , indent = 1)
         return md
 
     @classmethod
@@ -181,12 +181,12 @@ class ModelPredictor:
             md = cls(model)
             md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt , silent = silent)
             if md._current_update_dates:
-                Logger.stdout(f'  --> Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}')
+                Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
             else:
-                Logger.stdout(f'  --> No new recalculating model prediction for {model}')
+                Logger.stdout(f'No new recalculating model prediction for {model}' , indent = 1)
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.stdout(f'  --> Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
                 else:
-                    Logger.stdout(f'  --> No new deploying model prediction for {model}')
+                    Logger.stdout(f'No new deploying model prediction for {model}' , indent = 1)
         return md

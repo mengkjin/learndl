@@ -11,11 +11,11 @@ class UpdateAPI:
     @classmethod
     def daily(cls):
         if not MACHINE.updatable:
-            Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
+            Logger.failure(f'{MACHINE.name} is not updatable, skip rollback update')
             return
         DataAPI.update()
         if not DataAPI.is_updated():
-            Logger.conclude('Data is not updated to the latest date, skip model update' , level = 'error')
+            Logger.failure('Data is not updated to the latest date, skip model update')
             return
         FactorAPI.Market.update()
         FactorAPI.Stock.update(timeout = 3)
@@ -30,7 +30,7 @@ class UpdateAPI:
     @classmethod
     def rollback(cls , rollback_date : int):
         if not MACHINE.updatable:
-            Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
+            Logger.failure(f'{MACHINE.name} is not updatable, skip rollback update')
             return
         CALENDAR.check_rollback_date(rollback_date)
         DataAPI.rollback(rollback_date)
@@ -44,7 +44,7 @@ class UpdateAPI:
     @classmethod
     def weekly(cls):
         if not MACHINE.updatable:
-            Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
+            Logger.failure(f'{MACHINE.name} is not updatable, skip rollback update')
             return
         ModelAPI.update_models()
         

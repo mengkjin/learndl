@@ -233,7 +233,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         if cls.jobs:
             Logger.info(f'Finish Collecting {len(cls.jobs)} Jobs for {cls.__name__}')
         else:
-            Logger.stdout(f'Skipping: There is no {cls.__name__} Jobs to Proceed...')
+            Logger.skipping(f'There is no {cls.__name__} Jobs to Proceed...')
         
     @classmethod
     def before_process_jobs(cls , start : int | None = None , end : int | None = None , 
@@ -268,8 +268,8 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             cls.process_group_jobs(group , jobs , verbosity)
 
             if timeout > 0 and (datetime.now() - start_time).total_seconds() > timeout * 3600:
-                Logger.failure(f'Timeout: {timeout} hours reached, stopping update')
-                Logger.failure(f'Terminated at {group}')
+                Logger.alert(f'Timeout: {timeout} hours reached, stopping update')
+                Logger.alert(f'Terminated at {group}')
                 break
 
     @classmethod
@@ -310,7 +310,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
         CALENDAR.check_rollback_date(rollback_date)
-        start = CALENDAR.td(rollback_date , 1)
+        start = int(CALENDAR.td(rollback_date , 1))
         cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
         
     @classmethod
@@ -379,13 +379,13 @@ class StockFactorUpdater(BaseFactorUpdater):
         if verbosity > 0:
             Logger.success(f'Stock Factor Update of {group} Done: {sum(job.done for job in jobs)} / {len(jobs)}')
         if failed_jobs := [job for job in jobs if not job.done]: 
-            Logger.attention(f'Failed Stock Factors: {failed_jobs}')
+            Logger.alert(f'Failed Stock Factors: {failed_jobs}')
             if cls.multi_thread:
                 # if multi_thread is True, auto retry failed jobs
                 Logger.stdout(f'Auto Retry Failed Stock Factors...')
                 parallel({job:job.do for job in failed_jobs} , method = cls.multi_thread)
                 if failed_jobs := [job for job in jobs if not job.done]:
-                    Logger.attention(f'Failed Stock Factors Again: {failed_jobs}')
+                    Logger.alert(f'Failed Stock Factors Again: {failed_jobs}')
 
 class MarketFactorUpdater(BaseFactorUpdater):
     """manager of market factor update jobs"""

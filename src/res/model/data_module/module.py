@@ -74,7 +74,7 @@ class DataModule(BaseDataModule):
                                      self.config.input_factor_names , 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision, 
-                                     factor_start_dt = CALENDAR.td(self.beg_date , -1) , factor_end_dt = self.end_date)
+                                     factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date)
         self.config.update_data_param(self.datas.x)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
 

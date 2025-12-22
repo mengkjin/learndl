@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , MACHINE , Logger , Device
+from src.proj import PATH , MACHINE , Logger , Device , FormatStr
 from src.basic import ModelPath , ModelDBMapping , DB
 from src.func import recur_update
 from src.res.algo import AlgoModule
@@ -253,7 +253,7 @@ class TrainParam:
         v = int(self.Param['env.verbosity'])
         return min(max(v , 0) , 10)
     @property
-    def random_seed(self) -> Any: 
+    def random_seed(self) -> int | Any: 
         return self.Param['env.random_seed']
     @property
     def mem_storage(self) -> bool: 
@@ -899,56 +899,58 @@ class TrainConfig(TrainParam):
         return self
 
     def print_out(self):
-        info_strs = []
-        info_strs.append(f'Model Name   : {self.model_name}')
+        color = None
+        info_strs : list[tuple[int , str , str]] = [] # indent , key , value
+        info_strs.append((0 , 'Model Name' , self.model_name))
         if self.module_type in ['db' , 'factor']:
-            info_strs.append(f'Model Labels : {self.model_labels}')
-            info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
-            info_strs.append(f'Resuming     : {self.is_resuming}')
-            info_strs.append(f'Verbosity    : {self.verbosity}')
-            
+            info_strs.append((0 , 'Model Labels' , f'{self.model_labels}'))
+            info_strs.append((0 , 'Model Period' , f'{self.beg_date} ~ {self.end_date}'))
+            info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
+            info_strs.append((0 , 'Verbosity' , f'{self.verbosity}'))
         else:
-            info_strs.append(f'Model Module : {self.model_module}')
+            info_strs.append((0 , 'Model Module' , f'{self.model_module}'))
             if self.module_type == 'booster':
                 if self.model_module != self.model_booster_type:
-                    info_strs.append(f'  --> Booster Type   : {self.model_booster_type}')
+                    info_strs.append((1 , 'Booster Type' , f'{self.model_booster_type}'))
                 if self.model_booster_optuna:
-                    info_strs.append(f'  --> Booster Params :  Optuna for {self.model_booster_optuna_n_trials} trials')
+                    info_strs.append((1 , 'Booster Params' , f'Optuna for {self.model_booster_optuna_n_trials} trials'))
                 else:
-                    info_strs.append(f'  --> Booster Params :')
+                    info_strs.append((1 , 'Booster Params' , ''))
                     for k , v in self.Model.Param.items():
-                        info_strs.append(f'    --> {k} : {v}')
+                        info_strs.append((2 , k , f'{v}'))
             else:
                 if self.model_booster_head:
-                    info_strs.append(f'  --> Use Booster Head : {self.model_booster_head}')
-                info_strs.append(f'  --> Model Params :')
+                    info_strs.append((1 , 'Use Booster Head' , f'{self.model_booster_head}'))
+                info_strs.append((1 , 'Model Params' , ''))
                 for k , v in self.Model.Param.items():
-                    info_strs.append(f'    --> {k} : {v}')
-            info_strs.append(f'Model Num    : {self.Model.n_model}')
-            info_strs.append(f'Model Inputs : {self.model_input_type}')
+                    info_strs.append((2 , k , f'{v}'))
+            info_strs.append((0 , 'Model Num' , f'{self.Model.n_model}'))
+            info_strs.append((0 , 'Model Inputs' , f'{self.model_input_type}'))
             if self.model_input_type == 'data':
-                info_strs.append(f'  --> Data Types : {self.model_data_types}')
+                info_strs.append((1 , 'Data Types' , f'{self.model_data_types}'))
             elif self.model_input_type == 'hidden':
-                info_strs.append(f'  --> Hidden Models : {self.model_hidden_types}')
+                info_strs.append((1 , 'Hidden Models' , f'{self.model_hidden_types}'))
             elif self.model_input_type == 'factor':
-                info_strs.append(f'  --> Factor Types : {self.model_factor_types}')
+                info_strs.append((1 , 'Factor Types' , f'{self.model_factor_types}'))
                 if self.input_factor_names:
-                    info_strs.append(f'  --> Factor Names : {self.input_factor_names}')
+                    info_strs.append((1 , 'Factor Names' , f'{self.input_factor_names}'))
             elif self.model_input_type == 'combo':
-                info_strs.append(f'  --> Combo Types : {self.model_combo_types}')
-            info_strs.append(f'Model Labels : {self.model_labels}')
-            info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
-            info_strs.append(f'Interval     : {self.model_interval} days')
-            info_strs.append(f'Train Window : {self.model_train_window} days')
-            info_strs.append(f'Sampling     : {self.train_sample_method}')
-            info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
-            info_strs.append(f'Random Seed  : {self.random_seed}')
-            info_strs.append(f'Stage Queue  : {self.stage_queue}')
-            info_strs.append(f'Resuming     : {self.is_resuming}')
-            info_strs.append(f'Verbosity    : {self.verbosity}')
+                info_strs.append((1 , 'Combo Types' , f'{self.model_combo_types}'))
+            info_strs.append((0 , 'Model Labels' , f'{self.model_labels}'))
+            info_strs.append((0 , 'Model Period' , f'{self.beg_date} ~ {self.end_date}'))
+            info_strs.append((0 , 'Interval' , f'{self.model_interval} days'))
+            info_strs.append((0 , 'Train Window' , f'{self.model_train_window} days'))
+            info_strs.append((0 , 'Sampling' , f'{self.train_sample_method}'))
+            info_strs.append((0 , 'Shuffling' , f'{self.train_shuffle_option}'))
+            info_strs.append((0 , 'Random Seed' , f'{self.random_seed}'))
+            info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
+            info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
+            info_strs.append((0 , 'Verbosity' , f'{self.verbosity}'))
 
-        
-        Logger.stdout('\n'.join(info_strs))
+        indents = list(set([indent for indent , _ , _ in info_strs]))
+        indent_nchar = [max([len(key) for indent in indents for indent , key , _ in info_strs if indent == indent])]
+        infos = [FormatStr(f'{key.title():{indent_nchar[0]}s} : {value}' , indent = indent , color = color) for indent , key , value in info_strs]
+        Logger.stdout('\n'.join(infos))
         return self
 
     @property

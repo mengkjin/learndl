@@ -3,7 +3,8 @@ import numpy as np
 
 from datetime import datetime , timedelta
 from typing import Callable
-from .silence import Silence
+from .stdout import stdout
+from .display import Display
 
 class Duration:
     """Duration class, used to calculate the duration of the input or the start time"""
@@ -68,18 +69,19 @@ class Duration:
     
 class Timer:
     """simple timer to count time"""
-    def __init__(self , *args , exit_only = True , silent = False): 
+    def __init__(self , *args , exit_only = True , silent = False , indent = 0): 
         self.key = '/'.join(args)
         self.exit_only = exit_only
         self.silent = silent
+        self.indent = indent
         
     def __enter__(self):
         self._init_time = datetime.now()
-        if not self.silent and not Silence.silent and not self.exit_only: 
-            print(self.enter_str)
+        if not self.silent and not self.exit_only: 
+            stdout(self.enter_str , indent = self.indent)
     def __exit__(self, type, value, trace):
-        if not self.silent and not Silence.silent:
-            print(self.exit_str)
+        if not self.silent:
+            stdout(self.exit_str , indent = self.indent)
 
     @property
     def enter_str(self):
@@ -124,4 +126,5 @@ class PTimer:
             tb = pd.DataFrame([[k , len(self.recorder[k]) , np.sum(self.recorder[k])] for k in self.recorder.keys()] ,
                                 columns = pd.Index(['keys' , 'num_calls', 'total_time']))
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
-            print(tb.sort_values(by=['total_time'],ascending=False))
+            df = tb.sort_values(by=['total_time'],ascending=False)
+            Display(df)

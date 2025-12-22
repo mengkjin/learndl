@@ -76,7 +76,7 @@ class MACHINE:
 
     @classmethod
     def info(cls) -> list[str]:
-        """Print the machine info"""
+        """return the machine info list"""
         return [
             f'Machine Name : {cls.name}', 
             f'Is Server    : {cls.server}', 

@@ -179,7 +179,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.failure(f'baostock 5min {last_dt} - {dt} failed')
+                Logger.alert(f'baostock 5min {last_dt} - {dt} failed')
             elif verbosity > 1 :
                 Logger.success(f'baostock 5min {last_dt} - {dt} success')
 

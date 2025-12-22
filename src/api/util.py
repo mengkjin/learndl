@@ -5,7 +5,7 @@ def wrap_update(update_func , message : str , skip : bool = False , *args , **kw
     Wrap update function with logger enclosed message and warning if skip
     '''
     if skip:
-        Logger.warning(f'Skipping: {message.title()}')
+        Logger.warning(f'{message.title()} is Skipped')
     else:
         with Logger.ParagraphIII(f' {message.title()} '):
             update_func(*args , **kwargs)

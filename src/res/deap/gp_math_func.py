@@ -208,7 +208,7 @@ def betas_torch(x , y):
         try:    
             b = torch.linalg.inv(x.T.mm(x)).mm(x.T).mm(y)
         except Exception:
-            Logger.attention('neutralization error!')
+            Logger.alert('neutralization error!')
             b = torch.zeros(x.shape[-1],1).to(x)
     return b
 
@@ -219,7 +219,7 @@ def betas_np(x , y):
         try:    
             b = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
         except Exception:
-            Logger.attention('neutralization error!')
+            Logger.alert('neutralization error!')
             b = np.zeros((x.shape[-1],1))
     return b
 
@@ -227,7 +227,7 @@ def betas_sk(x , y):
     try:
         b = LinearRegression(fit_intercept=False).fit(x, y).coef_.T
     except Exception: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
-        Logger.attention('neutralization error!')
+        Logger.alert('neutralization error!')
         b = np.zeros((x.shape[-1],1))
     return b
 
@@ -574,7 +574,7 @@ def ts_delay(x, d):
     if d > x.shape[0]: 
         return None
     if d < 0: 
-        Logger.attention('Beware! future information used!')
+        Logger.alert('Beware! future information used!')
     z = x.roll(d, dims=0)
     if d >= 0:
         z[:d,:] = NaN
@@ -588,7 +588,7 @@ def ts_delta(x, d):
     if d > x.shape[0]: 
         return None
     if d < 0: 
-        Logger.attention('Beware! future information used!')
+        Logger.alert('Beware! future information used!')
     z = x - ts_delay(x, d)
     return z
 

@@ -106,7 +106,7 @@ class ModelPath:
         """next model date to train"""
         from src.basic.util.calendar import CALENDAR
         config = self.load_config()
-        return CALENDAR.td(self.model_dates[-1] , config.model_interval)
+        return CALENDAR.td(self.model_dates[-1] , config.model_interval).as_int()
     
 class HiddenPath:
     """hidden factor path for nn models , used for extracting hidden states"""
@@ -324,7 +324,7 @@ class RegisteredModel(ModelPath):
     @property
     def pred_target_dates(self) -> np.ndarray:
         """model pred target dates"""
-        start_dt = max(self.start_dt , CALENDAR.td(min(self.model_dates) , 1))
+        start_dt = max(self.start_dt , int(CALENDAR.td(min(self.model_dates) , 1)))
         end_dt = None
         return CALENDAR.td_within(start_dt , end_dt)
     
@@ -365,7 +365,7 @@ class RegisteredModel(ModelPath):
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             if verbose: 
-                Logger.attention(f'{path} does not exist')
+                Logger.alert(f'{path} does not exist')
             return pd.DataFrame()
         return DB.load_df(path)
     

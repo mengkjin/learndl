@@ -203,12 +203,12 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
     if len(dts) == 0: 
-        Logger.stdout(f'Skipping: rcquant {data_type} bar min has no date to download')
+        Logger.skipping(f'rcquant {data_type} bar min has no date to download')
     for dt in dts:
         Logger.stdout(f'Download: rcquant {data_type} bar min update date {dt}')
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            Logger.failure(f'rcquant {data_type} bar min {dt} failed')
+            Logger.alert(f'rcquant {data_type} bar min {dt} failed')
         elif verbosity > 1 :
             Logger.success(f'rcquant {data_type} bar min {dt} success')
 

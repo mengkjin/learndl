@@ -169,7 +169,7 @@ class SellsideSQLDownloader:
                     last1_dt = CALENDAR.cd(old_dates[-1],1)
                     start_dt = max(start_dt , last1_dt)
 
-            end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to()))
+            end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to())).as_int()
             date_intervals = date_seg(start_dt , end_dt , self.FREQ , astype=int)
         if not date_intervals: 
             return 
@@ -192,7 +192,7 @@ class SellsideSQLDownloader:
         if self.save_data(df):
             Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(since = t0)}')
         else:
-            Logger.failure(f'Failure : No data')
+            Logger.alert(f'EmptyData: {self.DB_SRC}/{self.db_key}:{start}-{end}')
         return True
 
     def query_start_dt(self , connection : Connection):

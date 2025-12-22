@@ -123,7 +123,7 @@ class StatusDisplay(BaseCallBack):
         if avg and self.record_model_stage * self.record_epoch_stage:
             self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
                 key.title() , tc / 3600 , tc / 60 / self.record_model_stage , tc / self.record_epoch_stage)
-            Logger.highlight(self.record_texts[key] , default_prefix = True)
+            Logger.highlight(self.record_texts[key] , prefix = True)
         else:
             self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.title() , tc)
 
@@ -205,4 +205,4 @@ class StatusDisplay(BaseCallBack):
         Logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
     
     def on_before_test_end(self): 
-        Logger.highlight(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}' , default_prefix = True)
+        Logger.highlight(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}' , prefix = True)

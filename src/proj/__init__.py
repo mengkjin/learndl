@@ -1,5 +1,5 @@
 from .env import MACHINE , PATH , ProjStates , Options
-from .func import Timer , PTimer , Duration , Display , Silence
+from .func import Timer , PTimer , Duration , Display , Silence , FormatStr , stdout , stderr
 from .util import (
     Logger , IOCatcher , LogWriter , OutputCatcher , OutputDeflector , 
     HtmlCatcher , MarkdownCatcher , WarningCatcher , DBConnHandler , 

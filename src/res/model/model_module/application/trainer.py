@@ -42,7 +42,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def update_models(cls):
         if not MACHINE.server:
-            Logger.attention('This is not server! Will not update models!')
+            Logger.alert('This is not server! Will not update models!')
         else:
             for model in RegisteredModel.SelectModels():
                 with Logger.ParagraphI(f'Updating Model {model.model_path}'):
