@@ -98,7 +98,7 @@ class FuncCall:
                 result_dict[key] = result
             return result
         except catch_errors as e:
-            Logger.warning(f'{key} : {func}({args} , {kwargs}) generated an exception: {e}')
+            Logger.alert(f'{key} : {func}({args} , {kwargs}) generated an exception: {e}' , level = 1)
         except Exception as e:
             Logger.error(f'{key} : {func}({args} , {kwargs}) generated an exception: {e}')
             raise e

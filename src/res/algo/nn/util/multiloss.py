@@ -205,6 +205,6 @@ class MultiHeadLosses:
             ax2.set_title('Weight for Epoch')
             ax2.legend()
         else:
-            Logger.warning(f'Unknow multi_type : {multi_type}')
+            Logger.error(f'Unknow multi_type : {multi_type}')
         plt.show()
         #plt.close(fig)

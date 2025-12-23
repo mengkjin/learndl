@@ -357,7 +357,7 @@ class TrainerPredRecorder(ModelStreamLine):
     def load_saved_preds(self) -> pd.DataFrame:
         df = DB.load_df(self.path_pred)
         if self.path_pred.exists() and not np.isin(self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS , df.columns).all():
-            Logger.warning(f'{self.path_pred} is not valid , removed automatically')
+            Logger.alert(f'{self.path_pred} is not valid , removed automatically' , level = 1)
             self.path_pred.unlink()
             return self.empty_preds()
         return df
@@ -614,8 +614,8 @@ class BaseTrainer(ModelStreamLine):
         self.on_configure_model()
 
         if not self.stage_queue:
-            Logger.error("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
-            raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
+            Logger.error("stage_queue is empty , please check src.proj.ProjStates.trainer")
+            raise Exception("stage_queue is empty , please check src.proj.ProjStates.trainer")
 
         if 'data' in self.stage_queue:
             with Logger.ParagraphII('Stage [Data]'):

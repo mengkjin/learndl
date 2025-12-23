@@ -12,7 +12,7 @@ FOCUSED_PORTS = ['use_daily']
 class TradingPortfolioTracker:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None):
-        Logger.info(f'Update: {cls.__name__} since last update!')
+        Logger.stdout(f'Update: {cls.__name__} since last update!')
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         ports = TradingPort.portfolio_dict()

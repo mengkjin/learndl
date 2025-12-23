@@ -13,13 +13,13 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    Logger.critical("🧹 Clean local changes...")
+    Logger.highlight("Clean local changes...")
     subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
     subprocess.run(['git', 'clean', '-fd'], check=True)
     
-    Logger.critical("⬇️ Pull latest code...")
+    Logger.highlight("Pull latest code...")
     result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
-    Logger.success(f"✅ Done: {result.stdout}")
+    Logger.success(f"Done: {result.stdout}")
 
     return f'Finish pull: {result.stdout}'
 

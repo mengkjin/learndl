@@ -1,4 +1,5 @@
 from pathlib import Path
+import io
 
 class _ProjectStatesValue:
     """custom class to record a single value"""
@@ -8,7 +9,7 @@ class _ProjectStatesValue:
     def __set__(self , instance, value):
         self.set_assertion_class()
         if self._assertion_class is not None:
-            assert isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
+            assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
         setattr(self , f'_{self.name}' , value)
 
     def __get__(self , instance, owner):
@@ -39,7 +40,7 @@ class _Trainer(_ProjectStatesValue):
 
     def __get__(self , instance, owner):
         obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a BaseTrainer instance: {obj} , cannot be get from {owner}.{self.name}'
+        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
         return obj
 
 class _Account(_ProjectStatesValue):
@@ -50,7 +51,7 @@ class _Account(_ProjectStatesValue):
 
     def __get__(self , instance, owner):
         obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a pd.DataFrame instance: {obj} , cannot be get from {owner}.{self.name}'
+        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
         return obj
 
 class _Factor(_ProjectStatesValue):
@@ -61,7 +62,16 @@ class _Factor(_ProjectStatesValue):
 
     def __get__(self , instance, owner):
         obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a StockFactor instance: {obj} , cannot be get from {owner}.{self.name}'
+        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
+        return obj
+
+class _Log_File(_ProjectStatesValue):
+    def set_assertion_class(self) -> None:
+        self._assertion_class = io.TextIOWrapper
+
+    def __get__(self , instance, owner):
+        obj = super().__get__(instance, owner)
+        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
         return obj
 
 class _Email_Attachments(_ProjectStatesList):
@@ -79,6 +89,7 @@ class _ProjStatesMeta(type):
     trainer = _Trainer()
     account = _Account()
     factor = _Factor()
+    log_file = _Log_File()
     email_attachments = _Email_Attachments()
     exit_files = _Exit_Files()
 

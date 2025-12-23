@@ -68,9 +68,9 @@ class DataPreProcessor:
         else:
             blocks = data_types
         processor = cls(predict , blocks)
-        Logger.info(f'Data Processing start with {len(processor.blocks)} datas and predict = {predict}!')
+        Logger.stdout(f'Data Processing start with {len(processor.blocks)} datas and predict = {predict}!')
         if verbosity > 1:
-            Logger.info(f'Will process {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
+            Logger.stdout(f'Will process {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
@@ -79,22 +79,22 @@ class DataPreProcessor:
                 Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = 1)
                 continue
             if verbosity >= 2:
-                Logger.stdout(f'Preprocessing: [{key.upper()}] start...')
+                Logger.stdout(f'Preprocessing: [{key.upper()}] start...' , indent = 1)
             tt1 = datetime.now()
 
-            with Timer(f'[{key}] blocks loading' , silent = verbosity < 2):
+            with Timer(f'[{key}] blocks loading' , silent = verbosity < 2 , indent = 1):
                 block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, silent = verbosity < 2)
-            with Timer(f'[{key}] blocks process' , silent = verbosity < 2):
+            with Timer(f'[{key}] blocks process' , silent = verbosity < 2 , indent = 1):
                 data_block = proc.process_blocks(block_dict)
-            with Timer(f'[{key}] blocks masking' , silent = verbosity < 2):   
+            with Timer(f'[{key}] blocks masking' , silent = verbosity < 2 , indent = 1):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Timer(f'[{key}] blocks saving ' , silent = verbosity < 2):
+            with Timer(f'[{key}] blocks saving ' , silent = verbosity < 2 , indent = 1):
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
-            with Timer(f'[{key}] blocks norming' , silent = verbosity < 2):
+            with Timer(f'[{key}] blocks norming' , silent = verbosity < 2 , indent = 1):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            Logger.success(f'Preprocessing {key.upper()}(predict={predict}) finished! Cost {Duration(since = tt1)}')
+            Logger.success(f'Preprocessing {key.upper()}(predict={predict}) finished! Cost {Duration(since = tt1)}' , indent = 1)
             if verbosity >= 2:
                 Logger.divider()
 
@@ -111,7 +111,7 @@ class TypePreProcessor(ABC):
     def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , silent = False , **kwargs):
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load_block(start_dt , end_dt , silent = silent , **kwargs).align(secid = secid_align , date = date_align)
+            blocks[src_key] = loader.load(start_dt , end_dt , silent = silent , **kwargs).align(secid_align , date_align , inplace = True)
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks
@@ -119,7 +119,7 @@ class TypePreProcessor(ABC):
     def process_blocks(self, blocks : dict[str,DataBlock]):
         np.seterr(invalid = 'ignore' , divide = 'ignore')
         data_block = self.process(blocks)
-        data_block = data_block.align_feature(self.final_feat())
+        data_block = data_block.align_feature(self.final_feat() , inplace = True)
         np.seterr(invalid = 'warn' , divide = 'warn')
         return data_block
     
@@ -163,7 +163,7 @@ class pp_15m(TypePreProcessor):
     def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): 
         data_block = blocks['15m']
-        db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
+        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
@@ -180,7 +180,7 @@ class pp_30m(TypePreProcessor):
 
     def process(self , blocks): 
         data_block = blocks['30m']
-        db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
+        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
@@ -196,7 +196,7 @@ class pp_60m(TypePreProcessor):
     def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): 
         data_block = blocks['60m']
-        db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
+        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
@@ -215,7 +215,7 @@ class pp_week(TypePreProcessor):
             start_dt = 2 * start_dt
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load_block(start_dt , end_dt , silent = silent , **kwargs).align(secid = secid_align , date = date_align)
+            blocks[src_key] = loader.load(start_dt , end_dt , silent = silent , **kwargs).align(secid_align , date_align , inplace = True)
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks

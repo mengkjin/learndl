@@ -277,6 +277,7 @@ def total_memory(unit = 1e9):
     return psutil.Process(os.getpid()).memory_info().rss / unit
 
 def to_numpy(values):
+    """convert values to numpy array"""
     if not isinstance(values , np.ndarray): 
         if isinstance(values , torch.Tensor): 
             values = values.cpu().numpy()

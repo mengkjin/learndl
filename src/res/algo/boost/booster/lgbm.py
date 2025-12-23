@@ -121,7 +121,7 @@ class LgbmPlot:
 
     def histogram(self , feature_idx='all'):
         if self.plot_path is None:
-            Logger.alert(f'plot path not given, will not proceed')
+            Logger.alert(f'plot path not given, will not proceed' , level = 1)
             return
         if isinstance(feature_idx,str):
             assert feature_idx=='all' , feature_idx
@@ -148,7 +148,7 @@ class LgbmPlot:
 
     def tree(self , num_trees_list=[0]):   
         if self.plot_path is None:
-            Logger.alert(f'plot path not given, will not proceed')
+            Logger.alert(f'plot path not given, will not proceed' , level = 1)
             return
         for num_trees in num_trees_list:
             fig, ax = plt.subplots(figsize=(12,12))
@@ -160,7 +160,7 @@ class LgbmPlot:
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
-            Logger.alert(f'plot path not given, will not proceed')
+            Logger.alert(f'plot path not given, will not proceed' , level = 1)
             return
         import shap # type: ignore
         
@@ -193,7 +193,7 @@ class LgbmPlot:
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
-            Logger.alert(f'plot path not given, will not proceed')
+            Logger.alert(f'plot path not given, will not proceed' , level = 1)
             return
         x = train.X().cpu().numpy()
         pred = np.array(self.lgbm.model.predict(x))
@@ -209,7 +209,7 @@ class LgbmPlot:
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
-            Logger.alert(f'plot path not given, will not proceed')
+            Logger.alert(f'plot path not given, will not proceed' , level = 1)
             return
         self.plot_path.joinpath('explainer_pdp').mkdir(exist_ok=True)
         [file.unlink() for file in self.plot_path.joinpath('explainer_pdp').iterdir()]

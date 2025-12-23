@@ -491,7 +491,7 @@ class TuShareCNE5_Calculator:
     @classmethod
     def update(cls):
         '''update all updatable dates'''
-        Logger.info(f'Update: {cls.__name__} since last update!')
+        Logger.stdout(f'Update: {cls.__name__} since last update!')
         task = cls()
         for date in task.updatable_dates('exposure'): 
             task.update_date(date , 'exposure')
@@ -503,7 +503,7 @@ class TuShareCNE5_Calculator:
     def rollback(cls , rollback_date : int):
         '''update all updatable dates from a given rollback date'''
         CALENDAR.check_rollback_date(rollback_date)
-        Logger.info(f'Update: {cls.__name__} rollback from {rollback_date}!')
+        Logger.stdout(f'Update: {cls.__name__} rollback from {rollback_date}!')
         task = cls()
         start_date = CALENDAR.td(rollback_date , 1)
         end_date = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])

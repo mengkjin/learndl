@@ -51,7 +51,7 @@ def extract_js_min(date):
     try:
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
-        Logger.error(e)
+        Logger.error(f'Failed to convert ticker to int: {e}')
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
 

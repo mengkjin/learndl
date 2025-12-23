@@ -72,7 +72,7 @@ class ScheduledTask:
         self.task_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.task_path, 'w') as f:
             f.write(self.cmdline)
-        Logger.info(f"ScheduledTask {self.task_path} distributed")
+        Logger.success(f"ScheduledTask {self.task_path} distributed")
         return self
 
     def complete(self) -> None:
@@ -95,7 +95,7 @@ class ScheduledTask:
     def run(self , exclude_script : str | None = None):
         """run the task"""
         if exclude_script and Path(exclude_script).name in self.cmdline:
-            Logger.warning(f"Skipping task {self.cmdline} because it contains {exclude_script}")
+            Logger.alert(f"Skipping task {self.cmdline} because it contains {exclude_script}" , level = 1)
             return self
         try:
             env = os.environ.copy()
@@ -109,7 +109,7 @@ class ScheduledTask:
                 check = True,
             )
             # printout the result
-            Logger.info(f"command {self.cmdline} executed successfully, return code: {result.returncode}\n")
+            Logger.success(f"command {self.cmdline} executed successfully, return code: {result.returncode}\n")
             self.complete()
         except subprocess.CalledProcessError as e:
             Logger.error(f"command executed failed, return code: {e.returncode}")
@@ -150,7 +150,7 @@ class TaskScheduler:
         """printout all the tasks of the machine"""
         tasks = cls.get_machine_tasks()
         for task in tasks.values():
-            Logger.warning(f'{task} awaits to be executed')
+            Logger.alert(f'{task} awaits to be executed' , level = 1)
         return tasks
 
     @classmethod
@@ -173,5 +173,5 @@ class TaskScheduler:
         script = PATH.path_at_machine(script , machine_name)
         kwargs_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in kwargs.items() if v != ''])
         cmdline = f"{PATH.path_at_machine(Path(MACHINE.python_path) , machine_name)} {script} {kwargs_str}"
-        Logger.info(f"add run script {script} with kwargs {kwargs} to {machine_name}")
+        Logger.success(f"add run script {script} with kwargs {kwargs} to {machine_name}")
         return cls.add_task(machine_name = machine_name, cmdline = cmdline)

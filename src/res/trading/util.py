@@ -150,7 +150,7 @@ class TradingPort:
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
         if reset_port:
-            Logger.warning(f'Beware: reset port for new build! {self.name}')
+            Logger.alert(f'Beware: reset port for new build! {self.name}' , level = 1)
             port = Portfolio(self.name)
         else:
             if date in self.last_ports:
@@ -251,7 +251,7 @@ class TradingPort:
                 verbosity = 1 , write_down = False , display = True , 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
         if not write_down and not display:
-            Logger.error(f'{self.name} analyze: write_down and display cannot be both False')
+            Logger.error(f'write_down and display cannot be both False')
             return self
         start = start if start is not None else -1
         end = end if end is not None else 99991231
@@ -271,13 +271,13 @@ class TradingPort:
 
         if display:
             for name , fig in figs.items():
-                Logger.stdout(f'Figure: {name}:')
+                Logger.caption(f'Figure: {name.title()}:')
                 Display(fig)
 
         self.analyze_results = rslts
         self.analyze_figs = figs
         if verbosity > 0: 
-            Logger.info(f'{self.name} analyze Finished!')
+            Logger.success(f'Finish analyzing trading portfolio [{self.name}]!')
         return self
 
 @dataclass

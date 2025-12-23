@@ -98,9 +98,18 @@ class DataBlock(Stock4DData):
                 'feature' : self.feature}
         self.save_dict(data , path)
 
-    def ffill(self , fill : bool | Any = True):
-        if bool(fill):
+    def ffill(self , if_fill : bool = True):
+        if if_fill:
             self.values = forward_fillna(self.values , axis = 1)
+        return self
+
+    def fillna(self , value : Any = 0):
+        if isinstance(self.values , torch.Tensor):
+            self.values = self.values.nan_to_num(value)
+        elif isinstance(self.values , np.ndarray):
+            self.values = np.nan_to_num(self.values , value)
+        else:
+            raise TypeError(f'Unsupported type: {type(self.values)} for {self.__class__.__name__} values')
         return self
     
     @staticmethod
@@ -145,28 +154,26 @@ class DataBlock(Stock4DData):
             fillna = np.repeat(fillna , len(paths))
         else:
             assert len(paths) == len(fillna) , (len(paths) , len(fillna))
+            fillna = np.array(fillna)
+        fillna = fillna.astype(bool)
         
         block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlock [{",".join(block_names)}]'
         with Timer(f'Load {block_title}'):
             blocks = [cls.load_path(path) for path in paths]
 
-        if len(blocks) == 1:
-            blocks[0].ffill(fillna[0]).as_tensor().as_type(dtype)
-            return blocks
-        else:
-            with Timer(f'Align {block_title}'):
-                # sligtly faster than .align(secid = secid , date = date)
-                if intersect_secid:  
-                    newsecid = index_intersect([blk.secid for blk in blocks])[0]
-                else:
-                    newsecid = None
-                
-                newdate : np.ndarray | Any = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
-                for blk in blocks: 
-                    newdate = newdate[newdate >= min(blk.date)]
-                
-                for i , blk in enumerate(blocks):
-                    blk.align_secid_date(newsecid , newdate).ffill(fillna[i]).as_tensor().as_type(dtype)
+        with Timer(f'Align {block_title}' , silent = len(blocks) <= 1):
+            # sligtly faster than .align(secid = secid , date = date)
+            if intersect_secid:  
+                newsecid = index_intersect([blk.secid for blk in blocks])[0]
+            else:
+                newsecid = None
+            
+            newdate : np.ndarray | Any = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
+            for blk in blocks: 
+                newdate = newdate[newdate >= min(blk.date)]
+            
+            for i , blk in enumerate(blocks):
+                blk.align_secid_date(newsecid , newdate , inplace = True).ffill(fillna[i]).as_tensor().as_type(dtype)
 
         return blocks
     
@@ -180,8 +187,8 @@ class DataBlock(Stock4DData):
         return {key:val for key,val in zip(keys , cls.load_paths(paths , **kwargs))}
     
     @classmethod
-    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True , all_dates = False):
-        df = DB.load_multi(db_src , db_key , start_dt = start_dt , end_dt = end_dt , use_alt=use_alt , all_dates = all_dates)
+    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
+        df = DB.load_multi(db_src , db_key , start_dt = start_dt , end_dt = end_dt , use_alt=use_alt)
 
         if len(df) == 0: 
             return cls()
@@ -427,11 +434,10 @@ class ModuleData:
             hist_data = cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
             pred_data = cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
 
-            hist_data.y = hist_data.y.merge_others([pred_data.y])
+            hist_data.y = hist_data.y.merge_others([pred_data.y] , inplace = True)
             hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
             for x_key in hist_data.x:
-                hist_data.x[x_key] = hist_data.x[x_key].merge_others([pred_data.x[x_key]]).\
-                    align_secid_date(hist_data.secid , hist_data.date)
+                hist_data.x[x_key] = hist_data.x[x_key].merge_others([pred_data.x[x_key]] , inplace = True).align_secid_date(hist_data.secid , hist_data.date , inplace = True)
 
             return hist_data
 
@@ -480,10 +486,8 @@ class ModuleData:
                 from src.data.loader import FactorLoader
                 start_dt = max(factor_start_dt or data.date[0] , data.date[0])
                 end_dt = min(factor_end_dt or data.date[-1] , data.date[-1])
-                add_x = FactorLoader(factor_names).load_block(start_dt , end_dt , silent = True)
-                data.x['factor'] = add_x.align_secid_date(data.secid , data.date)
-
-        data.y.align_feature(y_labels)
+                data.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , silent = True).align_secid_date(data.secid , data.date , inplace = True)
+        data.y.align_feature(y_labels , inplace = True)
         return data
     
     @staticmethod
@@ -500,7 +504,7 @@ class ModuleData:
             try:
                 cache_key_dict = json.load(f)
             except json.JSONDecodeError as e:
-                Logger.alert(f'cache_key.json is corrupted, reset it: {e}')
+                Logger.alert(f'cache_key.json is corrupted, reset it: {e}' , level = 1)
                 cache_key_dict = {}
         for key , value in cache_key_dict.items():
             if value['type'] != 'dataset':
@@ -542,11 +546,11 @@ class ModuleData:
                     Logger.success(f'Loading Module Data, Try \'{path}\', success!')
             else:
                 if not Silence.silent: 
-                    Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+                    Logger.alert(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!' , level = 1)
                 data = None
         except ModuleNotFoundError:
             '''can be caused by different package version'''
-            Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+            Logger.alert(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!' , level = 1)
             data = None
         except Exception as e:
             raise e

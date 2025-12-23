@@ -192,7 +192,7 @@ class SellsideSQLDownloader:
         if self.save_data(df):
             Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(since = t0)}')
         else:
-            Logger.alert(f'EmptyData: {self.DB_SRC}/{self.db_key}:{start}-{end}')
+            Logger.alert(f'EmptyData: {self.DB_SRC}/{self.db_key}:{start}-{end}' , level = 1)
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -206,7 +206,7 @@ class SellsideSQLDownloader:
             try:
                 df = self.make_query(self.default_query , conn , start_dt , end_dt)
             except exc.ResourceClosedError:
-                Logger.warning(f'{self.factor_src} Connection is closed, re-connect')
+                Logger.alert(f'{self.factor_src} Connection is closed, re-connect' , level = 1)
                 conn = connection.connect(reconnect = True)
             i += 1
         if not connection.stay_connect: 
@@ -402,18 +402,18 @@ class SellsideSQLDownloader:
         prompt = f'Download: {cls.__name__} allaround!'
         assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
         assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        Logger.info(prompt)
+        Logger.stdout(prompt)
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('all' , connection)
 
     @classmethod
     def update(cls):
-        Logger.info(f'Download: {cls.__name__} since last update!')
+        Logger.stdout(f'Download: {cls.__name__} since last update!')
         try:
             cls.update_since(trace = 0)
         except Exception as e:
-            Logger.error(f'In {cls.__name__} : Error in update_since: {e}')
+            Logger.alert(f'In {cls.__name__} : Error in update_since: {e}' , level = 2)
             traceback.print_exc()
         
 if __name__ == '__main__':

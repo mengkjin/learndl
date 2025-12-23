@@ -491,7 +491,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def update_day_factor(self , date : int , overwrite = False , show_success = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         if show_warning and date not in CONF.Factor.UPDATE.target_dates:
-            Logger.alert(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
+            Logger.alert(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates' , level = 1)
         prefix = f'{self.factor_string} at date {date}'
         try:
             done = self.calc_and_deploy(date , overwrite = overwrite , verbose = show_success)
@@ -1003,7 +1003,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
         if not overwrite:
             return
         if after is not None:
-            Logger.warning(f'Dropping pooling weight of {self.factor_name} after {after}!')
+            Logger.alert(f'Dropping pooling weight of {self.factor_name} after {after}!' , level = 1)
             df = self.load_pooling_weight().query('date < @after')
             DB.save(df , 'pooling_weight' , self.db_key , verbose = False)
         else:
@@ -1012,7 +1012,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
     def purge_pooling_weight(self , confirm : bool = False) -> None:
         """purge pooling weight of a given date"""
         if confirm:
-            Logger.warning(f'Purging pooling weight of {self.factor_name}!')
+            Logger.alert(f'Purging pooling weight of {self.factor_name}!' , level = 1)
             DB.path('pooling_weight' , self.db_key).unlink(missing_ok = True)
 
     def get_pooling_weight(self , date : int) -> pd.DataFrame:
@@ -1026,7 +1026,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
             return pd.DataFrame()
         weight = self._loaded_weight.query('date == @date').set_index('date')
         if weight.empty:
-            Logger.warning(f'pooling weight is empty for {date} , has dates: {self._loaded_weight["date"].unique()}')
+            Logger.error(f'pooling weight is empty for {date} , has dates: {self._loaded_weight["date"].unique()}')
             raise ValueError(f'pooling weight is empty for {date}')
         return weight
 

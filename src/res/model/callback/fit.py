@@ -97,7 +97,7 @@ class NanLossRetrain(BaseCallBack):
         if not self.is_nanloss:
             pass
         elif self.remain_nan_life > 0:
-            Logger.error(f'Initialize a new model to retrain! Lives remaining {self.remain_nan_life}')
+            Logger.warning(f'Initialize a new model to retrain! Lives remaining {self.remain_nan_life}')
             self.remain_nan_life -= 1
 
             self.metrics.new_attempt()

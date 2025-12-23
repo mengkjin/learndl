@@ -29,7 +29,7 @@ class ScriptLock:
     def _log(self, message: str):
         """printing out message"""
         if self.verbose:
-            Logger.info(f"[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] {message}")
+            Logger.debug(message)
 
     def _log_get_lock(self , start_time: datetime | None = None):
         if start_time is not None and (wait_time := (datetime.now() - start_time).total_seconds()) > 1:
@@ -124,7 +124,7 @@ class ScriptLockMultiple:
     def _log(self, message: str):
         """printing out message"""
         if self.verbose:
-            Logger.info(f"[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] {message}")
+            Logger.debug(message)
 
     def _log_get_lock(self, lock_id: int, start_time: datetime | None = None):
         """record the log of getting lock"""

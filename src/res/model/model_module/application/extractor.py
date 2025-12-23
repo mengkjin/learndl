@@ -136,12 +136,12 @@ class ModelHiddenExtractor:
         
         models = HiddenExtractingModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.info(f'model_name is None, update all hidden models (len={len(models)})')
+            Logger.stdout(f'model_name is None, update all hidden models (len={len(models)})')
         for model in models:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)
             if extractor._current_update_dates:
-                Logger.stdout(f'Finish updating hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = 1)
+                Logger.success(f'Finish updating hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = 1)
             else:
-                Logger.stdout(f'No new updating hidden feature extraction for {model}' , indent = 1)
+                Logger.skipping(f'No new updating hidden feature extraction for {model}' , indent = 1)
         return extractor

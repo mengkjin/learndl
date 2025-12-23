@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.proj import Logger
-from src.func import match_values , index_union , index_stack
+from src.func import match_values , index_union , index_stack , to_numpy
 
 from .nd import NdData
 
@@ -76,19 +76,27 @@ class Stock4DData:
     def min_date(self): return 99991231 if self.empty else self.date.min()
 
     def update(self , **kwargs):
-        [setattr(self,k,v) for k,v in kwargs.items() if k in ['values','secid','date','feature']]
+        if 'values' in kwargs:
+            self.values = kwargs['values']
+        if 'secid' in kwargs:
+            self.secid = to_numpy(kwargs['secid'])
+        if 'date' in kwargs:
+            self.date = to_numpy(kwargs['date'])
+        if 'feature' in kwargs:
+            self.feature = to_numpy(kwargs['feature'])
         return self.asserted()
     
     def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]
     
     @classmethod
-    def merge(cls , block_list):
+    def merge(cls , block_list , inplace = False):
+        """merge multiple blocks into one block , if inplace is True, merge into the first block"""
         blocks = [blk for blk in block_list if isinstance(blk , cls) and not blk.empty]
         if len(blocks) == 0: 
             return cls()
         elif len(blocks) == 1: 
-            return blocks[0]
+            return blocks[0] if inplace else blocks[0].copy()
             
         secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
         date    , p0d , p1d = index_union([blk.date    for blk in blocks])
@@ -97,16 +105,16 @@ class Stock4DData:
         assert np.all([blk.shape[2] == len_inday for blk in blocks]) , 'blocks with different inday cannot be merged'
         p0i = p1i = np.arange(len_inday)
 
-        new_blk = blocks[0].align(secid , date , feature , False)
+        new_blk = blocks[0].align(secid , date , feature , inplace = inplace)
         for i , blk in enumerate(blocks[1:] , start = 1): 
             new_blk.values[np.ix_(p0s[i],p0d[i],p0i,p0f[i])] = blk.values[np.ix_(p1s[i],p1d[i],p1i,p1f[i])]
 
         return new_blk
 
-    def merge_others(self , others : list | Any):
+    def merge_others(self , others : list | Any , inplace = False):
         if not isinstance(others , list): 
             others = [others]
-        return self.merge([self , *others]).align_feature(self.feature)
+        return self.merge([self , *others] , inplace = inplace).align_feature(self.feature , inplace = True)
     
     def as_tensor(self , asTensor = True):
         if asTensor and isinstance(self.values , np.ndarray): 
@@ -122,10 +130,13 @@ class Stock4DData:
     
     def copy(self): return deepcopy(self)
 
-    def align(self , secid = None , date = None , feature = None , inplace = True):
-        return self.align_secid_date(secid , date , inplace = inplace).align_feature(feature , inplace = True)
+    def align(self , secid = None , date = None , feature = None , inplace = False):
+        blk = self.align_secid_date(secid , date , inplace = inplace)
+        blk = blk.align_feature(feature , inplace = True)
+        return blk
 
-    def align_secid(self , secid , inplace = True):
+    def align_secid(self , secid , inplace = False):
+        secid = None if secid is None else to_numpy(secid)
         if secid is None or len(secid) == 0: 
             return self if inplace else self.copy()
         asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
@@ -138,7 +149,8 @@ class Stock4DData:
         else:
             return self.__class__(values = values , secid = secid , date = self.date , feature = self.feature).as_type(dtype)
 
-    def align_date(self , date , inplace = True):
+    def align_date(self , date , inplace = False):
+        date = None if date is None else to_numpy(date)
         if date is None or len(date) == 0: 
             return self if inplace else self.copy()
         asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
@@ -151,7 +163,9 @@ class Stock4DData:
         else:
             return self.__class__(values = values , secid = self.secid , date = date , feature = self.feature).as_type(dtype)
     
-    def align_secid_date(self , secid = None , date = None , inplace = True):
+    def align_secid_date(self , secid = None , date = None , inplace = False):
+        secid = None if secid is None else to_numpy(secid)
+        date = None if date is None else to_numpy(date)
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
             return self if inplace else self.copy()
         elif secid is None or len(secid) == 0:
@@ -172,7 +186,8 @@ class Stock4DData:
             else:
                 return self.__class__(values = values , secid = secid , date = date , feature = self.feature).as_type(dtype)
     
-    def align_feature(self , feature , inplace = True):
+    def align_feature(self , feature , inplace = False):
+        feature = None if feature is None else to_numpy(feature) 
         if feature is None or len(feature) == 0: 
             return self if inplace else self.copy()
         asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype

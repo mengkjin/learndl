@@ -200,7 +200,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         dates = self.target_dates()
 
         if len(dates) == 0: 
-            Logger.skipping(f'{self.__class__.__name__} already updated!' , indent = 1)
+            Logger.skipping(f'{self.__class__.__name__} already updated!')
             return
         
         Logger.stdout(f'Download: {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
@@ -210,9 +210,9 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             except Exception as e:
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
-                        Logger.error(f'max retries reached: {e}')
+                        Logger.warning(f'max retries reached: {e}')
                     else:
-                        Logger.warning(f'{e} , wait {timeout_wait_seconds} seconds')
+                        Logger.alert(f'{e} , wait {timeout_wait_seconds} seconds' , level = 1)
                         time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
                     Logger.error(e)
@@ -341,8 +341,8 @@ class RollingFetcher(TushareFetcher):
             return []
 
         rolling_last_date = max(self.START_DATE , CALENDAR.cd(self.last_date() , -self.ROLLING_BACK_DAYS))
-        all_dates = dates_to_update(rolling_last_date , self.UPDATE_FREQ , update_to)
-        d , dates = all_dates[0] , [all_dates[0]]
+        update_dates = dates_to_update(rolling_last_date , self.UPDATE_FREQ , update_to)
+        d , dates = update_dates[0] , [update_dates[0]]
         while True:
             d = CALENDAR.cd(d , self.ROLLING_SEP_DAYS)
             dates.append(min(d , update_to))

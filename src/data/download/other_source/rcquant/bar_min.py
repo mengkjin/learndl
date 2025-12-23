@@ -67,7 +67,7 @@ def rcquant_init():
             if _error := output['stderr']:
                 key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
                 if key_info:
-                    Logger.warning(f'RcQuant Warning : {key_info.group(0)}')
+                    Logger.alert(f'RcQuant Warning : {key_info.group(0)}' , level = 1)
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
         except FileNotFoundError:
@@ -104,16 +104,16 @@ def target_dates(data_type : DATA_TYPES , date : int | None = None):
 def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> list[int]:
     if data_type != 'sec': 
         return []
-    all_dates = np.array([])
+    all_relevant_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , src_key(data_type , 1))
         stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
         target_dates = CALENDAR.diffs(source_dates , stored_dates)
         dates = target_dates[target_dates >= src_start_date(data_type)]
-        all_dates = np.concatenate([all_dates , dates])
+        all_relevant_dates = np.concatenate([all_relevant_dates , dates])
     end = CALENDAR.update_to() if date is None else date
-    all_dates = np.unique(all_dates[all_dates <= end]).astype(int).tolist()
-    return all_dates
+    all_relevant_dates = np.unique(all_relevant_dates[all_relevant_dates <= end]).astype(int).tolist()
+    return all_relevant_dates
 
 def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': 
@@ -208,7 +208,7 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
         Logger.stdout(f'Download: rcquant {data_type} bar min update date {dt}')
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            Logger.alert(f'rcquant {data_type} bar min {dt} failed')
+            Logger.alert(f'rcquant {data_type} bar min {dt} failed' , level = 1)
         elif verbosity > 1 :
             Logger.success(f'rcquant {data_type} bar min {dt} success')
 

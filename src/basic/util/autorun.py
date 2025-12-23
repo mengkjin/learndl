@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Callable
 
-from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , Email , ProjStates
+from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , Email , ProjStates , Duration
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 
@@ -142,8 +142,9 @@ class AutoRunTask:
 
         self.error_messages.extend(Logger.get_conclusions('error'))
         if not self.error_messages:
-            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed successfully')
-        self.exit_message = Logger.wrap_conclusions()
+            dur = Duration(self.end_time - self.init_time)
+            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y%m%d %H:%M:%S")} successfully finished at {self.end_time.strftime("%Y%m%d %H:%M:%S")} , cost {dur}')
+        self.exit_message = Logger.draw_conclusions()
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         

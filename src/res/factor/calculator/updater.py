@@ -231,7 +231,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         cls.jobs.sort(key=lambda x: x.sort_key())
 
         if cls.jobs:
-            Logger.info(f'Finish Collecting {len(cls.jobs)} Jobs for {cls.__name__}')
+            Logger.success(f'Finish Collecting {len(cls.jobs)} Jobs for {cls.__name__}')
         else:
             Logger.skipping(f'There is no {cls.__name__} Jobs to Proceed...')
         
@@ -268,8 +268,8 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             cls.process_group_jobs(group , jobs , verbosity)
 
             if timeout > 0 and (datetime.now() - start_time).total_seconds() > timeout * 3600:
-                Logger.alert(f'Timeout: {timeout} hours reached, stopping update')
-                Logger.alert(f'Terminated at {group}')
+                Logger.alert(f'Timeout: {timeout} hours reached, stopping update' , level = 1)
+                Logger.alert(f'Terminated at {group}' , level = 1)
                 break
 
     @classmethod
@@ -379,13 +379,13 @@ class StockFactorUpdater(BaseFactorUpdater):
         if verbosity > 0:
             Logger.success(f'Stock Factor Update of {group} Done: {sum(job.done for job in jobs)} / {len(jobs)}')
         if failed_jobs := [job for job in jobs if not job.done]: 
-            Logger.alert(f'Failed Stock Factors: {failed_jobs}')
+            Logger.alert(f'Failed Stock Factors: {failed_jobs}' , level = 1)
             if cls.multi_thread:
                 # if multi_thread is True, auto retry failed jobs
                 Logger.stdout(f'Auto Retry Failed Stock Factors...')
                 parallel({job:job.do for job in failed_jobs} , method = cls.multi_thread)
                 if failed_jobs := [job for job in jobs if not job.done]:
-                    Logger.alert(f'Failed Stock Factors Again: {failed_jobs}')
+                    Logger.alert(f'Failed Stock Factors Again: {failed_jobs}' , level = 1)
 
 class MarketFactorUpdater(BaseFactorUpdater):
     """manager of market factor update jobs"""

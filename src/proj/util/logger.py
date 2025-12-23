@@ -1,4 +1,4 @@
-import colorlog , logging , sys
+import colorlog , logging
 import logging.handlers
 
 import re
@@ -8,9 +8,9 @@ import traceback
 import pandas as pd
 
 from datetime import datetime
-from typing import Any , Generator , Literal , Type
+from typing import Any , Literal , Type
 
-from src.proj.env import PATH
+from src.proj.env import PATH , ProjStates
 from src.proj.func import Duration , Display , stdout , stderr
 
 class _LevelFormatter(logging.Formatter):
@@ -82,10 +82,32 @@ def reset_logger(log : logging.Logger , config : dict[str, Any]):
     return log
 
 class Logger:
-    """custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'"""
+    """
+    custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'
+    method include:
+        stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
+        success: custom stdout with green color
+        remark: custom stdout , level [0,1,2,3] indicate the color of the message: 0 for blue (normal) , 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical) (blue color stdout)
+        skipping: custom skipping message (gray color stdout)
+        highlight: custom cyan colored Highlight level message (cyan color stdout)
+        info: Info level stderr
+        debug: Debug level stderr
+        warning: Warning level stderr
+        error: Error level stderr
+        critical: Critical level stderr
+        divider: Divider stdout (use info level)
+        conclude: Add the message to the conclusions for later use
+        draw_conclusions: wrap the conclusions: printout , merge into a single string and clear them
+        get_conclusions: Get the conclusions of given level
+        ParagraphI: Format Enclosed process to count time
+        ParagraphII: Format Enclosed process to count time
+        ParagraphIII: Format enclosed message
+        Profiler: Profiler class for profiling the code, show the profile result in the best way
+    """
     _instance : 'Logger | Any' = None
     _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
     _levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
+    _levels_palette : list[str] = ['lightgreen' , 'gray' , 'lightyellow' , 'lightred' , 'purple']
     _conclusions : dict[_type_levels , list[str]] = {level : [] for level in _levels}
     _config = log_config()
     log = new_log(_config)
@@ -103,7 +125,8 @@ class Logger:
     @classmethod
     def log_only(cls , *args , **kwargs):
         """dump to log writer with no display"""
-        cls.dump_to_logwriter(*args)
+        if log_file := ProjStates.log_file:
+            log_file.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
     def stdout(cls , *args , indent = 0 , color = None , **kwargs):
@@ -117,96 +140,87 @@ class Logger:
         stdout(*args , indent = indent , color = color , **kwargs)
 
     @classmethod
-    def stderr(cls , *args , **kwargs):
-        """custom stderr message
-        kwargs:
-            indent: add prefix '  --> ' before the message
-            color , bg_color , bold: color the message
-            sep , end , file , flush: same as print
-            level_prefix: None or dict[str, Any] = {'level' : 'AnyStr' , 'color' : 'white' , 'bg_color' : 'blue'}
-        """
-        stderr(*args , **kwargs)
+    def caption(cls , *args , **kwargs):
+        """custom gray stdout message for caption (e.g. table title)"""
+        stdout(*args , color = 'gray' , **kwargs)
         
     @classmethod
     def success(cls , *args , **kwargs):
-        """custom success message"""
+        """custom green stdout message for success"""
         stdout(*args , color = 'lightgreen' , **kwargs)
 
     @classmethod
-    def alert(cls , *args , **kwargs):
-        """custom alert message"""
-        stdout(*args , color = 'lightyellow' , **kwargs)
-
-    @classmethod
-    def danger(cls , *args , **kwargs):
-        """custom failure message"""
-        stdout(*args , color = 'lightred' , **kwargs)
-
-    @classmethod
-    def marking(cls , *args , **kwargs):
-        """custom marking message"""
-        stdout(*args , color = 'lightblue' , **kwargs)
+    def alert(cls , *args , level : Literal[1 , 2 , 3] = 1 , **kwargs):
+        """
+        custom stdout message with color for alert
+        level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
+        """
+        color = ['lightyellow' , 'lightred' , 'purple'][level - 1]
+        stdout(*args , color = color , **kwargs)
 
     @classmethod
     def skipping(cls , *args , **kwargs):
-        """custom error message"""
+        """custom skipping message"""
         stdout('Skipping:' , *args , color = 'gray' , **kwargs)
 
     @classmethod
-    def highlight(cls , *args , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):
+    def _speical_message(cls , *args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , level_prefix : dict[str, Any] | None = None , **kwargs):
         """custom cyan colored Highlight level message"""
-        assert not prefix or not padding_char , 'prefix and padding_char cannot be used together'
+        assert not level_prefix or not padding_char , 'prefix and padding_char cannot be used together'
         msg = ' '.join([str(s) for s in args])
-        if prefix:
-            kwargs['level_prefix'] = {'level' : 'HIGHLIGHT' , 'color' : 'white' , 'bg_color' : 'cyan'}
         if padding_char and len(msg) < padding_width:
             padding_left = padding_char * max(0 , (padding_width - len(msg) - 2) // 2)
             padding_right = padding_char * max(0 , padding_width - len(msg) - 2 - len(padding_left))
             msg = ' '.join([padding_left , msg , padding_right])
-        stderr(msg , color = 'cyan' , bold = True , **kwargs)
+        if level_prefix:
+            stderr(msg , color = color , bold = True , level_prefix = level_prefix , **kwargs)
+        else:
+            stdout(msg , color = color , bold = True , **kwargs)
+
+    @classmethod
+    def remark(cls , *args , color = 'lightblue' , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):
+        """
+        custom blue stdout message for remark
+        level: 0 for blue (normal) , 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
+        """
+        level_prefix = {'level' : 'REMARK' , 'color' : 'white' , 'bg_color' : color} if prefix else None
+        cls._speical_message(*args , padding_char = padding_char , padding_width = padding_width , color = color , level_prefix = level_prefix , **kwargs)
+
+    @classmethod
+    def highlight(cls , *args , color = 'cyan' , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):
+        """custom cyan colored Highlight level message"""
+        level_prefix = {'level' : 'HIGHLIGHT' , 'color' : 'white' , 'bg_color' : color} if prefix else None
+        cls._speical_message(*args , padding_char = padding_char , padding_width = padding_width , color = color , level_prefix = level_prefix , **kwargs)
 
     @classmethod
     def debug(cls , *args , **kwargs):
-        """Debug level message"""
+        """Debug level stderr"""
         cls.log.debug(*args , **kwargs)
-        cls.dump_to_logwriter(*args)
-    
+
     @classmethod
     def info(cls , *args , **kwargs):
-        """Info level message"""
+        """Info level stderr"""
         cls.log.info(*args , **kwargs)
-        cls.dump_to_logwriter(*args)
 
     @classmethod
     def warning(cls , *args , **kwargs):
-        """Warning level message"""
+        """Warning level stderr"""
         cls.log.warning(*args , **kwargs)
-        cls.dump_to_logwriter(*args)
 
     @classmethod
     def error(cls , *args , **kwargs):
-        """Error level message"""
+        """Error level stderr"""
         cls.log.error(*args , **kwargs)
-        cls.dump_to_logwriter(*args)   
 
     @classmethod
     def critical(cls , *args , **kwargs):
-        """Critical level message"""
+        """Critical level stderr"""
         cls.log.critical(*args , **kwargs)
-        cls.dump_to_logwriter(*args)
 
     @classmethod
-    def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-'):
-        """Divider message , use info level"""
-        stdout(char * width)
-        
-    @staticmethod
-    def dump_to_logwriter(*args):
-        """Dump the message to the log writer if sys.stdout has a log attribute"""
-        log = getattr(sys.stdout , 'log' , None)
-        write = getattr(log , 'write' , None)
-        if write:
-            write(' '.join([str(s) for s in args]) + '\n')
+    def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-' , color : str | None = None):
+        """Divider mesge , use stdout"""
+        stdout(char * width , color = color)
 
     @classmethod
     def conclude(cls , *args : str , level : _type_levels = 'critical'):
@@ -215,36 +229,18 @@ class Logger:
         cls._conclusions[level].append(msg)
 
     @classmethod
-    def failure(cls , *args):
-        """custom warning message"""
-        cls.conclude(*args , level = 'error')
-
-    @classmethod
-    def iter_conclusions(cls) -> Generator[tuple[_type_levels , str] , None , None]:
-        """Iterate the conclusions"""
-        for type in cls._conclusions:
-            while cls._conclusions[type]:
-                yield type , cls._conclusions[type].pop(0)
-
-    @classmethod
-    def iter_level_conclusions(cls) -> Generator[tuple[_type_levels , list[str]] , None , None]:
-        """Clear the conclusions"""
-        for level in cls._conclusions:
-            if cls._conclusions[level]:
-                yield level , cls._conclusions[level]
-
-    @classmethod
-    def wrap_conclusions(cls):
+    def draw_conclusions(cls):
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
-        for level in cls._conclusions:
-            if not cls._conclusions[level]:
-                continue
-            getattr(cls , level)(f'There are {len(cls._conclusions[level])} {level} level conclusions:')
-            for conclusion in cls._conclusions[level]:
-                stdout(conclusion , indent = 1)
-                conclusion_strs.append(f'{level.upper()}: {conclusion}')
-            cls._conclusions[level].clear()
+        with cls.ParagraphIII('Final Conclusions'):
+            for level , color in zip(cls._levels , cls._levels_palette):
+                if not cls._conclusions[level]:
+                    continue
+                stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = color)
+                for conclusion in cls._conclusions[level]:
+                    stdout(conclusion , indent = 1)
+                    conclusion_strs.append(f'{level.upper()}: {conclusion}')
+                cls._conclusions[level].clear()
         return '\n'.join(conclusion_strs)
 
     @classmethod
@@ -268,7 +264,7 @@ class Logger:
             self._end_time = datetime.now()
             self.write(f'{self.title} Finished at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}! Cost {Duration(self._end_time - self._init_time)}')
         def write(self , message : str):
-            Logger.critical(message)
+            Logger.warning(message)
 
     class ParagraphII:
         """
@@ -286,7 +282,7 @@ class Logger:
             self._end_time = datetime.now()
             self.write(f'{self.title} Finished at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}! Cost {Duration(self._end_time - self._init_time)}')
         def write(self , message : str):
-            Logger.warning(message)
+            Logger.info(message)
 
     class ParagraphIII:
         """

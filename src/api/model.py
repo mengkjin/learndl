@@ -33,7 +33,7 @@ class ModelAPI:
             wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
             wrap_update(cls.Trainer.update_models , 'update models')
         else:
-            Logger.warning('This is not a server with cuda, skip this process')
+            Logger.alert('This is not a server with cuda, skip this process' , level = 1)
 
     @classmethod
     def update_hidden(cls):

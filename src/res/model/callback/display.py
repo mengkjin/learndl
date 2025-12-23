@@ -34,7 +34,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
-            Logger.stdout('Table: Callback Time costs:')
+            Logger.caption('Table: Callback Time Costs:')
             Display(df)
 
 class BatchDisplay(BaseCallBack):
@@ -98,7 +98,7 @@ class StatusDisplay(BaseCallBack):
         return getattr(self.trainer.model , 'optimizer')
     def display(self , *args , **kwargs):
         if (self.show_info_step or self.initial_models):
-            return Logger.info(*args , **kwargs)
+            return Logger.stdout(*args , **kwargs)
         else:
             return Logger.log_only(*args , **kwargs)
     def event_sdout(self , event) -> str:
@@ -202,7 +202,7 @@ class StatusDisplay(BaseCallBack):
         self.record_texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self.record_texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.tc('model') / 60 , self.tc('model') / (self.record_epoch_model + 1))
-        Logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
+        Logger.remark('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts) , prefix = True)
     
     def on_before_test_end(self): 
         Logger.highlight(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}' , prefix = True)

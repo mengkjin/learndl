@@ -157,18 +157,18 @@ class ModelPortfolioBuilder:
         '''Update pre-registered models' factor model portfolios'''
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.info(f'model_name is None, build fmps for all registered models (len={len(models)})')
+            Logger.stdout(f'model_name is None, build fmps for all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)
             if md._update_fmps_record:
-                Logger.stdout(f'Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}' , indent = 1)
+                Logger.success(f'Finish updating model portfolios for {model} , len={len(md._update_fmps_record)}' , indent = 1)
             else:
-                Logger.stdout(f'No new updating model portfolios for {model}' , indent = 1)
+                Logger.skipping(f'No new updating model portfolios for {model}' , indent = 1)
 
             md.accounting(resume = True)
             if md._update_account_record:
-                Logger.stdout(f'Finish updating model accounting for {model} , len={len(md._update_account_record)}' , indent = 1)
+                Logger.success(f'Finish updating model accounting for {model} , len={len(md._update_account_record)}' , indent = 1)
             else:
-                Logger.stdout(f'No new updating model accounting for {model}' , indent = 1)
+                Logger.skipping(f'No new updating model accounting for {model}' , indent = 1)
         return md

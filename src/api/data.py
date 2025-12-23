@@ -60,5 +60,5 @@ class DataAPI:
         update_to = CALENDAR.td(CALENDAR.update_to()) # use trade date to compare
         is_updated = updated >= update_to
         if verbose and not is_updated:
-            Logger.info(f'updated: {updated}, update_to: {update_to}')
+            Logger.alert(f'Only updated to {updated}, should update to {update_to}' , level = 1)
         return is_updated

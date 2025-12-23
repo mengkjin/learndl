@@ -141,7 +141,7 @@ def append_bound_range(opt_input : Any):
         elif valname == 'cp':
             value = DATAVENDOR.get_cp(secid , model_date)
         elif valname in ['amt' , 'bv']:
-            Logger.alert('Warning! [amt] and [bv] not yet define in [get_bound_range]!')
+            Logger.alert('Warning! [amt] and [bv] not yet define in [get_bound_range]!' , level = 1)
             continue
         else:
             raise KeyError(valname)

@@ -32,11 +32,11 @@ class TradingAPI:
         available_ports = cls.available_ports(backtest = True)
         ports = [port for port in available_ports if port.startswith(port_name_starter)]
         if ports:
-            Logger.warning(f'multiple backtest ports found for {port_name_starter}: {ports}')
+            Logger.stdout(f'multiple backtest ports found for {port_name_starter}: {ports}')
             for port in ports:
                 with Logger.ParagraphIII(f'backtest {port}'):
                     TradingPortfolioBacktestor.analyze(port , start , end , **kwargs)
         elif len(ports) == 0:
             Logger.error(f'no backtest ports found starting with {port_name_starter}')
-            Logger.info(f'available backtest ports: {available_ports}')
+            Logger.stdout(f'available backtest ports: {available_ports}')
         

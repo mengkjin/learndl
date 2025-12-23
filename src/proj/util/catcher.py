@@ -145,7 +145,7 @@ def _figure_to_base64(fig : Figure | Any):
         return image_base64
     except Exception as e:
         # _critical(f"Error converting figure to base64: {e}")
-        Logger.critical(f"Error converting figure to base64: {e}")
+        Logger.error(f"Error converting figure to base64: {e}")
         return None
     
 def _ansi_to_css(ansi_string: str) -> str:
@@ -206,6 +206,7 @@ def _figure_to_html(fig: Figure | Any):
     except Exception as e:
         # _critical(f"Error capturing matplotlib figure: {e}")
         Logger.error(f"Error capturing matplotlib figure: {e}")
+        content = f'<div class="figure-fallback"><pre>Error capturing matplotlib figure: {e}</pre></div>'
     return content
 class OutputDeflector:
     """
@@ -428,6 +429,15 @@ class LogWriter(OutputCatcher):
             self.log_file = open(log_path, "w")
         self.stdout_catcher = self.log_file
         self.stderr_catcher = self.log_file
+
+    def __enter__(self):
+        super().__enter__()
+        ProjStates.log_file = self.log_file
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        ProjStates.log_file = None
+        super().__exit__(exc_type, exc_val, exc_tb)
 
     def get_contents(self):
         if self.log_path is None: 
@@ -689,7 +699,7 @@ class HtmlCatcher(OutputCatcher):
         """Set the instance of the catcher, if the catcher is already running, block the new instance"""
         if cls.Instance is not None:
             # _critical(f"{cls.Instance} is already running, blocking {instance}")
-            Logger.critical(f"{cls.Instance} is already running, blocking {instance}")
+            Logger.alert(f"{cls.Instance} is already running, blocking {instance}" , level = 1)
             instance._enable_catcher = False
         else:
             cls.Instance = instance
@@ -708,7 +718,7 @@ class HtmlCatcher(OutputCatcher):
         self.start_time = datetime.now()
         self.redirect_display_function()
         # _critical(f"{self} Capturing Start")
-        Logger.critical(f"{self} Capturing Start")
+        Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -726,11 +736,10 @@ class HtmlCatcher(OutputCatcher):
 
         # log first and then export
         # _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
-        Logger.critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         for export_path in self.export_file_list:
             stdout(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
-            
-        ProjStates.exit_files.append(self.export_file_list[-1])
+        ProjStates.exit_files.append(self.export_file_list[0])
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:
@@ -1157,6 +1166,7 @@ class MarkdownCatcher(OutputCatcher):
         self.stdout_deflector = OutputDeflector('stdout', self, True , 'write_stdout').start_catching()
         self.stderr_deflector = OutputDeflector('stderr', self, True , 'write_stderr').start_catching()
         self.is_catching = True
+        Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1186,7 +1196,7 @@ class MarkdownCatcher(OutputCatcher):
             self.markdown_file.close()
             return
         # _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
-        Logger.critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         self.markdown_file.close()
         for filename in self.export_file_list:
             if filename.exists(): 

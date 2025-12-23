@@ -156,19 +156,19 @@ class ModelPredictor:
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.info(f'model_name is None, update all registered models (len={len(models)})')
+            Logger.stdout(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt , silent = silent)
             if md._current_update_dates:
-                Logger.stdout(f'Finish updating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
+                Logger.success(f'Finish updating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
             else:
-                Logger.stdout(f'No new updating model prediction for {model}' , indent = 1)
+                Logger.skipping(f'No new updating model prediction for {model}' , indent = 1)
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
+                    Logger.success(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
                 else:
-                    Logger.stdout(f'No new deploying model prediction for {model}' , indent = 1)
+                    Logger.skipping(f'No new deploying model prediction for {model}' , indent = 1)
         return md
 
     @classmethod
@@ -176,7 +176,7 @@ class ModelPredictor:
         """Recalculate all model predictions"""
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.info(f'model_name is None, update all registered models (len={len(models)})')
+            Logger.stdout(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt , silent = silent)

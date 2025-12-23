@@ -99,7 +99,7 @@ class FormatStr(str):
         return _ansi_styler(msg , color = color , bg_color = bg_color , bold = bold)
         
     def write(self , stdout = False , stderr = False , file = None , end : str = '\n' , flush = False , **kwargs):
-        msg = self._level_prefix + self.formatted(**kwargs) + end
+        msg = self.formatted(**kwargs) + end
         if self._level_prefix:
             msg = f'{self._level_prefix}: {msg}'
         if file:
@@ -108,6 +108,8 @@ class FormatStr(str):
                 if flush:
                     f.flush()
         else:
+            if not (stdout or stderr):
+                return
             io = sys.stdout if stdout else sys.stderr
             io.write(msg)
             if flush:

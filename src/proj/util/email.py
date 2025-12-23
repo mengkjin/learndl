@@ -109,7 +109,7 @@ class Email:
              confirmation_message = ''):
         
         if not MACHINE.server:
-            Logger.alert('not in my server , skip sending email')
+            Logger.alert('not in my server , skip sending email' , level = 1)
             return
 
         cls.setup_settings(server)

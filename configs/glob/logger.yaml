@@ -19,53 +19,53 @@ formatters:
   color:
     fmt: '%(log_color)s%(asctime)s|LEVEL:%(levelname)-9s|%(reset_log_color)s: %(message_log_color)s%(message)s'
     log_colors:
-      CRITICAL: bold,white,bg_purple
-      DEBUG: bold,white
-      ERROR: bold,white,bg_red
+      DEBUG: bold,white,bg_light_black
       INFO: bold,white,bg_green
       WARNING: bold,black,bg_yellow
+      ERROR: bold,white,bg_red
+      CRITICAL: bold,white,bg_purple
     secondary_log_colors:
       message:
-        CRITICAL: bold,white,bg_purple
-        DEBUG: reset
-        ERROR: bold,red
+        DEBUG: bold,light_black
         INFO: bold,green
+        ERROR: bold,red
         WARNING: bold,yellow
+        CRITICAL: bold,white,bg_purple
       reset:
-        CRITICAL: reset
         DEBUG: reset
-        ERROR: reset
         INFO: reset
         WARNING: reset
+        ERROR: reset
+        CRITICAL: reset
   level:
     fmt: '%(asctime)s|LEVEL:%(levelname)-9s|: %(message)s'
-    level_fmts:
-      DEBUG: '%(message)s'
-      INFO: '%(message)s'
+    # level_fmts:
+    #  DEBUG: '%(message)s'
+    #  INFO: '%(message)s'
   levelcolor:
     fmt: '%(log_color)s%(asctime)s|LEVEL:%(levelname)-9s|%(reset_log_color)s: %(message_log_color)s%(message)s'
-    level_fmts:
-      DEBUG: '%(message_log_color)s%(message)s'
-      INFO: '%(message_log_color)s%(message)s'
+    #level_fmts:
+    #  DEBUG: '%(message_log_color)s%(message)s'
+    #  INFO: '%(message_log_color)s%(message)s'
     log_colors:
-      CRITICAL: bold,white,bg_purple
-      DEBUG: reset
-      ERROR: bold,white,bg_red
+      DEBUG: bold,white,bg_light_black
       INFO: bold,white,bg_green
       WARNING: bold,black,bg_yellow
+      ERROR: bold,white,bg_red
+      CRITICAL: bold,white,bg_purple
     secondary_log_colors:
       message:
-        CRITICAL: bold,white,bg_purple
-        DEBUG: reset
-        ERROR: bold,red
+        DEBUG: bold,light_black
         INFO: bold,green
+        ERROR: bold,red
         WARNING: bold,yellow
+        CRITICAL: bold,white,bg_purple
       reset:
-        CRITICAL: reset
         DEBUG: reset
-        ERROR: reset
         INFO: reset
         WARNING: reset
+        ERROR: reset
+        CRITICAL: reset
   standard:
     fmt: '%(asctime)s|LEVEL:%(levelname)-9s|: %(message)s'
 handlers:

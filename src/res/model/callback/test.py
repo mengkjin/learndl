@@ -26,17 +26,15 @@ class BasicTestResult(BaseCallBack):
     def path_test_df(self): return self.config.model_base_path.snapshot('test_by_date.feather')
 
     def save_test_df(self , verbose = False):
-        df = self.get_test_df(all_dates = True)
+        df = self.get_test_df()
         DB.save_df(df , self.path_test_df , overwrite = True , verbose = False)
         if verbose:
             Logger.stdout(f'Basic Test Result saved to {self.path_test_df}') 
 
-    def get_test_df(self , all_dates = False) -> pd.DataFrame:
+    def get_test_df(self) -> pd.DataFrame:
         df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date]) if self.config.is_resuming else self.test_df_date
         df = df.drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True)
-        if not all_dates:
-            df = df.query('date in @self.test_full_dates').reset_index(drop=True)
         return df
 
     def on_test_start(self): 
@@ -61,8 +59,8 @@ class BasicTestResult(BaseCallBack):
         with Logger.ParagraphIII('Test Summary'): 
             self.save_test_df()
 
-            df_date = self.get_test_df(False)
-            Logger.stdout(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
+            df_date = self.get_test_df().query('date in @self.test_full_dates')
+            Logger.caption(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
 
             if df_date['model_date'].nunique() == 1 or self.config.module_type in ['factor' , 'db']:
                 # only one model_date, calculate by year
@@ -206,7 +204,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def display_export(self):
         with Logger.ParagraphIII('Display Analytic Results'):
             for name in self.display_tables:
-                Logger.stdout(f'Table: {name}:')
+                Logger.caption(f'Table: {name.title()}:')
                 df = self.test_results[name].copy()
                 df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
                 for col in df.columns:
@@ -219,7 +217,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 Display(df)
 
             for name in self.display_figures:
-                Logger.stdout(f'Figure: {name}:')
+                Logger.caption(f'Figure: {name.title()}:')
                 Display(self.test_figures[name])
 
             dfs_to_excel(self.test_results , self.path_data , print_prefix='Analytic datas')

@@ -307,7 +307,7 @@ class TaskDatabase:
             cursor.execute("DELETE FROM task_records WHERE task_id = ?", (task_id,))
             if verbose:
                 if cursor.rowcount == 0:
-                    Logger.warning(f"Task ID {task_id} not found, nothing to delete")
+                    Logger.alert(f"Task ID {task_id} not found, nothing to delete" , level = 1)
                 else:
                     Logger.success(f"Task ID {task_id} successfully deleted")
 
@@ -319,7 +319,7 @@ class TaskDatabase:
             cursor.execute("DELETE FROM queue_records WHERE queue_id = ?", (queue_id,))
             if verbose:
                 if cursor.rowcount == 0:
-                    Logger.warning(f"Queue ID {queue_id} not found, nothing to delete")
+                    Logger.alert(f"Queue ID {queue_id} not found, nothing to delete" , level = 1)
                 else:
                     Logger.success(f"Queue ID {queue_id} successfully deleted")
     

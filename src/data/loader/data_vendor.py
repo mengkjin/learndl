@@ -107,7 +107,7 @@ class DataVendor:
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
         else:
-            Logger.alert(f'EmptyData: None of {names} found in {start_dt} ~ {end_dt}')
+            Logger.alert(f'EmptyData: None of {names} found in {start_dt} ~ {end_dt}' , level = 1)
             return DataBlock()
 
     @classmethod
@@ -123,19 +123,6 @@ class DataVendor:
         secid = self.secid()
         return DataBlock(np.random.randn(len(secid),len(date),1,nfactor),
                          secid,date,[f'factor{i+1}' for i in range(nfactor)])
-
-    def get_returns_block(self , start_dt : int , end_dt : int):
-        td_within = self.td_within(start_dt , end_dt , updated = True)
-        if (not hasattr(self , 'day_ret')) or (not np.isin(td_within , self.day_ret.date).all()):
-            with Silence():
-                pre_start_dt = CALENDAR.cd(start_dt , -20)
-                extend_td_within = self.td_within(pre_start_dt , end_dt)
-                blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap'] , inplace = False).as_tensor()
-                values = blk.values[:,1:] / blk.values[:,:-1] - 1
-                secid  = blk.secid
-                date   = blk.date[1:]
-                new_date = blk.date_within(start_dt , end_dt)
-                self.day_ret = DataBlock(values , secid , date , ['close' , 'vwap']).align_date(new_date)
 
     def update_named_data_block(
         self,
@@ -166,32 +153,40 @@ class DataVendor:
         dates = self.td_within(target_start , target_end)
 
         if len(early_dates := dates[dates < block0.min_date]) > 0:
-            block = BlockLoader(db_src , db_key).load_block(early_dates.min() , early_dates.max() , silent = True).adjust_price()
-            block0 = block0.merge_others(block)
+            block = BlockLoader(db_src , db_key).load(early_dates.min() , early_dates.max() , silent = True).adjust_price()
+            block0 = block0.merge_others(block , inplace = True)
         if len(late_dates := dates[dates > block0.max_date]) > 0:
-            block = BlockLoader(db_src , db_key).load_block(late_dates.min() , late_dates.max() , silent = True).adjust_price()
-            block0 = block0.merge_others(block)
+            block = BlockLoader(db_src , db_key).load(late_dates.min() , late_dates.max() , silent = True).adjust_price()
+            block0 = block0.merge_others(block , inplace = True)
         if not Silence.silent:
-            Logger.info(f'DATAVENDOR: {data_key} expand from {loaded_start} ~ {loaded_end} to {target_start} ~ {target_end}')
+            Logger.success(f'DATAVENDOR: {data_key} expand from {loaded_start} ~ {loaded_end} to {target_start} ~ {target_end}')
         setattr(self , f'_block_{data_key}' , block0)
 
-    @property
-    def daily_quotes(self) -> DataBlock:
-        return getattr(self , f'_block_daily_quotes' , DataBlock())
-
-    @property
-    def risk_exp(self) -> DataBlock:
-        return getattr(self , f'_block_risk_exp' , DataBlock())
+    def update_return_block(self , start_dt : int , end_dt : int):
+        td_within = self.td_within(start_dt , end_dt , updated = True)
+        daily_ret = getattr(self , f'_block_daily_ret' , DataBlock())
+        if daily_ret.date is None or not np.isin(td_within , daily_ret.date).all():
+            pre_start_dt = CALENDAR.cd(start_dt , -20)
+            extend_td_within = self.td_within(pre_start_dt , end_dt)
+            blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).as_tensor().ffill()
+            blk.update(values = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan))
+            blk = blk.align_date(blk.date_within(start_dt , end_dt) , inplace = True)
+            setattr(self , f'_block_daily_ret' , blk)
 
     def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , extend = 0) -> DataBlock:
         with Silence(True):
             self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend)
-        return self.daily_quotes
+        return getattr(self , f'_block_daily_quotes' , DataBlock())
 
     def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , extend = 0) -> DataBlock:
         with Silence(True):
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend)
-        return self.risk_exp
+        return getattr(self , f'_block_risk_exp' , DataBlock())
+
+    def get_returns_block(self , start_dt : int , end_dt : int):
+        with Silence(True):
+            self.update_return_block(start_dt , end_dt)
+        return getattr(self , f'_block_daily_ret' , DataBlock())
     
     def day_quote(self , date : int | Any , price : Literal['close' , 'vwap' , 'open'] = 'close'):
         df = self.TRADE.get_trd(date , ['secid' , 'adjfactor' , price])
@@ -261,32 +256,26 @@ class DataVendor:
         assert lag > 0 , f'lag must be positive : {lag}. If you want to use next day\'s return, set lag = 1'
         date_min = self.td(date.min() , -10)
         date_max = self.td(int(date.max()) , nday + lag + 10)
-        self.get_returns_block(date_min , date_max)
         full_date = self.td_within(date_min , date_max)
-
-        block = self.day_ret.align(secid , full_date , [ret_type] , inplace=False).as_tensor()
-        block.values = torch.nn.functional.pad(block.values[:,lag:] , (0,0,0,0,0,lag) , value = torch.nan)
-
-        new_value = block.values.unfold(1 , nday , 1).exp().prod(dim = -1) - 1
-        feature   = ['ret']
-
-        new_block = DataBlock(new_value , secid , full_date[:new_value.shape[1]] , feature).align_date(date)
-        return new_block
+        blk = self.get_returns_block(date_min , date_max).align(secid , full_date , ret_type).as_tensor()
+        values = torch.nn.functional.pad(blk.values[:,lag:] , (0,0,0,0,0,lag) , value = torch.nan).unfold(1 , nday , 1).exp().prod(dim = -1) - 1
+        blk.update(values = values , date = full_date[:values.shape[1]] , feature = ['ret']).align_date(date , inplace = True)
+        return blk
     
     def ffmv(self , secid : np.ndarray , date : np.ndarray , prev = True):
         if prev : 
             date = self.td_array(date , -1)
-        blk = self.get_risk_exp(date).align(secid , date , ['weight'] , inplace = False)
+        blk = self.get_risk_exp(date).align(secid , date , ['weight'])
         if prev : 
             blk.date = self.td_array(blk.date , 1)
         return blk
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.style , inplace = False)
+        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.style)
         return blk
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.indus , inplace = False)
+        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.indus)
         return blk
     
     def get_ffmv(self , secid : np.ndarray , d : int):

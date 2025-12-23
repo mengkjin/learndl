@@ -92,8 +92,8 @@ class SpecCB_DSize(BaseCallBack):
 
     def init_buffer(self):
         if self.size_block is None: 
-            self.size_block = BlockLoader('models', 'tushare_cne5_exp', ['size']).load_block().as_tensor()
-        self.data.buffer['size'] = self.size_block.align(secid = self.data.y_secid , date = self.data.y_date).values.squeeze()
+            self.size_block = BlockLoader('models', 'tushare_cne5_exp', ['size']).load().as_tensor()
+        self.data.buffer['size'] = self.size_block.align(self.data.y_secid , self.data.y_date).values.squeeze()
     def fill_batch_data(self):
         i0 = self.batch_data.i[:,0].cpu()
         i1 = self.batch_data.i[:,1].cpu()

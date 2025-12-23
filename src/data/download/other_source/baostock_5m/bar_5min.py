@@ -54,13 +54,13 @@ def updatable(date , last_date):
     return (len(updated_dates()) == 0) or (date > 0 and date > CALENDAR.cd(last_date , 6))
 
 def x_mins_update_dates(date) -> list[int]:
-    all_dates = np.array([])
+    all_relevant_dates = np.array([])
     for x_min in [10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , '5min')
         stored_dates = DB.dates('trade_ts' , f'{x_min}min')
         dates = CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates)
-        all_dates = np.concatenate([all_dates , dates])
-    return np.unique(all_dates).astype(int).tolist()
+        all_relevant_dates = np.concatenate([all_relevant_dates , dates])
+    return np.unique(all_relevant_dates).astype(int).tolist()
 
 def x_mins_to_update(date):
     x_mins : list[int] = []
@@ -179,7 +179,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.alert(f'baostock 5min {last_dt} - {dt} failed')
+                Logger.alert(f'baostock 5min {last_dt} - {dt} failed' , level = 1)
             elif verbosity > 1 :
                 Logger.success(f'baostock 5min {last_dt} - {dt} success')
 

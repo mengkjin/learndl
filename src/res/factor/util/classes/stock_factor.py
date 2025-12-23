@@ -287,7 +287,7 @@ class StockFactor:
             self._df = factor
         elif isinstance(factor , DataBlock):
             if factor.empty:
-                factor = factor.align_feature(factor_names)
+                factor = factor.align_feature(factor_names , inplace = True)
             self._blk = factor
         else:
             raise TypeError(f'Unknown factor type: {type(factor)}')
@@ -468,7 +468,7 @@ class StockFactor:
                 df = df[factor_name]
             return StockFactor(df)
         else:
-            return StockFactor(self._blk.align(secid , date , factor_name , inplace = False))
+            return StockFactor(self._blk.align(secid , date , factor_name))
 
     def within(self , benchmark : Benchmark | str | None , recalculate = False) -> 'StockFactor':
         """

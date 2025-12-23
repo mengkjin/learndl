@@ -173,18 +173,17 @@ class DataModule(BaseDataModule):
             
         db_mapping = self.config.db_mapping
         assert db_mapping.name == self.config.model_module , (db_mapping.name , self.config.model_module)
-        self.datas.x[db_mapping.name] = db_mapping.load_block(test_dates[0] , test_dates[-1]).\
-            align_secid_date(self.datas.secid , self.datas.date)
+        self.datas.x[db_mapping.name] = db_mapping.load_block(test_dates[0] , test_dates[-1]).align_secid_date(self.datas.secid , self.datas.date)
         self.config.update_data_param(self.datas.x)
 
     def setup_loader_prepare(self):
-        
+        seq_lens = self.seq_lens
         x_keys = self.input_keys
-        y_keys = [k for k in self.seq_lens.keys() if k not in x_keys]
-        assert all([self.seq_lens[xkey] > 0 for xkey in x_keys]) , (self.seq_lens , x_keys)
-        assert all([self.seq_lens[ykey] > 0 for ykey in y_keys]) , (self.seq_lens , y_keys)
-        y_extend = max([self.seq_lens[ykey] for ykey in y_keys]) if y_keys else 1
-        x_extend = max([self.seq_lens[xkey] * self.seq_steps[xkey] for xkey in x_keys]) if x_keys else 1
+        y_keys = [k for k in seq_lens.keys() if k not in x_keys]
+        assert all([seq_lens[xkey] > 0 for xkey in x_keys]) , (seq_lens , x_keys)
+        assert all([seq_lens[ykey] > 0 for ykey in y_keys]) , (seq_lens , y_keys)
+        y_extend = max([seq_lens[ykey] for ykey in y_keys]) if y_keys else 1
+        x_extend = max([seq_lens[xkey] * self.seq_steps[xkey] for xkey in x_keys]) if x_keys else 1
         d_extend = x_extend + y_extend - 1
 
         if self.stage == 'fit':
@@ -405,7 +404,7 @@ class DataModule(BaseDataModule):
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
             if not Silence.silent and (divlast or histnorm): 
-                Logger.debug(f'Pre-Norming {mdt} : {dict(divlast=divlast, histnorm=histnorm)}')
+                Logger.success(f'Pre-Norming {mdt} : {dict(divlast=divlast, histnorm=histnorm)}')
             if divlast: 
                 self.prenorm_divlast.append(mdt)
             if histnorm: 
