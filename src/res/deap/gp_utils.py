@@ -867,7 +867,7 @@ class gpEliteGroup:
         iter_df = iter_df.sort_values(['ib' , 'jb' , 'ik' , 'jk'])
         Logger.stdout(f'Total Correlation Counts : {len(iter_df)}')
         for grp , sub_df in iter_df.groupby(['ib' , 'jb']):
-            ib , jb = grp # type: ignore
+            ib , jb = int(grp[0]) , int(grp[1]) # type: ignore
             Blk_i = self.container[ib].data_to_device(self.device)
             Blk_j = self.container[jb].data_to_device(self.device)
             for _ , (ii,ik,jj,jk) in tqdm(sub_df.loc[:,['ii','ik','jj','jk']].iterrows(),

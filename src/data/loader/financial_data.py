@@ -43,7 +43,7 @@ class FDataAccess(DateDataAccess):
         ann_dt = ann_dt.loc[ann_dt['td_forward'] <= date , :]
         if within_days > 0:
             ann_dt = ann_dt[ann_dt['td_backward'] >= CALENDAR.cd(date , -within_days)]
-        ann_dt = ann_dt[ann_dt['secid'] >= 0].sort_values(['secid' , 'td_backward']).set_index(['secid','end_date'])
+        ann_dt = ann_dt.query('secid >= 0').sort_values(['secid' , 'td_backward']).set_index(['secid','end_date'])
         if latest_n <= 0:
             return ann_dt
         else:

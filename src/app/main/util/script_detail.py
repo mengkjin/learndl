@@ -389,7 +389,7 @@ def direclty_open_file(path : Path | None = None):
         if os.path.exists(pdf_path):
             # Use platform-specific commands to open the file
             if MACHINE.is_windows:  
-                os.startfile(pdf_path)
+                os.startfile(pdf_path) # type: ignore
             elif MACHINE.is_linux or MACHINE.is_macos: 
                 subprocess.run(['open', pdf_path])
             else:

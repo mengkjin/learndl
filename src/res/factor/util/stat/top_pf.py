@@ -102,7 +102,7 @@ def calc_perf_month(account : pd.DataFrame):
     return calc_perf_period(account , 'month')
 
 def calc_exp_style(account : pd.DataFrame):
-    def fetch_exp_style(x : pd.Series) -> pd.DataFrame:
+    def fetch_exp_style(x : pd.Series , **kwargs) -> pd.DataFrame:
         return x.iloc[0].style.loc[:,['active']]
     df = _filter_account(account , pos_model_date=True)
     df = df.loc[:,['start','analytic']].set_index('start' , append=True)
@@ -112,7 +112,7 @@ def calc_exp_style(account : pd.DataFrame):
     return df
 
 def calc_exp_indus(account : pd.DataFrame):
-    def fetch_exp_indus(x : pd.Series) -> pd.DataFrame:
+    def fetch_exp_indus(x : pd.Series , **kwargs) -> pd.DataFrame:
         return x.iloc[0].industry.loc[:,['active']]
     df = _filter_account(account , pos_model_date=True)
     df = df.loc[:,['start','analytic']].set_index('start' , append=True)
@@ -122,7 +122,7 @@ def calc_exp_indus(account : pd.DataFrame):
     return df
 
 def calc_attrib_source(account : pd.DataFrame):
-    def fetch_attrib_source(x : pd.Series) -> pd.DataFrame:
+    def fetch_attrib_source(x : pd.Series , **kwargs) -> pd.DataFrame:
         return x.iloc[0].source.loc[:,['contribution']].rename_axis('source')
     df = _filter_account(account , pos_model_date=True)
     df = df.loc[:,['end','attribution']].set_index('end' , append=True)
@@ -131,7 +131,7 @@ def calc_attrib_source(account : pd.DataFrame):
     return df
 
 def calc_attrib_style(account : pd.DataFrame):
-    def fetch_attrib_style(x : pd.Series) -> pd.DataFrame:
+    def fetch_attrib_style(x : pd.Series , **kwargs) -> pd.DataFrame:
         return x.iloc[0].style.loc[:,['contribution']].rename_axis('style')
     df = _filter_account(account , pos_model_date=True)
     df = df.loc[:,['end','attribution']].set_index('end' , append=True)

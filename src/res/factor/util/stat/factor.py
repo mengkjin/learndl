@@ -126,7 +126,7 @@ def calc_style_corr(factor : StockFactor , benchmark : Benchmark | str | None = 
         return subdf.corr(method='spearman').loc[factor.factor_names, style.columns.values]
     grouped = factor.frame().merge(style, on=['secid', 'date'], how='inner').groupby('date' , observed=True)
     df = grouped.apply(df_style_corr , include_groups = False)
-    df.index.rename(['date','factor_name'], inplace=True)
+    df.index = df.index.set_names(['date','factor_name'])
     df = df.reset_index()
     return df
 

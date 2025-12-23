@@ -248,7 +248,7 @@ class DataVendor:
         q1 = df.merge(quotes , left_on = ['secid' , 'end'] , right_on = ['secid' , 'date'] , how = 'left')[ret_type]
         ret = q1 / q0 - 1
         df['ret'] = ret
-        del df['prev']
+        df.drop(columns = ['prev'] , inplace = True)
         return df
 
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 

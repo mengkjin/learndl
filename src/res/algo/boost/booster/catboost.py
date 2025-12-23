@@ -37,7 +37,7 @@ class CatBoost(BasicBoosterModel):
         verbose_eval    = self.fit_train_param.pop('verbosity') > 0 and not silent
         num_class       = self.fit_train_param.pop('n_bins' , None)
         if 'eval_metric' in self.fit_train_param and self.fit_train_param['eval_metric'] is None: 
-            del self.fit_train_param['eval_metric']
+            self.fit_train_param.pop('eval_metric')
 
         self.fit_train_param.update({
             'random_seed':          self.seed , 

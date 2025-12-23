@@ -345,9 +345,9 @@ class Logger:
             df = pd.DataFrame(
                 getattr(self , 'getstats')(), 
                 columns=pd.Index(['full_name', 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'caller']))
-            df.tottime = df.tottime.round(4)
-            df.cumtime = df.cumtime.round(4)
-            df.full_name = df.full_name.astype(str)
+            df['tottime'] = df['tottime'].round(4)
+            df['cumtime'] = df['cumtime'].round(4)
+            df['full_name'] = df['full_name'].astype(str)
             df_func = pd.DataFrame(
                 [self.decompose_func_str(s) for s in df.full_name] , 
                 columns = pd.Index(['type' , 'name' , 'where' , 'memory']))

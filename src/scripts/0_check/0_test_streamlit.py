@@ -64,15 +64,13 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.alert('error message' , level = 2)
                 Logger.alert('critical message' , level = 3)
                 Logger.skipping('skipping message' , indent = 1)
-                # Logger.exception
-                # Logger.fatal
-                #Logger.skip
                 Logger.conclude(f'cmd is: {" ".join(sys.argv)}' , level = 'info')
                 Logger.conclude(f'this is kwargs: {str(kwargs)}' , level = 'info')
                 Logger.conclude(f'this is an info: {txt}' , level = 'info')
                 Logger.conclude(f'this is an debug: {txt}' , level = 'debug')
                 Logger.conclude(f'critical: lazy message')
                 Logger.conclude(f'this is a warning: {txt}' , level = 'warning')
+                Logger.conclude(f'this is a error: {txt}' , level = 'error')
                 Logger.conclude(f'this is a critical: {txt}' , level = 'critical')
                 Logger.stdout(f'email: {ScriptTool.get_value('email')}')
                 Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}')

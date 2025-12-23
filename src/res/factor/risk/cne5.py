@@ -40,9 +40,9 @@ class DateDfs:
     def trim(self , date : int | None = None) -> None:
         '''trim cache to keep the latest max_len entries'''
         if date and date in self.D: 
-            del self.D[date] 
+            self.D.pop(date) 
         if len(self.D) >= self.max_len: 
-            del self.D[list(self.D.keys())[0]]
+            self.D.pop(list(self.D.keys())[0])
 
     def add(self , v , date : int) -> None:
         '''add a new dataframe to cache'''
@@ -65,7 +65,7 @@ class DateSeriesDict:
     def trim(self , date : int | None = None) -> None:
         '''trim cache to keep the latest max_len entries'''
         if len(self.D) >= self.max_len: 
-            del self.D[list(self.D.keys())[0]]
+            self.D.pop(list(self.D.keys())[0])
         if date not in self.D and date is not None: 
             self.D[date] = {}
 

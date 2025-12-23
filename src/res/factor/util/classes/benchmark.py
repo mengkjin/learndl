@@ -113,7 +113,7 @@ class Benchmark(Portfolio):
         univ  = self.universe(secid , date).to_dataframe()
         factor_val = factor_val.join(univ)
         factor_val.loc[~factor_val['universe'] , factor_list] = np.nan
-        del factor_val['universe']
+        factor_val = factor_val.drop(columns=['universe'])
         return factor_val.dropna(how = 'all')
     
     @classmethod

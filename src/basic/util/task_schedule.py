@@ -78,7 +78,7 @@ class ScheduledTask:
     def complete(self) -> None:
         """complete the task"""
         self.task_path.rename(self.task_path.with_suffix('.done'))
-        del self._instances[self.operator_machine][self.time_key]
+        self._instances[self.operator_machine].pop(self.time_key)
 
     @property
     def task_path(self) -> Path:

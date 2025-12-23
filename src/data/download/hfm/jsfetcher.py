@@ -189,7 +189,7 @@ class JSFetcher:
         if params[key].get('remain_cols'):
             df = df.loc[:,params[key]['remain_cols']]
         df = df.reset_index(drop=True)
-        return df
+        return df.to_frame() if isinstance(df , pd.Series) else df
 
     @classmethod
     def risk_exp(cls , date : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:

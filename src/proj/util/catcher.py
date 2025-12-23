@@ -240,9 +240,9 @@ class OutputDeflector:
         self.original_output = None
         self.is_catching = False
         if hasattr(self, '_catcher_write'):
-            del self._catcher_write
+            delattr(self, '_catcher_write')
         if hasattr(self, '_catcher_flush'):
-            del self._catcher_flush
+            delattr(self, '_catcher_flush')
 
     @property
     def original_std(self) -> 'OutputDeflector | IO | OutputCatcher':
@@ -797,12 +797,12 @@ class HtmlCatcher(OutputCatcher):
 
     def write_stdout(self, text: str):
         """Write stdout to the catcher"""
-        if text := text.strip():
+        if text := text.strip('\n'):
             self.add_output(text, 'stdout')
 
     def write_stderr(self, text: str):
         """Write stderr to the catcher"""
-        if text := text.strip():
+        if text := text.strip('\n'):
             self.add_output(text, 'stderr')
 
     def get_contents(self):

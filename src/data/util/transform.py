@@ -75,7 +75,7 @@ def trade_min_fillna(df : pd.DataFrame):
     # prices to last time price (min != 0)
     for feat in ['open','high','low','vwap','close']: 
         df[feat] = df[feat].where(~df[feat].isna() , df['fix'])
-    del df['fix']
+    df = df.drop(columns=['fix'])
     return df
 
 def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):

@@ -199,7 +199,7 @@ class LgbmPlot:
         pred = np.array(self.lgbm.model.predict(x))
         dtrain = lightgbm.Dataset(x, label=pred)
         _params = deepcopy(self.lgbm.train_param)
-        del _params['early_stopping']
+        _params.pop('early_stopping')
         SDT = lightgbm.train(_params, dtrain, num_boost_round=1)
         fig, ax = plt.subplots(figsize=(12,12))
         ax = lightgbm.plot_tree(SDT, tree_index=0, ax=ax)

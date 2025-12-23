@@ -318,7 +318,7 @@ def gp_filename_converter():
         return f'{defaults.DIR_data}/{rawkey}' + '_zscore' * zscore + '_day.parquet'
     return wrapper
 
-def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_freq='D'):
+def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_freq='D') -> pd.DataFrame:
     '''
     ------------------------ read gp data and convert to torch.tensor ------------------------
     
@@ -343,7 +343,7 @@ def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_fr
         df = df.loc[:,df_columns]# 选取指定股票
     if slice_date is None and df_index is not None: 
         df = df.loc[df_index]
-    return df
+    return df if isinstance(df , pd.DataFrame) else df.to_frame()
 
 def df2ts(x , gp_key = '' , device = None , share_memory = True):
     # additional treatment based by gp_key
@@ -704,7 +704,7 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
     new_log = pd.concat([infos , metrics] , axis = 1)
 
     ir_floor = param.ir_floor * (param.ir_floor_decay**i_iter)
-    new_log.elite = (
+    new_log['elite'] = (
         new_log.valid & # valid factor value
         (new_log.rankir_in_res.abs() > ir_floor) & # higher rankir_res than threshold
         (new_log.rankir_in_raw.abs() > ir_floor) & # higher rankir_res than threshold

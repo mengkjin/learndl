@@ -3,6 +3,7 @@
 /~
 .python-version
 
+
 # Windows:
 Thumbs.db
 ehthumbs.db
@@ -19,6 +20,7 @@ __old_version__/
 /logs
 /models
 /results
+/log.txt
 
 # temporary created files
 /src/app/main/pages/_*.py

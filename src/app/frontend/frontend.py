@@ -705,13 +705,13 @@ class ColoredText(str):
         if message.lower().startswith('error'):
             return 'red'
         elif message.lower().startswith('warning'):
-            return 'yellow'
+            return 'orange'
         elif message.lower().startswith('info'):
             return 'green'
         elif message.lower().startswith('debug'):
             return 'gray'
         elif message.lower().startswith('critical'):
-            return 'blue'
+            return 'violet'
         else:
             return None
         
