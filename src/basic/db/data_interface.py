@@ -360,7 +360,7 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
                     date_colname = date_colname , verbose = verbose , use_alt = use_alt , 
                     parallel = parallel , **kwargs)
     if dates is None:
-        assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
+        assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
