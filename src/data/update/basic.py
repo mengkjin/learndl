@@ -1,4 +1,3 @@
-from abc import abstractmethod , ABCMeta
 from typing import Any , Type , Literal
 from importlib import import_module
 from pathlib import Path
@@ -6,7 +5,7 @@ from pathlib import Path
 from src.proj import PATH , Logger
 from src.basic import CALENDAR
 
-class BasicUpdaterMeta(ABCMeta):
+class BasicUpdaterMeta(type):
     """meta class of BasicUpdater"""
     registry : dict[str , Type['BasicUpdater'] | Any] = {}
     def __new__(cls , name , bases , dct):
@@ -14,12 +13,8 @@ class BasicUpdaterMeta(ABCMeta):
         if name != 'BasicUpdater':
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
-            assert 'update' in new_cls.__dict__  , \
-                f'{name} must implement update method'
-            assert 'rollback' in new_cls.__dict__ , \
-                f'{name} must implement rollback method'
-            assert 'recalculate_all' in new_cls.__dict__ , \
-                f'{name} must implement recalculate_all method'
+            assert 'update_all' in new_cls.__dict__  , \
+                f'{name} must implement update_all method'
             cls.registry[name] = new_cls
         return new_cls
 
@@ -67,6 +62,5 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
         cls._rollback_date = rollback_date
 
     @classmethod
-    @abstractmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
         pass
