@@ -13,6 +13,10 @@ from typing import Any , Literal , Type
 from src.proj.env import PATH , ProjStates , ProjConfig
 from src.proj.func import Duration , Display , stdout , stderr , FormatStr
 
+_type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
+_levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
+_levels_palette : list[str] = ['lightgreen' , 'gray' , 'lightyellow' , 'lightred' , 'purple']
+
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""
     def __init__(self, fmt=None, datefmt=None, level_fmts=None):
@@ -85,32 +89,34 @@ class Logger:
     """
     custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'
     method include:
-        stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
-        success: custom stdout with green color
-        remark: custom stdout , level [0,1,2,3] indicate the color of the message: 0 for blue (normal) , 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical) (blue color stdout)
-        skipping: custom skipping message (gray color stdout)
-        highlight: custom cyan colored Highlight level message (cyan color stdout)
-        info: Info level stderr
-        debug: Debug level stderr
-        warning: Warning level stderr
-        error: Error level stderr
-        critical: Critical level stderr
-        divider: Divider stdout (use info level)
-        conclude: Add the message to the conclusions for later use
-        draw_conclusions: wrap the conclusions: printout , merge into a single string and clear them
-        get_conclusions: Get the conclusions of given level
-        ParagraphI: Format Enclosed process to count time
-        ParagraphII: Format Enclosed process to count time
-        ParagraphIII: Format enclosed message
-        Profiler: Profiler class for profiling the code, show the profile result in the best way
+        stdout level:
+            - stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
+            - divider: long line on stdout
+            - success (lightgreen) , skipping (gray) , footnote (gray) , alert1 (lightyellow) , alert2 (lightred) , alert3 (purple)
+
+        stderr level:
+            - info (green) , debug (gray) , warning (yellow) , error (red) , critical (purple)
+
+        stdout / stderr level (depends on the prefix):
+            -highlight (cyan) , remark (lightblue)
+
+        conclusions:
+            - conclude(message , level = 'critical') to add the message to the conclusions for later use
+            - draw_conclusions: wrap the conclusions: output to stdout , merge into a single string and clear them
+            - get_conclusions(level = 'critical'): Get the conclusions of given level
+        
+        paragraph:
+            - ParagraphI: start and end message with warning level
+            - ParagraphII: start and end message with info level
+            - ParagraphIII: start and end message with highlight level
+
+        profiler:
+            - Profiler: Profiler class for profiling the code, show the profile result in the best way
     """
     _instance : 'Logger | Any' = None
-    _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
-    _levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
-    _levels_palette : list[str] = ['lightgreen' , 'gray' , 'lightyellow' , 'lightred' , 'purple']
     _conclusions : dict[_type_levels , list[str]] = {level : [] for level in _levels}
     _config = log_config()
-    log = new_log(_config)
+    _log = new_log(_config)
 
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
@@ -120,7 +126,7 @@ class Logger:
     @classmethod
     def reset_logger(cls):
         """reset the log writer"""
-        reset_logger(cls.log , cls._config)
+        reset_logger(cls._log , cls._config)
 
     @classmethod
     def log_only(cls , *args , **kwargs):
@@ -218,31 +224,31 @@ class Logger:
     def debug(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Debug level stderr"""
         if vb_level <= ProjConfig.verbosity:
-            cls.log.debug(FormatStr(*args , indent = indent) , **kwargs)
+            cls._log.debug(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def info(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Info level stderr"""
         if vb_level <= ProjConfig.verbosity:
-            cls.log.info(FormatStr(*args , indent = indent) , **kwargs)
+            cls._log.info(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def warning(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Warning level stderr"""
         if vb_level <= ProjConfig.verbosity:
-            cls.log.warning(FormatStr(*args , indent = indent) , **kwargs)
+            cls._log.warning(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def error(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Error level stderr"""
         if vb_level <= ProjConfig.verbosity:
-            cls.log.error(FormatStr(*args , indent = indent) , **kwargs)
+            cls._log.error(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def critical(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Critical level stderr"""
         if vb_level <= ProjConfig.verbosity:
-            cls.log.critical(FormatStr(*args , indent = indent) , **kwargs)
+            cls._log.critical(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-' , color : str | None = None , vb_level : int = 0):
@@ -260,7 +266,7 @@ class Logger:
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
         with cls.ParagraphIII('Final Conclusions'):
-            for level , color in zip(cls._levels , cls._levels_palette):
+            for level , color in zip(_levels , _levels_palette):
                 if not cls._conclusions[level]:
                     continue
                 stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = color)

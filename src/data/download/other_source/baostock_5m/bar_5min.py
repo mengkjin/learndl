@@ -182,8 +182,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
                 Logger.alert1(f'baostock 5min {last_dt} - {dt} failed' , indent = 2)
             else:
                 Logger.stdout(f'baostock 5min {last_dt} - {dt} downloaded' , indent = 2 , vb_level = 2)
-        Logger.success(f'Success : baostock 5min at {CALENDAR.dates_str([last_dt , dt])} downloaded' , indent = 1)
-
+        
     dts = x_mins_update_dates(date)
     for dt in dts:
         for x_min in x_mins_to_update(dt):
@@ -191,6 +190,5 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
             DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt)
         Logger.stdout(f'baostock {x_min}min bars at {dt} transformed' , indent = 2 , vb_level = 2)
-    Logger.success(f'Success : baostock {x_min}min bars at {CALENDAR.dates_str(dts)} transformed' , indent = 1)
-
+    
     return True

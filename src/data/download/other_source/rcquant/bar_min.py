@@ -212,7 +212,8 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
             Logger.alert1(f'rcquant {data_type} bar min {dt} failed' , indent = 2)
         else:
             Logger.stdout(f'rcquant {data_type} bar min {dt} downloaded' , indent = 2 , vb_level = 2)
-    Logger.success(f'Success : rcquant {data_type} bar min at {CALENDAR.dates_str(dts)} downloaded' , indent = 1)
+    if len(dts) > 0:
+        Logger.success(f'Success : rcquant {data_type} bar min at {CALENDAR.dates_str(dts)} downloaded' , indent = 1)
 
     dts = x_mins_target_dates(data_type , date)
     for dt in dts:
@@ -222,7 +223,8 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
             x_min_df = trade_min_reform(min_df , x_min , 1)
             DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = 2)
         Logger.stdout(f'rcquant {data_type} X-min bars at {dt} transformed' , indent = 2 , vb_level = 2)
-    Logger.success(f'Success : rcquant {data_type} X-min bars at {CALENDAR.dates_str(dts)} transformed' , indent = 1)
+    if len(dts) > 0:
+        Logger.success(f'Success : rcquant {data_type} X-min bars at {CALENDAR.dates_str(dts)} transformed' , indent = 1)
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):

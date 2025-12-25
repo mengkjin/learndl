@@ -134,7 +134,7 @@ class AutoRunTask:
         self.end_time = datetime.now()
 
         if exc_type is not None:
-            # traceback.print_exc()
+            traceback.print_exc()
             self.status = 'Error'
             self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
