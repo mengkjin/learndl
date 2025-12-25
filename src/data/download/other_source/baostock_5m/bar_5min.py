@@ -37,7 +37,7 @@ def baostock_secdf(date : int):
     secdf['secid'] = secdf['code'].str.slice(3).astype(int)
     secdf['is_sec'] = ((secdf['market'] == 'sh') * (secdf['secid'] >= 600000) + \
         (secdf['market'] == 'sz') * (secdf['secid'] < 600000)) * (~secdf['code_name'].str.contains('指数'))
-    DB.save_df(secdf , path , verbose = False)
+    DB.save_df(secdf , path , vb_level = 99)
     return secdf
 
 def baostock_past_dates(file_type : Literal['secdf' , '5min']):
@@ -125,7 +125,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 assert rs is not None , f'{rs} is None , corrupted data'
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
-                    DB.save_df(result , tmp_file_path(start_dt , end_dt , code) , verbose = False)
+                    DB.save_df(result , tmp_file_path(start_dt , end_dt , code) , vb_level = 99)
 
                 if i % 100 == 0:
                     Logger.success(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
@@ -146,10 +146,10 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
         df : pd.DataFrame = df_all.query('date == @date_str')
         date = int(str(date_str).replace('-', ''))
         df = df.copy().reset_index(drop = True).assign(date = date)
-        DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , verbose = False)
+        DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = 99)
 
         df = baostock_5min_to_normal_5min(df)
-        DB.save(df , 'trade_ts' , '5min' , date = date , verbose = True)
+        DB.save(df , 'trade_ts' , '5min' , date = date)
     # del after : No!
     '''
     if first_n <= 0:
@@ -169,7 +169,7 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10 , verbosity : int = 1):
+def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
     pending_dt = pending_date()
     end_dt = CALENDAR.update_to() if date is None else date
     if pending_dt == end_dt: 
@@ -179,15 +179,18 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.alert(f'baostock 5min {last_dt} - {dt} failed' , level = 1)
-            elif verbosity > 1 :
-                Logger.success(f'baostock 5min {last_dt} - {dt} success')
+                Logger.alert1(f'baostock 5min {last_dt} - {dt} failed' , indent = 2)
+            else:
+                Logger.stdout(f'baostock 5min {last_dt} - {dt} downloaded' , indent = 2 , vb_level = 2)
+        Logger.success(f'Success : baostock 5min at {CALENDAR.dates_str([last_dt , dt])} downloaded' , indent = 1)
 
-    for dt in x_mins_update_dates(date):
-        Logger.stdout(f'Transform: sec X-min bars at {dt} from source baostock')
+    dts = x_mins_update_dates(date)
+    for dt in dts:
         for x_min in x_mins_to_update(dt):
             five_min_df = DB.load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
-            DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
+            DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt)
+        Logger.stdout(f'baostock {x_min}min bars at {dt} transformed' , indent = 2 , vb_level = 2)
+    Logger.success(f'Success : baostock {x_min}min bars at {CALENDAR.dates_str(dts)} transformed' , indent = 1)
 
     return True

@@ -134,7 +134,7 @@ class AutoRunTask:
         self.end_time = datetime.now()
 
         if exc_type is not None:
-            traceback.print_exc()
+            # traceback.print_exc()
             self.status = 'Error'
             self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
@@ -143,7 +143,7 @@ class AutoRunTask:
         self.error_messages.extend(Logger.get_conclusions('error'))
         if not self.error_messages:
             dur = Duration(self.end_time - self.init_time)
-            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y%m%d %H:%M:%S")} successfully finished at {self.end_time.strftime("%Y%m%d %H:%M:%S")} , cost {dur}')
+            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} successfully finished at {self.end_time.strftime("%Y-%m-%d %H:%M:%S")} , cost {dur}')
         self.exit_message = Logger.draw_conclusions()
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)

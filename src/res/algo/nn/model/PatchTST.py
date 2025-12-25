@@ -26,7 +26,7 @@ class PatchTST(nn.Module):
         norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act_type:str='gelu', 
         res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
-        head_type = 'prediction', verbose:bool=False, **kwargs
+        head_type = 'prediction', **kwargs
     ):
 
         super().__init__()
@@ -53,7 +53,7 @@ class PatchTST(nn.Module):
             shared_embedding=shared_embedding, d_ff=d_ff,norm=norm,
             attn_dropout=attn_dropout, dropout=dropout, act_type=act_type, 
             res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
-            pe=pe, learn_pe=learn_pe, verbose=verbose, **kwargs)
+            pe=pe, learn_pe=learn_pe, **kwargs)
         
         # Head
         if head_type == 'pretrain':
@@ -247,7 +247,7 @@ class PatchTSTEncoder(nn.Module):
     def __init__(self, nvars, num_patch, d_model, n_layers=3, n_heads=8, 
                  d_ff=64, norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu', store_attn=False,
                  res_attention=True, pre_norm=False,
-                 pe='zeros', learn_pe=True, verbose=False, **kwargs):
+                 pe='zeros', learn_pe=True, **kwargs):
 
         super().__init__()
         self.nvars = nvars
@@ -394,11 +394,11 @@ if __name__ == '__main__' :
     model_pretrain = ModelPretrain(nvars = n_inputs, seq_len = seq_len , d_model = d_model, 
                                    patch_len = patch_len, stride = stride, 
                                    res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
-                                   head_dropout = 0, head_type = 'pretrain', individual = False, verbose=True)
+                                   head_dropout = 0, head_type = 'pretrain', individual = False)
     Logger.stdout(model_pretrain(x).shape , model_pretrain.pretrain_label(x).shape)
     
     model_predict = ModelPredict(nvars = n_inputs, seq_len = seq_len , d_model = d_model, 
                                  patch_len = patch_len,  stride = stride, predict_steps = predict_steps ,
                                  res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
-                                 head_dropout = 0, head_type = 'prediction', individual = False, verbose=True)
+                                 head_dropout = 0, head_type = 'prediction', individual = False)
     Logger.stdout(model_predict(x).shape , y.shape)

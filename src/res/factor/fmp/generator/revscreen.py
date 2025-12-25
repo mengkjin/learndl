@@ -35,14 +35,18 @@ class RevScreeningPortfolioCreatorConfig:
             self.screen_alpha_dates = DB.dates(*self.sa_src_key)
 
     @classmethod
-    def init_from(cls , print_info : bool = False , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : int = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v is not None}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
-        if print_info:
-            if use_kwargs : 
-                Logger.stdout(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}' , indent = 1)
-            if drop_kwargs: 
-                Logger.stdout(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}' , indent = 1)
+        if use_kwargs and drop_kwargs: 
+            kwargs_str = f'used kwargs: {use_kwargs}, dropped kwargs: {drop_kwargs}'
+        elif use_kwargs:
+            kwargs_str = f'used kwargs: {use_kwargs}'
+        elif drop_kwargs:
+            kwargs_str = f'dropped kwargs: {drop_kwargs}'
+        else:
+            kwargs_str = 'no kwargs used'
+        Logger.stdout(f'{cls.__name__}.init_from: {kwargs_str}' , indent = indent , vb_level = vb_level)
         return cls(**use_kwargs)
 
     def get_screen_alpha(self , model_date : int , indus = True) -> pd.DataFrame:
@@ -95,8 +99,8 @@ class RevScreeningPortfolioCreator(PortCreator):
     def __init__(self , name : str):
         super().__init__(name)
 
-    def setup(self , print_info : bool = False , **kwargs):
-        self.conf = RevScreeningPortfolioCreatorConfig.init_from(print_info = print_info , **kwargs)
+    def setup(self , indent : int = 1 , vb_level : int = 3 , **kwargs):
+        self.conf = RevScreeningPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         return self
     
     def parse_input(self):

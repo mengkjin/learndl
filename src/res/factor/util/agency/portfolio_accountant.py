@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal , Sequence , Any
 
 from src.proj import ProjStates , Logger
-from src.basic import CONF
+from src.basic import CONF , CALENDAR
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -22,7 +22,8 @@ class AccountConfig:
     attribution : bool = True
     trade_engine : str = 'default'
     daily : bool = False
-    verbosity : int = 1
+    indent : int = 0
+    vb_level : int = 1
     
     @staticmethod
     def get_benchmark(benchmark : Portfolio | Benchmark | str | None = None) -> Portfolio: 
@@ -132,8 +133,8 @@ class PortfolioAccountant:
             return self
             
         port_old = Port.none_port(self.account.index.values[1])
-        if self.config.verbosity > 0:
-            Logger.stdout(f'{self.config.name} has {len(self.account) - 1} account dates from {self.account['start'].values[1]} to {self.account['end'].values[-1]}' , indent = 1)
+        Logger.stdout(f'{self.config.name} has {len(self.account) - 1} account dates at {CALENDAR.dates_str([self.account['start'].values[1] , self.account['end'].values[-1]])}' , 
+                      indent = self.config.indent , vb_level = self.config.vb_level)
         for i , (date , ed) in enumerate(zip(self.account.index.values[1:] , self.account['end'].values[1:])):
             port_new = self.portfolio.get(date) if self.portfolio.has(date) else port_old
             bench = self.config.benchmark.get(date , True)
@@ -148,8 +149,9 @@ class PortfolioAccountant:
             if self.config.attribution: 
                 self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
-            if self.config.verbosity > 1 and (i % 100 == 0 or i == len(self.account) - 2):
-                Logger.stdout(f'{self.config.name} accounting {i} / {len(self.account) - 1} at {date}' , indent = 1)
+            if (i % 100 == 0 or i == len(self.account) - 2):
+                Logger.stdout(f'{self.config.name} accounting {i} / {len(self.account) - 1} at {date}' , 
+                              indent = self.config.indent + 1 , vb_level = self.config.vb_level + 2)
 
         self.account['pf']  = self.account['pf'] - self.account['turn'] * self.config.trade_cost
         self.account['excess'] = self.account['pf'] - self.account['bm']
@@ -186,13 +188,14 @@ class PortfolioAccountant:
                    start : int = -1 , end : int = 99991231 , 
                    analytic = True , attribution = True , 
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-                   daily = False , store = False , verbosity : int = 1):
+                   daily = False , store = False , indent : int = 0 , vb_level : int = 1):
         '''Accounting portfolio through date, if resume is True, will resume from last account date'''
         if isinstance(config_or_benchmark , AccountConfig):
             self.config = config_or_benchmark
         else:
             benchmark = AccountConfig.get_benchmark(config_or_benchmark)
-            self.config = AccountConfig(self.portfolio.name , benchmark , start , end , analytic , attribution , trade_engine , daily , verbosity)
+            self.config = AccountConfig(self.portfolio.name , benchmark , start , end , analytic , attribution , trade_engine , 
+                                        daily , indent = indent , vb_level = vb_level)
         
         for config in self.stored_accounts:
             if config == self.config:

@@ -174,8 +174,8 @@ class SellsideSQLDownloader:
         if not date_intervals: 
             return 
         
-        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} from ' + 
-            f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
+        start , end = date_intervals[0][0] , date_intervals[-1][1]
+        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {len(date_intervals)} periods' , indent = 1)
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
             connection.stay_connect = True
@@ -190,9 +190,9 @@ class SellsideSQLDownloader:
         t0 = datetime.now()
         df = self.query_default(connection , start , end)
         if self.save_data(df):
-            Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(since = t0)}')
+            Logger.success(f'Success : {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, cost {Duration(since = t0)}' , indent = 1)
         else:
-            Logger.alert(f'EmptyData: {self.DB_SRC}/{self.db_key}:{start}-{end}' , level = 1)
+            Logger.alert1(f'No Data : {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}' , indent = 1)
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -206,7 +206,7 @@ class SellsideSQLDownloader:
             try:
                 df = self.make_query(self.default_query , conn , start_dt , end_dt)
             except exc.ResourceClosedError:
-                Logger.alert(f'{self.factor_src} Connection is closed, re-connect' , level = 1)
+                Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
                 conn = connection.connect(reconnect = True)
             i += 1
         if not connection.stay_connect: 
@@ -402,18 +402,18 @@ class SellsideSQLDownloader:
         prompt = f'Download: {cls.__name__} allaround!'
         assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
         assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        Logger.stdout(prompt)
+        Logger.remark(prompt)
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('all' , connection)
 
     @classmethod
     def update(cls):
-        Logger.stdout(f'Download: {cls.__name__} since last update!')
+        Logger.remark(f'Download: {cls.__name__} since last update!')
         try:
             cls.update_since(trace = 0)
         except Exception as e:
-            Logger.alert(f'In {cls.__name__} : Error in update_since: {e}' , level = 2)
+            Logger.error(f'In {cls.__name__} : Error in update_since: {e}')
             traceback.print_exc()
         
 if __name__ == '__main__':

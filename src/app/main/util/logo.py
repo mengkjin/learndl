@@ -33,7 +33,7 @@ def get_font() -> Path:
             f.write(response.content)
     else:
         Logger.error(f"download failed: {response.status_code}")
-        Logger.alert("please download the font file and put it in the fonts directory" , level = 2)
+        Logger.alert2("please download the font file and put it in the fonts directory")
         raise Exception("download failed")
     
     # 2. unzip

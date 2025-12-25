@@ -16,8 +16,8 @@ plotter = Plotter(test_title(test_type))
 class TopCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
-    def calc(self , account : pd.DataFrame , verbosity = 0):
-        with self.calc_manager(f'{self.__class__.__name__} calc' , verbosity = verbosity , indent = 1): 
+    def calc(self , account : pd.DataFrame , indent : int = 1 , vb_level : int = 1):
+        with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account)
         return self
     
@@ -118,20 +118,21 @@ class TopFMPTest(BaseFactorAnalyticTest):
     ]
 
     def generate(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
-                 n_bests = [20,30,50,100] , verbosity = 2):
+                 n_bests = [20,30,50,100] , indent : int = 0 , vb_level : int = 1):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
-        self.update_kwargs(n_bests = n_bests , verbosity = verbosity)
+        self.update_kwargs(n_bests = n_bests)
         self.portfolio_group = PortfolioGroupBuilder(
-            'top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , start_dt = self.start_dt , end_dt = self.end_dt , **self.kwargs)
+            'top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , 
+            caller = self , start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-             n_bests = [20,30,50,100] , verbosity = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
-            self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
+             n_bests = [20,30,50,100] , indent : int = 0 , vb_level : int = 1 , **kwargs):
+        self.generate(factor , benchmark , n_bests = n_bests , indent = indent , vb_level = vb_level)
+        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
-                task.calc(self.account , verbosity = verbosity - 1) 
+                task.calc(self.account , indent = indent + 1 , vb_level = vb_level + 1) 
         return self
     
     def update_kwargs(self , n_bests = [20,30,50,100] , **kwargs):

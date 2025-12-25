@@ -47,6 +47,8 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     UPDATE_FREQ : Literal['d' , 'w' , 'm' , ''] = ''
     DB_SRC      : str = ''
     DB_KEY      : str = ''
+
+    _stdout_indent : int = 1
     
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}Fetcher(type={self.DB_TYPE},db={self.DB_SRC}/{self.DB_KEY},start={self.START_DATE},freq={self.UPDATE_FREQ})'
@@ -59,6 +61,10 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         return f'{name}()'
 
     @classmethod
+    def set_stdout_indent(cls , indent : int):
+        cls._stdout_indent = indent
+
+    @classmethod
     def load_tasks(cls):
         task_path = Path(__file__).parent.with_name('task')
         for path in sorted(task_path.rglob('*.py')):
@@ -67,7 +73,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
 
     @abstractmethod
     def get_data(self , date : int | Any = None , date2 : int | Any = None) -> pd.DataFrame: 
-        """get required dataframe at date""" 
+        """get required dataframe on given date""" 
 
     @abstractmethod
     def target_dates(self) -> list[int] | np.ndarray: 
@@ -193,17 +199,16 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         if not self.db_by_name:
             assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
         for date in dates: 
-            DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
+            DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , indent = 2)
 
     def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10) -> None:
         """update the fetcher with retries"""
         dates = self.target_dates()
 
         if len(dates) == 0: 
-            Logger.skipping(f'{self.__class__.__name__} already updated!')
+            Logger.skipping(f'{self.__class__.__name__} already fetched!' , indent = self._stdout_indent)
             return
         
-        Logger.stdout(f'Download: {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
         while timeout_max_retries >= 0:
             try:
                 self.update_dates(dates)
@@ -212,7 +217,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                     if timeout_max_retries <= 0: 
                         Logger.warning(f'max retries reached: {e}')
                     else:
-                        Logger.alert(f'{e} , wait {timeout_wait_seconds} seconds' , level = 1)
+                        Logger.alert1(f'{e} , wait {timeout_wait_seconds} seconds' , indent = self._stdout_indent)
                         time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
                     Logger.error(e)
@@ -225,6 +230,8 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
+        date_str = f'dates {dates[0]} ~ {dates[-1]}' if len(dates) > 1 else f'date {dates[0]}'
+        Logger.success(f'Success : {self.__class__.__name__} fetched {date_str}' , indent = self._stdout_indent)
 
     def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = 200 , **kwargs) -> pd.DataFrame:
         """iterate fetch from tushare"""
@@ -363,4 +370,4 @@ class RollingFetcher(TushareFetcher):
                 subdf = df.query(f'{self.ROLLING_DATE_COL} == @date').copy()
                 if not self.SAVEING_DATE_COL: 
                     subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
-                DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)
+                DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , indent = 2)

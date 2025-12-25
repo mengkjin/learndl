@@ -45,8 +45,8 @@ class BaseFactorAnalyticCalculator(ABC):
         return name.lower() in [cls.__name__.lower() , cls.task_name()]
 
     class calc_manager:
-        def __init__(self , *args , verbosity = 0 , **kwargs):
-            self.timer = Timer(*args , silent = verbosity < 1 , **kwargs)
+        def __init__(self , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+            self.timer = Timer(*args , indent = indent , vb_level = vb_level , **kwargs)
         def __enter__(self):
             self.timer.__enter__()
             warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
@@ -64,8 +64,8 @@ class BaseFactorAnalyticCalculator(ABC):
     def calc(self , *args , **kwargs):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
-    def plot(self , show = False , verbosity = 0): 
-        with Timer(f'{self.__class__.__name__} plot' , silent = verbosity < 1 , exit_only = verbosity < 2 , indent = 1):
+    def plot(self , show = False , indent : int = 0 , vb_level : int = 1): 
+        with Timer(f'{self.__class__.__name__} plot' , indent = indent , vb_level = vb_level):
             if self.calc_rslt.empty: 
                 self.figs = {}
                 return self
@@ -117,23 +117,23 @@ class BaseFactorAnalyticTest(ABC):
     @classmethod
     def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
                  test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
-                 verbosity = 2 , start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
+                 indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
         pm = cls(test_name , test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
-        pm.calc(StockFactor(factor) , benchmark , verbosity = verbosity)
-        pm.plot(show = False , verbosity = verbosity)
+        pm.calc(StockFactor(factor) , benchmark , indent = indent , vb_level = vb_level)
+        pm.plot(show = False , indent = indent , vb_level = vb_level)
         return pm
 
     @abstractmethod
-    def calc(self , factor : StockFactor , *args , verbosity = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
+    def calc(self , factor : StockFactor , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
-                task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
+                task.calc(factor , *args , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs) 
         return self
 
-    def plot(self , show = False , verbosity = 1):
-        with Timer(f'{self.__class__.__name__}.plot' , silent = verbosity < 1 , exit_only = verbosity < 2):
+    def plot(self , show = False , indent : int = 0 , vb_level : int = 1):
+        with Timer(f'{self.__class__.__name__}.plot' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values(): 
-                task.plot(show = show , verbosity = verbosity - 1)
+                task.plot(show = show , indent = indent + 1 , vb_level = vb_level + 1)
         return self
 
     def get_test_name(self):

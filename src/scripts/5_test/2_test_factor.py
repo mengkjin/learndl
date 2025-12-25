@@ -30,7 +30,7 @@
 from src.api import ModelAPI
 from src.app import ScriptTool
 
-@ScriptTool('test_factor' , '@factor_name' , lock_num = 0)
+@ScriptTool('test_factor' , '@factor_name' , lock_num = 0 , verbosity = 9)
 def main(factor_name : str | None = None , resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert factor_name is not None , 'factor_name is required'
     ModelAPI.test_factor(factor_name , resume = 0 if resume is None else int(resume) , start = start , end = end)

@@ -36,4 +36,4 @@ if __name__ == '__main__':
     api = jsdata.get_api()
     for date in dates:
         df = download_jsdata(date , api = api)
-        DB.save(df , 'trade_js' , 'fut_min' , date , verbose = True)
+        DB.save(df , 'trade_js' , 'fut_min' , date)

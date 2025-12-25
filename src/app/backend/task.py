@@ -292,7 +292,7 @@ class TaskDatabase:
             else:
                 return 'default'
     
-    def del_task(self, task_id: str , verbose: bool = False , check = True , force = False):
+    def del_task(self, task_id: str , check = True , force = False):
         """Delete task and related output files"""
         with self.conn_handler as (conn, cursor):
             if check:
@@ -305,23 +305,21 @@ class TaskDatabase:
                         Logger.warning(f"Task ID {task_id} is not an error task , but force is True , so it will be deleted")
             cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))
             cursor.execute("DELETE FROM task_records WHERE task_id = ?", (task_id,))
-            if verbose:
-                if cursor.rowcount == 0:
-                    Logger.alert(f"Task ID {task_id} not found, nothing to delete" , level = 1)
-                else:
-                    Logger.success(f"Task ID {task_id} successfully deleted")
+            if cursor.rowcount == 0:
+                Logger.alert1(f"Task ID {task_id} not found, nothing to delete")
+            else:
+                Logger.success(f"Task ID {task_id} successfully deleted")
 
-    def del_queue(self, queue_id: str , verbose: bool = False):
+    def del_queue(self, queue_id: str):
         """Delete queue and related tasks"""
         assert False , 'not implemented'
         with self.conn_handler as (conn, cursor):
             cursor.execute("DELETE FROM task_queues WHERE queue_id = ?", (queue_id,))
             cursor.execute("DELETE FROM queue_records WHERE queue_id = ?", (queue_id,))
-            if verbose:
-                if cursor.rowcount == 0:
-                    Logger.alert(f"Queue ID {queue_id} not found, nothing to delete" , level = 1)
-                else:
-                    Logger.success(f"Queue ID {queue_id} successfully deleted")
+            if cursor.rowcount == 0:
+                Logger.alert1(f"Queue ID {queue_id} not found, nothing to delete")
+            else:
+                Logger.success(f"Queue ID {queue_id} successfully deleted")
     
     def get_backup_paths(self):
         return self.conn_handler.all_backup_paths()

@@ -107,7 +107,7 @@ class DataVendor:
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
         else:
-            Logger.alert(f'EmptyData: None of {names} found in {start_dt} ~ {end_dt}' , level = 1)
+            Logger.alert1(f'EmptyData: None of {names} found in {start_dt} ~ {end_dt}')
             return DataBlock()
 
     @classmethod
@@ -153,13 +153,12 @@ class DataVendor:
         dates = self.td_within(target_start , target_end)
 
         if len(early_dates := dates[dates < block0.min_date]) > 0:
-            block = BlockLoader(db_src , db_key).load(early_dates.min() , early_dates.max() , silent = True).adjust_price()
+            block = BlockLoader(db_src , db_key).load(early_dates.min() , early_dates.max() , vb_level = 99).adjust_price()
             block0 = block0.merge_others(block , inplace = True)
         if len(late_dates := dates[dates > block0.max_date]) > 0:
-            block = BlockLoader(db_src , db_key).load(late_dates.min() , late_dates.max() , silent = True).adjust_price()
+            block = BlockLoader(db_src , db_key).load(late_dates.min() , late_dates.max() , vb_level = 99).adjust_price()
             block0 = block0.merge_others(block , inplace = True)
-        if not Silence.silent:
-            Logger.success(f'DATAVENDOR: {data_key} expand from {loaded_start} ~ {loaded_end} to {target_start} ~ {target_end}')
+        Logger.success(f'DATAVENDOR: {data_key} expand from {CALENDAR.dates_str([loaded_start,loaded_end])} to {CALENDAR.dates_str([target_start,target_end])}')
         setattr(self , f'_block_{data_key}' , block0)
 
     def update_return_block(self , start_dt : int , end_dt : int):

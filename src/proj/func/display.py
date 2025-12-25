@@ -3,10 +3,13 @@ from matplotlib.figure import Figure
 from IPython.display import display as raw_display
 from typing import Callable
 
+from src.proj.env import ProjConfig
+from .silence import Silence
+
 __all__ = ['Display']
 
 class Display:
-    """Display the object in the best way"""
+    """Display the object in the best way , vb_level can be set to control display"""
     _instance = None
     _callbacks_before : list[Callable] = []
     _callbacks_after : list[Callable] = []
@@ -16,21 +19,21 @@ class Display:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , obj = None , raise_error = True):
+    def __init__(self , obj = None , vb_level : int = 1):
         """
         display the object if it is not None in the constructor
         example:
             Display(obj) # will create (or use the existing instance) a new instance of the display and also display the object
         """
         if obj is not None:
-            self(obj , raise_error = raise_error)
+            self(obj , vb_level = vb_level)
 
-    def __call__(self , obj , raise_error = True):
+    def __call__(self , obj , **kwargs):
         """
         display the object
         """
         assert obj is not None , "No object to display"
-        self.display(obj , raise_error = raise_error)
+        self.display(obj , **kwargs)
 
     @classmethod
     def set_callbacks(cls , callbacks_before : list[Callable] | None = None, callbacks_after : list[Callable] | None = None):
@@ -56,17 +59,20 @@ class Display:
         cls._callbacks_after.clear()
 
     @classmethod
-    def display(cls , obj , raise_error = True):
+    def display(cls , obj , vb_level : int = 1):
         """
         display the object
         """
+        if Silence.silent or ProjConfig.verbosity < vb_level:
+            return
+
         for callback in cls._callbacks_before:
             callback(obj)
             
         if isinstance(obj , Figure):
-            cls.figure(obj , raise_error = raise_error)
+            cls.figure(obj)
         elif isinstance(obj , pd.DataFrame):
-            cls.data_frame(obj , raise_error = raise_error)
+            cls.data_frame(obj)
         else:
             raw_display(obj)
 
@@ -74,14 +80,10 @@ class Display:
             callback(obj)
 
     @staticmethod
-    def data_frame(df : pd.DataFrame , raise_error = True):
+    def data_frame(df : pd.DataFrame):
         """
         display a pandas dataframe
         """
-        if df is None:
-            if raise_error: 
-                raise ValueError('No dataframe to display')
-            return
         with pd.option_context(
             'display.max_rows', 100,
             'display.max_columns', None,
@@ -91,12 +93,8 @@ class Display:
             raw_display(df)
 
     @staticmethod
-    def figure(fig : Figure , raise_error = True):
+    def figure(fig : Figure):
         """
         display a matplotlib figure
         """
-        if fig is None:
-            if raise_error: 
-                raise ValueError('No figure to display')
-            return
         raw_display(fig)

@@ -130,11 +130,10 @@ class PATH:
         [shutil.copyfile(f'{src}/{base}' , f'{dst}/{base}') for base in bases]
 
     @staticmethod
-    def deltrees(dir : str | Path , bases : list[str] , verbose = True) -> None:
+    def deltrees(dir : str | Path , bases : list[str]) -> None:
         """Delete sub folders in the directory"""
         for base in bases:
-            if verbose: 
-                sys.stderr.write(f'\u001b[31m\u001b[1mDeleting {base} in {dir}\u001b[0m\n')
+            sys.stderr.write(f'\u001b[31m\u001b[1mDeleting {base} in {dir}\u001b[0m\n')
             shutil.rmtree(f'{dir}/{base}')
 
     @staticmethod

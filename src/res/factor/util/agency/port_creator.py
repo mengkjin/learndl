@@ -10,7 +10,7 @@ class PortCreator(ABC):
         self.name = name
 
     @abstractmethod
-    def setup(self , print_info : bool = False , **kwargs): 
+    def setup(self , indent : int = 2 , vb_level : int = 3 , **kwargs): 
         return self
     
     def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 

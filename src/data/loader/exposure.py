@@ -15,7 +15,7 @@ class ExposureAccess(DateDataAccess):
     
     def data_loader(self , date , data_type):
         if data_type in self.DATA_TYPE_LIST: 
-            df = DB.load('exposure' , data_type , date , verbose = False , use_alt = True)
+            df = DB.load('exposure' , data_type , date , vb_level = 99 , use_alt = True)
             if not df.empty: 
                 secid = INFO.get_secid(date) # noqa
                 df = df.query('secid in @secid')

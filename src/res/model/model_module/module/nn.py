@@ -65,8 +65,7 @@ class NNPredictor(BasePredictorModel):
         return self.net(x , *args , **kwargs)
 
     def fit(self):
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model fit start')
+        Logger.stdout('model fit start' , vb_level = 10)
 
         self.new_model()
         for _ in self.trainer.iter_fit_epoches():
@@ -79,13 +78,11 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model fit done')
+        Logger.stdout('model fit done' , vb_level = 10)
 
     def test(self):
         '''test the model inside'''
-        if self.trainer.verbosity > 10:
-            Logger.stdout('model test start')
+        Logger.stdout('model test start' , vb_level = 10)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -93,8 +90,7 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model test done')
+        Logger.stdout('model test done' , vb_level = 10)
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)

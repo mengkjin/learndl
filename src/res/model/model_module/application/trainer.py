@@ -18,8 +18,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def initialize(cls , stage = -1 , resume = -1 , selection = -1 , base_path = None , 
                    override : dict | None = None , schedule_name = None ,
-                   module = None , short_test = None , verbosity = None , 
-                   start = None , end = None ,
+                   module = None , short_test = None , start = None , end = None ,
                    **kwargs):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
@@ -31,8 +30,6 @@ class ModelTrainer(BaseTrainer):
             override['module'] = module
         if short_test is not None: 
             override['short_test'] = short_test
-        if verbosity  is not None: 
-            override['verbosity'] = verbosity
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , selection = selection , 
                   schedule_name = schedule_name , start = start , end = end , **kwargs)
         HtmlCatcher.AddExportFile(app.path_training_output)
@@ -42,7 +39,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def update_models(cls):
         if not MACHINE.server:
-            Logger.alert('This is not server! Will not update models!' , level = 1)
+            Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             for model in RegisteredModel.SelectModels():
                 with Logger.ParagraphI(f'Updating Model {model.model_path}'):

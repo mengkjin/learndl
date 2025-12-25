@@ -25,11 +25,10 @@ class BasicTestResult(BaseCallBack):
     @property
     def path_test_df(self): return self.config.model_base_path.snapshot('test_by_date.feather')
 
-    def save_test_df(self , verbose = False):
+    def save_test_df(self , vb_level : int = 1):
         df = self.get_test_df()
-        DB.save_df(df , self.path_test_df , overwrite = True , verbose = False)
-        if verbose:
-            Logger.stdout(f'Basic Test Result saved to {self.path_test_df}') 
+        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 99)
+        Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
 
     def get_test_df(self) -> pd.DataFrame:
         df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date]) if self.config.is_resuming else self.test_df_date
@@ -108,8 +107,7 @@ class BasicTestResult(BaseCallBack):
                 df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
                 df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
                 rslt[f'{model_num}'] = df
-            dfs_to_excel(rslt , self.path_summary)
-            Logger.stdout(f'Test Summary saved to {self.path_summary}')
+            dfs_to_excel(rslt , self.path_summary , print_prefix = 'Test Summary')
 
 
 class DetailedAlphaAnalysis(BaseCallBack):
@@ -160,42 +158,42 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factor = StockFactor(df , factor_names = self.factor_names)
         return factor
 
-    def factor_test(self):
+    def factor_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor Perf Test'):
-            with Timer(f'FactorPerfTest.get_factor' , silent = self.verbosity < 1):
+            with Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(tested_only=False , interval = 5)
-            with Timer(f'FactorPerfTest.load_day_rets' , silent = self.verbosity < 1):
+            with Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
                 factor.day_returns()
 
             for task in self.factor_tasks:
-                if self.verbosity > 0:
-                    Logger.divider()
+                Logger.divider(vb_level = vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.test_path , 
-                                                 resume = self.config.is_resuming , save_resumable = True , verbosity = self.verbosity , 
+                                                 resume = self.config.is_resuming , save_resumable = True , 
                                                  start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date ,
+                                                 indent = indent , vb_level = vb_level,
                                                  title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
-    def fmp_test(self):
+    def fmp_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor FMP Test'):
-            with Timer(f'FactorFMPTest.get_factor' , silent = self.verbosity < 1):
+            with Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(tested_only=True , interval = 1)
-            with Timer(f'FactorFMPTest.load_alpha_models' , silent = self.verbosity < 1):
+            with Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
                 factor.alpha_models()
-            with Timer(f'FactorFMPTest.load_risk_models' , silent = self.verbosity < 1):
+            with Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):
                 factor.risk_model()
-            with Timer(f'FactorFMPTest.load_universe' , silent = self.verbosity < 1):
+            with Timer(f'FactorFMPTest.load_universe' , indent = indent , vb_level = vb_level):
                 factor.universe(load = True)
-            with Timer(f'FactorFMPTest.load_day_quotes' , silent = self.verbosity < 1):
+            with Timer(f'FactorFMPTest.load_day_quotes' , indent = indent , vb_level = vb_level):
                 factor.day_quotes()
             for task in self.fmp_tasks:
-                if self.verbosity > 0:
-                    Logger.divider()
+                Logger.divider(vb_level = vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.test_path , 
-                                                 resume = self.config.is_resuming , save_resumable = True , verbosity = self.verbosity ,
+                                                 resume = self.config.is_resuming , save_resumable = True , 
                                                  start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date,
+                                                 indent = indent , vb_level = vb_level,
                                                  title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})

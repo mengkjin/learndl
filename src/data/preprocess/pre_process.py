@@ -51,10 +51,10 @@ class DataPreProcessor:
     
     @classmethod
     def proceed(cls , predict = True):
-        return cls.main(predict = True , verbosity = 0 if predict else 1)
+        return cls.main(predict = True , vb_level = 10 if predict else 1)
 
     @classmethod
-    def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None , verbosity = 1):
+    def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -68,35 +68,35 @@ class DataPreProcessor:
         else:
             blocks = data_types
         processor = cls(predict , blocks)
-        Logger.stdout(f'Data Processing start with {len(processor.blocks)} datas and predict = {predict}!')
-        if verbosity > 1:
-            Logger.stdout(f'Will process {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
+        Logger.stdout(f'Preprocess: Data Processing start with {len(processor.blocks)} datas and predict = {predict}!' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Will process {str(list(processor.blocks))} at {CALENDAR.dates_str([processor.load_start_dt,processor.load_end_dt])}' , 
+                        indent = indent + 1 , vb_level = vb_level + 1)
         # return processor
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
                 time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = 1)
+                Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level)
                 continue
-            if verbosity >= 2:
-                Logger.stdout(f'Preprocessing: [{key.upper()}] start...' , indent = 1)
-            tt1 = datetime.now()
 
-            with Timer(f'[{key}] blocks loading' , silent = verbosity < 2 , indent = 1):
-                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, silent = verbosity < 2)
-            with Timer(f'[{key}] blocks process' , silent = verbosity < 2 , indent = 1):
+            tt1 = datetime.now()
+            Logger.stdout(f'Preprocessing: [{key.upper()}] start...' , indent = indent + 2 , vb_level = vb_level + 1)
+
+            with Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 1):
+                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 2)
+            with Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 1):
                 data_block = proc.process_blocks(block_dict)
-            with Timer(f'[{key}] blocks masking' , silent = verbosity < 2 , indent = 1):   
+            with Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 1):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Timer(f'[{key}] blocks saving ' , silent = verbosity < 2 , indent = 1):
+            with Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 1):
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
-            with Timer(f'[{key}] blocks norming' , silent = verbosity < 2 , indent = 1):
+            with Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 1):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            Logger.success(f'Preprocessing {key.upper()}(predict={predict}) finished! Cost {Duration(since = tt1)}' , indent = 1)
-            if verbosity >= 2:
-                Logger.divider()
+            Logger.success(f'Preprocessing {key.upper()} (predict={predict}) finished! Cost {Duration(since = tt1)}' , 
+                           indent = indent + 1 , vb_level = vb_level)
+            Logger.divider(vb_level = vb_level + 1)
 
 class TypePreProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
@@ -108,10 +108,10 @@ class TypePreProcessor(ABC):
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
         
-    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , silent = False , **kwargs):
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , indent = 0 , vb_level = 1 , **kwargs):
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load(start_dt , end_dt , silent = silent , **kwargs).align(secid_align , date_align , inplace = True)
+            blocks[src_key] = loader.load(start_dt , end_dt , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align(secid_align , date_align , inplace = True)
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks
@@ -210,12 +210,12 @@ class pp_week(TypePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
-    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , silent = False , **kwargs):
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , indent = 0 , vb_level = 1 , **kwargs):
         if start_dt is not None and start_dt < 0: 
             start_dt = 2 * start_dt
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load(start_dt , end_dt , silent = silent , **kwargs).align(secid_align , date_align , inplace = True)
+            blocks[src_key] = loader.load(start_dt , end_dt , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align(secid_align , date_align , inplace = True)
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks

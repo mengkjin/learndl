@@ -1,11 +1,12 @@
-from typing import Any , Type
+from abc import abstractmethod , ABCMeta
+from typing import Any , Type , Literal
 from importlib import import_module
 from pathlib import Path
 
 from src.proj import PATH , Logger
 from src.basic import CALENDAR
 
-class BasicUpdaterMeta(type):
+class BasicUpdaterMeta(ABCMeta):
     """meta class of BasicUpdater"""
     registry : dict[str , Type['BasicUpdater'] | Any] = {}
     def __new__(cls , name , bases , dct):
@@ -46,20 +47,26 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
 
     @classmethod
     def update(cls):
-        Logger.stdout(f'Update: {cls.__name__} since last update!')
-        raise NotImplementedError(f'{cls.__name__} must implement update method')
+        Logger.remark(f'Update: {cls.__name__} since last update!')
+        cls.update_all('update')
 
     @classmethod
     def rollback(cls , rollback_date : int):
-        Logger.stdout(f'Update: {cls.__name__} rollback from {rollback_date}!')
-        raise NotImplementedError(f'{cls.__name__} must implement rollback method')
+        Logger.remark(f'Update: {cls.__name__} rollback from {rollback_date}!')
+        cls.set_rollback_date(rollback_date)
+        cls.update_all('rollback')
 
     @classmethod
     def recalculate_all(cls):
-        Logger.stdout(f'Update: {cls.__name__} recalculate all!')
-        raise NotImplementedError(f'{cls.__name__} must implement recalculate_all method')
+        Logger.remark(f'Update: {cls.__name__} recalculate all!')
+        cls.update_all('recalc')
 
     @classmethod
     def set_rollback_date(cls , rollback_date : int):
         CALENDAR.check_rollback_date(rollback_date)
         cls._rollback_date = rollback_date
+
+    @classmethod
+    @abstractmethod
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+        pass

@@ -136,7 +136,7 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
         gp_raw_list         作为GP输入时,原始指标的数量
         slice_date:         修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日
         device:             用cuda还是cpu计算
-        verbose:            训练过程是否输出细节信息
+        show_progress:      训练过程是否输出细节信息
         pool_num:           并行任务数量,建议设为1,即不并行,使用单显卡单进程运行
         pop_num:            种群数量,初始化时生成多少个备选公式
         hof_num:            精英数量,一般精英数量设为种群数量的1/6左右即可
@@ -197,14 +197,14 @@ def gp_namespace(gp_params):
         package_data = torch_load(package_path) if os.path.exists(package_path) else {}
 
         if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all():
-            if gp_space.param.verbose: 
+            if gp_space.param.show_progress: 
                 Logger.stdout(f'Exists "{package_path}" but Lack Required Data!' , indent = 1)
         else:
             assert np.isin(package_require , list(package_data.keys())).all() , np.setdiff1d(package_require , list(package_data.keys()))
             assert np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all() , np.setdiff1d(gp_space.gp_argnames , package_data['gp_argnames'])
             assert package_data['df_index'] is not None
 
-            if gp_space.param.verbose: 
+            if gp_space.param.show_progress: 
                 Logger.stdout(f'Directly load "{package_path}"' , indent = 1)
             for gp_key in gp_space.gp_argnames:
                 gp_val = package_data['gp_inputs'][package_data['gp_argnames'].index(gp_key)]
@@ -223,12 +223,12 @@ def gp_namespace(gp_params):
             load_finished = True
 
         if not load_finished:
-            if gp_space.param.verbose: 
+            if gp_space.param.show_progress: 
                 Logger.stdout(f'Load from Parquet Files:' , indent = 1)
             gp_filename = gp_filename_converter()
             nrowchar = 0
             for i , gp_key in enumerate(gp_space.gp_argnames):
-                if gp_space.param.verbose and nrowchar == 0: 
+                if gp_space.param.show_progress and nrowchar == 0: 
                     Logger.stdout('' , end='', indent = 1)
                 gp_val = read_gp_data(gp_filename(gp_key),gp_space.param.slice_date,gp_space.records.get('df_columns'))
                 if i == 0: 
@@ -236,7 +236,7 @@ def gp_namespace(gp_params):
                 gp_val = df2ts(gp_val , gp_key , gp_space.device)
                 gp_space.gp_inputs.append(gp_val)
                 
-                if gp_space.param.verbose:
+                if gp_space.param.show_progress:
                     Logger.stdout(gp_key , end=',')
                     nrowchar += len(gp_key) + 1
                     if nrowchar >= 100 or i == len(gp_space.gp_argnames):
@@ -260,7 +260,7 @@ def gp_namespace(gp_params):
                           gp_space.records.subset(['df_index' , 'df_columns'] , require = True) )
             torch.save(saved_data , package_path)
 
-    if gp_space.param.verbose: 
+    if gp_space.param.show_progress: 
         Logger.stdout(f'{len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!' , indent = 1)
 
     gp_space.mgr_file.save_state(gp_space.param.__dict__, 'params', i_iter = 0) # useful to assert same index as package data
@@ -607,7 +607,7 @@ def gp_population(toolbox , pop_num , max_round = 100 , last_gen = None , forbid
 
 # %%
 def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_lambda = None , 
-                 mgr_file=gpFileManager(), timer=gpTimer(),verbose=__debug__,stats=None,**kwargs):  
+                 mgr_file=gpFileManager(), timer=gpTimer(),show_progress=__debug__,stats=None,**kwargs):  
     """
     ------------------------ Evolutionary Algorithm simple ------------------------
     
@@ -629,13 +629,13 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
     forbidden += records.get('forbidden' , [])
 
     for i_gen in range(start_gen, param.n_gen):
-        if verbose and i_gen > 0: 
+        if show_progress and i_gen > 0: 
             Logger.stdout(f'Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones' , indent = 1)
         population = gp_population(toolbox , param.pop_num , last_gen = population , forbidden = forbidden + [ind for ind in halloffame])
         #Logger.stdout([str(ind) for ind in population[:20]])
         population = toolbox.indpop2syxpop(population)
         #Logger.stdout([str(ind) for ind in population[:20]])
-        if verbose and i_gen == 0: 
+        if show_progress and i_gen == 0: 
             Logger.stdout(f'**A Population({len(population)}) has been Initialized')
 
         # Evaluate the new population
@@ -671,7 +671,7 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
 # %%
 def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
                  mgr_file=None,timer=None,mgr_mem=None,device=None,
-                 test_code=False,verbose=__debug__,**kwargs):
+                 test_code=False,show_progress=__debug__,**kwargs):
     """
     ------------------------ gp halloffame evaluation ------------------------
     
@@ -745,7 +745,7 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         hof_elites.append(factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  --> Hof{i:_>3d}/')
         if False and test_code: 
             mgr_file.save_state(factor_value.to_dataframe(index = records.df_index , columns = records.df_columns) , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
-        mgr_mem.check(showoff = verbose and test_code, starter = '  --> ')
+        mgr_mem.check(showoff = show_progress and test_code, starter = '  --> ')
 
     mgr_file.dump_generation(population, halloffame, forbidden , i_iter = i_iter , i_gen = -1)
     records.update(forbidden = forbidden)
@@ -854,7 +854,7 @@ class gpGenerator:
             Logger.stdout(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
         return factor
 
-    def entire_elites(self , verbose = True , block_len = 50 , process_key = None):
+    def entire_elites(self , show_progress = True , block_len = 50 , process_key = None):
         '''
         Load all elite factors
         '''
@@ -862,7 +862,7 @@ class gpGenerator:
         hof_log    = self.gp_space.mgr_file.load_state('hoflog'   , i_iter = -1)
         hof_elites = gpEliteGroup(start_i_elite=0 , device=self.gp_space.device , block_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
         for elite in elite_log.syntax: 
-            hof_elites.append(self(elite , process_key = process_key , print_info = verbose))
+            hof_elites.append(self(elite , process_key = process_key , print_info = show_progress))
         hof_elites.cat_all()
         Logger.stdout(f'Load {hof_elites.total_len()} Elites')
         return hof_elites
@@ -894,7 +894,7 @@ class gpGenerator:
         return multi # multi对象拥有multi,weight,inputs三个自变量
     
     def multi_elite_factor(
-            self , elites = None , verbose = True , 
+            self , elites = None , show_progress = True , 
             process_key : str | None = None ,  
             weight_scheme : Literal['ic' , 'ir' , 'ew'] | None = None, 
             window_type  : Literal['insample' , 'rolling'] | None = None, 
@@ -909,7 +909,7 @@ class gpGenerator:
         None kwargs will use default values
         '''
         if elites is None:
-            elites = self.entire_elites(verbose = verbose , process_key = process_key)
+            elites = self.entire_elites(show_progress = show_progress , process_key = process_key)
         if isinstance(elites , gpEliteGroup):
             elites = elites.compile_elite_tensor()
         assert isinstance(elites , torch.Tensor) , type(elites)

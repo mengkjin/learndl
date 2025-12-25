@@ -21,7 +21,7 @@ class RiskModelUpdater:
 class FactorCalculatorAPI:
     Stock = StockFactorUpdater
     Market = MarketFactorUpdater
-    Risk = AffiliateFactorUpdater
+    Affiliate = AffiliateFactorUpdater
     Pooling = PoolingFactorUpdater
     Stats = FactorStatsUpdater
 
@@ -29,7 +29,7 @@ class FactorCalculatorAPI:
     def update(cls , **kwargs):
         cls.Market.update(**kwargs)
         cls.Stock.update(**kwargs)
-        cls.Risk.update(**kwargs)
+        cls.Affiliate.update(**kwargs)
         cls.Pooling.update(**kwargs)
         cls.Stats.update(**kwargs)
         cls.export()
@@ -38,7 +38,7 @@ class FactorCalculatorAPI:
     def rollback(cls , rollback_date : int , **kwargs):
         cls.Market.rollback(rollback_date , **kwargs)
         cls.Stock.rollback(rollback_date , **kwargs)
-        cls.Risk.rollback(rollback_date , **kwargs)
+        cls.Affiliate.rollback(rollback_date , **kwargs)
         cls.Pooling.rollback(rollback_date , **kwargs)
         cls.Stats.rollback(rollback_date , **kwargs)
         cls.export()
@@ -47,7 +47,7 @@ class FactorCalculatorAPI:
     def recalculate(cls , **kwargs):
         cls.Market.recalculate(**kwargs)
         cls.Stock.recalculate(**kwargs)
-        cls.Risk.recalculate(**kwargs)
+        cls.Affiliate.recalculate(**kwargs)
         cls.Pooling.recalculate(**kwargs)
         cls.Stats.recalculate(**kwargs)
         cls.export()
@@ -56,7 +56,7 @@ class FactorCalculatorAPI:
     def fix(cls , factors : list[str] , **kwargs):
         cls.Market.fix(factors , **kwargs)
         cls.Stock.fix(factors , **kwargs)
-        cls.Risk.fix(factors , **kwargs)
+        cls.Affiliate.fix(factors , **kwargs)
         cls.Pooling.fix(factors , **kwargs)
         cls.Stats.fix(factors , **kwargs)
         cls.export()
@@ -109,10 +109,10 @@ class FactorTestAPI:
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
                  test_name : str | None = None , test_path : Path | str | None = None , 
                  resume : bool = False , save_resumable : bool = False , 
-                 verbosity = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
+                 indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                  write_down = False , display_figs = False , **kwargs):
         pm = cls.get_analytic_test(test_type).run_test(
-            factor , benchmark , test_name , test_path , resume , save_resumable , verbosity , start_dt , end_dt , **kwargs)
+            factor , benchmark , test_name , test_path , resume , save_resumable , indent , vb_level , start_dt , end_dt , **kwargs)
         if write_down:   
             pm.write_down()
         if display_figs: 
@@ -122,20 +122,20 @@ class FactorTestAPI:
     @classmethod
     def FactorPerf(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
                    test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
-                   verbosity = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
+                   indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                    write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
         pm = cls.run_test('factor' , factor , benchmark , test_name , test_path , resume , save_resumable , 
-                          verbosity , start_dt , end_dt , write_down , display_figs , **kwargs)
+                          indent , vb_level , start_dt , end_dt , write_down , display_figs , **kwargs)
         assert isinstance(pm , FactorPerfTest) , 'FactorPerfTest is expected!'
         return pm
     
     @classmethod
     def FmpOptim(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                  test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
-                 verbosity = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
+                 indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                  write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
         pm = cls.run_test('optim' , factor , benchmark , test_name , test_path , resume , save_resumable , 
-                          verbosity , start_dt , end_dt , write_down , display_figs , **kwargs)
+                          indent , vb_level , start_dt , end_dt , write_down , display_figs , **kwargs)
         assert isinstance(pm , OptimFMPTest) , 'OptimFMPTest is expected!'
         return pm
 
@@ -143,9 +143,9 @@ class FactorTestAPI:
     @classmethod
     def FmpTop(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
-               verbosity = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
+               indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
         pm = cls.run_test('top' , factor , benchmark , test_name , test_path , resume , save_resumable , 
-                          verbosity , start_dt , end_dt , write_down , display_figs , **kwargs)
+                          indent , vb_level , start_dt , end_dt , write_down , display_figs , **kwargs)
         assert isinstance(pm , TopFMPTest) , 'TopFMPTest is expected!'
         return pm

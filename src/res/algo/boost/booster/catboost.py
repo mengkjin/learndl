@@ -42,7 +42,6 @@ class CatBoost(BasicBoosterModel):
         self.fit_train_param.update({
             'random_seed':          self.seed , 
             'task_type':            'GPU' if self.use_gpu else 'CPU' , 
-            # 'verbose':            0 if silent else 1 ,
             'monotone_constraints': self.mono_constr(self.fit_train_param , self.fit_train_ds.nfeat , as_tuple=True)}) 
         if self.fit_train_param['objective'] in ['softmax']: 
             self.fit_train_param['num_class'] = num_class

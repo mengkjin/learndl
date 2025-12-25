@@ -475,23 +475,25 @@ class TuShareCNE5_Calculator:
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
         return all_updated
         
-    def update_date(self , date : int , job : Literal['exposure' , 'risk']) -> None:
+    def update_date(self , date : int , job : Literal['exposure' , 'risk'] , indent : int = 1 , vb_level : int = 1) -> None:
         '''update a given date of a given job of "exposure" or "risk"'''
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
-            DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , verbose=True)
-            DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , verbose=True)
-            DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , verbose=True)
+            DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , indent = indent + 1 , vb_level = vb_level + 1)
+            DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , indent = indent + 1 , vb_level = vb_level + 1)
+            DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , indent = indent + 1 , vb_level = vb_level + 1)
         elif job == 'risk':
-            DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , verbose=True)
-            DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , verbose=True)
+            DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , indent = indent + 1 , vb_level = vb_level + 1)
+            DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , indent = indent + 1 , vb_level = vb_level + 1)
         else:
             raise KeyError(job)
         
+        Logger.success(f'Success : tushare_cne5.{job} at {date} updated' , indent = indent , vb_level = vb_level)
+
     @classmethod
     def update(cls):
         '''update all updatable dates'''
-        Logger.stdout(f'Update: {cls.__name__} since last update!')
+        Logger.remark(f'Update: {cls.__name__} since last update!')
         task = cls()
         for date in task.updatable_dates('exposure'): 
             task.update_date(date , 'exposure')
@@ -503,7 +505,7 @@ class TuShareCNE5_Calculator:
     def rollback(cls , rollback_date : int):
         '''update all updatable dates from a given rollback date'''
         CALENDAR.check_rollback_date(rollback_date)
-        Logger.stdout(f'Update: {cls.__name__} rollback from {rollback_date}!')
+        Logger.remark(f'Update: {cls.__name__} rollback from {rollback_date}!')
         task = cls()
         start_date = CALENDAR.td(rollback_date , 1)
         end_date = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])

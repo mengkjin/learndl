@@ -178,12 +178,12 @@ class HiddenPath:
         dates = [int(p.name.removesuffix(suffix)) for p in parent.iterdir() if p.name.endswith(suffix)]
         return np.sort(dates)
 
-    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int) -> None:
+    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int , indent : int = 1 , vb_level : int = 2) -> None:
         """save hidden dataframe"""
         hidden_path = self.target_path(model_date)
-        DB.save_df(hidden_df , hidden_path , overwrite = True)
+        DB.save_df(hidden_df , hidden_path , overwrite = True , prefix = f'Hidden States' , indent = indent , vb_level = vb_level)
 
-    def get_hidden_df(self , model_date : int , exact = False) -> tuple[int, pd.DataFrame]:
+    def get_hidden_df(self , model_date : int , exact = False , indent : int = 1 , vb_level : int = 2) -> tuple[int, pd.DataFrame]:
         """get hidden dataframe"""
         if not exact: 
             model_date = self.latest_hidden_model_date(model_date)
@@ -271,9 +271,9 @@ class ModelDBMapping:
     def from_dict(cls , name : str , mapping : dict[str,Any]) -> 'ModelDBMapping':
         return cls(name , **mapping[name.removeprefix('db@')])
 
-    def load_block(self , start_dt : int , end_dt : int , silent = True):
+    def load_block(self , start_dt : int , end_dt : int , indent = 1 , vb_level : int = 10):
         from src.data.loader import BlockLoader
-        return BlockLoader(db_src = self.src , db_key = self.key , feature = self.col).load(start_dt , end_dt , silent = silent)
+        return BlockLoader(db_src = self.src , db_key = self.key , feature = self.col).load(start_dt , end_dt , indent = indent , vb_level = vb_level)
     
 class RegisteredModel(ModelPath):
     '''
@@ -338,34 +338,33 @@ class RegisteredModel(ModelPath):
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = 2) -> None:
         """save model pred"""
-        DB.save(df , 'pred' , self.pred_name , date , overwrite)
+        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level)
 
-    def load_pred(self , date : int , verbose = True , **kwargs) -> pd.DataFrame:
+    def load_pred(self , date : int , indent = 1 , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
         """load model pred"""
-        df = DB.load('pred' , self.pred_name , date , verbose = verbose , **kwargs)
+        df = DB.load('pred' , self.pred_name , date , indent = indent , vb_level = vb_level , **kwargs)
         if df.empty: 
             return df
         if self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.name:self.pred_name})
-            self.save_pred(df , date , overwrite = True)
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = vb_level)
         return df
 
-    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
+    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:
         """save model factor portfolio"""
         if df.empty: 
             return
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        DB.save_df(df , path , overwrite = overwrite)
+        DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = indent , vb_level = vb_level)
 
-    def load_fmp(self , date : int , verbose = True , **kwargs) -> pd.DataFrame:
+    def load_fmp(self , date : int , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
         """load model factor portfolio"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
-            if verbose: 
-                Logger.alert(f'{path} does not exist' , level = 1)
+            Logger.alert1(f'{path} does not exist' , vb_level = vb_level)
             return pd.DataFrame()
         return DB.load_df(path)
     

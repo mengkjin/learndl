@@ -95,7 +95,7 @@ class ScheduledTask:
     def run(self , exclude_script : str | None = None):
         """run the task"""
         if exclude_script and Path(exclude_script).name in self.cmdline:
-            Logger.alert(f"Skipping task {self.cmdline} because it contains {exclude_script}" , level = 1)
+            Logger.alert1(f"Skipping task {self.cmdline} because it contains {exclude_script}")
             return self
         try:
             env = os.environ.copy()
@@ -150,7 +150,7 @@ class TaskScheduler:
         """printout all the tasks of the machine"""
         tasks = cls.get_machine_tasks()
         for task in tasks.values():
-            Logger.alert(f'{task} awaits to be executed' , level = 1)
+            Logger.alert1(f'{task} awaits to be executed')
         return tasks
 
     @classmethod

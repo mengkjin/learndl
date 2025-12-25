@@ -18,8 +18,8 @@ class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
 
-    def calc(self , account : pd.DataFrame , verbosity = 0):
-        with self.calc_manager(f'{self.__class__.__name__} calc' , verbosity = verbosity , indent = 1): 
+    def calc(self , account : pd.DataFrame , indent : int = 0 , vb_level : int = 1):
+        with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account)
         return self
     
@@ -121,20 +121,22 @@ class OptimFMPTest(BaseFactorAnalyticTest):
     ]
 
     def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
-              add_lag = 1 , optim_config = None , verbosity = 2):
+              add_lag = 1 , optim_config = None , indent : int = 0 , vb_level : int = 1):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
-        self.update_kwargs(add_lag = add_lag , optim_config = optim_config , verbosity = verbosity)
+        self.update_kwargs(add_lag = add_lag , optim_config = optim_config)
         self.portfolio_group = PortfolioGroupBuilder(
-            'optim' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , start_dt = self.start_dt , end_dt = self.end_dt , **self.kwargs)
+            'optim' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , caller = self , 
+            start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-             add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , verbosity = 1 , **kwargs):
-        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
+             add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , 
+             indent : int = 0 , vb_level : int = 1 , **kwargs):
+        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , indent = indent , vb_level = vb_level)
+        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
-                task.calc(self.account , verbosity = verbosity - 1) 
+                task.calc(self.account , indent = indent + 1 , vb_level = vb_level + 1) 
         return self
     
     def update_kwargs(self , add_lag = 1 , **kwargs):

@@ -19,7 +19,7 @@ class UpdateAPI:
             return
         FactorAPI.Market.update()
         FactorAPI.Stock.update(timeout = 3)
-        FactorAPI.Risk.update()
+        FactorAPI.Affiliate.update()
         ModelAPI.update()
         FactorAPI.Pooling.update(timeout = 3)
         FactorAPI.Stats.update()
@@ -36,7 +36,7 @@ class UpdateAPI:
         DataAPI.rollback(rollback_date)
         FactorAPI.Market.rollback(rollback_date)
         FactorAPI.Stock.rollback(rollback_date , timeout = 10)
-        FactorAPI.Risk.rollback(rollback_date)
+        FactorAPI.Affiliate.rollback(rollback_date)
         FactorAPI.Pooling.rollback(rollback_date , timeout = 10)
         FactorAPI.Stats.rollback(rollback_date)
         FactorAPI.Hierarchy.rollback(rollback_date)

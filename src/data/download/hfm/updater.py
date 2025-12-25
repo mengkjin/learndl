@@ -122,7 +122,7 @@ class JSDataUpdater():
         abs_path = str(target_path.absolute())
         rel_path = str(target_path.relative_to(self.UPDATER_BASE))
         if isinstance(result , pd.DataFrame):
-            DB.save_df(result , target_path)
+            DB.save_df(result , target_path , prefix = f'JS Data')
             with tarfile.open(self.Updater, 'a') as tar:  
                 tar.add(abs_path , arcname = rel_path) 
             self.Success.append(target_path)
@@ -203,7 +203,7 @@ class JSDataUpdater():
 
     @classmethod
     def update_hfm_terminal(cls):
-        assert not MACHINE.server , f'must on terminal machine'
+        assert not MACHINE.server , f'{MACHINE.name} is a server, must on terminal machine'
         if not MACHINE.belong_to_hfm: 
             return
         with Logger.ParagraphIII('Update JSData Update Files'):
@@ -215,7 +215,7 @@ class JSDataUpdater():
             
     @classmethod
     def update_server(cls):
-        assert MACHINE.server , f'must on server machine'
+        assert MACHINE.server , f'{MACHINE.name} is not a server, must on server machine'
 
         with Logger.ParagraphIII('Unpack JSData Update Files'):
             cls.unpack_exist_updaters(del_after_dumping=True)

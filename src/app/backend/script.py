@@ -96,7 +96,7 @@ class ScriptHeader:
         return ScriptParamInput.from_dict(self.parameters)
 
     @classmethod
-    def read_from_file(cls , path : Path , verbose=False, include_starter='#', exit_starter='', ignore_starters=('#!', '# coding:')):
+    def read_from_file(cls , path : Path , include_starter='#', exit_starter='', ignore_starters=('#!', '# coding:')):
         yaml_lines: list[str] = []
         try:
             with open(path, 'r', encoding='utf-8') as file:

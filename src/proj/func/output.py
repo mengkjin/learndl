@@ -1,6 +1,8 @@
 import sys
 from datetime import datetime
 from typing import Any
+
+from src.proj.env import ProjConfig
 from .silence import Silence
 
 _ansi_color_mapping = {
@@ -56,21 +58,22 @@ def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None =
     return prefix + msg + suffix
 
 class FormatStr(str):
-    def __new__(cls , *args , sep = ' ' , **kwargs):
-        self = super().__new__(cls , sep.join([str(arg) for arg in args]))
+    def __new__(cls , *args , sep = ' ' , indent : int = 0 , **kwargs):
+        msg = cls.indent_str(indent) + sep.join([str(arg) for arg in args])
+        self = super().__new__(cls , msg)
         return self
 
-    def __init__(self , *args , sep = ' ' , **kwargs):
-        self.msg = sep.join(args)
+    def __init__(self , *args , sep = ' ' , indent : int = 0 , **kwargs):
+        self.msg = self.indent_str(indent) + sep.join([str(arg) for arg in args])
         self.kwargs = kwargs
         self._level_prefix = ''
 
     def __str__(self):
         return self.formatted()
 
-    def indented(self , indent : int | None = None) -> str:
-        indent = indent or self.kwargs.get('indent' , 0)
-        return self.msg if indent <= 0 else ('  ' * indent + '--> ' + self.msg)
+    @classmethod
+    def indent_str(cls , indent : int = 0) -> str:
+        return '' if indent <= 0 else ('  ' * indent + '--> ')
 
     def colored(self , color : str | None = None , bg_color : str | None = None , bold : bool = False) -> str:
         color = color or self.kwargs.get('color' , None)
@@ -80,12 +83,10 @@ class FormatStr(str):
 
     def formatted(self , **kwargs) -> str:
         kwargs = self.kwargs | kwargs
-        indent = kwargs.get('indent' , 0)
-        msg = self.msg if indent <= 0 else ('  ' * indent + '--> ' + self.msg)
         color = kwargs.get('color' , None)
         bg_color = kwargs.get('bg_color' , None)
         bold = kwargs.get('bold' , False)
-        return _ansi_styler(msg , color = color , bg_color = bg_color , bold = bold)
+        return _ansi_styler(self.msg , color = color , bg_color = bg_color , bold = bold)
 
     def with_level_prefix(self , level: str | None = None , color : str | None = None , bg_color : str | None = None , bold : bool = True):
         if not level:
@@ -116,19 +117,19 @@ class FormatStr(str):
                 io.flush()
 
 def stdout(*args , color : str | None = None , bg_color : str | None = None , bold : bool = False , indent : int = 0 , 
-           sep = ' ' , end = '\n' , file = None , flush = False):
-    """custom stdout message"""
-    if Silence.silent:
+           sep = ' ' , end = '\n' , file = None , flush = False , vb_level : int = 1):
+    """custom stdout message , vb_level can be set to control display (minimum ProjConfig.verbosity level)"""
+    if Silence.silent or ProjConfig.verbosity < vb_level:
         return
-    fstr = FormatStr(*args , sep = sep , color = color , bg_color = bg_color , bold = bold , indent = indent)
+    fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold)
     fstr.write(stdout = True , file = file , end = end , flush = flush)
 
 def stderr(*args , color : str | None = None , bg_color : str | None = None , bold : bool = False , indent : int = 0 , 
-           sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None):
-    """custom stderr message"""
-    if Silence.silent:
+           sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, vb_level : int = 0):
+    """custom stderr message , vb_level can be set to control display (minimum ProjConfig.verbosity level)"""
+    if Silence.silent or ProjConfig.verbosity < vb_level:
         return
-    fstr = FormatStr(*args , sep = sep , color = color , bg_color = bg_color , bold = bold , indent = indent)
+    fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold)
     if level_prefix:
         fstr.with_level_prefix(**level_prefix)
     fstr.write(stderr = True , file = file , end = end , flush = flush)

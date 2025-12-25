@@ -145,7 +145,7 @@ def process_sec_min_files():
             if sec_type == 'sec':
                 sec_df = transform_sec(df)
             src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
-            DB.save(sec_df , 'trade_js' , src_key , date , verbose = True)
+            DB.save(sec_df , 'trade_js' , src_key , date)
 
 def process_fut_min_files():
 
@@ -163,7 +163,7 @@ def process_fut_min_files():
                     with zip_ref.open(file_name) as file:
                         df = pd.read_csv(file)
                         df.columns = df.columns.str.lower()
-                    DB.save(df, 'trade_js', 'fut_min', date, verbose=True)
+                    DB.save(df, 'trade_js', 'fut_min', date)
     
 def main():
     process_sec_min_files()

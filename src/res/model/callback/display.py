@@ -5,29 +5,27 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , ClassVar
 
-from src.proj import PATH , MACHINE , Logger , Duration , Display
+from src.proj import PATH , MACHINE , Logger , Duration , Display , ProjConfig
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 
 class CallbackTimer(BaseCallBack):
     '''record time cost of callback hooks'''
     WITH_CB = True
-    CB_KEY_PARAMS = ['verbosity']
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.recording = self.verbosity >= 10
+        self.recording = ProjConfig.verbosity >= 10
         self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.possible_hooks()}
         self.record_start_time : dict[str,datetime] = {}
-        
 
-    def at_enter(self , hook_name , verbosity : int = 0):
-        super().at_enter(hook_name , verbosity)
+    def at_enter(self , hook_name , vb_level : int = 10):
+        super().at_enter(hook_name , vb_level)
         if self.recording: 
             self.record_start_time[hook_name] = datetime.now()
-    def at_exit(self, hook_name , verbosity : int = 0):
+    def at_exit(self, hook_name , vb_level : int = 10):
         if self.recording: 
             self.record_hook_durations[hook_name].append((datetime.now() - self.record_start_time[hook_name]).total_seconds())
-        super().at_exit(hook_name , verbosity)
+        super().at_exit(hook_name , vb_level)
     def on_summarize_model(self):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
@@ -35,45 +33,18 @@ class CallbackTimer(BaseCallBack):
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
             Logger.caption('Table: Callback Time Costs:')
-            Display(df)
-
-class BatchDisplay(BaseCallBack):
-    '''display batch progress bar'''
-    CB_KEY_PARAMS = ['verbosity']
-    def __init__(self , trainer , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.show_info = self.verbosity >= 10        
-
-    @property
-    def dataloader(self) -> BatchDataLoader | Any : return self.trainer.dataloader
-
-    def on_train_batch_end(self):  
-        if self.show_info: 
-            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
-            # self.device.status()
-    def on_train_batch_start(self):
-        if self.show_info: 
-            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
-
-    def on_validation_batch_end(self):   
-        if self.show_info: 
-            self.dataloader.display(f'Valid Ep#{self.status.epoch:3d} score : {self.metrics.output.score:.5f}')
-
-    def on_test_batch_end(self):         
-        if self.show_info: 
-            self.dataloader.display('Test {} {} score : {:.5f}'.format(
-                self.status.model_submodel , self.trainer.batch_dates[self.batch_idx] , self.metrics.output.score))
+            Display(df)  
             
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''
     CB_ORDER : int = 100
-    CB_KEY_PARAMS = ['verbosity']
     RESULT_PATH = PATH.rslt_train.joinpath('model_results.json')
     SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.show_info_step = [0,10,5,3,2,1][min(self.verbosity // 2 , 5)]
+        self.show_info_step = [0,10,5,3,2,1][min(ProjConfig.verbosity // 2 , 5)]
+        self.dataloader_info = ProjConfig.verbosity >= 10
         self.record_init_time = datetime.now()
         self.record_times : dict[str,datetime] = {}
         self.record_texts : dict[str,str]   = {}
@@ -81,6 +52,8 @@ class StatusDisplay(BaseCallBack):
         self.record_epoch_stage : int = 0
         self.record_model_stage : int = 0
 
+    @property
+    def dataloader(self) -> BatchDataLoader | Any : return self.trainer.dataloader
     @property
     def path_test(self): return str(self.config.model_base_path.rslt('test.xlsx'))
     @property
@@ -205,4 +178,22 @@ class StatusDisplay(BaseCallBack):
         Logger.remark('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts) , prefix = True)
     
     def on_before_test_end(self): 
-        Logger.highlight(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}' , prefix = True)
+        Logger.remark(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}')
+
+    def on_train_batch_end(self):  
+        if self.dataloader_info: 
+            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
+            # self.device.status()
+    def on_train_batch_start(self):
+        if self.dataloader_info: 
+            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
+
+    def on_validation_batch_end(self):   
+        if self.dataloader_info: 
+            self.dataloader.display(f'Valid Ep#{self.status.epoch:3d} score : {self.metrics.output.score:.5f}')
+
+    def on_test_batch_end(self):         
+        if self.dataloader_info: 
+            self.dataloader.display('Test {} {} score : {:.5f}'.format(
+                self.status.model_submodel , self.trainer.batch_dates[self.batch_idx] , self.metrics.output.score))
+

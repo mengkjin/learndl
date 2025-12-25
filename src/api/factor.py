@@ -24,14 +24,12 @@ def get_real_factor(names = None ,
     return StockFactor(DATAVENDOR.real_factor(factor_type , names , start_dt , end_dt , step).to_dataframe())
 
 def get_factor(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
-               start_dt = 20240101 , end_dt = 20240331 , step = 5 , verbosity = 1):
+               start_dt = 20240101 , end_dt = 20240331 , step = 5):
     if not names or names == 'random':
-        if verbosity > 0: 
-            Logger.stdout(f'Getting random factor values...')
+        Logger.stdout(f'Getting random factor values...')
         return get_random_factor(start_dt , end_dt , step)
     else:
-        if verbosity > 0: 
-            Logger.stdout(f'Getting factor values for {names}...')
+        Logger.stdout(f'Getting factor values for {names}...')
         return get_real_factor(names , factor_type , start_dt , end_dt , step)
 
 class FactorAPI:
@@ -74,16 +72,16 @@ class FactorAPI:
             # update market factor
             wrap_update(FactorCalculatorAPI.Market.rollback , 'rollback market factors' , rollback_date = rollback_date)
 
-    class Risk:
+    class Affiliate:
         @classmethod
         def update(cls):
             # update risk factor
-            wrap_update(FactorCalculatorAPI.Risk.update , 'update risk factors')
+            wrap_update(FactorCalculatorAPI.Affiliate.update , 'update risk & external factors')
 
         @classmethod
         def rollback(cls , rollback_date : int):
             # update risk factor
-            wrap_update(FactorCalculatorAPI.Risk.rollback , 'rollback risk factors' , rollback_date = rollback_date)
+            wrap_update(FactorCalculatorAPI.Affiliate.rollback , 'rollback risk & external factors' , rollback_date = rollback_date)
     
     class Pooling:
         @classmethod
@@ -113,41 +111,41 @@ class FactorAPI:
                        factor_type : Literal['factor' , 'pred'] = 'factor' , 
                        benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                        start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
-                       write_down = True , display_figs = False , verbosity = 1 , 
+                       write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
                        **kwargs):
             with Logger.ParagraphIII(' test factor performance '):
-                factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
-                ret = FactorTestAPI.FactorPerf(factor , benchmark , verbosity = verbosity , write_down = write_down , display_figs = display_figs , **kwargs)
+                factor = get_factor(names , factor_type , start_dt , end_dt , step)
+                ret = FactorTestAPI.FactorPerf(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
         
         @staticmethod
         def FmpOptim(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
                      benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                      start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
-                     write_down = True , display_figs = False , verbosity = 1 , 
+                     write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
                      prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
                      **kwargs):
             with Logger.ParagraphIII(' test optimized fmp '):
-                factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
-                ret = FactorTestAPI.FmpOptim(factor , benchmark , verbosity = verbosity , write_down = write_down , display_figs = display_figs , prob_type = prob_type ,**kwargs)
+                factor = get_factor(names , factor_type , start_dt , end_dt , step)
+                ret = FactorTestAPI.FmpOptim(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , prob_type = prob_type ,**kwargs)
             return ret
         
         @staticmethod
         def FmpTop(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
                    benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                    start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
-                   write_down = True , display_figs = False , verbosity = 1 , 
+                   write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
                    **kwargs):
             with Logger.ParagraphIII(' test top fmp '):
-                factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
-                ret = FactorTestAPI.FmpTop(factor , benchmark , verbosity = verbosity , write_down = write_down , display_figs = display_figs , **kwargs)
+                factor = get_factor(names , factor_type , start_dt , end_dt , step)
+                ret = FactorTestAPI.FmpTop(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
 
     @classmethod
     def FastAnalyze(cls , factor_name : str , start : int = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
         factor_calc = cls.Hierarchy.get_factor(factor_name)
         dates = factor_calc.FactorDates(start,end,step)
-        factor = factor_calc.Factor(dates , verbose= True , normalize = True , ignore_error = False)
+        factor = factor_calc.Factor(dates , normalize = True , ignore_error = False)
         factor.fast_analyze(nday = step , lag = lag)
         return factor
     
@@ -155,6 +153,6 @@ class FactorAPI:
     def FullAnalyze(cls , factor_name : str , start : int = 20170101 , end : int | None = None , step : int = 1 , lag = 2):
         factor_calc = cls.Hierarchy.get_factor(factor_name)
         dates = factor_calc.FactorDates(start,end,step)
-        factor = factor_calc.Factor(dates , verbose= True , normalize = True , ignore_error = False)
+        factor = factor_calc.Factor(dates , normalize = True , ignore_error = False)
         factor.full_analyze(nday = step , lag = lag)
         return factor

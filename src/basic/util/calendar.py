@@ -392,3 +392,19 @@ class CALENDAR:
         earliest_rollback_date = cls.td(cls.updated() , -max_rollback_days)
         assert rollback_date >= earliest_rollback_date , \
             f'rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}'
+
+    @classmethod
+    def dates_str(cls , dates : np.ndarray | list[int | None] | Any) -> str:
+        if isinstance(dates , np.ndarray):
+            d0 , d1 = min(dates) , max(dates)
+            dstr = f'{d0}~{d1}' if d0 != d1 else str(d0)
+        elif isinstance(dates , list):
+            valid_dates = [d for d in dates if d is not None]
+            if None in dates:
+                d0 , d1 = min(valid_dates) , 99991231
+            else:
+                d0 , d1 = min(valid_dates) , max(valid_dates)
+            dstr = f'{d0}~{d1}' if d0 != d1 else str(d0)
+        else:
+            dstr = str(dates) if dates is not None else 'None'
+        return dstr

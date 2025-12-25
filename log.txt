@@ -1,22 +1,24 @@
 This will be caught
-[36m[1m***************************************** MAIN PART START ******************************************[0m
-[1m[37m[45m25-12-23 02:47:11|LEVEL:CRITICAL |[0m: [1m[37m[45mcritical message[0m
-[1m[37m[41m25-12-23 02:47:11|LEVEL:ERROR    |[0m: [1m[31merror message[0m
-[1m[30m[43m25-12-23 02:47:11|LEVEL:WARNING  |[0m: [1m[33mwarning message[0m
-[1m[37m[42m25-12-23 02:47:11|LEVEL:INFO     |[0m: [1m[32minfo message[0m
-[1m[37m[100m25-12-23 02:47:11|LEVEL:DEBUG    |[0m: [1m[90mdebug message[0m
+[1m[30m[43m25-12-24 21:51:35|LEVEL:WARNING  |[0m: [1m[33mmain part Start at 2025-12-24 21:51:35[0m
+[1m[35m25-12-24 21:51:35|LEVEL:CRITICAL |[0m: [1m[35mcritical message[0m
+[1m[37m[41m25-12-24 21:51:35|LEVEL:ERROR    |[0m: [1m[31merror message[0m
+[1m[30m[43m25-12-24 21:51:35|LEVEL:WARNING  |[0m: [1m[33mwarning message[0m
+[1m[37m[42m25-12-24 21:51:35|LEVEL:INFO     |[0m: [1m[32minfo message[0m
+[1m[37m[100m25-12-24 21:51:35|LEVEL:DEBUG    |[0m: [1m[90mdebug message[0m
 [36m[1mhighlight message[0m
-[37m[46m[1m25-12-23 02:47:11|LEVEL:HIGHLIGHT|[0m: [36m[1mhighlight message with default prefix[0m
+[30m[46m[1m25-12-24 21:51:35|LEVEL:HIGHLIGHT|[0m: [36m[1mhighlight message with default prefix[0m
 ----------------------------------------------------------------------------------------------------
 [92msuccess message[0m
 [94m[1mremark message[0m
+[94m[1mremark message with default prefix[0m
+[90mfootnote message[0m
 [93mwarning message[0m
 [91merror message[0m
 [35mcritical message[0m
 [90m  --> Skipping: skipping message[0m
 email: True
-forfeit_task: False
-task_key: a
+  --> forfeit_task: False
+    --> task_key: a
 this is a log only message
 abc finished! Cost <1 Sec
-[36m[1m*********************************** MAIN PART FINISHED IN <1 SEC ***********************************[0m
+[1m[30m[43m25-12-24 21:51:35|LEVEL:WARNING  |[0m: [1m[33mmain part Finished at 2025-12-24 21:51:35! Cost <1 Sec[0m

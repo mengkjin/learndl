@@ -48,7 +48,7 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
     catcher = LogWriter('log.txt')
     with catcher:
         Logger.stdout('This will be caught')
-        with Logger.ParagraphIII('main part'):
+        with Logger.ParagraphI('main part'):
             with Timer('abc'):
                 Logger.critical('critical message')
                 Logger.error('error message')
@@ -60,9 +60,11 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.divider()
                 Logger.success('success message')
                 Logger.remark('remark message')
-                Logger.alert('warning message' , level = 1)
-                Logger.alert('error message' , level = 2)
-                Logger.alert('critical message' , level = 3)
+                Logger.remark('remark message with default prefix' , color = 'lightblue')
+                Logger.footnote('footnote message')
+                Logger.alert1('warning message')
+                Logger.alert2('error message')
+                Logger.alert3('critical message')
                 Logger.skipping('skipping message' , indent = 1)
                 Logger.conclude(f'cmd is: {" ".join(sys.argv)}' , level = 'info')
                 Logger.conclude(f'this is kwargs: {str(kwargs)}' , level = 'info')
@@ -72,9 +74,9 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.conclude(f'this is a warning: {txt}' , level = 'warning')
                 Logger.conclude(f'this is a error: {txt}' , level = 'error')
                 Logger.conclude(f'this is a critical: {txt}' , level = 'critical')
-                Logger.stdout(f'email: {ScriptTool.get_value('email')}')
-                Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}')
-                Logger.stdout(f'task_key: {ScriptTool.get_value('task_key')}')
+                Logger.stdout(f'email: {ScriptTool.get_value('email')}' , indent = 0)
+                Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}' , indent = 1)
+                Logger.stdout(f'task_key: {ScriptTool.get_value('task_key')}' , indent = 2)
                 Logger.log_only('this is a log only message')
                 if (rnd := random.random()) < 0.5:
                     Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')

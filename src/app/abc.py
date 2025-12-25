@@ -30,7 +30,7 @@ def get_running_scripts(exclude_scripts : list[str] | str | None = None , script
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
                       log_path : Path | None = None ,
-                      verbose = False):
+                      vb_level : int = 1):
     # running_scripts = get_running_scripts(exclude_scripts)
     main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to {mode}'
     if MACHINE.is_windows:
@@ -38,8 +38,7 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
     else:
         main_str += f' applied\n'
         subprocess.run(['powerprofilesctl', 'set', mode])
-    if verbose: 
-        Logger.stdout(main_str , end = '')
+    Logger.stdout(main_str , end = '')
     if log_path is not None:
         log_path.parent.mkdir(parents = True , exist_ok = True)
         with open(log_path, 'a') as log_file:

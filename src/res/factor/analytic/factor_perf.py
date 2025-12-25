@@ -17,8 +17,8 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     COMPULSORY_BENCHMARKS : Any = None
         
-    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None , verbosity = 0):
-        with self.calc_manager(f'{self.__class__.__name__} calc' , verbosity = verbosity , indent = 1):
+    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None , indent : int = 1 , vb_level : int = 1):
+        with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level):
             func = self.calculator()
             rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
             self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
@@ -241,9 +241,9 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         # Distrib_Qtile ,
     ]
 
-    def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , verbosity = 1):
+    def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , indent : int = 0 , vb_level : int = 1):
         factor = factor.filter_dates_between(self.start_dt , self.end_dt)
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
+        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values(): 
-                task.calc(factor , benchmarks , verbosity = verbosity - 1)
+                task.calc(factor , benchmarks , indent = indent + 1 , vb_level = vb_level + 1)
         return self

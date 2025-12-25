@@ -335,15 +335,15 @@ class DataModule(BaseDataModule):
         return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.loader_param.stage , no_weight))
 
     def train_dataloader(self)   -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['train'] , self)
+        return BatchDataLoader(self.loader_dict['train'] , self , desc = 'Train')
     def val_dataloader(self)     -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['valid'] , self)
+        return BatchDataLoader(self.loader_dict['valid'] , self , desc = 'Valid')
     def test_dataloader(self)    -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['test'] , self)
+        return BatchDataLoader(self.loader_dict['test'] , self , desc = 'Test')
     def predict_dataloader(self) -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['predict'] , self , tqdm = False)
+        return BatchDataLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
     def extract_dataloader(self) -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['extract'] , self)
+        return BatchDataLoader(self.loader_dict['extract'] , self , desc = 'Extract')
     
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':

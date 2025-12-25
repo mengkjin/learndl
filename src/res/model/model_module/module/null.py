@@ -44,8 +44,7 @@ class NullPredictor(BasePredictorModel):
 
     def test(self):
         '''test the model inside'''
-        if self.trainer.verbosity > 10:
-            Logger.stdout('model test start')
+        Logger.stdout('model test start' , vb_level = 10)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -53,8 +52,7 @@ class NullPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model test done')
+        Logger.stdout('model test done' , vb_level = 10)
 
     def collect(self , *args):
         return self.model_dict

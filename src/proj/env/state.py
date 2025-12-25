@@ -108,18 +108,18 @@ class ProjStates(metaclass=_ProjStatesMeta):
         ProjStates.email_attachments.append(email_attachment) # for list[Path | str] email attachments
         ProjStates.exit_files.append(exit_file) # for list[Path | str] exit files
     """
-    @classmethod
-    def __setattr__(cls, key, value):
-        if key not in cls._meta_slots:
-            raise Exception(f'cannot set {cls.__name__}.{key} , only {cls._meta_slots} are allowed')
-        object.__setattr__(cls, key, value)
+    # @classmethod
+    # def __setattr__(cls, key, value):
+    #     if key not in cls._meta_slots:
+    #         raise Exception(f'cannot set {cls.__name__}.{key} , only {cls._meta_slots} are allowed')
+    #     object.__setattr__(cls, key, value)
 
     @classmethod
     def info(cls) -> list[str]:
         """return the machine info list"""
         names = ', '.join(cls._meta_slots)
         return [
-            f'Proj States  : {names}', 
+            f'Proj States    : {names}', 
         ]
 
     @classmethod

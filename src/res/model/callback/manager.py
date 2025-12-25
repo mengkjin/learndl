@@ -12,10 +12,10 @@ class CallBackManager(BaseCallBack):
         super().__init__(trainer)   
         self.callbacks : list[BaseCallBack] = [cb for cb in callbacks if isinstance(cb , BaseCallBack) and not cb.turn_off]
 
-    def at_enter(self , hook , verbosity : int = 0):
-        [cb.at_enter(hook , verbosity) for cb in self.callbacks]
-    def at_exit(self, hook , verbosity : int = 0):
-        [cb.at_exit(hook , verbosity) for cb in self.callbacks]
+    def at_enter(self , hook , vb_level : int = 10):
+        [cb.at_enter(hook , vb_level) for cb in self.callbacks]
+    def at_exit(self, hook , vb_level : int = 10):
+        [cb.at_exit(hook , vb_level) for cb in self.callbacks]
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):

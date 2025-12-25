@@ -486,7 +486,7 @@ class ModuleData:
                 from src.data.loader import FactorLoader
                 start_dt = max(factor_start_dt or data.date[0] , data.date[0])
                 end_dt = min(factor_end_dt or data.date[-1] , data.date[-1])
-                data.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , silent = True).align_secid_date(data.secid , data.date , inplace = True)
+                data.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 99).align_secid_date(data.secid , data.date , inplace = True)
         data.y.align_feature(y_labels , inplace = True)
         return data
     
@@ -504,7 +504,7 @@ class ModuleData:
             try:
                 cache_key_dict = json.load(f)
             except json.JSONDecodeError as e:
-                Logger.alert(f'cache_key.json is corrupted, reset it: {e}' , level = 1)
+                Logger.alert1(f'cache_key.json is corrupted, reset it: {e}')
                 cache_key_dict = {}
         for key , value in cache_key_dict.items():
             if value['type'] != 'dataset':
@@ -546,11 +546,11 @@ class ModuleData:
                     Logger.success(f'Loading Module Data, Try \'{path}\', success!')
             else:
                 if not Silence.silent: 
-                    Logger.alert(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!' , level = 1)
+                    Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None
         except ModuleNotFoundError:
             '''can be caused by different package version'''
-            Logger.alert(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!' , level = 1)
+            Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
             data = None
         except Exception as e:
             raise e

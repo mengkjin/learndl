@@ -1,18 +1,18 @@
 import numpy as np
 from tqdm import tqdm
 
-from src.proj import Silence
+from src.proj import ProjConfig
 from src.res.model.util import BaseDataModule , BatchData
     
 class BatchDataLoader:
     '''wrap loader to impletement DataModule Callbacks'''
-    def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True) -> None:
+    def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
         self.loader      = raw_loader
         self.data_module = data_module
         self.device      = data_module.device
-        self.verbosity   = data_module.config.verbosity
-        if self.verbosity >= 10 and tqdm: 
-            self.enable_tqdm()
+        self.tqdm        = tqdm
+        self.desc        = desc
+        self.enable_tqdm()
         self.filter_dates(exclude_dates , include_dates)
 
     def __repr__(self):
@@ -38,9 +38,10 @@ class BatchDataLoader:
         return batch_data
 
     def enable_tqdm(self , disable = False):
+        if ProjConfig.verbosity < 9 or not self.tqdm or disable: 
+            return self
         if not isinstance(self.loader , tqdm): 
-            self.loader = tqdm(self.loader , total=len(self.loader))
-        self.loader.disable = disable or Silence.silent
+            self.loader = tqdm(self.loader , total=len(self.loader) , desc=self.desc)
         return self
 
     def display(self , text : str):

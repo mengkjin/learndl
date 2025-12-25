@@ -10,8 +10,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , Literal , Type
 
-from src.proj.env import PATH , ProjStates
-from src.proj.func import Duration , Display , stdout , stderr
+from src.proj.env import PATH , ProjStates , ProjConfig
+from src.proj.func import Duration , Display , stdout , stderr , FormatStr
 
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""
@@ -129,7 +129,7 @@ class Logger:
             log_file.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def stdout(cls , *args , indent = 0 , color = None , **kwargs):
+    def stdout(cls , *args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
         """
         custom stdout message
         kwargs:
@@ -137,11 +137,16 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as print
         """
-        stdout(*args , indent = indent , color = color , **kwargs)
+        stdout(*args , indent = indent , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def caption(cls , *args , **kwargs):
-        """custom gray stdout message for caption (e.g. table title)"""
+        """custom gray stdout message for caption (e.g. table / figure title)"""
+        stdout(*args , color = 'white' , bg_color = 'gray' , bold = True , **kwargs)
+
+    @classmethod
+    def footnote(cls , *args , **kwargs):
+        """custom gray stdout message for footnote (e.g. saved information)"""
         stdout(*args , color = 'gray' , **kwargs)
         
     @classmethod
@@ -150,13 +155,28 @@ class Logger:
         stdout(*args , color = 'lightgreen' , **kwargs)
 
     @classmethod
-    def alert(cls , *args , level : Literal[1 , 2 , 3] = 1 , **kwargs):
+    def alert1(cls , *args , color = 'lightyellow' , vb_level : int = 0 , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        color = ['lightyellow' , 'lightred' , 'purple'][level - 1]
-        stdout(*args , color = color , **kwargs)
+        stdout(*args , color = color , vb_level = vb_level , **kwargs)
+
+    @classmethod
+    def alert2(cls , *args , color = 'lightred' , vb_level : int = 0 , **kwargs):
+        """
+        custom stdout message with color for alert
+        level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
+        """
+        stdout(*args , color = color , vb_level = vb_level , **kwargs)
+
+    @classmethod
+    def alert3(cls , *args , color = 'purple' , vb_level : int = 0 , **kwargs):
+        """
+        custom stdout message with color for alert
+        level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
+        """
+        stdout(*args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def skipping(cls , *args , **kwargs):
@@ -164,9 +184,11 @@ class Logger:
         stdout('Skipping:' , *args , color = 'gray' , **kwargs)
 
     @classmethod
-    def _speical_message(cls , *args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , level_prefix : dict[str, Any] | None = None , **kwargs):
+    def _speical_message(cls , *args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , level_prefix : dict[str, Any] | None = None , vb_level : int | None = None , **kwargs):
         """custom cyan colored Highlight level message"""
         assert not level_prefix or not padding_char , 'prefix and padding_char cannot be used together'
+        if vb_level is None:
+            vb_level = 0 if level_prefix else 1
         msg = ' '.join([str(s) for s in args])
         if padding_char and len(msg) < padding_width:
             padding_left = padding_char * max(0 , (padding_width - len(msg) - 2) // 2)
@@ -189,38 +211,43 @@ class Logger:
     @classmethod
     def highlight(cls , *args , color = 'cyan' , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):
         """custom cyan colored Highlight level message"""
-        level_prefix = {'level' : 'HIGHLIGHT' , 'color' : 'white' , 'bg_color' : color} if prefix else None
+        level_prefix = {'level' : 'HIGHLIGHT' , 'color' : 'black' , 'bg_color' : color} if prefix else None
         cls._speical_message(*args , padding_char = padding_char , padding_width = padding_width , color = color , level_prefix = level_prefix , **kwargs)
 
     @classmethod
-    def debug(cls , *args , **kwargs):
+    def debug(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Debug level stderr"""
-        cls.log.debug(*args , **kwargs)
+        if vb_level <= ProjConfig.verbosity:
+            cls.log.debug(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
-    def info(cls , *args , **kwargs):
+    def info(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Info level stderr"""
-        cls.log.info(*args , **kwargs)
+        if vb_level <= ProjConfig.verbosity:
+            cls.log.info(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
-    def warning(cls , *args , **kwargs):
+    def warning(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Warning level stderr"""
-        cls.log.warning(*args , **kwargs)
+        if vb_level <= ProjConfig.verbosity:
+            cls.log.warning(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
-    def error(cls , *args , **kwargs):
+    def error(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Error level stderr"""
-        cls.log.error(*args , **kwargs)
+        if vb_level <= ProjConfig.verbosity:
+            cls.log.error(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
-    def critical(cls , *args , **kwargs):
+    def critical(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Critical level stderr"""
-        cls.log.critical(*args , **kwargs)
+        if vb_level <= ProjConfig.verbosity:
+            cls.log.critical(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
-    def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-' , color : str | None = None):
+    def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-' , color : str | None = None , vb_level : int = 0):
         """Divider mesge , use stdout"""
-        stdout(char * width , color = color)
+        stdout(char * width , color = color , vb_level = vb_level)
 
     @classmethod
     def conclude(cls , *args : str , level : _type_levels = 'critical'):
@@ -255,8 +282,9 @@ class Logger:
             with Logger.ParagraphI('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
-        def __init__(self , title : str):
+        def __init__(self , title : str , vb_level : int = 0):
             self.title = title
+            self.vb_level = vb_level
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -264,7 +292,7 @@ class Logger:
             self._end_time = datetime.now()
             self.write(f'{self.title} Finished at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}! Cost {Duration(self._end_time - self._init_time)}')
         def write(self , message : str):
-            Logger.warning(message)
+            Logger.warning(message , vb_level = self.vb_level)
 
     class ParagraphII:
         """
@@ -273,8 +301,9 @@ class Logger:
             with Logger.ParagraphII('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
-        def __init__(self , title : str):
+        def __init__(self , title : str , vb_level : int = 0):
             self.title = title
+            self.vb_level = vb_level
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -282,7 +311,7 @@ class Logger:
             self._end_time = datetime.now()
             self.write(f'{self.title} Finished at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}! Cost {Duration(self._end_time - self._init_time)}')
         def write(self , message : str):
-            Logger.info(message)
+            Logger.info(message , vb_level = self.vb_level)
 
     class ParagraphIII:
         """
@@ -291,10 +320,11 @@ class Logger:
             with Logger.ParagraphIII('Title'):
                 Logger.info('This is the enclosed message...')
         """
-        def __init__(self , title : str , width : int = 100 , char : Literal['-' , '=' , '*'] = '*'):
+        def __init__(self , title : str , width : int = 100 , char : Literal['-' , '=' , '*'] = '*', vb_level : int = 0):
             self.title = title.strip().upper()
             self.width = width
             self.char = char
+            self.vb_level = vb_level
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start'.upper())
@@ -304,7 +334,7 @@ class Logger:
             self.write(f'{self.title} Finished in {Duration(self._end_time - self._init_time)}'.upper())
 
         def write(self , message : str):
-            Logger.highlight(message , padding_char = self.char , padding_width = self.width)
+            Logger.highlight(message , padding_char = self.char , padding_width = self.width , vb_level = self.vb_level)
 
     class Profiler(cProfile.Profile):
         """Profiler class for profiling the code, show the profile result in the best way"""
@@ -360,7 +390,7 @@ class Logger:
             if isinstance(output , str): 
                 path = PATH.log_profile.joinpath(output).with_suffix('.csv')
                 df.to_csv(path)
-                stdout(f'Profile result saved to {path}')
+                Logger.footnote(f'Profile result saved to {path}')
             return df.reset_index(drop=True)
 
         @staticmethod

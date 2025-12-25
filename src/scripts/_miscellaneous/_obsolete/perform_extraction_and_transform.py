@@ -52,7 +52,7 @@ def extract_js_min(date):
         Logger.error(e)
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
-    DB.save_df(df , target_path , verbose = False)
+    DB.save_df(df , target_path , prefix = f'Kline' , vb_level = 99)
     return df
 
 def add_sec_type(df : pd.DataFrame):
@@ -131,7 +131,7 @@ def perform_extraction_and_transform(date : int):
         if sec_type == 'sec':
             sec_df = transform_sec(df)
         src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
-        DB.save(sec_df , 'trade_js' , src_key , date , verbose = True)
+        DB.save(sec_df , 'trade_js' , src_key , date)
     
 if __name__ == '__main__' and MACHINE.server:
     args = argparse.ArgumentParser()

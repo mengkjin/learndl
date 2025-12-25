@@ -13,8 +13,7 @@ class TSBackUpDataTransform():
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
-        date_str = str(date)
-        record_file = PATH.bak_data.joinpath(f'{key}_{date_str}.csv')
+        record_file = PATH.bak_data.joinpath(f'{key}_{CALENDAR.dates_str(date)}.csv')
         df = pd.read_csv(record_file)
         df.columns = df.columns.str.lower()
         return df

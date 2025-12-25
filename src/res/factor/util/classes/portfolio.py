@@ -144,7 +144,7 @@ class Portfolio:
             return cls(path.stem)
         
 
-    def save(self , path : Path | str , overwrite = False , append = True):
+    def save(self , path : Path | str , overwrite = False , append = True , indent : int = 1 , vb_level : int = 2):
         path = Path(path)
         if path.exists() and not overwrite:
             raise FileExistsError(f'{path} already exists')
@@ -157,7 +157,7 @@ class Portfolio:
             port = pd.concat([prev_port , new_port]).sort_values(by=['date' , 'secid'])
         else:
             port = self.to_dataframe()
-        DB.save_df(port , path , overwrite = True)
+        DB.save_df(port , path , overwrite = True , prefix = f'Portfolio' , indent = indent , vb_level = vb_level)
     
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         if secid is None or self.is_empty: 
@@ -212,10 +212,10 @@ class Portfolio:
                    start : int = -1 , end : int = 99991231 , 
                    analytic = True , attribution = True , 
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-                   daily = False , store = False , verbosity : int = 1):
+                   daily = False , store = False , indent : int = 0 , vb_level : int = 1):
         if not hasattr(self , 'accountant'): 
             self.activate_accountant()
-        self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store , verbosity)
+        self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store , indent = indent , vb_level = vb_level)
         return self
     
     def account_with_index(self , add_index : dict[str,Any] | None = None):

@@ -10,7 +10,7 @@ __all__ = ['ScriptLock' , 'ScriptLockMultiple']
 class ScriptLock:
     LOCK_DIR = PATH.runtime.joinpath('script_lock')
     
-    def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , verbose: bool = True):
+    def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , vb_level : int = 1):
         """
         init script lock
         Args:
@@ -23,13 +23,12 @@ class ScriptLock:
         self.timeout = timeout
         self.wait_time = wait_time
         self.lock_file = None
-        self.verbose = verbose
+        self.vb_level = vb_level
         self.LOCK_DIR.mkdir(parents=True, exist_ok=True)
 
     def _log(self, message: str):
         """printing out message"""
-        if self.verbose:
-            Logger.debug(message)
+        Logger.debug(message , vb_level = self.vb_level)
 
     def _log_get_lock(self , start_time: datetime | None = None):
         if start_time is not None and (wait_time := (datetime.now() - start_time).total_seconds()) > 1:
@@ -98,7 +97,7 @@ class ScriptLockMultiple:
     LOCK_DIR = PATH.runtime.joinpath('script_lock_multiple')
     
     def __init__(self, lock_name: str, lock_num: int = 1, timeout: int | None = None, 
-                 wait_time: int = 1, verbose: bool = True):
+                 wait_time: int = 1, vb_level : int = 1):
         """
         initialize multiple lock manager
         Args:
@@ -106,13 +105,13 @@ class ScriptLockMultiple:
             lock_num: maximum number of instances allowed to run simultaneously
             timeout: timeout seconds, None means infinite wait
             wait_time: wait time seconds between each check
-            verbose: whether to output detailed logs
+            vb_level: minimum verbosity level to output logs
         """
         self.lock_name = lock_name
         self.lock_num = lock_num
         self.timeout = timeout
         self.wait_time = wait_time
-        self.verbose = verbose
+        self.vb_level = vb_level
         self.acquired_locks = []  # 存储已获取的锁文件
         self._has_wait_message = False
         self.lock_dir.mkdir(parents=True, exist_ok=True)
@@ -123,8 +122,7 @@ class ScriptLockMultiple:
 
     def _log(self, message: str):
         """printing out message"""
-        if self.verbose:
-            Logger.debug(message)
+        Logger.debug(message , vb_level = self.vb_level)
 
     def _log_get_lock(self, lock_id: int, start_time: datetime | None = None):
         """record the log of getting lock"""

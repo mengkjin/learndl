@@ -78,12 +78,12 @@ class MACHINE:
     def info(cls) -> list[str]:
         """return the machine info list"""
         return [
-            f'Machine Name : {cls.name}', 
-            f'Is Server    : {cls.server}', 
-            f'System       : {cls.system_name}', 
-            f'Main Path    : {cls.main_path}' , 
-            f'Python Path  : {cls.python_path}' ,
-            f'Best Device  : {cls.best_device}' ,
+            f'Machine Name   : {cls.name}', 
+            f'Is Server      : {cls.server}', 
+            f'System         : {cls.system_name}', 
+            f'Main Path      : {cls.main_path}' , 
+            f'Python Path    : {cls.python_path}' ,
+            f'Best Device    : {cls.best_device}' ,
         ]
 
     @classmethod

@@ -13,25 +13,10 @@ class MultiKlineUpdater(BasicUpdater):
     DAYS = [5 , 10 , 20]
 
     @classmethod
-    def update(cls):
-        Logger.stdout(f'Update: {cls.__name__} since last update!')
-        cls.update_all('update')
-
-    @classmethod
-    def rollback(cls , rollback_date : int):
-        Logger.stdout(f'Update: {cls.__name__} rollback from {rollback_date}!')
-        cls.set_rollback_date(rollback_date)
-        cls.update_all('rollback')
-
-    @classmethod
-    def recalculate_all(cls):
-        Logger.stdout(f'Update: {cls.__name__} recalculate all!')
-        cls.update_all('recalc')
-
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all nday klines is not supported yet for {cls.__name__}')
+        
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
             if update_type == 'recalc':
@@ -46,11 +31,14 @@ class MultiKlineUpdater(BasicUpdater):
             end_date     = DB.dates(cls.DB_SRC , 'day').max()
             update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
             for date in update_dates: 
-                cls.update_one(date , n_day , label_name)
+                cls.update_one(date , n_day , label_name , indent = indent + 1 , vb_level = vb_level + 1)
+            
+            Logger.success(f'Success : {cls.DB_SRC}/{label_name} at {CALENDAR.dates_str(update_dates)} updated' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , n_day : int , label_name : str):
-        DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , verbose = True)
+    def update_one(cls , date : int , n_day : int , label_name : str , indent : int = 1 , vb_level : int = 1):
+        DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , vb_level = 99)
+        Logger.success(f'Success : {cls.DB_SRC}/{label_name} at {date} updated' , indent = indent , vb_level = vb_level)
 
 
 def nday_kline(date : int , n_day : int) -> pd.DataFrame:

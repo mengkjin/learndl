@@ -122,8 +122,6 @@ class TrainParam:
         return not self.base_path and not MACHINE.server
 
     def special_adjustment(self):
-        if 'verbosity'  in self.override: 
-            self.override['env.verbosity']  = self.override.pop('verbosity')
         if 'short_test' in self.override: 
             self.override['env.short_test'] = self.override.pop('short_test')
         if 'module'     in self.override: 
@@ -168,7 +166,7 @@ class TrainParam:
     
     def check_validity(self):
         if self.should_be_short_test and not self.short_test:
-            Logger.alert('Beware! Should be at server or short_test, but short_test is False now!' , level = 1)
+            Logger.alert1('Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = AlgoModule.nn_category(self.model_module)
         if nn_category == 'tra': 
@@ -199,7 +197,7 @@ class TrainParam:
     def generate_model_param(self , update_inplace = True , **kwargs):
         module = self.model_booster_type if self.module_type == 'booster' else self.model_module
         assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , self.short_test , self.schedule_name , **kwargs).expand()
+        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.short_test , self.schedule_name , **kwargs).expand()
         if update_inplace: 
             self.update_model_param(model_param)
         return model_param
@@ -248,10 +246,6 @@ class TrainParam:
     def short_test(self , value : bool):
         self.Param['env.short_test'] = value
 
-    @property
-    def verbosity(self) -> int: 
-        v = int(self.Param['env.verbosity'])
-        return min(max(v , 0) , 10)
     @property
     def random_seed(self) -> int | Any: 
         return self.Param['env.random_seed']
@@ -459,7 +453,7 @@ class TrainParam:
 
 class ModelParam:
     def __init__(self , base_path : ModelPath | Path | str | None , module : str , 
-                 booster_head : Any = False , verbosity = 2 , short_test : bool | None = None , 
+                 booster_head : Any = False , short_test : bool | None = None , 
                  schedule_name : str | None = None,
                  **kwargs):
         self.base_path = ModelPath(base_path)
@@ -467,7 +461,6 @@ class ModelParam:
         self.module = module.lower()
         self.booster_head = booster_head if self.module_type == 'nn' else None    
         self.short_test = short_test
-        self.verbosity = verbosity
         self.schedule_name = schedule_name
         self.override = kwargs
         self.load_param().check_validity()
@@ -522,7 +515,6 @@ class ModelParam:
         return self
     
     def special_adjustment(self):
-        self.model_param['verbosity'] = self.verbosity
         self.model_param.update(self.override)
         return self
 
@@ -544,7 +536,7 @@ class ModelParam:
 
         if self.booster_head:
             assert AlgoModule.is_valid(self.booster_head , 'booster') , self.booster_head
-            self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , **self.override)
+            self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , **self.override)
         return self
     
     def get(self , key : str , default = None) -> Any:
@@ -761,7 +753,7 @@ class TrainConfig(TrainParam):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
-    def parser_stage(self , value = -1 , verbose = True):
+    def parser_stage(self , value = -1 , vb_level : int = 1):
         """
         parser stage queue
         value:
@@ -781,11 +773,10 @@ class TrainConfig(TrainParam):
                 stage_queue = ['data' , stage_queue[value]]
             elif value < 0:
                 raise Exception(f'Error input : {value}')
-        if verbose:
-            Logger.success('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
+        Logger.success('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , vb_level = vb_level)
         self._stage_queue = stage_queue
 
-    def parser_resume(self , value = -1 , verbose = True):
+    def parser_resume(self , value = -1 , vb_level : int = 1):
         """
         parser resume flag
         value:
@@ -804,10 +795,9 @@ class TrainConfig(TrainParam):
                 user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
         self.is_resuming = value > 0 
-        if verbose:
-            Logger.success(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!')
+        Logger.success(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!' , vb_level = vb_level)
 
-    def parser_select(self , value = -1 , verbose = True):
+    def parser_select(self , value = -1 , vb_level : int = 1):
         '''
         parse model_name selection if model_name dirs exists
         value:
@@ -845,8 +835,7 @@ class TrainConfig(TrainParam):
                     if model_name not in candidate_name:
                         Logger.error(f'The raw model_name [{model_name}] does not exist! You have to start a new training or manually delete the existing model_name dir!')
                         raise Exception(f'the raw model_name [{model_name}] does not exist!')
-                    if self.verbosity > 0:
-                        Logger.remark(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
+                    Logger.remark(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
                 else:
                     if model_name in candidate_name:
                         model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
@@ -876,12 +865,11 @@ class TrainConfig(TrainParam):
         else:
             raise Exception(f'Invalid stage queue: {self.stage_queue}')
 
-        if verbose:
-            Logger.success(f'--Model_name is set to {model_name}!')  
+        Logger.success(f'--Model_name is set to {model_name}!' , vb_level = vb_level)  
         self.Train.reset_base_path(model_name)
         self.Model.reset_base_path(model_name)
 
-    def process_parser(self , stage = -1 , resume = -1 , selection = -1 , verbose = True):
+    def process_parser(self , stage = -1 , resume = -1 , selection = -1 , vb_level : int = 1):
         if self.model_base_path:
             if resume == -1 or resume == 1:
                 resume = 1
@@ -891,11 +879,11 @@ class TrainConfig(TrainParam):
                 selection = 0
             else:
                 raise ValueError(f'selection must be -1 or 0 when base_path is not None , got {selection}')
-            verbose = False
+            vb_level = 99
         
-        self.parser_stage(stage , verbose)
-        self.parser_resume(resume , verbose)
-        self.parser_select(selection , verbose) 
+        self.parser_stage(stage , vb_level)
+        self.parser_resume(resume , vb_level)
+        self.parser_select(selection , vb_level) 
         return self
 
     def print_out(self):
@@ -906,7 +894,6 @@ class TrainConfig(TrainParam):
             info_strs.append((0 , 'Model Labels' , f'{self.model_labels}'))
             info_strs.append((0 , 'Model Period' , f'{self.beg_date} ~ {self.end_date}'))
             info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
-            info_strs.append((0 , 'Verbosity' , f'{self.verbosity}'))
         else:
             info_strs.append((0 , 'Model Module' , f'{self.model_module}'))
             if self.module_type == 'booster':
@@ -945,11 +932,10 @@ class TrainConfig(TrainParam):
             info_strs.append((0 , 'Random Seed' , f'{self.random_seed}'))
             info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
             info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
-            info_strs.append((0 , 'Verbosity' , f'{self.verbosity}'))
 
         indents = list(set([indent for indent , _ , _ in info_strs]))
-        indent_nchar = [max([len(key) for indent in indents for indent , key , _ in info_strs if indent == indent])]
-        infos = [FormatStr(f'{key.title():{indent_nchar[0]}s} : {value}' , indent = indent , color = color) for indent , key , value in info_strs]
+        indent_nchar = {indent:max([len(key) for indent in indents for indent , key , _ in info_strs if indent == indent]) for indent in indents}
+        infos = [FormatStr(f'{key.title():{indent_nchar[indent]}s} : {value}' , indent = indent , color = color) for indent , key , value in info_strs]
         Logger.stdout('\n'.join(infos))
         return self
 

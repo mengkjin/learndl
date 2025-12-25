@@ -42,7 +42,7 @@ def load_list(date : int , data_type : DATA_TYPES):
 def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    DB.save_df(df , path , verbose = False)
+    DB.save_df(df , path , vb_level = 99)
 
 def load_min(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
@@ -53,7 +53,7 @@ def load_min(date : int , data_type : DATA_TYPES):
 def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    DB.save_df(df , path , verbose = False)
+    DB.save_df(df , path , vb_level = 99)
 
 def rcquant_init():
     if not rqdatac.initialized(): 
@@ -67,7 +67,7 @@ def rcquant_init():
             if _error := output['stderr']:
                 key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
                 if key_info:
-                    Logger.alert(f'RcQuant Warning : {key_info.group(0)}' , level = 1)
+                    Logger.alert1(f'RcQuant Warning : {key_info.group(0)}')
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
         except FileNotFoundError:
@@ -160,7 +160,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
 
     if (sec_min := load_min(date , data_type)) is not None: 
         df = rcquant_min_to_normal_min(sec_min , data_type)
-        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
+        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 2)
         return True
 
     if not rcquant_init(): 
@@ -181,7 +181,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         write_min(data , date , data_type)
 
         df = rcquant_min_to_normal_min(data , data_type)
-        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
+        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 2)
         return True
     else:
         return False
@@ -199,26 +199,30 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1 , verbosity : int = 1):
+def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
     if len(dts) == 0: 
-        Logger.skipping(f'rcquant {data_type} bar min has no date to download')
+        Logger.skipping(f'rcquant {data_type} bar min has no date to download' , indent = 1)
+        return True
+    
     for dt in dts:
-        Logger.stdout(f'Download: rcquant {data_type} bar min update date {dt}')
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            Logger.alert(f'rcquant {data_type} bar min {dt} failed' , level = 1)
-        elif verbosity > 1 :
-            Logger.success(f'rcquant {data_type} bar min {dt} success')
+            Logger.alert1(f'rcquant {data_type} bar min {dt} failed' , indent = 2)
+        else:
+            Logger.stdout(f'rcquant {data_type} bar min {dt} downloaded' , indent = 2 , vb_level = 2)
+    Logger.success(f'Success : rcquant {data_type} bar min at {CALENDAR.dates_str(dts)} downloaded' , indent = 1)
 
-    for dt in x_mins_target_dates(data_type , date):
-        Logger.stdout(f'Transform: {data_type} X-min bars at {dt} from source rcquant')
+    dts = x_mins_target_dates(data_type , date)
+    for dt in dts:
         for x_min in x_mins_to_update(dt , data_type = data_type):
             min_df = DB.load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
             x_min_df = trade_min_reform(min_df , x_min , 1)
-            DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
+            DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = 2)
+        Logger.stdout(f'rcquant {data_type} X-min bars at {dt} transformed' , indent = 2 , vb_level = 2)
+    Logger.success(f'Success : rcquant {data_type} X-min bars at {CALENDAR.dates_str(dts)} transformed' , indent = 1)
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):

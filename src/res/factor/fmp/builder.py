@@ -59,13 +59,14 @@ class PortfolioBuilder:
     def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
-                 build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
+                 build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
         self.category  = category
         self.alpha     = alpha
         self.benchmark = get_benchmark(benchmark)
         self.kwargs    = kwargs
         self.lag       = lag
-        self.verbosity = verbosity
+        self.indent    = indent
+        self.vb_level  = vb_level
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
@@ -112,10 +113,10 @@ class PortfolioBuilder:
         self.portfolio = port.filter_dates(dates = dates[(dates >= build_on_start) & (dates < self.min_alpha_date)]).rename(self.full_name)
         return self
 
-    def export_portfolio(self , path : Path | str | None = None , append = False):
+    def export_portfolio(self , path : Path | str | None = None , append = False , indent : int = 0 , vb_level : int = 1):
         if path is None:
             return self
-        self.portfolio.save(self.build_on_path(path) , overwrite = True , append = append)
+        self.portfolio.save(self.build_on_path(path) , overwrite = True , append = append , indent = indent , vb_level = vb_level)
         return self
     
     @property
@@ -127,10 +128,10 @@ class PortfolioBuilder:
         return get_port_index(self.full_name)
     
     @classmethod
-    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
+    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
         elements = parse_full_name(full_name)
         assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
-        return cls(alpha = alpha , verbosity = verbosity , **elements , **kwargs).set_build_on(build_on)
+        return cls(alpha = alpha , indent = indent , vb_level = vb_level , **elements , **kwargs).set_build_on(build_on)
     
     @staticmethod
     def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen'] , alpha : AlphaModel | str , 
@@ -138,9 +139,7 @@ class PortfolioBuilder:
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
     
-    def setup(self , verbosity : int | None = None):
-        if verbosity is None: 
-            verbosity = self.verbosity
+    def setup(self):
 
         match self.category:
             case 'optim':
@@ -154,7 +153,7 @@ class PortfolioBuilder:
             case _:
                 raise ValueError(f'Unknown category: {self.category}')
 
-        self.creator = creator_class(self.full_name).setup(print_info = verbosity > 1 , **self.kwargs)
+        self.creator = creator_class(self.full_name).setup(indent = self.indent , vb_level = self.vb_level + 1 , **self.kwargs)
         return self
         
     def build(self , date : int):
@@ -174,7 +173,7 @@ class PortfolioBuilder:
         '''Accounting portfolio through date, require at least portfolio'''
         self.portfolio.accounting(self.benchmark , start , end , 
                                   analytic and self.lag == 0 , attribution and self.lag == 0 ,
-                                  trade_engine , daily , verbosity = self.verbosity)
+                                  trade_engine , daily , indent = self.indent , vb_level = self.vb_level)
         self.account = self.portfolio.account_with_index(self.port_index)
         return self
 
@@ -223,12 +222,13 @@ class PortfolioGroupBuilder:
         analytic : bool = True ,
         attribution : bool = True ,
         trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
-        verbosity : int = 1 ,
         resume : bool = False ,
         resume_path : Path | str | None = None ,
         start_dt : int = -1 ,
         end_dt : int = 99991231 ,
         caller = None ,
+        indent : int = 0 , 
+        vb_level : int = 1 ,
         **kwargs
     ):
         
@@ -249,7 +249,8 @@ class PortfolioGroupBuilder:
             self.param_groups = {'default':kwargs}
         self.acc_kwargs : dict[str,Any] = {'daily' : daily , 'analytic' : analytic , 'attribution' : attribution , 'trade_engine' : trade_engine}
 
-        self.verbosity = verbosity
+        self.indent = indent
+        self.vb_level = vb_level
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None else None
         self.caller = caller
@@ -279,14 +280,15 @@ class PortfolioGroupBuilder:
                f'{len(self.lags)}lag,{len(self.param_groups)}kwgs] & {len(self.relevant_dates)} dates, totaling {self.n_builds} builds)'
 
     def builders_info(self):
-        Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs) and {self.n_builds} (x {len(self.relevant_dates)} dates)')
+        Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs) {self.n_builds} builds (x {len(self.relevant_dates)} dates)' , 
+                      indent = self.indent , vb_level = self.vb_level)
     
     def builders_setup(self):
-        with Timer(f'{self.class_name}.setup' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name}.setup' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
             self.builders.clear()
             self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
-                kwargs = self.param_groups[strategy] | {'strategy':strategy , 'verbosity':self.verbosity - 1}
+                kwargs = self.param_groups[strategy] | {'strategy':strategy , 'indent':self.indent + 1 , 'vb_level':self.vb_level + 1}
                 builder = PortfolioBuilder(self.category , alpha , bench , lag , **kwargs).setup()
                 self.builders.append(builder)
         return self
@@ -294,7 +296,7 @@ class PortfolioGroupBuilder:
     def builders_resume(self):
         if self.resume_path is None or not self.resume:
             return
-        with Timer(f'{self.class_name}.resume' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name}.resume' , indent = self.indent , vb_level = self.vb_level):
             for builder in self.builders:
                 builder.set_build_on(self.resume_path)
         return self
@@ -302,9 +304,9 @@ class PortfolioGroupBuilder:
     def export_portfolio(self):
         if self.resume_path is None:
             return
-        with Timer(f'{self.class_name}.export' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
             for builder in self.builders:
-                builder.export_portfolio(self.resume_path , append = self.resume)
+                builder.export_portfolio(self.resume_path , append = self.resume , indent = self.indent + 1 , vb_level = self.vb_level + 2)
         return self
     
     @property
@@ -342,20 +344,23 @@ class PortfolioGroupBuilder:
                     continue
                 self._builder.build(self._date)
                 _opt_count += 1
-                if self.verbosity > 2 and _opt_count % 100 == 0: 
+                if _opt_count % 100 == 0: 
                     time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].timecost.items()}
                     Logger.stdout(f'Building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
-                          f' Finished at {self._date} , time cost (ms) : {time_cost}' , indent = 1)
-        if self.verbosity > 0:
-            secs = (datetime.now() - _t0).total_seconds()
-            Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building')
+                          f' Finished at {self._date} , time cost (ms) : {time_cost}' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        secs = (datetime.now() - _t0).total_seconds()
+        Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building' , 
+                      indent = self.indent , vb_level = self.vb_level)
         self.export_portfolio()
         return self
     
     def accounting(self):
-        with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1 , exit_only = self.verbosity < 2) , Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv'):
+        with (
+            Timer(f'{self.class_name} accounting' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 1) , 
+            Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv')
+        ):
             for builder in self.builders:
-                with Timer(f'{builder.portfolio.name} accounting' , silent = self.verbosity < 2 , indent = 1):
+                with Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1):
                     builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
         self.accounted = True
         return self

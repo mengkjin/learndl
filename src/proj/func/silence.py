@@ -2,7 +2,7 @@ class _SilenceSilent:
     """Silent silencer, used to silence most of the project's output , nested usage is supported"""
     def __get__(self , instance, owner):
         instance_list = getattr(owner, 'instance_list' , None)
-        return instance_list and instance_list[-1].enable
+        return bool(instance_list) and instance_list[-1].enable
 
 class Silence:
     """Silence manager, can be used to silence most of the project's output , nested usage is supported"""

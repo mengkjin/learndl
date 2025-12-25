@@ -53,7 +53,7 @@ def _db_src_deprecated(i : int):
         def inner(*args , **kwargs):
             db_src = args[i]
             if db_src in _deprecated_db_by_name or db_src in _deprecated_db_by_date:
-                Logger.alert(f'at {func.__name__} , {db_src} will be deprecated soon, please update your code' , level = 1)
+                Logger.alert1(f'at {func.__name__} , {db_src} will be deprecated soon, please update your code')
             return func(*args , **kwargs)
         return inner
     return wrapper
@@ -107,7 +107,7 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True , prefix = '' , stdout_indent = 1):
+def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
     """save dataframe to path"""
     prefix = prefix or ''
     path = Path(path)
@@ -120,16 +120,14 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , ve
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
-        if verbose: 
-            Logger.stdout(f'{prefix}{status}: {path}' , indent = stdout_indent)
+        Logger.footnote(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return True
     else:
         status = 'File Exists'
-        if verbose: 
-            Logger.alert(f'{prefix}{status}: {path}' , level = 1 , indent = stdout_indent)
+        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def load_df(path : Path , raise_if_not_exist = False):
+def load_df(path : Path , *, raise_if_not_exist = False):
     """load dataframe from path"""
     if not path.exists():
         if raise_if_not_exist: 
@@ -178,25 +176,24 @@ def _load_df_multi(paths : dict , date_colname : str = 'date' ,
 
     if not dfs: 
         return pd.DataFrame()
-    df = pd.concat([v for v in dfs if not v.empty])
-    df = _load_df_mapper(df)
-    return df
+    else:
+        df = _load_df_mapper(pd.concat([v for v in dfs if not v.empty]))
+        return df
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
-               df_syntax : str | None = 'some df' , reset_index = True , ignored_fields = [] , stdout_indent = 1):
+               df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int = 1):
     """process dataframe"""
     if date_colname and date is not None: 
         df[date_colname] = date
 
-    if df_syntax:
-        if df.empty:
-            Logger.stdout(f'{df_syntax} is empty')
-        else:
-            na_cols : pd.Series | Any = df.isna().all()
-            if na_cols.all():
-                Logger.alert(f'{df_syntax} is all-NA' , level = 1 , indent = stdout_indent)
-            elif check_na_cols and na_cols.any():
-                Logger.alert(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA' , level = 1 , indent = stdout_indent)
+    if df.empty:
+        Logger.alert1(f'{df_syntax} is empty' , indent = indent , vb_level = vb_level)
+    else:
+        na_cols : pd.Series | Any = df.isna().all()
+        if na_cols.all():
+            Logger.alert1(f'{df_syntax} is all-NA' , indent = indent)
+        elif check_na_cols and na_cols.any():
+            Logger.alert1(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA' , indent = indent)
 
     if reset_index and len(df.index.names) > 1 or df.index.name: 
         df = df.reset_index()
@@ -258,7 +255,7 @@ def _db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , 
         dates = np.concatenate([alt_dates , dates])
     return dates
 
-def min_date(db_src , db_key , use_alt = False):
+def min_date(db_src , db_key , *, use_alt = False):
     """get minimum date from any database data"""
     directory = _db_parent(db_src , db_key)
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()] if directory.exists() else []
@@ -278,7 +275,7 @@ def min_date(db_src , db_key , use_alt = False):
             mdate = min(mdate , min(dates) if len(dates) else 99991231)
     return int(mdate)
 
-def max_date(db_src , db_key , use_alt = False):
+def max_date(db_src , db_key , *, use_alt = False):
     """get maximum date from any database data"""
     directory = _db_parent(db_src , db_key)
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()] if directory.exists() else []
@@ -299,7 +296,7 @@ def max_date(db_src , db_key , use_alt = False):
     return int(mdate)
 
 # @_db_src_deprecated(1)
-def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True , stdout_indent = 1):
+def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , *, overwrite = True , indent = 1 , vb_level : int = 1):
     '''
     Save data to database
     Parameters  
@@ -316,12 +313,13 @@ def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = Tr
     if df is not None and (len(df.index.names) > 1 or df.index.name): 
         df = df.reset_index()
     mark = save_df(df , _db_path(db_src , db_key , date , use_alt = False) , 
-                   overwrite = True , verbose = verbose , stdout_indent = stdout_indent)
+                   overwrite = overwrite , prefix = db_key.title() , indent = indent , vb_level = vb_level)
     return mark
 
 # @_db_src_deprecated(0)
-def load(db_src , db_key , date = None , date_colname = None , verbose = True , use_alt = False , 
-         raise_if_not_exist = False , stdout_indent = 1 , **kwargs) -> pd.DataFrame: 
+def load(db_src , db_key , date = None , *, 
+         date_colname = None , use_alt = False , 
+         raise_if_not_exist = False , indent = 1 , vb_level : int = 1 , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
     Parameters
@@ -345,27 +343,25 @@ def load(db_src , db_key , date = None , date_colname = None , verbose = True , 
             if True, reset index (no drop index)
     '''
     path = _db_path(db_src , db_key , date , use_alt = use_alt)
-    df_syntax = f'{db_src}/{db_key}/{date}' if verbose else None
     df = load_df(path , raise_if_not_exist = raise_if_not_exist)
-    df = _process_df(df , date , date_colname , df_syntax = df_syntax , stdout_indent = stdout_indent , **kwargs)
+    df = _process_df(df , date , date_colname , df_syntax = f'{db_src}/{db_key}/{date}' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
 # @_db_src_deprecated(0)
-def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , 
-               date_colname = 'date' , verbose = True , use_alt = False , 
-               parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , stdout_indent = 1 , **kwargs):
+def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
+               date_colname = 'date' , use_alt = False , 
+               parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , indent = 1 , vb_level : int = 1 , **kwargs):
     """load multiple dates from database"""
     if db_src in DB_BY_NAME + EXPORT_BY_NAME:
         return load(db_src , db_key , dates = dates , start_dt = start_dt , end_dt = end_dt , 
-                    date_colname = date_colname , verbose = verbose , use_alt = use_alt , 
-                    parallel = parallel , **kwargs)
+                    date_colname = date_colname , use_alt = use_alt , 
+                    parallel = parallel , indent = indent , vb_level = vb_level , **kwargs)
     if dates is None:
         assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
-    df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
     df = _load_df_multi(paths , date_colname , parallel)
-    df = _process_df(df , df_syntax = df_syntax , stdout_indent = stdout_indent , **kwargs)
+    df = _process_df(df , df_syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
 def rename(db_src , db_key , new_db_key):

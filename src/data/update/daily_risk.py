@@ -13,23 +13,7 @@ class DailyRiskUpdater(BasicUpdater):
     DB_KEY = 'daily_risk'
 
     @classmethod
-    def update(cls):
-        Logger.stdout(f'Update: {cls.__name__} since last update!')
-        cls.update_all('update')
-
-    @classmethod
-    def rollback(cls , rollback_date : int):
-        Logger.stdout(f'Update: {cls.__name__} rollback from {rollback_date}!')
-        cls.set_rollback_date(rollback_date)
-        cls.update_all('rollback')
-        
-    @classmethod
-    def recalculate_all(cls):
-        Logger.stdout(f'Update: {cls.__name__} recalculate all!')
-        cls.update_all('recalc')
-
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all daily risk is not supported yet for {cls.__name__}')
             stored_dates = np.array([])
@@ -44,11 +28,14 @@ class DailyRiskUpdater(BasicUpdater):
         end_date = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
         update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
         for date in update_dates:
-            cls.update_one(date)
+            cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 1)
+
+        Logger.success(f'Success : {cls.DB_SRC}/{cls.DB_KEY} at {CALENDAR.dates_str(update_dates)} updated' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int):
-        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , verbose = True)
+    def update_one(cls , date : int , indent : int = 1 , vb_level : int = 1):
+        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , vb_level = 99)
+        Logger.success(f'Success : {cls.DB_SRC}/{cls.DB_KEY} at {date} updated' , indent = indent , vb_level = vb_level)
 
 def calc_daily_risk(date : int):
     inputs : dict[str , pd.DataFrame] = {

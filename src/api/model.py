@@ -33,7 +33,7 @@ class ModelAPI:
             wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
             wrap_update(cls.Trainer.update_models , 'update models')
         else:
-            Logger.alert('This is not a server with cuda, skip this process' , level = 1)
+            Logger.alert1('This is not a server with cuda, skip this process')
 
     @classmethod
     def update_hidden(cls):
@@ -86,12 +86,12 @@ class ModelAPI:
         DataPreProcessor.main(predict=False , confirm=1)
 
     @classmethod
-    def train_model(cls , module : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , 
+    def train_model(cls , module : str | None = None , short_test : bool | None = None , 
                     start : int | None = None , end : int | None = None , **kwargs):
         '''
         train a model
         '''
-        return cls.Trainer.train(module , short_test , verbosity = verbosity , start = start , end = end , 
+        return cls.Trainer.train(module , short_test , start = start , end = end , 
                                  stage = 0 , resume = 0 , selection = 1 , **kwargs)
 
     @classmethod
@@ -103,44 +103,38 @@ class ModelAPI:
     
     @classmethod
     def test_model(cls , model_name : str | None = None , resume : int = 0 ,
-                   start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
+                   start : int | None = None , end : int | None = None , **kwargs):
         '''
         test a existing model
         model_name :
             None: use default model
             str : use the model name , must be in ModelAPI.Trainer.available_models(short_test = False)
-        verbosity :
-            None: use default verbosity
-            int : use the verbosity level , if above 10 will printout more details
         '''
-        return cls.Trainer.test(model_name , resume = int(resume) , start = start , end = end , verbosity = verbosity , **kwargs)
+        return cls.Trainer.test(model_name , resume = int(resume) , start = start , end = end , **kwargs)
 
     @classmethod
     def test_db_mapping(cls , mapping_name : str | None = None , 
-                        start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
+                        start : int | None = None , end : int | None = None , **kwargs):
         '''
         test a existing db mapping
         '''
-        return cls.Trainer.test_db_mapping(mapping_name , start = start , end = end , 
-                                           verbosity = verbosity , **kwargs)
+        return cls.Trainer.test_db_mapping(mapping_name , start = start , end = end , **kwargs)
 
     @classmethod
     def test_factor(cls , factor_name : str | None = None , resume : int = 0 ,
-                    start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
+                    start : int | None = None , end : int | None = None , **kwargs):
         '''
         test a existing factor
         '''
-        return cls.Trainer.test_factor(factor_name , resume = resume , start = start , end = end , 
-                                       verbosity = verbosity , **kwargs)
+        return cls.Trainer.test_factor(factor_name , resume = resume , start = start , end = end , **kwargs)
 
     @classmethod
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , resume : int = 1 , 
-                       start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
+                       start : int | None = None , end : int | None = None , **kwargs):
         '''
         Train a schedule model in config/schedule or .local_resources/shared/schedule_model folder
         '''
-        return cls.Trainer.schedule(schedule_name , short_test , start = start , end = end , 
-                                    verbosity = verbosity , resume = resume , **kwargs)
+        return cls.Trainer.schedule(schedule_name , short_test , start = start , end = end , resume = resume , **kwargs)
     
     @classmethod
     def clear_st_models(cls):
@@ -148,4 +142,4 @@ class ModelAPI:
         Clear short test models in model folder
         '''
         bases = cls.Trainer.available_models(short_test = True)
-        PATH.deltrees(PATH.model , bases , verbose = True)
+        PATH.deltrees(PATH.model , bases)

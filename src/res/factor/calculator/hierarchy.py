@@ -169,7 +169,7 @@ class StockFactorHierarchy:
         return cls().pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
-                              multi_thread = True , ignore_error = True , verbose = True , **kwargs) -> dict[str , pd.Series]:
+                              multi_thread = True , ignore_error = True , vb_level = 1 , **kwargs) -> dict[str , pd.Series]:
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
@@ -183,8 +183,8 @@ class StockFactorHierarchy:
         def calculate_factor(obj : FactorCalculator):
             factor_value = obj.calc_factor(date)
             valid_ratio = len(factor_value.dropna()) / len(factor_value)
-            if verbose or valid_ratio < 0.3: 
-                Logger.stdout(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
+            if valid_ratio < 0.3: 
+                Logger.stdout(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}' , vb_level = vb_level)
             return factor_value
 
         kwargs = kwargs

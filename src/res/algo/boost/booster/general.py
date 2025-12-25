@@ -33,7 +33,7 @@ class GeneralBooster:
     def update_param(self , params : dict[str,Any] , **kwargs):
         self.train_param = {k:v for k,v in params.items() if k not in [*BoosterWeightMethod.__slots__,'verbosity','seqlens']}
         self.weight_param = {k:v for k,v in params.items() if k in BoosterWeightMethod.__slots__}
-        self.verbosity = params.get('verbosity' , 10)
+        self.fit_verbosity = params.get('verbosity' , 10)
 
         self.booster.update_param(self.train_param , self.weight_param , **kwargs)
         return self
@@ -45,7 +45,7 @@ class GeneralBooster:
     def fit(self , train = None , valid = None , use_feature = None , silent = False):
         self.import_data(train = train , valid = valid)
         self.booster.update_feature(use_feature)
-        self.booster.fit(silent = silent or self.verbosity < 10)
+        self.booster.fit(silent = silent or self.fit_verbosity < 10)
         return self
         
     @property

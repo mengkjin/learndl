@@ -295,7 +295,7 @@ class JSFetcher:
         paths_not_exists = {k:p.exists()==0 for k,p in paths.items()}
         if any(paths_not_exists.values()): 
             # something wrong
-            Logger.error(f'Something wrong at date {date} on {cls.__name__}.trade_day')
+            Logger.error(f'Something wrong at {date} on {cls.__name__}.trade_day')
             return FailedData('day' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
@@ -455,11 +455,11 @@ class JSFetcher:
 
 class JSDownloader():
     @classmethod
-    def proceed(cls , verbose = True):
-        paths = kline_download(verbose = True)
+    def proceed(cls):
+        paths = kline_download()
         return paths
 
-def kline_download(verbose = True):
+def kline_download():
     import boto3 , re , datetime , os    # type: ignore
     from pathlib import Path
 
@@ -521,7 +521,6 @@ def kline_download(verbose = True):
             date = futures[future]
             if (path := future.result()) is not None: 
                 paths.append(path)
-            if verbose: 
-                Logger.success(f'{datetime.datetime.now()} : {date} minute kline download done!')
+            Logger.success(f'{datetime.datetime.now()} : {date} minute kline download done!')
             
     return paths

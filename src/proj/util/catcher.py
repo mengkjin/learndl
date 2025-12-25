@@ -1,7 +1,7 @@
 import io , sys , re , html , base64 , platform , warnings , shutil , traceback
 import pandas as pd
 
-from typing import Any ,Literal , IO
+from typing import Any ,Literal , IO , ClassVar
 from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
@@ -10,7 +10,7 @@ from datetime import datetime
 from matplotlib.figure import Figure
 
 from src.proj.env import PATH , MACHINE , ProjStates
-from src.proj.func import Duration , Display , stdout , stderr
+from src.proj.func import Duration , Display
 from .logger import Logger
 
 __all__ = [
@@ -18,37 +18,17 @@ __all__ = [
     'HtmlCatcher' , 'MarkdownCatcher' , 'WarningCatcher' ,
 ]
 
-def _error(*messages: str | Any):
-    """Write error message to stderr , same as Logger.critical, redefine to avoid circular import"""
-    # prefix = level_prefix('ERROR' , color = 'white' , bg_color = 'red' , bold = True)
-    # message = full_content(' '.join(messages) , color = 'red' , bold = True) 
-    # msg = f"{prefix}: {message}"
-    # sys.stderr.write(msg + '\n')
-
-    stderr(*messages , color = 'red' , bg_color = 'red' , bold = True , 
-                     level_prefix = {'level' : 'ERROR' , 'color' : 'white' , 'bg_color' : 'red'})
-
-def _critical(*messages: str | Any):
-    """Write critical message to stderr , same as Logger.critical, redefine to avoid circular import"""
-    # prefix = level_prefix('CRITICAL' , color = 'white' , bg_color = 'purple' , bold = True)
-    # message = full_content(' '.join(messages) , color = 'white' , bg_color = 'purple' , bold = True) 
-    # msg = f"{prefix}: {message}"
-    # sys.stderr.write(msg + '\n')
-    stderr(*messages , color = 'white' , bg_color = 'purple' , bold = True , 
-           level_prefix = {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'purple'})
-
 def _str_to_html(text: str | Any):
     """capture string to html"""
     
     assert isinstance(text, str) , f"text must be a string , but got {type(text)}"
-    if re.match(r"^(?!100%\|)\d{1,2}%\|", text): 
-        return None  # skip unfinished progress bar
+
     text = html.escape(text)
-    text = re.sub(r'(?:\u001b\[[\d;]*m)+', replace_ansi_sequences, text)
+    text = re.sub(r'(?:\u001b\[[\d;]*m)+', _replace_ansi_sequences, text)
     
     return text
 
-def replace_ansi_sequences(match):
+def _replace_ansi_sequences(match):
     """replace ANSI sequences to html span tag"""
     # match.group(0) contains all continuous ANSI sequences
     sequences = match.group(0)
@@ -144,7 +124,6 @@ def _figure_to_base64(fig : Figure | Any):
         buffer.close()
         return image_base64
     except Exception as e:
-        # _critical(f"Error converting figure to base64: {e}")
         Logger.error(f"Error converting figure to base64: {e}")
         return None
     
@@ -204,7 +183,6 @@ def _figure_to_html(fig: Figure | Any):
             if image_base64 := _figure_to_base64(fig):
                 content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">'
     except Exception as e:
-        # _critical(f"Error capturing matplotlib figure: {e}")
         Logger.error(f"Error capturing matplotlib figure: {e}")
         content = f'<div class="figure-fallback"><pre>Error capturing matplotlib figure: {e}</pre></div>'
     return content
@@ -332,7 +310,6 @@ class OutputDeflector:
             try:
                 getattr(self.catcher, 'close')()
             except Exception as e:
-                # _error(f"Error closing catcher: {e}")
                 Logger.error(f"Error closing catcher: {e}")
                 raise e
 
@@ -463,13 +440,13 @@ class WarningCatcher:
         # only catch the warnings we care about
         if any(c in str(message).lower() for c in self.catch_warnings):
             stack = traceback.extract_stack()
-            stderr(f"\n caught warning: {message}" , color = 'yellow')
-            stderr(f"warning location: {filename}:{lineno}" , color = 'yellow')
-            stderr("call stack:" , color = 'yellow')
+            Logger.alert1(f"\n caught warning: {message}")
+            Logger.alert1(f"warning location: {filename}:{lineno}")
+            Logger.alert1("call stack:")
             for i, frame in enumerate(stack[:-1]):  # exclude current frame
-                stderr(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}" , color = 'yellow')
-                stderr(f"     {frame.line}" , color = 'yellow')
-            stderr("-" * 80 , color = 'yellow')
+                Logger.alert1(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}")
+                Logger.alert1(f"     {frame.line}")
+            Logger.alert1("-" * 80)
             
             raise Exception(message)
         
@@ -490,6 +467,8 @@ class TimedOutput:
     content: str | pd.DataFrame | pd.Series | Figure | None | Any
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
+
+    progress_bar_contents : ClassVar[list[str]] = []
     
     def __post_init__(self):
         self._time = datetime.now()
@@ -534,6 +513,11 @@ class TimedOutput:
     def time_str(self) -> str:
         """Get the time string of the output item"""
         return self._time.strftime('%H:%M:%S.%f')[:-3]
+
+    @property
+    def is_progress_bar(self) -> bool:
+        """Check if the output item is a progress bar"""
+        return self.infos.get('is_progress_bar' , False)
     
     @classmethod
     def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
@@ -554,9 +538,13 @@ class TimedOutput:
             r2 = re.search(r"\s*([^\]]+),\s*([^\]]+)it/s]", content) # [XXXXXXX, XXXXit/s]
             if r0 and r1 and r2: # is a progress bar
                 infos['is_progress_bar'] = True
-                infos['unique_content'] = str(r0.group(1))
-                if int(r0.group(2)) != 100 or (int(r1.group(1)) != int(r1.group(2))): # not finished
+                infos['unique_content'] = str(r0.group(1)).strip()
+                if infos['unique_content'] == '':
                     valid = False
+                elif int(r0.group(2)) != 100 or (int(r1.group(1)) != int(r1.group(2))): # not finished
+                    valid = False
+                content = content.strip()
+                cls.progress_bar_contents.append(content)
         elif output_type == 'stdout':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
             if content == '...': 
@@ -572,13 +560,7 @@ class TimedOutput:
         if self.type in ['data_frame' , 'figure']:
             return False
         if self.type == other.type:
-            if str(self.content) == str(other.content): 
-                return True
-            elif self.type == 'stderr':
-                if self.infos.get('is_progress_bar' , False) and other.infos.get('is_progress_bar' , False):
-                    uc0 = self.infos.get('unique_content' , '')
-                    uc1 = other.infos.get('unique_content' , '')
-                    return (uc0 == uc1) and (uc0 != '')
+            return str(self.content) == str(other.content)
         return False
     
     def to_html(self , index: int = 0):
@@ -698,8 +680,7 @@ class HtmlCatcher(OutputCatcher):
     def SetInstance(cls , instance : 'HtmlCatcher'):
         """Set the instance of the catcher, if the catcher is already running, block the new instance"""
         if cls.Instance is not None:
-            # _critical(f"{cls.Instance} is already running, blocking {instance}")
-            Logger.alert(f"{cls.Instance} is already running, blocking {instance}" , level = 1)
+            Logger.alert1(f"{cls.Instance} is already running, blocking {instance}")
             instance._enable_catcher = False
         else:
             cls.Instance = instance
@@ -717,13 +698,13 @@ class HtmlCatcher(OutputCatcher):
             return self
         self.start_time = datetime.now()
         self.redirect_display_function()
-        # _critical(f"{self} Capturing Start")
         Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.enabled: 
             return
+        print(TimedOutput.progress_bar_contents)
         self.export()   
         self.restore_display_function()
         self.ClearInstance(self)
@@ -735,10 +716,9 @@ class HtmlCatcher(OutputCatcher):
             return
 
         # log first and then export
-        # _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
         Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         for export_path in self.export_file_list:
-            stdout(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
+            Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
         ProjStates.exit_files.append(self.export_file_list[0])
         
         html_content = self.generate_html()
@@ -780,7 +760,7 @@ class HtmlCatcher(OutputCatcher):
             return
         
         output = TimedOutput.create(content , output_type)
-        if not self.outputs or (output and not output.equivalent(self.outputs[-1])): 
+        if output and (not self.outputs or not output.equivalent(self.outputs[-1])): 
             self.outputs.append(output)
 
     @classmethod
@@ -1195,7 +1175,6 @@ class MarkdownCatcher(OutputCatcher):
         if not self.enabled or not self.export_file_list:
             self.markdown_file.close()
             return
-        # _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
         Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         self.markdown_file.close()
         for filename in self.export_file_list:
@@ -1203,7 +1182,7 @@ class MarkdownCatcher(OutputCatcher):
                 filename.unlink()
             filename.parent.mkdir(exist_ok=True,parents=True)
             shutil.copy(self.running_filename, filename)
-            stdout(f"{self.__class__.__name__} result saved to {filename}" , indent = 1)
+            Logger.footnote(f"{self.__class__.__name__} result saved to {filename}" , indent = 1)
         self.running_filename.unlink()
     
     def _markdown_header(self):

@@ -58,8 +58,7 @@ class BoostPredictor(BasePredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model fit start')
+        Logger.stdout('model fit start' , vb_level = 10)
 
         self.new_model()
 
@@ -73,12 +72,10 @@ class BoostPredictor(BasePredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model fit done')
+        Logger.stdout('model fit done' , vb_level = 10)
 
     def test(self):
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model test start')
+        Logger.stdout('model test start' , vb_level = 10)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -86,8 +83,7 @@ class BoostPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: 
-            Logger.stdout('model test done')
+        Logger.stdout('model test done' , vb_level = 10)
 
     def collect(self , submodel = 'best' , *args):
         self.model_dict.booster_dict = self.booster.to_dict()

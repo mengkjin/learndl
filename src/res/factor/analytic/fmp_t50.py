@@ -17,8 +17,8 @@ class T50Calc(BaseFactorAnalyticCalculator):
     TEST_TYPE = 't50'
     DEFAULT_BENCHMARKS = 'defaults'
 
-    def calc(self , account : pd.DataFrame , verbosity = 0):
-        with self.calc_manager(f'{self.__class__.__name__} calc' , verbosity = verbosity , indent = 1): 
+    def calc(self , account : pd.DataFrame , indent : int = 1 , vb_level : int = 1):
+        with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account)
         return self
     
@@ -79,20 +79,21 @@ class T50FMPTest(BaseFactorAnalyticTest):
         Perf_Year ,
     ]
 
-    def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2):
+    def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : int = 1):
         alpha_models = factor.alpha_models()
         benchmarks = [factor.universe(load = True).to_portfolio().rename('univ')]
-        self.update_kwargs(verbosity = verbosity)
+        self.update_kwargs()
         self.portfolio_group = PortfolioGroupBuilder(
             'top' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 
-            resume = self.resume , resume_path = self.resume_path , caller = self , start_dt = self.start_dt , end_dt = self.end_dt , **self.kwargs)
+            resume = self.resume , resume_path = self.resume_path , caller = self ,
+            start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 
-    def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):
-        self.generate(factor , benchmark , verbosity = verbosity)
-        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1 , exit_only = verbosity < 2):
+    def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : int = 1 , **kwargs):
+        self.generate(factor , benchmark , indent = indent , vb_level = vb_level)
+        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
-                task.calc(self.account , verbosity = verbosity - 1) 
+                task.calc(self.account , indent = indent + 1 , vb_level = vb_level + 1) 
         return self
     
     def update_kwargs(self , **kwargs):

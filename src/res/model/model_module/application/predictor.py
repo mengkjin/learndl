@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , ClassVar , Literal
 
-from src.proj import MACHINE , Silence , Logger
+from src.proj import MACHINE , Logger , Silence
 from src.basic import CALENDAR , RegisteredModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
@@ -29,7 +29,7 @@ class ModelPredictor:
         else:
             self.model_nums = list(self.reg_model.num)
 
-        self.config = TrainConfig.load_model(self.model_name , override={'env.verbosity':0})
+        self.config = TrainConfig.load_model(self.model_name)
         self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
 
@@ -44,14 +44,15 @@ class ModelPredictor:
             self.predict_dates([date])
         return self.df.query('date == @date')
     
-    def update_preds(self , update = True , overwrite = False , start_dt = None , end_dt = None , silent = True):
+    def update_preds(self , update = True , overwrite = False , start_dt = None , end_dt = None):
         '''get update dates and predict these dates'''
         assert update != overwrite , 'update and overwrite must be different here'
-        with Silence(silent):   
-            dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
+        
+        dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
+        with Silence():
             self.predict_dates(dates)
-            self.save_preds()
-            self.deploy()
+        self.save_preds()
+        self.deploy()
 
     def predict_dates(self , dates : np.ndarray | list[int]):
         '''predict recent days'''
@@ -126,7 +127,7 @@ class ModelPredictor:
                 dates = np.setdiff1d(self.reg_model.pred_dates , deployed_dates)
             self._current_deploy_dates = []
             for date in dates:
-                df = self.reg_model.load_pred(date , verbose = False)
+                df = self.reg_model.load_pred(date , vb_level = 99)
                 df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
                 self._current_deploy_dates.append(date)
         except OSError as e:
@@ -152,14 +153,14 @@ class ModelPredictor:
         return cls(model , use_data)
     
     @classmethod
-    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , silent = True):
+    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
-            md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt , silent = silent)
+            md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt)
             if md._current_update_dates:
                 Logger.success(f'Finish updating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
             else:
@@ -172,14 +173,14 @@ class ModelPredictor:
         return md
 
     @classmethod
-    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , silent = True):
+    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None):
         """Recalculate all model predictions"""
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
-            md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt , silent = silent)
+            md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt)
             if md._current_update_dates:
                 Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
             else:

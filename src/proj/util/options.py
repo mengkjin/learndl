@@ -1,7 +1,7 @@
 import json , sys
 
 from datetime import datetime
-from .path import PATH
+from src.proj.env import PATH
 
 class OptionsDefinition:
     """Specified Options for the project , how they are defined/calculated"""

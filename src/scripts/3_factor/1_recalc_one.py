@@ -15,12 +15,12 @@
 from src.res.factor.api import FactorCalculatorAPI
 from src.app import ScriptTool
 
-@ScriptTool('recalc_one' , lock_name = 'update_factors')
+@ScriptTool('recalc_one' , lock_name = 'update_factors' , verbosity = 10)
 def main(factor_names : str | None = None , **kwargs):
     assert factor_names is not None , 'factor_names is required'
     factors = [s.strip() for s in factor_names.split(',')]
     assert len(factors) == 1 , f'only one factor is supported , got {factors}'
-    FactorCalculatorAPI.fix(factors = factors , verbosity = 10)
+    FactorCalculatorAPI.fix(factors = factors)
     
 if __name__ == '__main__':
     main()

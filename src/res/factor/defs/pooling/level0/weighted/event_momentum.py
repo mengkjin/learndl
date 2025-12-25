@@ -109,10 +109,10 @@ class SignedFactor:
 
         self.loaded = False
 
-    def eval(self , dates : np.ndarray | list[int] | int , verbose : bool = False):
+    def eval(self , dates : np.ndarray | list[int] | int , vb_level : int = 10):
         if isinstance(dates , int):
             dates = [dates]
-        self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , verbose = verbose)
+        self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , vb_level = vb_level)
         self.loaded = True
         return self
 
@@ -321,7 +321,7 @@ class event_factor_momentum_test(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , verbose = False) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , vb_level : int = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         if dates is None:
             dates = CALENDAR.slice(CALENDAR.td_within(start , end) , self.init_date , CALENDAR.updated())
@@ -364,7 +364,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , verbose = False) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , vb_level : int = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         if dates is None:
             dates = CALENDAR.slice(CALENDAR.td_within(start , end) , self.init_date , CALENDAR.updated())

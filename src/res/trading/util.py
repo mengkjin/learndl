@@ -28,7 +28,7 @@ def all_path_convert():
     for path in file_list:
         new_path = path.with_suffix('.feather')
         df = pd.read_csv(path)
-        DB.save_df(df , new_path , verbose = False)
+        DB.save_df(df , new_path , vb_level = 99)
         path.unlink()
 
 all_path_convert()
@@ -93,7 +93,8 @@ class TradingPort:
     def load(cls , name : str) -> 'TradingPort':
         port_dict = cls.portfolio_dict()
         assert name in port_dict , f'{name} is not in portfolio_dict'
-        return cls(name , **port_dict[name])
+        kwargs = {'name' : name , **port_dict[name]}
+        return cls(**kwargs)
 
     def port_dir(self) -> Path:
         return PATH.trade_port.joinpath(self.name)
@@ -150,7 +151,7 @@ class TradingPort:
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
         if reset_port:
-            Logger.alert(f'Beware: reset port for new build! {self.name}' , level = 1)
+            Logger.alert1(f'Beware: reset port for new build! {self.name}')
             port = Portfolio(self.name)
         else:
             if date in self.last_ports:
@@ -165,16 +166,16 @@ class TradingPort:
         assert port.is_empty or max(port.port_date) < date , f'last port date {max(port.port_date)} should be less than date {date}'
         return port
     
-    def build(self , date : int , reset = False , export = True):
+    def build(self , date : int , reset = False , export = True , indent : int = 0 , vb_level : int = 1):
         if self.backtest:
-            df = self.build_backward(date , reset_port = reset , export = export)
+            df = self.build_backward(date , reset_port = reset , export = export , indent = indent , vb_level = vb_level)
         else:
-            df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True)
+            df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True , indent = indent , vb_level = vb_level)
         self.new_ports[date] = df
         return self
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
-                        alpha_details = False) -> pd.DataFrame:
+                        alpha_details = False , indent : int = 0 , vb_level : int = 1) -> pd.DataFrame:
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date)
         if last_port is None:
@@ -184,7 +185,7 @@ class TradingPort:
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
-                                   screen_ratio = self.screen_ratio).setup(0)
+                                   screen_ratio = self.screen_ratio , indent = indent , vb_level = vb_level).setup()
 
         pf = builder.build(date).port.to_dataframe()
         if pf.empty: 
@@ -196,7 +197,7 @@ class TradingPort:
         if export:
             path = self.port_path(date)
             path.parent.mkdir(parents=True, exist_ok=True)
-            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path)
+            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , vb_level = vb_level + 1)
 
         # add columns to include alpha and universe
         if alpha_details:
@@ -205,7 +206,7 @@ class TradingPort:
             pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
         return pf.assign(name = self.name , date = date)
     
-    def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:
+    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 0 , vb_level : int = 1) -> pd.DataFrame:
         assert self.backtest , 'backtest must be True'
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
@@ -220,10 +221,10 @@ class TradingPort:
         if len(date_list) == 0: 
             return pd.DataFrame()
         
-        Logger.stdout(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
+        Logger.stdout(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days' , indent = indent + 1 , vb_level = vb_level)
         pf = None
         for d in date_list:
-            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf))
+            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf , vb_level = vb_level + 1))
         return pd.DataFrame()
     
     def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:
@@ -248,7 +249,7 @@ class TradingPort:
         return portfolio.account_with_index(default_index)
 
     def analyze(self , start : int | None = None , end : int | None = None , 
-                verbosity = 1 , write_down = False , display = True , 
+                vb_level : int = 1 , write_down = False , display = True , 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
         if not write_down and not display:
             Logger.error(f'write_down and display cannot be both False')
@@ -259,7 +260,7 @@ class TradingPort:
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
-            task.calc(account , verbosity = verbosity - 1) 
+            task.calc(account , vb_level = vb_level + 1) 
             task.plot(show = False)  
 
         rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
@@ -271,13 +272,12 @@ class TradingPort:
 
         if display:
             for name , fig in figs.items():
-                Logger.caption(f'Figure: {name.title()}:')
+                Logger.caption(f'Figure: {name.title()}:' , vb_level = 0)
                 Display(fig)
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        if verbosity > 0: 
-            Logger.success(f'Finish analyzing trading portfolio [{self.name}]!')
+        Logger.success(f'Finish analyzing trading portfolio [{self.name}]!')
         return self
 
 @dataclass
@@ -319,7 +319,7 @@ class CompositeAlpha:
             dates = DB.dates(alpha_type , alpha_name)
             assert len(dates) > 0 , f'no dates found for {alpha_name}'
             use_date = dates[dates <= date].max()
-            df = DB.load(alpha_type , alpha_name , use_date , verbose = False).loc[:,['secid' , alpha_column]]
+            df = DB.load(alpha_type , alpha_name , use_date , vb_level = 99).loc[:,['secid' , alpha_column]]
         else:
             raise Exception(f'{alpha_name} is not a valid alpha')
         factor = StockFactor(df.assign(date = date))

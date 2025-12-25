@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
 from src.proj import ProjStates , PATH , Logger
-from src.basic import ModelDict , DB
+from src.basic import CALENDAR , ModelDict , DB
 from src.func import Filtered
 from src.res.algo import AlgoModule
 from src.data import ModuleData
@@ -258,7 +258,7 @@ class TrainerPredRecorder(ModelStreamLine):
         """empty predictions dataframe"""
         return pd.DataFrame(columns = self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS)
 
-    def resume_preds(self , verbose : bool = True):
+    def resume_preds(self , vb_level : int = 1):
         """
         resume previous saved predictions
         notes:
@@ -296,8 +296,7 @@ class TrainerPredRecorder(ModelStreamLine):
             self.resumed_preds = df
             self.resumed_preds_models = pd.DataFrame(resumed_preds_models , columns = ['model_date' , 'model_num'])
 
-        if verbose:
-            Logger.stdout(resume_info)
+        Logger.remark(resume_info , vb_level = vb_level)
 
     def get_preds(self , tested_only : bool = True , interval : int = 1) -> pd.DataFrame:
         df = self.tested_preds
@@ -357,7 +356,7 @@ class TrainerPredRecorder(ModelStreamLine):
     def load_saved_preds(self) -> pd.DataFrame:
         df = DB.load_df(self.path_pred)
         if self.path_pred.exists() and not np.isin(self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS , df.columns).all():
-            Logger.alert(f'{self.path_pred} is not valid , removed automatically' , level = 1)
+            Logger.alert1(f'{self.path_pred} is not valid , removed automatically')
             self.path_pred.unlink()
             return self.empty_preds()
         return df
@@ -367,7 +366,7 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def on_test_start(self):
         if self.trainer.config.is_resuming:
-            self.resume_preds(verbose = self.trainer.verbosity > 0)
+            self.resume_preds()
                 
     def on_test_batch_end(self): 
         self.append_batch_values()
@@ -382,9 +381,8 @@ class TrainerPredRecorder(ModelStreamLine):
             new_df = self.tested_preds
         if not new_df.empty:
             new_df = new_df.drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
-        DB.save_df(new_df , self.path_pred , overwrite = True , verbose = False)
-        if self.trainer.verbosity >= 10:
-            Logger.stdout(f'Test Predictions from {new_df["date"].min()} to {new_df["date"].max()} saved to {self.path_pred}')
+        DB.save_df(new_df , self.path_pred , overwrite = True , vb_level = 99)
+        Logger.footnote(f'Test Predictions at {CALENDAR.dates_str(new_df["date"].to_numpy(int))} saved to {self.path_pred}' , vb_level = 1)
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -528,25 +526,23 @@ class BaseTrainer(ModelStreamLine):
         self.record = TrainerPredRecorder(self)
 
     def wrap_callbacks(self):
-        [setattr(self , hook , self.hook_wrapper(self , hook , self.verbosity)) for hook in possible_hooks()]
+        [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
 
     @staticmethod
-    def hook_wrapper(trainer : 'BaseTrainer' , hook : str , verbosity : int = 0):
+    def hook_wrapper(trainer : 'BaseTrainer' , hook : str , vb_level : int = 10):
         action_status  = getattr(trainer.status , hook)
         action_trainer = getattr(trainer , hook)
         action_model   = getattr(trainer.model , hook)
         action_record  = getattr(trainer.record , hook)
         def wrapper() -> None:
-            if verbosity > 10: 
-                Logger.stdout(f'{hook} of stage {trainer.status.stage} start')
-            trainer.callback.at_enter(hook , verbosity)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = vb_level)
+            trainer.callback.at_enter(hook , vb_level)
             action_status()
             action_trainer()
             action_model()
             action_record()
-            trainer.callback.at_exit(hook , verbosity)
-            if verbosity > 10: 
-                Logger.stdout(f'{hook} of stage {trainer.status.stage} end')
+            trainer.callback.at_exit(hook , vb_level)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = vb_level)
         return wrapper
 
     @abstractmethod
@@ -564,8 +560,6 @@ class BaseTrainer(ModelStreamLine):
         '''initialized data_module'''
         self.data : BaseDataModule
 
-    @property
-    def verbosity(self): return self.config.verbosity
     @property
     def device(self): return self.config.device
     @property
@@ -694,7 +688,7 @@ class BaseTrainer(ModelStreamLine):
         #    model_iter = []
         else:
             iter_info += f'{num_all_models} to go!'
-        Logger.stdout(iter_info)
+        Logger.remark(iter_info)
         return model_iter
 
     def iter_model_submodels(self):
@@ -833,8 +827,6 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     @property
     def batch_idx(self): return self.trainer.batch_idx
     @property
-    def verbosity(self): return self.config.verbosity
-    @property
     def model_date(self): return self.trainer.model_date
     @property
     def model_num(self): return self.trainer.model_num
@@ -865,13 +857,11 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.at_enter(self.__hook_stack[-1])
     def __exit__(self , *args):
         self.at_exit(self.__hook_stack.pop())
-    def at_enter(self , hook : str , verbosity : int = 0):  
-        if verbosity > 10: 
-            Logger.stdout(f'{hook} of callback {self.__class__.__name__} start')
-    def at_exit(self , hook : str , verbosity : int = 0): 
+    def at_enter(self , hook : str , vb_level : int = 10):  
+        Logger.stdout(f'{hook} of callback {self.__class__.__name__} start' , vb_level = vb_level)
+    def at_exit(self , hook : str , vb_level : int = 10): 
         getattr(self , hook)()
-        if verbosity > 10: 
-            Logger.stdout(f'{hook} of callback {self.__class__.__name__} end')
+        Logger.stdout(f'{hook} of callback {self.__class__.__name__} end' , vb_level = vb_level)
 
     def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')

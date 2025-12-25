@@ -25,7 +25,7 @@ class TSMixer(nn.Module):
         revin:bool=True,
         norm_type:str='batch', dropout:float=0., act_type:str='gelu', 
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
-        head_type = 'prediction', verbose:bool=False, **kwargs
+        head_type = 'prediction', **kwargs
     ):
         super().__init__()
         assert head_type in ['pretrain', 'prediction'], \
@@ -397,7 +397,7 @@ class TSMixerEncoder(nn.Module):
     '''
     def __init__(self, nvars, num_patch, d_model , channel_mixer = True, 
                  dropout=0., expansion_factor = 2, gated_attn = True , norm_type = 'batch', act_type='gelu', 
-                 pe='zeros', learn_pe=True, verbose=False, **kwargs):
+                 pe='zeros', learn_pe=True, **kwargs):
 
         super().__init__()
         self.nvars = nvars

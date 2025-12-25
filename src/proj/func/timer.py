@@ -3,7 +3,7 @@ import numpy as np
 
 from datetime import datetime , timedelta
 from typing import Callable
-from .stdout import stdout
+from .output import stdout
 from .display import Display
 
 class Duration:
@@ -69,19 +69,20 @@ class Duration:
     
 class Timer:
     """simple timer to count time"""
-    def __init__(self , *args , exit_only = True , silent = False , indent = 0): 
+    def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 0 , enter_vb_level : int = 99): 
         self.key = '/'.join(args)
-        self.exit_only = exit_only
         self.silent = silent
         self.indent = indent
-        
+        self.vb_level = vb_level
+        self.enter_vb_level = enter_vb_level
+
     def __enter__(self):
         self._init_time = datetime.now()
-        if not self.silent and not self.exit_only: 
-            stdout(self.enter_str , indent = self.indent)
+        if not self.silent: 
+            stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
     def __exit__(self, type, value, trace):
         if not self.silent:
-            stdout(self.exit_str , indent = self.indent)
+            stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
 
     @property
     def enter_str(self):
@@ -94,9 +95,10 @@ class Timer:
 
 class PTimer:
     """process timer , call to record and .summarize() to display the summary"""
-    def __init__(self , record = True) -> None:
+    def __init__(self , record = True , vb_level : int = 0) -> None:
         self.recording = record
         self.recorder = {} if record else None
+        self.vb_level = vb_level
     class ptimer:
         """process timer class, used to record the time of the input function"""
         def __init__(self , target : dict[str,list[float]] | None , key):
@@ -127,4 +129,4 @@ class PTimer:
                                 columns = pd.Index(['keys' , 'num_calls', 'total_time']))
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
             df = tb.sort_values(by=['total_time'],ascending=False)
-            Display(df)
+            Display(df , vb_level = self.vb_level)

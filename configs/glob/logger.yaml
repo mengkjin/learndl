@@ -30,7 +30,7 @@ formatters:
         INFO: bold,green
         ERROR: bold,red
         WARNING: bold,yellow
-        CRITICAL: bold,white,bg_purple
+        CRITICAL: bold,purple
       reset:
         DEBUG: reset
         INFO: reset
@@ -59,7 +59,7 @@ formatters:
         INFO: bold,green
         ERROR: bold,red
         WARNING: bold,yellow
-        CRITICAL: bold,white,bg_purple
+        CRITICAL: bold,purple
       reset:
         DEBUG: reset
         INFO: reset
