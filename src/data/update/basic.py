@@ -21,7 +21,7 @@ class BasicUpdaterMeta(type):
 class BasicUpdater(metaclass=BasicUpdaterMeta):
     """
     base class of basic updater
-    must implement update and rollback methods
+    must implement update_all method
     def update(self):
         pass
     def rollback(self , rollback_date : int):

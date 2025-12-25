@@ -28,14 +28,13 @@ class DailyRiskUpdater(BasicUpdater):
         end_date = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
         update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
         for date in update_dates:
-            cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 1)
+            cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 2)
 
-        Logger.success(f'Success : {cls.DB_SRC}/{cls.DB_KEY} at {CALENDAR.dates_str(update_dates)} updated' , indent = indent , vb_level = vb_level)
+        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , indent : int = 1 , vb_level : int = 1):
-        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , vb_level = 99)
-        Logger.success(f'Success : {cls.DB_SRC}/{cls.DB_KEY} at {date} updated' , indent = indent , vb_level = vb_level)
+    def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):
+        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
 
 def calc_daily_risk(date : int):
     inputs : dict[str , pd.DataFrame] = {

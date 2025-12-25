@@ -521,6 +521,6 @@ def kline_download():
             date = futures[future]
             if (path := future.result()) is not None: 
                 paths.append(path)
-            Logger.success(f'{datetime.datetime.now()} : {date} minute kline download done!')
+            Logger.success(f'Download {date} minute kline at {datetime.datetime.now()}!')
             
     return paths

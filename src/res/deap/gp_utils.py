@@ -611,7 +611,7 @@ class gpTimer:
                 if self.record: 
                     self.append_time(self.target_dict , self.key , time_cost)
                 if self.printing: 
-                    Logger.success(f'{self.print_str} Done, Cost {time_cost:.2f} Secs' + mem_info)
+                    Logger.success(f'{self.print_str} , Cost {time_cost:.2f} Secs' + mem_info)
                 return self
         def add_string(self , new_str):
             self.print_str = self.print_str + new_str

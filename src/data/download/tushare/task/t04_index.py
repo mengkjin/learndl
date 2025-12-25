@@ -91,7 +91,7 @@ class IndexDaily(TimeSeriesFetcher):
             df = self.get_data(index , start_date , end_dt)
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).sort_values('trade_date')
             df['trade_date'] = df['trade_date'].astype(int)
-            DB.save(df , self.DB_SRC , index , indent = 2)
+            DB.save(df , self.DB_SRC , index , indent = 1 , vb_level = 3)
 
 class ZXIndexDaily(DayFetcher):
     """
@@ -136,17 +136,17 @@ class ZXIndexDaily(DayFetcher):
         for start , end in zip(si , ei): 
             date_dfs , index_dfs = self.get_zx_index_quotes(start , end)
             for date , df in date_dfs.items():
-                DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = 2)
+                DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
             for index , df in index_dfs.items():
-                self.update_index_daily_file(index , df , vb_level = 99)
+                self.update_index_daily_file(index , df , vb_level = 3)
 
-    def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 1):
+    def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 3):
         df_old = DB.load('index_daily_ts' , index , vb_level = 99)
         if not df_old.empty:
             df_old['trade_date'] = df_old['trade_date'].astype(int)
             df = pd.concat([df_old , df]).drop_duplicates('trade_date' , keep = 'last')
         df = df.sort_values('trade_date').reset_index(drop = True)
-        DB.save(df , 'index_daily_ts' , index , indent = 2 , vb_level = vb_level)
+        DB.save(df , 'index_daily_ts' , index , indent = 1 , vb_level = vb_level)
     
 class THSConcept(MonthFetcher):
     """Tonghuashun Concept"""

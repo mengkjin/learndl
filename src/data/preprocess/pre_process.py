@@ -68,7 +68,7 @@ class DataPreProcessor:
         else:
             blocks = data_types
         processor = cls(predict , blocks)
-        Logger.stdout(f'Preprocess: Data Processing start with {len(processor.blocks)} datas and predict = {predict}!' , indent = indent , vb_level = vb_level)
+        Logger.remark(f'Data PreProcessing start with {len(processor.blocks)} datas and predict = {predict}!' , indent = indent , vb_level = vb_level)
         Logger.stdout(f'Will process {str(list(processor.blocks))} at {CALENDAR.dates_str([processor.load_start_dt,processor.load_end_dt])}' , 
                         indent = indent + 1 , vb_level = vb_level + 1)
         # return processor
@@ -80,22 +80,22 @@ class DataPreProcessor:
                 continue
 
             tt1 = datetime.now()
-            Logger.stdout(f'Preprocessing: [{key.upper()}] start...' , indent = indent + 2 , vb_level = vb_level + 1)
+            Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 2)
 
-            with Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 1):
-                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 2)
-            with Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 1):
+            with Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 2 , enter_vb_level = vb_level + 3):
+                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 3)
+            with Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block = proc.process_blocks(block_dict)
-            with Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 1):   
+            with Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 2):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 1):
+            with Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
-            with Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 1):
+            with Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            Logger.success(f'Preprocessing {key.upper()} (predict={predict}) finished! Cost {Duration(since = tt1)}' , 
-                           indent = indent + 1 , vb_level = vb_level)
+            Logger.success(f'Preprocess [{key.upper()}] with predict={predict} finished! Cost {Duration(since = tt1)}' , 
+                           indent = indent + 1 , vb_level = vb_level + 1)
             Logger.divider(vb_level = vb_level + 1)
 
 class TypePreProcessor(ABC):

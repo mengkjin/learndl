@@ -151,7 +151,7 @@ class TradingPort:
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
         if reset_port:
-            Logger.alert1(f'Beware: reset port for new build! {self.name}')
+            Logger.alert1(f'Reset port for new build! {self.name}')
             port = Portfolio(self.name)
         else:
             if date in self.last_ports:
@@ -166,7 +166,7 @@ class TradingPort:
         assert port.is_empty or max(port.port_date) < date , f'last port date {max(port.port_date)} should be less than date {date}'
         return port
     
-    def build(self , date : int , reset = False , export = True , indent : int = 0 , vb_level : int = 1):
+    def build(self , date : int , reset = False , export = True , indent : int = 1 , vb_level : int = 2):
         if self.backtest:
             df = self.build_backward(date , reset_port = reset , export = export , indent = indent , vb_level = vb_level)
         else:
@@ -185,7 +185,7 @@ class TradingPort:
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
-                                   screen_ratio = self.screen_ratio , indent = indent , vb_level = vb_level).setup()
+                                   screen_ratio = self.screen_ratio , indent = indent + 1 , vb_level = vb_level + 1).setup()
 
         pf = builder.build(date).port.to_dataframe()
         if pf.empty: 
@@ -197,7 +197,7 @@ class TradingPort:
         if export:
             path = self.port_path(date)
             path.parent.mkdir(parents=True, exist_ok=True)
-            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , vb_level = vb_level + 1)
+            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent , vb_level = vb_level + 2)
 
         # add columns to include alpha and universe
         if alpha_details:
@@ -224,7 +224,7 @@ class TradingPort:
         Logger.stdout(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days' , indent = indent + 1 , vb_level = vb_level)
         pf = None
         for d in date_list:
-            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf , vb_level = vb_level + 1))
+            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf , indent = indent + 1 , vb_level = vb_level + 2))
         return pd.DataFrame()
     
     def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:
@@ -277,7 +277,7 @@ class TradingPort:
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        Logger.success(f'Finish analyzing trading portfolio [{self.name}]!')
+        Logger.success(f'Analyze trading portfolio [{self.name}]!')
         return self
 
 @dataclass

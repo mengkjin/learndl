@@ -160,7 +160,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
 
     if (sec_min := load_min(date , data_type)) is not None: 
         df = rcquant_min_to_normal_min(sec_min , data_type)
-        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 2)
+        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 1, vb_level = 3)
         return True
 
     if not rcquant_init(): 
@@ -181,7 +181,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         write_min(data , date , data_type)
 
         df = rcquant_min_to_normal_min(data , data_type)
-        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 2)
+        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 1 , vb_level = 3)
         return True
     else:
         return False
@@ -203,28 +203,29 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
     if len(dts) == 0: 
-        Logger.skipping(f'rcquant {data_type} bar min has no date to download' , indent = 1)
+        Logger.skipping(f'RcQuant {data_type} bar min is up to date' , indent = 1)
         return True
     
-    for dt in dts:
-        mark = rcquant_bar_min(dt , data_type , first_n)
-        if not mark: 
-            Logger.alert1(f'rcquant {data_type} bar min {dt} failed' , indent = 2)
-        else:
-            Logger.stdout(f'rcquant {data_type} bar min {dt} downloaded' , indent = 2 , vb_level = 2)
-    if len(dts) > 0:
-        Logger.success(f'Success : rcquant {data_type} bar min at {CALENDAR.dates_str(dts)} downloaded' , indent = 1)
+    if len(dts) == 0: 
+        Logger.skipping(f'RcQuant {data_type} bar min is up to date' , indent = 1)
+    else:
+        for dt in dts:
+            mark = rcquant_bar_min(dt , data_type , first_n)
+            if not mark: 
+                Logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed' , indent = 1)
+        Logger.success(f'Download RcQuant {data_type} bar min at {CALENDAR.dates_str(dts)}' , indent = 1 , vb_level = 1)
 
     dts = x_mins_target_dates(data_type , date)
-    for dt in dts:
-        for x_min in x_mins_to_update(dt , data_type = data_type):
-            min_df = DB.load('trade_ts' , src_key(data_type) , dt)
-            assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-            x_min_df = trade_min_reform(min_df , x_min , 1)
-            DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = 2)
-        Logger.stdout(f'rcquant {data_type} X-min bars at {dt} transformed' , indent = 2 , vb_level = 2)
-    if len(dts) > 0:
-        Logger.success(f'Success : rcquant {data_type} X-min bars at {CALENDAR.dates_str(dts)} transformed' , indent = 1)
+    if len(dts) == 0: 
+        ...
+    else:
+        for dt in dts:
+            for x_min in x_mins_to_update(dt , data_type = data_type):
+                min_df = DB.load('trade_ts' , src_key(data_type) , dt)
+                assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
+                x_min_df = trade_min_reform(min_df , x_min , 1)
+                DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = 1 , vb_level = 3)
+        Logger.success(f'Transform RcQuant {data_type} X-min bars at {CALENDAR.dates_str(dts)}' , indent = 1 , vb_level = 1)
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):
@@ -234,7 +235,7 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
         try:
             rcquant_download(date , data_type , first_n)
         except Exception as e:
-            Logger.error(f'rcquant download {data_type} minbar failed: {e}')
+            Logger.error(f'RcQuant {data_type} minbar failed: {e}')
             return False
     
     return True

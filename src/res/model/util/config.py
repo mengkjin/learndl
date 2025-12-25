@@ -166,7 +166,7 @@ class TrainParam:
     
     def check_validity(self):
         if self.should_be_short_test and not self.short_test:
-            Logger.alert1('Beware! Should be at server or short_test, but short_test is False now!')
+            Logger.alert1('Should be at server or short_test, but short_test is False now!')
 
         nn_category = AlgoModule.nn_category(self.model_module)
         if nn_category == 'tra': 
@@ -773,7 +773,8 @@ class TrainConfig(TrainParam):
                 stage_queue = ['data' , stage_queue[value]]
             elif value < 0:
                 raise Exception(f'Error input : {value}')
-        Logger.success('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , vb_level = vb_level)
+        Logger.remark('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , 
+                      color = 'lightblue' , vb_level = vb_level)
         self._stage_queue = stage_queue
 
     def parser_resume(self , value = -1 , vb_level : int = 1):
@@ -795,7 +796,7 @@ class TrainConfig(TrainParam):
                 user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
         self.is_resuming = value > 0 
-        Logger.success(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!' , vb_level = vb_level)
+        Logger.remark(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!' , vb_level = vb_level)
 
     def parser_select(self , value = -1 , vb_level : int = 1):
         '''
@@ -839,7 +840,7 @@ class TrainConfig(TrainParam):
                 else:
                     if model_name in candidate_name:
                         model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-                    Logger.success(f'Input 0 to create a new model_name dir! New model_name is {model_name}')
+                    Logger.remark(f'Input 0 to create a new model_name dir! New model_name is {model_name}')
             else:
                 model_name = candidate_name[value-1]
                 if not self.is_resuming:
@@ -865,7 +866,7 @@ class TrainConfig(TrainParam):
         else:
             raise Exception(f'Invalid stage queue: {self.stage_queue}')
 
-        Logger.success(f'--Model_name is set to {model_name}!' , vb_level = vb_level)  
+        Logger.remark(f'--Model_name is set to {model_name}!' , vb_level = vb_level)  
         self.Train.reset_base_path(model_name)
         self.Model.reset_base_path(model_name)
 

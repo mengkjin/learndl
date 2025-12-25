@@ -31,14 +31,13 @@ class MultiKlineUpdater(BasicUpdater):
             end_date     = DB.dates(cls.DB_SRC , 'day').max()
             update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
             for date in update_dates: 
-                cls.update_one(date , n_day , label_name , indent = indent + 1 , vb_level = vb_level + 1)
+                cls.update_one(date , n_day , label_name , indent = indent + 1 , vb_level = vb_level + 2)
             
-            Logger.success(f'Success : {cls.DB_SRC}/{label_name} at {CALENDAR.dates_str(update_dates)} updated' , indent = indent , vb_level = vb_level)
+            Logger.success(f'Update {cls.DB_SRC}/{label_name} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , n_day : int , label_name : str , indent : int = 1 , vb_level : int = 1):
-        DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , vb_level = 99)
-        Logger.success(f'Success : {cls.DB_SRC}/{label_name} at {date} updated' , indent = indent , vb_level = vb_level)
+    def update_one(cls , date : int , n_day : int , label_name : str , indent : int = 2 , vb_level : int = 2):
+        DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , indent = indent , vb_level = vb_level)
 
 
 def nday_kline(date : int , n_day : int) -> pd.DataFrame:

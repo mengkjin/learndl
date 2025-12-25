@@ -189,10 +189,10 @@ class SellsideSQLDownloader:
     def download_period(self , connection , start , end):
         t0 = datetime.now()
         df = self.query_default(connection , start , end)
-        if self.save_data(df):
-            Logger.success(f'Success : {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, cost {Duration(since = t0)}' , indent = 1)
+        if (num_dates := self.save_data(df)) > 0:
+            Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1)
         else:
-            Logger.alert1(f'No Data : {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}' , indent = 1)
+            Logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}' , indent = 1)
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -232,16 +232,17 @@ class SellsideSQLDownloader:
                                            connection) for factor in self.factors}
         return df
 
-    def save_data(self , data : pd.DataFrame | None) -> bool:
+    def save_data(self , data : pd.DataFrame | None) -> int:
         if data is None or data.empty or len(data) == 0: 
-            return False
+            return 0
         data = data.sort_values(['date' , 'secid']).set_index('date')
-        status = True
+        status = 0
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            status = DB.save(data_at_d , self.DB_SRC , self.db_key , d) or status
+            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = 2 , vb_level = 3)
+            status += 1
         return status
 
     @classmethod

@@ -149,7 +149,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
         DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = 99)
 
         df = baostock_5min_to_normal_5min(df)
-        DB.save(df , 'trade_ts' , '5min' , date = date)
+        DB.save(df , 'trade_ts' , '5min' , date = date , indent = 1 , vb_level = 3)
     # del after : No!
     '''
     if first_n <= 0:
@@ -174,21 +174,27 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
     end_dt = CALENDAR.update_to() if date is None else date
     if pending_dt == end_dt: 
         pending_dt = -1
+
+    updated = False
     for dt in [pending_dt , end_dt]:
         last_dt = last_date(1)
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.alert1(f'baostock 5min {last_dt} - {dt} failed' , indent = 2)
-            else:
-                Logger.stdout(f'baostock 5min {last_dt} - {dt} downloaded' , indent = 2 , vb_level = 2)
-        
+                Logger.alert1(f'baostock 5min {last_dt} - {dt} failed' , indent = 1)
+            updated = updated or mark
+    if updated:
+        Logger.success(f'Download baostock 5min at {CALENDAR.dates_str(end_dt)}' , indent = 1)
+            
     dts = x_mins_update_dates(date)
+    updated = False
     for dt in dts:
         for x_min in x_mins_to_update(dt):
             five_min_df = DB.load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
             DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt)
+            updated = updated or mark
         Logger.stdout(f'baostock {x_min}min bars at {dt} transformed' , indent = 2 , vb_level = 2)
-    
+    if len(dts) > 0:
+        Logger.success(f'Transform baostock X-min bars at {CALENDAR.dates_str(dts)}' , indent = 1)
     return True

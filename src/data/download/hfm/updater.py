@@ -150,7 +150,7 @@ class JSDataUpdater():
             df , target_path = param()
             target_str = self.handle_result(df , target_path , result)
             if target_str: 
-                Logger.success(f'Fetching: {target_str} Done! Cost {Duration(since = start_time)}')
+                Logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
         return result
     
     def fetch_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
@@ -172,7 +172,7 @@ class JSDataUpdater():
                 if param.db_src == 'trade_js' and param.db_key == 'min': 
                     temporal['df_min'] = df
                 if target_str: 
-                    Logger.success(f'Fetching: {target_str} Done! Cost {Duration(since = start_time)}')
+                    Logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
         return result
 
     def fetch_all(self ,start_dt = None , end_dt = None , force = False):
@@ -194,7 +194,7 @@ class JSDataUpdater():
             start_time = datetime.now()
             target_str = self.handle_result(path , path)
             if target_str: 
-                Logger.success(f'Download: {target_str} Done! Cost {Duration(since = start_time)}')
+                Logger.success(f'Download {target_str}! Cost {Duration(since = start_time)}')
             paths.append(path)
         return paths
 

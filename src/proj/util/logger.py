@@ -153,12 +153,17 @@ class Logger:
     @classmethod
     def footnote(cls , *args , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        stdout(*args , color = 'gray' , **kwargs)
+        stdout('*' , *args , color = 'gray' , **kwargs)
         
     @classmethod
     def success(cls , *args , **kwargs):
         """custom green stdout message for success"""
-        stdout(*args , color = 'lightgreen' , **kwargs)
+        stdout('Success :' , *args , color = 'lightgreen' , **kwargs)
+    
+    @classmethod
+    def skipping(cls , *args , **kwargs):
+        """custom skipping message"""
+        stdout('Skipping:' , *args , color = 'gray' , **kwargs)
 
     @classmethod
     def alert1(cls , *args , color = 'lightyellow' , vb_level : int = 0 , **kwargs):
@@ -166,7 +171,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        stdout(*args , color = color , vb_level = vb_level , **kwargs)
+        stdout('Caution :' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def alert2(cls , *args , color = 'lightred' , vb_level : int = 0 , **kwargs):
@@ -174,7 +179,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        stdout(*args , color = color , vb_level = vb_level , **kwargs)
+        stdout('RedAlert: ' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def alert3(cls , *args , color = 'purple' , vb_level : int = 0 , **kwargs):
@@ -182,12 +187,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        stdout(*args , color = color , vb_level = vb_level , **kwargs)
-
-    @classmethod
-    def skipping(cls , *args , **kwargs):
-        """custom skipping message"""
-        stdout('Skipping:' , *args , color = 'gray' , **kwargs)
+        stdout('Fatal   :' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def _speical_message(cls , *args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , level_prefix : dict[str, Any] | None = None , vb_level : int | None = None , **kwargs):

@@ -350,7 +350,7 @@ class RegisteredModel(ModelPath):
         if self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = vb_level)
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 99)
         return df
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:

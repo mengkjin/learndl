@@ -4,7 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Callable
 
-from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , Email , ProjStates , Duration
+from src.proj import (
+    MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , 
+    Email , ProjStates , ProjConfig , Duration , print_project_info)
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 
@@ -100,6 +102,7 @@ class AutoRunTask:
         task_key : str | Any | None = None , 
         catchers : list[str] = ['html' , 'markdown' , 'warning'],
         forfeit_if_done = False,
+        verbosity : int = 2 ,
         **kwargs
     ):
         self.task_name = task_name
@@ -108,6 +111,8 @@ class AutoRunTask:
         
         self.catchers = AutoRunCatchers(catchers)
         self.forfeit_if_done = forfeit_if_done
+
+        self.verbosity = verbosity
 
         self.kwargs = kwargs
         
@@ -126,8 +131,10 @@ class AutoRunTask:
     def __enter__(self):
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.already_done = self.task_recorder.is_finished()
-        self.catchers.enter(self.task_full_name , self.task_name , self.init_time , )
+        self.catchers.enter(self.task_full_name , self.task_name , self.init_time)
         self.status = 'Running'
+        ProjConfig.verbosity = self.verbosity
+        print_project_info(script_level = True)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):

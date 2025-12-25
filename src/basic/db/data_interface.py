@@ -313,7 +313,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
     if df is not None and (len(df.index.names) > 1 or df.index.name): 
         df = df.reset_index()
     mark = save_df(df , _db_path(db_src , db_key , date , use_alt = False) , 
-                   overwrite = overwrite , prefix = db_key.title() , indent = indent , vb_level = vb_level)
+                   overwrite = overwrite , prefix = db_key , indent = indent , vb_level = vb_level)
     return mark
 
 # @_db_src_deprecated(0)

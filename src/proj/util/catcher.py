@@ -704,7 +704,8 @@ class HtmlCatcher(OutputCatcher):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.enabled: 
             return
-        print(TimedOutput.progress_bar_contents)
+        with Logger.ParagraphIII('all progress bar contents:'):
+            print(TimedOutput.progress_bar_contents , sep = '\n')
         self.export()   
         self.restore_display_function()
         self.ClearInstance(self)

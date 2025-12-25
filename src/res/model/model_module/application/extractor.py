@@ -141,7 +141,7 @@ class ModelHiddenExtractor:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 1)
             if extractor._current_update_dates:
-                Logger.success(f'Finish updating hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
+                Logger.success(f'Update hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
-                Logger.skipping(f'No new updating hidden feature extraction for {model}' , indent = indent + 1 , vb_level = vb_level)
+                Logger.skipping(f'Hidden feature extraction for {model} is up to date' , indent = indent + 1 , vb_level = vb_level)
         return extractor

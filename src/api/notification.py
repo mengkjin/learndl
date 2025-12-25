@@ -24,7 +24,7 @@ def check_cuda_status():
     if not MACHINE.server:
         Logger.skipping(f'{MACHINE.name} is not a server, skip checking cuda status')
     elif torch.cuda.is_available(): 
-        Logger.success(f'Success : Server {MACHINE.name} CUDA is available')
+        Logger.success(f'Server {MACHINE.name} CUDA is available')
     else:
         Logger.error(f'Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution:')
     
@@ -80,12 +80,12 @@ def email_to_fanghan(test = False):
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')
             return
-    Logger.success(f'Success : email_to_fanghan at {today} sent')
+    Logger.success(f'Email to Fanghan at {today}')
     return
 
 def reset_options_cache():
     Options.cache.clear()
-    Logger.success(f'Success : reset options cache')
+    Logger.success(f'Reset Options Cache')
 
 class NotificationAPI:
     @classmethod

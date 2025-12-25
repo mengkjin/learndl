@@ -105,7 +105,7 @@ class ModelPredictor:
         self._current_update_dates = []
         for date , subdf in new_df.groupby(date_col):
             new_df = subdf.drop(columns='date').set_index(secid_col)
-            self.reg_model.save_pred(new_df , date , overwrite)
+            self.reg_model.save_pred(new_df , date , overwrite , indent = 2 , vb_level = 3)
             self._current_update_dates.append(date)
         return self
 
@@ -162,14 +162,14 @@ class ModelPredictor:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt)
             if md._current_update_dates:
-                Logger.success(f'Finish updating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
+                Logger.success(f'Update model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
             else:
-                Logger.skipping(f'No new updating model prediction for {model}' , indent = 1)
+                Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1)
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.success(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
+                    Logger.success(f'Deploy model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
                 else:
-                    Logger.skipping(f'No new deploying model prediction for {model}' , indent = 1)
+                    Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1)
         return md
 
     @classmethod

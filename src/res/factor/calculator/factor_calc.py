@@ -295,7 +295,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
     @abstractmethod
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , vb_level : int = 1) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = 1) -> bool:
         """store factor data after calculate"""
         raise NotImplementedError(f'{self.factor_name} calc_and_deploy is not implemented')
 
@@ -309,7 +309,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         df = DB.load(self.db_src , self.db_key , date , vb_level = 99)
         return df
 
-    def eval_factor(self , date : int , vb_level : int = 1) -> pd.DataFrame:
+    def eval_factor(self , date : int , indent : int = 1 , vb_level : int = 10) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         try:
             df = self.load_factor(date)
@@ -319,15 +319,14 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if (df.empty or 
             (self.meta_type == 'market' and 'date' not in df.columns) or 
             (self.meta_type == 'stock' and 'secid' not in df.columns)): 
-            self.calc_and_deploy(date , overwrite = True)
+            self.calc_and_deploy(date , overwrite = True , indent = indent , vb_level = vb_level)
+            assert self._df is not None and not self._df.empty , f'factor {self.factor_name} is not calculated at {date}'
             df = self._df
-            assert df is not None and not df.empty , f'factor {self.factor_name} is not calculated at {date}'
-            Logger.stdout(f'{self.factor_name} at {date} recalculated' , vb_level = vb_level)
         return df
 
-    def eval_factor_series(self ,  date : int , vb_level : int = 1) -> pd.Series:
+    def eval_factor_series(self ,  date : int , indent : int = 1 , vb_level : int = 10) -> pd.Series:
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
-        df = self.eval_factor(date , vb_level)
+        df = self.eval_factor(date , indent = indent , vb_level = vb_level)
         if 'secid' in df.columns:
             return df.set_index('secid').iloc[:,0]
         elif 'date' in df.columns:
@@ -348,7 +347,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-              indent : int = 1 , vb_level : int = 1
+              indent : int = 1 , vb_level : int = 10
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
         dates = np.intersect1d(dates , cls.stored_dates())
@@ -383,12 +382,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def Factor(cls , dates : np.ndarray | list[int] , normalize = True , 
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-               multi_thread = True , ignore_error = True , vb_level : int = 1) -> StockFactor:
+               multi_thread = True , ignore_error = True , indent : int = 0 , vb_level : int = 10) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
             return StockFactor()
         calc = cls()
-        func_calls = {date:(calc.eval_factor , {'date' : date , 'vb_level' : vb_level}) for date in dates}
+        func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : vb_level + 2}) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs)
         if normalize: 
@@ -491,7 +490,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def update_day_factor(self , date : int , overwrite = False , vb_level : int = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         if show_warning and date not in CONF.Factor.UPDATE.target_dates:
-            Logger.alert1(f'Warning: {self.factor_string} at {date} is not in CONF.Factor.UPDATE.target_dates')
+            Logger.alert1(f'{self.factor_string} at {date} is not in CONF.Factor.UPDATE.target_dates')
         prefix = f'{self.factor_string} at {date}'
         try:
             done = self.calc_and_deploy(date , overwrite = overwrite , vb_level = vb_level)
@@ -612,7 +611,7 @@ class StockFactorCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , vb_level : int = 1) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = 10) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path(self.db_src , self.db_key , date).exists(): 
             return False
@@ -623,7 +622,7 @@ class StockFactorCalculator(FactorCalculator):
         self._df = df
         self._date = date
 
-        return DB.save(df , self.db_src , self.db_key , date , vb_level = vb_level)
+        return DB.save(df , self.db_src , self.db_key , date , indent = indent , vb_level = vb_level)
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -656,7 +655,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , vb_level : int = 1) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = 10) -> bool:
         """store factor data after calculate"""
         return False
 
@@ -670,14 +669,14 @@ class AffiliateFactorCalculator(FactorCalculator):
         df = df.rename(columns = {self.load_col_name : self.factor_name})
         return df
 
-    def eval_factor(self , date : int , vb_level : int = 1) -> pd.DataFrame:
+    def eval_factor(self , date : int , indent : int = 1 , vb_level : int = 10) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         return self.load_factor(date)
 
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-              indent : int = 1 , vb_level : int = 1
+              indent : int = 1 , vb_level : int = 10
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = np.intersect1d(dates , cls.stored_dates())
@@ -758,7 +757,7 @@ class MarketFactorCalculator(FactorCalculator):
         df = instance.validate_value(df , calc_date , strict = True)
         return DB.save(df , cls.db_src , cls.db_key , vb_level = vb_level)
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , vb_level : int = 1) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = 10) -> bool:
         """store factor data after calculate"""
         if not DB.path(self.db_src , self.db_key).exists():
             return self.recalculate(date , vb_level = vb_level)
@@ -771,7 +770,7 @@ class MarketFactorCalculator(FactorCalculator):
         df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
             sort_values('date').reset_index(drop = True)
 
-        return DB.save(df , self.db_src , self.db_key , vb_level = vb_level)
+        return DB.save(df , self.db_src , self.db_key , indent = indent , vb_level = vb_level)
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -804,7 +803,7 @@ class MarketFactorCalculator(FactorCalculator):
     @classmethod
     def Loads(cls , start : int | None = None , end : int | None = None , fillna = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median' ,
-              indent : int = 1 , vb_level : int = 1
+              indent : int = 1 , vb_level : int = 10
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         df = DB.load(cls.db_src , cls.db_key , vb_level = 99)
@@ -870,7 +869,7 @@ class PoolingCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , vb_level : int = 1) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = 10) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path(self.db_src , self.db_key , date).exists(): 
             return False
@@ -881,7 +880,7 @@ class PoolingCalculator(FactorCalculator):
         self._df = df
         self._date = date
 
-        return DB.save(df , self.db_src , self.db_key , date , vb_level = vb_level)
+        return DB.save(df , self.db_src , self.db_key , date , indent = indent , vb_level = vb_level)
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -1005,7 +1004,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
         df = DB.load('pooling_weight' , self.db_key , vb_level = 99)
         return df
 
-    def drop_pooling_weight(self , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1):
+    def drop_pooling_weight(self , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 10):
         """trim pooling weight of a given date range"""
         if not overwrite:
             return

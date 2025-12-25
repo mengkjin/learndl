@@ -121,6 +121,6 @@ class Email:
                 smtp.login(cls._settings.sender, cls._settings.password)
                 smtp.sendmail(cls._settings.sender, cls.recipient(recipient), message.as_string())
             if confirmation_message:
-                Logger.success(f'Success : sending email {confirmation_message}')
+                Logger.success(f'Send email {confirmation_message}')
         except Exception as e:
             Logger.error(f'Error : sending email went wrong: {e}')

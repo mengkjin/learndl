@@ -13,7 +13,7 @@ def print_project_info(script_level : bool = False , identifier = 'project_initi
         return
     
     Logger.highlight(f'Project Initialized Successfully!')
-    [Logger.success(info) for info in MACHINE.info() + ProjConfig.info() + ProjStates.info()]
+    [Logger.stdout(info , color = 'lightgreen') for info in MACHINE.info() + ProjConfig.info() + ProjStates.info()]
     if MACHINE.server and not torch.cuda.is_available():
         Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
     os.environ[identifier] = "1"

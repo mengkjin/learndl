@@ -3,7 +3,7 @@ from pathlib import Path
 
 from typing import Any, Callable
 
-from src.proj import Logger , ProjConfig , print_project_info
+from src.proj import Logger
 from src.basic import AutoRunTask
 from src.app.script_lock import ScriptLockMultiple
 from src.app.backend import BackendTaskRecorder , ScriptHeader
@@ -68,16 +68,15 @@ class ScriptTool:
         self.task_name = task_name
         self.task_key = task_key
         self.lock_name = lock_name
+        self.verbosity = verbosity
         
         if 'email' not in kwargs and (caller_path := _get_caller_path()) is not None:
             header = ScriptHeader.read_from_file(caller_path)
             kwargs.update({'email' : header.email})
         
-        ProjConfig.verbosity = verbosity
-        print_project_info(script_level = True)
         self.backend_recorder = BackendTaskRecorder(**kwargs)
         self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout , lock_wait_time)
-        self.autorun_task = AutoRunTask(task_name , task_key , catchers , forfeit_if_done)
+        self.autorun_task = AutoRunTask(task_name , task_key , catchers , forfeit_if_done , verbosity)
 
 
     def __call__(self , func : Callable):

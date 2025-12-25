@@ -109,7 +109,7 @@ class ScheduledTask:
                 check = True,
             )
             # printout the result
-            Logger.success(f"command {self.cmdline} executed successfully, return code: {result.returncode}\n")
+            Logger.success(f"Command {self.cmdline} executed successfully, return code: {result.returncode}\n")
             self.complete()
         except subprocess.CalledProcessError as e:
             Logger.error(f"command executed failed, return code: {e.returncode}")
@@ -173,5 +173,5 @@ class TaskScheduler:
         script = PATH.path_at_machine(script , machine_name)
         kwargs_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in kwargs.items() if v != ''])
         cmdline = f"{PATH.path_at_machine(Path(MACHINE.python_path) , machine_name)} {script} {kwargs_str}"
-        Logger.success(f"add run script {script} with kwargs {kwargs} to {machine_name}")
+        Logger.success(f"Add run script {script} with kwargs {kwargs} to {machine_name}")
         return cls.add_task(machine_name = machine_name, cmdline = cmdline)
