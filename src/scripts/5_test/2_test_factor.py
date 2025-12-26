@@ -28,7 +28,7 @@
 #       desc : end date
 
 from src.api import ModelAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('test_factor' , '@factor_name' , lock_num = 0 , verbosity = 9)
 def main(factor_name : str | None = None , resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):

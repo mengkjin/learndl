@@ -1,6 +1,8 @@
 import sys
 
 _config_slots = ['verbosity']
+_max_verbosity = 10
+_min_verbosity = 0
 
 class _Verbosity:
     """
@@ -15,7 +17,7 @@ class _Verbosity:
         return self._verbosity
     def __set__(self, instance, value):
         assert isinstance(value , int) , f'verbosity must be an integer , got {type(value)} : {value}'
-        value = max(min(value , 10) , 0)
+        value = max(min(value , _max_verbosity) , _min_verbosity)
         if value != self._verbosity:
             sys.stderr.write(f'\u001b[31m\u001b[1mProject Verbosity Changed from {self._verbosity} to {value}\u001b[0m\n')
         else:
@@ -25,6 +27,8 @@ class _Verbosity:
 class _ProjStatesMeta(type):
     """meta class of ProjConfig"""
     verbosity = _Verbosity()
+    max_verbosity = _max_verbosity
+    min_verbosity = _min_verbosity
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')

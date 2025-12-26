@@ -46,7 +46,6 @@ def page_navigation():
     pg = st.navigation(pages = pages , position='top')
     return pg
 
-
 def sidebar_navigation():
     with st.sidebar:
         st.logo(**get_logo() , link = 'https://github.com/mengkjin/learndl')
@@ -88,11 +87,21 @@ def global_button():
             
 def global_settings():
     with st.container(key = "sidebar-global-settings").expander('Global Settings' , icon = ':material/settings:'):
+        # max verbosity, yes for 10 , no for 0 , None for default (2 if not set), passed to script params
+        cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
+        cols[0].markdown(":blue-badge[Max Verbosity]" , 
+                         help="""Should use max verbosity or min? Not selected will use default (2 if not set).""")
+        cols[1].segmented_control('MaxVB' , ['yes' , 'no'] , default = None , 
+                                  key = 'global-settings-maxvb'  , label_visibility = 'collapsed')
+
+        # email notification, yes , no , None for default, passed to script params
         cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
         cols[0].markdown(":blue-badge[Email Notification]" , 
                          help="""If email after the script is complete? Not selected will use script header value.""")
         cols[1].segmented_control('Email' , ['yes' , 'no'] , default = None , 
                                   key = 'global-settings-email'  , label_visibility = 'collapsed')
+
+        # run mode, shell , os , or default , used in SessionControl.click_script_runner_run()
         cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
         cols[0].markdown(":blue-badge[Run Mode]" , 
                          help='''Which mode should the script be running in?

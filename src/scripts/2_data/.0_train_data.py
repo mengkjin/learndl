@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.api import DataAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('reconstruct_train_data')
 def main(**kwargs):

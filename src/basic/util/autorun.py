@@ -6,7 +6,7 @@ from typing import Any , Callable
 
 from src.proj import (
     MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , 
-    Email , ProjStates , ProjConfig , Duration , print_project_info)
+    Email , ProjStates , ProjConfig , print_project_info)
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 
@@ -133,7 +133,7 @@ class AutoRunTask:
         self.already_done = self.task_recorder.is_finished()
         self.catchers.enter(self.task_full_name , self.task_name , self.init_time)
         self.status = 'Running'
-        ProjConfig.verbosity = self.verbosity
+        self.set_verbosity()
         print_project_info(script_level = True)
         return self
 
@@ -148,9 +148,6 @@ class AutoRunTask:
             self.status = 'Success'
 
         self.error_messages.extend(Logger.get_conclusions('error'))
-        if not self.error_messages:
-            dur = Duration(self.end_time - self.init_time)
-            Logger.conclude(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} successfully finished at {self.end_time.strftime("%Y-%m-%d %H:%M:%S")} , cost {dur}')
         self.exit_message = Logger.draw_conclusions()
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)
@@ -264,6 +261,14 @@ class AutoRunTask:
     def today(self , format : str = '%Y%m%d') -> str:
         """return the today's date in the given format"""
         return self.init_time.strftime(format)
+
+    def set_verbosity(self):
+        """set the verbosity of the task"""
+        if 'max_vb' in self.kwargs:
+            self.verbosity = 10 * int(self.kwargs['max_vb'])
+        elif 'verbosity' in self.kwargs:
+            self.verbosity = int(self.kwargs['verbosity'])
+        ProjConfig.verbosity = self.verbosity
 
     def send_email(self):
         """send email with attachment if in server and email is True"""

@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.proj import Options , Logger
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('reset_options')
 def main(**kwargs):

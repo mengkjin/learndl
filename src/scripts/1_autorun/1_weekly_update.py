@@ -9,7 +9,7 @@
 
 from src.api import UpdateAPI
 from src.basic import CALENDAR
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('weekly_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):

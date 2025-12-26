@@ -97,6 +97,8 @@ def _convert_ansi_codes_to_span(codes):
             return '</span>'
         elif code == 1:
             styles.append('font-weight: bold')
+        elif code == 3:
+            styles.append('font-style: italic')
         elif code in color_map:
             if 30 <= code <= 37 or 90 <= code <= 97:  # foreground colors
                 fg_color = color_map[code]
@@ -126,41 +128,6 @@ def _figure_to_base64(fig : Figure | Any):
     except Exception as e:
         Logger.error(f"Error converting figure to base64: {e}")
         return None
-    
-def _ansi_to_css(ansi_string: str) -> str:
-    """convert ANSI color codes to CSS"""
-    mapping =  {
-        #'\u001b[0m': '</span>',  # reset
-        '\u001b[0m': '</span>',  # reset
-        '\u001b[1m': '<span style="font-weight: bold;">',  # bold
-        '\u001b[30m': '<span style="color: black;">',  # black
-        '\u001b[31m': '<span style="color: red;">',  # red
-        '\u001b[32m': '<span style="color: green;">',  # green
-        '\u001b[33m': '<span style="color: yellow;">',  # yellow
-        '\u001b[34m': '<span style="color: blue;">',  # blue
-        '\u001b[35m': '<span style="color: purple;">',  # purple
-        '\u001b[36m': '<span style="color: cyan;">',  # cyan
-        '\u001b[37m': '<span style="color: white;">',  # white
-        '\u001b[40m': '<span style="background-color: black; color: white;">',  # black background
-        '\u001b[41m': '<span style="background-color: red; color: white;">',  # red background
-        '\u001b[42m': '<span style="background-color: green; color: white;">',  # green background
-        '\u001b[43m': '<span style="background-color: yellow; color: black;">',  # yellow background
-        '\u001b[44m': '<span style="background-color: blue; color: white;">',  # blue background
-        '\u001b[45m': '<span style="background-color: purple; color: white;">',  # purple background
-        '\u001b[46m': '<span style="background-color: cyan; color: black;">',  # cyan background
-        '\u001b[47m': '<span style="background-color: white; color: black;">',  # white background
-        '\u001b[90m': '<span style="color: gray">', # 灰色
-        '\u001b[91m': '<span style="color: lightred">', # 亮红色
-        '\u001b[92m': '<span style="color: lightgreen">', # 亮绿色
-        '\u001b[93m': '<span style="color: lightyellow">', # 亮黄色
-        '\u001b[94m': '<span style="color: lightblue">', # 亮蓝色
-        '\u001b[95m': '<span style="color: lightpurple">', # 亮洋红色
-        '\u001b[96m': '<span style="color: lightcyan">', # 亮青色
-        '\u001b[97m': '<span style="color: white">', # 白色
-    }
-    for ansi_code, html_code in mapping.items():
-        ansi_string = ansi_string.replace(ansi_code, html_code)
-    return ansi_string
 
 def _dataframe_to_html(df: pd.DataFrame | pd.Series | Any):
     """capture display object (dataframe or other object)"""
@@ -1219,7 +1186,7 @@ class MarkdownCatcher(OutputCatcher):
     def formatted_text(self, text : str , prefix='- ' , suffix='  \n' , type: Literal['stdout' , 'stderr'] = 'stdout'):
         """replace ANSI color codes with HTML span tags"""
         text = text.strip('\n')
-        text = _ansi_to_css(text)
+        text = _str_to_html(text)
         if type == 'stderr':
             text = f'<u>{text}</u>'
         text = prefix + text + suffix

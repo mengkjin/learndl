@@ -120,7 +120,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True ,
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
-        Logger.footnote(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists'
@@ -296,7 +296,7 @@ def max_date(db_src , db_key , *, use_alt = False):
     return int(mdate)
 
 # @_db_src_deprecated(1)
-def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , *, overwrite = True , indent = 1 , vb_level : int = 1):
+def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , *, overwrite = True , indent = 1 , vb_level : int = 1 , reason : str = ''):
     '''
     Save data to database
     Parameters  
@@ -313,7 +313,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
     if df is not None and (len(df.index.names) > 1 or df.index.name): 
         df = df.reset_index()
     mark = save_df(df , _db_path(db_src , db_key , date , use_alt = False) , 
-                   overwrite = overwrite , prefix = db_key , indent = indent , vb_level = vb_level)
+                   overwrite = overwrite , prefix = f'{db_key} {reason}' if reason else db_key , indent = indent , vb_level = vb_level)
     return mark
 
 # @_db_src_deprecated(0)

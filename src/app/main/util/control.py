@@ -98,6 +98,10 @@ class SessionControl:
     
     def get_global_settings(self):
         setting = {}
+        max_vb = str(st.session_state.get('global-settings-maxvb' , 'none')).lower()
+        if max_vb != 'none': 
+            setting['max_vb'] = 1 if max_vb.startswith('y') else 0
+
         email = str(st.session_state.get('global-settings-email' , 'none')).lower()
         if email != 'none': 
             setting['email'] = 1 if email.startswith('y') else 0

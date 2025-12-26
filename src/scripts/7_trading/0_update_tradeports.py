@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.api import TradingAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('update_tradeports')
 def main(**kwargs):

@@ -27,7 +27,7 @@
 #       default : 10
 
 from src.res.factor.api import FactorCalculatorAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('recalc_all' , lock_name = 'update_factors')
 def main(start : int | None = None, end : int | None = None , timeout : float | None = 10 , **kwargs):

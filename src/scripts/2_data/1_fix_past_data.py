@@ -8,7 +8,7 @@
 # mode: shell
 
 
-from src.app import ScriptTool
+from src.basic import ScriptTool
 from src.basic import DB
 
 @ScriptTool('fix_past_data')

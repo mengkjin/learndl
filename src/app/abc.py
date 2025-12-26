@@ -86,7 +86,7 @@ def Popen(cmd : list[str] | str , encoding = 'utf-8' , communicating = False):
     return subprocess.Popen(cmd , **kwargs)
     
 class ScriptCmd:
-    macos_terminal_profile_name = 'Pro'
+    macos_terminal_profile_name = 'Basic'
     macos_tempfile_method = False
     def __init__(self , script : str | Path , params : dict | None = None , 
                  mode: Literal['shell', 'os'] = 'shell'):
@@ -243,7 +243,6 @@ def find_python_process_by_name(name : str , task_id : str  | None = None , try_
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
     parser.add_argument('--source', type=str, default='py', help='Source of the script call')
-    parser.add_argument('--email', type=str, default='0', help='Send email or not')
     args , unknown = parser.parse_known_args()
     return args.__dict__ | unknown_args(unknown) | kwargs
 

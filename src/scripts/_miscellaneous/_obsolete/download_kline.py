@@ -32,7 +32,7 @@ def transform_one_day(date):
     with zipfile.ZipFile(zip_file_path, 'r') as zip_ref: 
         zip_ref.extract(txt_file_path , download_path)
     df = pd.read_csv(download_path.joinpath(txt_file_path) , sep = '\t')
-    DB.save_df(df , target_path , prefix = f'Kline' , vb_level = 99)
+    DB.save_df(df , target_path , prefix = f'Kline Tranformed' , vb_level = 10)
 
 def kline_download(start = 20100104 , end = 20241226):
     os.makedirs(download_path , exist_ok=True)

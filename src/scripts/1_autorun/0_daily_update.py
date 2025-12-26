@@ -10,7 +10,7 @@
 from src.api import UpdateAPI
 from src.proj import SharedSync
 from src.basic import CALENDAR , TaskScheduler
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):

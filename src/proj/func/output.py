@@ -44,9 +44,10 @@ _ansi_bg_color_mapping = {
 }
 
 _ansi_bold = '\u001b[1m'
+_ansi_italic = '\u001b[3m'
 _ansi_reset = '\u001b[0m'
 
-def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None = None , bold : bool = False) -> str:
+def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False) -> str:
     prefix = ''
     if color:
         prefix += _ansi_color_mapping.get(color , '')
@@ -54,6 +55,8 @@ def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None =
         prefix += _ansi_bg_color_mapping.get(bg_color , '')
     if bold:
         prefix += _ansi_bold
+    if italic:
+        prefix += _ansi_italic
     suffix = _ansi_reset if prefix else ''
     return prefix + msg + suffix
 
@@ -71,22 +74,20 @@ class FormatStr(str):
     def __str__(self):
         return self.formatted()
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}({repr(self.formatted())})'
+
     @classmethod
     def indent_str(cls , indent : int = 0) -> str:
         return '' if indent <= 0 else ('  ' * indent + '--> ')
-
-    def colored(self , color : str | None = None , bg_color : str | None = None , bold : bool = False) -> str:
-        color = color or self.kwargs.get('color' , None)
-        bg_color = bg_color or self.kwargs.get('bg_color' , None)
-        bold = bold or self.kwargs.get('bold' , False)
-        return _ansi_styler(self.msg , color = color , bg_color = bg_color , bold = bold)
 
     def formatted(self , **kwargs) -> str:
         kwargs = self.kwargs | kwargs
         color = kwargs.get('color' , None)
         bg_color = kwargs.get('bg_color' , None)
         bold = kwargs.get('bold' , False)
-        return _ansi_styler(self.msg , color = color , bg_color = bg_color , bold = bold)
+        italic = kwargs.get('italic' , False)
+        return _ansi_styler(self.msg , color = color , bg_color = bg_color , bold = bold , italic = italic)
 
     def with_level_prefix(self , level: str | None = None , color : str | None = None , bg_color : str | None = None , bold : bool = True):
         if not level:
@@ -116,20 +117,20 @@ class FormatStr(str):
             if flush:
                 io.flush()
 
-def stdout(*args , color : str | None = None , bg_color : str | None = None , bold : bool = False , indent : int = 0 , 
+def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , vb_level : int = 1):
     """custom stdout message , vb_level can be set to control display (minimum ProjConfig.verbosity level)"""
-    if Silence.silent or ProjConfig.verbosity < vb_level:
+    if Silence.silent or vb_level >= 99 or min(vb_level , ProjConfig.max_verbosity) > ProjConfig.verbosity:
         return
-    fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold)
+    fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     fstr.write(stdout = True , file = file , end = end , flush = flush)
 
-def stderr(*args , color : str | None = None , bg_color : str | None = None , bold : bool = False , indent : int = 0 , 
+def stderr(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, vb_level : int = 0):
     """custom stderr message , vb_level can be set to control display (minimum ProjConfig.verbosity level)"""
-    if Silence.silent or ProjConfig.verbosity < vb_level:
+    if Silence.silent or vb_level >= 99 or min(vb_level , ProjConfig.max_verbosity) > ProjConfig.verbosity:
         return
-    fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold)
+    fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     if level_prefix:
         fstr.with_level_prefix(**level_prefix)
     fstr.write(stderr = True , file = file , end = end , flush = flush)

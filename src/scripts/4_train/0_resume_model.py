@@ -18,7 +18,7 @@
 #   height : 600 # optional
 
 from src.api import ModelAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('resume_model' , '@model_name')
 def main(model_name : str | None = None , **kwargs):

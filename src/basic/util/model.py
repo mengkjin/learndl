@@ -338,9 +338,9 @@ class RegisteredModel(ModelPath):
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = 2) -> None:
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = 2 , reason : str = '') -> None:
         """save model pred"""
-        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level)
+        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
 
     def load_pred(self , date : int , indent = 1 , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
         """load model pred"""
@@ -350,7 +350,7 @@ class RegisteredModel(ModelPath):
         if self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 99)
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 10 , reason = 'rename columns')
         return df
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:

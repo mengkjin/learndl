@@ -30,7 +30,7 @@
 #   height : 600 # optional
 
 from src.api import ModelAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('test_model' , '@model_name' , lock_num = 0)
 def main(model_name : str | None = None , resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):

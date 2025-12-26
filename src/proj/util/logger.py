@@ -141,7 +141,7 @@ class Logger:
         kwargs:
             indent: add prefix '  --> ' before the message
             color , bg_color , bold: color the message
-            sep , end , file , flush: same as print
+            sep , end , file , flush: same as stdout
         """
         stdout(*args , indent = indent , color = color , vb_level = vb_level , **kwargs)
 
@@ -153,7 +153,7 @@ class Logger:
     @classmethod
     def footnote(cls , *args , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        stdout('*' , *args , color = 'gray' , **kwargs)
+        stdout(f'**{args[0]}' , *args[1:] , color = 'gray' , bold = True , italic = True , **kwargs)
         
     @classmethod
     def success(cls , *args , **kwargs):
@@ -265,6 +265,10 @@ class Logger:
     def draw_conclusions(cls):
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
+        num_conclusions = sum([len(cls._conclusions[level]) for level in _levels])
+        if num_conclusions == 0:
+            return conclusion_strs
+
         with cls.ParagraphIII('Final Conclusions'):
             for level , color in zip(_levels , _levels_palette):
                 if not cls._conclusions[level]:

@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.api import ModelAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('update_preds')
 def main(**kwargs):

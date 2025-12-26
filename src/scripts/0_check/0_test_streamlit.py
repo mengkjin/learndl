@@ -41,7 +41,7 @@
 #       default : 42.
 import time , random , sys
 from src.proj import Logger , LogWriter , Timer
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
 def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
@@ -58,10 +58,10 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.highlight('highlight message')
                 Logger.highlight('highlight message with default prefix' , prefix = True)
                 Logger.divider()
-                Logger.success('success message')
-                Logger.remark('remark message')
+                Logger.success('success message' , vb_level = 5)
+                Logger.remark('remark message' , vb_level = 12)
                 Logger.remark('remark message with default prefix' , color = 'lightblue')
-                Logger.footnote('footnote message')
+                Logger.footnote('footnote message' , vb_level = 99)
                 Logger.alert1('warning message')
                 Logger.alert2('error message')
                 Logger.alert3('critical message')

@@ -33,7 +33,7 @@
 #       default : 20250904
 
 from src.res.factor.api import FactorTestAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('analyze_factor' , lock_name = 'analyze_factor')
 def main(factor_name : str | None = None , test_type : str = 'fast' , start : int | None = 20170101 , end : int | None = None ,  **kwargs):

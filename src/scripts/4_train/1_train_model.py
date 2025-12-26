@@ -28,7 +28,7 @@
 
 from pathlib import Path
 from src.api import ModelAPI
-from src.app import ScriptTool
+from src.basic import ScriptTool
 
 @ScriptTool('train_model' , '@module_name')
 def main(module_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):

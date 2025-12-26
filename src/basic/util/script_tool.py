@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from src.proj import Logger , PATH
-from src.basic import AutoRunTask
-from src.app.script_lock import ScriptLockMultiple
-from src.app.backend import BackendTaskRecorder , ScriptHeader
+
+from .autorun import AutoRunTask
+from .script_lock import ScriptLockMultiple
 
 __all__ = ['ScriptTool']
 
@@ -64,26 +64,28 @@ class ScriptTool:
         lock_wait_time : int = 1 ,
         verbosity : int = 2 ,
         **kwargs
-    ):
+    ):  
+
+        from src.app.backend import BackendTaskRecorder
+
         self.task_name = task_name
         self.task_key = task_key
         self.lock_name = lock_name
-        self.verbosity = verbosity
-        
-        if 'email' not in kwargs and (caller_path := _get_caller_path()) is not None:
-            header = ScriptHeader.read_from_file(caller_path)
-            kwargs.update({'email' : header.email})
         
         self.backend_recorder = BackendTaskRecorder(**kwargs)
         self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout , lock_wait_time)
         self.autorun_task = AutoRunTask(task_name , task_key , catchers , forfeit_if_done , verbosity)
 
+        # set current working directory to main
         os.chdir(str(PATH.main))
 
 
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
         self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
+        if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
+            from src.app.backend import ScriptHeader
+            self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
         return self.backend_recorder(self.script_lock(self.autorun_task(func)))
 
     def __repr__(self):
