@@ -5,9 +5,8 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type
 
-from src.proj import PATH , MACHINE , Logger , Display
+from src.proj import PATH , MACHINE , Logger , Display , dfs_to_excel , figs_to_pdf
 from src.basic import CALENDAR , RegisteredModel , DB
-from src.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -175,11 +174,13 @@ class TradingPort:
         return self
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
-                        alpha_details = False , indent : int = 0 , vb_level : int = 1) -> pd.DataFrame:
+                        alpha_details = False , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date)
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
+
+        Logger.stdout(f'Perform portfolio building for TradingPort {self.name} on {date}' , indent = indent , vb_level = vb_level)
 
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
@@ -197,7 +198,7 @@ class TradingPort:
         if export:
             path = self.port_path(date)
             path.parent.mkdir(parents=True, exist_ok=True)
-            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent , vb_level = vb_level + 2)
+            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent + 1 , vb_level = vb_level + 2)
 
         # add columns to include alpha and universe
         if alpha_details:
@@ -206,7 +207,7 @@ class TradingPort:
             pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
         return pf.assign(name = self.name , date = date)
     
-    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 0 , vb_level : int = 1) -> pd.DataFrame:
+    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
         assert self.backtest , 'backtest must be True'
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
@@ -221,10 +222,10 @@ class TradingPort:
         if len(date_list) == 0: 
             return pd.DataFrame()
         
-        Logger.stdout(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days' , indent = indent + 1 , vb_level = vb_level)
+        Logger.stdout(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days' , indent = indent , vb_level = vb_level)
         pf = None
         for d in date_list:
-            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf , indent = indent + 1 , vb_level = vb_level + 2))
+            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf , indent = indent + 1 , vb_level = vb_level + 1))
         return pd.DataFrame()
     
     def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:

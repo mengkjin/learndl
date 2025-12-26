@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Literal
 
 from src.basic import TradeDate , DB
-from src.func.singleton import singleton
+from src.math.singleton import singleton
 from src.data.util import INFO
 
 from .access import DateDataAccess

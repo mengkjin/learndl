@@ -4,7 +4,7 @@ from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
-from src.func.transform import lm_resid
+from src.math.transform import lm_resid
 
 def get_amplitudes(start_date , end_date , pivot = True):
     quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['high' , 'low' , 'preclose'] , adj_price = False)

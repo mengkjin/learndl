@@ -3,7 +3,7 @@ import pandas as pd
 from plottable import ColumnDefinition
 from typing import Any
 
-import src.func.plot as plot
+import src.math.plot as plot
 from .plot_basic import PlotDfFigIterator
 
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']

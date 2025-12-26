@@ -3,7 +3,7 @@ from matplotlib.figure import Figure
 from IPython.display import display as raw_display
 from typing import Callable
 
-from src.proj.env import ProjConfig
+from src.proj.env import Proj
 from .silence import Silence
 
 __all__ = ['Display']
@@ -63,7 +63,7 @@ class Display:
         """
         display the object
         """
-        if Silence.silent or ProjConfig.verbosity < vb_level:
+        if Silence.silent or Proj.verbosity < vb_level:
             return
 
         for callback in cls._callbacks_before:

@@ -5,8 +5,8 @@ from src.basic import CALENDAR , DB , CONF
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
-from src.func.transform import time_weight , lm_resid
-from src.func.linalg import symmetric_orth_np
+from src.math.transform import time_weight , lm_resid
+from src.math.linalg import symmetric_orth_np
 
 __all__ = ['umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m']
 

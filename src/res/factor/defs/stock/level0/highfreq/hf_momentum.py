@@ -4,7 +4,7 @@ import polars as pl
 from src.data import DATAVENDOR
 from src.res.factor.calculator import HfMomentumFactor
 
-from src.func.transform import lm_resid
+from src.math.transform import lm_resid
 
 __all__ = [
     'inday_amap_orig' , 'inday_conf_persist' , 'inday_regain_conf_persist' , 'inday_high_time' ,

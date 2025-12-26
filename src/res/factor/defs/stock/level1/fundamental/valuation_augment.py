@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from src.data import DATAVENDOR
-from src.func.transform import winsorize , whiten
+from src.math.transform import winsorize , whiten
 
 from src.res.factor.calculator import ValueFactor
 from src.res.factor.defs.stock.level0.fundamental.valuation_static import (btop , btop_rank3y , etop , etop_rank3y , cfev , cfev_rank3y)

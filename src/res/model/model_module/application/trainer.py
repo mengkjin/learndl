@@ -1,4 +1,4 @@
-from src.proj import PATH , MACHINE , HtmlCatcher , Logger , ProjStates
+from src.proj import PATH , MACHINE , HtmlCatcher , Logger , Proj
 from src.basic import RegisteredModel
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
@@ -33,7 +33,7 @@ class ModelTrainer(BaseTrainer):
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , selection = selection , 
                   schedule_name = schedule_name , start = start , end = end , **kwargs)
         HtmlCatcher.AddExportFile(app.path_training_output)
-        ProjStates.exit_files.extend(app.result_package)
+        Proj.States.exit_files.extend(app.result_package)
         return app
 
     @classmethod

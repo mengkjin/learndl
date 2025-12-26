@@ -73,12 +73,12 @@ class IndexDaily(TimeSeriesFetcher):
         update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         return [update_to] if update else []
 
-    def update_dates(self , dates):
+    def update_dates(self , dates) -> np.ndarray:
         """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
         if not dates:
-            return
+            return np.array([] , dtype = int)
         end_dt = max(dates)
-
+        updated_dates = []
         for index in self.TARGET_INDEX:
             path = DB.path(self.DB_SRC , index)
             old_df = pd.DataFrame()
@@ -92,6 +92,8 @@ class IndexDaily(TimeSeriesFetcher):
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).sort_values('trade_date')
             df['trade_date'] = df['trade_date'].astype(int)
             DB.save(df , self.DB_SRC , index , indent = 1 , vb_level = 3)
+            updated_dates.extend(df['trade_date'].unique())
+        return np.unique(np.array(updated_dates , dtype = int))
 
 class ZXIndexDaily(DayFetcher):
     """
@@ -121,10 +123,10 @@ class ZXIndexDaily(DayFetcher):
             index_dfs[index] = df
         return date_dfs , index_dfs
 
-    def update_dates(self , dates , step = 25 , **kwargs) -> None:
+    def update_dates(self , dates , step = 25 , **kwargs) -> np.ndarray:
         """update the fetcher given dates"""
         if self.check_server_down(): 
-            return
+            return np.array([] , dtype = int)
         if not self.db_by_name:
             assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
         assert step > 0 , f'step must be larger than 0 , got {step}'
@@ -133,13 +135,17 @@ class ZXIndexDaily(DayFetcher):
         if len(si) != len(ei):
             ei = np.concatenate([ei , dates[-1:]])
 
+        updated_dates = []
+
         for start , end in zip(si , ei): 
             date_dfs , index_dfs = self.get_zx_index_quotes(start , end)
             for date , df in date_dfs.items():
                 DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
+                updated_dates.append(date)
             for index , df in index_dfs.items():
                 self.update_index_daily_file(index , df , vb_level = 3)
-
+        return np.unique(np.array(updated_dates , dtype = int))
+    
     def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 3):
         df_old = DB.load('index_daily_ts' , index , vb_level = 99)
         if not df_old.empty:

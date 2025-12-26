@@ -102,11 +102,11 @@ class ProjStates(metaclass=_ProjStatesMeta):
     """
     custom class to record anything
     example:
-        ProjStates.trainer = trainer # for src.res.model.util.classes.BaseTrainer
-        ProjStates.account = account # for pandas.DataFrame portfolio account
-        ProjStates.factor = factor   # for src.res.factor.util.classes.StockFactor
-        ProjStates.email_attachments.append(email_attachment) # for list[Path | str] email attachments
-        ProjStates.exit_files.append(exit_file) # for list[Path | str] exit files
+        Proj.States.trainer = trainer # for src.res.model.util.classes.BaseTrainer
+        Proj.States.account = account # for pandas.DataFrame portfolio account
+        Proj.States.factor = factor   # for src.res.factor.util.classes.StockFactor
+        Proj.States.email_attachments.append(email_attachment) # for list[Path | str] email attachments
+        Proj.States.exit_files.append(exit_file) # for list[Path | str] exit files
     """
     # @classmethod
     # def __setattr__(cls, key, value):

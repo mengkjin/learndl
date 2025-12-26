@@ -6,7 +6,7 @@ from typing import Any , Callable
 
 from src.proj import (
     MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher , 
-    Email , ProjStates , ProjConfig , print_project_info)
+    Email , Proj)
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 
@@ -134,7 +134,7 @@ class AutoRunTask:
         self.catchers.enter(self.task_full_name , self.task_name , self.init_time)
         self.status = 'Running'
         self.set_verbosity()
-        print_project_info(script_level = True)
+        Proj.print_info(script_level = True)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -152,8 +152,8 @@ class AutoRunTask:
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         
-        self.exit_files = list(set(self.exit_files + [Path(f) for f in ProjStates.exit_files]))
-        ProjStates.exit_files.clear()
+        self.exit_files = list(set(self.exit_files + [Path(f) for f in Proj.States.exit_files]))
+        Proj.States.exit_files.clear()
 
         # send email if not forfeit task
         if not self.forfeit_task:
@@ -268,7 +268,7 @@ class AutoRunTask:
             self.verbosity = 10 * int(self.kwargs['max_vb'])
         elif 'verbosity' in self.kwargs:
             self.verbosity = int(self.kwargs['verbosity'])
-        ProjConfig.verbosity = self.verbosity
+        Proj.verbosity = self.verbosity
 
     def send_email(self):
         """send email with attachment if in server and email is True"""

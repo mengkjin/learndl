@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from src.proj import ProjConfig
+from src.proj import Proj
 from src.res.model.util import BaseDataModule , BatchData
     
 class BatchDataLoader:
@@ -38,7 +38,7 @@ class BatchDataLoader:
         return batch_data
 
     def enable_tqdm(self , disable = False):
-        if ProjConfig.verbosity < 9 or not self.tqdm or disable: 
+        if Proj.verbosity < 9 or not self.tqdm or disable: 
             return self
         if not isinstance(self.loader , tqdm): 
             self.loader = tqdm(self.loader , total=len(self.loader) , desc=self.desc)

@@ -7,7 +7,7 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Literal
 
-from src.proj import Logger
+from .logger import Logger
 
 def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : str | Path , mode : Literal['a','w'] = 'w' , 
                  name_prefix = '' , print_prefix = None , vb_level : int = 1):

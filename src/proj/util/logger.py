@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , Literal , Type
 
-from src.proj.env import PATH , ProjStates , ProjConfig
+from src.proj.env import PATH , Proj
 from src.proj.func import Duration , Display , stdout , stderr , FormatStr
 
 _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
@@ -131,7 +131,7 @@ class Logger:
     @classmethod
     def log_only(cls , *args , **kwargs):
         """dump to log writer with no display"""
-        if log_file := ProjStates.log_file:
+        if log_file := Proj.States.log_file:
             log_file.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
@@ -190,7 +190,8 @@ class Logger:
         stdout('Fatal   :' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def _speical_message(cls , *args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , level_prefix : dict[str, Any] | None = None , vb_level : int | None = None , **kwargs):
+    def _speical_message(cls , *args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , 
+                         level_prefix : dict[str, Any] | None = None , vb_level : int | None = None , **kwargs):
         """custom cyan colored Highlight level message"""
         assert not level_prefix or not padding_char , 'prefix and padding_char cannot be used together'
         if vb_level is None:
@@ -201,9 +202,9 @@ class Logger:
             padding_right = padding_char * max(0 , padding_width - len(msg) - 2 - len(padding_left))
             msg = ' '.join([padding_left , msg , padding_right])
         if level_prefix:
-            stderr(msg , color = color , bold = True , level_prefix = level_prefix , **kwargs)
+            stderr(msg , color = color , bold = True , level_prefix = level_prefix , vb_level = vb_level , **kwargs)
         else:
-            stdout(msg , color = color , bold = True , **kwargs)
+            stdout(msg , color = color , bold = True , vb_level = vb_level , **kwargs)
 
     @classmethod
     def remark(cls , *args , color = 'lightblue' , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):
@@ -223,31 +224,31 @@ class Logger:
     @classmethod
     def debug(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Debug level stderr"""
-        if vb_level <= ProjConfig.verbosity:
+        if vb_level <= Proj.verbosity:
             cls._log.debug(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def info(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Info level stderr"""
-        if vb_level <= ProjConfig.verbosity:
+        if vb_level <= Proj.verbosity:
             cls._log.info(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def warning(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Warning level stderr"""
-        if vb_level <= ProjConfig.verbosity:
+        if vb_level <= Proj.verbosity:
             cls._log.warning(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def error(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Error level stderr"""
-        if vb_level <= ProjConfig.verbosity:
+        if vb_level <= Proj.verbosity:
             cls._log.error(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod
     def critical(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Critical level stderr"""
-        if vb_level <= ProjConfig.verbosity:
+        if vb_level <= Proj.verbosity:
             cls._log.critical(FormatStr(*args , indent = indent) , **kwargs)
 
     @classmethod

@@ -3,7 +3,7 @@ from typing import Literal
 from src.basic import CALENDAR
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
-from src.func.singleton import singleton   
+from src.math.singleton import singleton   
 
 def get_profit_ann_dt(date : int):
     ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , 180)

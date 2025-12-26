@@ -9,7 +9,7 @@ from typing import Any , Literal
 from src.proj import PATH , Logger , Silence
 from src.basic import HiddenPath , CALENDAR
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
-from src.func import tensor_standardize_and_weight , match_values
+from src.math import tensor_standardize_and_weight , match_values
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
 
 from .loader import BatchDataLoader

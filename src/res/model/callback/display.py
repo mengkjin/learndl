@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , ClassVar
 
-from src.proj import PATH , MACHINE , Logger , Duration , Display , ProjConfig
+from src.proj import PATH , MACHINE , Logger , Duration , Display , Proj
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 
@@ -14,7 +14,7 @@ class CallbackTimer(BaseCallBack):
     WITH_CB = True
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.recording = ProjConfig.verbosity >= 10
+        self.recording = Proj.verbosity >= 10
         self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.possible_hooks()}
         self.record_start_time : dict[str,datetime] = {}
 
@@ -43,8 +43,8 @@ class StatusDisplay(BaseCallBack):
 
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.show_info_step = [0,10,5,3,2,1][min(ProjConfig.verbosity // 2 , 5)]
-        self.dataloader_info = ProjConfig.verbosity >= 10
+        self.show_info_step = [0,10,5,3,2,1][min(Proj.verbosity // 2 , 5)]
+        self.dataloader_info = Proj.verbosity >= 10
         self.record_init_time = datetime.now()
         self.record_times : dict[str,datetime] = {}
         self.record_texts : dict[str,str]   = {}

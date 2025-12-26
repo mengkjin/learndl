@@ -7,8 +7,7 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , Timer , Logger , Display
-from src.func import dfs_to_excel , figs_to_pdf
+from src.proj import PATH , Timer , Logger , Display , dfs_to_excel , figs_to_pdf
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 

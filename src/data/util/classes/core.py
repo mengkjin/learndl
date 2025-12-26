@@ -8,7 +8,7 @@ from typing import Any , ClassVar
 
 from src.proj import PATH , Logger , Silence , Timer
 from src.basic import CALENDAR , DB , torch_load
-from src.func import index_union , index_intersect , forward_fillna
+from src.math import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
 from ..stock_info import INFO

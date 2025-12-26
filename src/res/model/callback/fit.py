@@ -1,7 +1,7 @@
 import torch
 from copy import deepcopy
 
-from src import func as FUNC
+from src import math as FUNC
 from src.proj import Logger
 from src.res.model.util import BaseCallBack , Optimizer
 

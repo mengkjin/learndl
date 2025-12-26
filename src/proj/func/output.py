@@ -2,7 +2,7 @@ import sys
 from datetime import datetime
 from typing import Any
 
-from src.proj.env import ProjConfig
+from src.proj.env import Proj
 from .silence import Silence
 
 _ansi_color_mapping = {
@@ -119,17 +119,21 @@ class FormatStr(str):
 
 def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , vb_level : int = 1):
-    """custom stdout message , vb_level can be set to control display (minimum ProjConfig.verbosity level)"""
-    if Silence.silent or vb_level >= 99 or min(vb_level , ProjConfig.max_verbosity) > ProjConfig.verbosity:
+    """custom stdout message , vb_level can be set to control display (minimum Proj.verbosity level)"""
+    if Silence.silent or vb_level >= 99 or min(vb_level , Proj.max_verbosity) > Proj.verbosity:
         return
+    if Proj.verbosity == Proj.max_verbosity:
+        args = [*args , f'vb_level: {vb_level}']
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     fstr.write(stdout = True , file = file , end = end , flush = flush)
 
 def stderr(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, vb_level : int = 0):
-    """custom stderr message , vb_level can be set to control display (minimum ProjConfig.verbosity level)"""
-    if Silence.silent or vb_level >= 99 or min(vb_level , ProjConfig.max_verbosity) > ProjConfig.verbosity:
+    """custom stderr message , vb_level can be set to control display (minimum Proj.verbosity level)"""
+    if Silence.silent or vb_level >= 99 or min(vb_level , Proj.max_verbosity) > Proj.verbosity:
         return
+    if Proj.verbosity == Proj.max_verbosity:
+        args = [*args , f'vb_level: {vb_level}']
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     if level_prefix:
         fstr.with_level_prefix(**level_prefix)

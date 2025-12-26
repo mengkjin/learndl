@@ -6,7 +6,7 @@ from typing import Any , Literal
 
 from src.proj import PATH , MACHINE , Logger , Device , FormatStr
 from src.basic import ModelPath , ModelDBMapping , DB
-from src.func import recur_update
+from src.math import recur_update
 from src.res.algo import AlgoModule
 
 from .metrics import Metrics

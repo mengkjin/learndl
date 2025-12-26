@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
-from src.func.transform import time_weight , apply_ols
-from src.func.singleton import singleton
+from src.math.transform import time_weight , apply_ols
+from src.math.singleton import singleton
 
 @dataclass
 class FF3_Model:

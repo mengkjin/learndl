@@ -9,7 +9,7 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from matplotlib.figure import Figure
 
-from src.proj.env import PATH , MACHINE , ProjStates
+from src.proj.env import PATH , MACHINE , Proj
 from src.proj.func import Duration , Display
 from .logger import Logger
 
@@ -376,11 +376,11 @@ class LogWriter(OutputCatcher):
 
     def __enter__(self):
         super().__enter__()
-        ProjStates.log_file = self.log_file
+        Proj.States.log_file = self.log_file
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        ProjStates.log_file = None
+        Proj.States.log_file = None
         super().__exit__(exc_type, exc_val, exc_tb)
 
     def get_contents(self):
@@ -687,7 +687,7 @@ class HtmlCatcher(OutputCatcher):
         Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         for export_path in self.export_file_list:
             Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
-        ProjStates.exit_files.append(self.export_file_list[0])
+        Proj.States.exit_files.append(self.export_file_list[0])
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:

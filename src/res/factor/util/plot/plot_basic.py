@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-import src.func.plot as plot 
+import src.math.plot as plot 
 
 class PlotDfFigIterator:
     def __init__(self , default_prefix : str):

@@ -11,8 +11,8 @@ from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 from src.proj import Logger
 from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
-from src.func.parallel import parallel
-from src.func.singleton import SingletonMeta
+from src.math.parallel import parallel
+from src.math.singleton import SingletonMeta
 
 __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
 
@@ -163,8 +163,9 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         return f'{self.__name__}({n_jobs} jobs)'
 
     @classmethod
-    def jobs_dict(cls):
-        return {job:job for job in cls.jobs}
+    def jobs_dict(cls , jobs : list[_BaseJob]) -> dict[Any , _BaseJob]:
+        """get jobs dictionary"""
+        return {job:job for job in jobs}
 
     @classmethod
     def levels(cls) -> np.ndarray: 
@@ -198,7 +199,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , indent : int = 0 , vb_level : int = 1 , **kwargs) -> None:
+                     overwrite = False , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """
         collect FactorCalculator jobs for all factors between start and end date
         """
@@ -235,7 +236,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def before_process_jobs(cls , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
-                            overwrite = False , indent : int = 0 , vb_level : int = 1 , **kwargs) -> None:
+                            overwrite = False , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """before process jobs"""
         for calc in cls.calculators(all , selected_factors , **kwargs):
             if isinstance(calc , WeightedPoolingCalculator):
@@ -246,7 +247,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , **kwargs) -> None:
         """preview update jobs for all factors between start and end date"""
-        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite)
+        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = 99)
         [job.preview() for job in cls.jobs]
 
     @classmethod
@@ -258,11 +259,11 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         default behavior is to collect jobs first to find all FactorCalculators then update one by one
         timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         """
-        cls.collect_jobs(start , end , all , selected_factors , overwrite , indent = indent , vb_level = vb_level)
+        cls.collect_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
         start_time = datetime.now()
-        cls.before_process_jobs(start , end , all , selected_factors , overwrite , indent = indent , vb_level = vb_level)
+        cls.before_process_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
         for group , jobs in cls.grouped_jobs():
-            cls.process_group_jobs(group , jobs , indent = indent + 1 , vb_level = vb_level + 1)
+            cls.process_group_jobs(group , jobs , indent = indent + 2 , vb_level = vb_level + 2)
 
             if timeout > 0 and (datetime.now() - start_time).total_seconds() > timeout * 3600:
                 Logger.alert1(f'Timeout reached, {timeout} hours passed, stopping update', indent = indent + 1)
@@ -296,18 +297,21 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def update(cls , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         """update pooling factor data according"""
+        Logger.remark(f'Update : {cls.__name__} since last update!')
         cls.process_jobs(start = start , end = end , all = True , timeout = timeout)
 
     @classmethod
     def recalculate(cls , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         """recalculate factors between start and end date"""
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
+        Logger.remark(f'Update : {cls.__name__} recalculate all factors!')
         cls.process_jobs(start = start , end = end , all = True , overwrite = True , timeout = timeout)
 
     @classmethod
     def rollback(cls , rollback_date : int , timeout : int = -1 , **kwargs) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         start = int(CALENDAR.td(rollback_date , 1))
+        Logger.remark(f'Update : {cls.__name__} rollback from {rollback_date}!')
         cls.process_jobs(start = start , all = True , overwrite = True , timeout = timeout)
         
     @classmethod
@@ -315,7 +319,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         assert factors , 'factors are required for fix'
         factors = [factor for factor in cls.factors() if factor in factors]
         if factors:
-            Logger.stdout(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
+            Logger.remark(f'Fixing : {cls.__name__} {factors} from {start} to {end}!')
             cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , timeout = timeout)
 
     @classmethod
@@ -371,14 +375,14 @@ class StockFactorUpdater(BaseFactorUpdater):
         """process a group of stock factor update jobs"""
         DATAVENDOR.data_storage_control()
         Logger.stdout(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)) , indent = indent , vb_level = vb_level + 1)
-        parallel({job:job.do for job in jobs} , method = cls.multi_thread)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
         Logger.success(f'Stock Factor Update of {group} : {sum(job.done for job in jobs)} / {len(jobs)}' , indent = indent , vb_level = vb_level)
         if failed_jobs := [job for job in jobs if not job.done]: 
-            Logger.alert1(f'Failed Stock Factors: {failed_jobs}', indent = indent + 1)
+            Logger.alert1(f'Failed Stock Factors: {failed_jobs}', indent = indent)
             if cls.multi_thread:
                 # if multi_thread is True, auto retry failed jobs
                 Logger.stdout(f'Auto Retry Failed Stock Factors...' , indent = indent)
-                parallel({job:job.do for job in failed_jobs} , method = cls.multi_thread)
+                parallel(cls.jobs_dict(failed_jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
                 if failed_jobs := [job for job in jobs if not job.done]:
                     Logger.alert1(f'Failed Stock Factors Again: {failed_jobs}', indent = indent)
 
@@ -394,11 +398,11 @@ class MarketFactorUpdater(BaseFactorUpdater):
         return cls.grouped_jobs_by(['level' , 'factor_name'])
         
     @classmethod
-    def process_group_jobs(cls , group : dict , jobs : list[_JobFactorAll] , 
+    def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , 
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        parallel(cls.jobs_dict() , method = cls.multi_thread , indent = indent , vb_level = vb_level)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
 
 class PoolingFactorUpdater(BaseFactorUpdater):
     """manager of pooling factor update jobs"""
@@ -416,7 +420,7 @@ class PoolingFactorUpdater(BaseFactorUpdater):
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        parallel(cls.jobs_dict() , method = cls.multi_thread , indent = indent , vb_level = vb_level)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
 
 class AffiliateFactorUpdater(BaseFactorUpdater):
     """manager of affiliate factor update jobs"""
@@ -434,7 +438,7 @@ class AffiliateFactorUpdater(BaseFactorUpdater):
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        parallel(cls.jobs_dict() , method = cls.multi_thread , indent = indent , vb_level = vb_level)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
     
 class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""
@@ -451,7 +455,7 @@ class FactorStatsUpdater(BaseFactorUpdater):
     def process_group_jobs(cls , group : Any , jobs : list[_BaseJob] , 
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of factor stats update jobs"""
-        Logger.stdout(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates' , indent = 1)
+        Logger.stdout(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates' , indent = indent , vb_level = vb_level)
         if len(jobs) <= 10:
             Logger.stdout(f'Jobs included: {jobs}' , indent = indent , vb_level = vb_level)
-        parallel({job:job.do for job in jobs} , method = cls.multi_thread , indent = indent , vb_level = vb_level)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)

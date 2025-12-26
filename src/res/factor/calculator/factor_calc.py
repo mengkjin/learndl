@@ -12,8 +12,8 @@ from ..util import StockFactor
 from src.proj import Logger , PATH
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
-from src.func.singleton import SingletonABCMeta
-from src.func.parallel import parallel
+from src.math.singleton import SingletonABCMeta
+from src.math.parallel import parallel
 
 __all__ = [
     'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' , 'AffiliateFactorCalculator' ,

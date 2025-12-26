@@ -6,8 +6,8 @@ from datetime import datetime , timedelta , time
 from typing import Any , Literal , Sequence
 
 from src.proj import PATH
-from src.basic import DB
-from src.func.singleton import singleton
+from src.basic import db as DB
+from src.math.singleton import singleton
 
 @singleton
 class _Calendars:
@@ -410,7 +410,7 @@ class CALENDAR:
                     d0 , d1 = min(valid_dates) , 99991231
                 else:
                     d0 , d1 = min(valid_dates) , max(valid_dates)
-                dstr = f'{d0}~{d1}' if d0 != d1 else str(d0)
+                dstr = f'{d0} ~ {d1}' if d0 != d1 else str(d0)
         else:
             dstr = str(dates) if dates is not None else 'None'
         return dstr

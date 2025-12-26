@@ -7,3 +7,4 @@ from .shared_sync import SharedSync
 from .email import Email
 from .device import Device , MemoryPrinter
 from .options import Options
+from .export import dfs_to_excel , figs_to_pdf

@@ -3,9 +3,8 @@ import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Logger , Timer , Display
+from src.proj import Logger , Timer , Display , dfs_to_excel , figs_to_pdf
 from src.basic import DB
-from src.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.func.transform import winsorize , whiten
+from src.math.transform import winsorize , whiten
 
 from src.res.factor.calculator import CoverageFactor
 from src.res.factor.defs.stock.level0.analyst.coverage import (

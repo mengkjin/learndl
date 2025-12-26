@@ -8,7 +8,7 @@ from typing import Any , Iterator
 
 from src.proj import Logger , Timer , Duration
 from src.basic import CONF , CALENDAR
-from src.func.primas import neutralize_2d , process_factor
+from src.math.primas import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -96,7 +96,7 @@ class DataPreProcessor:
             gc.collect()
             Logger.success(f'Preprocess [{key.upper()}] with predict={predict} finished! Cost {Duration(since = tt1)}' , 
                            indent = indent + 1 , vb_level = vb_level + 1)
-            Logger.divider(vb_level = vb_level + 1)
+            Logger.divider(vb_level = vb_level + 2)
 
 class TypePreProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']

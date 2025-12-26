@@ -7,12 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
-from typing import ClassVar , Literal
+from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import Logger , Duration
 from src.basic import CALENDAR , DB
 from src.data.util import secid_adjust
-from src.func.time import date_seg
 
 def factor_name_pinyin_conversion(text : str):
     text = text.replace('\'' , '2').replace('因子' , '')
@@ -26,6 +25,21 @@ def factor_name_pinyin_conversion(text : str):
         text = text.replace(hanzi, pinyin)
     
     return text
+
+def _date_offset(date : Any , offset : int = 0 , astype = int):
+    iterable_input = isinstance(date , Iterable)
+    date = pd.DatetimeIndex(np.array(date).astype(str) if iterable_input else [str(date)])
+    dseries : pd.DatetimeIndex = (date + pd.DateOffset(n=offset))
+    new_date = dseries.strftime('%Y%m%d').to_numpy(astype)
+    return new_date if iterable_input else new_date[0]
+
+def _date_seg(start_dt , end_dt , freq='QE' , astype : Any = int):
+    if start_dt >= end_dt: 
+        return []
+    dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
+    dt_starts = [_date_offset(start_dt) , *_date_offset(dt_list[:-1],1)]
+    dt_ends = [*dt_list[:-1] , _date_offset(end_dt)]
+    return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
 
 @dataclass
 class Connection:
@@ -170,7 +184,7 @@ class SellsideSQLDownloader:
                     start_dt = max(start_dt , last1_dt)
 
             end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to())).as_int()
-            date_intervals = date_seg(start_dt , end_dt , self.FREQ , astype=int)
+            date_intervals = _date_seg(start_dt , end_dt , self.FREQ , astype=int)
         if not date_intervals: 
             return 
         

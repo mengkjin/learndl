@@ -9,9 +9,9 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import ProjStates , PATH , Logger
+from src.proj import Proj , PATH , Logger
 from src.basic import CALENDAR , ModelDict , DB
-from src.func import Filtered
+from src.math import Filtered
 from src.res.algo import AlgoModule
 from src.data import ModuleData
 
@@ -514,7 +514,7 @@ class BaseTrainer(ModelStreamLine):
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
             self.wrap_callbacks()
-            ProjStates.trainer = self
+            Proj.States.trainer = self
         
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
@@ -608,8 +608,8 @@ class BaseTrainer(ModelStreamLine):
         self.on_configure_model()
 
         if not self.stage_queue:
-            Logger.error("stage_queue is empty , please check src.proj.ProjStates.trainer")
-            raise Exception("stage_queue is empty , please check src.proj.ProjStates.trainer")
+            Logger.error("stage_queue is empty , please check src.proj.Proj.States.trainer")
+            raise Exception("stage_queue is empty , please check src.proj.Proj.States.trainer")
 
         if 'data' in self.stage_queue:
             with Logger.ParagraphII('Stage [Data]'):

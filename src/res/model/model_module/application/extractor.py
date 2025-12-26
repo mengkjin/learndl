@@ -133,10 +133,10 @@ class ModelHiddenExtractor:
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
-        
+        Logger.remark(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = HiddenExtractingModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.stdout(f'model_name is None, update all hidden models (len={len(models)})')
+            Logger.stdout(f'model_name is None, update all hidden models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 1)

@@ -11,7 +11,7 @@ from typing import Any
 
 from src.proj import PATH , Logger
 from src.basic import DB
-from src.func import ic_2d , rankic_2d
+from src.math import ic_2d , rankic_2d
 
 from .io import BoosterInput , BoosterOutput
 

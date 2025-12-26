@@ -75,7 +75,7 @@ def email_to_fanghan(test = False):
         df = pd.merge(df1 , df2 , on='secid' , how='left')
         df.to_csv(temp_file)
         try:
-            Email.send(title , body , recipient , send_attachments = False , additional_attachments = attachments , confirmation_message='Fanghan')
+            Email.send(title , body , recipient , send_attachments = False , additional_attachments = attachments)
             task_recorder.mark_finished(success = True)
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')

@@ -3,7 +3,7 @@ import torch.nn as nn
 from typing import Callable , Any , Literal
 
 from src.proj import Logger
-from src.func import mse , pearson , ccc , spearman
+from src.math import mse , pearson , ccc , spearman
 from .multiloss import MultiHeadLosses
 
 class MetricsCalculator:

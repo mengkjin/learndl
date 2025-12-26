@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any , Literal
 
 from src.data import DATAVENDOR
-from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
+from src.math.transform import fill_na_as_const , winsorize_by_dist , zscore
 
 from .general_model import GeneralModel
 

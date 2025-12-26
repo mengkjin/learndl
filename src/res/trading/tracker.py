@@ -3,7 +3,7 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.proj import PATH , Logger , ProjStates
+from src.proj import PATH , Logger , Proj
 from src.basic import CALENDAR
 from src.res.trading.util import TradingPort
 
@@ -11,8 +11,8 @@ FOCUSED_PORTS = ['use_daily']
 
 class TradingPortfolioTracker:
     @classmethod
-    def update(cls , reset_ports : list[str] | None = None , vb_level : int = 1):
-        Logger.remark(f'Update: {cls.__name__} since last update!')
+    def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
+        Logger.remark(f'Update: {cls.__name__} since last update!' , indent = indent)
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         ports = TradingPort.portfolio_dict()
@@ -20,21 +20,21 @@ class TradingPortfolioTracker:
         assert not reset_ports or all([port in ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
             
-        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , vb_level = vb_level) for k,v in ports.items()}
+        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , indent = indent + 1 , vb_level = vb_level + 1) for k,v in ports.items()}
         updated_ports = {k:v for k,v in updated_ports.items() if not v.new_ports[date].empty}
 
         new_ports = {k:v.new_ports[date] for k,v in updated_ports.items()}
         last_ports = {k:v.get_last_port(date).to_dataframe() for k,v in updated_ports.items()}
             
         if len(updated_ports) == 0: 
-            Logger.stdout(f'No trading portfolios updated on {date}')
+            Logger.stdout(f'No trading portfolios updated on {date}' , indent = indent + 1 , vb_level = vb_level + 1)
         else:
-            Logger.stdout(f'Trading portfolios updated on {date}: {list(new_ports.keys())}')
+            Logger.stdout(f'Trading portfolios updated on {date}: {list(new_ports.keys())}' , indent = indent + 1 , vb_level = vb_level + 1)
             for port_name in new_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
                 message = f'Port {port_name} : total {len(new_ports[port_name])} , in {len(in_secids)} , out {len(out_secids)}'
-                Logger.stdout(message , indent = 1)
+                Logger.stdout(message , indent = indent + 2 , vb_level = vb_level + 1)
                 if port_name in FOCUSED_PORTS:
                     in_detail = f'include new secids: {in_secids}'
                     out_detail = f'exclude old secids: {out_secids}'
@@ -44,7 +44,7 @@ class TradingPortfolioTracker:
 
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
-            ProjStates.email_attachments.append(path)
+            Proj.States.email_attachments.append(path)
 
     @classmethod
     def attachment_path(cls , date : int) -> Path:

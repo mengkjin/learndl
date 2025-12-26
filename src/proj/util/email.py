@@ -7,7 +7,7 @@ from email import encoders
 from pathlib import Path
 from typing import Literal
 
-from src.proj.env import MACHINE , ProjStates
+from src.proj.env import MACHINE , Proj
 from .logger import Logger
 
 class _EmailSettings:
@@ -36,8 +36,8 @@ class Email:
     """
     Email class for sending email with attachment
     example:
-        from src.proj import Email , ProjStates
-        ProjStates.email_attachments.append('path/to/attachment.txt')
+        from src.proj import Email , Proj
+        Proj.States.email_attachments.append('path/to/attachment.txt')
         Email.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'test@example.com' , send_attachments = True , additional_attachments = ['path/to/additional.txt'])
     """
     _instance = None
@@ -75,8 +75,8 @@ class Email:
 
         attachments : list[Path] = []
         if send_attachments:
-            attachments.extend([Path(f) for f in ProjStates.email_attachments])
-            ProjStates.email_attachments.clear()
+            attachments.extend([Path(f) for f in Proj.States.email_attachments])
+            Proj.States.email_attachments.clear()
         if additional_attachments:
             if isinstance(additional_attachments , list):
                 attachments.extend([Path(f) for f in additional_attachments])

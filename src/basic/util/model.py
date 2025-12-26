@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import MACHINE , PATH , Logger
-from src.basic import DB
+from src.basic import db as DB
 from .version import torch_load
 from .calendar import CALENDAR
 

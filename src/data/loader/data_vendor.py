@@ -6,7 +6,7 @@ from typing import Any , Literal
 
 from src.proj import Silence , Logger
 from src.basic import CALENDAR , CONF , DB
-from src.func.singleton import singleton
+from src.math.singleton import singleton
 from src.data.util import DataBlock , INFO
 
 from .loader import BlockLoader

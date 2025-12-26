@@ -4,7 +4,7 @@ from typing import Any
 
 from src.proj import MACHINE
 from src.basic import CALENDAR , TradeDate , DB
-from src.func.singleton import singleton
+from src.math.singleton import singleton
 
 @singleton
 class InfoDataAccess:

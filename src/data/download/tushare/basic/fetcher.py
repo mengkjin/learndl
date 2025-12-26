@@ -192,14 +192,15 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             return True
         return False
 
-    def update_dates(self , dates , **kwargs) -> None:
+    def update_dates(self , dates , **kwargs) -> np.ndarray:
         """update the fetcher given dates"""
         if self.check_server_down(): 
-            return
+            return np.array([], dtype = int)
         if not self.db_by_name:
             assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
         for date in dates: 
             DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
+        return dates
 
     def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10) -> None:
         """update the fetcher with retries"""
@@ -208,10 +209,12 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         if len(dates) == 0: 
             Logger.skipping(f'{self.__class__.__name__} already fetched!' , indent = self._stdout_indent)
             return
+
+        updated_dates = np.array([], dtype = int)
         
         while timeout_max_retries >= 0:
             try:
-                self.update_dates(dates)
+                updated_dates = np.concatenate([updated_dates , self.update_dates(dates)])
             except Exception as e:
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
@@ -230,8 +233,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
-        date_str = f'dates {dates[0]} ~ {dates[-1]}' if len(dates) > 1 else f'date {dates[0]}'
-        Logger.success(f'{self.__class__.__name__} fetched {date_str}' , indent = self._stdout_indent)
+        Logger.success(f'{self.__class__.__name__} fetched for {CALENDAR.dates_str(updated_dates)}' , indent = self._stdout_indent)
 
     def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = 200 , **kwargs) -> pd.DataFrame:
         """iterate fetch from tushare"""
@@ -357,9 +359,10 @@ class RollingFetcher(TushareFetcher):
                 break
         return dates
 
-    def update_dates(self , dates):
+    def update_dates(self , dates) -> np.ndarray:
         """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
         assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
+        updated_dates = []
         for i in range(len(dates) - 1):
             start_dt , end_dt = CALENDAR.cd(dates[i] , 1) , dates[i+1]
             df = self.get_data(start_dt , end_dt)
@@ -371,3 +374,5 @@ class RollingFetcher(TushareFetcher):
                 if not self.SAVEING_DATE_COL: 
                     subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
                 DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
+                updated_dates.append(date)
+        return np.array(updated_dates , dtype = int)

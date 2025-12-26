@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from src.func import match_values , index_union , index_stack , rankic_2d , ic_2d
+from src.math import match_values , index_union , index_stack , rankic_2d , ic_2d
 
 __all__ = ['BoosterOutput' , 'BoosterInput' , 'BoosterWeightMethod']
 

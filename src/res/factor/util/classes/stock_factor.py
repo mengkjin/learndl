@@ -6,9 +6,9 @@ from collections.abc import Iterable
 from copy import deepcopy
 from typing import Any , Literal
 
-from src.proj import ProjStates
+from src.proj import Proj
 from src.basic import DB
-from src.func import transform as T
+from src.math import transform as T
 from src.data import DataBlock , DATAVENDOR
 
 from .alpha_model import AlphaModel
@@ -228,7 +228,7 @@ class StockFactor:
         if factor is None:
             factor = pd.DataFrame()
         self.update(factor , normalized , factor_names)
-        ProjStates.factor = self
+        Proj.States.factor = self
 
     def __repr__(self):
         format_str = f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={{}})'

@@ -3,7 +3,7 @@ from src.basic import DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
-from src.func.transform import time_weight , lm_resid
+from src.math.transform import time_weight , lm_resid
 
 __all__ = ['umr_raw_1m' , 'umr_raw_3m' , 'umr_raw_6m' , 'umr_raw_12m']
 

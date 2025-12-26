@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-import src.func.plot as plot
+import src.math.plot as plot
 
 from .plot_basic import PlotDfFigIterator
 

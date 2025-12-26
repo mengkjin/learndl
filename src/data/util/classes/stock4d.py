@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.proj import Logger
-from src.func import match_values , index_union , index_stack , to_numpy
+from src.math import match_values , index_union , index_stack , to_numpy
 
 from .nd import NdData
 
