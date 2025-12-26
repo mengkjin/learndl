@@ -5,6 +5,9 @@ from src.proj import PATH
 from src.basic import CALENDAR , DB
 from .func import ts_code_to_secid
 
+path_bak_data   = PATH.resource.joinpath('tushare_bak_data')
+path_bak_record = PATH.resource.joinpath('tushare_bak_data_record')
+
 class TSBackUpDataTransform():
     """use csv backup data downloaded from tushare to transform to database"""
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
@@ -13,7 +16,7 @@ class TSBackUpDataTransform():
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
-        record_file = PATH.bak_data.joinpath(f'{key}_{CALENDAR.dates_str(date)}.csv')
+        record_file = path_bak_data.joinpath(f'{key}_{CALENDAR.dates_str(date)}.csv')
         df = pd.read_csv(record_file)
         df.columns = df.columns.str.lower()
         return df
@@ -126,11 +129,11 @@ class TSBackUpDataTransform():
 
     def path_record(self , date : int):
         """get backed record path"""
-        return PATH.bak_record.joinpath(f'{date}.backed')
+        return path_bak_record.joinpath(f'{date}.backed')
 
     def get_baked_dates(self):
         """get all backed dates"""
-        return [int(file.stem) for file in PATH.bak_record.glob('*.backed')]
+        return [int(file.stem) for file in path_bak_record.glob('*.backed')]
 
     def get_bakable_dates(self):
         """get all bakable dates (has csv files)"""
@@ -140,7 +143,7 @@ class TSBackUpDataTransform():
     
     def bakable_date(self , date : int):
         """check if a date is bakable (has all required csv files)"""
-        paths = [PATH.bak_data.joinpath(f'{key}_{date}.csv') for key in self.REQUIRED_KEYS]
+        paths = [path_bak_data.joinpath(f'{key}_{date}.csv') for key in self.REQUIRED_KEYS]
         return all([path.exists() for path in paths])
     
     @classmethod
