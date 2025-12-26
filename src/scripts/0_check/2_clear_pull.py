@@ -7,12 +7,13 @@
 # email: False
 # mode: shell
 
-import subprocess 
+import subprocess , os
 from src.proj import Logger
 from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
+    print(f"Current directory: {os.getcwd()}")
     Logger.highlight("Clean local changes...")
     subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
     subprocess.run(['git', 'clean', '-fd'], check=True)
