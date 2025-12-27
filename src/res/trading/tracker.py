@@ -19,16 +19,16 @@ class TradingPortfolioTracker:
         assert not reset_ports or all([port in ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
             
-        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , indent = indent + 1 , vb_level = vb_level + 1) for k,v in ports.items()}
+        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , indent = indent + 1 , vb_level = vb_level + 2) for k,v in ports.items()}
         updated_ports = {k:v for k,v in updated_ports.items() if not v.new_ports[date].empty}
 
         new_ports = {k:v.new_ports[date] for k,v in updated_ports.items()}
         last_ports = {k:v.get_last_port(date).to_dataframe() for k,v in updated_ports.items()}
             
         if len(updated_ports) == 0: 
-            Logger.stdout(f'No trading portfolios updated on {date}' , indent = indent + 1 , vb_level = vb_level + 1)
+            Logger.alert1(f'No trading portfolios updated on {date}' , indent = indent + 1)
         else:
-            Logger.stdout(f'Trading portfolios updated on {date}: {list(new_ports.keys())}' , indent = indent + 1 , vb_level = vb_level + 1)
+            Logger.success(f'Trading portfolios updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
             for port_name in new_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])

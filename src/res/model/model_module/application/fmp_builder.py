@@ -155,9 +155,10 @@ class ModelPortfolioBuilder:
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
         '''Update pre-registered models' factor model portfolios'''
+        Logger.remark(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.stdout(f'model_name is None, build fmps for all registered models (len={len(models)})' , indent = indent , vb_level = vb_level)
+            Logger.stdout(f'model_name is None, build fmps for all registered models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 2)

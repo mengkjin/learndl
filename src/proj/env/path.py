@@ -1,5 +1,5 @@
 # please check this path before running the code
-import shutil , yaml , os , sys
+import shutil , yaml , os , sys , json
 
 from datetime import datetime
 from pathlib import Path
@@ -58,7 +58,6 @@ class PATH:
     
     # configs folder and subfolders
     conf        = main.joinpath('configs')
-    conf_schedule = conf.joinpath('schedule')
 
     # results folder and subfolders
     result      = main.joinpath('results')
@@ -99,7 +98,7 @@ class PATH:
                 return path
         
     @staticmethod
-    def read_yaml(yaml_file : str | Path , **kwargs) -> Any:
+    def read_yaml(yaml_file : str | Path , **kwargs) -> dict[str, Any]:
         """Read yaml file"""
         if isinstance(yaml_file , str):
             yaml_file = Path(yaml_file)
@@ -118,6 +117,17 @@ class PATH:
         """Dump data to yaml file"""
         with open(yaml_file , 'a' if os.path.exists(yaml_file) else 'w') as f:
             yaml.dump(data , f , **kwargs)
+
+    @staticmethod
+    def read_json(json_file : str | Path , **kwargs) -> dict[str, Any]:
+        """Read json file"""
+        if isinstance(json_file , str):
+            json_file = Path(json_file)
+        if isinstance(json_file , Path) and json_file.suffix == '' and json_file.with_name(f'{json_file.name}.json').exists():
+            json_file = json_file.with_name(f'{json_file.name}.json')
+        with open(json_file , 'r' , **kwargs) as f:
+            d = json.load(f)
+        return d
 
     @staticmethod
     def copytree(src : str | Path , dst : str | Path) -> None:

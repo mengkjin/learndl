@@ -12,7 +12,7 @@ def show_config_editor():
     """show config yaml editor"""
     with st.container(key="special-expander-editor"):
         files = [f for sub in ["train" , "trade" , "nn" , "boost"] for f in PATH.conf.joinpath(sub).glob("*.yaml")]
-        default_file = PATH.conf.joinpath("train/model.yaml")
+        default_file = PATH.conf.joinpath("train" , "model.yaml")
         config_editor = YAMLFileEditor('config-editor', file_root=PATH.conf)
         SC.config_editor_state = config_editor.state
         config_editor.show_yaml_editor(files, default_file=default_file)

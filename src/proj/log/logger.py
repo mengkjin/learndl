@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , Literal , Type
 
-from src.proj.env import PATH , Proj
+from src.proj.env import MACHINE , PATH , Proj
 from src.proj.abc import Duration , stdout , stderr , FormatStr , Timer
 
 _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
@@ -53,7 +53,7 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
 def log_config() -> dict[str, Any]:
     """Initialize the logger"""
-    log_config = PATH.read_yaml(PATH.conf.joinpath('glob' , 'logger.yaml'))
+    log_config = MACHINE.configs('proj' , 'logger')
     new_path = PATH.log_main.joinpath(log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
     new_path.parent.mkdir(exist_ok=True)
@@ -87,7 +87,7 @@ def reset_logger(log : logging.Logger , config : dict[str, Any]):
 
 class Logger:
     """
-    custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'
+    custom colored log , config at PATH.conf / 'proj' / 'logger.yaml'
     method include:
         stdout level:
             - stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
@@ -286,12 +286,12 @@ class Logger:
         cls._conclusions[level].append(msg)
 
     @classmethod
-    def draw_conclusions(cls):
+    def draw_conclusions(cls) -> str:
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
         num_conclusions = sum([len(cls._conclusions[level]) for level in _levels])
         if num_conclusions == 0:
-            return conclusion_strs
+            return ''
 
         with cls.ParagraphIII('Final Conclusions'):
             for level , color in zip(_levels , _levels_palette):

@@ -1,7 +1,7 @@
 import json , sys
 
 from datetime import datetime
-from src.proj.env import PATH
+from src.proj.env import MACHINE , PATH
 
 class OptionsDefinition:
     """Specified Options for the project , how they are defined/calculated"""
@@ -20,12 +20,12 @@ class OptionsDefinition:
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules in the config/schedule directory"""
-        return [p.stem for p in PATH.conf_schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
+        return [p.stem for p in PATH.conf.joinpath('schedule').glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
 
     @classmethod
     def available_db_mappings(cls) -> list[str]:
         """Get the available db mappings in the config/registry/db_models_mapping.yaml file"""
-        return list(PATH.read_yaml(PATH.conf.joinpath('registry' , 'db_models_mapping')).keys())
+        return list(MACHINE.configs('proj' , 'db_models_mapping').keys())
 
     @classmethod
     def available_tradeports(cls) -> list[str]:

@@ -4,7 +4,7 @@ import pathlib , os
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from src.proj import CONF
+from src.proj import CONF , Proj
 from util import (SC , style , intro_pages , script_pages , runs_page_url , get_logo)
 
 file_path = str(pathlib.Path(__file__).absolute())
@@ -160,6 +160,7 @@ def script_links(show_dir = False):
             group = page['group']
   
 def main():
+    Proj.print_info(script_level = False)
     page_config()
     pg = page_navigation()
     sidebar_navigation()

@@ -14,7 +14,7 @@ class InfoDataAccess:
         self.cname = DB.load('information_ts' , 'change_name') 
         self.cname = self.cname.query('secid >= 0').sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
 
-        self.indus_dict = pd.DataFrame(MACHINE.configs('glob' , 'tushare_indus'))
+        self.indus_dict = pd.DataFrame(MACHINE.configs('proj' , 'tushare_indus'))
         self.indus_data = DB.load('information_ts' , 'industry') 
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values

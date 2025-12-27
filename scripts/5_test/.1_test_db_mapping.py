@@ -8,7 +8,7 @@
 # mode: shell
 # parameters:
 #   mapping_name : 
-#       type : "list(PATH.read_yaml(PATH.conf.joinpath('registry' , 'db_models_mapping')).keys())"
+#       type : "list(MACHINE.configs('proj' , 'db_models_mapping').keys())"
 #       desc : choose a model
 #       prefix : "db@"
 #       required : True

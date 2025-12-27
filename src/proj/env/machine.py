@@ -101,7 +101,7 @@ class MACHINE:
     def PATH(cls):
         """Get the PATH of the machine"""
         if not hasattr(cls , '_path'):
-            from src.proj import PATH
+            from src.proj.env.path import PATH
             cls._path = PATH
         return cls._path
 
@@ -116,13 +116,33 @@ class MACHINE:
         return cls.PATH().get_share_folder_path()
         
     @classmethod
-    def configs(cls , conf_type : Literal['glob' , 'registry' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'schedule'] , name : str) -> dict:
-        """Get the configs of the machine"""
+    def configs(cls , conf_type : Literal['proj' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'schedule'] , name : str , raise_if_not_exist = True , **kwargs) -> dict:
+        """
+        Get the configs of the machine
+        possible conf_type: proj , factor , boost , nn , train , trade , schedule
+        possible suffixes: .yaml , .json
+        additional kwargs: encoding : 'gbk' for tushare_indus
+        """
         PATH = cls.PATH()
-        p = PATH.conf.joinpath(conf_type , f'{name}.yaml')
-        assert p.exists() , p
-        if conf_type == 'glob' and name == 'tushare_indus': 
-            kwargs = {'encoding' : 'gbk'}
-        else: 
-            kwargs = {}
-        return PATH.read_yaml(p , **kwargs)
+        for suffix in ('.yaml' , '.json'):
+            if (path := PATH.conf.joinpath(conf_type , f'{name}{suffix}')).exists():
+                break
+        else:
+            if raise_if_not_exist:
+                raise FileNotFoundError(f'Config file {conf_type}/{name} does not exist')
+            else:
+                return {}
+        
+        match name:
+            case 'tushare_indus':
+                additional_kwargs = {'encoding' : 'gbk'}
+            case _:
+                additional_kwargs = {}
+        kwargs = kwargs | additional_kwargs
+
+        if path.suffix == '.yaml':
+            return PATH.read_yaml(path , **kwargs)
+        elif path.suffix == '.json':
+            return PATH.read_json(path , **kwargs)
+        else:
+            raise ValueError(f'Unsupported config file type: {path.suffix}')

@@ -152,7 +152,7 @@ class AutoRunTask:
             self.status = 'Success'
 
         self.error_messages.extend(Logger.get_conclusions('error'))
-        self.exit_message = '\n'.join(Logger.draw_conclusions())
+        self.exit_message = Logger.draw_conclusions()
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         

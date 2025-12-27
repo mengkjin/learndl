@@ -282,7 +282,7 @@ class RegisteredModel(ModelPath):
     '''
     START_DT = 20170101 if MACHINE.server else 20170101
     FMP_STEP = 5
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('registry' , 'registered_models')
+    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'registered_models')
 
     def __init__(self, pred_name : str , name: str | Any = None , 
                  submodel : Literal['best' , 'swalast' , 'swabest'] | Any = None ,
@@ -378,7 +378,7 @@ class HiddenExtractingModel(ModelPath):
     for a registeredmodel to extract hidden states
     model dict stored in configs/registry/update_models.yaml
     '''
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('registry' , 'hidden_models')
+    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'hidden_models')
     def __init__(self , hidden_name : str , name: str | Any = None , 
                  submodels : list | np.ndarray | Literal['best' , 'swalast' , 'swabest'] | None = None ,
                  nums : list | np.ndarray | int | None = None , assertion = True):

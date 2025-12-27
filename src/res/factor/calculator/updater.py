@@ -250,6 +250,15 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         [job.preview() for job in cls.jobs]
 
     @classmethod
+    def after_process_jobs(cls , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+        """after process jobs"""
+        failed_jobs = [job for job in cls.jobs if not job.done]
+        if failed_jobs:
+            Logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: {failed_jobs}', indent = indent)
+        else:
+            Logger.success(f'All {len(cls.jobs)} Jobs are Processed Successfully!' , indent = indent , vb_level = vb_level)
+
+    @classmethod
     def process_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , indent : int = 0 , vb_level : int = 1 , timeout : int = -1 , **kwargs) -> None:
@@ -268,6 +277,8 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                 Logger.alert1(f'Timeout reached, {timeout} hours passed, stopping update', indent = indent + 1)
                 Logger.alert1(f'Terminated at {group}', indent = indent + 1)
                 break
+        cls.after_process_jobs(indent = indent + 1 , vb_level = vb_level + 1)
+        
 
     @classmethod
     def grouped_jobs_by(cls , keys : list[str]) -> Generator[tuple[dict , list[Any]] , None , None]:

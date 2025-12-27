@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime , timedelta , time
 from typing import Any , Literal , Sequence
 
-from src.proj.env import PATH
+from src.proj.env import MACHINE    
 from src.proj.abc.singleton import singleton
 import src.proj.db as DB
 
@@ -16,9 +16,9 @@ class _Calendars:
 
     def load_calendars(self):
         calendar = DB.load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
-        if (res_path := PATH.conf.joinpath('glob','reserved_calendar.json')).exists():
-            res_calendar = pd.read_json(res_path).loc[:,['calendar' , 'trade']]
-            calendar = pd.concat([calendar , res_calendar[res_calendar['calendar'] > calendar['calendar'].max()]]).sort_values('calendar')
+        res_calendar = pd.DataFrame(MACHINE.configs('proj' , 'reserved_calendar' , raise_if_not_exist = False))
+        if not res_calendar.empty:
+            calendar = pd.concat([calendar , res_calendar.loc[:,['calendar' , 'trade']]]).drop_duplicates(subset='calendar', keep='first').sort_values('calendar')
 
         trd = calendar.query('trade == 1').reset_index(drop=True)
         trd['td'] = trd['calendar']

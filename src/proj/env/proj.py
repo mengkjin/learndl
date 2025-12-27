@@ -4,12 +4,7 @@ from ..abc import stderr
 
 __all__ = ['Proj']
 
-_project_config = {
-    'default_verbosity': 2,
-    'max_verbosity': 10,
-    'min_verbosity': 0,
-    'callback_vb_level': 99, # to show all callback messages, set to values less than 99
-}
+_project_settings = MACHINE.configs('proj' , 'proj_settings')
 
 class _Verbosity:
     """
@@ -18,7 +13,7 @@ class _Verbosity:
         ProjVerbosity.verbosity = 1 # for int verbosity
     """
     def __init__(self):
-        self.value = _project_config['default_verbosity']
+        self.value = _project_settings['verbosity']
     def __get__(self , instance, owner):
         return self.value
     def __set__(self, instance, value):
@@ -32,19 +27,19 @@ class _Verbosity:
 
 class _MaxVerbosity:
     def __init__(self):
-        self.value = _project_config['max_verbosity']
+        self.value = _project_settings['max_verbosity']
     def __get__(self , instance, owner):
         return self.value
 
 class _MinVerbosity:
     def __init__(self):
-        self.value = _project_config['min_verbosity']
+        self.value = _project_settings['min_verbosity']
     def __get__(self , instance, owner):
         return self.value
 
 class _CallbackVbLevel:
     def __init__(self):
-        self.value = _project_config['callback_vb_level']
+        self.value = _project_settings['callback_vb_level']
     def __get__(self , instance, owner):
         return self.value
 

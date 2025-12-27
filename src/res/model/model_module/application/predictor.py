@@ -152,41 +152,47 @@ class ModelPredictor:
         return cls(model , use_data)
     
     @classmethod
-    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None):
+    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : int = 1):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
+        Logger.remark(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
+        if start_dt is not None or end_dt is not None:
+            Logger.stdout(f'Update from {start_dt} to {end_dt}' , indent = indent + 1 , vb_level = vb_level)
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.stdout(f'model_name is None, update all registered models (len={len(models)})')
+            Logger.stdout(f'model_name is None, update all registered models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt)
             if md._current_update_dates:
-                Logger.success(f'Update model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
+                Logger.success(f'Update model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1 , vb_level = vb_level)
             else:
-                Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1)
+                Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.success(f'Deploy model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
+                    Logger.success(f'Deploy model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1 , vb_level = vb_level)
                 else:
-                    Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1)
+                    Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
         return md
 
     @classmethod
-    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None):
+    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : int = 1):
         """Recalculate all model predictions"""
+        Logger.remark(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
+        if start_dt is not None or end_dt is not None:
+            Logger.stdout(f'Recalculate from {start_dt} to {end_dt}' , indent = indent + 1 , vb_level = vb_level)
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            Logger.stdout(f'model_name is None, update all registered models (len={len(models)})')
+            Logger.stdout(f'model_name is None, update all registered models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
             md = cls(model)
             md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt)
             if md._current_update_dates:
-                Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1)
+                Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
-                Logger.stdout(f'No new recalculating model prediction for {model}' , indent = 1)
+                Logger.stdout(f'No new recalculating model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
             if md.deploy_required:
                 if md._current_deploy_dates:
-                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1)
+                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = indent + 1 , vb_level = vb_level)
                 else:
-                    Logger.stdout(f'No new deploying model prediction for {model}' , indent = 1)
+                    Logger.stdout(f'No new deploying model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
         return md

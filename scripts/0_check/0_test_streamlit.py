@@ -41,47 +41,45 @@
 #       default : 42.
 import time , random , sys
 from src.proj import Logger
-from src.proj.util import LogWriter , ScriptTool
+from src.proj.util import ScriptTool
 
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
 def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
-    catcher = LogWriter('log.txt')
-    with catcher:
-        Logger.stdout('This will be caught')
-        with Logger.ParagraphI('main part'):
-            with Logger.Timer('abc'):
-                Logger.critical('critical message')
-                Logger.error('error message')
-                Logger.warning('warning message')
-                Logger.info('info message')
-                Logger.debug('debug message')
-                Logger.highlight('highlight message')
-                Logger.highlight('highlight message with default prefix' , prefix = True)
-                Logger.divider()
-                Logger.success('success message' , vb_level = 5)
-                Logger.remark('remark message' , vb_level = 12)
-                Logger.remark('remark message with default prefix' , color = 'lightblue')
-                Logger.footnote('footnote message' , vb_level = 99)
-                Logger.alert1('warning message')
-                Logger.alert2('error message')
-                Logger.alert3('critical message')
-                Logger.skipping('skipping message' , indent = 1)
-                Logger.conclude(f'cmd is: {" ".join(sys.argv)}' , level = 'info')
-                Logger.conclude(f'this is kwargs: {str(kwargs)}' , level = 'info')
-                Logger.conclude(f'this is an info: {txt}' , level = 'info')
-                Logger.conclude(f'this is an debug: {txt}' , level = 'debug')
-                Logger.conclude(f'critical: lazy message')
-                Logger.conclude(f'this is a warning: {txt}' , level = 'warning')
-                Logger.conclude(f'this is a error: {txt}' , level = 'error')
-                Logger.conclude(f'this is a critical: {txt}' , level = 'critical')
-                Logger.stdout(f'email: {ScriptTool.get_value('email')}' , indent = 0)
-                Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}' , indent = 1)
-                Logger.stdout(f'task_key: {ScriptTool.get_value('task_key')}' , indent = 2)
-                Logger.log_only('this is a log only message')
-                if (rnd := random.random()) < 0.5:
-                    Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')
-                else:
-                    Logger.conclude(f'this is an info: random number {rnd} >= 0.5' , level = 'info')
+    Logger.stdout('This will be caught')
+    with Logger.ParagraphI('main part'):
+        with Logger.Timer('abc'):
+            Logger.critical('critical message')
+            Logger.error('error message')
+            Logger.warning('warning message')
+            Logger.info('info message')
+            Logger.debug('debug message')
+            Logger.highlight('highlight message')
+            Logger.highlight('highlight message with default prefix' , prefix = True)
+            Logger.divider()
+            Logger.success('success message' , vb_level = 5)
+            Logger.remark('remark message' , vb_level = 12)
+            Logger.remark('remark message with default prefix' , color = 'lightblue')
+            Logger.footnote('footnote message' , vb_level = 99)
+            Logger.alert1('warning message')
+            Logger.alert2('error message')
+            Logger.alert3('critical message')
+            Logger.skipping('skipping message' , indent = 1)
+            Logger.conclude(f'cmd is: {" ".join(sys.argv)}' , level = 'info')
+            Logger.conclude(f'this is kwargs: {str(kwargs)}' , level = 'info')
+            Logger.conclude(f'this is an info: {txt}' , level = 'info')
+            Logger.conclude(f'this is an debug: {txt}' , level = 'debug')
+            Logger.conclude(f'critical: lazy message')
+            Logger.conclude(f'this is a warning: {txt}' , level = 'warning')
+            Logger.conclude(f'this is a error: {txt}' , level = 'error')
+            Logger.conclude(f'this is a critical: {txt}' , level = 'critical')
+            Logger.stdout(f'email: {ScriptTool.get_value('email')}' , indent = 0)
+            Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}' , indent = 1)
+            Logger.stdout(f'task_key: {ScriptTool.get_value('task_key')}' , indent = 2)
+            Logger.log_only('this is a log only message')
+            if (rnd := random.random()) < 0.5:
+                Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')
+            else:
+                Logger.conclude(f'this is an info: random number {rnd} >= 0.5' , level = 'info')
     time.sleep(1)
         
 if __name__ == '__main__':
