@@ -149,8 +149,8 @@ class Logger:
         """
         if vb_level >= 99 or min(vb_level , Proj.max_verbosity) > Proj.verbosity:
             return
-        if Proj.verbosity == Proj.max_verbosity:
-            args = [*args , f'vb_level: {vb_level}']
+        if Proj.verbosity >= Proj.max_verbosity - 1:
+            args = [*args , f'(vb_level: {vb_level})']
         stdout(*args , indent = indent , color = color , **kwargs)
 
     @classmethod
@@ -164,8 +164,8 @@ class Logger:
         """
         if vb_level >= 99 or min(vb_level , Proj.max_verbosity) > Proj.verbosity:
             return
-        if Proj.verbosity == Proj.max_verbosity:
-            args = [*args , f'vb_level: {vb_level}']
+        if Proj.verbosity >= Proj.max_verbosity - 1:
+            args = [*args , f'(vb_level: {vb_level})']
         stderr(*args , indent = indent , color = color , **kwargs)
 
     @classmethod

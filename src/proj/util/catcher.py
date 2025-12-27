@@ -1,7 +1,7 @@
 import io , sys , re , html , base64 , platform , warnings , shutil , traceback
 import pandas as pd
 
-from typing import Any ,Literal , IO , ClassVar
+from typing import Any ,Literal , IO
 from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
@@ -436,8 +436,6 @@ class TimedOutput:
     content: str | pd.DataFrame | pd.Series | Figure | None | Any
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
-
-    progress_bar_contents : ClassVar[list[str]] = []
     
     def __post_init__(self):
         self._time = datetime.now()
@@ -512,8 +510,7 @@ class TimedOutput:
                     valid = False
                 elif int(r0.group(2)) != 100 or (int(r1.group(1)) != int(r1.group(2))): # not finished
                     valid = False
-                content = content.strip()
-                cls.progress_bar_contents.append(content)
+                content = f'(Progress Bar) {content.strip()}'
         elif output_type == 'stdout':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
             if content == '...': 
@@ -673,8 +670,6 @@ class HtmlCatcher(OutputCatcher):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.enabled: 
             return
-        with Logger.ParagraphIII('all progress bar contents:'):
-            print(TimedOutput.progress_bar_contents , sep = '\n')
         self.export()   
         self.restore_display_function()
         self.ClearInstance(self)

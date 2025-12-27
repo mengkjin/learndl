@@ -138,6 +138,7 @@ class AutoRunTask:
         self.status = 'Running'
         self.set_verbosity()
         Proj.print_info(script_level = True)
+        Logger.divider()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -151,7 +152,7 @@ class AutoRunTask:
             self.status = 'Success'
 
         self.error_messages.extend(Logger.get_conclusions('error'))
-        self.exit_message = Logger.draw_conclusions()
+        self.exit_message = '\n'.join(Logger.draw_conclusions())
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         
@@ -291,7 +292,6 @@ class AutoRunTask:
                 f'Final Messages : ' + '-' * 20 ,
                 self.exit_message ,
             ]
-
             Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , additional_attachments = self.exit_files)
 
     @classmethod

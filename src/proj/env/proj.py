@@ -8,6 +8,7 @@ _project_config = {
     'default_verbosity': 2,
     'max_verbosity': 10,
     'min_verbosity': 0,
+    'callback_vb_level': 99, # to show all callback messages, set to values less than 99
 }
 
 class _Verbosity:
@@ -41,11 +42,18 @@ class _MinVerbosity:
     def __get__(self , instance, owner):
         return self.value
 
+class _CallbackVbLevel:
+    def __init__(self):
+        self.value = _project_config['callback_vb_level']
+    def __get__(self , instance, owner):
+        return self.value
+
 class _ProjMeta(type):
     """meta class of ProjConfig"""
     verbosity = _Verbosity()
     max_verbosity = _MaxVerbosity()
     min_verbosity = _MinVerbosity()
+    callback_vb_level = _CallbackVbLevel()
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')

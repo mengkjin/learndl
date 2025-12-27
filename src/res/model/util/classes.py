@@ -529,20 +529,20 @@ class BaseTrainer(ModelStreamLine):
         [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
 
     @staticmethod
-    def hook_wrapper(trainer : 'BaseTrainer' , hook : str , vb_level : int = 10):
+    def hook_wrapper(trainer : 'BaseTrainer' , hook : str):
         action_status  = getattr(trainer.status , hook)
         action_trainer = getattr(trainer , hook)
         action_model   = getattr(trainer.model , hook)
         action_record  = getattr(trainer.record , hook)
         def wrapper() -> None:
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = vb_level)
-            trainer.callback.at_enter(hook , vb_level)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.callback_vb_level)
+            trainer.callback.at_enter(hook , Proj.callback_vb_level)
             action_status()
             action_trainer()
             action_model()
             action_record()
-            trainer.callback.at_exit(hook , vb_level)
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = vb_level)
+            trainer.callback.at_exit(hook , Proj.callback_vb_level)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.callback_vb_level)
         return wrapper
 
     @abstractmethod
