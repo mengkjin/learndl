@@ -553,6 +553,30 @@ def style():
             justify-content: center !important;
         }
     }
+    .stElementContainer[class*="sidebar-refresh-task-queue"] {
+        button {
+            min-width: 60px !important;
+            height: 60px !important;
+            width: 60px !important;
+            background-color: lightgreen !important;
+            color: white !important;
+            border-radius: 25%;
+            border: none;
+            display: flex;
+            margin-top: 0px !important;
+            margin-bottom: 0px !important;
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+            &:hover {background-color: darkblue !important;}
+        }
+        p {
+            font-size: 48px !important;
+            font-weight: bold !important;
+        }
+        .stTooltipIcon {
+            justify-content: center !important;
+        }
+    }
     .stElementContainer[class*="exit-file"] {
         &[class*="open"] button {
             min-width: 500px !important;

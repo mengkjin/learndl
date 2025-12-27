@@ -58,7 +58,7 @@ def sidebar_navigation():
             script_links()
 
 def global_button():
-    _ , col0 , col1 , _ = st.columns([0.5,1,1,0.5] , gap = 'small' , vertical_alignment = 'center')
+    _ , col0 , col1 , col2 , _ = st.columns([0.2,1,1,1,0.2] , gap = 'small' , vertical_alignment = 'center')
     with col0:
         key = 'sidebar-runner-button'
         if key not in st.session_state:
@@ -84,6 +84,14 @@ def global_button():
                             on_click = SC.click_show_complete_report , args = (item,) ,
                             disabled = False):
                     st.switch_page(runs_page_url(item.script_key))
+
+    with col2:
+        key = 'sidebar-refresh-task-queue-button'
+        if key not in st.session_state:
+            st.session_state[key] = st.empty()
+        with st.session_state[key]:
+            st.button(":material/refresh:", key=f"{key}-big" , help = "Refresh Task Queue" , 
+                      on_click = SC.click_queue_refresh , disabled = False)
             
 def global_settings():
     with st.container(key = "sidebar-global-settings").expander('Global Settings' , icon = ':material/settings:'):
