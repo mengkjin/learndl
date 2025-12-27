@@ -6,8 +6,7 @@ from datetime import datetime
 from functools import reduce
 from pathlib import Path
 
-from src.proj import PATH , MACHINE , Logger , Duration
-from src.basic import DB
+from src.proj import PATH , MACHINE , Logger , Duration , DB
 
 from .jsfetcher import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform    

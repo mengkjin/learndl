@@ -5,8 +5,8 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger , IOCatcher
-from src.basic import CALENDAR , DB
+from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
+from src.proj.util import IOCatcher
 from src.data.util import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')

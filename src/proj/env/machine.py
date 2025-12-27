@@ -67,6 +67,7 @@ class MACHINE:
     is_windows = system_name == 'Windows'
     is_macos = system_name == 'Darwin'
 
+    cpu_count = os.cpu_count() or 1
     best_device = _get_best_device()
     
     assert main_path.exists() , f'main_path not exists: {main_path}'

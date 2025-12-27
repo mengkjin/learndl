@@ -1,8 +1,8 @@
-from src.proj import PATH , MACHINE , HtmlCatcher , Logger , Proj
-from src.basic import RegisteredModel
+from src.proj import PATH , MACHINE , Logger , Proj
+from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
-from src.res.model.util import BaseTrainer
+from src.res.model.util import BaseTrainer , RegisteredModel
 
 from ..module import get_predictor_module
 

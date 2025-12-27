@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Any , Literal
-from src.basic import CALENDAR , DB
-from src.proj import Logger
+from src.proj import CALENDAR , DB , Logger
 
 from .basic import BasicUpdater
 

@@ -4,8 +4,7 @@ import torch.nn.functional as F
 from typing import Any
 import math
 
-from src.proj import Logger
-from src.basic import CONF
+from src.proj import Logger , CONF
 class GatedResidualNetwork(nn.Module):
     """门控残差网络"""
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, dropout: float = 0.1):

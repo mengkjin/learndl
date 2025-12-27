@@ -23,7 +23,7 @@ __old_version__/
 /log.txt
 
 # temporary created files
-/src/app/main/pages/_*.py
+/src/interactive/main/pages/_*.py
 
 .vs/
 

@@ -1,8 +1,7 @@
-from src.proj import Logger
+from src.proj import Logger , CALENDAR
 from src.data import CoreDataUpdater , SellsideDataUpdater , AffiliatedDataUpdater , DataPreProcessor
 # from src.data import JSDataUpdater
 from src.res.factor.api import RiskModelUpdater
-from src.basic import CALENDAR
 
 from .util import wrap_update
 

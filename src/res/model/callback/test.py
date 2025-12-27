@@ -3,8 +3,10 @@ import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Logger , Timer , Display , dfs_to_excel , figs_to_pdf
-from src.basic import DB
+from src.proj import Logger , DB
+from src.proj.func import dfs_to_excel , figs_to_pdf
+from src.proj.util import Display
+
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
@@ -159,9 +161,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def factor_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor Perf Test'):
-            with Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(tested_only=False , interval = 5)
-            with Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
                 factor.day_returns()
 
             for task in self.factor_tasks:
@@ -177,15 +179,15 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def fmp_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor FMP Test'):
-            with Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(tested_only=True , interval = 1)
-            with Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
                 factor.alpha_models()
-            with Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):
                 factor.risk_model()
-            with Timer(f'FactorFMPTest.load_universe' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorFMPTest.load_universe' , indent = indent , vb_level = vb_level):
                 factor.universe(load = True)
-            with Timer(f'FactorFMPTest.load_day_quotes' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorFMPTest.load_day_quotes' , indent = indent , vb_level = vb_level):
                 factor.day_quotes()
             for task in self.fmp_tasks:
                 Logger.divider(vb_level = vb_level)

@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import Logger
-from src.basic import ModelDict , ModelPath , torch_load
+from src.proj.func import torch_load
+from .model_path import ModelDict , ModelPath
 
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''

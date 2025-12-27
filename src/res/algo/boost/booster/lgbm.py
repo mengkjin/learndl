@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from src.math import match_values
-from src.proj import Display , Logger
+from src.proj import Logger
+from src.proj.util import Display
 from ..util import BasicBoosterModel , BoosterInput
 
 PLOT_PATH : Path | None = None

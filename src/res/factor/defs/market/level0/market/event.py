@@ -1,7 +1,7 @@
 import pandas as pd
 
+from src.proj import DB
 from src.data import DATAVENDOR
-from src.basic import DB
 from src.res.factor.calculator import MarketEventFactor
 
 __all__ = [

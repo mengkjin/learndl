@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Sequence , Any
 
-from src.proj import Proj , Logger
-from src.basic import CONF , CALENDAR
+from src.proj import Proj , Logger , CONF , CALENDAR
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 

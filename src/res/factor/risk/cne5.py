@@ -3,8 +3,7 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal
 
-from src.proj import Logger
-from src.basic import CONF , CALENDAR , DB
+from src.proj import Logger , CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.math.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 

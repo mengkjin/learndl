@@ -1,13 +1,19 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-import warnings
+import warnings , sys
 
 from typing import Any , Literal
 from scipy.stats import norm, rankdata
 from scipy.linalg import lstsq
 
-from src.proj import Logger
+def alert_message(message : str , color : str = 'lightyellow'):
+    if color == 'lightyellow':
+        sys.stderr.write(f'\u001b[93m\u001b[1m{message}\u001b[0m')
+    elif color == 'lightred':
+        sys.stderr.write(f'\u001b[91m\u001b[1m{message}\u001b[0m')
+    else:
+        sys.stderr.write(message)
 
 warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
@@ -145,7 +151,7 @@ def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
             else:
                 replaced_vals[nan_ind == ind] = np.nanmean(y_[ind_risk_ == ind])
         if np.isnan(replaced_vals).any():
-            Logger.alert1('warning >> patched_by_industry >> all nan encountered.')
+            alert_message('warning >> patched_by_industry >> all nan encountered.')
             replaced_vals[np.isnan(replaced_vals)] = np.nanmedian(replaced_vals)
         assert not np.isnan(replaced_vals).any() , replaced_vals
         y = y_.copy()
@@ -236,7 +242,7 @@ def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','med
 def _lstsq_rst(x : np.ndarray , y : np.ndarray):
     lstsq_result = lstsq(x, y)
     if lstsq_result is None:
-        Logger.alert2(f'lstsq error! x : {x} , y : {y}')
+        alert_message(f'lstsq error! x : {x} , y : {y}' , color = 'lightred')
         return np.zeros((x.shape[-1],1))
     return lstsq_result[0]
     

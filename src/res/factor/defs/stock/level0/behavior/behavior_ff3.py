@@ -3,11 +3,11 @@ import pandas as pd
 from typing import Any
 from dataclasses import dataclass
 
+from src.proj.func import singleton
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
 from src.math.transform import time_weight , apply_ols
-from src.math.singleton import singleton
 
 @dataclass
 class FF3_Model:

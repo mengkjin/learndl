@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.proj import PATH
-from src.basic import CALENDAR , DB
+from src.proj import PATH , CALENDAR , DB
 from .func import ts_code_to_secid
 
 path_bak_data   = PATH.resource.joinpath('tushare_bak_data')

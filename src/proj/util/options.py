@@ -41,7 +41,7 @@ class OptionsDefinition:
             [p.factor_name for p in FactorCalculator.iter(category1 = 'sellside' , updatable = True)]
 
 class OptionsCache:
-    """Cache for the options , used to accelerate the streamlit app"""
+    """Cache for the options , used to accelerate the streamlit interactive app"""
     cache_path = PATH.local_machine.joinpath('options_cache.json')
     cache : dict[str , list[str]] = {}
 

@@ -5,8 +5,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal
 
-from src.proj import Silence
-from src.basic import DB , CONF
+from src.proj import Silence , DB , CONF
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 
 from .general_model import GeneralModel

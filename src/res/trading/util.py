@@ -5,11 +5,13 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type
 
-from src.proj import PATH , MACHINE , Logger , Display , dfs_to_excel , figs_to_pdf
-from src.basic import CALENDAR , RegisteredModel , DB
+from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
+from src.proj.func import dfs_to_excel , figs_to_pdf
+from src.proj.util import Display
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
+from src.res.model.util import RegisteredModel
 
 TASK_LIST : list[Type[TopCalc]] = [
     FrontFace , 

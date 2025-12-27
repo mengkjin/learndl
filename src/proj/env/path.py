@@ -24,7 +24,7 @@ class PATH:
         PATH.conf
     """
     main        = MACHINE.main_path
-    scpt        = main.joinpath('src' , 'scripts')
+    scpt        = main.joinpath('scripts')
     fac_def     = main.joinpath('src' , 'res' , 'factor' , 'defs')
 
     # data folder and subfolders

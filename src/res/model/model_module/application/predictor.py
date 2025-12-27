@@ -4,9 +4,8 @@ import pandas as pd
 
 from typing import Any , ClassVar , Literal
 
-from src.proj import MACHINE , Logger , Silence
-from src.basic import CALENDAR , RegisteredModel
-from src.res.model.util import TrainConfig
+from src.proj import MACHINE , Logger , Silence , CALENDAR
+from src.res.model.util import TrainConfig , RegisteredModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import get_predictor_module
 

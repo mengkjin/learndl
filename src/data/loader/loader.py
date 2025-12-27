@@ -3,8 +3,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Literal
 
-from src.proj import PATH , Timer
-from src.basic import DB , CONF , CALENDAR
+from src.proj import PATH , Logger , DB , CONF , CALENDAR
 from src.data.util import DataBlock
 
 @dataclass
@@ -32,12 +31,12 @@ class BlockLoader:
     def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> DataBlock:
         """Load block data , alias for load"""
         sub_blocks = []
-        with Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level):
+        with Logger.Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level):
             for db_key in self.iter_keys():
-                with Timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , indent = indent +1 , vb_level = vb_level + 1):
+                with Logger.Timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , indent = indent +1 , vb_level = vb_level + 1):
                     blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , feature = self.feature , use_alt = self.use_alt)
                     sub_blocks.append(blk)
-        with Timer(f'{self.db_src} blocks merging ({len(sub_blocks)})' , silent = len(sub_blocks) <= 1 , indent = indent , vb_level = vb_level): 
+        with Logger.Timer(f'{self.db_src} blocks merging ({len(sub_blocks)})' , silent = len(sub_blocks) <= 1 , indent = indent , vb_level = vb_level): 
             block = DataBlock.merge(sub_blocks , inplace = True)
         return block
 
@@ -94,13 +93,13 @@ class FactorLoader(BlockLoader):
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
-        with Timer(f'factor blocks reading [{len(self.names)} factors]' , indent = indent , vb_level = vb_level):
+        with Logger.Timer(f'factor blocks reading [{len(self.names)} factors]' , indent = indent , vb_level = vb_level):
             dates = CALENDAR.td_within(start_dt , end_dt)
             for calc in FactorCalculator.iter(selected_factors = self.names , **self.kwargs):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = indent + 1 , vb_level = vb_level + 1)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
-        with Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
+        with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
             assert len([fac for fac in factors if not fac.empty]) > 0 , f'no factors found for {self.names}'
             df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
@@ -130,13 +129,13 @@ class FactorCategory1Loader(BlockLoader):
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
-        with Timer(f'factor blocks reading [{self.category0} , {self.category1}]' , indent = indent , vb_level = vb_level):
+        with Logger.Timer(f'factor blocks reading [{self.category0} , {self.category1}]' , indent = indent , vb_level = vb_level):
             dates = CALENDAR.td_within(start_dt , end_dt)
             for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = indent + 1 , vb_level = vb_level + 1)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
-        with Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
+        with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
             assert len([fac for fac in factors if not fac.empty]) > 0 , f'no factors found for {self.category0} , {self.category1}'
             df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)

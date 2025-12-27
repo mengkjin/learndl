@@ -1,9 +1,14 @@
 import torch
 from copy import deepcopy
 
-from src import math as FUNC
 from src.proj import Logger
 from src.res.model.util import BaseCallBack , Optimizer
+
+def list_converge(arr , n = None , eps = 1e-6) -> bool:
+    '''Last n element of arr has range smaller than eps'''
+    if n is None: 
+        return max(arr) - min(arr) < eps   
+    return len(arr) >= n and (max(arr[-n:]) - min(arr[-n:]) < eps)
 
 class EarlyStoppage(BaseCallBack):
     '''stop fitting when validation score cease to improve'''
@@ -32,7 +37,7 @@ class ValidationConverge(BaseCallBack):
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.eps):
+        if list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.eps):
             self.status.fit_loop_breaker.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
 class TrainConverge(BaseCallBack):
@@ -44,7 +49,7 @@ class TrainConverge(BaseCallBack):
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.eps):
+        if list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.eps):
             self.status.fit_loop_breaker.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
 class FitConverge(BaseCallBack):
@@ -56,8 +61,8 @@ class FitConverge(BaseCallBack):
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.eps) and 
-            FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.eps)):
+        if (list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.eps) and 
+            list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.eps)):
             self.status.fit_loop_breaker.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
 
 class EarlyExitRetrain(BaseCallBack):

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.basic import CALENDAR , DB , CONF
+from src.proj import CALENDAR , DB , CONF
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 

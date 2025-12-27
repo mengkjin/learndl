@@ -3,7 +3,7 @@ import pandas as pd
 from plottable import ColumnDefinition
 from typing import Any
 
-import src.math.plot as plot
+from src.proj.util import Plot
 from .plot_basic import PlotDfFigIterator
 
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
@@ -32,7 +32,7 @@ class Plotter:
         for df , fig in self.plot_iter.iter():     
             df = df.reset_index([i for i in df.index.names if i])
             df['strategy'] = df_strategy(df)
-            plot.plot_table(df.set_index('strategy') , 
+            Plot.plot_table(df.set_index('strategy') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] ,
                             fontsize = 7 , index_width = 4 ,
@@ -49,10 +49,10 @@ class Plotter:
                 df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
-            ax = plot.sns_lineplot(df , x='trade_date' , y='pf' , hue='topN')
+            ax = Plot.sns_lineplot(df , x='trade_date' , y='pf' , hue='topN')
 
-            plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
-            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b')
+            Plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
+            Plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b')
                 
         return self.plot_iter.figs
 
@@ -64,10 +64,10 @@ class Plotter:
                 df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
-            ax = plot.sns_lineplot(df , x='trade_date' , y='excess' , hue='topN')
+            ax = Plot.sns_lineplot(df , x='trade_date' , y='excess' , hue='topN')
 
-            plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
-            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Excess Return' , title_color='b')
+            Plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
+            Plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Excess Return' , title_color='b')
 
         return self.plot_iter.figs
 
@@ -80,11 +80,11 @@ class Plotter:
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
 
             if df['topN'].nunique() > 1:
-                ax1 = plot.sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')
-                plot.set_yaxis(ax1 , format='pct' , digits=2 , title = 'Cummulative Drawdown' , title_color='b')
-                plot.set_xaxis(ax1 , df['trade_date'].unique() , title = 'Trade Date')
+                ax1 = Plot.sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')
+                Plot.set_yaxis(ax1 , format='pct' , digits=2 , title = 'Cummulative Drawdown' , title_color='b')
+                Plot.set_xaxis(ax1 , df['trade_date'].unique() , title = 'Trade Date')
             else:
-                ax1 , ax2 = plot.get_twin_axes(fig , 111)
+                ax1 , ax2 = Plot.get_twin_axes(fig , 111)
                 
                 ax1.plot(df['trade_date'], df['drawdown'], 'grey', label='Drawdown (left)')  
                 ax1.legend(loc='upper left')
@@ -94,9 +94,9 @@ class Plotter:
                         ax2.plot(df['trade_date'] , df[col] , label=col)
                 ax2.legend(loc='upper right')  
 
-                plot.set_xaxis(ax1 , df['trade_date'] , title = 'Trade Date')
-                plot.set_yaxis(ax1 , format='pct' , digits=2 , title = 'Drawdown' , title_color='b')
-                plot.set_yaxis(ax2 , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b' , tick_pos=None)
+                Plot.set_xaxis(ax1 , df['trade_date'] , title = 'Trade Date')
+                Plot.set_yaxis(ax1 , format='pct' , digits=2 , title = 'Drawdown' , title_color='b')
+                Plot.set_yaxis(ax2 , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b' , tick_pos=None)
                     
         return self.plot_iter.figs
 
@@ -107,15 +107,15 @@ class Plotter:
                 df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
-            ax = plot.sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')
-            plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
-            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Excess Drawdown' , title_color='b')
+            ax = Plot.sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')
+            Plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
+            Plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Excess Drawdown' , title_color='b')
         return self.plot_iter.figs
 
     def plot_perf_year(self , data : pd.DataFrame , show = False , title_prefix = None):
         self.plot_iter.set_args(data , show , title_prefix , 'Year Performance' , MAJOR_KEYS)
         for df , fig in self.plot_iter.iter():
-            plot.plot_table(df.set_index('year') , 
+            Plot.plot_table(df.set_index('year') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] ,    
                             column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] , 
@@ -125,7 +125,7 @@ class Plotter:
     def plot_perf_month(self , data : pd.DataFrame , show = False , title_prefix = None):
         self.plot_iter.set_args(data , show , title_prefix , 'Month Performance' , MAJOR_KEYS)
         for df , fig in self.plot_iter.iter():
-            plot.plot_table(df.set_index('month') , 
+            Plot.plot_table(df.set_index('month') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] , 
                             column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] ,
@@ -137,10 +137,10 @@ class Plotter:
         for df , fig in self.plot_iter.iter():
             df = df.groupby(['strategy'] , observed=True).mean().reset_index().\
                 melt(id_vars=['strategy'] , var_name='style' , value_name='exposure')
-            ax = plot.sns_barplot(df , x='style' , y='exposure' , hue='strategy')
+            ax = Plot.sns_barplot(df , x='style' , y='exposure' , hue='strategy')
 
-            plot.set_xaxis(ax , title = 'Style')
-            plot.set_yaxis(ax , format='flt' , digits=1 , title = 'Style Exposure' , title_color='b')
+            Plot.set_xaxis(ax , title = 'Style')
+            Plot.set_yaxis(ax , format='flt' , digits=1 , title = 'Style Exposure' , title_color='b')
         return self.plot_iter.figs
 
     def plot_exp_indus(self , data : pd.DataFrame , show = False , title_prefix = None):
@@ -151,10 +151,10 @@ class Plotter:
             df_mean : pd.Series | Any = df.groupby(['industry'] , observed=True)['deviation'].mean()
             df_mean = df_mean.rename('mdev')
             df = df.merge(df_mean , on='industry').sort_values(['mdev' , 'strategy'] , ascending=[False , True]).drop(columns=['mdev'])
-            ax = plot.sns_barplot(df , x='industry' , y='deviation' , hue='strategy' , legend='upper right')
+            ax = Plot.sns_barplot(df , x='industry' , y='deviation' , hue='strategy' , legend='upper right')
 
-            plot.set_xaxis(ax , title = 'Industry')
-            plot.set_yaxis(ax , format='pct' , digits=1 , title = 'Industry Deviation' , title_color='b')
+            Plot.set_xaxis(ax , title = 'Industry')
+            Plot.set_yaxis(ax , format='pct' , digits=1 , title = 'Industry Deviation' , title_color='b')
         return self.plot_iter.figs
 
     def plot_attrib_source(self , data : pd.DataFrame , show = False , title_prefix = None):
@@ -162,18 +162,18 @@ class Plotter:
         for df , fig in self.plot_iter.iter():
             df = df.reset_index().set_index('source')[['strategy' , 'contribution']].\
                 loc[['tot' , 'excess' , 'market' , 'industry' , 'style' , 'specific' , 'cost']]
-            ax = plot.sns_barplot(df , x='source' , y='contribution' , hue='strategy' , legend='upper right')
+            ax = Plot.sns_barplot(df , x='source' , y='contribution' , hue='strategy' , legend='upper right')
 
-            plot.set_xaxis(ax , df.index , title = 'Source' , num_ticks=len(df.index))
-            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Total Attribution' , title_color='b')
+            Plot.set_xaxis(ax , df.index , title = 'Source' , num_ticks=len(df.index))
+            Plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Total Attribution' , title_color='b')
         return self.plot_iter.figs
 
     def plot_attrib_style(self , data : pd.DataFrame , show = False , title_prefix = None):
         self.plot_iter.set_args(data , show , title_prefix , 'Style Attribution' , ['factor_name' , 'benchmark'] , drop_keys = False)
         for df , fig in self.plot_iter.iter():
             df = df.reset_index().set_index('style').filter(items=['strategy' , 'contribution'])
-            ax = plot.sns_barplot(df , x='style' , y='contribution' , hue='strategy' , legend='upper right')
+            ax = Plot.sns_barplot(df , x='style' , y='contribution' , hue='strategy' , legend='upper right')
 
-            plot.set_xaxis(ax , df.index , title = 'Style' , num_ticks=len(df.index))
-            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Total Attribution' , title_color='b')
+            Plot.set_xaxis(ax , df.index , title = 'Style' , num_ticks=len(df.index))
+            Plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Total Attribution' , title_color='b')
         return self.plot_iter.figs

@@ -1,4 +1,4 @@
 from . import (
-    linalg , plot , primas , transform , singleton 
+    linalg , primas , transform 
 )
 from .basic import * 

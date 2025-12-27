@@ -1,6 +1,5 @@
-from src.basic import TradeDate , DB
-from src.math.singleton import singleton
-
+from src.proj import TradeDate , DB 
+from src.proj.func import singleton
 from .access import DateDataAccess
     
 @singleton

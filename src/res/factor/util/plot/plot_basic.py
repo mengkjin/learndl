@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-import src.math.plot as plot 
+from src.proj.util import Plot
 
 class PlotDfFigIterator:
     def __init__(self , default_prefix : str):
@@ -28,12 +28,12 @@ class PlotDfFigIterator:
         if not self.args_set:
             raise ValueError('Arguments not set')
         self.args_set = False
-        self.group_plot = plot.PlotMultipleData(self.data , self.group_key , self.num_groups_per_iter)
+        self.group_plot = Plot.PlotMultipleData(self.data , self.group_key , self.num_groups_per_iter)
         title = f'{self.title_prefix or self.default_prefix} {self.title}'
         
         for i , sub_data in enumerate(self.group_plot):
             full_title = '' if self.num_pages is None else f'{title} (P{i+1}/{self.num_pages})'
-            with plot.PlotFactorData(sub_data , drop = self.drop , title = title , full_title = full_title , show=self.show and i==0 , **self.kwargs) as (df , fig):
+            with Plot.PlotFactorData(sub_data , drop = self.drop , title = title , full_title = full_title , show=self.show and i==0 , **self.kwargs) as (df , fig):
                 yield df , fig
 
     @property

@@ -19,4 +19,4 @@ else
 fi
 
 cd "$BASE_PATH"
-$PYTHON_CMD src/scripts/1_autorun/0_daily_update.py --source=bash --email=1
+$PYTHON_CMD scripts/1_autorun/0_daily_update.py --source=bash --email=1

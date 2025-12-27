@@ -4,11 +4,13 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , MACHINE , Logger , Device , FormatStr
-from src.basic import ModelPath , ModelDBMapping , DB
-from src.math import recur_update
+from src.proj import PATH , MACHINE , Logger , DB
+from src.proj.abc import FormatStr
+from src.proj.util import Device 
+from src.proj.func import update_dict
 from src.res.algo import AlgoModule
 
+from .model_path import ModelPath , ModelDBMapping
 from .metrics import Metrics
 from .storage import Checkpoint , Deposition
 
@@ -137,11 +139,11 @@ class TrainParam:
 
         if self.short_test:
             new_dict = {k:v for k,v in self.Param.get('conditional.short_test' , {}).items() if k not in self.override}
-            recur_update(self.Param , new_dict)
+            update_dict(self.Param , new_dict)
 
         if self.model_module == 'transformer':
             new_dict = {k:v for k,v in self.Param.get('conditional.transformer' , {}).items() if k not in self.override}
-            recur_update(self.Param , new_dict)
+            update_dict(self.Param , new_dict)
         return self
     
     def make_model_name(self):

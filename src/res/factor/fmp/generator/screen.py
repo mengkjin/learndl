@@ -6,8 +6,7 @@ from typing import Any
 
 from ...util import Port , PortCreateResult , PortCreator
 
-from src.proj import Logger
-from src.basic import DB
+from src.proj import Logger , DB
 from src.data import DATAVENDOR
 
 DEFAULT_SCREEN_RATIO = 0.5

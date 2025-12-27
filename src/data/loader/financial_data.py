@@ -4,8 +4,8 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.basic import CALENDAR , DB
-from src.math.singleton import singleton
+from src.proj import CALENDAR , DB
+from src.proj.func import singleton
 
 from .access import DateDataAccess
 

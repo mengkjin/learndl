@@ -1,11 +1,18 @@
-import torch
+import torch , sys
 from torch.nn.functional import pad , one_hot
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-from src.proj import Logger
-
 NaN = torch.nan
+
+def alert_message(message : str , color : str = 'lightyellow'):
+    if color == 'lightyellow':
+        sys.stderr.write(f'\u001b[93m\u001b[1m{message}\u001b[0m')
+    elif color == 'lightred':
+        sys.stderr.write(f'\u001b[91m\u001b[1m{message}\u001b[0m')
+    else:
+        sys.stderr.write(message)
+
 
 def allna(x , inf_as_na = True):
     if inf_as_na:
@@ -239,7 +246,7 @@ def betas_torch(x , y):
         try:    
             b = torch.linalg.inv(x.T.mm(x)).mm(x.T).mm(y)
         except Exception:
-            Logger.alert1(f'neutralization error in betas_torch')
+            alert_message(f'neutralization error in betas_torch')
             b = torch.zeros(x.shape[-1],1).to(x)
     return b
 
@@ -250,7 +257,7 @@ def betas_np(x , y):
         try:    
             b = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
         except Exception:
-            Logger.alert1(f'neutralization error in betas_np')
+            alert_message(f'neutralization error in betas_np')
             b = np.zeros((x.shape[-1],1))
     return b
 
@@ -258,7 +265,7 @@ def betas_sk(x , y):
     try:
         b = LinearRegression(fit_intercept=False).fit(x, y).coef_.T
     except Exception: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
-        Logger.alert1(f'neutralization error in betas_sk')
+        alert_message(f'neutralization error in betas_sk')
         b = np.zeros((x.shape[-1],1))
     return b
 
@@ -606,7 +613,7 @@ def ts_delay(x, d):
     if d > x.shape[0]: 
         return None
     if d < 0: 
-        Logger.alert2('Beware! future information used!')
+        alert_message('Beware! future information used!' , color = 'lightred')
     z = x.roll(d, dims=0)
     if d >= 0:
         z[:d,:] = NaN
@@ -620,7 +627,7 @@ def ts_delta(x, d):
     if d > x.shape[0]: 
         return None
     if d < 0: 
-        Logger.alert2('Beware! future information used!')
+        alert_message('Beware! future information used!' , color = 'lightred')
     z = x - ts_delay(x, d)
     return z
 

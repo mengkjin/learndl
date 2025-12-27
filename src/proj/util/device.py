@@ -2,7 +2,7 @@ import psutil , torch
 from torch.nn import Module
 from typing import Any
 
-from .logger import Logger
+from src.proj.log import Logger
 
 __all__ = ['Device' , 'MemoryPrinter']
 

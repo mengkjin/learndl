@@ -8,11 +8,10 @@ from typing import Any , Generator , Literal
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 
-from src.proj import Logger
-from src.basic import CONF , CALENDAR 
+from src.proj import Logger , CONF , CALENDAR 
+from src.proj.func import parallel    
+from src.proj.util import SingletonMeta
 from src.data import DATAVENDOR
-from src.math.parallel import parallel
-from src.math.singleton import SingletonMeta
 
 __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
 

@@ -9,8 +9,7 @@ from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import Logger , Duration
-from src.basic import CALENDAR , DB
+from src.proj import Logger , Duration , CALENDAR , DB
 from src.data.util import secid_adjust
 
 def factor_name_pinyin_conversion(text : str):

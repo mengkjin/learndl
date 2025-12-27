@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Timer , Duration , Logger
+from src.proj import Duration , Logger
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator
@@ -284,7 +284,7 @@ class PortfolioGroupBuilder:
                       indent = self.indent , vb_level = self.vb_level)
     
     def builders_setup(self):
-        with Timer(f'{self.class_name}.setup' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
+        with Logger.Timer(f'{self.class_name}.setup' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
             self.builders.clear()
             self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
@@ -296,7 +296,7 @@ class PortfolioGroupBuilder:
     def builders_resume(self):
         if self.resume_path is None or not self.resume:
             return
-        with Timer(f'{self.class_name}.resume' , indent = self.indent , vb_level = self.vb_level):
+        with Logger.Timer(f'{self.class_name}.resume' , indent = self.indent , vb_level = self.vb_level):
             for builder in self.builders:
                 builder.set_build_on(self.resume_path)
         return self
@@ -304,7 +304,7 @@ class PortfolioGroupBuilder:
     def export_portfolio(self):
         if self.resume_path is None:
             return
-        with Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
+        with Logger.Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
             for builder in self.builders:
                 builder.export_portfolio(self.resume_path , append = self.resume , indent = self.indent + 1 , vb_level = self.vb_level + 2)
         return self
@@ -356,11 +356,11 @@ class PortfolioGroupBuilder:
     
     def accounting(self):
         with (
-            Timer(f'{self.class_name} accounting' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 1) , 
+            Logger.Timer(f'{self.class_name} accounting' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 1) , 
             Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv')
         ):
             for builder in self.builders:
-                with Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1):
+                with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1):
                     builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
         self.accounted = True
         return self

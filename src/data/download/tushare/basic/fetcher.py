@@ -7,8 +7,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any , Literal , Type
 
-from src.proj import PATH , Logger
-from src.basic import DB , CALENDAR
+from src.proj import PATH , Logger , CALENDAR , DB
 from .func import updatable , dates_to_update
 from .connect import TS_PARAMS
 

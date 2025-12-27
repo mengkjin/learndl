@@ -1,88 +1,89 @@
 from pathlib import Path
 import io
+import pandas as pd
 
-class _ProjectStatesValue:
-    """custom class to record a single value"""
-    def __init__(self):
-        self.name = self.__class__.__name__.removeprefix('_').lower()
+__all__ = ['ProjStates']
 
-    def __set__(self , instance, value):
-        self.set_assertion_class()
-        if self._assertion_class is not None:
-            assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
-        setattr(self , f'_{self.name}' , value)
+_project_states = {
 
-    def __get__(self , instance, owner):
-        obj = getattr(self , f'_{self.name}' , None)
-        return obj
-
-    def set_assertion_class(self) -> None:
-        self._assertion_class = None
-
-class _ProjectStatesList:
-    """custom class to record a list of values"""
-    def __init__(self):
-        self.name = self.__class__.__name__.removeprefix('_').lower()
-
-    def __set__(self , instance, value):
-        raise AttributeError(f'cannot set {instance.__name__}.{self.name} to {value} , {self.name} is a list property')
-
-    def __get__(self , instance, owner) -> list:
-        if not hasattr(self , f'_{self.name}'):
-            setattr(self , f'_{self.name}' , [])
-        return getattr(self , f'_{self.name}')
-
-class _Trainer(_ProjectStatesValue):
+}
+class _Trainer:
     """custom class to record trainer instance"""
-    def set_assertion_class(self) -> None:
+    def __init__(self):
+        self.name = 'trainer'
+        _project_states[self.name] = None
+
+    def __set__(self , instance, value):
         from src.res.model.util.classes import BaseTrainer
         self._assertion_class = BaseTrainer
+        assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
+        _project_states[self.name] = value
 
     def __get__(self , instance, owner):
-        obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
-        return obj
+        value = _project_states.get(self.name , None)
+        assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        return value
 
-class _Account(_ProjectStatesValue):
+class _Account:
     """custom class to record account instance"""
-    def set_assertion_class(self) -> None:
-        import pandas as pd
-        self._assertion_class = pd.DataFrame
+    def __init__(self):
+        self.name = 'account'
+        _project_states[self.name] = None
+
+    def __set__(self , instance, value):
+        assert value is None or isinstance(value , pd.DataFrame) , f'value is not a {pd.DataFrame} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
+        _project_states[self.name] = value
 
     def __get__(self , instance, owner):
-        obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
-        return obj
-
-class _Factor(_ProjectStatesValue):
+        value = _project_states.get(self.name , None)
+        assert value is None or isinstance(value , pd.DataFrame) , f'value is not a {pd.DataFrame} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        return value
+class _Factor:
     """custom class to record factor instance"""
-    def set_assertion_class(self) -> None:
+    def __init__(self):
+        self.name = 'factor'
+        _project_states[self.name] = None
+
+    def __set__(self , instance, value):
         from src.res.factor.util import StockFactor
         self._assertion_class = StockFactor
+        assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
+        _project_states[self.name] = value
 
     def __get__(self , instance, owner):
-        obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
-        return obj
+        value = _project_states.get(self.name , None)
+        assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        return value
 
-class _Log_File(_ProjectStatesValue):
-    def set_assertion_class(self) -> None:
-        self._assertion_class = io.TextIOWrapper
+class _Log_File:
+    def __init__(self):
+        self.name = 'log_file'
+        _project_states[self.name] = None
+
+    def __set__(self , instance, value):
+        assert value is None or isinstance(value , io.TextIOWrapper) , f'value is not a {io.TextIOWrapper} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
+        _project_states[self.name] = value
 
     def __get__(self , instance, owner):
-        obj = super().__get__(instance, owner)
-        assert obj is None or isinstance(obj , self._assertion_class) , f'value is not a {self._assertion_class.__name__} instance: {obj} , cannot be get from {owner}.{self.name}'
-        return obj
+        value = _project_states.get(self.name , None)
+        assert value is None or isinstance(value , io.TextIOWrapper) , f'value is not a {io.TextIOWrapper} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        return value
 
-class _Email_Attachments(_ProjectStatesList):
+class _Email_Attachments:
     """custom class to record email path"""
+    def __init__(self):
+        self.name = 'email_attachments'
+        _project_states[self.name] = []
     def __get__(self , instance, owner) -> list[Path | str]:
-        return super().__get__(instance, owner)
+        return _project_states[self.name]
 
-class _Exit_Files(_ProjectStatesList):
-    """custom class to record app attachments"""
+class _Exit_Files:
+    """custom class to record app exit files"""
+    def __init__(self):
+        self.name = 'exit_files'
+        _project_states[self.name] = []
     def __get__(self , instance, owner) -> list[Path | str]:
-        return super().__get__(instance, owner)
+        return _project_states[self.name]
 
 class _ProjStatesMeta(type):
     """meta class of ProjStates, allow to set attributes of _meta_slots"""
@@ -92,8 +93,6 @@ class _ProjStatesMeta(type):
     log_file = _Log_File()
     email_attachments = _Email_Attachments()
     exit_files = _Exit_Files()
-
-    _meta_slots = ['trainer', 'account', 'factor', 'email_attachments', 'exit_files']
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')
@@ -108,16 +107,11 @@ class ProjStates(metaclass=_ProjStatesMeta):
         Proj.States.email_attachments.append(email_attachment) # for list[Path | str] email attachments
         Proj.States.exit_files.append(exit_file) # for list[Path | str] exit files
     """
-    # @classmethod
-    # def __setattr__(cls, key, value):
-    #     if key not in cls._meta_slots:
-    #         raise Exception(f'cannot set {cls.__name__}.{key} , only {cls._meta_slots} are allowed')
-    #     object.__setattr__(cls, key, value)
 
     @classmethod
     def info(cls) -> list[str]:
         """return the machine info list"""
-        names = ', '.join(cls._meta_slots)
+        names = ', '.join(_project_states.keys())
         return [
             f'Proj States    : {names}', 
         ]
@@ -126,8 +120,7 @@ class ProjStates(metaclass=_ProjStatesMeta):
     def status(cls) -> dict:
         """return the machine status dict"""
         status = {}
-        for name in cls._meta_slots:
-            obj = getattr(cls, name)
+        for name , obj in _project_states.items():
             if obj is not None or (isinstance(obj , list) and obj):
                 status[name] = obj
         return status

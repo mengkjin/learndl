@@ -2,7 +2,7 @@ import pandas as pd
 
 from typing import Any , Literal , Type
 
-from src.proj import Timer
+from src.proj import Logger
 
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
@@ -134,7 +134,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , 
              indent : int = 0 , vb_level : int = 1 , **kwargs):
         self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , indent = indent , vb_level = vb_level)
-        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
+        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
                 task.calc(self.account , indent = indent + 1 , vb_level = vb_level + 1) 
         return self

@@ -11,7 +11,7 @@ from copy import deepcopy
 from tqdm import tqdm
 
 from src.proj import Logger
-from src.basic import torch_load
+from src.proj.func import torch_load
 from . import gp_math_func as MF
 from . import gp_factor_func as FF
 

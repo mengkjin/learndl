@@ -3,9 +3,8 @@ import pandas as pd
 import numpy as np
 from typing import Literal
 
-from src.basic import CALENDAR , DB
+from src.proj import CALENDAR , DB , Logger
 from src.data.loader import TRADE , RISK
-from src.proj import Logger
 
 from .basic import BasicUpdater
 

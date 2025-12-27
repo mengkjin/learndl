@@ -6,8 +6,7 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from typing import Any , Iterator
 
-from src.proj import Logger , Timer , Duration
-from src.basic import CONF , CALENDAR
+from src.proj import Logger , Duration , CONF , CALENDAR
 from src.math.primas import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
@@ -82,15 +81,15 @@ class DataPreProcessor:
             tt1 = datetime.now()
             Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 2)
 
-            with Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 2 , enter_vb_level = vb_level + 3):
+            with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 2 , enter_vb_level = vb_level + 3):
                 block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 3)
-            with Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 2):
+            with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block = proc.process_blocks(block_dict)
-            with Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 2):   
+            with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 2):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 2):
+            with Logger.Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
-            with Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 2):
+            with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()

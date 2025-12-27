@@ -1,4 +1,4 @@
-from src.basic import CALENDAR
+from src.proj import CALENDAR
 from src.res.trading.util import TradingPort
 
 class TradingPortfolioBacktestor:

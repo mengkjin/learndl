@@ -3,7 +3,7 @@ import numpy as np
 from copy import deepcopy
 from typing import Any
 
-from src.basic import CONF
+from src.proj import CONF
 from src.res.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL , Rmodel
 
 from .solver_input import SolverInput

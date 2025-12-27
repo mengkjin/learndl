@@ -5,9 +5,8 @@ import pandas as pd
 from datetime import datetime
 from itertools import product
 
-from src.proj import Silence , Logger
-from src.basic import CALENDAR , HiddenPath , HiddenExtractingModel
-from src.res.model.util import TrainConfig
+from src.proj import Silence , Logger , CALENDAR
+from src.res.model.util import TrainConfig , HiddenPath , HiddenExtractingModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
 

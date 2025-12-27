@@ -5,8 +5,7 @@ import pandas as pd
 from typing import Literal
 
 from src.data.util import trade_min_fillna
-from src.proj import PATH , Logger
-from src.basic import DB
+from src.proj import PATH , Logger , DB
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')

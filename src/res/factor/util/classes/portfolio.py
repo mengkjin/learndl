@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from src.basic import DB
+from src.proj import DB
 from src.data import DataBlock
 from .port import Port
 

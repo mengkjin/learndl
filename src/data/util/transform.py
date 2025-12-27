@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any
-from src.basic import DB
+from src.proj import DB
 
 def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):

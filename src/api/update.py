@@ -1,5 +1,4 @@
-from src.proj import Logger , MACHINE
-from src.basic import CALENDAR
+from src.proj import Logger , MACHINE , CALENDAR
 
 from .data import DataAPI
 from .factor import FactorAPI

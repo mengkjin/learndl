@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar
 
-from src.proj import PATH , Logger , Silence , Timer
-from src.basic import CALENDAR , DB , torch_load
+from src.proj import PATH , Logger , CALENDAR , DB
+from src.proj.func import torch_load
 from src.math import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
@@ -158,10 +158,10 @@ class DataBlock(Stock4DData):
         fillna = fillna.astype(bool)
         
         block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlock [{",".join(block_names)}]'
-        with Timer(f'Load {block_title}'):
+        with Logger.Timer(f'Load {block_title}'):
             blocks = [cls.load_path(path) for path in paths]
 
-        with Timer(f'Align {block_title}' , silent = len(blocks) <= 1):
+        with Logger.Timer(f'Align {block_title}' , silent = len(blocks) <= 1):
             # sligtly faster than .align(secid = secid , date = date)
             if intersect_secid:  
                 newsecid = index_intersect([blk.secid for blk in blocks])[0]
@@ -482,7 +482,7 @@ class ModuleData:
 
         if factor_names:
             factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
-            with Timer(f'Load {factor_title}'):
+            with Logger.Timer(f'Load {factor_title}'):
                 from src.data.loader import FactorLoader
                 start_dt = max(factor_start_dt or data.date[0] , data.date[0])
                 end_dt = min(factor_end_dt or data.date[-1] , data.date[-1])
@@ -542,11 +542,9 @@ class ModuleData:
             data = cls(**torch_load(path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
-                if not Silence.silent: 
-                    Logger.success(f'Loading Module Data, Try \'{path}\', success!')
+                Logger.success(f'Loading Module Data, Try \'{path}\', success!')
             else:
-                if not Silence.silent: 
-                    Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+                Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None
         except ModuleNotFoundError:
             '''can be caused by different package version'''

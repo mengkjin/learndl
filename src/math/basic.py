@@ -1,11 +1,8 @@
-import os , pprint , psutil , torch
+import torch
 import numpy as np
-from typing import Any, Callable, Iterable
+from typing import Any
 
-from pytimedinput import timedInput
 from scipy import stats
-
-from src.proj import Logger
 
 DIV_TOL = 1e-4
 
@@ -273,9 +270,6 @@ def rankic_2d(x : torch.Tensor, y : torch.Tensor , dim = 1 , universe = None , m
     ic = ic_2d(x , y , dim=dim)
     return ic if ic is None else torch.where(coverage < min_coverage * valid.sum(dim=dim) , torch.nan , ic)
 
-def total_memory(unit = 1e9):
-    return psutil.Process(os.getpid()).memory_info().rss / unit
-
 def to_numpy(values):
     """convert values to numpy array"""
     if not isinstance(values , np.ndarray): 
@@ -320,23 +314,6 @@ def merge_data_2d(data_tuple , row_tuple , col_tuple , row_all = None , col_all 
     for i , data in enumerate(data_tuple):
         data_all[np.repeat(row_index[i],len(col_index[i])),np.tile(col_index[i],len(row_index[i]))] = data[:].flatten()
     return data_all , row_all , col_all
-        
-def list_converge(arr , n = None , eps = 1e-6):
-    '''Last n element of arr has range smaller than eps'''
-    if n is None: 
-        return max(arr) - min(arr) < eps   
-    return len(arr) >= n and (max(arr[-n:]) - min(arr[-n:]) < eps)
-
-def pretty_print_dict(dictionary , width = 140 , sort_dicts = False):
-    pprint.pprint(dictionary, indent = 1, width = width , sort_dicts = sort_dicts)
-
-def subset(x , i):
-    if isinstance(x , (list,tuple)):
-        return type(x)([v[i] for v in x])
-    elif isinstance(x , dict):
-        return {k:v if v is None else v[i] for k,v in x.items()}
-    else:
-        return x[i]
     
 def forward_fillna(arr , axis = 0):
     shape = arr.shape
@@ -425,53 +402,3 @@ def index_stack(idxs , min_value = None , max_value = None) -> tuple[np.ndarray 
     pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
     pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
     return new_idx , pos_new , pos_old
-
-def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = Logger.stdout):
-    assert isinstance(prompt , str) , prompt
-    userText_list , userText_cond = [] , []
-    for t in range(recurrent):
-        if t == 0:
-            _prompt = prompt 
-        elif t == 1:
-            _prompt = 'Really?'
-        else:
-            _prompt = 'Really again?'
-            
-        userText, timedOut = None , None
-        if timeout > 0:
-            try:
-                userText, timedOut = timedInput(f'{_prompt} (in {timeout} seconds): ' , timeout = timeout)
-            except Exception:
-                pass
-        if userText is None : 
-            userText, timedOut = input(f'{_prompt} : ') , False
-        (_timeout , _sofar) = ('Time Out! ' , 'so far') if timedOut else ('' , '')
-        print_function(f'{_timeout}User-input {_sofar} is : [{userText}].')
-        userText_list.append(userText)
-        userText_cond.append(proceed_condition(userText))
-        if not userText_cond[-1]: 
-            break
-    return userText_list , userText_cond
-
-def recur_update(old : dict , update : dict | None) -> dict:
-    if update:
-        for k , v in update.items():
-            if isinstance(v , dict) and isinstance(old.get(k) , dict):
-                old[k] = recur_update(old[k] , v)
-            else:
-                old[k] = v
-    return old
-
-class Filtered:
-    def __init__(self, iterable, condition : Callable | Iterable , **kwargs):
-        self.iterable  = iter(iterable)
-        self.condition = condition if callable(condition) else iter(condition)
-        self.kwargs = kwargs
-    def __iter__(self):
-        return self
-    def __next__(self):
-        while True:
-            item = next(self.iterable)
-            cond = self.condition(item) if callable(self.condition) else next(self.condition)
-            if cond: 
-                return item

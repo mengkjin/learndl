@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from src.basic import CALENDAR
+from src.proj import CALENDAR
 from src.data.util import secid_adjust
 
 def ts_code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , drop_old = True , ashare = True):

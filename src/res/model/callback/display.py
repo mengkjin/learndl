@@ -5,7 +5,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , ClassVar
 
-from src.proj import PATH , MACHINE , Logger , Duration , Display , Proj
+from src.proj import PATH , MACHINE , Logger , Duration , Proj
+from src.proj.util import Display
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 

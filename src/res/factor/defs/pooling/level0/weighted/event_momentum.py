@@ -3,9 +3,9 @@ import numpy as np
 
 from typing import Literal
 
+from src.proj import CALENDAR
 from src.res.factor.util import StockFactor
 from src.res.factor.calculator import WeightedPoolingCalculator , StockFactorHierarchy
-from src.basic import CALENDAR
 from src.data.loader.data_vendor import DATAVENDOR
 
 

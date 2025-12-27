@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.basic import DB , CONF
+from src.proj import DB , CONF
 from src.data import DataBlock , DATAVENDOR
 
 from .portfolio import Port , Portfolio

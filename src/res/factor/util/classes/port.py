@@ -4,7 +4,7 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal
 
-from src.basic import CONF
+from src.proj import CONF
 from src.data import DATAVENDOR
 
 class Port:

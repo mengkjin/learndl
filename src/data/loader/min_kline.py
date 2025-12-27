@@ -2,8 +2,8 @@ import polars as pl
 
 from typing import Literal
 
-from src.basic import DB
-from src.math.singleton import singleton
+from src.proj import DB 
+from src.proj.func import singleton
 from src.data.util import INFO
 
 from .access import DateDataAccess

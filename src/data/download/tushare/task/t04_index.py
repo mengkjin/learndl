@@ -3,10 +3,8 @@ import pandas as pd
 import numpy as np
 
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , ts_code_to_secid
-from src.basic import DB , CALENDAR
-from src.proj import PATH
+from src.proj import DB , CALENDAR , PATH
 from typing import Any
-
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
     """get index weight data by iterate fetch"""

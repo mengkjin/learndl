@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.basic import CALENDAR , DB
+from src.proj import CALENDAR , DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import HoldingFactor
 

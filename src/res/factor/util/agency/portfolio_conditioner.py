@@ -12,7 +12,7 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from src.basic import CONF
+from src.proj import CONF
 from src.res.factor.util import Portfolio
 
 from ..stat import eval_cum_ret , eval_drawdown , eval_uncovered_max_drawdown

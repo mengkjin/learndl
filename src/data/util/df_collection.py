@@ -8,7 +8,7 @@ from abc import ABC , abstractmethod
 from copy import deepcopy
 from typing import Any
 
-from src.basic import TradeDate
+from src.proj import TradeDate
 
 lock = threading.Lock()
 

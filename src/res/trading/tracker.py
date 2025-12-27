@@ -3,8 +3,7 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.proj import PATH , Logger , Proj
-from src.basic import CALENDAR
+from src.proj import PATH , Logger , Proj , CALENDAR
 from src.res.trading.util import TradingPort
 
 FOCUSED_PORTS = ['use_daily']

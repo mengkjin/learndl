@@ -2,8 +2,7 @@ from typing import Any , Type , Literal
 from importlib import import_module
 from pathlib import Path
 
-from src.proj import PATH , Logger
-from src.basic import CALENDAR
+from src.proj import PATH , Logger , CALENDAR
 
 class BasicUpdaterMeta(type):
     """meta class of BasicUpdater"""

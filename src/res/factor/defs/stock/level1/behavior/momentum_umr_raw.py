@@ -1,5 +1,5 @@
 import pandas as pd
-from src.basic import DB
+from src.proj import DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 

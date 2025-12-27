@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.basic import CONF
+from src.proj import CONF
 
 from .. import layer as Layer
 

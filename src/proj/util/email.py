@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from src.proj.env import MACHINE , Proj
-from .logger import Logger
+from src.proj.log import Logger
 
 class _EmailSettings:
     Settings : dict[str , dict] = MACHINE.local_settings('email')

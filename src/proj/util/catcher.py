@@ -10,8 +10,10 @@ from datetime import datetime
 from matplotlib.figure import Figure
 
 from src.proj.env import PATH , MACHINE , Proj
-from src.proj.func import Duration , Display
-from .logger import Logger
+from src.proj.abc import Duration
+from src.proj.log import Logger
+
+from .display import Display
 
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 

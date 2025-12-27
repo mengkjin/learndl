@@ -1,11 +1,14 @@
-import sys
-
 from .state import ProjStates
 from .machine import MACHINE
+from ..abc import stderr
 
-_default_verbosity = 2
-_max_verbosity = 10
-_min_verbosity = 0
+__all__ = ['Proj']
+
+_project_config = {
+    'default_verbosity': 2,
+    'max_verbosity': 10,
+    'min_verbosity': 0,
+}
 
 class _Verbosity:
     """
@@ -14,25 +17,35 @@ class _Verbosity:
         ProjVerbosity.verbosity = 1 # for int verbosity
     """
     def __init__(self):
-        self._verbosity = _default_verbosity
-
+        self.value = _project_config['default_verbosity']
     def __get__(self , instance, owner):
-        return self._verbosity
+        return self.value
     def __set__(self, instance, value):
         assert isinstance(value , int) , f'verbosity must be an integer , got {type(value)} : {value}'
-        value = max(min(value , _max_verbosity) , _min_verbosity)
-        if value != self._verbosity:
-            sys.stderr.write(f'\u001b[31m\u001b[1mProject Verbosity Changed from {self._verbosity} to {value}\u001b[0m\n')
+        value = max(min(value , instance.max_verbosity) , instance.min_verbosity)
+        if value != self.value:
+            stderr(f'Project Verbosity Changed from {self.value} to {value}' , color = 'lightred' , bold = True)
         else:
-            sys.stderr.write(f'\u001b[31m\u001b[1mProject Verbosity Unchanged at {value}\u001b[0m\n')
-        self._verbosity = value
-        
+            stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
+        self.value = value
+
+class _MaxVerbosity:
+    def __init__(self):
+        self.value = _project_config['max_verbosity']
+    def __get__(self , instance, owner):
+        return self.value
+
+class _MinVerbosity:
+    def __init__(self):
+        self.value = _project_config['min_verbosity']
+    def __get__(self , instance, owner):
+        return self.value
 
 class _ProjMeta(type):
     """meta class of ProjConfig"""
     verbosity = _Verbosity()
-    max_verbosity = _max_verbosity
-    min_verbosity = _min_verbosity
+    max_verbosity = _MaxVerbosity()
+    min_verbosity = _MinVerbosity()
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')
@@ -59,7 +72,7 @@ class Proj(metaclass=_ProjMeta):
         for script level or os level (only once for all scripts in one os process)
         """
         import torch , os
-        from src.proj.util import Logger
+        from src.proj.log import Logger
         def _print_project_info():
             [Logger.stdout(info , color = 'lightgreen') for info in cls.info()]
             if MACHINE.server and not torch.cuda.is_available():

@@ -7,7 +7,9 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , Timer , Logger , Display , dfs_to_excel , figs_to_pdf
+from src.proj import PATH , Logger
+from src.proj.func import dfs_to_excel , figs_to_pdf
+from src.proj.util import Display
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
@@ -45,7 +47,7 @@ class BaseFactorAnalyticCalculator(ABC):
 
     class calc_manager:
         def __init__(self , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
-            self.timer = Timer(*args , indent = indent , vb_level = vb_level , **kwargs)
+            self.timer = Logger.Timer(*args , indent = indent , vb_level = vb_level , **kwargs)
         def __enter__(self):
             self.timer.__enter__()
             warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
@@ -64,7 +66,7 @@ class BaseFactorAnalyticCalculator(ABC):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
     def plot(self , show = False , indent : int = 0 , vb_level : int = 1): 
-        with Timer(f'{self.__class__.__name__} plot' , indent = indent , vb_level = vb_level):
+        with Logger.Timer(f'{self.__class__.__name__} plot' , indent = indent , vb_level = vb_level):
             if self.calc_rslt.empty: 
                 self.figs = {}
                 return self
@@ -124,13 +126,13 @@ class BaseFactorAnalyticTest(ABC):
 
     @abstractmethod
     def calc(self , factor : StockFactor , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
+        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
                 task.calc(factor , *args , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs) 
         return self
 
     def plot(self , show = False , indent : int = 0 , vb_level : int = 1):
-        with Timer(f'{self.__class__.__name__}.plot' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
+        with Logger.Timer(f'{self.__class__.__name__}.plot' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values(): 
                 task.plot(show = show , indent = indent + 1 , vb_level = vb_level + 1)
         return self

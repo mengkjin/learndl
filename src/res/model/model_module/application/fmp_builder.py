@@ -5,10 +5,10 @@ import pandas as pd
 from collections.abc import Iterable
 from typing import Any
 
-from src.proj import Logger
-from src.basic import CALENDAR , RegisteredModel
+from src.proj import Logger , CALENDAR
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
+from src.res.model.util import RegisteredModel
 
 class ModelPortfolioBuilder:
     FMP_TYPES  = ['top' , 'optim']

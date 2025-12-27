@@ -5,7 +5,7 @@ import torch.nn as nn
 from dataclasses import dataclass , field
 from typing import Any
 
-from src.proj import Device
+from src.proj.util import Device
 
 def _object_shape(obj : Any) -> Any:
     if obj is None: 
