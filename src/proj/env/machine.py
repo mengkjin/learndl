@@ -116,15 +116,15 @@ class MACHINE:
         return cls.PATH().get_share_folder_path()
         
     @classmethod
-    def configs(cls , conf_type : Literal['proj' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'schedule'] , name : str , raise_if_not_exist = True , **kwargs) -> dict:
+    def configs(cls , conf_type : Literal['proj' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'reserved' , 'schedule'] , name : str , raise_if_not_exist = True , **kwargs) -> dict:
         """
         Get the configs of the machine
         possible conf_type: proj , factor , boost , nn , train , trade , schedule
-        possible suffixes: .yaml , .json
-        additional kwargs: encoding : 'gbk' for tushare_indus
+        possible suffixes: .json , .yaml , prefer json over yaml
+        additional kwargs: e.g. encoding
         """
         PATH = cls.PATH()
-        for suffix in ('.yaml' , '.json'):
+        for suffix in ('.json' , '.yaml'):
             if (path := PATH.conf.joinpath(conf_type , f'{name}{suffix}')).exists():
                 break
         else:
@@ -133,11 +133,10 @@ class MACHINE:
             else:
                 return {}
         
-        match name:
-            case 'tushare_indus':
-                additional_kwargs = {'encoding' : 'gbk'}
-            case _:
-                additional_kwargs = {}
+        additional_kwargs = {}
+        #match name:
+        #    case 'tushare_indus':
+        #        additional_kwargs.update({'encoding' : 'gbk'})
         kwargs = kwargs | additional_kwargs
 
         if path.suffix == '.yaml':

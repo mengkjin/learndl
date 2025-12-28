@@ -10,7 +10,7 @@ from src.proj.calendar import CALENDAR
 from src.proj.func import torch_load
 import src.proj.db as DB
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'ModelDBMapping' , 'RegisteredModel' , 'HiddenExtractingModel']
+__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'DBMappingModel' , 'PredictionModel' , 'HiddenExtractionModel']
 
 class ModelPath:
     """
@@ -250,46 +250,43 @@ class ModelFile:
         """load model dictionary"""
         return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
 
-class ModelDBMapping:
+class DBMappingModel:
     """model db mapping definition"""
-    def __init__(self ,  name : str , src : str , key : str , col : str | list[str] | None = None) -> None:
-        self.name = name
-        self.src = src
-        self.key = key
-        self.col = [col] if isinstance(col , str) else col
+    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['db_mapping']
+
+    def __init__(self ,  name : str) -> None:
+        if name in self.MODEL_DICT:
+            self.name = name
+            reg_dict = self.MODEL_DICT[name]
+            self.src = reg_dict['src']
+            self.key = reg_dict['key']
+            self.col = reg_dict['col']
+        else:
+            raise ValueError(f'{name} is not a valid db mapping model')
+
     
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},src={self.src},key={self.key},col={self.col})'
-    
-    @classmethod
-    def from_yaml(cls , name : str , base_path : ModelPath | Path | str | None = None) -> 'ModelDBMapping':
-        base_path = ModelPath(base_path)
-        mapping : dict[str,Any] = PATH.read_yaml(base_path.conf('registry' , 'db_models_mapping'))
-        return cls(name , **mapping[name.removeprefix('db@')])
-
-    @classmethod
-    def from_dict(cls , name : str , mapping : dict[str,Any]) -> 'ModelDBMapping':
-        return cls(name , **mapping[name.removeprefix('db@')])
 
     def load_block(self , start_dt : int , end_dt : int , indent = 1 , vb_level : int = 10):
         from src.data.loader import BlockLoader
         return BlockLoader(db_src = self.src , db_key = self.key , feature = self.col).load(start_dt , end_dt , indent = indent , vb_level = vb_level)
     
-class RegisteredModel(ModelPath):
+class PredictionModel(ModelPath):
     '''
-    for a registeredmodel to predict recent/history data
-    model dict stored in configs/registry/update_models.yaml
+    for a prediction model to predict recent/history data
+    model dict stored in configs/proj/model_settings.yaml file under prediction section
     '''
     START_DT = 20170101 if MACHINE.server else 20170101
     FMP_STEP = 5
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'registered_models')
+    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['prediction']
 
     def __init__(self, pred_name : str , name: str | Any = None , 
                  submodel : Literal['best' , 'swalast' , 'swabest'] | Any = None ,
                  num  : int | list[int] | range | Literal['all'] | Any = None , 
                  start_dt = START_DT , assertion = True) -> None:
         if assertion:
-            assert pred_name in self.MODEL_DICT , f'{pred_name} is not a registered model'
+            assert pred_name in self.MODEL_DICT , f'{pred_name} is not a prediction model'
         if pred_name in self.MODEL_DICT:
             reg_dict = self.MODEL_DICT[pred_name]
             name     = reg_dict['name']
@@ -308,8 +305,8 @@ class RegisteredModel(ModelPath):
         return f'{self.__class__.__name__}(pred_name={self.pred_name},name={self.name},submodel={self.submodel},num={str(self.num)})'
     
     @classmethod
-    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list['RegisteredModel']:
-        """select registered models"""
+    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list['PredictionModel']:
+        """select prediction models"""
         if pred_names is None: 
             pred_names = list(cls.MODEL_DICT.keys())
         if isinstance(pred_names , str): 
@@ -373,17 +370,17 @@ class RegisteredModel(ModelPath):
         """model factor portfolio account directory"""
         return PATH.fmp_account.joinpath(self.pred_name)
 
-class HiddenExtractingModel(ModelPath):
+class HiddenExtractionModel(ModelPath):
     '''
-    for a registeredmodel to extract hidden states
-    model dict stored in configs/registry/update_models.yaml
+    for a hidden extraction model to extract hidden states
+    model dict stored in configs/proj/model_settings.yaml file under hidden_extraction section
     '''
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'hidden_models')
-    def __init__(self , hidden_name : str , name: str | Any = None , 
+    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['hidden_extraction']
+    def __init__(self , hidden_name : str , name: str | Any = None ,    
                  submodels : list | np.ndarray | Literal['best' , 'swalast' , 'swabest'] | None = None ,
                  nums : list | np.ndarray | int | None = None , assertion = True):
         if assertion:
-            assert hidden_name in self.MODEL_DICT , f'{hidden_name} is not a registered model'
+            assert hidden_name in self.MODEL_DICT , f'{hidden_name} is not a hidden extraction model'
         if hidden_name in self.MODEL_DICT:
             reg_dict  = self.MODEL_DICT[hidden_name]
             name      = reg_dict['name']
@@ -400,7 +397,7 @@ class HiddenExtractingModel(ModelPath):
         return f'{self.__class__.__name__}(hidden_name={self.hidden_name},name={self.name},submodels={self.submodels},nums={str(self.nums)})'
 
     @classmethod
-    def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list['HiddenExtractingModel']:   
+    def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list['HiddenExtractionModel']:   
         """select hidden models"""
         if hidden_names is None: 
             hidden_names = list(cls.MODEL_DICT.keys())

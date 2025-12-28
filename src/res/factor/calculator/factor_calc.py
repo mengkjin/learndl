@@ -864,6 +864,8 @@ class MarketFactorCalculator(FactorCalculator):
 
 class PoolingCalculator(FactorCalculator):
     """base class of factor calculator"""
+    sub_factors : list[str] = []
+    
     def calc_history(self , date : int) -> pd.DataFrame:
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')

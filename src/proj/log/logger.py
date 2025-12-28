@@ -53,7 +53,7 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
 def log_config() -> dict[str, Any]:
     """Initialize the logger"""
-    log_config = MACHINE.configs('proj' , 'logger')
+    log_config = MACHINE.configs('proj' , 'logger_settings')
     new_path = PATH.log_main.joinpath(log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
     new_path.parent.mkdir(exist_ok=True)
@@ -87,7 +87,7 @@ def reset_logger(log : logging.Logger , config : dict[str, Any]):
 
 class Logger:
     """
-    custom colored log , config at PATH.conf / 'proj' / 'logger.yaml'
+    custom colored log , config at PATH.conf / 'proj' / 'logger_settings.yaml'
     method include:
         stdout level:
             - stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs

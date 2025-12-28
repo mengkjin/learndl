@@ -11,7 +11,7 @@ from src.proj.util import Display
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
-from src.res.model.util import RegisteredModel
+from src.res.model.util import PredictionModel
 
 TASK_LIST : list[Type[TopCalc]] = [
     FrontFace , 
@@ -309,8 +309,8 @@ class CompositeAlpha:
     
     @staticmethod
     def get_single_alpha(alpha_name : str , date : int) -> AlphaModel:
-        if alpha_name in RegisteredModel.MODEL_DICT:
-            reg_model = RegisteredModel.SelectModels(alpha_name)[0]
+        if alpha_name in PredictionModel.MODEL_DICT:
+            reg_model = PredictionModel.SelectModels(alpha_name)[0]
             dates = reg_model.pred_dates
             df = reg_model.load_pred(dates[dates <= date].max())
         elif '@' in alpha_name:

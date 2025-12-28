@@ -16,9 +16,9 @@ class _Calendars:
 
     def load_calendars(self):
         calendar = DB.load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
-        res_calendar = pd.DataFrame(MACHINE.configs('proj' , 'reserved_calendar' , raise_if_not_exist = False))
-        if not res_calendar.empty:
-            calendar = pd.concat([calendar , res_calendar.loc[:,['calendar' , 'trade']]]).drop_duplicates(subset='calendar', keep='first').sort_values('calendar')
+        reserved = pd.DataFrame(MACHINE.configs('reserved' , 'calendar' , raise_if_not_exist = False))
+        if not reserved.empty:
+            calendar = pd.concat([calendar , reserved.loc[:,['calendar' , 'trade']]]).drop_duplicates(subset='calendar', keep='first').sort_values('calendar')
 
         trd = calendar.query('trade == 1').reset_index(drop=True)
         trd['td'] = trd['calendar']

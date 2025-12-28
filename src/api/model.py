@@ -27,7 +27,7 @@ class ModelAPI:
         '''
         Update models for both laptop and server:
         a. for laptop, do nothing
-        b. for server, continue training registered models in model'
+        b. for server, continue training prediction models in model'
         '''
         if MACHINE.server:
             wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
@@ -46,7 +46,7 @@ class ModelAPI:
     @classmethod
     def update_preds(cls):
         '''
-        Update factors for prediction models (registered models) for both laptop and server:
+        Update factors for prediction models for both laptop and server:
         '''
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
         wrap_update(cls.Predictor.update , 'update predictors')
@@ -54,7 +54,7 @@ class ModelAPI:
     @classmethod
     def recalculate_preds(cls , start_dt = None , end_dt = None):
         '''
-        Recalculate factors for prediction models (registered models) for both laptop and server:
+        Recalculate factors for prediction models for both laptop and server:
         '''
         wrap_update(cls.Predictor.recalculate , 'recalculate all predictors' , start_dt = start_dt , end_dt = end_dt)
     

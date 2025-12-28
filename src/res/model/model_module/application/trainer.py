@@ -2,7 +2,7 @@ from src.proj import PATH , MACHINE , Logger , Proj
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
-from src.res.model.util import BaseTrainer , RegisteredModel
+from src.res.model.util import BaseTrainer , PredictionModel
 
 from ..module import get_predictor_module
 
@@ -41,7 +41,7 @@ class ModelTrainer(BaseTrainer):
         if not MACHINE.server:
             Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
-            for model in RegisteredModel.SelectModels():
+            for model in PredictionModel.SelectModels():
                 with Logger.ParagraphI(f'Updating Model {model.model_path}'):
                     cls.initialize(0 , 1 , 0 , model.model_path).go()
 

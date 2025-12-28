@@ -3,7 +3,7 @@
 # author: jinmeng
 # date: 2024-11-27
 # description: Update Model Predictions
-# content: 更新所有Registered模型的预测结果
+# content: 更新所有Prediction模型的预测结果
 # email: True
 # mode: shell
 

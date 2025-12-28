@@ -24,8 +24,8 @@ class OptionsDefinition:
 
     @classmethod
     def available_db_mappings(cls) -> list[str]:
-        """Get the available db mappings in the config/registry/db_models_mapping.yaml file"""
-        return list(MACHINE.configs('proj' , 'db_models_mapping').keys())
+        """Get the available db mappings in the config/proj/model_settings.yaml file"""
+        return list(MACHINE.configs('proj' , 'model_settings')['db_mapping'].keys())
 
     @classmethod
     def available_tradeports(cls) -> list[str]:

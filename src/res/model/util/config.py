@@ -10,7 +10,7 @@ from src.proj.util import Device
 from src.proj.func import update_dict
 from src.res.algo import AlgoModule
 
-from .model_path import ModelPath , ModelDBMapping
+from .model_path import ModelPath , DBMappingModel
 from .metrics import Metrics
 from .storage import Checkpoint , Deposition
 
@@ -35,7 +35,9 @@ def schedule_path(base_path : ModelPath | Path | str | None , name : str):
         path = schedule_path_0 if schedule_path_0.exists() else schedule_path_1
     return path
 
-def conf_copy(source : Path , target : Path , overwrite = False):
+def conf_copy(source : Path | None , target : Path | None , overwrite = False):
+    if source is None or target is None:
+        return
     if source.is_dir():
         if not overwrite: 
             assert not target.exists() or len([v for v in target.iterdir()]) == 0 , target
@@ -492,21 +494,21 @@ class ModelParam:
     def mod_type_dir(self) -> str:
         return 'boost' if self.module_type == 'booster' else self.module_type
 
-    def conf_file(self , base : Path | ModelPath | str | None | Literal['self'] = 'self'):
+    def conf_file(self , base : Path | ModelPath | str | None | Literal['self'] = 'self') -> Path | None:
         if base == 'self': 
             base = self.base_path
-        if self.module_type == 'db':
-            return conf_path(base , 'registry' , 'db_models_mapping')
-        elif self.module_type == 'factor':
-            return Path('')
+        if self.module_type in ['db' , 'factor']:
+            return None
         else:
             return conf_path(base , self.mod_type_dir , self.module)
 
     def load_param(self):
         self.model_param : dict[str,Any] = {}
-        if self.module_type != 'factor':
-            p : dict[str,Any] = PATH.read_yaml(self.conf_file())
-            self.model_param.update(p)
+        if (conf_file := self.conf_file()) is not None: 
+            if not conf_file.exists() and self.module_type == 'nn':
+                Logger.warning(f'{conf_file} does not exist, trying default.yaml.')
+                conf_file = conf_file.with_stem(f'default')
+            self.model_param.update(PATH.read_yaml(conf_file))
         self.update_schedule_param()
         self.special_adjustment()
         return self
@@ -601,10 +603,10 @@ class ModelParam:
         return max(self.Param.get('num_output' , [1]))
 
     @property
-    def db_mapping(self) -> ModelDBMapping:
+    def db_mapping(self) -> DBMappingModel:
         assert self.module_type == 'db' , f'{self.module_type} is not a db module , cannot use db_mapping'
         if not hasattr(self , '_db_mapping'):
-            self._db_mapping = ModelDBMapping.from_dict(self.module , self.Param)
+            self._db_mapping = DBMappingModel(self.module.removeprefix('db@'))
         return self._db_mapping
 
 class TrainConfig(TrainParam):
@@ -678,7 +680,7 @@ class TrainConfig(TrainParam):
         assert len(self.Model.booster_head_param.params) == 1 , self.Model.booster_head_param.params
         return self.Model.booster_head_param.params[0]
     @property
-    def db_mapping(self) -> ModelDBMapping:
+    def db_mapping(self) -> DBMappingModel:
         return self.Model.db_mapping
     @property
     def beg_date(self) -> int: 

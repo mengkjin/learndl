@@ -6,13 +6,13 @@ from datetime import datetime
 from itertools import product
 
 from src.proj import Silence , Logger , CALENDAR
-from src.res.model.util import TrainConfig , HiddenPath , HiddenExtractingModel
+from src.res.model.util import TrainConfig , HiddenPath , HiddenExtractionModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
 
 class ModelHiddenExtractor:
     '''for a model to predict recent/history data'''
-    def __init__(self , model : HiddenExtractingModel , backward_days = 300 , forward_days = 160):
+    def __init__(self , model : HiddenExtractionModel , backward_days = 300 , forward_days = 160):
         self.hidden_model = model
         self.backward_days = backward_days
         self.forward_days  = forward_days
@@ -128,12 +128,12 @@ class ModelHiddenExtractor:
 
     @classmethod
     def SelectModel(cls , model_name : str) -> 'ModelHiddenExtractor':
-        return cls(HiddenExtractingModel(model_name))
+        return cls(HiddenExtractionModel(model_name))
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
         Logger.remark(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
-        models = HiddenExtractingModel.SelectModels(model_name)
+        models = HiddenExtractionModel.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all hidden models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:

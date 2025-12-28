@@ -100,34 +100,48 @@ class PATH:
     @staticmethod
     def read_yaml(yaml_file : str | Path , **kwargs) -> dict[str, Any]:
         """Read yaml file"""
-        if isinstance(yaml_file , str):
-            yaml_file = Path(yaml_file)
-        if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():
-            yaml_file = yaml_file.with_name(f'{yaml_file.name}.yaml')
+        yaml_file = Path(yaml_file)
+        if yaml_file.suffix == '' and yaml_file.with_suffix('.yaml').exists():
+            yaml_file = yaml_file.with_suffix('.yaml')
         if not yaml_file.exists():
-            if yaml_file.parent.stem == 'nn':
-                sys.stderr.write(f'\u001b[31m\u001b[1m{yaml_file} does not exist, trying default.yaml\u001b[0m\n')
-                yaml_file = yaml_file.with_name(f'default.yaml')
+            sys.stderr.write(f'\u001b[31m\u001b[1m{yaml_file} does not exist!\u001b[0m\n')
+            return {}
         with open(yaml_file ,'r' , **kwargs) as f:
             d = yaml.load(f , Loader = yaml.FullLoader)
         return d
 
     @staticmethod
-    def dump_yaml(data , yaml_file , **kwargs) -> None:
+    def dump_yaml(data , yaml_file : str | Path , **kwargs) -> None:
         """Dump data to yaml file"""
+        assert isinstance(data , dict) , type(data)
+        yaml_file = Path(yaml_file)
+        assert yaml_file.suffix == '.yaml' , yaml_file
+        assert not yaml_file.exists() or not os.path.getsize(yaml_file) , f'{yaml_file} already exists'
         with open(yaml_file , 'a' if os.path.exists(yaml_file) else 'w') as f:
             yaml.dump(data , f , **kwargs)
 
     @staticmethod
     def read_json(json_file : str | Path , **kwargs) -> dict[str, Any]:
         """Read json file"""
-        if isinstance(json_file , str):
-            json_file = Path(json_file)
-        if isinstance(json_file , Path) and json_file.suffix == '' and json_file.with_name(f'{json_file.name}.json').exists():
-            json_file = json_file.with_name(f'{json_file.name}.json')
+        json_file = Path(json_file)
+        if json_file.suffix == '' and json_file.with_suffix('.json').exists():
+            json_file = json_file.with_suffix('.json')
+        if not json_file.exists():
+            sys.stderr.write(f'\u001b[31m\u001b[1m{json_file} does not exist!\u001b[0m\n')
+            return {}
         with open(json_file , 'r' , **kwargs) as f:
             d = json.load(f)
         return d
+
+    @staticmethod
+    def dump_json(data , json_file : str | Path , ensure_ascii = False , indent = 4 , **kwargs) -> None:
+        """Dump data to json file"""
+        assert isinstance(data , dict) , type(data)
+        json_file = Path(json_file)
+        assert json_file.suffix == '.json' , json_file
+        assert not json_file.exists() or not os.path.getsize(json_file) , f'{json_file} already exists'
+        with open(json_file , 'w' , **kwargs) as f:
+            json.dump(data , f , ensure_ascii = ensure_ascii , indent = indent , **kwargs)
 
     @staticmethod
     def copytree(src : str | Path , dst : str | Path) -> None:

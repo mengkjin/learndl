@@ -7,7 +7,7 @@
 # email: False
 # mode: shell
 
-import subprocess
+import subprocess , shutil
 from pathlib import Path
 from src.proj import Logger
 from src.interactive.backend import BackendTaskRecorder
@@ -26,10 +26,19 @@ def main(**kwargs):
 
     # remove empty folders in src
     Logger.highlight("Remove empty script folders in src...")
-    for folder in Path('src').rglob('*/'):
+    for folder in [*Path('src').rglob('*/') , *Path('configs').rglob('*/')]:
         if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
-            Logger.stdout(f"Removing empty folder: {folder}")
-            folder.rmdir()
+            subfiles = [x for x in folder.rglob('*') if x.is_file()]
+            if not len(subfiles):
+                Logger.stdout(f"Removing empty folder: {folder}")
+                folder.rmdir()
+            else:
+                if all([x.suffix == '.pyc' for x in subfiles]):
+                    Logger.stdout(f"Removing folder with only pyc files: {folder}")
+                    shutil.rmtree(folder)
+                else:
+                    Logger.error(f"Error removing folder: {folder}:")
+                    Logger.error(f"Subfiles: {subfiles}")
 
     return f'Finish pull: {result.stdout}'
 
