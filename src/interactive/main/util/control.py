@@ -8,7 +8,7 @@ from datetime import datetime
 
 from src.proj import PATH , Logger
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
-from src.interactive.frontend import YAMLFileEditorState , ActionLogger , action_confirmation
+from src.interactive.frontend import YAMLFileEditorState , action_confirmation # , ActionLogger
 
 
 def set_current_page(key: str) -> None:
@@ -170,38 +170,38 @@ class SessionControl:
     def click_log_clear_confirmation(self):
         """click log clear confirmation"""
         def on_confirm():
-            ActionLogger.clear_log()
+            # ActionLogger.clear_log()
             self.queue_last_action = f"Log Clear Success" , True
         def on_abort():
             self.queue_last_action = f"Log Clear Aborted" , False
         action_confirmation(on_confirm , on_abort , title = "Are You Sure about Clearing Logs (This Action is Irreversible)?")
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_sync(self):
         """click task queue sync"""
         self.task_queue.sync()
         self.queue_last_action = f"Queue Manually Synced at {datetime.now().strftime('%H:%M:%S')}" , True
    
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_refresh(self):
         """click task queue refresh"""
         self.task_queue.refresh()
         self.queue_last_action = f"Queue Manually Refreshed at {datetime.now().strftime('%H:%M:%S')}" , True
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_clean(self):
         """click task queue refresh confirmation"""
         items = [item for item in self.task_queue.values() if item.is_error]
         [self.task_queue.remove(item) for item in items]
         self.queue_last_action = f"Queue Cleaned All Error Tasks at {datetime.now().strftime('%H:%M:%S')}" , True
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_delist_all(self):
         """click task queue delist all"""
         self.task_queue.empty()
         self.queue_last_action = f"Entire Queue Delisted" , True
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_remove_all(self):
         """click task queue refresh confirmation"""
         def on_confirm():
@@ -212,13 +212,13 @@ class SessionControl:
         action_confirmation(on_confirm , on_abort , 
                             title = "Are You Sure about Removing All Tasks in Queue (Will be Auto Backuped)?")
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_delist_item(self , item : TaskItem):
         """click task queue delist item"""
         self.task_queue.delist(item)
         self.queue_last_action = f"Delist Success: {item.id}" , True
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_queue_remove_item(self , item : TaskItem):
         """click task queue remove item"""
         def on_confirm():
@@ -235,7 +235,7 @@ class SessionControl:
         else:
             on_confirm()
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     @st.dialog("Are You Sure about Restoring from Backup?")
     def click_queue_restore_all(self):
         """click task queue restore all"""
@@ -268,7 +268,7 @@ class SessionControl:
         st.session_state['task-filter-path-folder'] = []
         st.session_state['task-filter-path-file'] = [runner.path.path]
         
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
         run_params = self.get_global_settings()
@@ -290,7 +290,7 @@ class SessionControl:
         Logger.stdout(f'run script: {item.id}')
         item.run_script()
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_file_preview(self , path : Path):
         """click file previewer"""
         Logger.stdout('click file previewer')
@@ -299,12 +299,12 @@ class SessionControl:
         else:   
             self.running_report_file_previewer = path   
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_file_download(self , path : Path):
         """click file previewer"""
         # TODO: things to do before download
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_show_complete_report(self , item : TaskItem):
         """click show complete report"""
         self.current_task_item = item.id
@@ -312,7 +312,7 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_item_choose_select(self , item : TaskItem):
         """click choose task item"""
         new_id = item.id if self.current_task_item != item.id else None
@@ -322,7 +322,7 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-    @ActionLogger.log_action()
+    # @ActionLogger.log_action()
     def click_choose_item_selectbox(self , item_id : str | None = None):
         """click choose task item"""
         if item_id is None: 

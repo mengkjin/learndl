@@ -7,6 +7,7 @@ from typing import Any , Callable
 from src.proj.env import MACHINE , Proj
 from src.proj.log import Logger
 from src.proj.calendar import CALENDAR
+from src.proj.func import print_disk_space_info
 
 from .task_record import TaskRecorder
 from ..email import Email
@@ -153,6 +154,8 @@ class AutoRunTask:
 
         self.error_messages.extend(Logger.get_conclusions('error'))
         self.exit_message = Logger.draw_conclusions()
+
+        print_disk_space_info()
         
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         

@@ -1,6 +1,6 @@
 import streamlit as st
 
-from src.interactive.frontend.frontend import ActionLogger , expander_subheader
+from src.interactive.frontend.frontend import expander_subheader # , ActionLogger
 
 from util import SC , set_current_page , show_sidebar_buttons , print_page_header
 
@@ -29,14 +29,14 @@ def show_developer_info(H = 500):
             'icon' : ':material/directory_sync:' ,
             'operation' : lambda : st.json(SC.task_queue.queue_content() , expanded = 1)
         } , 
-        "Action Logs" : {
-            'icon' : ':material/format_list_numbered:' ,
-            'operation' : lambda : st.code(ActionLogger.get_action_log(), language='log' , height = H , wrap_lines = True)
-        } , 
-        "Error Logs" : {
-            'icon' : ':material/error:' ,
-            'operation' : lambda : st.code(ActionLogger.get_error_log(), language='log' , height = H , wrap_lines = True)
-        } ,
+        # "Action Logs" : {
+        #     'icon' : ':material/format_list_numbered:' ,
+        #     'operation' : lambda : st.code(ActionLogger.get_action_log(), language='log' , height = H , wrap_lines = True)
+        # } , 
+        # "Error Logs" : {
+        #     'icon' : ':material/error:' ,
+        #     'operation' : lambda : st.code(ActionLogger.get_error_log(), language='log' , height = H , wrap_lines = True)
+        # } ,
     }
     
     with st.container(key = "developer-info-special-expander"):
