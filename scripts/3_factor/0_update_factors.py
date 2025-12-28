@@ -27,7 +27,7 @@
 from src.res.factor.api import FactorCalculatorAPI
 from src.proj.util import ScriptTool
 
-@ScriptTool('update_factors' , lock_name = 'update_factors' , verbosity = 10)
+@ScriptTool('update_factors' , lock_name = 'update_factors')
 def main(start : int | None = None , end : int | None = None , timeout : float | None = 10 , **kwargs):
     timeout = float(timeout) if timeout is not None else None
     FactorCalculatorAPI.update(start = start , end = end , timeout = timeout)

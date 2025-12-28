@@ -63,7 +63,7 @@ class ScriptTool:
         lock_num : int = 1 , 
         lock_timeout : int = 60 , 
         lock_wait_time : int = 1 ,
-        verbosity : int = 2 ,
+        verbosity : int | None = None ,
         **kwargs
     ):  
 

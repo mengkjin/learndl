@@ -105,7 +105,7 @@ class AutoRunTask:
         task_key : str | Any | None = None , 
         catchers : list[str] = ['html' , 'markdown' , 'warning'],
         forfeit_if_done = False,
-        verbosity : int = 2 ,
+        verbosity : int | None = None ,
         **kwargs
     ):
         self.task_name = task_name
@@ -270,8 +270,6 @@ class AutoRunTask:
         """set the verbosity of the task"""
         if 'max_vb' in self.kwargs:
             self.verbosity = 10 * int(self.kwargs['max_vb'])
-        elif 'verbosity' in self.kwargs:
-            self.verbosity = int(self.kwargs['verbosity'])
         Proj.verbosity = self.verbosity
 
     def send_email(self):

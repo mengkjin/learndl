@@ -16,7 +16,10 @@ class _Verbosity:
         self.value = _project_settings['verbosity']
     def __get__(self , instance, owner):
         return self.value
-    def __set__(self, instance, value):
+    def __set__(self, instance, value : int | None = None):
+        if value is None:
+            stderr(f'Project Verbosity Unchanged at {value} (Set to None)' , color = 'lightred' , bold = True)
+            return
         assert isinstance(value , int) , f'verbosity must be an integer , got {type(value)} : {value}'
         value = max(min(value , instance.max_verbosity) , instance.min_verbosity)
         if value != self.value:
