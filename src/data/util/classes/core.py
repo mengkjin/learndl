@@ -210,7 +210,7 @@ class DataBlock(Stock4DData):
 
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 , 
                      price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
-        if self.price_adjusted: 
+        if self.price_adjusted or self.empty: 
             return self
         adjfactor = adjfactor and ('adjfactor' in self.feature)
         if multiply is None and divide is None and (not adjfactor): 
