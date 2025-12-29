@@ -167,7 +167,8 @@ class DataVendor:
             pre_start_dt = CALENDAR.cd(start_dt , -20)
             extend_td_within = self.td_within(pre_start_dt , end_dt)
             blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).as_tensor().ffill()
-            blk.update(values = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan))
+            rtn = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan)
+            blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
             blk = blk.align_date(blk.date_within(start_dt , end_dt) , inplace = True)
             setattr(self , f'_block_daily_ret' , blk)
 

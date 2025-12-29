@@ -604,7 +604,7 @@ class StockFactor:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
         if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-            assert not np.any(np.isinf(df['ret'])), f'inf values in factor data ret : {df.query('ret.isinf()')}'
+            assert not np.any(np.isinf(df['ret'])), f'inf values in factor data ret : {df[np.isinf(df).any(axis=1)]}'
             df = self._eval_group_perf(df , self.factor_names , group_num , excess)
             if trade_date:
                 df['start'] = DATAVENDOR.td_array(df['date'] , lag)
