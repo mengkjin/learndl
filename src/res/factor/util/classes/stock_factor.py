@@ -593,9 +593,6 @@ class StockFactor:
         """
         kwargs = {'x_cols' : factors , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess , 'include_groups' : False , 'direction' : direction}
         df = df.groupby('date').apply(eval_grp_avg , **kwargs) 
-        if np.any(np.isinf(df['ret'])):
-            print(df)
-            raise ValueError(f'inf values in factor data ret : {df}')
         df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
         return df
 
@@ -607,7 +604,7 @@ class StockFactor:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
         if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-            assert not np.any(np.isinf(df['ret'])), f'inf values in factor data ret : {df[self.factor_names]}'
+            assert not np.any(np.isinf(df['ret'])), f'inf values in factor data ret : {df.query('ret.isinf()')}'
             df = self._eval_group_perf(df , self.factor_names , group_num , excess)
             if trade_date:
                 df['start'] = DATAVENDOR.td_array(df['date'] , lag)

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any , Literal , Type
 
 from src.proj.env import MACHINE , PATH , Proj
-from src.proj.abc import Duration , stdout , stderr , FormatStr , Timer
+from src.proj.abc import Duration , stdout , stderr , FormatStr
 
 _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
 _levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
@@ -312,15 +312,28 @@ class Logger:
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
         def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 0 , enter_vb_level : int = 99): 
-            silent = silent or vb_level > Proj.verbosity
-            at_enter = vb_level <= Proj.verbosity
-            self.timer = Timer(*args , silent = silent , indent = indent , at_enter = at_enter)
-
+            self.key = '/'.join(args)
+            self.silent = silent
+            self.indent = indent
+            self.vb_level = vb_level
+            self.enter_vb_level = enter_vb_level
+    
         def __enter__(self):
-            self.timer.__enter__()
+            self._init_time = datetime.now()
+            if not self.silent: 
+                Logger.stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
+        def __exit__(self, type, value, trace):
+            if not self.silent:
+                Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
 
-        def __exit__(self, *args):
-            self.timer.__exit__(*args)
+        @property
+        def enter_str(self):
+            """Get the enter string"""
+            return f'{self.key} start ... '
+        @property
+        def exit_str(self):
+            """Get the exit string"""
+            return f'{self.key} finished! Cost {Duration(since = self._init_time)}'
 
     class ParagraphI:
         """
