@@ -191,15 +191,25 @@ def show_param_settings(runner : ScriptRunner):
     subheader = expander_subheader(wkey , header , icon , True , help = help)
 
     with subheader:
-        reset_param = st.empty()
+        param_controls = st.empty()
         SC.param_inputs_form = ParamInputsForm(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
         if is_empty: 
             return
 
-        if reset_param.button(":blue-badge[:material/refresh: **Reset Parameters**]", key = f"param-inputs-form-reset-param-button" , help = "Reset Parameters to Default" , type = 'tertiary'):
-            SC.script_params_cache.clear()
-            SC.current_task_item = None
-            st.rerun()
+        cols = param_controls.columns(4)
+        with cols[0]:
+            if st.button(":blue-badge[:material/refresh: **Reset Parameters**]", key = f"param-inputs-form-reset-param-button" , help = "Reset Parameters to Default" , type = 'tertiary'):
+                SC.script_params_cache.clear_script_cache(runner.script_key)
+                SC.current_task_item = None
+                st.rerun()
+
+        with cols[1]:
+            if st.button(":blue-badge[:material/history: **Last Parameters**]", key = f"param-inputs-form-last-param-button" , help = "Set Parameters to Latest Task's Parameters" , type = 'tertiary'):
+                item = SC.get_latest_task_item(runner.script_key)
+                if isinstance(SC.param_inputs_form, ParamInputsForm) and item is not None:
+                    item_params = SC.param_inputs_form.cmd_to_param_values(cmd = item.cmd)
+                    SC.script_params_cache.update_script_cache(runner.script_key, 'value', item_params)
+                    st.rerun()
 
         params = SC.param_inputs_form.param_values
         if runner.header.file_editor:

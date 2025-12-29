@@ -8,7 +8,7 @@ from datetime import datetime
 
 from src.proj import PATH , Logger
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
-from src.interactive.frontend import YAMLFileEditorState , action_confirmation # , ActionLogger
+from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache # , ActionLogger
 
 
 def set_current_page(key: str) -> None:
@@ -35,7 +35,7 @@ class SessionControl:
     running_report_init : bool = True
     running_report_file_previewer : Path | None = None
     param_inputs_form : Any = None
-    script_params_cache : dict[str, dict[str, dict[str , Any]]] = field(default_factory=dict)
+    script_params_cache : ParamCache = field(default_factory=ParamCache)
 
     # for config editor page
     config_editor_state : YAMLFileEditorState | None = None

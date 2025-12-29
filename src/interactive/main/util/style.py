@@ -757,7 +757,7 @@ def style():
             padding-bottom: 0px !important;
         }
     }
-    .stElementContainer[class*="param-inputs-form-reset-param"] {
+    .stElementContainer[class*="param-inputs-form"] {
         button {
             height: 20px !important;
             width: 100% !important;
