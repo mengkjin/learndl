@@ -1,6 +1,5 @@
 from typing import Literal , Any , Callable
 import streamlit as st
-import re
 
 from src.proj import Logger
 from src.interactive.backend import ScriptRunner , ScriptParamInput , TaskItem
@@ -48,7 +47,7 @@ class WidgetParamInput(ScriptParamInput):
                 if option is None or option == '' or option == 'Choose an option': 
                     option = 'Choose an option'
                 if option not in options:
-                    option = cls.remove_extra_prefix_regex(option, param.prefix)
+                    option = cls.remove_extra_prefix_regex(option, param.prefix, remain_prefix = False)
                 assert option in options , f"Invalid option '{option}' in list {options}"
                 value = values[options.index(option)]
                 return value
@@ -69,13 +68,13 @@ class WidgetParamInput(ScriptParamInput):
         ptype = param.ptype
         if isinstance(ptype, list):
             options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
-            values = [None] + ptype
+            values = [None] + [str(ptype_e) for ptype_e in ptype]
             def wrapper(value : Any):
                 """get index of value in options"""
                 if value is None or value == '' or value == 'Choose an option': 
                     value = None
                 if value not in values:
-                    value = f'{param.prefix}{cls.remove_extra_prefix_regex(value, param.prefix)}'
+                    value = cls.remove_extra_prefix_regex(value, param.prefix , remain_prefix = False)
                 assert value in values , f"Invalid value '{value}' in list {values}"
                 option = options[values.index(value)]
                 return option
@@ -92,15 +91,16 @@ class WidgetParamInput(ScriptParamInput):
             raise ValueError(f"Unsupported param type: {ptype}")
 
     @classmethod
-    def remove_extra_prefix_regex(cls , s : str , prefix : str):
+    def remove_extra_prefix_regex(cls , s : Any, prefix : str , remain_prefix : bool = True):
+        s = str(s)
         if not prefix:
             return s
-        escaped_prefix = re.escape(prefix)
-        pattern = rf'^({escaped_prefix})(\1)+'
-        match = re.match(pattern, s)
-        if match:
-            return re.sub(pattern, r'\1', s)
-        return s
+        while s.startswith(prefix):
+            s = s.removeprefix(prefix)
+        if remain_prefix:
+            return f'{prefix}{s}'
+        else:    
+            return s
     
     def on_change(self , cache : ParamCache):
         cache.set(self.option, self.script_key, 'option', self.name)
@@ -119,6 +119,7 @@ class WidgetParamInput(ScriptParamInput):
             #elif self.widget_key in st.session_state:
             #    default_option = st.session_state.get(self.widget_key, None)
             else:
+                print(self.default)
                 default_option = self.value_to_option(self.default)
         return default_option
 
