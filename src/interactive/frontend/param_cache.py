@@ -1,5 +1,8 @@
 from typing import Any, Literal
 
+class NoCachedValue:
+    ...
+
 class ParamCache:
     def __init__(self):
         self.cache : dict[str, dict[str, dict[str, Any]]] = {}
@@ -7,8 +10,11 @@ class ParamCache:
     def __repr__(self):
         return f"ParamCache(cache={self.cache})"
 
+    def has(self, script_key: str , cache_type : Literal['option', 'value', 'valid'] , name : str) -> bool:
+        return name in self.cache.get(script_key, {}).get(cache_type, {})
+
     def get(self, script_key: str , cache_type : Literal['option', 'value', 'valid'] , name : str) -> Any:
-        return self.cache.get(script_key, {}).get(cache_type, {}).get(name, None)
+        return self.cache.get(script_key, {}).get(cache_type, {})[name]
 
     def set(self, value : Any, script_key: str, cache_type : Literal['option', 'value', 'valid'] , name : str):
         if script_key not in self.cache:

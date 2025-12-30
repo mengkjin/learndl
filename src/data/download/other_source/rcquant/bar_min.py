@@ -67,7 +67,7 @@ def rcquant_init():
             if _error := output['stderr']:
                 key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
                 if key_info:
-                    Logger.alert1(f'RcQuant Warning >> {key_info.group(0)}' , indent = 1)
+                    Logger.alert1(f'RcQuant Warning >> {key_info.group(0)}' , indent = 1 , vb_level = 1)
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
         except FileNotFoundError:

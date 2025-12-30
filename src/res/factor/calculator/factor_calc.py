@@ -323,7 +323,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             df = self._df
         return df
 
-    def eval_factor_series(self ,  date : int , indent : int = 1 , vb_level : int = 10) -> pd.Series:
+    def eval_factor_series(self ,  date : int , indent : int = 3 , vb_level : int = 99) -> pd.Series:
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
         df = self.eval_factor(date , indent = indent , vb_level = vb_level)
         if 'secid' in df.columns:
@@ -361,9 +361,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return cls().eval_factor(date)
 
     @classmethod
-    def EvalSeries(cls , date : int) -> pd.Series:
+    def EvalSeries(cls , date : int , indent : int = 3 , vb_level : int = 99) -> pd.Series:
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
-        return cls().eval_factor_series(date)
+        return cls().eval_factor_series(date , indent = indent , vb_level = vb_level)
 
     @classmethod
     def FactorDates(cls , start : int | None = 20170101 , end : int | None = None , step : int = 1) -> np.ndarray:
@@ -458,41 +458,41 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return DB.path(cls.db_src , cls.db_key , date).exists()
 
     @classmethod
-    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , vb_level : int = 1) -> None:
+    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update factor data and stats of a given date"""
-        cls.update_all_factors(start = start , end = end , overwrite = overwrite , vb_level = vb_level)
-        cls.update_all_stats(start = start , end = end , overwrite = overwrite , vb_level = vb_level)
+        cls.update_all_factors(start = start , end = end , overwrite = overwrite , indent = indent , vb_level = vb_level)
+        cls.update_all_stats(start = start , end = end , overwrite = overwrite , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , vb_level : int = 1) -> None:
+    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update all factor data until date"""
         dates = cls.target_dates(start = start , end = end , overwrite = overwrite)
         calc = cls()
         for date in dates:
-            calc.update_day_factor(date , overwrite = overwrite , vb_level = vb_level , show_warning = False)
+            calc.update_day_factor(date , overwrite = overwrite , indent = indent , vb_level = vb_level , show_warning = False)
 
     @classmethod
-    def update_all_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , vb_level : int = 1) -> None:
+    def update_all_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update all factor stats until date"""
         target_dates = cls.stats_target_dates(start = start , end = end , overwrite = overwrite)
         for stats_type , dates in target_dates.items():
-            cls.update_periodic_stats(stats_type , dates , overwrite = overwrite , vb_level = vb_level)
+            cls.update_periodic_stats(stats_type , dates , overwrite = overwrite , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def recalculate_all(cls , start : int | None = None , end : int | None = None , vb_level : int = 1) -> None:
+    def recalculate_all(cls , start : int | None = None , end : int | None = None , indent : int = 1 , vb_level : int = 1) -> None:
         calc = cls()
         if isinstance(calc , WeightedPoolingCalculator):
             calc.drop_pooling_weight(after = start , overwrite = True)
-        cls.update_all_factors(start = start , end = end , overwrite = True , vb_level = vb_level)
-        cls.update_all_stats(start = start , end = end , overwrite = True , vb_level = vb_level)
+        cls.update_all_factors(start = start , end = end , overwrite = True , indent = indent , vb_level = vb_level)
+        cls.update_all_stats(start = start , end = end , overwrite = True , indent = indent , vb_level = vb_level)
 
-    def update_day_factor(self , date : int , overwrite = False , vb_level : int = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
+    def update_day_factor(self , date : int , overwrite = False , indent : int = 1 , vb_level : int = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         if show_warning and date not in CONF.Factor.UPDATE.target_dates:
-            Logger.alert1(f'{self.factor_string} at {date} is not in CONF.Factor.UPDATE.target_dates')
+            Logger.alert1(f'{self.factor_string} at {date} is not in CONF.Factor.UPDATE.target_dates' , indent = indent)
         prefix = f'{self.factor_string} at {date}'
         try:
-            done = self.calc_and_deploy(date , overwrite = overwrite , vb_level = vb_level)
+            done = self.calc_and_deploy(date , overwrite = overwrite , indent = indent , vb_level = vb_level)
         except catch_errors as e:
             Logger.error(f'{prefix} failed: {e}')
             traceback.print_exc()
@@ -500,7 +500,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return done
 
     @classmethod
-    def update_periodic_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , overwrite = False , vb_level : int = 1) -> None:
+    def update_periodic_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update factor daily or weekly stats"""
         if dates is None:
             dates = cls.stats_target_dates()[stats_type]
@@ -514,17 +514,17 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , cls.db_key , vb_level = 99)
-        Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates' , vb_level = vb_level)
+        Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , vb_level : int = 1) -> None:
+    def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update factor daily stats"""
-        cls.update_periodic_stats('daily' , dates , overwrite , vb_level = vb_level)
+        cls.update_periodic_stats('daily' , dates , overwrite , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , vb_level : int = 1) -> None:
+    def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update factor weekly stats"""
-        cls.update_periodic_stats('weekly' , dates , overwrite , vb_level = vb_level)
+        cls.update_periodic_stats('weekly' , dates , overwrite , indent = indent , vb_level = vb_level)
 
     @classmethod
     def daily_stats(cls) -> pd.DataFrame:
@@ -737,11 +737,11 @@ class AffiliateFactorCalculator(FactorCalculator):
         return DB.path(cls.load_db_src , cls.load_db_key , date).exists()
 
     @classmethod
-    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , vb_level : int = 1) -> None:
+    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update all factor data until date"""
         return
 
-    def update_day_factor(self , date : int , overwrite = False , vb_level : int = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
+    def update_day_factor(self , date : int , overwrite = False , indent : int = 1 , vb_level : int = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         return True
 
@@ -1000,57 +1000,58 @@ class WeightedPoolingCalculator(PoolingCalculator):
     """Factor Calculator of meta_type: pooling , category0: pooling , category1: weighted"""
     category1 = 'weighted'
 
-    def load_pooling_weight(self) -> pd.DataFrame:
+    @classmethod
+    def load_pooling_weight(cls) -> pd.DataFrame:
         """load pooling weight of a given date"""
-        df = DB.load('pooling_weight' , self.db_key , vb_level = 99)
+        df = DB.load('pooling_weight' , cls.db_key , vb_level = 99)
         return df
 
-    def drop_pooling_weight(self , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 10):
+    @classmethod
+    def drop_pooling_weight(cls , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 10):
         """trim pooling weight of a given date range"""
         if not overwrite:
             return
         if after is not None:
-            Logger.alert1(f'Dropping pooling weight of {self.factor_name} after {after}!', indent = indent)
-            df = self.load_pooling_weight().query('date < @after')
-            DB.save(df , 'pooling_weight' , self.db_key , indent = indent , vb_level = vb_level)
+            Logger.alert1(f'Dropping pooling weight of {cls.factor_name} after {after}!', indent = indent)
+            df = cls.load_pooling_weight().query('date < @after')
+            DB.save(df , 'pooling_weight' , cls.db_key , indent = indent , vb_level = vb_level)
         else:
-            self.purge_pooling_weight(confirm = True)
+            cls.purge_pooling_weight(confirm = True)
 
-    def purge_pooling_weight(self , confirm : bool = False) -> None:
+    @classmethod
+    def purge_pooling_weight(cls , confirm : bool = False) -> None:
         """purge pooling weight of a given date"""
         if confirm:
-            Logger.alert1(f'Purging pooling weight of {self.factor_name}!')
-            DB.path('pooling_weight' , self.db_key).unlink(missing_ok = True)
+            Logger.alert1(f'Purging pooling weight of {cls.factor_name}!')
+            DB.path('pooling_weight' , cls.db_key).unlink(missing_ok = True)
 
     def get_pooling_weight(self , date : int) -> pd.DataFrame:
         """get pooling weight of a given date"""
         if not hasattr(self , '_loaded_weight'):
             self._loaded_weight = self.load_pooling_weight()
-        if self._loaded_weight.empty or date not in self._loaded_weight['date']:
-            self.update_all_pooling_weight(date = date)
-            self._loaded_weight = self.load_pooling_weight()
-        if self._loaded_weight.empty:
-            return pd.DataFrame()
         weight = self._loaded_weight.query('date == @date').set_index('date')
         if weight.empty:
             Logger.error(f'pooling weight is empty for {date} , has dates: {self._loaded_weight["date"].unique()}')
+            Logger.error(f'Call {self.__class__.__name__}.update_all_pooling_weight(date = {date}) to update pooling weight first')
             raise ValueError(f'pooling weight is empty for {date}')
         return weight
 
     @abstractmethod
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , vb_level : int = 1) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         raise NotImplementedError(f'{self.factor_name} : calc_pooling_weight should not be implemented for weighted pooling')
 
     @classmethod
-    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , vb_level : int = 1) -> None:
-        """update factor data and stats of a given date"""
-        cls.update_all_pooling_weight(date = end , vb_level = vb_level)
-        cls.update_all_factors(start = start , end = end , overwrite = overwrite , vb_level = vb_level)
-        cls.update_all_stats(start = start , end = end , overwrite = overwrite , vb_level = vb_level)
+    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
+        """update all factor data until date"""
+        dates = cls.target_dates(start = start , end = end , overwrite = overwrite)
+        cls.update_all_pooling_weight(date = end , indent = indent , vb_level = vb_level)
+        calc = cls()
+        for date in dates:
+            calc.update_day_factor(date , overwrite = overwrite , indent = indent , vb_level = vb_level , show_warning = False)
 
     @classmethod
-    def update_all_pooling_weight(cls , date : int | None = None , overwrite = False , vb_level : int = 1) -> None:
+    def update_all_pooling_weight(cls , date : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update all factor data until date"""
         calc = cls()
         target_dates = CALENDAR.slice(calc.update_calendar , 0 , date)
@@ -1062,11 +1063,11 @@ class WeightedPoolingCalculator(PoolingCalculator):
             old_weights = pd.DataFrame()
         if len(target_dates) == 0:
             return
-        new_weight = calc.calc_pooling_weight(dates = target_dates , vb_level = vb_level)
+        new_weight = calc.calc_pooling_weight(dates = target_dates , indent = indent , vb_level = vb_level)
         if 'date' not in new_weight.columns:
             new_weight = new_weight.reset_index(drop = False)
         weights = pd.concat([old_weights , new_weight]).drop_duplicates(subset = ['date'] , keep = 'last').sort_values('date')
-        DB.save(weights , 'pooling_weight' , calc.db_key , vb_level = vb_level)
+        DB.save(weights , 'pooling_weight' , calc.db_key , indent = indent , vb_level = vb_level)
 
 class NonlinearPoolingCalculator(PoolingCalculator):
     """Factor Calculator of meta_type: pooling , category0: pooling , category1: nonlinear"""

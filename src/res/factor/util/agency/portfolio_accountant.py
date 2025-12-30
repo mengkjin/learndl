@@ -148,8 +148,8 @@ class PortfolioAccountant:
             if self.config.attribution: 
                 self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
-            if (i % 100 == 0 or i == len(self.account) - 2):
-                Logger.stdout(f'{self.config.name} accounting {i} / {len(self.account) - 1} at {date}' , 
+            if i > 0 and ((i + 1) % 100 == 0 or i == len(self.account) - 2):
+                Logger.stdout(f'{self.config.name} accounting {i + 1} / {len(self.account) - 1} at {date}' , 
                               indent = self.config.indent + 1 , vb_level = self.config.vb_level + 2)
 
         self.account['pf']  = self.account['pf'] - self.account['turn'] * self.config.trade_cost

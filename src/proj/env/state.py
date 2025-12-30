@@ -1,12 +1,12 @@
-from pathlib import Path
-import io
 import pandas as pd
-
+from pathlib import Path
+from typing import Any
 __all__ = ['ProjStates']
 
-_project_states = {
+_project_states : dict[str, Any] = {
 
 }
+
 class _Trainer:
     """custom class to record trainer instance"""
     def __init__(self):
@@ -55,20 +55,6 @@ class _Factor:
         assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
         return value
 
-class _Log_File:
-    def __init__(self):
-        self.name = 'log_file'
-        _project_states[self.name] = None
-
-    def __set__(self , instance, value):
-        assert value is None or isinstance(value , io.TextIOWrapper) , f'value is not a {io.TextIOWrapper} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
-        _project_states[self.name] = value
-
-    def __get__(self , instance, owner):
-        value = _project_states.get(self.name , None)
-        assert value is None or isinstance(value , io.TextIOWrapper) , f'value is not a {io.TextIOWrapper} instance: {type(value)} , cannot be get from {owner}.{self.name}'
-        return value
-
 class _Email_Attachments:
     """custom class to record email path"""
     def __init__(self):
@@ -90,9 +76,9 @@ class _ProjStatesMeta(type):
     trainer = _Trainer()
     account = _Account()
     factor = _Factor()
-    log_file = _Log_File()
     email_attachments = _Email_Attachments()
     exit_files = _Exit_Files()
+    current_vb_level : int | None = None
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')

@@ -111,12 +111,14 @@ class WidgetParamInput(ScriptParamInput):
         if value is not None:
             default_option = self.value_to_option(value)
         else:
-            default_option = cache.get(self.script_key, 'option', self.name)
-            if default_option is None:
+            default_option = None
+            if cache.has(self.script_key, 'option', self.name):
+                default_option = cache.get(self.script_key, 'option', self.name)
+            elif cache.has(self.script_key, 'value', self.name):
                 default_option = self.value_to_option(cache.get(self.script_key, 'value', self.name))
-            #if default_option is None:
+            #elif self.widget_key in st.session_state:
             #    default_option = st.session_state.get(self.widget_key, None)
-            if default_option is None:
+            else:
                 default_option = self.value_to_option(self.default)
         return default_option
 

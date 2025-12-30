@@ -1,3 +1,5 @@
+import io
+
 from .state import ProjStates
 from .machine import MACHINE
 from ..abc import stderr
@@ -45,12 +47,28 @@ class _CallbackVbLevel:
     def __get__(self , instance, owner):
         return self.value
 
+class _Log_File:
+    def __init__(self):
+        self.value = None
+
+    def __set__(self , instance, value):
+        assert value is None or isinstance(value , io.TextIOWrapper) , f'value is not a {io.TextIOWrapper} instance: {type(value)} , cannot be set to {instance.__name__}.log_file'
+        if self.value is None:
+            stderr(f'Project Log File Reset to None' , color = 'lightred' , bold = True)
+        else:
+            stderr(f'Project Log File Set to a new file : {value.name}' , color = 'lightred' , bold = True)
+        self.value = value
+
+    def __get__(self , instance, owner):
+        return self.value
+
 class _ProjMeta(type):
     """meta class of ProjConfig"""
     verbosity = _Verbosity()
     max_verbosity = _MaxVerbosity()
     min_verbosity = _MinVerbosity()
     callback_vb_level = _CallbackVbLevel()
+    log_file = _Log_File()
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')
@@ -67,13 +85,14 @@ class Proj(metaclass=_ProjMeta):
         return [
             *MACHINE.info(),
             f'Proj Verbosity : {cls.verbosity}', 
+            f'Proj Log File  : {cls.log_file}',
             *cls.States.info(),
         ]
 
     @classmethod
     def print_info(cls , script_level : bool = True , identifier = 'project_initialized'):
         """
-        print project info 
+        output project info 
         for script level or os level (only once for all scripts in one os process)
         """
         import torch , os

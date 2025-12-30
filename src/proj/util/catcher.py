@@ -378,11 +378,11 @@ class LogWriter(OutputCatcher):
 
     def __enter__(self):
         super().__enter__()
-        Proj.States.log_file = self.log_file
+        Proj.log_file = self.log_file
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        Proj.States.log_file = None
+        Proj.log_file = None
         super().__exit__(exc_type, exc_val, exc_tb)
 
     def get_contents(self):
@@ -436,6 +436,7 @@ class TimedOutput:
     content: str | pd.DataFrame | pd.Series | Figure | None | Any
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
+    vb_level: int | None = None
     
     def __post_init__(self):
         self._time = datetime.now()
@@ -482,6 +483,11 @@ class TimedOutput:
         return self._time.strftime('%H:%M:%S.%f')[:-3]
 
     @property
+    def vb_level_str(self) -> str:
+        """Get the vb level string of the output item"""
+        return f'V' if self.vb_level is None or self.vb_level == 0 else f'{self.vb_level}'
+
+    @property
     def is_progress_bar(self) -> bool:
         """Check if the output item is a progress bar"""
         return self.infos.get('is_progress_bar' , False)
@@ -491,6 +497,7 @@ class TimedOutput:
         """Create a timed output item"""
         infos = {}
         valid = True
+        vb_level = Proj.States.current_vb_level
         if output_type is None:
             if isinstance(content , Figure): 
                 output_type = 'figure'
@@ -516,7 +523,7 @@ class TimedOutput:
             if content == '...': 
                 valid = False
 
-        return cls(output_type, content , infos , valid)
+        return cls(output_type, content , infos , valid , vb_level)
     
     def equivalent(self, other: 'TimedOutput') -> bool:
         """
@@ -547,6 +554,7 @@ class TimedOutput:
                 <tr class="output-row">
                     <td class="index-cell">{index}</td>
                     <td class="type-cell {self.format_type}-type">{self.type_str}</td>
+                    <td class="vb-level-cell">{self.vb_level_str}</td>
                     <td class="time-cell">{self.time_str}</td>
                     <td class="content-cell">
                         <div class="{self.format_type}-content">{text}</div>
@@ -693,11 +701,8 @@ class HtmlCatcher(OutputCatcher):
         
     def redirect_display_function(self):
         """redirect stdout, stderr, and proj.display.Display to catcher"""
-        self.stdout_deflector = OutputDeflector('stdout', self , self.keep_original , 'write_stdout')
-        self.stderr_deflector = OutputDeflector('stderr', self , self.keep_original , 'write_stderr')
-        self.stdout_deflector.start_catching()
-        self.stderr_deflector.start_catching()
-
+        self.stdout_deflector = OutputDeflector('stdout', self , self.keep_original , 'write_stdout').start_catching()
+        self.stderr_deflector = OutputDeflector('stderr', self , self.keep_original , 'write_stderr').start_catching()
         Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
 
     def restore_display_function(self):
@@ -856,6 +861,11 @@ class HtmlCatcher(OutputCatcher):
             width: 50px;
             min-width: 50px;
         }}
+        .col-vb-level {{
+            text-align: center;
+            width: 10px;
+            min-width: 1px;
+        }}
         .col-time {{
             text-align: center;
             width: 50px;
@@ -899,6 +909,13 @@ class HtmlCatcher(OutputCatcher):
             background-color: #7f1d1d;
             color: #f87171;
             border-left: 3px solid #ef4444;
+        }}
+        .vb-level-cell {{
+            padding: 1px 4px;
+            font-weight: bold;
+            text-align: center;
+            vertical-align: top;
+            font-size: 11px;
         }}
         .time-cell {{
             padding: 1px 4px;
@@ -997,6 +1014,7 @@ class HtmlCatcher(OutputCatcher):
                 <tr>
                     <th class="col-index">Id</th>
                     <th class="col-type">Type</th>
+                    <th class="col-vb-level">Vb</th>
                     <th class="col-time">Time</th>
                     <th class="col-content">Content</th>
                 </tr>

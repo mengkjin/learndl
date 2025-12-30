@@ -65,6 +65,7 @@ class Display:
         """
         if Silence.silent or Proj.verbosity < vb_level:
             return
+        Proj.States.current_vb_level = vb_level
         for callback in cls._callbacks_before:
             callback(obj)
             
@@ -77,6 +78,7 @@ class Display:
 
         for callback in cls._callbacks_after:
             callback(obj)
+        Proj.States.current_vb_level = None
 
     @staticmethod
     def data_frame(df : pd.DataFrame):

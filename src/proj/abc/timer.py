@@ -3,7 +3,7 @@ import numpy as np
 
 from datetime import datetime , timedelta
 from typing import Callable
-from .output import stdout
+from .output import stdout , stderr
 
 class Duration:
     """Duration class, used to calculate the duration of the input or the start time"""
@@ -69,6 +69,7 @@ class Duration:
 class Timer:
     """simple timer to count time"""
     def __init__(self , *args , silent = False , indent = 0 , at_enter : bool = False): 
+        stderr(f'Timer is deprecated, use Logger.Timer instead' , color = 'lightred' , bold = True)
         self.key = '/'.join(args)
         self.silent = silent
         self.indent = indent

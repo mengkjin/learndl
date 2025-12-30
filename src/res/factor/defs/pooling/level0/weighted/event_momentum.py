@@ -109,7 +109,7 @@ class SignedFactor:
 
         self.loaded = False
 
-    def eval(self , dates : np.ndarray | list[int] | int , indent : int = 1 , vb_level : int = 1):
+    def eval(self , dates : np.ndarray | list[int] | int , indent : int = 2 , vb_level : int = 2):
         if isinstance(dates , int):
             dates = [dates]
         self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , indent = indent , vb_level = vb_level)
@@ -321,7 +321,7 @@ class event_factor_momentum_test(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , vb_level : int = 1) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         if dates is None:
             dates = CALENDAR.slice(CALENDAR.td_within(start , end) , self.init_date , CALENDAR.updated())
@@ -364,7 +364,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , vb_level : int = 1) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         if dates is None:
             dates = CALENDAR.slice(CALENDAR.td_within(start , end) , self.init_date , CALENDAR.updated())

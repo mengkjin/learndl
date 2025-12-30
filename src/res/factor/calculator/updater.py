@@ -78,11 +78,11 @@ class _JobFactorDate(_BaseJob):
         """sort key of the job : (level , date , factor_name)"""
         return (self.level , self.date , self.factor_name)
 
-    def do(self , indent : int = 1 , vb_level : int = 1 , **kwargs) -> None:
+    def do(self , indent : int = 1 , **kwargs) -> None:
         """do the job"""
-        self.preview(indent = indent , vb_level = vb_level)
+        # self.preview(indent = indent , vb_level = vb_level) # will not preview since saving will output the information
         self.done = self.calc.update_day_factor(
-            self.date , vb_level = self.vb_level , overwrite = self.overwrite , catch_errors = CATCH_ERRORS)
+            self.date , indent = indent , vb_level = self.vb_level , overwrite = self.overwrite , catch_errors = CATCH_ERRORS)
     
     def preview(self , indent : int = 1 , vb_level : int = 1) -> None:
         """preview the job"""
@@ -104,11 +104,11 @@ class _JobFactorAll(_BaseJob):
         """sort key of the job"""
         return (self.level , self.factor_name)
 
-    def do(self , indent : int = 1 , vb_level : int = 1 , **kwargs) -> None:
+    def do(self , indent : int = 1 , **kwargs) -> None:
         """do the job"""
-        self.preview(indent = indent , vb_level = vb_level)
+        # self.preview(indent = indent , vb_level = self.vb_level) # will not preview since saving will output the information
         self.calc.update_all_factors(
-            start = self.start , end = self.end , vb_level = self.vb_level , overwrite = self.overwrite
+            start = self.start , end = self.end , indent = indent , vb_level = self.vb_level , overwrite = self.overwrite
         )
         self.done = True
 
@@ -136,13 +136,13 @@ class _JobFactorStats(_BaseJob):
         """sort key of the job"""
         return (self.year , self.factor_name)
 
-    def do(self , indent : int = 1 , vb_level : int = 1 , **kwargs) -> None:
+    def do(self , indent : int = 1 , **kwargs) -> None:
         """do the job"""
-        self.preview(indent = indent , vb_level = vb_level)
+        # self.preview(indent = indent , vb_level = self.vb_level) # will not preview since saving will output the information
         if self.stats_type == 'daily':
-            self.calc.update_daily_stats(self.dates() , vb_level = self.vb_level , overwrite = self.overwrite)
+            self.calc.update_daily_stats(self.dates() , indent = indent , vb_level = self.vb_level , overwrite = self.overwrite)
         elif self.stats_type == 'weekly':
-            self.calc.update_weekly_stats(self.dates() , vb_level = self.vb_level , overwrite = self.overwrite)
+            self.calc.update_weekly_stats(self.dates() , indent = indent , vb_level = self.vb_level , overwrite = self.overwrite)
         else:
             raise ValueError(f'Invalid stats type: {self.stats_type}')
         self.done = True
@@ -255,7 +255,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         failed_jobs = [job for job in cls.jobs if not job.done]
         if failed_jobs:
             Logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: {failed_jobs}', indent = indent)
-        else:
+        elif len(cls.jobs) > 0:
             Logger.success(f'All {len(cls.jobs)} Jobs are Processed Successfully!' , indent = indent , vb_level = vb_level)
 
     @classmethod
@@ -384,15 +384,15 @@ class StockFactorUpdater(BaseFactorUpdater):
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of stock factor update jobs"""
         DATAVENDOR.data_storage_control()
-        Logger.stdout(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)) , indent = indent , vb_level = vb_level + 1)
-        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
+        Logger.stdout(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)) , indent = indent , vb_level = vb_level)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
         Logger.success(f'Stock Factor Update of {group} : {sum(job.done for job in jobs)} / {len(jobs)}' , indent = indent , vb_level = vb_level)
         if failed_jobs := [job for job in jobs if not job.done]: 
             Logger.alert1(f'Failed Stock Factors: {failed_jobs}', indent = indent)
             if cls.multi_thread:
                 # if multi_thread is True, auto retry failed jobs
                 Logger.stdout(f'Auto Retry Failed Stock Factors...' , indent = indent)
-                parallel(cls.jobs_dict(failed_jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
+                parallel(cls.jobs_dict(failed_jobs) , method = cls.multi_thread , indent = indent + 1)
                 if failed_jobs := [job for job in jobs if not job.done]:
                     Logger.alert1(f'Failed Stock Factors Again: {failed_jobs}', indent = indent)
 
@@ -412,7 +412,7 @@ class MarketFactorUpdater(BaseFactorUpdater):
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
 
 class PoolingFactorUpdater(BaseFactorUpdater):
     """manager of pooling factor update jobs"""
@@ -430,7 +430,7 @@ class PoolingFactorUpdater(BaseFactorUpdater):
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
 
 class AffiliateFactorUpdater(BaseFactorUpdater):
     """manager of affiliate factor update jobs"""
@@ -448,7 +448,7 @@ class AffiliateFactorUpdater(BaseFactorUpdater):
                            indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
     
 class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""
@@ -468,4 +468,4 @@ class FactorStatsUpdater(BaseFactorUpdater):
         Logger.stdout(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates' , indent = indent , vb_level = vb_level)
         if len(jobs) <= 10:
             Logger.stdout(f'Jobs included: {jobs}' , indent = indent , vb_level = vb_level)
-        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1 , vb_level = vb_level + 1)
+        parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
