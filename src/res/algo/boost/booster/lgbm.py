@@ -9,7 +9,6 @@ from typing import Any
 
 from src.math import match_values
 from src.proj import Logger
-from src.proj.util import Display
 from ..util import BasicBoosterModel , BoosterInput
 
 PLOT_PATH : Path | None = None
@@ -109,7 +108,7 @@ class LgbmPlot:
             plt.yscale(yscale)
         plt.close(fig)
         if show_plot: 
-            Display(fig)
+            Logger.Display(fig)
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)

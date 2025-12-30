@@ -13,8 +13,6 @@ from src.proj.env import PATH , MACHINE , Proj
 from src.proj.abc import Duration
 from src.proj.log import Logger
 
-from .display import Display
-
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 
     'HtmlCatcher' , 'MarkdownCatcher' , 'WarningCatcher' ,
@@ -445,7 +443,7 @@ class TimedOutput:
         return self.valid
     
     @property
-    def format_type(self) -> Literal['stdout' , 'stderr' , 'dataframe' , 'image'] | str:
+    def type_fmt(self) -> Literal['stdout' , 'stderr' , 'dataframe' , 'image'] | str:
         ft = {
             'stdout' : 'stdout',
             'stderr' : 'stderr',
@@ -485,7 +483,7 @@ class TimedOutput:
     @property
     def vb_level_str(self) -> str:
         """Get the vb level string of the output item"""
-        return f'V' if self.vb_level is None or self.vb_level == 0 else f'{self.vb_level}'
+        return f'' if self.vb_level is None or self.vb_level == 0 else f'{self.vb_level}'
 
     @property
     def is_progress_bar(self) -> bool:
@@ -553,19 +551,17 @@ class TimedOutput:
         text = f"""
                 <tr class="output-row">
                     <td class="index-cell">{index}</td>
-                    <td class="type-cell {self.format_type}-type">{self.type_str}</td>
-                    <td class="vb-level-cell">{self.vb_level_str}</td>
-                    <td class="time-cell">{self.time_str}</td>
-                    <td class="content-cell">
-                        <div class="{self.format_type}-content">{text}</div>
-                    </td>
+                    <td class="type-cell {self.type_fmt}-type">{self.type_str}</td>
+                    <td class="vb-level-cell {self.type_fmt}-bg">{self.vb_level_str}</td>
+                    <td class="time-cell {self.type_fmt}-bg">{self.time_str}</td>
+                    <td class="content-cell {self.type_fmt}-bg {self.type_fmt}-content">{text}</td>
                 </tr>
 """
         return text
 
 class HtmlCatcher(OutputCatcher):
     """
-    Html catcher for stdout, stderr, dataframe, and image (use proj.display.Display to display), export to html file at exit
+    Html catcher for stdout, stderr, dataframe, and image (use Logger.display to display), export to html file at exit
     example:
         catcher = HtmlCatcher()
         with catcher:
@@ -700,16 +696,16 @@ class HtmlCatcher(OutputCatcher):
             export_path.write_text(html_content, encoding='utf-8')
         
     def redirect_display_function(self):
-        """redirect stdout, stderr, and proj.display.Display to catcher"""
+        """redirect stdout, stderr, and Logger.Display to catcher"""
         self.stdout_deflector = OutputDeflector('stdout', self , self.keep_original , 'write_stdout').start_catching()
         self.stderr_deflector = OutputDeflector('stderr', self , self.keep_original , 'write_stderr').start_catching()
-        Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
+        Logger.Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
 
     def restore_display_function(self):
         """restore stdout, stderr, and display_module functions"""
         self.stdout_deflector.end_catching()
         self.stderr_deflector.end_catching()
-        Display.reset_callbacks()
+        Logger.Display.reset_callbacks()
     
     def generate_html(self):
         """generate html file with time ordered outputs"""
@@ -877,9 +873,12 @@ class HtmlCatcher(OutputCatcher):
         }}
         .output-row {{
             border-bottom: 1px solid #3e3e42;
+            transition: background-color 0.15s ease;
         }}
         .output-row:hover {{
-            background-color: #2d2d30;
+            outline: 2px solid white;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+            transition: all 0.25s ease;
         }}
         .output-row:last-child {{
             border-bottom: none;
@@ -910,6 +909,16 @@ class HtmlCatcher(OutputCatcher):
             color: #f87171;
             border-left: 3px solid #ef4444;
         }}
+        .dataframe-type {{
+            background-color: #1e3a8a;
+            color: #60a5fa;
+            border-left: 3px solid #3b82f6;
+        }}
+        .image-type {{
+            background-color: #7c2d12;
+            color: #fb923c;
+            border-left: 3px solid #ea580c;
+        }}
         .vb-level-cell {{
             padding: 1px 4px;
             font-weight: bold;
@@ -930,31 +939,31 @@ class HtmlCatcher(OutputCatcher):
             vertical-align: top;
             word-wrap: break-word;
             word-break: break-word;
-        }}
-        .stdout-content {{
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            white-space: pre-wrap;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 12px;
-        }}
-        .stderr-content {{
-            background-color: #2d1b1b;
-            color: #ffcccc;
-            white-space: pre-wrap;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 12px;
-        }}
-        .dataframe-type {{
-            background-color: #1e3a8a;
-            color: #60a5fa;
-            border-left: 3px solid #3b82f6;
-        }}
-        .dataframe-content {{
-            padding: 1px 4px;
-            border-radius: 1px;
             overflow-x: auto;
             max-width: 100%;
+            font-size: 11px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }}
+        .stdout-bg {{
+        }}
+        .stderr-bg {{
+            background-color: #2d1b1b ;
+        }}
+        .dataframe-bg {{
+            background-color: #1B1D2D;
+        }}
+        .image-bg {{
+            background-color: #2D271B;
+        }}
+        .stdout-content {{
+            white-space: pre-wrap;
+        }}
+        .stderr-content {{
+            white-space: pre-wrap;
+        }}
+        .dataframe-content {{
+        }}
+        .image-content {{
         }}
         .dataframe table {{
             border-collapse: collapse;
@@ -987,16 +996,6 @@ class HtmlCatcher(OutputCatcher):
             padding: 8px;
             border-radius: 3px;
             font-size: 11px;
-        }}
-        .image-type {{
-            background-color: #7c2d12;
-            color: #fb923c;
-            border-left: 3px solid #ea580c;
-        }}
-        .image-content {{
-            padding: 1px 4px;
-            border-radius: 1px;
-            text-align: center;
         }}
     </style>
 </head>

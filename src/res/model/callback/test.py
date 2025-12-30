@@ -5,7 +5,6 @@ from matplotlib.figure import Figure
 
 from src.proj import Logger , DB
 from src.proj.func import dfs_to_excel , figs_to_pdf
-from src.proj.util import Display
 
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI
@@ -98,7 +97,7 @@ class BasicTestResult(BaseCallBack):
             df_display = self.status.test_summary
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]           
-            Display(df_display)
+            Logger.Display(df_display)
             
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}
@@ -213,11 +212,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         df[col] = df[col].map(lambda x:f'{x:.3f}')
                     elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
                         df[col] = df[col].map(lambda x:f'{x:.3%}')
-                Display(df)
+                Logger.Display(df)
 
             for name in self.display_figures:
                 Logger.caption(f'Figure: {name.title()}:')
-                Display(self.test_figures[name])
+                Logger.Display(self.test_figures[name])
 
             dfs_to_excel(self.test_results , self.path_data , print_prefix='Analytic datas')
             figs_to_pdf(self.test_figures , self.path_plot , print_prefix='Analytic plots')

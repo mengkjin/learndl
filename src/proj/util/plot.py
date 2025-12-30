@@ -11,7 +11,7 @@ from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Literal
 
-from src.proj.util import Display
+from src.proj.log import Logger
 
 __all__ = ['PlotMultipleData' , 'SubPlotData' , 'PlotFactorData' , 'plot_table' , 'get_twin_axes' , 'set_xaxis' , 'set_yaxis' , 'sns_lineplot' , 'sns_barplot']
 
@@ -136,7 +136,7 @@ class PlotFactorData:
         plt.tight_layout()
         plt.close(self.fig)
         if self.show: 
-            Display(self.fig)
+            Logger.Display(self.fig)
 
     def title_suffix(self):
         if self.name_key:

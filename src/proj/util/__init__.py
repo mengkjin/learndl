@@ -2,7 +2,6 @@ from src.proj.abc.singleton import SingletonMeta , SingletonABCMeta
 
 from .basic import *
 
-from .display import Display
 from .catcher import (
     IOCatcher , LogWriter , 
     HtmlCatcher , MarkdownCatcher , WarningCatcher)

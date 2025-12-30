@@ -9,7 +9,6 @@ from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , Logger
 from src.proj.func import dfs_to_excel , figs_to_pdf
-from src.proj.util import Display
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
@@ -170,7 +169,7 @@ class BaseFactorAnalyticTest(ABC):
         return {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
     
     def display_figs(self):
-        [Display(fig) for fig in self.get_figs().values()]
+        [Logger.Display(fig) for fig in self.get_figs().values()]
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()

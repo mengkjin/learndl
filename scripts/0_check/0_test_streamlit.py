@@ -39,15 +39,19 @@
 #       desc : seed
 #       required : False
 #       default : 42.
-import time , random , sys
+import time , random , sys , tqdm
 from src.proj import Logger
 from src.proj.util import ScriptTool
+
+import pandas as pd
+import matplotlib.pyplot as plt
 
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
 def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
     Logger.stdout('This will be caught')
     with Logger.ParagraphI('main part'):
         with Logger.Timer('abc'):
+            print('this is a print message')
             Logger.critical('critical message')
             Logger.error('error message')
             Logger.warning('warning message')
@@ -76,6 +80,17 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
             Logger.stdout(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}' , indent = 1)
             Logger.stdout(f'task_key: {ScriptTool.get_value('task_key')}' , indent = 2)
             Logger.log_only('this is a log only message')
+
+            df = pd.DataFrame({'a':[1,2,3,4,5,6,7,8,9,10],'b':[4,5,6,7,8,9,10,11,12,13]})
+            Logger.Display(df)
+            fig = plt.figure()
+            plt.plot([1,2,3],[4,5,6])
+            plt.close(fig)
+            Logger.Display(fig)
+
+            for i in tqdm.tqdm(range(100) , desc='processing'):
+                pass
+
             if (rnd := random.random()) < 0.5:
                 Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')
             else:

@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any , ClassVar
 
 from src.proj import PATH , MACHINE , Logger , Duration , Proj
-from src.proj.util import Display
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 
@@ -34,7 +33,7 @@ class CallbackTimer(BaseCallBack):
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
             Logger.caption('Table: Callback Time Costs:')
-            Display(df)  
+            Logger.Display(df)  
             
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''

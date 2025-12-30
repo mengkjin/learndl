@@ -7,7 +7,6 @@ from typing import Literal , Type
 
 from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
 from src.proj.func import dfs_to_excel , figs_to_pdf
-from src.proj.util import Display
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -276,7 +275,7 @@ class TradingPort:
         if display:
             for name , fig in figs.items():
                 Logger.caption(f'Figure: {name.title()}:' , vb_level = 0)
-                Display(fig)
+                Logger.Display(fig)
 
         self.analyze_results = rslts
         self.analyze_figs = figs

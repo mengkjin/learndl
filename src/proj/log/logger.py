@@ -13,6 +13,8 @@ from typing import Any , Literal , Type
 from src.proj.env import MACHINE , PATH , Proj
 from src.proj.abc import Duration , stdout , stderr , FormatStr
 
+from .display import Display
+
 _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
 _levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
 _levels_palette : list[str] = ['lightgreen' , 'gray' , 'lightyellow' , 'lightred' , 'purple']
@@ -141,6 +143,7 @@ _raw_config = log_config()
 _raw_logger = new_log(_raw_config)
 
 class Logger:
+    Display = Display
     """
     custom colored log , config at PATH.conf / 'proj' / 'logger_settings.yaml'
     method include:
@@ -278,22 +281,22 @@ class Logger:
         new_logger_output('debug' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def info(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def info(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Info level stderr"""
         new_logger_output('info' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def warning(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def warning(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Warning level stderr"""
         new_logger_output('warning' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def error(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def error(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Error level stderr"""
         new_logger_output('error' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def critical(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def critical(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
         """Critical level stderr"""
         new_logger_output('critical' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
@@ -320,9 +323,9 @@ class Logger:
             for level , color in zip(_levels , _levels_palette):
                 if not cls._conclusions[level]:
                     continue
-                new_stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = color)
+                new_stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = color , vb_level = 0)
                 for conclusion in cls._conclusions[level]:
-                    new_stdout(conclusion , indent = 1)
+                    new_stdout(conclusion , indent = 1 , vb_level = 0)
                     conclusion_strs.append(f'{level.upper()}: {conclusion}')
                 cls._conclusions[level].clear()
         return '\n'.join(conclusion_strs)
