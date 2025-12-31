@@ -515,6 +515,8 @@ class BaseTrainer(ModelStreamLine):
             self.init_callbacks(**kwargs)
             self.wrap_callbacks()
             Proj.States.trainer = self
+            Proj.States.export_html_files.append(self.path_training_output)
+            Proj.States.exit_files.extend(self.result_package)
         
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
@@ -582,6 +584,8 @@ class BaseTrainer(ModelStreamLine):
     def model_num(self): return self.status.model_num
     @property
     def model_submodel(self): return self.status.model_submodel
+    @property
+    def model_str(self): return f'{self.config.model_name}.{self.model_num}.{self.model_submodel}.{self.model_date}'
     @property
     def prev_model_date(self): return self.data.prev_model_date(self.model_date)
     @property
@@ -832,6 +836,8 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def model_num(self): return self.trainer.model_num
     @property
     def model_submodel(self): return self.trainer.model_submodel
+    @property
+    def model_str(self): return self.trainer.model_str
 
 class BaseCallBack(ModelStreamLineWithTrainer):
     CB_ORDER : int = 0

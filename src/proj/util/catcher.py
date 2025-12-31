@@ -148,7 +148,7 @@ def _figure_to_html(fig: Figure | Any):
     try:
         if fig.get_axes():  # check if figure has content
             if image_base64 := _figure_to_base64(fig):
-                content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">'
+                content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 2px 0;">'
     except Exception as e:
         Logger.error(f"Error capturing matplotlib figure: {e}")
         content = f'<div class="figure-fallback"><pre>Error capturing matplotlib figure: {e}</pre></div>'
@@ -430,7 +430,7 @@ class WarningCatcher:
 @dataclass
 class TimedOutput:
     """time ordered output item"""
-    type: str
+    type: Literal['stdout' , 'stderr' , 'data_frame' , 'figure'] | str
     content: str | pd.DataFrame | pd.Series | Figure | None | Any
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
@@ -438,32 +438,37 @@ class TimedOutput:
     
     def __post_init__(self):
         self._time = datetime.now()
+        self.type_fmt = self.get_type_fmt()
+        self.type_str = self.get_type_str()
 
     def __bool__(self):
         return self.valid
     
-    @property
-    def type_fmt(self) -> Literal['stdout' , 'stderr' , 'dataframe' , 'image'] | str:
-        ft = {
-            'stdout' : 'stdout',
-            'stderr' : 'stderr',
-            'data_frame' : 'dataframe',
-            'figure' : 'image',
-        }[self.type]
-        return ft
+    def get_type_fmt(self) -> Literal['stdout' , 'stderr' , 'dataframe' , 'image'] | str:
+        match self.type:
+            case 'stdout':
+                return 'stdout'
+            case 'stderr':
+                return 'stderr'
+            case 'data_frame':
+                return 'dataframe'
+            case 'figure':
+                return 'image'
+            case _:
+                return 'other'
     
-    @property
-    def type_str(self) -> Literal['STDERR' , 'STDOUT' , 'TABLE' , 'IMAGE'] | str:
-        if self.type == 'stderr':
-            return 'STDERR'
-        elif self.type == 'stdout':
-            return 'STDOUT'
-        elif self.type == 'data_frame':
-            return 'TABLE'
-        elif self.type == 'figure':
-            return 'IMAGE'
-        else:
-            raise ValueError(f"Unknown output type: {self.type}")
+    def get_type_str(self) -> Literal['STDERR' , 'STDOUT' , 'TABLE' , 'IMAGE'] | str:
+        match self.type:
+            case 'stderr':
+                return 'STDERR'
+            case 'stdout':
+                return 'STDOUT'
+            case 'data_frame':
+                return 'TABLE'
+            case 'figure':
+                return 'IMAGE'
+            case _:
+                return self.type.upper()
 
     @property
     def create_time(self):
@@ -484,11 +489,6 @@ class TimedOutput:
     def vb_level_str(self) -> str:
         """Get the vb level string of the output item"""
         return f'' if self.vb_level is None or self.vb_level == 0 else f'{self.vb_level}'
-
-    @property
-    def is_progress_bar(self) -> bool:
-        """Check if the output item is a progress bar"""
-        return self.infos.get('is_progress_bar' , False)
     
     @classmethod
     def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
@@ -502,7 +502,10 @@ class TimedOutput:
             elif isinstance(content , pd.DataFrame): 
                 output_type = 'data_frame'
             else: 
-                raise ValueError(f"Unknown output type: {type(content)}")
+                if not isinstance(content , str):
+                    Logger.warning(f"Unknown output type for catcher.TimedOutput.create: {type(content)}")
+                    content = str(content)
+                output_type = 'stdout'
         if output_type == 'stderr':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
             r0 = re.search(r"^(.*?)(\d{1,3})%\|", content) # capture text before XX%|
@@ -515,7 +518,8 @@ class TimedOutput:
                     valid = False
                 elif int(r0.group(2)) != 100 or (int(r1.group(1)) != int(r1.group(2))): # not finished
                     valid = False
-                content = f'(Progress Bar) {content.strip()}'
+                content = content.strip()
+                output_type = 'tqdm'
         elif output_type == 'stdout':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
             if content == '...': 
@@ -530,22 +534,18 @@ class TimedOutput:
         """
         if self.type in ['data_frame' , 'figure']:
             return False
-        if self.type == other.type:
-            return str(self.content) == str(other.content)
-        return False
+        return self.type == other.type and str(self.content) == str(other.content)
     
     def to_html(self , index: int = 0):
         """Convert the output item to html"""
         if self.content is None: 
-            return None
-        if self.type in ['stdout' , 'stderr']:
-            text = _str_to_html(self.content)
+            text = None
         elif self.type == 'data_frame':
             text = _dataframe_to_html(self.content)
         elif self.type == 'figure':
             text = _figure_to_html(self.content)
         else:
-            raise ValueError(f"Unknown output type: {self.type}")
+            text = _str_to_html(self.content)
         if text is None: 
             return None
         text = f"""
@@ -681,6 +681,8 @@ class HtmlCatcher(OutputCatcher):
     def export(self , export_path: Path | None = None):
         """Export the catcher to all paths in the export file list"""
         self.add_export_file(export_path)
+        for file in Proj.States.export_html_files:
+            self.add_export_file(file)
         if not self.export_file_list:
             return
 
@@ -761,18 +763,30 @@ class HtmlCatcher(OutputCatcher):
         if self.kwargs:
             key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , key_width)
         finish_time = datetime.now()
-        infos = {
+        script_infos = {
             'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
+            'Command' : ' '.join(sys.argv),
             'Start at' : f'{self.start_time.strftime("%Y-%m-%d %H:%M:%S")}',
             'Finish at' : f'{finish_time.strftime("%Y-%m-%d %H:%M:%S")}',
             'Duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
-            'Outputs Num' : len(self.outputs)
         }
-        infos_block = '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
-                                 for key, value in infos.items()])
-        kwargs_block = '\n'.join([f'<div class="add-kwargs"><span class="add-key">{key}</span><span class="add-seperator">=</span><span class="add-value">{value}</span></div>' 
-                                  for key, value in self.kwargs.items()])
+        other_types : list[str] = list(set([output.type_str for output in self.outputs if output.type not in ['stdout' , 'stderr' , 'dataframe' , 'image']]))
+        output_infos = {
+            'Total #' : len(self.outputs),
+            'Stdout #' : sum(1 for output in self.outputs if output.type == 'stdout'),
+            'Stderr #' : sum(1 for output in self.outputs if output.type == 'stderr'),
+            'Dataframe #' : sum(1 for output in self.outputs if output.type == 'dataframe'),
+            'Image #' : sum(1 for output in self.outputs if output.type == 'image'),
+            **{type.title() + ' #' : sum(1 for output in self.outputs if output.type_str == type) for type in other_types},
+        }
+        output_infos = {key: value for key, value in output_infos.items() if value > 0}
+        infos_script = '<div class="add-infos add-title"> INFORMATION </div>' + \
+            '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
+                       for key, value in script_infos.items()])
+        infos_outputs = '<div class="add-infos add-title"> NUMBER OF OUTPUTS </div>' + \
+            '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
+                        for key, value in output_infos.items()])
         
         head = f"""
 <!DOCTYPE html>
@@ -799,9 +813,10 @@ class HtmlCatcher(OutputCatcher):
             border-radius: 5px;
             margin-bottom: 20px;
             border-left: 4px solid #007acc;
+            border-right: 4px solid #007acc;
         }}
-        .add-kwargs {{
-            color: #007acc;
+        .footer {{
+            color: #888;
             font-size: 11px;
             display: flex;
         }}
@@ -811,6 +826,7 @@ class HtmlCatcher(OutputCatcher):
             display: flex;
         }}
         .add-title {{
+            color: #007acc;
             font-size: 12px;
             font-weight: bold;
         }}
@@ -833,7 +849,8 @@ class HtmlCatcher(OutputCatcher):
             background-color: #252526;
             border-radius: 5px;
             overflow: hidden;
-            border: 1px solid #3e3e42;
+            border-left: 4px solid gray;
+            border-right: 4px solid gray;
         }}
         .table-header {{
             background-color: #2d2d30;
@@ -844,7 +861,8 @@ class HtmlCatcher(OutputCatcher):
         .table-header th {{
             padding: 12px 4px;
             font-weight: bold;
-            border-bottom: 2px solid #007acc;
+            border-top: 2px solid #3a3a3a;
+            border-bottom: 2px solid #3a3a3a;
             color: #ffffff;
         }}
         .col-index {{
@@ -853,118 +871,127 @@ class HtmlCatcher(OutputCatcher):
             min-width: 1px;
         }}
         .col-type {{
+            border-left: 0.5px solid #3a3a3a;
             text-align: center;
             width: 50px;
             min-width: 50px;
         }}
         .col-vb-level {{
+            border-left: 0.5px solid #3a3a3a;
             text-align: center;
             width: 10px;
             min-width: 1px;
         }}
         .col-time {{
+            border-left: 0.5px solid #3a3a3a;
             text-align: center;
             width: 50px;
             min-width: 50px;
         }}
         .col-content {{
+            border-left: 0.5px solid #3a3a3a;
             text-align: left;
             width: auto;
         }}
-        .output-row {{
-            border-bottom: 1px solid #3e3e42;
+        .output-row td {{
+            border-bottom: 0.5px solid #3a3a3a;
             transition: background-color 0.15s ease;
+            font-weight: bold;
+            vertical-align: top;
+            font-size: 11px;
+            padding: 1px 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         }}
-        .output-row:hover {{
+        .output-row:last-child td {{
+            border-bottom: 2px solid #3a3a3a;
+        }}
+        .output-row:hover{{
             outline: 2px solid white;
-            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
             transition: all 0.25s ease;
         }}
-        .output-row:last-child {{
-            border-bottom: none;
+        .output-row:hover td {{
+            background-color: #3b3b3b !important;
         }}
         .index-cell {{
-            padding: 1px 4px;
-            font-weight: bold;
             text-align: center;
-            vertical-align: top;
-            font-size: 11px;
         }}
         .type-cell {{
-            padding: 1px 4px;
-            font-weight: bold;
+            border-left: 0.5px solid #3a3a3a;
             text-align: center;
-            vertical-align: top;
-            font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }}
-        .stdout-type {{
-            background-color: #1a472a;
-            color: #4ade80;
-            border-left: 3px solid #22c55e;
-        }}
-        .stderr-type {{
-            background-color: #7f1d1d;
-            color: #f87171;
-            border-left: 3px solid #ef4444;
-        }}
-        .dataframe-type {{
-            background-color: #1e3a8a;
-            color: #60a5fa;
-            border-left: 3px solid #3b82f6;
-        }}
-        .image-type {{
-            background-color: #7c2d12;
-            color: #fb923c;
-            border-left: 3px solid #ea580c;
-        }}
         .vb-level-cell {{
-            padding: 1px 4px;
-            font-weight: bold;
+            border-left: 0.5px solid #3a3a3a;
             text-align: center;
-            vertical-align: top;
-            font-size: 11px;
+            color: #9ca3af;
         }}
         .time-cell {{
-            padding: 1px 4px;
-            font-size: 11px;
+            border-left: 0.5px solid #3a3a3a;
             color: #9ca3af;
-            vertical-align: top;
             white-space: nowrap;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         }}
         .content-cell {{
-            padding: 1px 4px;
-            vertical-align: top;
+            border-left: 0.5px solid #3a3a3a;
             word-wrap: break-word;
             word-break: break-word;
             overflow-x: auto;
             max-width: 100%;
-            font-size: 11px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }}
+        .stdout-type {{
+            color: #4dff8e;
+            border-left: 3px solid #4dff8e;
+            background-color: #00802f;
         }}
         .stdout-bg {{
-        }}
-        .stderr-bg {{
-            background-color: #2d1b1b ;
-        }}
-        .dataframe-bg {{
-            background-color: #1B1D2D;
-        }}
-        .image-bg {{
-            background-color: #2D271B;
+            background-color: #031909;
         }}
         .stdout-content {{
             white-space: pre-wrap;
         }}
+
+        .stderr-type {{
+            color: #ff4d4d;
+            border-left: 3px solid #ff4d4d;
+            background-color: #800000;
+        }}
+        .stderr-bg {{
+            background-color: #190303;
+        }}
         .stderr-content {{
             white-space: pre-wrap;
         }}
-        .dataframe-content {{
+
+        .dataframe-type {{
+            color: #4d72ff;
+            border-left: 3px solid #4d72ff;
+            background-color: #001a80;
         }}
-        .image-content {{
+        .dataframe-bg {{
+            background-color: #000a33;
         }}
+
+        .image-type {{
+            color: #ffb84d;
+            border-left: 3px solid #ffb84d;
+            background-color: #804c00;
+        }}
+        .image-bg {{
+            background-color: #191103;
+        }}
+
+        .other-type {{
+            color: #db4dff;
+            border-left: 3px solid #db4dff;
+            background-color: #660080;
+        }}
+        .other-bg {{
+            background-color: #150319;
+        }}
+        .other-content {{
+            white-space: pre-wrap;
+        }}
+
         .dataframe table {{
             border-collapse: collapse;
             width: auto;
@@ -1003,10 +1030,10 @@ class HtmlCatcher(OutputCatcher):
     <div class="container">
         <div class="header">
             <h1>{self.title.title()}</h1>
-            <div class="add-infos"><span class="add-title"> INFORMATION </span></div>
-            {infos_block}
-            <div class="add-kwargs"><span class="add-title"> KEYWORD ARGUMENTS </span></div>
-            {kwargs_block}
+            {infos_script}
+            <br>
+            {infos_outputs}
+            <br>
         </div>
         <table class="output-table">
             <thead class="table-header">
@@ -1028,6 +1055,9 @@ class HtmlCatcher(OutputCatcher):
         tail = """
             </tbody>
         </table>
+        <div class="footer">
+            <p>End of Table</p>
+        </div>
     </div>
 </body>
 </html>

@@ -71,6 +71,14 @@ class _Exit_Files:
     def __get__(self , instance, owner) -> list[Path | str]:
         return _project_states[self.name]
 
+class _Export_Html_Files:
+    """custom class to record export html files"""
+    def __init__(self):
+        self.name = 'export_html_files'
+        _project_states[self.name] = []
+    def __get__(self , instance, owner) -> list[Path | str]:
+        return _project_states[self.name]
+
 class _ProjStatesMeta(type):
     """meta class of ProjStates, allow to set attributes of _meta_slots"""
     trainer = _Trainer()
@@ -78,6 +86,7 @@ class _ProjStatesMeta(type):
     factor = _Factor()
     email_attachments = _Email_Attachments()
     exit_files = _Exit_Files()
+    export_html_files = _Export_Html_Files()
     current_vb_level : int | None = None
 
     def __call__(cls, *args, **kwargs):
@@ -97,7 +106,7 @@ class ProjStates(metaclass=_ProjStatesMeta):
     @classmethod
     def info(cls) -> list[str]:
         """return the machine info list"""
-        names = ', '.join(_project_states.keys())
+        names = ', '.join([key for key , value in _project_states.items() if value])
         return [
             f'Proj States    : {names}', 
         ]

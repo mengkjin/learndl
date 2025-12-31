@@ -1,4 +1,4 @@
-from src.proj import PATH , MACHINE , Logger , Proj
+from src.proj import PATH , MACHINE , Logger
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
@@ -32,8 +32,6 @@ class ModelTrainer(BaseTrainer):
             override['short_test'] = short_test
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , selection = selection , 
                   schedule_name = schedule_name , start = start , end = end , **kwargs)
-        HtmlCatcher.AddExportFile(app.path_training_output)
-        Proj.States.exit_files.extend(app.result_package)
         return app
 
     @classmethod
@@ -44,6 +42,15 @@ class ModelTrainer(BaseTrainer):
             for model in PredictionModel.SelectModels():
                 with Logger.ParagraphI(f'Updating Model {model.model_path}'):
                     cls.initialize(0 , 1 , 0 , model.model_path).go()
+
+    @classmethod
+    def resume_testing_models(cls):
+        '''
+        Resume testing prediction models:
+        '''
+        for model in PredictionModel.SelectModels():
+            with Logger.ParagraphI(f'Resume Testing Model {model.model_path}'):
+                cls.initialize(2 , 1 , 0 , model.model_path).go()
 
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 

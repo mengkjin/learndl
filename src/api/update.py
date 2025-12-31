@@ -1,9 +1,12 @@
 from src.proj import Logger , MACHINE , CALENDAR
+from src.proj.util import Options
 from src.proj.func import print_disk_space_info
+from src.res.model.util import PredictionModel
 
 from .data import DataAPI
 from .factor import FactorAPI
 from .model import ModelAPI
+
 from .trading import TradingAPI
 from .notification import NotificationAPI
 
@@ -48,5 +51,19 @@ class UpdateAPI:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
         ModelAPI.update_models()
+
+    @classmethod
+    def resume_testing(cls):
+        models = PredictionModel.SelectModels()
+        factors = Options.available_factors()
+        Logger.remark(f'Resume Testing {len(models) + len(factors)} models and factors')
+        [Logger.remark(f'Resume Testing Model {model.model_path.name}' , indent = 1) for model in models]
+        [Logger.remark(f'Resume Testing Factor {factor}' , indent = 1) for factor in factors]
+        for model in PredictionModel.SelectModels():
+            with Logger.ParagraphI(f'Resume Testing Model {model.model_path}'):
+                ModelAPI.test_model(model.model_path.name , resume = 1)
+        for factor in Options.available_factors():
+            with Logger.ParagraphI(f'Resume Testing Factor {factor}'):
+                ModelAPI.test_factor(factor , resume = 1)
         
     

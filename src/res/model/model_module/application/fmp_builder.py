@@ -123,7 +123,7 @@ class ModelPortfolioBuilder:
         ret = {name:last_dates.get(name , self.reg_model.start_dt) for name in fmp_names}
         return ret
     
-    def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : int = 2):
+    def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : int = 3):
         self.load_accounts(resume = resume , indent = indent + 1 , vb_level = vb_level + 1)
         self._update_account_record = []
 
@@ -167,7 +167,7 @@ class ModelPortfolioBuilder:
             else:
                 Logger.skipping(f'Model portfolios for {model} is up to date' , indent = indent + 1 , vb_level = vb_level)
 
-            md.accounting(resume = True , deploy = True , indent = indent + 1 , vb_level = vb_level + 1)
+            md.accounting(resume = True , deploy = True , indent = indent + 1 , vb_level = vb_level + 2)
             if md._update_account_record:
                 Logger.success(f'Update model portfolios accounting for {model} , len={len(md._update_account_record)}' , indent = indent + 1 , vb_level = vb_level)
             else:

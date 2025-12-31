@@ -1,6 +1,7 @@
 from typing import Any , Literal
 
 from src.proj import Logger
+from src.proj.util import Options
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
 from src.res.factor.api import RiskModelUpdater , FactorCalculatorAPI , FactorTestAPI
@@ -156,3 +157,10 @@ class FactorAPI:
         factor = factor_calc.Factor(dates , normalize = True , ignore_error = False)
         factor.full_analyze(nday = step , lag = lag)
         return factor
+
+    @classmethod
+    def resume_testing_factors(cls):
+        from src.api import ModelAPI
+        for factor in Options.available_factors():
+            with Logger.ParagraphI(f'Resume Testing Factor {factor}'):
+                ModelAPI.test_factor(factor , resume = 1)

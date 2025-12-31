@@ -891,8 +891,7 @@ class TrainConfig(TrainParam):
         self.parser_select(selection , vb_level) 
         return self
 
-    def print_out(self):
-        color = None
+    def print_out(self , color : str | None = None):
         info_strs : list[tuple[int , str , str]] = [] # indent , key , value
         info_strs.append((0 , 'Model Name' , self.model_name))
         if self.module_type in ['db' , 'factor']:
@@ -903,19 +902,19 @@ class TrainConfig(TrainParam):
             info_strs.append((0 , 'Model Module' , f'{self.model_module}'))
             if self.module_type == 'booster':
                 if self.model_module != self.model_booster_type:
-                    info_strs.append((1 , 'Booster Type' , f'{self.model_booster_type}'))
+                    info_strs.append((0 , 'Booster Type' , f'{self.model_booster_type}'))
                 if self.model_booster_optuna:
-                    info_strs.append((1 , 'Booster Params' , f'Optuna for {self.model_booster_optuna_n_trials} trials'))
+                    info_strs.append((0 , 'Booster Params' , f'Optuna for {self.model_booster_optuna_n_trials} trials'))
                 else:
-                    info_strs.append((1 , 'Booster Params' , ''))
+                    info_strs.append((0 , 'Booster Params' , ''))
                     for k , v in self.Model.Param.items():
                         info_strs.append((2 , k , f'{v}'))
             else:
                 if self.model_booster_head:
-                    info_strs.append((1 , 'Use Booster Head' , f'{self.model_booster_head}'))
-                info_strs.append((1 , 'Model Params' , ''))
+                    info_strs.append((0 , 'Use Booster Head' , f'{self.model_booster_head}'))
+                info_strs.append((0 , 'Model Params' , ''))
                 for k , v in self.Model.Param.items():
-                    info_strs.append((2 , k , f'{v}'))
+                    info_strs.append((1 , k , f'{v}'))
             info_strs.append((0 , 'Model Num' , f'{self.Model.n_model}'))
             info_strs.append((0 , 'Model Inputs' , f'{self.model_input_type}'))
             if self.model_input_type == 'data':
@@ -938,9 +937,10 @@ class TrainConfig(TrainParam):
             info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
             info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
 
-        indents = list(set([indent for indent , _ , _ in info_strs]))
-        indent_nchar = {indent:max([len(key) for indent in indents for indent , key , _ in info_strs if indent == indent]) for indent in indents}
-        infos = [FormatStr(f'{key.title():{indent_nchar[indent]}s} : {value}' , indent = indent , color = color) for indent , key , value in info_strs]
+        indented_keys = [FormatStr(key.title() , indent = indent).msg for indent , key , _ in info_strs]
+        max_key_length = max([len(key) for key in indented_keys])
+        infos = [FormatStr(f'{indented_keys:{max_key_length}s} : {value}' , color = color).formatted()
+                 for indented_keys , (indent , key , value) in zip(indented_keys , info_strs)]
         Logger.stdout('\n'.join(infos))
         return self
 

@@ -86,7 +86,7 @@ class Proj(metaclass=_ProjMeta):
             *MACHINE.info(),
             f'Proj Verbosity : {cls.verbosity}', 
             f'Proj Log File  : {cls.log_file}',
-            *cls.States.info(),
+            # *cls.States.info(),
         ]
 
     @classmethod

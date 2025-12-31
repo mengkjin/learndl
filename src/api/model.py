@@ -36,6 +36,13 @@ class ModelAPI:
             Logger.alert1('This is not a server with cuda, skip this process')
 
     @classmethod
+    def resume_testing_models(cls):
+        '''
+        Resume testing models for both laptop and server:
+        '''
+        cls.Trainer.resume_testing_models()
+
+    @classmethod
     def update_hidden(cls):
         '''
         Update hidden features for hidden feature models for both laptop and server:

@@ -109,7 +109,7 @@ class SignedFactor:
 
         self.loaded = False
 
-    def eval(self , dates : np.ndarray | list[int] | int , indent : int = 2 , vb_level : int = 2):
+    def eval(self , dates : np.ndarray | list[int] | int , indent : int = 3 , vb_level : int = 2):
         if isinstance(dates , int):
             dates = [dates]
         self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , indent = indent , vb_level = vb_level)
