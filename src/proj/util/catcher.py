@@ -1250,7 +1250,7 @@ class MarkdownCatcher(OutputCatcher):
         i = 0
         running_filename = self.export_file_list[-1].with_suffix('.running.md')
         while running_filename.exists():
-            running_filename = self.export_file_list[-1].with_suffix(f'{i}.running.md')
+            running_filename = self.export_file_list[-1].with_suffix(f'.{i}.running.md')
             i += 1
             if i >= max_running_files:
                 Logger.error(f"Too many running markdown files, max_running_files={max_running_files}")
