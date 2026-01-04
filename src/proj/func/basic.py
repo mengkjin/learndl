@@ -1,7 +1,8 @@
+import re
 from src.proj.log import Logger
 from pytimedinput import timedInput
 
-__all__ = ['update_dict' , 'ask_for_confirmation']
+__all__ = ['update_dict' , 'ask_for_confirmation' , 'camel_to_snake']
 
 def update_dict(old : dict , update : dict | None , recursive = True) -> dict:
     if update:
@@ -41,3 +42,7 @@ def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_con
         if not userText_cond[-1]: 
             break
     return userText_list , userText_cond
+
+def camel_to_snake(name):
+    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()

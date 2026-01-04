@@ -55,7 +55,7 @@ class ModelPath:
             return PATH.conf.joinpath(*args)
     def rslt(self , *args) -> Path:     
         """model results path"""
-        return self('detailed_analysis' , *args)
+        return self('results' , *args)
     def snapshot(self , *args) -> Path:
         """model snapshot path"""
         return self('snapshot' , *args)

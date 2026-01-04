@@ -85,14 +85,29 @@ class TaskRecorder:
             cursor.execute('SELECT * FROM task_meta WHERE task_type = ?', (self.task_type(type),))
             return cursor.fetchone() is not None
     
-    def mark_finished(self, name: str | None = None, key: str | None = None, success: bool = True, remark: str | None = None, type : str | None = None):
+    def mark_finished(self, name: str | None = None, key: str | None = None, remark: str | None = None, type : str | None = None):
         """mark task finished"""
         self.ensure_task_type(type)
         with self.conn_handler as (conn, cursor):   
             cursor.execute(f'''
                 INSERT INTO {self.task_type(type)} (task_name, task_key, success, complete_time, remark)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (self.task_name(name), self.task_key(key), success * 1, datetime.now(), remark))
+            ''', (self.task_name(name), self.task_key(key), 1, datetime.now(), remark))
+            
+            cursor.execute('''
+                UPDATE task_meta 
+                SET last_updated = ?
+                WHERE task_type = ?
+            ''', (datetime.now(), self.task_type(type)))
+
+    def mark_failed(self, name: str | None = None, key: str | None = None, remark: str | None = None, type : str | None = None):
+        """mark task finished"""
+        self.ensure_task_type(type)
+        with self.conn_handler as (conn, cursor):   
+            cursor.execute(f'''
+                INSERT INTO {self.task_type(type)} (task_name, task_key, success, complete_time, remark)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (self.task_name(name), self.task_key(key), 0 , datetime.now(), remark))
             
             cursor.execute('''
                 UPDATE task_meta 
@@ -186,8 +201,8 @@ if __name__ == "__main__":
     recorder = TaskRecorder('autorun')
     
     # 标记任务完成
-    recorder.mark_finished("data_processing", "task_001", True, "数据处理完成")
-    recorder.mark_finished("data_processing", "task_002", False, "数据清洗完成")
+    recorder.mark_finished("data_processing", "task_001", "数据处理完成")
+    recorder.mark_failed("data_processing", "task_002", "数据清洗失败")
     
     # 检查任务是否完成
     Logger.stdout(f"task_001 是否完成: {recorder.is_finished('data_processing', 'task_001')}")

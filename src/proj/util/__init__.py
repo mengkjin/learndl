@@ -3,8 +3,8 @@ from src.proj.abc.singleton import SingletonMeta , SingletonABCMeta
 from .basic import *
 
 from .catcher import (
-    IOCatcher , LogWriter , 
-    HtmlCatcher , MarkdownCatcher , WarningCatcher)
+    IOCatcher , LogWriter , WarningCatcher ,
+    HtmlCatcher , MarkdownCatcher , CrashProtectorCatcher)
 from .shared_sync import SharedSync
 from .email import Email
 from .device import Device , MemoryPrinter

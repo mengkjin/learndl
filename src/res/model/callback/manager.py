@@ -8,9 +8,9 @@ from . import display, fit, test , nnspecific
 SEARCH_MODS = [fit , display , test]
 
 class CallBackManager(BaseCallBack):
-    def __init__(self , trainer , *callbacks):
+    def __init__(self , trainer , *callbacks : BaseCallBack):
         super().__init__(trainer)   
-        self.callbacks : list[BaseCallBack] = [cb for cb in callbacks if isinstance(cb , BaseCallBack) and not cb.turn_off]
+        self.callbacks : list[BaseCallBack] = [cb for cb in callbacks if bool(cb)]
 
     def at_enter(self , hook , vb_level : int = 10):
         [cb.at_enter(hook , vb_level) for cb in self.callbacks]

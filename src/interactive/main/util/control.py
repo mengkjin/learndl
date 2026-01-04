@@ -191,7 +191,7 @@ class SessionControl:
     # @ActionLogger.log_action()
     def click_queue_clean(self):
         """click task queue refresh confirmation"""
-        items = [item for item in self.task_queue.values() if item.is_error]
+        items = [item for item in self.task_queue.values() if item.is_error or item.is_killed]
         [self.task_queue.remove(item) for item in items]
         self.queue_last_action = f"Queue Cleaned All Error Tasks at {datetime.now().strftime('%H:%M:%S')}" , True
 
@@ -344,7 +344,7 @@ class SessionControl:
         """wait for complete"""
         while True:
             item.refresh()
-            if item.status in ['complete' , 'error']:
+            if not item.is_running:
                 return True
             if item.status == 'starting':
                 running_timeout -= 1

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.proj import CALENDAR , DB , CONF
+from src.proj import CALENDAR , DB , Proj
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
@@ -41,7 +41,7 @@ def calc_umr_new(date , n_months : int , risk_window : int = 10):
 
     market_event_dates = get_market_event_dates()
 
-    mv_indus = DATAVENDOR.RISK.get_exp(date , ['secid' , 'size'] + CONF.Factor.RISK.indus).\
+    mv_indus = DATAVENDOR.RISK.get_exp(date , ['secid' , 'size'] + Proj.Conf.Factor.RISK.indus).\
         reset_index(drop = True).set_index('secid').reindex(rets.columns)
     commom_x = mv_indus.join(p_neg_rets)
 

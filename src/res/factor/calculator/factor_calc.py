@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..util import StockFactor
 
-from src.proj import Logger , PATH , CONF , CALENDAR , DB 
+from src.proj import Logger , PATH , Proj , CALENDAR , DB 
 from src.proj.func import parallel
 from src.proj.util import SingletonABCMeta
 from src.data import DATAVENDOR
@@ -43,7 +43,7 @@ class _FactorPropertyStr(_FactorProperty):
         return super().__get__(instance,owner)
 
     def category0(self , owner) -> str:
-        return CONF.Factor.STOCK.cat1_to_cat0(owner.category1)
+        return Proj.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def factor_name(self , owner) -> str:
         return owner.__qualname__
@@ -82,7 +82,7 @@ class _FactorPropertyBool(_FactorProperty):
 class _FactorMetaType:
     """meta class of factor"""
     def __get__(self,instance,owner) -> Literal['market' , 'stock' , 'affiliate' , 'pooling']:
-        return CONF.Factor.STOCK.cat0_to_meta(owner.category0)
+        return Proj.Conf.Factor.STOCK.cat0_to_meta(owner.category0)
 
 class _FactorDBSrc:
     """db source of factor"""
@@ -102,7 +102,7 @@ class _FactorDBKey:
 
 class _FactorCalendar:
     """calendar of factor"""
-    _dates = CALENDAR.td_within(CONF.Factor.UPDATE.init_date)
+    _dates = CALENDAR.td_within(Proj.Conf.Factor.UPDATE.init_date)
 
     def __init__(self , method : Literal['update' , 'calendar'] = 'calendar'):
         self.method = method
@@ -118,7 +118,7 @@ class _FactorCalendar:
         dates = dates[dates >= init_date]
         dates = dates[dates <= final_date]
         if self.method == 'update':
-            dates = dates[(dates >= CONF.Factor.UPDATE.start) & (dates <= CONF.Factor.UPDATE.end)]
+            dates = dates[(dates >= Proj.Conf.Factor.UPDATE.start) & (dates <= Proj.Conf.Factor.UPDATE.end)]
         return dates
 
 class _FactorStoredDates:
@@ -193,8 +193,8 @@ class _FactorCalculatorMeta(SingletonABCMeta):
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
 
-            if getattr(new_cls, "init_date" , -1) < CONF.Factor.UPDATE.init_date: 
-                raise AttributeError(f'class {name} init_date should be later than {CONF.Factor.UPDATE.init_date} , but got {getattr(new_cls, "init_date" , -1)}')
+            if getattr(new_cls, "init_date" , -1) < Proj.Conf.Factor.UPDATE.init_date: 
+                raise AttributeError(f'class {name} init_date should be later than {Proj.Conf.Factor.UPDATE.init_date} , but got {getattr(new_cls, "init_date" , -1)}')
 
             if not getattr(new_cls, "description" , -1):
                 raise AttributeError(f'class {name} description is not set')
@@ -219,7 +219,7 @@ class _FactorCalculatorMeta(SingletonABCMeta):
             if not category0:
                 raise AttributeError(f'class {name} category0 is not set')
 
-            CONF.Factor.STOCK.validate_categories(category0 , category1)
+            Proj.Conf.Factor.STOCK.validate_categories(category0 , category1)
             
             setattr(new_cls , 'calc_factor' , _calc_factor_wrapper(getattr(new_cls , 'calc_factor')))
             setattr(new_cls , 'calc_history' , _calc_factor_wrapper(getattr(new_cls , 'calc_history')))
@@ -239,7 +239,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     """base class of factor calculator"""
     init_date   : int = -1
     final_date  : int = 99991231
-    update_step : int = CONF.Factor.UPDATE.step
+    update_step : int = Proj.Conf.Factor.UPDATE.step
     category1 : Literal['weighted' , 'nonlinear' , 'style' , 'market_event' , 'quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
                         'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
                         'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
@@ -488,8 +488,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
 
     def update_day_factor(self , date : int , overwrite = False , indent : int = 1 , vb_level : int = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
-        if show_warning and date not in CONF.Factor.UPDATE.target_dates:
-            Logger.alert1(f'{self.factor_string} at {date} is not in CONF.Factor.UPDATE.target_dates' , indent = indent)
+        if show_warning and date not in Proj.Conf.Factor.UPDATE.target_dates:
+            Logger.alert1(f'{self.factor_string} at {date} is not in Proj.Conf.Factor.UPDATE.target_dates' , indent = indent)
         prefix = f'{self.factor_string} at {date}'
         try:
             done = self.calc_and_deploy(date , overwrite = overwrite , indent = indent , vb_level = vb_level)

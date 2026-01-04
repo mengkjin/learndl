@@ -1,7 +1,7 @@
 from copy import deepcopy
 from typing import Any
 
-from src.proj import CONF
+from src.proj import Proj
 from .bound import StockPool , IndustryPool , GeneralBound , ValidRange
 
 def parse_config_equity(config : dict) -> dict[str,float|Any]:
@@ -107,7 +107,7 @@ def parse_config_industry(config : dict):
     rslt : dict[str,list[GeneralBound]] = {}
     overall_bnds = [GeneralBound(bnd_key , *config[bnd_key]) for bnd_key in ['abs' , 'rel' , 'por'] if bnd_key in config]
     overall_bnds = [bnd for bnd in overall_bnds if bnd]
-    for name in CONF.Factor.RISK.indus:
+    for name in Proj.Conf.Factor.RISK.indus:
         sub_config = {key:val for key , val in config.items() if key.startswith(name)}
         if sub_config:
             bnds = [GeneralBound(default_bnd_key if key == name else key.split('.')[1] , *val) for key , val in sub_config.items()]
@@ -127,7 +127,7 @@ def parse_config_style(config : dict):
     rslt : dict[str,list[GeneralBound]] = {}
     overall_bnds = [GeneralBound(bnd_key , *config[bnd_key]) for bnd_key in ['abs' , 'rel' , 'por'] if bnd_key in config]
     overall_bnds = [bnd for bnd in overall_bnds if bnd]
-    for name in CONF.Factor.RISK.style:
+    for name in Proj.Conf.Factor.RISK.style:
         sub_config = {key:val for key , val in config.items() if key.startswith(name)}
         if sub_config:
             bnds = [GeneralBound(default_bnd_key if key == name else key.split('.')[1] , *val) for key , val in sub_config.items()]

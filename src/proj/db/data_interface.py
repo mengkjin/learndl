@@ -6,7 +6,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime , timedelta
 from pathlib import Path
-from typing import Any , Literal , Generator
+from typing import Any , Literal , Generator , Callable
 
 from src.proj.env import MACHINE , PATH
 from src.proj.log import Logger
@@ -15,7 +15,7 @@ from .code_mapper import secid_to_secid
 __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
     'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
-    'file_dates' , 'dir_dates' , 'save_df' , 'load_df' , 
+    'file_dates' , 'dir_dates' , 'save_df' , 'append_df' , 'load_df' , 'load_df_multi' ,
     'block_path' , 'norm_path' ,
 ]
 
@@ -70,6 +70,17 @@ def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     dates.sort()
     return dates
 
+def _df_loader(path : Path):
+    """load dataframe from path"""
+    return pd.read_feather(path) if SAVE_OPT_DB == 'feather' else pd.read_parquet(path)
+
+def _df_saver(df : pd.DataFrame , path : Path):
+    """save dataframe to path"""
+    if SAVE_OPT_DB == 'feather':
+        df.to_feather(path)
+    else:
+        df.to_parquet(path , engine='fastparquet')
+
 def by_name(db_src : str) -> bool:
     """whether the database is by name"""
     return db_src in DB_BY_NAME + EXPORT_BY_NAME
@@ -116,16 +127,30 @@ def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True ,
     elif overwrite or not path.exists(): 
         status = 'Overwritten' if path.exists() else 'Saved to DB'
         path.parent.mkdir(parents=True , exist_ok=True)
-        if SAVE_OPT_DB == 'feather':
-            df.to_feather(path)
-        else:
-            df.to_parquet(path , engine='fastparquet')
+        _df_saver(df , path)
         Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists'
         Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
+
+def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : int = 1):
+    """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
+    path = Path(path)
+    if df is None or df.empty: 
+        return False
+    elif not path.exists():
+        return save_df(df , path , overwrite = True , prefix = prefix , indent = indent , vb_level = vb_level)
+    else:
+        status = 'Appended'
+        df = pd.concat([load_df(path) , df])
+        if drop_duplicate_cols:
+            df = df.drop_duplicates(subset=drop_duplicate_cols , keep='last')
+            status += f'with unique ({",".join(drop_duplicate_cols)})'
+        _df_saver(df , path)
+        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        
 
 def load_df(path : Path , *, raise_if_not_exist = False):
     """load dataframe from path"""
@@ -134,11 +159,62 @@ def load_df(path : Path , *, raise_if_not_exist = False):
             raise FileNotFoundError(path)
         else: 
             return pd.DataFrame()
-    if SAVE_OPT_DB == 'feather':
-        df = pd.read_feather(path)
-    else:
-        df = pd.read_parquet(path)
+    df = _df_loader(path)
     df = _load_df_mapper(df)
+    return df
+
+def load_df_multi(paths : dict | list[Path] , key_column : str | None = 'date' , 
+                  parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+                  mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None):
+    """
+    load dataframe from multiple paths
+    Parameters
+    ----------
+    paths : dict[int, Path]
+        paths to load , key is date
+    key_column : str | None
+        key column name , if None, use date column
+    parallel : Literal['thread' , 'process' , 'dask' , 'none']
+        parallel mode
+    mapper : Callable[[pd.DataFrame], pd.DataFrame]
+        mapper function to execute on each dataframe
+    """
+    if parallel is None: 
+        parallel = _load_parallel
+
+    if mapper is None:
+        def loader(p : Path):
+            return _df_loader(p)
+    else:
+        def loader(p : Path):
+            return mapper(_df_loader(p))
+    
+    if isinstance(paths , dict):
+        paths = {d:p for d,p in paths.items() if p.exists()}
+        assign_col = key_column if key_column else 'empty_column'
+    else:
+        paths = {i:p for i,p in enumerate(paths) if p.exists()}
+        assign_col = 'empty_column'
+
+    if not paths:
+        return pd.DataFrame()
+    
+    if parallel is None or parallel == 'none':
+        dfs = [loader(p).assign(**{assign_col:d}) for d,p in paths.items()]
+    elif parallel == 'dask':
+        ddfs = [delayed(loader)(p).assign(**{assign_col:d}) for d,p in paths.items()]
+        dfs = compute(ddfs)[0]
+    else:
+        assert parallel == 'thread' or not MACHINE.is_windows, (parallel , MACHINE.system_name)
+        max_workers = min(_load_max_workers , max(len(paths) // 5 , 1))
+        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
+        with PoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(loader , p):d for d,p in paths.items()}
+            dfs = [future.result().assign(**{assign_col:futures[future]}) for future in as_completed(futures)]
+
+    df = _load_df_mapper(pd.concat([v for v in dfs if not v.empty]))
+    if key_column is None:
+        df = df.drop(columns = 'empty_column')
     return df
 
 def _load_df_mapper(df : pd.DataFrame):
@@ -153,32 +229,6 @@ def _load_df_mapper(df : pd.DataFrame):
     if 'date' in df.index.names and 'date' in df.columns:
         df = df.reset_index('date' , drop = True)
     return df
-
-def _load_df_multi(paths : dict , date_colname : str = 'date' , 
-                  parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread'):
-    """load dataframe from multiple paths"""
-    if parallel is None: 
-        parallel = _load_parallel
-    reader : Any = pd.read_feather if SAVE_OPT_DB == 'feather' else pd.read_parquet
-    paths = {d:p for d,p in paths.items() if p.exists()}
-    if parallel is None or parallel == 'none':
-        dfs = [reader(p).assign(**{date_colname:d}) for d,p in paths.items()]
-    elif parallel == 'dask':
-        ddfs = [delayed(reader)(p).assign(**{date_colname:d}) for d,p in paths.items()]
-        dfs = compute(ddfs)[0]
-    else:
-        assert parallel == 'thread' or not MACHINE.is_windows, (parallel , MACHINE.system_name)
-        max_workers = min(_load_max_workers , max(len(paths) // 5 , 1))
-        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
-        with PoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(reader , p):d for d,p in paths.items()}
-            dfs = [future.result().assign(**{date_colname:futures[future]}) for future in as_completed(futures)]
-
-    if not dfs: 
-        return pd.DataFrame()
-    else:
-        df = _load_df_mapper(pd.concat([v for v in dfs if not v.empty]))
-        return df
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
                df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int = 1):
@@ -360,7 +410,7 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
         assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
-    df = _load_df_multi(paths , date_colname , parallel)
+    df = load_df_multi(paths , date_colname , parallel)
     df = _process_df(df , df_syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 

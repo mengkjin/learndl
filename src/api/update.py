@@ -60,6 +60,9 @@ class UpdateAPI:
         [Logger.remark(f'Resume Testing Model {model.model_path.name}' , indent = 1) for model in models]
         [Logger.remark(f'Resume Testing Factor {factor}' , indent = 1) for factor in factors]
         for model in PredictionModel.SelectModels():
+            if model.model_path.name not in ModelAPI.Trainer.available_models():
+                Logger.warning(f'Model {model.model_path.name} is not available at {MACHINE.name}, skip testing')
+                continue
             with Logger.ParagraphI(f'Resume Testing Model {model.model_path}'):
                 ModelAPI.test_model(model.model_path.name , resume = 1)
         for factor in Options.available_factors():

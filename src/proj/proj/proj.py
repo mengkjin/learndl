@@ -1,8 +1,10 @@
 import io
 
+from src.proj.env.machine import MACHINE
+from src.proj.abc import stderr
+
 from .state import ProjStates
-from .machine import MACHINE
-from ..abc import stderr
+from . import conf as Conf
 
 __all__ = ['Proj']
 
@@ -75,6 +77,7 @@ class _ProjMeta(type):
 
 class Proj(metaclass=_ProjMeta):
     States = ProjStates
+    Conf = Conf
 
     def __new__(cls , *args , **kwargs):
         raise Exception(f'{cls.__name__} cannot be instantiated')

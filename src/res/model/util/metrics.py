@@ -12,13 +12,16 @@ from .batch import BatchMetric
 class MetricList:
     name : str
     type : str
-    values : list[Any] = field(default_factory=list) 
+    metrics : list[Any] = field(default_factory=list) 
+    keys : list[Any] = field(default_factory=list)
 
     def __post_init__(self): assert self.type in ['loss' , 'score'] , f'{self.type} must be "loss" or "score"'
-    def record(self , metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
-    def last(self): self.values[-1]
-    def mean(self): return 0 if len(self.values) == 0 else np.mean(self.values)
-    def any_nan(self): return np.isnan(self.values).any()
+    def record(self , metrics , key : Any = None): 
+        self.metrics.append(metrics.loss_item if self.type == 'loss' else metrics.score)
+        self.keys.append(key)
+    def last(self): self.metrics[-1]
+    def mean(self): return 0 if len(self.metrics) == 0 else np.mean(self.metrics)
+    def any_nan(self): return np.isnan(self.metrics).any()
 
 class Metrics:
     '''calculator of batch output'''
@@ -69,6 +72,10 @@ class Metrics:
     def losses(self): return self.metric_batchs.losses
     @property
     def scores(self): return self.metric_batchs.scores
+    @property
+    def loss_keys(self): return self.metric_batchs.loss_keys
+    @property
+    def score_keys(self): return self.metric_batchs.score_keys
     
     def new_model(self , model_param : dict[str,Any] , net : nn.Module | None = None , **kwargs):
         self.model_param  = model_param
@@ -97,8 +104,8 @@ class Metrics:
         self.dataset : Literal['train','valid','test'] = dataset
         self.metric_batchs.new(self.dataset , model_num , model_date , epoch , model_submodel)
 
-    def collect_batch(self):
-        self.metric_batchs.record(self.output)
+    def collect_batch(self , key : Any = None):
+        self.metric_batchs.record(self.output , key = key)
 
     def collect_epoch(self):
         self.metric_batchs.collect()
@@ -161,12 +168,12 @@ class MetricsAggregator:
     def __init__(self) -> None:
         self.table : pd.DataFrame | None = None
         self.new('init',0,0)
-    def __len__(self):  return len(self._record['loss'].values)
+    def __len__(self):  return len(self._record['loss'].metrics)
     def new(self , dataset , model_num , model_date , epoch = 0 , submodel = 'best'):
         self._params = [dataset , model_num , model_date , submodel , epoch]
         self._record = {m:MetricList(f'{dataset}.{model_num}.{model_date}.{submodel}.{epoch}.{m}',m) for m in ['loss','score']}
-    def record(self , metrics): 
-        [self._record[m].record(metrics) for m in ['loss','score']]
+    def record(self , metrics , key : Any = None): 
+        [self._record[m].record(metrics, key) for m in ['loss','score']]
     def collect(self):
         df = pd.DataFrame(
             [[*self._params , self.loss , self.score]] , 
@@ -179,6 +186,10 @@ class MetricsAggregator:
     @property
     def score(self): return self._record['score'].mean()
     @property
-    def losses(self): return self._record['loss'].values
+    def losses(self): return self._record['loss'].metrics
     @property
-    def scores(self): return self._record['score'].values
+    def scores(self): return self._record['score'].metrics
+    @property
+    def loss_keys(self): return self._record['loss'].keys
+    @property
+    def score_keys(self): return self._record['score'].keys

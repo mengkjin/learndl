@@ -119,7 +119,6 @@ class WidgetParamInput(ScriptParamInput):
             #elif self.widget_key in st.session_state:
             #    default_option = st.session_state.get(self.widget_key, None)
             else:
-                print(self.default)
                 default_option = self.value_to_option(self.default)
         return default_option
 

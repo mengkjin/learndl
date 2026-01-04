@@ -8,7 +8,7 @@ from typing import Any , Generator , Literal
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 
-from src.proj import Logger , CONF , CALENDAR 
+from src.proj import Logger , Proj , CALENDAR 
 from src.proj.func import parallel    
 from src.proj.util import SingletonMeta
 from src.data import DATAVENDOR
@@ -205,7 +205,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         cls.jobs.clear()
         
         if end is None: 
-            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
+            end = min(CALENDAR.updated() , Proj.Conf.Factor.UPDATE.end)
 
         for calc in cls.calculators(all , selected_factors , **kwargs):
             if cls.update_type in ['affiliate']:

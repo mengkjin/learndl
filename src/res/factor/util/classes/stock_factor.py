@@ -4,9 +4,10 @@ import warnings
 
 from collections.abc import Iterable
 from copy import deepcopy
+from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Proj , DB
+from src.proj import Proj , DB , Logger
 from src.math import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -17,7 +18,7 @@ from .universe import Universe
 
 __all__ = ['StockFactor']
 
-def append_indus(df : pd.DataFrame):
+def append_indus(df : pd.DataFrame) -> pd.DataFrame:
     """
     append industry to factor dataframe
     """
@@ -32,7 +33,7 @@ def append_indus(df : pd.DataFrame):
     df = df.merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
-def append_ffmv(df : pd.DataFrame):
+def append_ffmv(df : pd.DataFrame) -> pd.DataFrame:
     """
     append fmv to factor dataframe
     """
@@ -45,7 +46,7 @@ def append_ffmv(df : pd.DataFrame):
     df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
-def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
+def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
     """
     append future return to factor dataframe
     example:
@@ -60,7 +61,7 @@ def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_typ
     df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
-def melt_frame(df : pd.DataFrame):
+def melt_frame(df : pd.DataFrame) -> pd.DataFrame:
     """
     melt the dataframe from wide to long
     """
@@ -69,7 +70,7 @@ def melt_frame(df : pd.DataFrame):
     else:
         return df.melt(var_name = 'factor_name' , ignore_index = False).set_index('factor_name' , append=True)
 
-def pivot_frame(df : pd.DataFrame):
+def pivot_frame(df : pd.DataFrame) -> pd.DataFrame:
     """
     pivot the dataframe from long to wide
     """
@@ -78,7 +79,7 @@ def pivot_frame(df : pd.DataFrame):
     else:
         return df
 
-def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True):
+def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True) -> pd.DataFrame:
     """
     whiten the factors by date / factor_name , weight can be ffmv or not
     """
@@ -94,7 +95,7 @@ def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True):
         df = pivot_frame(df)
     return df
 
-def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs):
+def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs) -> pd.DataFrame:
     """
     winsorize the factors by date / factor_name
     """
@@ -108,7 +109,7 @@ def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs):
 
 def fillna(df : pd.DataFrame | Any , 
            fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'zero' ,
-           pivot = True , **kwargs):
+           pivot = True , **kwargs) -> pd.DataFrame:
     """
     fill NA values of factors by date / factor_name
     """
@@ -138,7 +139,7 @@ def fillna(df : pd.DataFrame | Any ,
         df = pivot_frame(df)
     return df
 
-def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs):
+def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs) -> pd.DataFrame:
     """
     neutralize the factors by date / factor_name
     !! unrealized feature !!
@@ -147,7 +148,10 @@ def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs):
         df = pivot_frame(df)
     return df
 
-def eval_grp_avg(x : pd.DataFrame , x_cols : list[str], y_name : str = 'ret', group_num : int = 10 , excess = False , direction : int = 1) -> pd.DataFrame:
+def eval_grp_avg(
+    x : pd.DataFrame , x_cols : list[str], y_name : str = 'ret', 
+    group_num : int = 10 , excess = False , direction : int = 1
+) -> pd.DataFrame:
     """
     evaluate the group average return of the factors
     """
@@ -165,7 +169,7 @@ def eval_grp_avg(x : pd.DataFrame , x_cols : list[str], y_name : str = 'ret', gr
     rtn = pd.concat(rtn, axis=1, sort=True)
     return rtn
 
-def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group_num : int = 10):
+def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group_num : int = 10) -> pd.Series | Any:
     """
     calculate the weights of the factors in calculation of weighted pnl
     """
@@ -185,7 +189,7 @@ def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group
         wgt = norm_weight(x > x.quantile(1 - 1 / group_num)) - norm_weight(x < x.quantile(1 / group_num))
     return wgt
 
-def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , group_num = 10 , y_name = 'ret'):
+def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , group_num = 10 , y_name = 'ret') -> float:
     """
     evaluate the weighted pnl (top - bottom) of the factors
     """
@@ -204,6 +208,114 @@ def param_match(args1 : dict[str,Any] , args2 : dict[str,Any]) -> bool:
     matches = [k in args2 and args2[k] == v for k , v in args1.items()]
     return all(matches) 
 
+class FactorStats:
+    """
+    FactorStats class is used to store and manipulate factor statistics
+    """
+    available_stats : list[str] = ['ic' , 'ic_indus' , 'group_perf' , 'weighted_pnl' , 'coverage']
+    def __init__(self , name : str):
+        assert name in self.available_stats , f'name {name} is not in {self.available_stats}'
+        self.name = name
+        self.stats : dict[str,pd.DataFrame] = {}
+    
+    def __repr__(self):
+        return f'FactorStats(name={self.name}, stats={list(self.stats.keys())})'
+    
+    def __str__(self):
+        return self.__repr__()
+
+    @staticmethod
+    def param_to_str(params : dict[str,Any]) -> str:
+        return '.'.join([f'{k}={v}' for k , v in params.items()])
+
+    @classmethod
+    def match_params(cls , params1 : dict[str,Any] , params2 : dict[str,Any]) -> bool:
+        return cls.param_to_str(params1) == cls.param_to_str(params2)
+
+    def update_stat(self , params : dict[str,Any] , stat : pd.DataFrame):
+        self.stats[self.param_to_str(params)] = stat
+
+    def append_stat(self , params : dict[str,Any] , stat : pd.DataFrame , keys : list[str] = []):
+        stat = pd.concat([self.get_stat(params) , stat])
+        index_names = [key for key in stat.index.names if key is not None]
+        if index_names:
+            stat = stat.reset_index(drop=False)
+        stat = stat.drop_duplicates(subset=keys , keep='last').sort_values(by=keys)
+        if index_names:
+            stat = stat.set_index(index_names)
+        self.update_stat(params , stat)
+
+    def get_stat(self , params : dict[str,Any]) -> pd.DataFrame:
+        return self.stats.get(self.param_to_str(params) , pd.DataFrame())
+
+    def dates_not_in_stat(self , params : dict[str,Any] , dates : np.ndarray) -> np.ndarray:
+        stat = self.get_stat(params)
+        if stat.empty:
+            stat_dates = np.array([])
+        else:
+            stat_dates = stat.index.get_level_values('date').unique() if 'date' in stat.index.names else stat['date'].unique()
+        return np.setdiff1d(dates, stat_dates)
+
+    def load(self , path : Path):
+        if not path.exists():
+            return self
+        assert path.is_dir() , f'path {path} is not a directory'
+        for file in path.iterdir():
+            self.stats[file.stem] = DB.load_df(file)
+            Logger.success(f'loaded factor stats {self.name.upper()}({file.stem}) from {path}' , indent = 1 , vb_level = 10)
+        return self
+
+    def save(self , path : Path):
+        path.mkdir(parents=True , exist_ok=True)
+        for name , stat in self.stats.items():
+            DB.save_df(stat , path.joinpath(f'{name}.feather') , indent = 1 , vb_level = 10 , prefix = 'Factor Stats')
+
+    @classmethod
+    def create_cache_factor_stats(cls) -> dict[str,'FactorStats']:
+        return {name:FactorStats(name) for name in cls.available_stats}
+
+class CacheFactorStats:
+    """
+    CacheFactorStats class is used to store and manipulate multiple factor statistics
+    """
+    def __init__(self):
+        self.factor_stats = FactorStats.create_cache_factor_stats()
+
+    def __getitem__(self , name : str) -> FactorStats:
+        return self.factor_stats[name]
+
+    def load(self , path : Path | None):
+        if path is None or not path.exists():
+            return
+        [factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()]
+        return self
+
+    def save(self , path : Path | None):
+        if path is None:
+            return
+        [factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()]
+
+    @property
+    def ic(self) -> FactorStats:
+        return self.factor_stats['ic']
+    
+    @property
+    def ic_indus(self) -> FactorStats:
+        return self.factor_stats['ic_indus']
+    
+    @property
+    def group_perf(self) -> FactorStats:
+        return self.factor_stats['group_perf']
+    
+    @property
+    def weighted_pnl(self) -> FactorStats:
+        return self.factor_stats['weighted_pnl']
+    
+    @property
+    def coverage(self) -> FactorStats:
+        return self.factor_stats['coverage']
+
+
 class StockFactor:
     """
     StockFactor class is used to store and manipulate factor data
@@ -218,16 +330,26 @@ class StockFactor:
         factor.eval_group_perf()
     """
     def __new__(cls , factor = None , *args , **kwargs):
-        if isinstance(factor , StockFactor):
-            return factor
-        else:
-            return super().__new__(cls)
+        if not isinstance(factor , StockFactor):
+            factor = super().__new__(cls)
+        Proj.States.factor = factor
+        return factor
 
-    def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' = None , normalized = False , factor_names : list[str] | None = None):
+    def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' = None , * ,
+                 normalized : bool | None = None , 
+                 benchmark : Benchmark | str | None = None , 
+                 cache_factor_stats : CacheFactorStats | None = None ,
+                 factor_names : list[str] | None = None):
         if factor is None:
-            factor = pd.DataFrame()
-        self.update(factor , normalized , factor_names)
-        Proj.States.factor = self
+            assert factor_names , 'factor_names must be provided if factor input is None'
+            factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
+        self.normalized = False
+        self.benchmark = None
+        
+        self.cache_alpha_models : dict[str,AlphaModel] = {}
+        self.cache_benchmark_subsets : dict[str,StockFactor] = {}
+        self.cache_factor_stats : CacheFactorStats = cache_factor_stats if cache_factor_stats else CacheFactorStats()
+        self.update(factor , normalized , benchmark)
 
     def __repr__(self):
         format_str = f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={{}})'
@@ -246,36 +368,27 @@ class StockFactor:
         """
         return self.prior_input.empty
 
-    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , factor_names : list[str] | None = None):
+    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , 
+               normalized : bool | None = None , benchmark : Benchmark | str | None = None):
         """
         update the factor data
         """
-        factor_names = factor_names or []
         if isinstance(factor , StockFactor):
-            assert factor.normalized == normalized , f'normalized must be the same as the original factor : {factor.normalized} != {normalized}'
+            if normalized is not None:
+                assert factor.normalized == normalized , f'normalized must be the same as the original factor : {factor.normalized} != {normalized}'
+            if benchmark is not None:
+                assert factor.benchmark == benchmark.name if isinstance(benchmark , Benchmark) else benchmark , f'benchmark must be the same as the original factor : {factor.benchmark} != {benchmark}'
             return factor
 
         if isinstance(factor , dict):
-            if not factor:
-                factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
-            else:
-                factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
-                                    for d , f in factor.items() if not f.empty])
+            factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
+                                for d , f in factor.items() if not f.empty])
         elif isinstance(factor , pd.Series):
             factor = factor.to_frame()
             
         assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or DataBlock , but got {type(factor)} : {factor}'
 
-        self._df  : pd.DataFrame | Any = None
-        self._blk : DataBlock | Any = None
-        self._alpha_models : dict[str,AlphaModel] = {}
-        self.normalized = normalized
-        self.subsets : dict[str,StockFactor] = {}
-        self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
-
         if isinstance(factor , pd.DataFrame):
-            if factor.empty:
-                factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
             factor = factor.reset_index().drop(columns=['index'] , errors='ignore')
             if 'date' in factor.columns: 
                 factor = factor.set_index('date' , append=True)
@@ -283,15 +396,46 @@ class StockFactor:
                 factor = factor.set_index('secid' , append=True)
             if None in factor.index.names:
                 factor = factor.reset_index([None] , drop=True)
-            self._df = factor
+            self.input_df = factor
         elif isinstance(factor , DataBlock):
-            if factor.empty:
-                factor = factor.align_feature(factor_names , inplace = True)
-            self._blk = factor
+            self.input_blk = factor
         else:
             raise TypeError(f'Unknown factor type: {type(factor)}')
 
+        if normalized is not None:
+            self.normalized = normalized
+        if benchmark is not None:
+            self.benchmark = benchmark.name if isinstance(benchmark , Benchmark) else benchmark
+
         return self
+
+    @property
+    def input_df(self) -> pd.DataFrame | None:
+        """
+        return the input DataFrame of the factor
+        """
+        if not hasattr(self , '_df'):
+            self._df = None
+        return self._df
+
+    @input_df.setter
+    def input_df(self , df : pd.DataFrame | None):
+        """set the input DataFrame of the factor"""
+        self._df = df
+    
+    @property
+    def input_blk(self) -> DataBlock | None:
+        """
+        return the input DataBlock of the factor
+        """
+        if not hasattr(self , '_blk'):
+            self._blk = None
+        return self._blk
+    
+    @input_blk.setter
+    def input_blk(self , blk : DataBlock | None):
+        """set the input DataBlock of the factor"""
+        self._blk = blk
 
     def copy(self): 
         """
@@ -303,10 +447,10 @@ class StockFactor:
         """
         filter the factor data by dates or other index
         """
-        if dates is None:
+        if self.empty or dates is None:
             return self
-        df = self._df.query('date not in @dates' if exclude else 'date in @dates')
-        return self.update(df , normalized = self.normalized) if inplace else StockFactor(df , normalized = self.normalized)
+        df = self.frame().query('date not in @dates' if exclude else 'date in @dates')
+        return self.update(df) if inplace else StockFactor(df , normalized = self.normalized , benchmark = self.benchmark)
 
     def filter_dates_between(self , start_dt : int , end_dt : int , inplace = False):
         """
@@ -317,10 +461,10 @@ class StockFactor:
         return self.filter_dates(dates , inplace = inplace)
 
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
-        if secid is None: 
+        if self.empty or secid is None:
             return self
-        df = self._df.query('secid not in @secid' if exclude else 'secid in @secid')
-        return self.update(df , normalized = self.normalized) if inplace else StockFactor(df , normalized = self.normalized)
+        df = self.frame().query('secid not in @secid' if exclude else 'secid in @secid')
+        return self.update(df) if inplace else StockFactor(df , normalized = self.normalized , benchmark = self.benchmark)
 
     def filter_by(self , step : int = 1):
         """
@@ -342,10 +486,10 @@ class StockFactor:
             mapping = {self.factor_names[i]:new_name[i] for i in range(len(new_name))}
         elif isinstance(new_name , dict):
             mapping = new_name
-        if self._df is not None: 
-            self._df.rename(columns=mapping , inplace=True)
-        if self._blk is not None: 
-            self._blk.rename_feature(mapping)
+        if self.input_df is not None: 
+            self.input_df.rename(columns=mapping , inplace=True)
+        if self.input_blk is not None: 
+            self.input_blk.rename_feature(mapping)
         return self
 
     def join(self , *others : 'StockFactor'):
@@ -371,51 +515,88 @@ class StockFactor:
         """
         return the factor data as a pandas DataFrame
         """
-        if self._df is None:
-            assert self._blk is not None , '_df and _blk cannot be both None'
-            self._df = self._blk.to_dataframe()
-        return self._df
+        prior_input = self.prior_input
+        if isinstance(prior_input , DataBlock):
+            self.input_df = prior_input.to_dataframe()
+            return self.input_df
+        else:
+            assert prior_input is not None , 'prior_input cannot be None'
+            return prior_input
     
     def block(self) -> DataBlock:
         """
         return the factor data as a DataBlock
         """
-        if self._blk is None:
-            assert self._df is not None , '_df and _blk cannot be both None'
-            self._blk = DataBlock.from_dataframe(self._df)
-        return self._blk
+        prior_input = self.prior_input
+        if isinstance(prior_input , DataBlock):
+            return prior_input
+        else:
+            assert prior_input is not None , 'prior_input cannot be None'
+            self.input_blk = DataBlock.from_dataframe(prior_input)
+            return self.input_blk
 
     @property
     def secid(self) -> np.ndarray: 
         """
         return the unique secid of the factor
         """
-        if self._blk is not None: 
-            return self._blk.secid
+        prior_input = self.prior_input
+        if isinstance(prior_input , DataBlock):
+            return prior_input.secid
+        elif prior_input.empty:
+            return np.array([])
         else:
-            return self._df.index.get_level_values('secid').unique().to_numpy()
+            return prior_input.index.get_level_values('secid').unique().to_numpy()
 
     @property
     def date(self) -> np.ndarray:
         """
         return the unique date of the factor
         """
-        if self._blk is not None: 
-            return self._blk.date
-        elif self._df.empty:
+        if self.pseudo_date is not None:
+            return self.pseudo_date
+        else:
+            return self.data_date
+
+    @property
+    def data_date(self) -> np.ndarray:
+        prior_input = self.prior_input
+        if isinstance(prior_input , DataBlock):
+            return prior_input.date
+        elif prior_input.empty:
             return np.array([])
         else:
-            return self._df.index.get_level_values('date').unique().to_numpy()
+            return prior_input.index.get_level_values('date').unique().to_numpy()
+
+    @property
+    def pseudo_date(self) -> np.ndarray | None:
+        """
+        return the pseudo date of the factor
+        """
+        if not hasattr(self , '_pseudo_date'):
+            return None
+        return self._pseudo_date
+
+    @pseudo_date.setter
+    def pseudo_date(self , date : np.ndarray | None):
+        if date is not None:
+            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = 10)
+            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 10)
+        self._pseudo_date = date
+
+    def set_pseudo_date(self , date : np.ndarray | None = None):
+        self.pseudo_date = date
         
     @property
     def factor_names(self) -> np.ndarray:
         """
         return the factor names of the factor
         """
-        if self._blk is not None:
-            return self._blk.feature
+        prior_input = self.prior_input
+        if isinstance(prior_input , DataBlock):
+            return prior_input.feature
         else:
-            return self._df.columns.to_numpy()
+            return prior_input.columns.to_numpy()
         
     @property
     def factor_num(self) -> int:
@@ -429,10 +610,11 @@ class StockFactor:
         """
         return the prior input of the factor (DataFrame or DataBlock that is initialized with)
         """
-        if self._df is not None:
-            return self._df
+        if self.input_df is not None:
+            return self.input_df
         else:
-            return self._blk
+            assert self.input_blk is not None , 'input_blk and input_df cannot be both None'
+            return self.input_blk
         
     @classmethod
     def Load(cls , factor_name : str , date : int):
@@ -454,8 +636,9 @@ class StockFactor:
         """
         select the factor data by secid , date , factor name
         """
-        if self._df is not None:
-            df = self._df.reset_index()
+        prior_input = self.prior_input
+        if isinstance(prior_input , pd.DataFrame):
+            df = prior_input.reset_index()
             if date is not None:  
                 date = date if isinstance(date , Iterable) else [date]
                 df = df.query('date in @date')
@@ -467,9 +650,9 @@ class StockFactor:
                 df = df[factor_name]
             return StockFactor(df)
         else:
-            return StockFactor(self._blk.align(secid , date , factor_name))
+            return StockFactor(prior_input.align(secid , date , factor_name))
 
-    def within(self , benchmark : Benchmark | str | None , recalculate = False) -> 'StockFactor':
+    def within(self , benchmark : Benchmark | str | None , use_cache = True , share_cache_factor_stats = True) -> 'StockFactor':
         """
         use benchmark to mask factor , only keep the factors that are in the benchmark
         """
@@ -477,9 +660,12 @@ class StockFactor:
             benchmark = Benchmark(benchmark)
         if not benchmark: 
             return self
-        if benchmark.name not in self.subsets or recalculate:
-            self.subsets[benchmark.name] = StockFactor(benchmark(self.prior_input) if benchmark else self.prior_input)
-        return self.subsets[benchmark.name]
+        if benchmark.name not in self.cache_benchmark_subsets or not use_cache:
+            factor_input = benchmark(self.prior_input) if benchmark else self.prior_input
+            cache_factor_stats = self.cache_factor_stats if share_cache_factor_stats else None
+            subset = StockFactor(factor_input , normalized = self.normalized , benchmark = benchmark.name , cache_factor_stats = cache_factor_stats)
+            self.cache_benchmark_subsets[benchmark.name] = subset
+        return self.cache_benchmark_subsets[benchmark.name]
     
     def alpha_model(self , use_cache = True) -> AlphaModel:
         """
@@ -487,9 +673,9 @@ class StockFactor:
         """
         assert len(self.factor_names) == 1 , f'only one factor is supported for alpha model , but got {len(self.factor_names)}'
         name = self.factor_names[0]
-        if name not in self._alpha_models or not use_cache:
-            self._alpha_models[name] = self._get_alpha_model(name)
-        return self._alpha_models[name]
+        if name not in self.cache_alpha_models or not use_cache:
+            self.cache_alpha_models[name] = self._get_alpha_model(name)
+        return self.cache_alpha_models[name]
 
     def alpha_models(self , use_cache = True) -> list[AlphaModel]:
         """
@@ -497,9 +683,9 @@ class StockFactor:
         """
         models = []
         for name in self.factor_names:
-            if name not in self._alpha_models or not use_cache:
-                self._alpha_models[name] = self._get_alpha_model(name)
-            models.append(self._alpha_models[name])
+            if name not in self.cache_alpha_models or not use_cache:
+                self.cache_alpha_models[name] = self._get_alpha_model(name)
+            models.append(self.cache_alpha_models[name])
         return models
 
     def risk_model(self , load = True):
@@ -536,11 +722,14 @@ class StockFactor:
         return AlphaModel.from_dataframe(self.frame()[name] , name)
 
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
-                        nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+                        nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close' ,
+                        dates : np.ndarray | None = None) -> pd.DataFrame:
         """
         return the factor data with additional columns
         """
         df = self.frame()
+        if dates is not None:
+            df = df.query('date in @dates')
         if indus:   
             df = append_indus(df)
         if fut_ret: 
@@ -550,14 +739,14 @@ class StockFactor:
         return df   
 
     def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+                ret_type : Literal['close' , 'vwap'] = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the IC of the factor
         """
-        params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
-
-        if 'ic' not in self.stats or not param_match(self.stats['ic'][0] , params):
-            df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
+        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'ic' : ic_type , 'ret' : ret_type}
+        calc_dates = self.cache_factor_stats.ic.dates_not_in_stat(params , self.date) if use_cache else self.date
+        if len(calc_dates) > 0:
+            df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
             grouped = df.groupby(by=['date'], as_index=True)
             def df_ic(subdf : pd.DataFrame , **kwargs):
                 with warnings.catch_warnings():
@@ -565,26 +754,29 @@ class StockFactor:
                     warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
                     return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
             ic = grouped.apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
-            self.stats['ic'] = (params , ic)
-        return self.stats['ic'][1]
+            self.cache_factor_stats.ic.append_stat(params , ic , keys = ['date'])
+        stat = self.cache_factor_stats.ic.get_stat(params)
+        return stat if all_dates else stat.query('date in @self.date')
     
     def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                      ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+                      ret_type : Literal['close' , 'vwap'] = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the IC of the factor by industry
         """
-        params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
-        if 'ic_indus' not in self.stats or not param_match(self.stats['ic_indus'][0] , params):
+        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'ic' : ic_type , 'ret' : ret_type}
+        calc_dates = self.cache_factor_stats.ic_indus.dates_not_in_stat(params , self.date) if use_cache else self.date
+        if len(calc_dates) > 0:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*correlation coefficient is not defined.*')
-                df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
+                df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
                 def df_ic(subdf : pd.DataFrame , **kwargs):
                     return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
                 ic = df.groupby(['date' , 'industry']).apply(df_ic , include_groups = False).\
                     rename_axis('factor_name',axis='columns').reset_index(drop=False).\
                     melt(id_vars = ['date' , 'industry'] , var_name = 'factor_name' , value_name = 'ic_indus')
-            self.stats['ic_indus'] = (params , ic)
-        return self.stats['ic_indus'][1]
+            self.cache_factor_stats.ic_indus.append_stat(params , ic , keys = ['date' , 'industry'])
+        stat = self.cache_factor_stats.ic_indus.get_stat(params)
+        return stat if all_dates else stat.query('date in @self.date')
     
     @staticmethod
     def _eval_group_perf(df : pd.DataFrame , factors , group_num : int = 10 , excess = False , direction : int = 1) -> pd.DataFrame:
@@ -597,60 +789,63 @@ class StockFactor:
         return df
 
     def eval_group_perf(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
-                        ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
+                        ret_type : Literal['close' , 'vwap'] = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the group performance of the factor
         """
-        params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
-        if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
-            df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
+        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'exc' : excess , 'ret' : ret_type}
+        calc_dates = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date
+        if len(calc_dates) > 0:
+            df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
             # assert not np.any(np.isinf(df['ret'])), f'inf values in factor data ret : {df[np.isinf(df).any(axis=1)]}'
             df = self._eval_group_perf(df , self.factor_names , group_num , excess)
-            if trade_date:
-                df['start'] = DATAVENDOR.td_array(df['date'] , lag)
-                df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
-            self.stats['group_perf'] = (params , df)
-        return self.stats['group_perf'][1]
+            df['start'] = DATAVENDOR.td_array(df['date'] , lag)
+            df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
+            self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name'])
+        stat = self.cache_factor_stats.group_perf.get_stat(params)
+        return stat if all_dates else stat.query('date in @self.date')
     
     def eval_weighted_pnl(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                          ret_type : Literal['close' , 'vwap'] = 'close' , given_direction : Literal[1,0,-1] = 0 ,
-                          weight_type_list : list[str] = ['long' , 'long_short' , 'short']) -> pd.DataFrame:
+                          ret_type : Literal['close' , 'vwap'] = 'close' , direction : Literal[1,0,-1] = 0 ,
+                          use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the weighted pnl of the factor
         """
-        params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type , 'given_direction' : given_direction , 'weight_type_list' : weight_type_list}
-        if 'weighted_pnl' not in self.stats or not param_match(self.stats['weighted_pnl'][0] , params):
-            df = self.frame_with_cols(fut_ret=True , nday=nday , lag=lag , ret_type=ret_type)
-            direction = given_direction if given_direction else np.sign(df.corr().loc['ret'].drop('ret')) 
+        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'ret' : ret_type , 'sign' : direction}
+        calc_dates = self.cache_factor_stats.weighted_pnl.dates_not_in_stat(params , self.date) if use_cache else self.date
+        if len(calc_dates) > 0:
+            df = self.frame_with_cols(fut_ret=True , nday=nday , lag=lag , ret_type=ret_type , dates=calc_dates)
+            dr = np.sign(df.corr().loc['ret'].drop('ret')) if direction == 0 else direction
 
-            dfs = []
-            for wt in weight_type_list:
-                kwargs = {'weight_type' : wt , 'direction' : direction , 'group_num' : group_num , 'include_groups' : False}
+            dfs : list[pd.DataFrame] = []
+            for wt in ['long' , 'long_short' , 'short']:
+                kwargs = {'weight_type' : wt , 'direction' : dr , 'group_num' : group_num , 'include_groups' : False}
                 df_wt = df.groupby('date').apply(eval_weighted_pnl, **kwargs).\
                     reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ret').assign(weight_type = wt)
                 dfs.append(df_wt)
 
-            pnl = pd.concat(dfs, axis=0).set_index(['weight_type' , 'date'])
-            pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
-            self.stats['weighted_pnl'] = (params , pnl)
-        return self.stats['weighted_pnl'][1]
+            pnl = pd.concat(dfs).set_index(['weight_type' , 'date'])
+            self.cache_factor_stats.weighted_pnl.append_stat(params , pnl , keys = ['weight_type' , 'date'])
+        stat = self.cache_factor_stats.weighted_pnl.get_stat(params)
+        return stat if all_dates else stat.query('date in @self.date')
 
-    def coverage(self , benchmark : Benchmark | str | None = None):
+    def coverage(self , benchmark : Benchmark | str | None = None , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the coverage of the factor by benchmark
         """
-        params = {'benchmark' : benchmark.name if isinstance(benchmark,Benchmark) else benchmark}
-        if 'coverage' not in self.stats or not param_match(self.stats['coverage'][0] , params):
-            dates = self.date
+        params = {'bm' : str(benchmark) if isinstance(benchmark,Benchmark) else str(benchmark)}
+        calc_dates = self.cache_factor_stats.coverage.dates_not_in_stat(params , self.date) if use_cache else self.date
+        if len(calc_dates) > 0:
             if isinstance(benchmark , str) or benchmark is None: 
                 benchmark = Benchmark(benchmark)
             factor = self.within(benchmark)
-            benchmark_size = pd.Series(benchmark.sec_num(dates) , index = dates)
+            benchmark_size = pd.Series(benchmark.sec_num(calc_dates) , index = calc_dates)
             coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
             for factor_name in coverage:
                 coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(lower=0 , upper=1)
-            self.stats['coverage'] = (params , coverage)
-        return self.stats['coverage'][1]
+            self.cache_factor_stats.coverage.append_stat(params , coverage , keys = ['date'])
+        stat = self.cache_factor_stats.coverage.get_stat(params)
+        return stat if all_dates else stat.query('date in @self.date')
 
     def time_series_stats(self , nday : int = 1 , lag : int = 1) -> pd.DataFrame:
         """
@@ -692,7 +887,7 @@ class StockFactor:
         if inplace: 
             return self.update(df , normalized = True)
         else:
-            return StockFactor(df , normalized = True)
+            return StockFactor(df , normalized = True , benchmark = self.benchmark)
     
     def select_analytic(self , task_name : str , **kwargs):
         """

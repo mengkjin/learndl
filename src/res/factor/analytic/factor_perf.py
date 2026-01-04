@@ -110,10 +110,9 @@ class IC_Monotony(FactorPerfCalc):
 class PnL_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , given_direction : Literal[1,0,-1] = 0 ,
-                 weight_type_list : list[str] = ['long' , 'long_short' , 'short'] , **kwargs) -> None:
+                 ret_type : Literal['close' , 'vwap'] = 'close' , direction : Literal[1,0,-1] = 0 , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type ,
-                  'given_direction' : given_direction , 'weight_type_list' : weight_type_list}
+                  'direction' : direction}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_pnl_curve
     def plotter(self): return plotter.plot_pnl_curve
@@ -243,7 +242,9 @@ class FactorPerfTest(BaseFactorAnalyticTest):
 
     def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , indent : int = 0 , vb_level : int = 1):
         factor = factor.filter_dates_between(self.start_dt , self.end_dt)
+        factor.cache_factor_stats.load(self.factor_stats_resume_path)
         with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values(): 
                 task.calc(factor , benchmarks , indent = indent + 1 , vb_level = vb_level + 1)
+        factor.cache_factor_stats.save(self.factor_stats_resume_path)
         return self

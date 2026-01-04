@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , Logger
-from src.proj.func import dfs_to_excel , figs_to_pdf
+from src.proj.func import dfs_to_excel , figs_to_pdf , camel_to_snake
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
@@ -156,11 +156,27 @@ class BaseFactorAnalyticTest(ABC):
         self._test_path = path if path is None else Path(path)
 
     @property
-    def resume_path(self):
+    def resume_path(self) -> Path | None:
         if self._test_path is None:
             return None
         else:
-            return self._test_path.joinpath(f'{self.TEST_TYPE}_portfolio')
+            return self._test_path.joinpath(camel_to_snake(self.__class__.__name__))
+
+    @property
+    def portfolio_resume_path(self):
+        assert self.TEST_TYPE not in ['factor'] , self.TEST_TYPE
+        if self.resume_path is None:
+            return None
+        else:
+            return self.resume_path.joinpath(f'portfolio')
+
+    @property
+    def factor_stats_resume_path(self):
+        assert self.TEST_TYPE in ['factor'] , self.TEST_TYPE
+        if self.resume_path is None:
+            return None
+        else:
+            return self.resume_path.joinpath(f'factor_stats')
 
     def get_rslts(self):
         return {k:v.calc_rslt for k,v in self.tasks.items()}

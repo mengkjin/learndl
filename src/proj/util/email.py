@@ -5,9 +5,10 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Literal
+from typing import Literal , Sequence
 
-from src.proj.env import MACHINE , Proj
+from src.proj.env import MACHINE
+from src.proj.proj import Proj
 from src.proj.log import Logger
 
 class _EmailSettings:
@@ -63,9 +64,9 @@ class Email:
         return recipient
     
     @classmethod
-    def message(cls , title : str  , body : str | None = None , recipient : str | None = None , 
-                send_attachments : bool = True ,
-                additional_attachments : str | Path | list[str | Path] | None = None ,
+    def message(cls , title : str  , body : str | None = None , recipient : str | None = None , * ,
+                attachments : str | Path | Sequence[str | Path] | None = None ,
+                project_attachments : bool = False ,
                 title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
         message['From'] = cls._settings.sender
@@ -73,18 +74,18 @@ class Email:
         message['Subject'] = f'{title_prefix} {title}'
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
-        attachments : list[Path] = []
-        if send_attachments:
-            attachments.extend([Path(f) for f in Proj.States.email_attachments])
+        if attachments is None:
+            attachment_paths : list[Path] = []
+        elif isinstance(attachments , Sequence):
+            attachment_paths = [Path(f) for f in attachments]
+        else:
+            attachment_paths = [Path(attachments)]
+            
+        if project_attachments:
+            attachment_paths.extend([Path(f) for f in Proj.States.email_attachments])
             Proj.States.email_attachments.clear()
-        if additional_attachments:
-            if isinstance(additional_attachments , list):
-                attachments.extend([Path(f) for f in additional_attachments])
-            else:
-                attachments.append(Path(additional_attachments))
-        attachments = list(set(attachments))
 
-        for attachment in attachments:
+        for attachment in attachment_paths:
             with open(attachment, 'rb') as attach_file:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(attach_file.read())
@@ -101,9 +102,9 @@ class Email:
     @classmethod
     def send(cls , title : str  , 
              body : str = 'This is test! Hello, World!' ,
-             recipient : str | None = None , 
-             send_attachments : bool = True ,
-             additional_attachments : str | Path | list[str | Path] | None = None ,
+             recipient : str | None = None , * , 
+             attachments : str | Path | Sequence[str | Path] | None = None ,
+             project_attachments : bool = False ,
              title_prefix : str | None = 'Learndl:' ,
              server : Literal['netease'] = 'netease' , 
              confirmation_message = ''):
@@ -113,7 +114,7 @@ class Email:
             return
 
         cls.setup_settings(server)
-        message = cls.message(title , body , recipient , send_attachments , additional_attachments , title_prefix)
+        message = cls.message(title , body , recipient , attachments = attachments , project_attachments = project_attachments , title_prefix = title_prefix)
 
         try:
             with cls.connection() as smtp:

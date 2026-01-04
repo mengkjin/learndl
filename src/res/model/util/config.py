@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , MACHINE , Logger , DB
+from src.proj import PATH , MACHINE , Logger , DB , Proj
 from src.proj.abc import FormatStr
 from src.proj.util import Device 
 from src.proj.func import update_dict
@@ -266,9 +266,6 @@ class TrainParam:
     @property
     def end_date(self) -> int: 
         return int(self.Param['model.end_date'])
-    @property
-    def model_rslt_path(self) -> Path: 
-        return self.model_base_path.rslt()
     @property
     def model_submodels(self) -> list: 
         return self.Param['model.submodels']
@@ -705,6 +702,9 @@ class TrainConfig(TrainParam):
     @property
     def model_labels(self) -> list[str]: 
         return self.Train.model_labels[:self.Model.max_num_output]
+    @property
+    def resume_option(self) -> Literal['last_model_date' , 'last_pred_date']:
+        return Proj.Conf.Model.TRAIN.resume_option
 
     def update(self, update = None , **kwargs):
         update = update or {}
@@ -891,7 +891,7 @@ class TrainConfig(TrainParam):
         self.parser_select(selection , vb_level) 
         return self
 
-    def print_out(self , color : str | None = None):
+    def print_out(self , color : str | None = 'lightgreen'):
         info_strs : list[tuple[int , str , str]] = [] # indent , key , value
         info_strs.append((0 , 'Model Name' , self.model_name))
         if self.module_type in ['db' , 'factor']:
@@ -936,6 +936,8 @@ class TrainConfig(TrainParam):
             info_strs.append((0 , 'Random Seed' , f'{self.random_seed}'))
             info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
             info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
+        if self.is_resuming:
+            info_strs.append((0 , 'Resume Option' , f'{self.resume_option}'))
 
         indented_keys = [FormatStr(key.title() , indent = indent).msg for indent , key , _ in info_strs]
         max_key_length = max([len(key) for key in indented_keys])

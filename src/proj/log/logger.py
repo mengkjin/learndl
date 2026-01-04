@@ -10,7 +10,8 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , Literal , Type
 
-from src.proj.env import MACHINE , PATH , Proj
+from src.proj.env import MACHINE , PATH
+from src.proj.proj import Proj
 from src.proj.abc import Duration , stdout , stderr , FormatStr
 
 from .display import Display
@@ -250,7 +251,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('RedAlert: ' , *args , color = color , vb_level = vb_level , **kwargs)
+        new_stdout('RedAlert:' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def alert3(cls , *args , color = 'purple' , vb_level : int = 0 , **kwargs):
@@ -425,7 +426,8 @@ class Logger:
     class Profiler(cProfile.Profile):
         """Profiler class for profiling the code, show the profile result in the best way"""
         def __init__(self, profiling = True , builtins = False , display = True , n_head = 20 , 
-                     columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where'] , sort_on = 'cumtime' , highlight = None , output = None ,
+                     columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where'] , 
+                     sort_on = 'cumtime' , highlight = None , output : str | None = 'profiler.csv' ,
                      **kwargs) -> None:
             self.profiling = profiling
             if self.profiling: 
@@ -439,6 +441,7 @@ class Logger:
 
         def __enter__(self):
             if self.profiling: 
+                self.start_time = datetime.now()
                 return super().__enter__()
             else:
                 return self
@@ -449,8 +452,9 @@ class Logger:
                 traceback.print_exc()
             elif self.profiling:
                 if self.display:
+                    new_stdout(f'Profiler cost time: {Duration(datetime.now() - self.start_time)}')
                     df = self.get_df(sort_on = self.sort_on , highlight = self.highlight , output = self.output)
-                    new_stdout(df.loc[:,self.columns].head(self.n_head))
+                    Display(df.loc[:,self.columns].head(self.n_head))
                 return super().__exit__(type , value , trace)
 
         def get_df(self , sort_on = 'cumtime' , highlight = None , output = None):
@@ -473,7 +477,7 @@ class Logger:
             df = df.loc[:,column_order]
             if isinstance(highlight , str): 
                 df = df[df.full_name.str.find(highlight) > 0]
-            if isinstance(output , str): 
+            if output is not None: 
                 path = PATH.log_profile.joinpath(output).with_suffix('.csv')
                 df.to_csv(path)
                 Logger.footnote(f'Profile result saved to {path}')

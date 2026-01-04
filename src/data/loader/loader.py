@@ -3,7 +3,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Literal
 
-from src.proj import PATH , Logger , DB , CONF , CALENDAR
+from src.proj import PATH , Logger , DB , Proj , CALENDAR
 from src.data.util import DataBlock
 
 @dataclass
@@ -99,8 +99,10 @@ class FactorLoader(BlockLoader):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = indent + 1 , vb_level = vb_level + 1)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
+        if not [fac for fac in factors if not fac.empty]:
+            Logger.alert1(f'no factors found for {self.names}')
+            return DataBlock()
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
-            assert len([fac for fac in factors if not fac.empty]) > 0 , f'no factors found for {self.names}'
             df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block
@@ -144,4 +146,4 @@ class FactorCategory1Loader(BlockLoader):
     @property
     def category0(self) -> str:
         """Get the category0 of the factor"""
-        return CONF.Factor.STOCK.cat1_to_cat0(self.category1)
+        return Proj.Conf.Factor.STOCK.cat1_to_cat0(self.category1)

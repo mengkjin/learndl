@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import Silence , Logger , CALENDAR , CONF , DB 
+from src.proj import Silence , Logger , CALENDAR , Proj , DB 
 from src.proj.func import singleton
 from src.data.util import DataBlock , INFO
 
@@ -270,11 +270,11 @@ class DataVendor:
         return blk
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.style)
+        blk = self.get_risk_exp(date).align(secid , date , Proj.Conf.Factor.RISK.style)
         return blk
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , CONF.Factor.RISK.indus)
+        blk = self.get_risk_exp(date).align(secid , date , Proj.Conf.Factor.RISK.indus)
         return blk
     
     def get_ffmv(self , secid : np.ndarray , d : int):

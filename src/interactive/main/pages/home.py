@@ -2,7 +2,7 @@ import platform, torch , sys , re
 import streamlit as st
 import psutil
 
-from src.proj import CONF
+from src.proj import Proj
 from src.interactive.frontend.frontend import expander_subheader
 from src.interactive.backend import ScriptRunner
 from util import SC , set_current_page , show_sidebar_buttons , get_script_page , print_page_header , intro_pages
@@ -68,10 +68,10 @@ def show_system_info():
             cols[1].markdown(f":blue-badge[*{value}*]")
         
 def show_pending_features():
-    if not CONF.InteractiveApp.pending_features: 
+    if not Proj.Conf.Interactive.pending_features: 
         return
     with expander_subheader('home-pending-features' , 'Pending Features' , ':material/pending_actions:' , True):
-        for feature in CONF.InteractiveApp.pending_features:
+        for feature in Proj.Conf.Interactive.pending_features:
             st.warning(feature , icon = ":material/schedule:")
 
 def show_intro_pages():

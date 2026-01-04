@@ -17,7 +17,8 @@ class CallbackTimer(BaseCallBack):
         self.recording = Proj.verbosity >= 10
         self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.possible_hooks()}
         self.record_start_time : dict[str,datetime] = {}
-
+    def __bool__(self):
+        return self.recording and not self.turn_off
     def at_enter(self , hook_name , vb_level : int = 10):
         super().at_enter(hook_name , vb_level)
         if self.recording: 
@@ -30,8 +31,7 @@ class CallbackTimer(BaseCallBack):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
-            df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
-            df.columns = columns
+            df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5)
             Logger.caption('Table: Callback Time Costs:')
             Logger.Display(df)  
             
@@ -54,8 +54,6 @@ class StatusDisplay(BaseCallBack):
 
     @property
     def dataloader(self) -> BatchDataLoader | Any : return self.trainer.dataloader
-    @property
-    def path_test(self): return str(self.config.model_base_path.rslt('test.xlsx'))
     @property
     def initial_models(self) -> bool: return self.record_model_stage <= self.config.model_num
     @property

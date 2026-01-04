@@ -308,13 +308,11 @@ def show_report_main(runner : ScriptRunner):
     with placeholder:
         if item is None or not item.belong_to(runner) : 
             return
-        status_text = f'{header}: {item.status_state.title()}'
-        status_color = 'green' if item.status_state == 'complete' else 'red' if item.status_state == 'error' else 'blue'
-        with expander_subheader(wkey , status_text , icon , True , help = help , status = True , color = status_color):
+        with expander_subheader(wkey , f'{header}: {item.status_title}' , icon , True , help = help , status = True , color = item.status_color):
             if item is None or not item.belong_to(runner): 
                 return
             
-            start_as_unfinished = item.status_state == 'running'
+            start_as_unfinished = item.is_running
             with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):
                 st.code(item.cmd , wrap_lines=True)
 
@@ -333,8 +331,10 @@ def show_report_main(runner : ScriptRunner):
             with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
-            if item.status == 'error':
+            if item.is_error:
                 st.error(f'{item.running_str} has Error!' , icon = ":material/error:")
+            elif item.is_killed:
+                st.error(f'{item.running_str} has been Killed!' , icon = ":material/cancel:")
             else:
                 st.success(f'{item.running_str} Completed!' , icon = ":material/trophy:")
 
@@ -347,7 +347,7 @@ def show_report_main(runner : ScriptRunner):
                     for s in value.split('\n'):
                         st.write(ColoredText(s))
                     st.write('')
-
+            
             if item.exit_files:
                 st.success(f'{item.running_str} Has {len(item.exit_files)} Exit File(s)!' , icon = ":material/preview:")
                 #if SC.running_report_init and len(item.exit_files) == 1:
@@ -360,26 +360,39 @@ def show_report_main(runner : ScriptRunner):
                         with col0:
                             if st.button(path.name, key= f"exit-file-open-{path}", 
                                          icon = ":material/open_in_new:" , 
-                                         help = f":blue[**Open**]: {path}"):
+                                         help = f":blue[**Open**]: {path}" or f":red[**Open**]: {path} (File Not Found)", 
+                                         disabled = not path.exists()):
                                 direclty_open_file(path)
 
                         with col1:
                             preview_key = f"exit-file-preview-{i}" if path != SC.running_report_file_previewer else f"exit-file-preview-select-{i}"
                             st.button(":material/preview:", key=preview_key ,
-                                      help = f":blue[**Preview**]: {path}" ,
+                                      help = f":blue[**Preview**]: {path}" or f":red[**Preview**]: {path} (File Not Found)", 
+                                      disabled = not path.exists() ,
                                       on_click = SC.click_file_preview , args = (path,))
 
                         with col2.container(key = f"exit-file-download-{path}"):
-                            with open(path, 'rb') as f:
-                                if st.download_button(
+                            if path.exists():
+                                with open(path, 'rb') as f:
+                                    if st.download_button(
+                                        ':material/download:', 
+                                        data=f.read(),
+                                        file_name=str(path),
+                                        key = f"download-{path}",
+                                        help = f":blue[**Download**]: {path}",
+                                        on_click=SC.click_file_download , args = (path,)
+                                    ):
+                                        pass
+                            else:
+                                st.download_button(
                                     ':material/download:', 
-                                    data=f.read(),
+                                    data=b'',
                                     file_name=str(path),
                                     key = f"download-{path}",
-                                    help = f":blue[**Download**]: {path}",
-                                    on_click=SC.click_file_download , args = (path,)
-                                ):
-                                    pass
+                                    help = f":red[**Download**]: {path} (File Not Found)",
+                                    disabled = True ,
+                                )
+
                     
                     previewer = FilePreviewer(SC.running_report_file_previewer)
                     previewer.preview()

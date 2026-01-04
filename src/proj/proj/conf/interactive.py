@@ -25,4 +25,4 @@ class InteractiveAppConfig:
         """auto refresh interval of the app"""
         return 0
 
-InteractiveApp = InteractiveAppConfig()
+Interactive = InteractiveAppConfig()

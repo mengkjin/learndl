@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Logger , DB
+from src.proj import Logger , DB , Proj
 from src.proj.func import dfs_to_excel , figs_to_pdf
 
 from src.res.factor.util import StockFactor
@@ -15,15 +15,18 @@ class BasicTestResult(BaseCallBack):
     
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        
+        self.snap_folder.mkdir(exist_ok=True , parents=True)
+
     @property
     def model_test_dates(self) -> np.ndarray: return self.trainer.data.model_test_dates
     @property
     def test_full_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
     @property
-    def path_summary(self): return self.config.model_base_path.rslt('test_summary.xlsx')
+    def path_summary(self): return self.config.model_base_path.rslt('basic_test_summary.xlsx')
     @property
-    def path_test_df(self): return self.config.model_base_path.snapshot('test_by_date.feather')
+    def snap_folder(self): return self.config.model_base_path.snapshot('basic_test')
+    @property
+    def path_test_df(self): return self.snap_folder.joinpath('test_by_date.feather')
 
     def save_test_df(self , vb_level : int = 1):
         df = self.get_test_df()
@@ -45,9 +48,9 @@ class BasicTestResult(BaseCallBack):
             'model_num' : self.status.model_num , 
             'model_date' : self.status.model_date ,
             'submodel' : self.status.model_submodel ,
-            'date' : self.model_test_dates ,
+            'date' : self.metrics.score_keys[-len(self.model_test_dates):] ,
             'value' : self.metrics.scores[-len(self.model_test_dates):]
-        })
+        }).query('date in @self.model_test_dates')
         self.test_df_date = pd.concat([self.test_df_date , df_date])
 
     def on_test_end(self): 
@@ -129,13 +132,17 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
         self.test_results : dict[str , pd.DataFrame] = {}
         self.test_figures : dict[str , Figure] = {}
+        self.snap_folder.mkdir(exist_ok=True , parents=True)
+
+    def __bool__(self):
+        return not self.turn_off and bool(self.tasks)
         
     @property
-    def test_path(self): return self.config.model_base_path.snapshot()
+    def snap_folder(self): return self.config.model_base_path.snapshot('detailed_alpha')
     @property
-    def path_data(self): return self.trainer.path_analytical_data
+    def path_data(self): return self.config.model_base_path.rslt('detailed_alpha_data.xlsx')
     @property
-    def path_plot(self): return self.trainer.path_analytical_plot
+    def path_plot(self): return self.config.model_base_path.rslt('detailed_alpha_plot.pdf')
     @property
     def display_tables(self) -> list[str]: return [name for name in self.DISPLAY_TABLES if name in self.test_results]
     @property
@@ -143,31 +150,38 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def factor_names(self) -> list[str] | Any: 
         return self.trainer.model_submodels
+    @property
+    def test_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
 
-    def get_factor(self , tested_only = True , interval = 5 , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
-        df = self.trainer.record.get_preds(tested_only=tested_only , interval = interval)
-        if which == 'first' or self.trainer.config.Model.n_model == 1:
-            df['factor_name'] = df['submodel']
-            df = df.query('model_num == 0')
+    def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
+        if which == 'first':
+            df = self.trainer.record.get_preds(pred_dates = pred_dates)
         elif which == 'avg':
-            df['factor_name'] = df['submodel']
-            df = df.groupby(['date','secid','submodel'])['pred'].mean().reset_index()
+            df = self.trainer.record.get_avg_preds(pred_dates = pred_dates)
         else:
             raise ValueError(f'Invalid which: {which}')
-        df = df.pivot_table('pred',['secid','date'],'factor_name').reset_index()
+        df = df.rename(columns={'submodel':'factor_name'}).pivot_table('pred',['secid','date'],'factor_name').reset_index()
         factor = StockFactor(df , factor_names = self.factor_names)
         return factor
+
+    def get_factor_for_factor_test(self) -> StockFactor:
+        return self.get_factor(self.test_dates[::5])
+
+    def get_factor_for_fmp_test(self , trailing_days : int = 10) -> StockFactor:
+        assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
+        test_date_num = sum(self.test_dates > self.trainer.record.resumed_last_pred_date)
+        return self.get_factor(self.test_dates[-test_date_num - trailing_days:])
 
     def factor_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor Perf Test'):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
-                factor = self.get_factor(tested_only=False , interval = 5)
+                factor = self.get_factor_for_factor_test()
             with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
                 factor.day_returns()
 
             for task in self.factor_tasks:
                 Logger.divider(vb_level = vb_level)
-                results = FactorTestAPI.run_test(task , factor , test_path = self.test_path , 
+                results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
                                                  start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date ,
                                                  indent = indent , vb_level = vb_level,
@@ -179,7 +193,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def fmp_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor FMP Test'):
             with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
-                factor = self.get_factor(tested_only=True , interval = 1)
+                factor = self.get_factor_for_fmp_test()
             with Logger.Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
                 factor.alpha_models()
             with Logger.Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):
@@ -190,7 +204,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 factor.day_quotes()
             for task in self.fmp_tasks:
                 Logger.divider(vb_level = vb_level)
-                results = FactorTestAPI.run_test(task , factor , test_path = self.test_path , 
+                results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
                                                  start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date,
                                                  indent = indent , vb_level = vb_level,
@@ -220,6 +234,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
             dfs_to_excel(self.test_results , self.path_data , print_prefix='Analytic datas')
             figs_to_pdf(self.test_figures , self.path_plot , print_prefix='Analytic plots')
+
+            Proj.States.exit_files.append(self.path_data)
+            Proj.States.exit_files.append(self.path_plot)
 
     def on_test_end(self):
         if not self.tasks:

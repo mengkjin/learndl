@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.proj import CONF
+from src.proj import Proj
 
 from .. import layer as Layer
 
@@ -12,7 +12,7 @@ class risk_att_gru(nn.Module):
     
     def __init__(
             self, 
-            input_dim    = (6,len(CONF.Factor.RISK.style),len(CONF.Factor.RISK.indus)),
+            input_dim    = (6,len(Proj.Conf.Factor.RISK.style),len(Proj.Conf.Factor.RISK.indus)),
             hidden_dim   = 2**5,
             att_dim      = 2**7 ,
             dropout      = 0.1,
@@ -24,10 +24,10 @@ class risk_att_gru(nn.Module):
         super().__init__()
         
         self.trade_gru = nn.GRU(input_dim[0] , hidden_dim , num_layers = rnn_layers , dropout = dropout , batch_first = True)
-        assert input_dim[1] == len(CONF.Factor.RISK.style) , \
-            (input_dim , (len(CONF.Factor.RISK.style),len(CONF.Factor.RISK.indus)))
-        assert input_dim[2] == len(CONF.Factor.RISK.indus) , \
-            (input_dim , (len(CONF.Factor.RISK.style),len(CONF.Factor.RISK.indus)))
+        assert input_dim[1] == len(Proj.Conf.Factor.RISK.style) , \
+            (input_dim , (len(Proj.Conf.Factor.RISK.style),len(Proj.Conf.Factor.RISK.indus)))
+        assert input_dim[2] == len(Proj.Conf.Factor.RISK.indus) , \
+            (input_dim , (len(Proj.Conf.Factor.RISK.style),len(Proj.Conf.Factor.RISK.indus)))
 
         if indus_embed:
             self.indus_embedding = nn.Linear(input_dim[-1] , indus_dim)

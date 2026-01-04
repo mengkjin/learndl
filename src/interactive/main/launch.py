@@ -4,7 +4,7 @@ import pathlib , os
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from src.proj import CONF , Proj
+from src.proj import Proj
 from util import (SC , style , intro_pages , script_pages , runs_page_url , get_logo)
 
 file_path = str(pathlib.Path(__file__).absolute())
@@ -15,12 +15,12 @@ assert os.getcwd().lower() == path , \
 
 st.set_option('client.showSidebarNavigation', False)
 
-if CONF.InteractiveApp.auto_refresh_interval > 0:
-    st_autorefresh.st_autorefresh(interval = CONF.InteractiveApp.auto_refresh_interval * 1000)
+if Proj.Conf.Interactive.auto_refresh_interval > 0:
+    st_autorefresh.st_autorefresh(interval = Proj.Conf.Interactive.auto_refresh_interval * 1000)
 
 def page_config():
     st.set_page_config(
-        page_title=CONF.InteractiveApp.page_title,
+        page_title=Proj.Conf.Interactive.page_title,
         page_icon=":material/rocket_launch:",
         layout= 'wide' , # 'centered',
         initial_sidebar_state="expanded"

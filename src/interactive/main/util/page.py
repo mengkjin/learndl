@@ -2,7 +2,7 @@ import streamlit as st
 from pathlib import Path
 from typing import Literal
 import re
-from src.proj import CONF
+from src.proj import Proj
 from src.interactive.backend import PathItem
 from .control import SC
 
@@ -12,7 +12,7 @@ assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
 PAGE_TITLES = {
-    'home' : f":rainbow[:material/rocket_launch: {CONF.InteractiveApp.page_title} (_v{CONF.InteractiveApp.version}_)]"
+    'home' : f":rainbow[:material/rocket_launch: {Proj.Conf.Interactive.page_title} (_v{Proj.Conf.Interactive.version}_)]"
 }
 
 PAGE_ICONS = {

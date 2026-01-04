@@ -41,7 +41,7 @@ def check_cuda_status():
         recipient = 'mengkjin@163.com'
         
         try:
-            Email.send(title , body , recipient , send_attachments = False , confirmation_message='CUDA Status')
+            Email.send(title , body , recipient , confirmation_message='CUDA Status')
         except Exception:
             pass
 
@@ -76,8 +76,8 @@ def email_to_fanghan(test = False):
         df = pd.merge(df1 , df2 , on='secid' , how='left')
         df.to_csv(temp_file)
         try:
-            Email.send(title , body , recipient , send_attachments = False , additional_attachments = attachments)
-            task_recorder.mark_finished(success = True)
+            Email.send(title , body , recipient , attachments = attachments)
+            task_recorder.mark_finished()
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')
             return

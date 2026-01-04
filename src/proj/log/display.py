@@ -4,7 +4,7 @@ from IPython.display import display as raw_display
 from typing import Callable
 
 from src.proj.abc import Silence
-from src.proj.env import Proj
+from src.proj.proj import Proj
 
 __all__ = ['Display']
 

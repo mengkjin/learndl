@@ -413,6 +413,10 @@ class ModuleData:
     secid : np.ndarray
     date  : np.ndarray
 
+    @property
+    def empty_x(self):
+        return len(self.x) == 0 or all([x.empty for x in self.x.values()])
+
     def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]
     

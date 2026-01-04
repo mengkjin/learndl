@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 from typing import Any
+
 __all__ = ['ProjStates']
 
 _project_states : dict[str, Any] = {

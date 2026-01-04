@@ -4,12 +4,12 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal
 
-from src.proj import CONF
+from src.proj import Proj
 from src.data import DATAVENDOR
 
 class Port:
     '''portfolio realization of one day'''
-    weight_eps = 1 / 10 ** CONF.Factor.ROUNDING.weight
+    weight_eps = 1 / 10 ** Proj.Conf.Factor.ROUNDING.weight
 
     def __init__(self , port : pd.DataFrame | None , date : int | Any = -1 , 
                  name : str | Any = 'default' , value : float = 1.) -> None:
@@ -210,7 +210,7 @@ class Port:
             return 0.
         assert isinstance(another , Port) , another
         turn = (self - another).port['weight'].abs().sum()
-        return np.round(turn , CONF.Factor.ROUNDING.turnover)
+        return np.round(turn , Proj.Conf.Factor.ROUNDING.turnover)
 
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False):
         if secid is None: 

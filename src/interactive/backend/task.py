@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.proj import PATH , Logger , Duration
 from src.proj.func import check_process_status , kill_process
-from src.proj.util import ScriptCmd , DBConnHandler
+from src.proj.util import ScriptCmd , DBConnHandler , Email
 
 def timestamp():
     return datetime.now().timestamp()
@@ -641,20 +641,57 @@ class TaskItem:
         item.set_task_db(task_db)
         return item
     
-    def refresh(self):
+    def refresh(self) -> None:
         '''refresh task item status , return True if status changed'''
-        changed = False
-        if self.pid and self.status not in ['complete', 'error']:
+        if self.pid and self.is_running:
             status = check_process_status(self.pid)
             if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
                 raise ValueError(f"Process {self.pid} is {status}")
-            if status in ['complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
-                changed = True
+            if status in ['complete' , 'zombie']:
+                if not self.check_killed():
+                    self.update({'status': 'complete'} , write_to_db = False)
+            else:
+                self.update({'status': 'running'} , write_to_db = False)
+            
         if self.task_db.is_backend_updated(self.id):
             self.reload()
-            changed = True
             self.task_db.del_backend_updated_task(self.id)
-        return changed
+
+    def check_killed(self) -> bool:
+        crash_protector_paths = self.get_crash_protector()
+        if crash_protector_paths:
+            updates = {
+                'status': 'killed',
+                'end_time': timestamp(),
+                'exit_code': 1,
+                'exit_error': f'CRITICAL: Process {self.pid} is killed , please check the crash_protector files',
+                'exit_files': crash_protector_paths,
+            }
+            self.update(updates , write_to_db = True)
+            title = f'Process Killed Unexpectedly'
+            body = f"""Process {self.id} killed , information includes:
+            - Task ID: {self.id}
+            - Script: {self.script}
+            - CMD: {self.cmd}
+            - PID: {self.pid}
+            - Create Time: {self.time_str('create')}
+            - Start Time: {self.time_str('start')}
+            - End Time: {self.time_str('end')}
+            - Duration: {self.duration_str}
+            - Exit Code: {self.exit_code}
+            - Exit Error: {self.exit_error}
+            - Exit Files: {crash_protector_paths}
+            """
+            Email.send(title , body , attachments = crash_protector_paths)
+            return True
+        else:
+            return False
+
+    def get_crash_protector(self) -> list[str]:
+        if self.task_id is None:
+            return []
+        long_suffix = '.' + self.task_id.replace('/', '_') + '.md'
+        return [str(path) for path in PATH.runtime.joinpath('crash_protector').glob('*.md') if path.name.endswith(long_suffix)]
     
     def to_dict(self):
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -675,9 +712,9 @@ class TaskItem:
             self.task_db.update_task(self.id , **updates)
 
     def kill(self):
-        if self.pid and self.status not in ['complete' , 'error']:
+        if self.pid and self.is_running:
             if kill_process(self.pid):
-                self.update({'status': 'killed', 'end_time': timestamp()} , write_to_db = True)
+                self.check_killed()
                 return True
             else:
                 return False
@@ -689,20 +726,35 @@ class TaskItem:
             icon , color = ':material/arrow_forward_ios:' , 'blue'
         elif status == 'complete': 
             icon , color = ':material/check:' , 'green'
-        elif status in ['error' , 'killed']: 
+        elif status == 'error': 
             icon , color = ':material/close:' , 'red'
+        elif status == 'killed':
+            icon , color = ':material/cancel:' , 'violet'
         else: 
             raise ValueError(f"Invalid status: {status}")
         return f":{color}-badge[{icon}]" if tag else icon
     
     @property
-    def status_state(self):
+    def status_state(self) -> Literal['running', 'complete', 'error']:
         if self.is_running: 
             return 'running'
         elif self.is_complete:  
             return 'complete'
-        elif self.is_error: 
+        elif self.is_error or self.is_killed: 
             return 'error'
+        else: 
+            raise ValueError(f"Invalid status: {self.status}")
+
+    @property
+    def status_title(self):
+        if self.is_running: 
+            return 'Running'
+        elif self.is_complete:  
+            return 'Complete'
+        elif self.is_error: 
+            return 'Error'
+        elif self.is_killed:
+            return 'Killed'
         else: 
             raise ValueError(f"Invalid status: {self.status}")
 
@@ -714,6 +766,8 @@ class TaskItem:
             return 'green'
         elif self.is_error: 
             return 'red'
+        elif self.is_killed:
+            return 'violet'
         else: 
             raise ValueError(f"Invalid status: {self.status}")
 
@@ -723,7 +777,11 @@ class TaskItem:
 
     @property
     def is_error(self):
-        return self.status in ['error' , 'killed']
+        return self.status == 'error'
+
+    @property
+    def is_killed(self):
+        return self.status == 'killed'
     
     @property
     def is_running(self):
@@ -731,12 +789,14 @@ class TaskItem:
 
     @property
     def plain_icon(self):
-        if self.status in ['running', 'starting']: 
+        if self.is_running: 
             icon = '🔵'
-        elif self.status == 'complete': 
+        elif self.is_complete: 
             icon = '✅'
-        elif self.status in ['error' , 'killed']: 
+        elif self.is_error: 
             icon = '❌'
+        elif self.is_killed:
+            icon = '💀'
         else: 
             raise ValueError(f"Invalid status: {self.status}")
         return icon

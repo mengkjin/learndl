@@ -12,7 +12,7 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from src.proj import CONF
+from src.proj import Proj
 from src.res.factor.util import Portfolio
 
 from ..stat import eval_cum_ret , eval_drawdown , eval_uncovered_max_drawdown
@@ -140,7 +140,7 @@ class AccountConditioner:
         else:
             pf = (self.position_start * self.accessor.overnight + 1) * \
                 (self.position_end * self.accessor.intraday + 1) - 1
-        pf = pf - self.position_change.abs() * CONF.Factor.TRADE.default
+        pf = pf - self.position_change.abs() * Proj.Conf.Factor.TRADE.default
         return pf
     
 class BaseConditioner(ABC):

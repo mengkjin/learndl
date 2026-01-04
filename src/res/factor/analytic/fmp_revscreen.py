@@ -85,7 +85,7 @@ class RevScreenFMPTest(BaseFactorAnalyticTest):
         self.update_kwargs()
         self.portfolio_group = PortfolioGroupBuilder(
             'revscreen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 
-            resume = self.resume , resume_path = self.resume_path , caller = self , 
+            resume = self.resume , resume_path = self.portfolio_resume_path , caller = self , 
             start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()
 

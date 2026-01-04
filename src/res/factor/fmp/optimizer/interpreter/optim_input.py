@@ -3,7 +3,7 @@ import numpy as np
 from copy import deepcopy
 from typing import Any
 
-from src.proj import CONF
+from src.proj import Proj
 from src.res.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL , Rmodel
 
 from .solver_input import SolverInput
@@ -46,7 +46,7 @@ class OptimizedPortfolioInput:
         self.cfg_short      = parse_config_short(self.config)
 
     def update_given_config(self , given_config : dict):
-        self.config = deepcopy(CONF.Factor.OPTIM.default)
+        self.config = deepcopy(Proj.Conf.Factor.OPTIM.default)
         for key in self.config:
             if not (given := given_config.get(key)): 
                 continue

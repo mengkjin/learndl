@@ -38,7 +38,7 @@ class BatchDataLoader:
         return batch_data
 
     def enable_tqdm(self , disable = False):
-        if Proj.verbosity < 9 or not self.tqdm or disable: 
+        if Proj.verbosity < Proj.max_verbosity or not self.tqdm or disable: 
             return self
         if not isinstance(self.loader , tqdm): 
             self.loader = tqdm(self.loader , total=len(self.loader) , desc=self.desc)
@@ -46,7 +46,7 @@ class BatchDataLoader:
 
     def display(self , text : str):
         if isinstance(self.loader , tqdm) and not self.loader.disable:  
-            self.loader.set_description(text)
+            self.loader.set_description(text.rstrip())
 
     def filter_dates(self , exclude_dates = None , include_dates = None):
         if exclude_dates is not None or include_dates is not None:

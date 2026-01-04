@@ -4,13 +4,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Callable
 
-from src.proj.env import MACHINE , Proj
+from src.proj.env import MACHINE
+from src.proj.proj import Proj
 from src.proj.log import Logger
 from src.proj.calendar import CALENDAR
 
 from .task_record import TaskRecorder
 from ..email import Email
-from ..catcher import HtmlCatcher , MarkdownCatcher , WarningCatcher
+from ..catcher import HtmlCatcher , MarkdownCatcher , WarningCatcher , CrashProtectorCatcher
 
 
 class TaskName:
@@ -54,11 +55,14 @@ class AutoRunCatchers:
         'must accept context and return_scalar arguments' ,
         'an item of incompatible dtype' ,
     ]
-    def __init__(self , catchers : list[str] = ['html' , 'markdown' , 'warning']):
+    def __init__(self , catchers : list[str] = ['crash_protector' , 'html' , 'markdown' , 'warning'] , task_id : str | None = None):
         self.catchers = catchers
+        self.task_id = task_id
 
     def enter(self , title : str , category : str , init_time : datetime):
         self._catchers = []
+        if 'crash_protector' in self.catchers:
+            self._catchers.append(CrashProtectorCatcher(self.task_id))
         if 'html' in self.catchers:
             self._catchers.append(HtmlCatcher(title , category , init_time))
         if 'markdown' in self.catchers:
@@ -103,16 +107,17 @@ class AutoRunTask:
         self , 
         task_name : str , 
         task_key : str | Any | None = None , 
-        catchers : list[str] = ['html' , 'markdown' , 'warning'],
         forfeit_if_done = False,
-        verbosity : int | None = None ,
+        verbosity : int | None = None , 
+        task_id : str | None = None ,
         **kwargs
     ):
         self.task_name = task_name
         self.task_key = task_key
         self.init_time = datetime.now()
-        
-        self.catchers = AutoRunCatchers(catchers)
+        self.task_id = task_id
+
+        self.catchers = AutoRunCatchers(task_id = task_id)
         self.forfeit_if_done = forfeit_if_done
 
         self.verbosity = verbosity
@@ -124,6 +129,7 @@ class AutoRunTask:
         
         self.status = 'Starting'
         self.func_return : Any | None = None
+        
 
     def __bool__(self):
         return True
@@ -144,12 +150,7 @@ class AutoRunTask:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.end_time = datetime.now()
 
-        if exc_type is not None:
-            traceback.print_exc()
-            self.status = 'Error'
-            self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-        else:
-            self.status = 'Success'
+        assert exc_type is None , 'Unexpected exception in AutoRunTask , should be caught by the caller!'
 
         self.error_messages.extend(Logger.get_conclusions('error'))
         self.exit_message = Logger.draw_conclusions()
@@ -164,9 +165,9 @@ class AutoRunTask:
             self.send_email()
 
         if self.execution_success: 
-            self.task_recorder.mark_finished(
-                remark = ' | '.join([f'source: {self.source}' , 
-                                     f'exit_code: {len(self.error_messages)}']))
+            self.task_recorder.mark_finished(remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}']))
+        else:
+            self.task_recorder.mark_failed(remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}']))
 
     def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
@@ -176,7 +177,13 @@ class AutoRunTask:
                 if self.forfeit_if_done and self.forfeit_task:
                     Logger.conclude(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update' , level = 'error')
                 else:
-                    self.func_return = func(*args , **self.kwargs)
+                    try:
+                        self.func_return = func(*args , **self.kwargs)
+                        self.status = 'Success'
+                    except Exception as e:
+                        traceback.print_exc()
+                        self.status = 'Error'
+                        Logger.conclude(''.join(msg for msg in traceback.format_exception(type(e), e, e.__traceback__)).strip() , level = 'error')
             return self
         return wrapper
 
@@ -290,7 +297,7 @@ class AutoRunTask:
                 f'Final Messages : ' + '-' * 20 ,
                 self.exit_message ,
             ]
-            Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , additional_attachments = self.exit_files)
+            Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
 
     @classmethod
     def get_value(cls , key : str) -> Any:

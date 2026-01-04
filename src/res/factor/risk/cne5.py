@@ -3,7 +3,7 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal
 
-from src.proj import Logger , CONF , CALENDAR , DB
+from src.proj import Logger , Proj , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.math.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
@@ -123,8 +123,8 @@ class TuShareCNE5_Calculator:
         if df is None or df.empty: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight','market']] , 
                             self.get_industry(date) , 
-                            *[self.get_style(date , name) for name in CONF.Factor.RISK.style]] , axis=1)
-        df = df.loc[:,['estuniv' , 'weight'] + CONF.Factor.RISK.common]
+                            *[self.get_style(date , name) for name in Proj.Conf.Factor.RISK.style]] , axis=1)
+        df = df.loc[:,['estuniv' , 'weight'] + Proj.Conf.Factor.RISK.common]
         self.exposure.add(df , date)
         return df
 
@@ -144,7 +144,7 @@ class TuShareCNE5_Calculator:
     
     def get_style(self , date : int , name : str) -> pd.Series:
         '''get style of a given date'''
-        assert name in CONF.Factor.RISK.style , name
+        assert name in Proj.Conf.Factor.RISK.style , name
         df = self.style.get(date , name)
         if df is None or df.empty: 
             df = getattr(self , f'calc_{name}')(date)
@@ -217,7 +217,7 @@ class TuShareCNE5_Calculator:
         self.ind_grp.add(df , date)
 
         df = df.assign(values = 1).pivot_table('values' , 'secid' , 'indus', fill_value=0).\
-            loc[:,CONF.Factor.RISK.indus]
+            loc[:,Proj.Conf.Factor.RISK.indus]
         df = df.reindex(univ.index).fillna(0).rename_axis(columns=None)
         self.ind_exp.add(df , date)
         
@@ -225,7 +225,7 @@ class TuShareCNE5_Calculator:
     
     def calc_style(self , date : int) -> None:
         '''calculate style of a given date'''
-        for style_name in CONF.Factor.RISK.style: 
+        for style_name in Proj.Conf.Factor.RISK.style: 
             getattr(self , f'calc_{style_name}')(date)
     
     def calc_size(self , date : int) -> pd.Series:

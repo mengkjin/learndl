@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from typing import Any
 import math
 
-from src.proj import Logger , CONF
+from src.proj import Logger , Proj
 class GatedResidualNetwork(nn.Module):
     """门控残差网络"""
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, dropout: float = 0.1):
@@ -137,7 +137,7 @@ class TemporalFusionTransformer(nn.Module):
     def __init__(
         self,
         input_dim : tuple[int,int] | tuple[int,int,int] = \
-            (6 , len(CONF.Factor.RISK.style),len(CONF.Factor.RISK.indus)), # aka , known dynamic dim , static dim
+            (6 , len(Proj.Conf.Factor.RISK.style),len(Proj.Conf.Factor.RISK.indus)), # aka , known dynamic dim , static dim
         hidden_dim: int = 16,
         label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used
         num_heads: int = 4,
@@ -170,7 +170,7 @@ class TemporalFusionTransformer(nn.Module):
         self.indus_dim = indus_dim
         self.indus_embed = indus_embed
 
-        assert self.static_dim == len(CONF.Factor.RISK.indus) , (input_dim , len(CONF.Factor.RISK.indus))
+        assert self.static_dim == len(Proj.Conf.Factor.RISK.indus) , (input_dim , len(Proj.Conf.Factor.RISK.indus))
         
         if indus_embed:
             self.indus_embedding = nn.Linear(self.static_dim , indus_dim)

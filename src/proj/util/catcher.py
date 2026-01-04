@@ -1,22 +1,26 @@
 import io , sys , re , html , base64 , platform , warnings , shutil , traceback
 import pandas as pd
 
-from typing import Any ,Literal , IO
+from typing import Any ,Literal , IO , Union
 from abc import ABC, abstractmethod
-from io import StringIO
+from io import StringIO , TextIOWrapper
 from pathlib import Path
 from dataclasses import dataclass , field
 from datetime import datetime
 from matplotlib.figure import Figure
 
-from src.proj.env import PATH , MACHINE , Proj
+from src.proj.env import PATH , MACHINE
+from src.proj.proj import Proj
 from src.proj.abc import Duration
 from src.proj.log import Logger
 
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 
-    'HtmlCatcher' , 'MarkdownCatcher' , 'WarningCatcher' ,
+    'HtmlCatcher' , 'MarkdownCatcher' , 'CrashProtectorCatcher' , 'WarningCatcher' ,
 ]
+
+type_of_std = Literal['stdout' , 'stderr']
+type_of_catcher = Union['OutputDeflector' , IO , 'OutputCatcher' , None]
 
 def _str_to_html(text: str | Any):
     """capture string to html"""
@@ -165,8 +169,8 @@ class OutputDeflector:
     """
     def __init__(
             self, 
-            type : Literal['stdout' , 'stderr'] ,
-            catcher : 'OutputDeflector | IO | OutputCatcher | None', 
+            type : type_of_std ,
+            catcher : type_of_catcher, 
             keep_original : bool = True,
             catcher_function : str = 'write',
         ):
@@ -280,6 +284,28 @@ class OutputDeflector:
                 Logger.error(f"Error closing catcher: {e}")
                 raise e
 
+class DeflectorGroup:
+    def __init__(self , catchers : dict[type_of_std , type_of_catcher] | type_of_catcher , 
+                 write_functions : dict[type_of_std , str] | str , 
+                 keep_original : bool = True):
+
+        stdout_catcher = catchers.get('stdout', None) if isinstance(catchers , dict) else catchers
+        stderr_catcher = catchers.get('stderr', None) if isinstance(catchers , dict) else catchers
+
+        stdout_writer = write_functions.get('stdout', 'write') if isinstance(write_functions , dict) else write_functions
+        stderr_writer = write_functions.get('stderr', 'write') if isinstance(write_functions , dict) else write_functions
+
+        self.stdout = OutputDeflector('stdout', stdout_catcher , keep_original , stdout_writer)
+        self.stderr = OutputDeflector('stderr', stderr_catcher , keep_original , stderr_writer)
+
+    def start_catching(self):
+        self.stdout.start_catching()
+        self.stderr.start_catching()
+        return self
+
+    def end_catching(self):
+        self.stdout.end_catching()
+        self.stderr.end_catching()
 class OutputCatcher(ABC):
     """
     Abstract base class for output catcher for stdout and stderr
@@ -287,21 +313,16 @@ class OutputCatcher(ABC):
     can rewrite the stdout_catcher/stderr_catcher or stdout_deflector/stderr_deflector
     """
     keep_original : bool = True
+    export_suffix : str = '.log'
 
-    def __init__(self):
-        self.stdout_catcher = None
-        self.stderr_catcher = None
-    
     def __enter__(self):
         """Enter the output catcher , start stdout and stderr redirection"""
-        self.stdout_deflector = OutputDeflector('stdout', self.stdout_catcher , self.keep_original).start_catching()
-        self.stderr_deflector = OutputDeflector('stderr', self.stderr_catcher , self.keep_original).start_catching()
+        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit the output catcher , end stdout and stderr redirection"""
-        self.stdout_deflector.end_catching()
-        self.stderr_deflector.end_catching()
+        self.deflectors.end_catching()
 
     def write(self, text : str | Any):
         """Write to the output catcher"""
@@ -320,6 +341,56 @@ class OutputCatcher(ABC):
     def contents(self) -> Any:
         """Get the contents of the output catcher"""
         return self.get_contents()
+
+    @property
+    def catchers(self) -> dict[type_of_std , type_of_catcher] | type_of_catcher | Any:
+        """Get the catchers of the output catcher"""
+        if not hasattr(self , '_catchers'):
+            return self
+
+    @catchers.setter
+    def catchers(self , value : dict[type_of_std , type_of_catcher] | type_of_catcher | Any):
+        """Set the catchers of the output catcher"""
+        self._catchers = value
+
+    @property
+    def write_functions(self) -> dict[type_of_std , str] | str:
+        """Get the deflectors of the output catcher"""
+        if not hasattr(self , '_write_functions'):
+            self._write_functions = 'write'
+        return self._write_functions
+    
+    @write_functions.setter
+    def write_functions(self , value : dict[type_of_std , str] | str):
+        """Set the write functions of the output catcher"""
+        self._write_functions = value
+
+    @property
+    def export_file_list(self) -> list[Path]:
+        """Get the export file list, usually the default path and the user provided path"""
+        if not hasattr(self , '_export_file_list'):
+            self._export_file_list : list[Path] = []
+        return self._export_file_list
+
+    @property
+    def enabled(self) -> bool:
+        """Check if the catcher is enabled"""
+        if not hasattr(self , '_enable_catcher'):
+            self._enable_catcher = True
+        return self._enable_catcher
+
+    @enabled.setter
+    def enabled(self , value : bool):
+        """Set the enabled status of the catcher"""
+        self._enable_catcher = value
+
+    def add_export_file(self , export_path : Path | str | None = None):
+        """Add an path to the export file list"""
+        if export_path is None:
+            return
+        export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
+        assert export_path.suffix == self.export_suffix , f"export_path must be a {self.export_suffix} file , but got {export_path}"
+        self.export_file_list.append(export_path)
     
 class IOCatcher(OutputCatcher):
     """
@@ -333,14 +404,10 @@ class IOCatcher(OutputCatcher):
     keep_original = False
     
     def __init__(self):
-        self.stdout_catcher = StringIO()
-        self.stderr_catcher = StringIO()
+        self.catchers : dict[type_of_std , StringIO] = {'stdout': StringIO(), 'stderr': StringIO()}
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._contents = {
-            'stdout': self.stdout_catcher.getvalue(),
-            'stderr': self.stderr_catcher.getvalue(),
-        }
+        self._contents = {key: catcher.getvalue() for key , catcher in self.catchers.items()}
         super().__exit__(exc_type, exc_val, exc_tb)
     
     def get_contents(self):
@@ -348,11 +415,9 @@ class IOCatcher(OutputCatcher):
     
     def clear(self):
         """Clear the contents of the output catcher"""
-        self.stdout_catcher.seek(0)
-        self.stdout_catcher.truncate(0)
-        
-        self.stderr_catcher.seek(0)
-        self.stderr_catcher.truncate(0)
+        for key , catcher in self.catchers.items():
+            catcher.seek(0)
+            catcher.truncate(0)
 
 class LogWriter(OutputCatcher):
     """
@@ -371,8 +436,7 @@ class LogWriter(OutputCatcher):
             log_path = PATH.main.joinpath(log_path)
             log_path.parent.mkdir(exist_ok=True,parents=True)
             self.log_file = open(log_path, "w")
-        self.stdout_catcher = self.log_file
-        self.stderr_catcher = self.log_file
+        self.catchers = {'stdout': self.log_file, 'stderr': self.log_file}
 
     def __enter__(self):
         super().__enter__()
@@ -489,6 +553,12 @@ class TimedOutput:
     def vb_level_str(self) -> str:
         """Get the vb level string of the output item"""
         return f'' if self.vb_level is None or self.vb_level == 0 else f'{self.vb_level}'
+
+    @property
+    def crash_protector_str(self) -> str:
+        """Get the crash protector string of the output item"""
+        content_str = str(self.content) if not isinstance(self.content , Figure) else 'matplotlib figure'
+        return f'{self.time_str}|{self.type_str}|vb{self.vb_level_str}|{content_str}'
     
     @classmethod
     def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
@@ -569,26 +639,28 @@ class HtmlCatcher(OutputCatcher):
         contents = catcher.contents
     """
     ExportDIR = PATH.log_catcher.joinpath('html')
+    export_suffix : str = '.html'
+
     Instance : 'HtmlCatcher | None' = None
     InstanceList : list['HtmlCatcher'] = []
     Capturing : bool = True
+
     def __init__(self, title: str | bool | None = None , category : str = 'miscelaneous', init_time: datetime | None = None , 
                  add_time_to_title: bool = True, **kwargs):
-        if isinstance(title , bool) and not title:
-            self._enable_catcher = False
-        else:
-            self._enable_catcher = True
-        
+        self.enabled = not isinstance(title , bool) or title
         self.title = title if isinstance(title , str) else 'html_catcher'
         self.category = category
+        assert self.category.replace(' ' , '_') != '_crash_protection' , f'self.category is not allowed to be _crash_protection'
         self.init_time = init_time if init_time else datetime.now()
 
         self.filename = f'{self.title.replace(' ' , '_')}.{self.init_time.strftime("%Y%m%d%H%M%S")}.html' if add_time_to_title else f'{self.title.replace(' ' , '_')}.html'
         self.add_export_file(self.ExportDIR.joinpath(self.category.replace(' ' , '_') , self.filename))
-
+        
         self.outputs: list[TimedOutput] = []
         self.kwargs = kwargs
         self.InstanceList.append(self)
+
+        self.write_functions = {'stdout': 'write_stdout', 'stderr': 'write_stderr'}
         
     def __bool__(self):
         return True
@@ -597,29 +669,9 @@ class HtmlCatcher(OutputCatcher):
         return f"{self.__class__.__name__}(title={self.title})"
     
     @property
-    def enabled(self):
-        """Check if the catcher is enabled"""
-        return self._enable_catcher
-    
-    @property
     def is_running(self):
         """Check if the catcher is running"""
         return self.Instance is not None
-
-    @property
-    def export_file_list(self) -> list[Path]:
-        """Get the export file list, usually the default path and the user provided path"""
-        if not hasattr(self , '_export_file_list'):
-            self._export_file_list : list[Path] = []
-        return self._export_file_list
-
-    def add_export_file(self , export_path : Path | str | None = None):
-        """Add an path to the export file list"""
-        if export_path is None:
-            return
-        export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
-        assert export_path.suffix == '.html' , f"export_path must be a html file , but got {export_path}"
-        self.export_file_list.append(export_path)
     
     def set_attrs(self , title : str | None = None , category : str | None = None):
         """
@@ -667,6 +719,7 @@ class HtmlCatcher(OutputCatcher):
         if not self.enabled: 
             return self
         self.start_time = datetime.now()
+        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
         self.redirect_display_function()
         Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
@@ -675,6 +728,7 @@ class HtmlCatcher(OutputCatcher):
         if not self.enabled: 
             return
         self.export()   
+        self.deflectors.end_catching()
         self.restore_display_function()
         self.ClearInstance(self)
 
@@ -698,15 +752,11 @@ class HtmlCatcher(OutputCatcher):
             export_path.write_text(html_content, encoding='utf-8')
         
     def redirect_display_function(self):
-        """redirect stdout, stderr, and Logger.Display to catcher"""
-        self.stdout_deflector = OutputDeflector('stdout', self , self.keep_original , 'write_stdout').start_catching()
-        self.stderr_deflector = OutputDeflector('stderr', self , self.keep_original , 'write_stderr').start_catching()
+        """redirect Logger.Display to catcher"""
         Logger.Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
 
     def restore_display_function(self):
-        """restore stdout, stderr, and display_module functions"""
-        self.stdout_deflector.end_catching()
-        self.stderr_deflector.end_catching()
+        """restore Logger.Display functions"""
         Logger.Display.reset_callbacks()
     
     def generate_html(self):
@@ -728,8 +778,10 @@ class HtmlCatcher(OutputCatcher):
             return
         
         output = TimedOutput.create(content , output_type)
-        if output and (not self.outputs or not output.equivalent(self.outputs[-1])): 
-            self.outputs.append(output)
+        if not output or (self.outputs and output.equivalent(self.outputs[-1])): 
+            return
+
+        self.outputs.append(output)
 
     @classmethod
     def stop_capturing(cls , *args, **kwargs):
@@ -1063,43 +1115,10 @@ class HtmlCatcher(OutputCatcher):
 </html>
 """
         return tail
-    
-class MarkdownCatcher(OutputCatcher):
-    """
-    Markdown catcher for stdout and stderr, export to running markdown file in runtime, and then export to markdown file at exit
-    example:
-        catcher = MarkdownCatcher()
-        with catcher:
-            Logger.stdout('This will be caught')
-        contents = catcher.contents
-    """
-    ExportDIR = PATH.log_catcher.joinpath('markdown')
-    InstanceList : list['OutputCatcher'] = []
 
-    def __init__(self, title: str | bool | None = None,
-                 category : str = 'miscelaneous',
-                 init_time: datetime | None = None,
-                 add_time_to_title: bool = True,
-                 to_share_folder: bool = False ,
-                 seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min',
-                 **kwargs):
-
-        if isinstance(title , bool) and not title:
-            self._enable_catcher = False
-        else:
-            self._enable_catcher = True
-
-        self.title = title if isinstance(title , str) else 'markdown_catcher'
-        self.category = category
-        self.init_time = init_time if init_time else datetime.now()
-        
-        self.filename = f'{self.title.replace(' ' , '_')}.{self.init_time.strftime("%Y%m%d%H%M%S")}.md' if add_time_to_title else f'{self.title.replace(' ' , '_')}.md'
-        self.add_export_file(self.ExportDIR.joinpath(self.category.replace(' ' , '_') , self.filename))
-        if to_share_folder and (share_folder_path := MACHINE.share_folder_path()) is not None:
-            self.add_export_file(share_folder_path.joinpath('markdown_catcher' , self.filename))
-        
-        self.kwargs = kwargs
-        self.last_seperator = None
+class _markdown_writer:
+    def __init__(self, md_file: TextIOWrapper, seperating_by: str| None = 'min'):
+        self.md_file = md_file
         self.seperating_by = seperating_by
         if seperating_by is None:
             self._seperator_time_str = lambda x: ''
@@ -1115,32 +1134,88 @@ class MarkdownCatcher(OutputCatcher):
             self._prefix_time_str = lambda x: x.strftime('%H:%M:%S.%f')[:-3]
         else:
             raise ValueError(f"Invalid SeperatingBy: {seperating_by}")
-        self.is_catching = False
+        self.last_seperator = None
 
+    def write(self, text: str , stderr : bool = False , prefix='- ' , suffix='  \n'):
+        """Write text to the markdown file"""
+        if not text.strip():
+            return
+        self.write_seperator()
+        text = f'{self._prefix_time_str(datetime.now())}: {text}'
+        text = _str_to_html(text.strip('\n'))
+        if stderr:
+            text = f'<u>{text}</u>'
+        self.md_file.write(prefix + text + suffix)
+        self.md_file.flush()
+
+    def write_seperator(self):
+        """Write the seperator of the markdown file"""
+        if self.seperating_by is None: 
+            return
+        seperator = self._seperator_time_str(datetime.now())
+        if seperator != self.last_seperator:
+            self.md_file.write(f"### {seperator} \n")
+            self.last_seperator = seperator
+
+    def header(self , title: str = ''):
+        """Write the header of the markdown file"""
+        self.md_file.write(f"# {title.title()}\n")
+        self.md_file.write(f"## Log Start \n")
+        self.md_file.write(f"- *Machine: {MACHINE.name}*  \n")
+        self.md_file.write(f"- *Python: {platform.python_version()}-{platform.machine()}*  \n")
+        self.md_file.write(f"- *Start at: {datetime.now()}*  \n")
+        self.md_file.write(f"## Log Main \n")
+        self.md_file.flush()
+
+    def footer(self , **kwargs):
+        """Write the footer of the markdown file"""
+        self.md_file.write(f"## Log End \n")
+        for key , value in kwargs.items():
+            self.md_file.write(f"- *{key.title()}: {value}*  \n")
+        self.md_file.write(f"***\n")
+        self.md_file.flush()
+    
+class MarkdownCatcher(OutputCatcher):
+    """
+    Markdown catcher for stdout and stderr, export to running markdown file in runtime, and then export to markdown file at exit
+    example:
+        catcher = MarkdownCatcher()
+        with catcher:
+            Logger.stdout('This will be caught')
+        contents = catcher.contents
+    """
+    ExportDIR = PATH.log_catcher.joinpath('markdown')
+    export_suffix : str = '.md'
+    InstanceList : list['MarkdownCatcher'] = []
+
+    def __init__(self, title: str | bool | None = None,
+                 category : str = 'miscelaneous',
+                 init_time: datetime | None = None,
+                 add_time_to_title: bool = True,
+                 to_share_folder: bool = False ,
+                 seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min',
+                 **kwargs):
+
+        self.enabled = not isinstance(title , bool) or title
+        self.title = title if isinstance(title , str) else 'markdown_catcher'
+        self.category = category
+        self.init_time = init_time if init_time else datetime.now()
+        
+        self.filename = f'{self.title.replace(' ' , '_')}.{self.init_time.strftime("%Y%m%d%H%M%S")}.md' if add_time_to_title else f'{self.title.replace(' ' , '_')}.md'
+        self.add_export_file(self.ExportDIR.joinpath(self.category.replace(' ' , '_') , self.filename))
+        if to_share_folder and (share_folder_path := MACHINE.share_folder_path()) is not None:
+            self.add_export_file(share_folder_path.joinpath('markdown_catcher' , self.filename))
+        
+        self.kwargs = kwargs
+        self.seperating_by = seperating_by
+        
+        self.is_catching = False
         self.InstanceList.append(self)
+
+        self.write_functions = {'stdout': 'write_stdout', 'stderr': 'write_stderr'}
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(title={self.title})'
-
-    @property
-    def export_file_list(self) -> list[Path]:
-        """Get the export file list, usually the default path and the user provided path"""
-        if not hasattr(self , '_export_file_list'):
-            self._export_file_list : list[Path] = []
-        return self._export_file_list
-
-    @property
-    def enabled(self) -> bool:
-        """Check if the catcher is enabled"""
-        return self._enable_catcher
-
-    def add_export_file(self , export_path : Path | str | None = None):
-        """Add an path to the export file list"""
-        if export_path is None:
-            return
-        export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
-        assert export_path.suffix == '.md' , f"export_path must be a markdown file , but got {export_path}"
-        self.export_file_list.append(export_path)
 
     def __enter__(self):
         if not self.enabled or not self.export_file_list:
@@ -1153,10 +1228,8 @@ class MarkdownCatcher(OutputCatcher):
             'stderr_lines' : 0,
         }
         
-        self._open_markdown_file()
-        self._markdown_header()
-        self.stdout_deflector = OutputDeflector('stdout', self, True , 'write_stdout').start_catching()
-        self.stderr_deflector = OutputDeflector('stderr', self, True , 'write_stderr').start_catching()
+        self.open_markdown_file()
+        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
         self.is_catching = True
         Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
@@ -1164,23 +1237,43 @@ class MarkdownCatcher(OutputCatcher):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.enabled or not self.is_catching or not self.export_file_list: 
             return
-        self._markdown_footer()
-        self.markdown_file.flush()
-        self.stdout_deflector.end_catching()
-        self.stderr_deflector.end_catching()
+        self.close_markdown_file()
+        self.deflectors.end_catching()
         self.export()
         self.is_catching = False
-        return False
     
-    def _open_markdown_file(self):
-        """Open the running markdown file"""
+    def open_markdown_file(self , max_running_files : int = 5):
+        """
+        Open the running markdown file , Generate the markdown header , 
+        including the title, start time, and basic information of the catcher
+        """
         i = 0
         running_filename = self.export_file_list[-1].with_suffix('.running.md')
         while running_filename.exists():
-            running_filename = running_filename.with_suffix(f'.{i}.md')
+            running_filename = self.export_file_list[-1].with_suffix(f'{i}.running.md')
+            i += 1
+            if i >= max_running_files:
+                Logger.error(f"Too many running markdown files, max_running_files={max_running_files}")
+                running_filename = self.export_file_list[-1].with_suffix('.running.md')
+                break
         self.running_filename = running_filename
         self.running_filename.parent.mkdir(exist_ok=True,parents=True)
         self.markdown_file = open(self.running_filename, 'w', encoding='utf-8')
+        self.markdown_writer = _markdown_writer(self.markdown_file, self.seperating_by)
+
+        self.markdown_writer.header(self.title)
+
+    def close_markdown_file(self):
+        """generate the markdown footer , including the finish time, duration, and stats of the catcher, then flush and close the file"""
+        finish_time = datetime.now()
+        kwargs = {
+            'finish at' : finish_time,
+            'duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
+            'stdout lines' : self.stats['stdout_lines'],
+            'stderr lines' : self.stats['stderr_lines'],
+        }
+        self.markdown_writer.footer(**kwargs)
+        self.markdown_file.close()
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
@@ -1193,67 +1286,25 @@ class MarkdownCatcher(OutputCatcher):
             if filename.exists(): 
                 filename.unlink()
             filename.parent.mkdir(exist_ok=True,parents=True)
-            shutil.copy(self.running_filename, filename)
+            try:
+                shutil.copy(self.running_filename, filename)
+            except OSError as e:
+                Logger.error(f"Failed to copy {self.running_filename} to {filename}: {e}")
             Logger.footnote(f"{self.__class__.__name__} result saved to {filename}" , indent = 1)
-        self.running_filename.unlink()
+        for path in self.running_filename.parent.glob(f'{self.filename.removesuffix(".md")}.*running.md'):
+            path.unlink()
     
-    def _markdown_header(self):
-        """Generate the markdown header , including the title, start time, and basic information of the catcher"""
-        self.markdown_file.write(f"# {self.title.title()}\n")
-        self.markdown_file.write(f"## Log Start \n")
-        self.markdown_file.write(f"- *Machine: {MACHINE.name}*  \n")
-        self.markdown_file.write(f"- *Python: {platform.python_version()}-{platform.machine()}*  \n")
-        self.markdown_file.write(f"- *Start at: {self.start_time}*  \n")
-        self.markdown_file.write(f"## Log Main \n")
-
-    def _markdown_footer(self):
-        """Generate the markdown footer , including the finish time, duration, and stats of the catcher"""
-        finish_time = datetime.now()
-        self.markdown_file.write(f"## Log End \n")
-        self.markdown_file.write(f"- *Finish at: {finish_time}*  \n")
-        self.markdown_file.write(f"- *Duration: {Duration((finish_time - self.start_time).total_seconds()).fmtstr}*  \n")
-        self.markdown_file.write(f"- *Stdout Lines: {self.stats['stdout_lines']}*  \n")
-        self.markdown_file.write(f"- *Stderr Lines: {self.stats['stderr_lines']}*  \n")
-        self.markdown_file.write(f"***\n")
-        self.markdown_file.flush()
-
-    def _markdown_seperator(self):
-        """Generate the markdown seperator , including the seperator time and the seperator text"""
-        if self.seperating_by is None: 
-            return
-        seperator = self._seperator_time_str(self.last_time)
-        if seperator != self.last_seperator:
-            self.markdown_file.write(f"### {seperator} \n")
-            self.last_seperator = seperator
-            self.markdown_file.flush()
-    
-    def formatted_text(self, text : str , prefix='- ' , suffix='  \n' , type: Literal['stdout' , 'stderr'] = 'stdout'):
-        """replace ANSI color codes with HTML span tags"""
-        text = text.strip('\n')
-        text = _str_to_html(text)
-        if type == 'stderr':
-            text = f'<u>{text}</u>'
-        text = prefix + text + suffix
-        return text
-    
-    def write_std(self , text: str , type: Literal['stdout' , 'stderr']):
-        """Write stdout or stderr to the markdown file"""
-        if self.is_catching and (text := text.strip()):
-            self.last_time = datetime.now()
-            self.stats[f'{type}_lines'] += 1
-            text = f'{self._prefix_time_str(self.last_time)} {text}'
-            text = self.formatted_text(text , type = type)
-            self._markdown_seperator()
-            self.markdown_file.write(text)
-            self.markdown_file.flush()
-    
-    def write_stdout(self, text):
+    def write_stdout(self, text : str):
         """Write stdout to the markdown file"""
-        self.write_std(text , 'stdout')
+        if self.is_catching and text.strip():
+            self.markdown_writer.write(text)
+            self.stats['stdout_lines'] += 1
 
-    def write_stderr(self, text):
+    def write_stderr(self, text : str):
         """Write stderr to the markdown file"""
-        self.write_std(text , 'stderr')
+        if self.is_catching and text.strip():
+            self.markdown_writer.write(text , stderr = True)
+            self.stats['stderr_lines'] += 1
 
     def get_contents(self):
         if self.running_filename.exists():
@@ -1265,3 +1316,81 @@ class MarkdownCatcher(OutputCatcher):
         
     def close(self):
         self.markdown_file.close()
+
+
+class CrashProtectorCatcher(OutputCatcher):
+    """
+    Crash protector catcher for stdout and stderr, export to crash protector file in runtime, and then remove the crash protector file at exit
+    ideally should be put before all other catchers (exit after all other catchers)
+    example:
+        catcher = CrashProtectorCatcher()
+        with catcher:
+            Logger.stdout('This will be caught')
+        contents = catcher.contents
+    """
+    ExportDIR = PATH.runtime.joinpath('crash_protector')
+    InstanceList : list['CrashProtectorCatcher'] = []
+
+    def __init__(self, task_id : str | None = None, init_time: datetime | None = None, 
+                 seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min', **kwargs):
+        self.enabled = task_id is not None
+        self.task_id = task_id
+        self.init_time = init_time if init_time else datetime.now()
+        
+        self.filename = self.ExportDIR / f'{self.init_time.strftime("%Y%m%d")}.{str(self.task_id).replace('/' , '_')}.md'
+    
+        self.kwargs = kwargs
+        self.seperating_by = seperating_by
+        
+        self.is_catching = False
+        self.InstanceList.append(self)
+
+        self.write_functions = {'stdout': 'write_stdout', 'stderr': 'write_stderr'}
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(task_id={self.task_id})'
+
+    def __enter__(self):
+        if not self.enabled:
+            return self
+        self.start_time = datetime.now()
+        self.open_markdown_file()
+        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
+        self.is_catching = True
+        Logger.remark(f"{self} Capturing Start" , prefix = True)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.enabled:
+            return
+        self.deflectors.end_catching()
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
+        Logger.footnote(f"{self.__class__.__name__} file {self.filename} removed" , indent = 1)
+        self.is_catching = False
+    
+    def open_markdown_file(self):
+        """
+        Open the running markdown file , Generate the markdown header , 
+        including the title, start time, and basic information of the catcher
+        """
+        self.filename.parent.mkdir(exist_ok=True,parents=True)
+        self.markdown_file = open(self.filename, 'w', encoding='utf-8')
+        self.markdown_writer = _markdown_writer(self.markdown_file, self.seperating_by)
+        self.markdown_writer.header(f'{self.task_id} initiated at {self.init_time}')
+    
+    def write_stdout(self, text):
+        """Write stdout to the crash protector file"""
+        if self.is_catching and text.strip():
+            self.markdown_writer.write(text)
+            
+    def write_stderr(self, text):
+        """Write stderr to the crash protector file"""
+        if self.is_catching and text.strip():
+            self.markdown_writer.write(text , stderr = True)
+
+    def get_contents(self):
+        return ''
+        
+    def close(self):
+        self.markdown_file.close()
+        self.filename.unlink(missing_ok=True)

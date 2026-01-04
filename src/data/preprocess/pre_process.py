@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from typing import Any , Iterator
 
-from src.proj import Logger , Duration , CONF , CALENDAR
+from src.proj import Logger , Duration , Proj , CALENDAR
 from src.math.primas import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
@@ -128,7 +128,7 @@ def select_processor(key : str) -> TypePreProcessor:
 class pp_y(TypePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]:
         return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONF.Factor.RISK.indus, 'size'])}
+                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Proj.Conf.Factor.RISK.indus, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
@@ -231,13 +231,13 @@ class pp_week(TypePreProcessor):
     
 class pp_style(TypePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONF.Factor.RISK.style)}
+        return {'style' : BlockLoader('models', 'tushare_cne5_exp', Proj.Conf.Factor.RISK.style)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
 class pp_indus(TypePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONF.Factor.RISK.indus)}
+        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', Proj.Conf.Factor.RISK.indus)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
 
@@ -256,7 +256,7 @@ class _ClassProperty:
         raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
 
     def category0(self , owner) -> str:
-        return CONF.Factor.STOCK.cat1_to_cat0(owner.category1)
+        return Proj.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def category1(self , owner) -> str:
         return str(owner.__qualname__).removeprefix('pp_').lower()

@@ -62,6 +62,10 @@ class DataModule(BaseDataModule):
             keys_str = str(keys)
         return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'
 
+    @property
+    def empty_x(self):
+        return self.datas.empty_x and not self.input_keys_hidden
+
     @staticmethod
     def prepare_data(data_types : list[str] | None = None):
         DataPreProcessor.main(predict = False , data_types = data_types)
@@ -80,6 +84,12 @@ class DataModule(BaseDataModule):
         self.set_critical_dates()
         self.parse_prenorm_method()
         self.reset_dataloaders()
+
+        if self.empty_x:
+            Logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
+            Logger.remark(f'{self.input_type} input keys: {self.input_keys}')
+            self.config.stage_queue.remove('fit')
+            self.config.stage_queue.remove('test')
         return self
 
     def set_critical_dates(self):

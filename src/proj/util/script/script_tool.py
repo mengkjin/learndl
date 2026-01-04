@@ -57,7 +57,6 @@ class ScriptTool:
         self , 
         task_name : str , 
         task_key : str | Any | None = None , 
-        catchers : list[str] = ['html' , 'markdown' , 'warning'],
         forfeit_if_done : bool = False ,
         lock_name : str | None = None ,
         lock_num : int = 1 , 
@@ -75,7 +74,7 @@ class ScriptTool:
         
         self.backend_recorder = BackendTaskRecorder(**kwargs)
         self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout , lock_wait_time)
-        self.autorun_task = AutoRunTask(task_name , task_key , catchers , forfeit_if_done , verbosity)
+        self.autorun_task = AutoRunTask(task_name , task_key , forfeit_if_done , verbosity , task_id = self.task_id)
 
         # set current working directory to main
         os.chdir(str(PATH.main))
@@ -95,3 +94,7 @@ class ScriptTool:
     @classmethod
     def get_value(cls , key : str):
         return AutoRunTask.get_value(key)
+
+    @property
+    def task_id(self):
+        return self.backend_recorder.task_id

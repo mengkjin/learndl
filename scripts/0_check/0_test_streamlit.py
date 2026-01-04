@@ -39,7 +39,7 @@
 #       desc : seed
 #       required : False
 #       default : 42.
-import time , random , sys , tqdm
+import random , sys , tqdm
 from src.proj import Logger
 from src.proj.util import ScriptTool
 
@@ -95,7 +95,6 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')
             else:
                 Logger.conclude(f'this is an info: random number {rnd} >= 0.5' , level = 'info')
-    time.sleep(1)
         
 if __name__ == '__main__':
     main()

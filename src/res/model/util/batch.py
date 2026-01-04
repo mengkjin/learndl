@@ -143,7 +143,9 @@ class BatchMetric:
 @dataclass(slots=True)
 class BatchOutput:
     outputs : torch.Tensor | tuple | list | None = None
-    def __len__(self): return len(self.pred)
+    def __len__(self): return 0 if self.outputs is None else len(self.pred)
+    @property    
+    def is_empty(self): return len(self) == 0
     @property
     def device(self): return self.pred.device
     @property
