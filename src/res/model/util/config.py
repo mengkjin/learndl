@@ -238,7 +238,7 @@ class TrainParam:
         return AlgoModule.nn_category(self.model_module)
 
     @property
-    def resumeable(self) -> bool: 
+    def resumable(self) -> bool: 
         assert self.model_name , f'{self} has model_name None'
         model_path = ModelPath(self.model_name)
         return all([model_path.conf(cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
@@ -619,9 +619,9 @@ class TrainConfig(TrainParam):
 
         self.process_parser(stage , resume , selection)
         assert self.Train.model_base_path , self.Train.model_name
-        if not base_path and makedir: 
-            self.makedir()
-
+        if makedir: 
+            self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
+            self.initialize_fitting()
         self.device = Device(try_cuda = self.try_cuda)
 
     @classmethod
@@ -643,16 +643,14 @@ class TrainConfig(TrainParam):
         assert model_path.base.exists() , f'{model_path.base} does not exist'
         return cls(model_path , override = override, stage = stage)
 
-    def makedir(self):
+    def initialize_fitting(self):
         if 'fit' in self.stage_queue and not self.is_resuming:
             if self.model_base_path.base.exists(): 
-                if not self.short_test and self.Train.resumeable:
-                    raise Exception(f'{self.model_name} resumeable, re-train has to delete folder manually')
+                if not self.short_test and self.Train.resumable:
+                    raise Exception(f'{self.model_name} resumable, re-train has to delete folder manually')
                 shutil.rmtree(self.model_base_path.base)
-            self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
             self.Train.copy_to(self.model_base_path , overwrite = self.short_test)
             self.Model.copy_to(self.model_base_path , overwrite = self.short_test)
-
     
     @property
     def Param(self) -> dict[str,Any]: 

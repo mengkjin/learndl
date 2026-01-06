@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Logger
+from src.proj import Duration , Logger , CALENDAR , Proj
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator
@@ -59,14 +59,19 @@ class PortfolioBuilder:
     def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
-                 build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
-        self.category  = category
-        self.alpha     = alpha
-        self.benchmark = get_benchmark(benchmark)
-        self.kwargs    = kwargs
-        self.lag       = lag
-        self.indent    = indent
-        self.vb_level  = vb_level
+                 build_on : Portfolio | None = None , resume_path : Path | str | None = None , 
+                 indent : int = 0 , vb_level : int = 1 , **kwargs):
+
+        assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
+        self.category     = category
+        self.alpha        = alpha
+        self.benchmark    = get_benchmark(benchmark)
+        self.kwargs       = kwargs
+        self.lag          = lag
+        self.build_on     = build_on 
+        self.resume_path  = resume_path
+        self.indent       = indent
+        self.vb_level     = vb_level
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
@@ -76,7 +81,7 @@ class PortfolioBuilder:
 
         self.creations : list[PortCreateResult] = []
 
-        self.set_build_on(build_on)
+        self.set_build_on(self.build_on)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name=\'{self.full_name}\',kwargs={self.kwargs},'+\
@@ -87,36 +92,57 @@ class PortfolioBuilder:
         dates = self.alpha.available_dates()
         return dates.min() if len(dates) > 0 else 99991231
 
-    def build_on_path(self , path : Path | str):
-        path = Path(path)
-        if path.exists():
-            if path.is_dir():
-                path = path.joinpath(f'{self.full_name.lower()}.feather')
-            else:
-                assert path.suffix == '.feather' , f'{path} is not a feather file'
-        else:
-            if path.suffix != '.feather':
-                path = path.joinpath(f'{self.full_name.lower()}.feather')
-        return path
+    @property
+    def resumed_portfolio_end_date(self) -> int:
+        if not hasattr(self , '_resumed_portfolio_end_date'):
+            self._resumed_portfolio_end_date = -1
+        return self._resumed_portfolio_end_date
 
-    def set_build_on(self , build_on : Portfolio | Path | str | None , build_on_start : int = -1):
+    @resumed_portfolio_end_date.setter
+    def resumed_portfolio_end_date(self , value : int):
+        self._resumed_portfolio_end_date = value
+
+    @property
+    def resumed_account_end_date(self) -> int:
+        return min(int(self.resumed_account['model_date'].iloc[-2]) if len(self.resumed_account) > 1 else -1 , self.resumed_portfolio_end_date)
+
+    @property
+    def resume_path_portfolio(self):
+        if self.resume_path is None:
+            return None
+        else:
+            return Path(self.resume_path) / 'portfolio' / f'{self.full_name.lower()}.feather'
+
+    @property
+    def resume_path_account(self):
+        if self.resume_path is None:
+            return None
+        else:
+            return Path(self.resume_path) / 'account' / f'{self.full_name.lower()}'
+
+    def set_build_on(self , build_on : Portfolio | None = None , start : int = -1 , end : int = 99991231):
         if build_on is None:
             self.portfolio = Portfolio(self.full_name)
-            return self
-        if isinstance(build_on , Portfolio):
-            port = build_on
-        elif isinstance(build_on , (Path , str)):
-            port = Portfolio.load(self.build_on_path(build_on))
         else:
-            raise ValueError(f'Unknown build_on type: {type(build_on)}')
-        dates = port.port_date
-        self.portfolio = port.filter_dates(dates = dates[(dates >= build_on_start) & (dates < self.min_alpha_date)]).rename(self.full_name)
+            dates = build_on.port_date[(build_on.port_date >= start) & (build_on.port_date <= end) & (build_on.port_date < self.min_alpha_date)]
+            self.portfolio = build_on.filter_dates(dates = dates).rename(self.full_name)
+            self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
         return self
 
-    def export_portfolio(self , path : Path | str | None = None , append = False , indent : int = 0 , vb_level : int = 1):
-        if path is None:
+    def load_portfolio(self , start : int = -1 , end : int = 99991231):
+        if self.resume_path_portfolio is not None:
+            port = Portfolio.load(self.resume_path_portfolio)
+            dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
+            self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
+            self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
+            Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
+                           indent = self.indent , vb_level = Proj.vb_max)
+        return self
+
+    def save_portfolio(self , append = False):
+        if self.resume_path_portfolio is None:
             return self
-        self.portfolio.save(self.build_on_path(path) , overwrite = True , append = append , indent = indent , vb_level = vb_level)
+        self.portfolio.save(self.resume_path_portfolio , overwrite = True , append = append , indent = self.indent , vb_level = self.vb_level + 1)
         return self
     
     @property
@@ -127,20 +153,7 @@ class PortfolioBuilder:
     def port_index(self):
         return get_port_index(self.full_name)
     
-    @classmethod
-    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
-        elements = parse_full_name(full_name)
-        assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
-        return cls(alpha = alpha , indent = indent , vb_level = vb_level , **elements , **kwargs).set_build_on(build_on)
-    
-    @staticmethod
-    def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen'] , alpha : AlphaModel | str , 
-                      benchmark : Portfolio | Benchmark | str | None = None , 
-                      strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
-        return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
-    
     def setup(self):
-
         match self.category:
             case 'optim':
                 creator_class = OptimizedPortfolioCreator
@@ -165,17 +178,46 @@ class PortfolioBuilder:
         self.portfolio.append(port_rslt.port.with_name(self.portfolio.name))
         self.port = port_rslt.port
         return self
+
+    def load_account(self):
+        self.resumed_account = PortfolioAccountant.load(self.resume_path_account)
+        if not self.resumed_account.empty:
+            Logger.success(f'Load account from {self.resume_path_account} at {CALENDAR.dates_str(self.resumed_account['model_date'])}' , 
+                           indent = self.indent , vb_level = Proj.vb_max)
+        return self
     
     def accounting(self , start : int = -1 , end : int = 99991231 ,
-                   analytic = True , attribution = True ,
+                   analytic = True , attribution = True , * ,
                    trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
                    daily = False):
         '''Accounting portfolio through date, require at least portfolio'''
-        self.portfolio.accounting(self.benchmark , start , end , 
+        self.portfolio.accounting(self.benchmark , max(start , self.resumed_account_end_date + 1) , end , 
                                   analytic and self.lag == 0 , attribution and self.lag == 0 ,
-                                  trade_engine , daily , indent = self.indent , vb_level = self.vb_level)
-        self.account = self.portfolio.account_with_index(self.port_index)
+                                  trade_engine = trade_engine , daily = daily , indent = self.indent , vb_level = self.vb_level)
+        if hasattr(self , 'resumed_account') and not self.resumed_account.empty:
+            self.account = PortfolioAccountant.concat_accounts([self.resumed_account , self.portfolio.account])
+        else:
+            self.account = self.portfolio.account
         return self
+
+    def save_account(self):
+        PortfolioAccountant.save_account(self.account , self.resume_path_account , indent = self.indent , vb_level = self.vb_level + 1)
+        return self
+
+    def account_with_index(self):
+        return PortfolioAccountant.account_with_index(self.account , self.port_index)
+
+    @classmethod
+    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
+        elements = parse_full_name(full_name)
+        assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
+        return cls(alpha = alpha , build_on = build_on , indent = indent , vb_level = vb_level , **elements , **kwargs)
+    
+    @staticmethod
+    def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen'] , alpha : AlphaModel | str , 
+                      benchmark : Portfolio | Benchmark | str | None = None , 
+                      strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
+        return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
 class PortfolioGroupBuilder:
     '''
@@ -236,7 +278,7 @@ class PortfolioGroupBuilder:
 
         assert alpha_models , f'alpha_models must has elements!'
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
-        self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([])).astype(int)
+        self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([] , dtype=int))
         self.relevant_dates = self.relevant_dates[(self.relevant_dates >= start_dt) & (self.relevant_dates <= end_dt)]
         self.benchmarks = Benchmark.get_benchmarks(benchmarks)
 
@@ -247,12 +289,16 @@ class PortfolioGroupBuilder:
             self.param_groups = {key:(kwargs | kwg) for key,kwg in param_groups.items()}
         else:
             self.param_groups = {'default':kwargs}
-        self.acc_kwargs : dict[str,Any] = {'daily' : daily , 'analytic' : analytic , 'attribution' : attribution , 'trade_engine' : trade_engine}
+        self.acc_kwargs : dict = {
+            'analytic' : analytic , 
+            'attribution' : attribution , 
+            'daily' : daily , 
+            'trade_engine' : trade_engine}
 
         self.indent = indent
         self.vb_level = vb_level
         self.resume = resume
-        self.resume_path = Path(resume_path) if resume_path is not None else None
+        self.resume_path = Path(resume_path) if resume_path is not None and resume else None
         self.caller = caller
         self.start_dt = start_dt
         self.end_dt = end_dt
@@ -288,25 +334,25 @@ class PortfolioGroupBuilder:
             self.builders.clear()
             self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
-                kwargs = self.param_groups[strategy] | {'strategy':strategy , 'indent':self.indent + 1 , 'vb_level':self.vb_level + 1}
+                kwargs = self.param_groups[strategy] | {'strategy':strategy , 'indent':self.indent + 1 , 'vb_level':self.vb_level + 1 , 'resume_path':self.resume_path}
                 builder = PortfolioBuilder(self.category , alpha , bench , lag , **kwargs).setup()
                 self.builders.append(builder)
         return self
 
     def builders_resume(self):
-        if self.resume_path is None or not self.resume:
+        if self.resume_path is None:
             return
         with Logger.Timer(f'{self.class_name}.resume' , indent = self.indent , vb_level = self.vb_level):
             for builder in self.builders:
-                builder.set_build_on(self.resume_path)
+                builder.load_portfolio(start = self.start_dt , end = self.end_dt)
         return self
 
-    def export_portfolio(self):
+    def save_portfolios(self):
         if self.resume_path is None:
             return
         with Logger.Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
             for builder in self.builders:
-                builder.export_portfolio(self.resume_path , append = self.resume , indent = self.indent + 1 , vb_level = self.vb_level + 2)
+                builder.save_portfolio(append = True)
         return self
     
     @property
@@ -351,7 +397,7 @@ class PortfolioGroupBuilder:
         secs = (datetime.now() - _t0).total_seconds()
         Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building' , 
                       indent = self.indent , vb_level = self.vb_level)
-        self.export_portfolio()
+        self.save_portfolios()
         return self
     
     def accounting(self):
@@ -361,7 +407,7 @@ class PortfolioGroupBuilder:
         ):
             for builder in self.builders:
                 with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1):
-                    builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
+                    builder.load_account().accounting(self.start_dt , self.end_dt , **self.acc_kwargs).save_account()
         self.accounted = True
         return self
     
@@ -369,5 +415,5 @@ class PortfolioGroupBuilder:
         assert self.builders , 'No builders to account!'
         if not self.accounted:
             self.accounting()
-        df = PortfolioAccountant.total_account([builder.account for builder in self.builders])
+        df = PortfolioAccountant.total_account([builder.account_with_index() for builder in self.builders])
         return df

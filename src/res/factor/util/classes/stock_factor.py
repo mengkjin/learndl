@@ -256,19 +256,20 @@ class FactorStats:
             stat_dates = stat.index.get_level_values('date').unique() if 'date' in stat.index.names else stat['date'].unique()
         return np.setdiff1d(dates, stat_dates)
 
-    def load(self , path : Path):
+    def load(self , path : Path) -> int:
         if not path.exists():
-            return self
+            return 0
         assert path.is_dir() , f'path {path} is not a directory'
-        for file in path.iterdir():
+        files = list(path.glob('*.feather'))
+        for file in files:
             self.stats[file.stem] = DB.load_df(file)
-            Logger.success(f'loaded factor stats {self.name.upper()}({file.stem}) from {path}' , indent = 1 , vb_level = 10)
-        return self
+        return len(files)
 
-    def save(self , path : Path):
+    def save(self , path : Path) -> int:
         path.mkdir(parents=True , exist_ok=True)
         for name , stat in self.stats.items():
-            DB.save_df(stat , path.joinpath(f'{name}.feather') , indent = 1 , vb_level = 10 , prefix = 'Factor Stats')
+            DB.save_df(stat , path.joinpath(f'{name}.feather') , vb_level = 99)
+        return len(self.stats)
 
     @classmethod
     def create_cache_factor_stats(cls) -> dict[str,'FactorStats']:
@@ -287,13 +288,15 @@ class CacheFactorStats:
     def load(self , path : Path | None):
         if path is None or not path.exists():
             return
-        [factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()]
+        stats_num = sum([factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
+        Logger.success(f'Load {stats_num} Factor Stats from {path}' , indent = 0 , vb_level = Proj.vb_max)
         return self
 
     def save(self , path : Path | None):
         if path is None:
             return
-        [factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()]
+        stats_num = sum([factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
+        Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = Proj.vb_max)
 
     @property
     def ic(self) -> FactorStats:
@@ -580,8 +583,8 @@ class StockFactor:
     @pseudo_date.setter
     def pseudo_date(self , date : np.ndarray | None):
         if date is not None:
-            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = 10)
-            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 10)
+            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = Proj.vb_max)
+            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = Proj.vb_max)
         self._pseudo_date = date
 
     def set_pseudo_date(self , date : np.ndarray | None = None):
@@ -701,6 +704,12 @@ class StockFactor:
         univ = Universe(name)
         univ.to_portfolio(self.date if load else None)
         return univ
+
+    def within_benchmarks(self , load = True):
+        """
+        pre-load benchmarked factors
+        """
+        return [self.within(bm) for bm in ['market' , 'csi300' , 'csi500' , 'csi1000']]
 
     def day_returns(self , load = True):
         """

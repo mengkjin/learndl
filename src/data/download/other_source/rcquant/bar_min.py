@@ -5,7 +5,7 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
+from src.proj import PATH , MACHINE , Logger , CALENDAR , DB , Proj
 from src.proj.util import IOCatcher
 from src.data.util import secid_adjust , trade_min_reform
 
@@ -42,7 +42,7 @@ def load_list(date : int , data_type : DATA_TYPES):
 def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    DB.save_df(df , path , vb_level = 10 , prefix = f'RcQuant {data_type} list {date}')
+    DB.save_df(df , path , vb_level = Proj.vb_max , prefix = f'RcQuant {data_type} list {date}')
 
 def load_min(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
@@ -53,7 +53,7 @@ def load_min(date : int , data_type : DATA_TYPES):
 def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    DB.save_df(df , path , vb_level = 10 , prefix = f'RcQuant {data_type} min {date}')
+    DB.save_df(df , path , vb_level = Proj.vb_max , prefix = f'RcQuant {data_type} min {date}')
 
 def rcquant_init():
     if not rqdatac.initialized(): 

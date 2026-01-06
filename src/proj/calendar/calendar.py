@@ -394,8 +394,8 @@ class CALENDAR:
             f'rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}'
 
     @classmethod
-    def dates_str(cls , dates : np.ndarray | list[int | None] | Any) -> str:
-        if isinstance(dates , np.ndarray):
+    def dates_str(cls , dates : np.ndarray | pd.Series | list[int | None] | Any) -> str:
+        if isinstance(dates , np.ndarray | pd.Series):
             if len(dates) == 0:
                 dstr = 'None'
             else:

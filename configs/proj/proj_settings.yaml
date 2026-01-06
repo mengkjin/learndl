@@ -1,4 +1,4 @@
-verbosity:  10
-max_verbosity: 10
-min_verbosity: 0
-callback_vb_level: 99 # to show all callback messages, set to values less than 99
+vb:  10
+vb_max: 10
+vb_min: 0
+vb_level_callback: 99 # to show all callback messages, set to values less than 99

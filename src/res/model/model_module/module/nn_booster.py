@@ -2,7 +2,7 @@ import torch
 from torch import set_grad_enabled
 from typing import Any
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData , BatchOutput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
@@ -102,7 +102,7 @@ class NNBooster(BasePredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        Logger.remark(f'model {self.model_str} fit start' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} fit start' , vb_level = Proj.vb_max)
 
         self.new_model()
 
@@ -138,11 +138,11 @@ class NNBooster(BasePredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} fit done' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} fit done' , vb_level = Proj.vb_max)
 
     def test(self):
         '''test the model inside'''
-        Logger.remark(f'model {self.model_str} test start' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} test start' , vb_level = Proj.vb_max)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -150,7 +150,7 @@ class NNBooster(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} test done' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} test done' , vb_level = Proj.vb_max)
 
     def batch_forward_net(self) -> None: 
         self.batch_output = BatchOutput(self.forward_net(self.batch_data))

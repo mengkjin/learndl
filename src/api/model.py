@@ -23,7 +23,7 @@ class ModelAPI:
 
     
     @classmethod
-    def update_models(cls):
+    def update_models(cls , force_update = False):
         '''
         Update models for both laptop and server:
         a. for laptop, do nothing
@@ -31,16 +31,16 @@ class ModelAPI:
         '''
         if MACHINE.server:
             wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
-            wrap_update(cls.Trainer.update_models , 'update models')
+            cls.Trainer.update_models(force_update = force_update)
         else:
             Logger.alert1('This is not a server with cuda, skip this process')
 
     @classmethod
-    def resume_testing_models(cls):
+    def resume_testing(cls , force_resume = False):
         '''
         Resume testing models for both laptop and server:
         '''
-        cls.Trainer.resume_testing_models()
+        cls.Trainer.resume_testing(force_resume = force_resume)
 
     @classmethod
     def update_hidden(cls):

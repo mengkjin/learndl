@@ -15,7 +15,7 @@ from .code_mapper import secid_to_secid
 __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
     'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
-    'file_dates' , 'dir_dates' , 'save_df' , 'append_df' , 'load_df' , 'load_df_multi' ,
+    'file_dates' , 'dir_dates' , 'save_df' , 'append_df' , 'load_df' , 'load_df_multi' , 'load_df_max_date' , 'load_df_min_date' ,
     'block_path' , 'norm_path' ,
 ]
 
@@ -72,7 +72,11 @@ def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
 
 def _df_loader(path : Path):
     """load dataframe from path"""
-    return pd.read_feather(path) if SAVE_OPT_DB == 'feather' else pd.read_parquet(path)
+    try:
+        return pd.read_feather(path) if SAVE_OPT_DB == 'feather' else pd.read_parquet(path)
+    except Exception as e:
+        Logger.error(f'Error loading {path}: {e}')
+        raise e
 
 def _df_saver(df : pd.DataFrame , path : Path):
     """save dataframe to path"""
@@ -125,7 +129,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True ,
     if df is None or df.empty: 
         return False
     elif overwrite or not path.exists(): 
-        status = 'Overwritten' if path.exists() else 'Saved to DB'
+        status = 'Overwritten ' if path.exists() else 'File Created'
         path.parent.mkdir(parents=True , exist_ok=True)
         _df_saver(df , path)
         Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
@@ -162,6 +166,20 @@ def load_df(path : Path , *, raise_if_not_exist = False):
     df = _df_loader(path)
     df = _load_df_mapper(df)
     return df
+
+def load_df_max_date(path : Path , date_colname : str = 'date') -> int:
+    """load dataframe from path"""
+    if not path.exists() or (df := load_df(path)).empty:
+        return 19000101
+    else:
+        return int(max(df[date_colname]))
+
+def load_df_min_date(path : Path , date_colname : str = 'date') -> int:
+    """load dataframe from path"""
+    if not path.exists() or (df := load_df(path)).empty:
+        return 99991231
+    else:
+        return int(min(df[date_colname]))
 
 def load_df_multi(paths : dict | list[Path] , key_column : str | None = 'date' , 
                   parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 

@@ -14,16 +14,16 @@ class CallbackTimer(BaseCallBack):
     WITH_CB = True
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.recording = Proj.verbosity >= 10
+        self.recording = Proj.vb >= 10
         self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.possible_hooks()}
         self.record_start_time : dict[str,datetime] = {}
     def __bool__(self):
         return self.recording and not self.turn_off
-    def at_enter(self , hook_name , vb_level : int = 10):
+    def at_enter(self , hook_name , vb_level : int = Proj.vb_max):
         super().at_enter(hook_name , vb_level)
         if self.recording: 
             self.record_start_time[hook_name] = datetime.now()
-    def at_exit(self, hook_name , vb_level : int = 10):
+    def at_exit(self, hook_name , vb_level : int = Proj.vb_max):
         if self.recording: 
             self.record_hook_durations[hook_name].append((datetime.now() - self.record_start_time[hook_name]).total_seconds())
         super().at_exit(hook_name , vb_level)
@@ -43,8 +43,8 @@ class StatusDisplay(BaseCallBack):
 
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.show_info_step = [0,10,5,3,2,1][min(Proj.verbosity // 2 , 5)]
-        self.dataloader_info = Proj.verbosity >= 10
+        self.show_info_step = [0,10,5,3,2,1][min(Proj.vb // 2 , 5)]
+        self.dataloader_info = Proj.vb >= 10
         self.record_init_time = datetime.now()
         self.record_times : dict[str,datetime] = {}
         self.record_texts : dict[str,str]   = {}

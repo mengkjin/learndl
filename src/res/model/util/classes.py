@@ -7,7 +7,7 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass
 from inspect import currentframe
 from pathlib import Path
-from typing import Any , final , Iterator , Literal
+from typing import Any , final , Iterator , Literal , Callable
 
 from src.proj import Proj , Logger , DB , PATH
 from src.proj.util import Filtered
@@ -67,11 +67,13 @@ class ModelStreamLine(ABC):
     def on_before_test_start(self): ...
     def on_before_test_end(self): ...
     def on_after_test_end(self): ...
+    def execute_hook(self , hook : str):
+        if hook in dir(self):
+            getattr(self , hook)()
     
-
 def possible_hooks() -> list[str]: 
     """Get the possible hooks for the model stream line"""
-    return [x for x in dir(ModelStreamLine) if not x.startswith('_')]
+    return [x for x in dir(ModelStreamLine) if not x.startswith('_') and x != 'execute_hook']
 
 @dataclass
 class _EndEpochStamp:
@@ -272,7 +274,7 @@ class TrainerPredRecorder(ModelStreamLine):
             
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = 10)
+        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb_max)
 
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
@@ -285,7 +287,7 @@ class TrainerPredRecorder(ModelStreamLine):
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = 10)
+        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb_max)
 
     def pred_records(self): 
         """model_date/model_num of saved predictions"""
@@ -572,6 +574,7 @@ class BaseDataModule(ABC):
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
     _instance = None
+    _raw_hooks : dict[str, Callable] = {}
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -586,7 +589,6 @@ class BaseTrainer(ModelStreamLine):
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
             self.wrap_callbacks()
-            Proj.States.export_html_files.append(self.config.model_base_path.rslt('training_output.html'))
 
     def __bool__(self): return True
 
@@ -602,35 +604,38 @@ class BaseTrainer(ModelStreamLine):
         self.status = TrainerStatus(self.config.train_max_epoch)
         self.record = TrainerPredRecorder(self)
 
+    @final
     def wrap_callbacks(self):
-        [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
+        # [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
+        for hook in possible_hooks():
+            if hook not in self._raw_hooks:
+                self._raw_hooks[hook] = getattr(self , hook)
+                setattr(self , hook , self.hook_wrapper(hook))
 
-    @staticmethod
-    def hook_wrapper(trainer : 'BaseTrainer' , hook : str):
-        action_status  = getattr(trainer.status , hook)
-        action_trainer = getattr(trainer , hook)
-        action_model   = getattr(trainer.model , hook)
-        action_record  = getattr(trainer.record , hook)
-        def wrapper() -> None:
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.callback_vb_level)
-            trainer.callback.at_enter(hook , Proj.callback_vb_level)
-            action_status()
-            action_trainer()
-            action_model()
-            action_record()
-            trainer.callback.at_exit(hook , Proj.callback_vb_level)
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.callback_vb_level)
+    @classmethod
+    def hook_wrapper(cls , hook : str):
+        trainer = cls._instance
+        assert isinstance(trainer , BaseTrainer)
+        def wrapper(*args , **kwargs) -> None:
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb_level_callback)
+            trainer.callback.at_enter(hook , Proj.vb_level_callback)
+            trainer.status.execute_hook(hook)
+            trainer._raw_hooks[hook](*args , **kwargs)
+            trainer.model.execute_hook(hook)
+            trainer.record.execute_hook(hook)
+            trainer.callback.at_exit(hook , Proj.vb_level_callback)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb_level_callback)
         return wrapper
 
     @abstractmethod
     def init_model(self , **kwargs): 
         '''initialized data_module'''
-        self.model  : BasePredictorModel
+        self.model : BasePredictorModel
 
     @abstractmethod
     def init_callbacks(self , **kwargs): 
         '''initialized data_module'''
-        self.callback  : BaseCallBack
+        self.callback : BaseCallBack
 
     @abstractmethod
     def init_data(self , **kwargs): 
@@ -675,9 +680,19 @@ class BaseTrainer(ModelStreamLine):
     def model_submodels(self): return self.config.model_submodels
     @property
     def if_transfer(self): return self.config.train_trainer_transfer     
-    
     @property
     def batch_output(self): return self.model.batch_output
+    @property
+    def html_catcher_export_path(self): 
+        if 'fit' in self.stage_queue and 'test' in self.stage_queue:
+            status = 'fitting_testing'
+        elif 'test' in self.stage_queue:
+            status = 'testing'
+        elif 'fit' in self.stage_queue:
+            status = 'fitting'
+        else:
+            status = 'unknown'
+        return self.config.model_base_path.log(f'{self.config.model_name}_{status}.html')
     
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -946,9 +961,9 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.at_exit(self.__hook_stack.pop())
     def __bool__(self):
         return not self.turn_off
-    def at_enter(self , hook : str , vb_level : int = 10):  
+    def at_enter(self , hook : str , vb_level : int = Proj.vb_max):  
         Logger.stdout(f'{hook} of callback {self.__class__.__name__} start' , vb_level = vb_level)
-    def at_exit(self , hook : str , vb_level : int = 10): 
+    def at_exit(self , hook : str , vb_level : int = Proj.vb_max): 
         getattr(self , hook)()
         Logger.stdout(f'{hook} of callback {self.__class__.__name__} end' , vb_level = vb_level)
 

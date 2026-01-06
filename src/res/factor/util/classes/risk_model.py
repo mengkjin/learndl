@@ -183,7 +183,23 @@ class RiskModel(GeneralModel):
         F = F.to_dataframe().assign(market=1.).reset_index(['date'],drop=True).astype(float)
         C = C.drop(columns='date').set_index('factor_name').astype(float)
         S = S.to_dataframe().reset_index(['date'],drop=True).astype(float)
-        return Rmodel(date , F , C , S)    
+        return Rmodel(date , F , C , S)
+
+    @staticmethod
+    def Analytics_to_dfs(analytics : dict[Any,'RiskAnalytic|None']) -> dict[str,pd.DataFrame]:
+        return RiskAnalytic.to_dfs_multi(analytics)
+
+    @staticmethod
+    def Attributions_to_dfs(attributions : dict[Any,'Attribution|None']) -> dict[str,pd.DataFrame]:
+        return Attribution.to_dfs_multi(attributions)
+
+    @staticmethod
+    def Analytics_from_dfs(dfs : dict[str,pd.DataFrame]) -> dict[int,'RiskAnalytic']:
+        return RiskAnalytic.from_dfs_multi(dfs)
+
+    @staticmethod
+    def Attributions_from_dfs(dfs : dict[str,pd.DataFrame]) -> dict[int,'Attribution']:
+        return Attribution.from_dfs_multi(dfs)
 
 @dataclass
 class RiskProfile:
@@ -206,6 +222,21 @@ class RiskProfile:
         df1 = pd.DataFrame({'factor_name':self.variance_measure,'value':[self.variance,self.standard_deviation]})
         return pd.concat([df0,df1]).set_index('factor_name')
     
+
+def get_unique_date(dfs : dict[str,pd.DataFrame] , col : str = 'date') -> int:
+    candidates = []
+    for df in dfs.values():
+        if col in df.columns:
+            assert df[col].nunique() == 1 , df[col].unique()
+            candidates.append(df[col].iloc[0])
+    if not candidates:
+        return 0
+    if len(candidates) == 1:
+        return candidates[0]
+    else:
+        assert all(c == candidates[0] for c in candidates) , candidates
+        return candidates[0]
+
 @dataclass
 class RiskAnalytic:
     '''
@@ -257,6 +288,53 @@ class RiskAnalytic:
         else:
             return self.risk.style.format(lambda x:f'{x:.4%}')
 
+    def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
+        dfs = {}
+        if self.industry is not None:
+            dfs['analytic_industry'] = self.industry.assign(date=self.date , **kwargs)
+        if self.style is not None:
+            dfs['analytic_style'] = self.style.assign(date=self.date , **kwargs)
+        if self.risk is not None:
+            dfs['analytic_risk'] = self.risk.assign(date=self.date , **kwargs)
+        return dfs
+
+    @classmethod
+    def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'date']) -> 'RiskAnalytic':
+        date = get_unique_date(dfs , 'date')
+        industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore') if 'analytic_industry' in dfs else None
+        style = dfs['analytic_style'].drop(columns=drop_columns , errors='ignore') if 'analytic_style' in dfs else None
+        risk = dfs['analytic_risk'].drop(columns=drop_columns , errors='ignore') if 'analytic_risk' in dfs else None
+        return cls(date , industry , style , risk)
+
+    @classmethod
+    def to_dfs_multi(cls , analytics : dict[Any,'RiskAnalytic|None']) -> dict[str,pd.DataFrame]:
+        dfs_multi : dict[str,list[pd.DataFrame]] = {}
+        for key , value in analytics.items():
+            if value is None:
+                continue
+            sub_dfs = value.to_dfs(model_date = key)
+            for k , v in sub_dfs.items():
+                if k not in dfs_multi:
+                    dfs_multi[k] = [v]
+                else:
+                    dfs_multi[k].append(v)
+        dfs_combine = {key : pd.concat(values , axis = 0) for key , values in dfs_multi.items()}
+        return dfs_combine
+
+    @classmethod
+    def from_dfs_multi(cls , dfs : dict[str,pd.DataFrame] , key_col : str = 'model_date'):
+        if not dfs or all(df.empty for df in dfs.values()):
+            return {}
+        dfs_multi : dict[int,dict[str,pd.DataFrame]] = {}
+        for key , df in dfs.items():
+            for k , v in df.groupby(key_col):
+                assert isinstance(k , int) , k
+                if k not in dfs_multi:
+                    dfs_multi[k] = {}
+                dfs_multi[k][key] = v
+        analytics = {key : cls.from_dfs(sub_dfs) for key , sub_dfs in dfs_multi.items()}
+        return analytics
+
 @dataclass
 class Attribution:
     '''
@@ -269,6 +347,8 @@ class Attribution:
     style    : pd.DataFrame | Any = None
     specific : pd.DataFrame | Any = None
     aggregated : pd.DataFrame | Any = None
+
+    order_list : ClassVar[list[str]] = ['tot','market','industry','style','excess','specific','cost']
 
     def __post_init__(self):
         ...
@@ -296,37 +376,43 @@ class Attribution:
         coef = risk_model.params
 
         specific = weight.join(futret).join(F).drop(columns = weight.columns)
-        aggregated = []
+        exp_list : list[pd.DataFrame] = []
         for col in weight.columns:
             exp = (specific * weight[col].to_numpy().reshape(-1,1)).sum().rename(col).to_frame()
             exp.loc[futret.columns.values] = weight[col].sum()
-            aggregated.append(exp)
+            exp_list.append(exp)
 
         specific *= weight['active'].to_numpy().reshape(-1,1)
         specific.loc[:,coef.index.values] *= coef.to_numpy().reshape(1,-1)
-        aggregated.append(specific.sum().rename('contribution'))
-        aggregated = pd.concat(aggregated , axis = 1)
+        exp_list.append(specific.sum().rename('contribution').to_frame())
+        aggregated = pd.concat(exp_list , axis = 1)
     
         agg_cost = pd.DataFrame([[0,0,0,-other_cost]], columns = aggregated.columns,index=pd.Index(['cost']))
         aggregated = pd.concat([aggregated , agg_cost]).rename_axis('source' , axis = 'index')
         aggregated.loc[['tot'],['contribution']] = aggregated.loc[['tot'],['contribution']] - other_cost
         
+        source , industry , style = cls.aggregated_to_others(aggregated)
+
+        specific['industry'] = specific.loc[:,_indus].sum(1)
+        specific['style']    = specific.loc[:,_style].sum(1)
+        specific = specific.drop(columns = _indus + _style).loc[:,cls.order_list[:-1]]
+
+        return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
+
+    @classmethod
+    def aggregated_to_others(cls , aggregated : pd.DataFrame | None):
+        if aggregated is None:
+            return None , None , None
         industry = aggregated.loc[_indus]
         style    = aggregated.loc[_style]
 
         source   = pd.concat([aggregated.loc[['tot','market','excess','specific','cost']] ,
                               industry.sum().rename('industry').to_frame().T ,
                               style.sum().rename('style').to_frame().T])
-        source.loc[['industry','style'] , weight.columns] = 0.
+        source.loc[['industry','style'] , ['portfolio' , 'benchmark' , 'active']] = 0.
+        source = source.loc[cls.order_list].rename_axis('source' , axis = 'index')
 
-        order_list = ['tot','market','industry','style','excess','specific','cost']
-        source = source.loc[order_list].rename_axis('source' , axis = 'index')
-
-        specific['industry'] = specific.loc[:,_indus].sum(1)
-        specific['style']    = specific.loc[:,_style].sum(1)
-        specific = specific.drop(columns = _indus + _style).loc[:,order_list[:-1]]
-
-        return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
+        return source , industry , style
     
     def rounding(self):
         decimals : dict[Any, int] = {
@@ -343,5 +429,48 @@ class Attribution:
         if self.aggregated is not None: 
             self.aggregated = self.aggregated.round(decimals)
         return self
+
+    def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
+        dfs = {'attribution_specific':self.specific.assign(start=self.start , end=self.end , **kwargs) , 
+               'attribution_aggregated':self.aggregated.assign(start=self.start , end=self.end , **kwargs)}
+        return dfs
+
+    @classmethod
+    def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'start' , 'end']) -> 'Attribution':
+        start = get_unique_date(dfs , 'start')
+        end = get_unique_date(dfs , 'end')
+        specific = dfs['attribution_specific'].drop(columns=drop_columns , errors='ignore') if 'attribution_specific' in dfs else None
+        aggregated = dfs['attribution_aggregated'].drop(columns=drop_columns , errors='ignore') if 'attribution_aggregated' in dfs else None
+        source , industry , style = cls.aggregated_to_others(aggregated)
+        return cls(start , end , source , industry , style , specific , aggregated)
+
+    @classmethod
+    def to_dfs_multi(cls , attributions : dict[Any,'Attribution|None']) -> dict[str,pd.DataFrame]:
+        dfs_multi : dict[str,list[pd.DataFrame]] = {}
+        for key , value in attributions.items():
+            if value is None:
+                continue
+            sub_dfs = value.to_dfs(model_date = key)
+            for k , v in sub_dfs.items():
+                if k not in dfs_multi:
+                    dfs_multi[k] = [v]
+                else:
+                    dfs_multi[k].append(v)
+        dfs_combine = {key : pd.concat(values , axis = 0) for key , values in dfs_multi.items()}
+        return dfs_combine
+
+    @classmethod
+    def from_dfs_multi(cls , dfs : dict[str,pd.DataFrame] , key_col : str = 'model_date'):
+        if not dfs or all(df.empty for df in dfs.values()):
+            return {}
+        dfs_multi : dict[int,dict[str,pd.DataFrame]] = {}
+        for key , df in dfs.items():
+            for k , v in df.groupby(key_col):
+                assert isinstance(k , int) , k
+                if k not in dfs_multi:
+                    dfs_multi[k] = {}
+                dfs_multi[k][key] = v
+        analytics = {key : cls.from_dfs(sub_dfs) for key , sub_dfs in dfs_multi.items()}
+        return analytics
 
 RISK_MODEL = RiskModel()

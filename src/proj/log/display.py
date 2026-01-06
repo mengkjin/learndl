@@ -63,7 +63,7 @@ class Display:
         """
         display the object
         """
-        if Silence.silent or Proj.verbosity < vb_level:
+        if Silence.silent or Proj.vb < vb_level:
             return
         Proj.States.current_vb_level = vb_level
         for callback in cls._callbacks_before:

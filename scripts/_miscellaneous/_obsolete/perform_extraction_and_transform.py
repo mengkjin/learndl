@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger , DB
+from src.proj import PATH , MACHINE , Logger , DB , Proj
 from src.data.util import trade_min_fillna
 
 zip_path = PATH.miscel.joinpath('JSMinute')
@@ -51,8 +51,8 @@ def extract_js_min(date):
         Logger.error(e)
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
-    DB.save_df(df , target_path , prefix = f'JS min' , vb_level = 10)
-    return df
+    DB.save_df(df , target_path , prefix = f'JS min' , vb_level = Proj.vb_max)
+    return df   
 
 def add_sec_type(df : pd.DataFrame):
     SZ_types : dict[tuple[int,int],str] = {

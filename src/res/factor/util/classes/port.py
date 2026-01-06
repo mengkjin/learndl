@@ -47,6 +47,11 @@ class Port:
         self._name = name
         return self
 
+    def with_date(self , date : int):   
+        port = self.copy()
+        port.date = date
+        return port
+
     @property
     def size(self): return len(self.port)
 
@@ -146,9 +151,9 @@ class Port:
     def none_port(cls , date : int , name = 'none'): return cls(None , date , name)
     
     @property
-    def port_with_date(self):
+    def df_with_date(self):
         if len(self.port):
-            return pd.DataFrame({'date':self.date , **self.port})
+            return self.port.assign(date = self.date)
         else:
             return pd.DataFrame(columns=pd.Index(['date','secid','weight'])).astype({'date':int,'secid':int,'weight':float})
         

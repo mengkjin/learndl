@@ -1,6 +1,6 @@
 import torch
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
@@ -58,7 +58,7 @@ class BoostPredictor(BasePredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        Logger.remark(f'model {self.model_str} fit start' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} fit start' , vb_level = Proj.vb_max)
 
         self.new_model()
 
@@ -72,10 +72,10 @@ class BoostPredictor(BasePredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} fit done' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} fit done' , vb_level = Proj.vb_max)
 
     def test(self):
-        Logger.remark(f'model {self.model_str} test start' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} test start' , vb_level = Proj.vb_max)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -83,7 +83,7 @@ class BoostPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} test done' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} test done' , vb_level = Proj.vb_max)
 
     def collect(self , submodel = 'best' , *args):
         self.model_dict.booster_dict = self.booster.to_dict()

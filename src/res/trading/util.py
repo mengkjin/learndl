@@ -246,7 +246,7 @@ class TradingPort:
             'benchmark'   : benchmark.name ,
             'strategy'    : f'top{self.top_num}' ,
         }
-        portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine)
+        portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine = trade_engine)
         self.portfolio = portfolio
         return portfolio.account_with_index(default_index)
 

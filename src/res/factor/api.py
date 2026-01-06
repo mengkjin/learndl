@@ -107,12 +107,12 @@ class FactorTestAPI:
     @classmethod
     def run_test(cls , test_type : TYPE_of_TEST , 
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
-                 test_name : str | None = None , test_path : Path | str | None = None , 
+                 test_path : Path | str | None = None , 
                  resume : bool = False , save_resumable : bool = False , 
                  indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                  write_down = False , display_figs = False , **kwargs):
         pm = cls.get_analytic_test(test_type).run_test(
-            factor , benchmark , test_name , test_path , resume , save_resumable , indent , vb_level , start_dt , end_dt , **kwargs)
+            factor , benchmark , test_path , resume , save_resumable , indent , vb_level , start_dt , end_dt , **kwargs)
         if write_down:   
             pm.write_down()
         if display_figs: 
@@ -120,21 +120,31 @@ class FactorTestAPI:
         return pm
 
     @classmethod
+    def last_portfolio_date(cls , test_types : list[TYPE_of_TEST] | TYPE_of_TEST , test_path : Path | str):
+        if not isinstance(test_types , list):
+            test_types = [test_types]
+        last_portfolio_dates = []
+        for test_type in test_types:
+            last_portfolio_date = cls.get_analytic_test(test_type).last_portfolio_date(test_path)
+            last_portfolio_dates.append(last_portfolio_date)
+        return min(last_portfolio_dates) if len(last_portfolio_dates) else 19000101
+
+    @classmethod
     def FactorPerf(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
-                   test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+                   test_path : Path | str | None = None , resume : bool = False , 
                    indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                    write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
-        pm = cls.run_test('factor' , factor , benchmark , test_name , test_path , resume , save_resumable , 
+        pm = cls.run_test('factor' , factor , benchmark , test_path , resume , save_resumable , 
                           indent , vb_level , start_dt , end_dt , write_down , display_figs , **kwargs)
         assert isinstance(pm , FactorPerfTest) , 'FactorPerfTest is expected!'
         return pm
     
     @classmethod
     def FmpOptim(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+                 test_path : Path | str | None = None , resume : bool = False , 
                  indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                  write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
-        pm = cls.run_test('optim' , factor , benchmark , test_name , test_path , resume , save_resumable , 
+        pm = cls.run_test('optim' , factor , benchmark , test_path , resume , save_resumable , 
                           indent , vb_level , start_dt , end_dt , write_down , display_figs , **kwargs)
         assert isinstance(pm , OptimFMPTest) , 'OptimFMPTest is expected!'
         return pm
@@ -142,10 +152,10 @@ class FactorTestAPI:
 
     @classmethod
     def FmpTop(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-               test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+               test_path : Path | str | None = None , resume : bool = False , 
                indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 ,
                write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
-        pm = cls.run_test('top' , factor , benchmark , test_name , test_path , resume , save_resumable , 
+        pm = cls.run_test('top' , factor , benchmark , test_path , resume , save_resumable , 
                           indent , vb_level , start_dt , end_dt , write_down , display_figs , **kwargs)
         assert isinstance(pm , TopFMPTest) , 'TopFMPTest is expected!'
         return pm

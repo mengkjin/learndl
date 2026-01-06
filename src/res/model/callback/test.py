@@ -22,11 +22,12 @@ class BasicTestResult(BaseCallBack):
     @property
     def test_full_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
     @property
-    def path_summary(self): return self.config.model_base_path.rslt('basic_test_summary.xlsx')
-    @property
     def snap_folder(self): return self.config.model_base_path.snapshot('basic_test')
     @property
     def path_test_df(self): return self.snap_folder.joinpath('test_by_date.feather')
+    @property
+    def path_result(self): return self.config.model_base_path.rslt('basic_test.xlsx')
+    
 
     def save_test_df(self , vb_level : int = 1):
         df = self.get_test_df()
@@ -55,13 +56,12 @@ class BasicTestResult(BaseCallBack):
 
     def on_test_end(self): 
         """update test_summary"""
-        if self.test_df_date.empty: 
+        self.save_test_df()
+        df_date = self.get_test_df().query('date in @self.test_full_dates')
+        if df_date.empty:
             return
 
         with Logger.ParagraphIII('Test Summary'): 
-            self.save_test_df()
-
-            df_date = self.get_test_df().query('date in @self.test_full_dates')
             Logger.caption(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
 
             if df_date['model_date'].nunique() == 1 or self.config.module_type in ['factor' , 'db']:
@@ -110,7 +110,8 @@ class BasicTestResult(BaseCallBack):
                 df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
                 df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
                 rslt[f'{model_num}'] = df
-            dfs_to_excel(rslt , self.path_summary , print_prefix = 'Test Summary')
+            [DB.save_df(df , self.snap_folder.joinpath(f'{key}.feather') , overwrite = True , vb_level = 99) for key,df in rslt.items()]
+            dfs_to_excel(rslt , self.path_result, print_prefix = 'Test Summary')
 
 
 class DetailedAlphaAnalysis(BaseCallBack):
@@ -140,9 +141,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def snap_folder(self): return self.config.model_base_path.snapshot('detailed_alpha')
     @property
-    def path_data(self): return self.config.model_base_path.rslt('detailed_alpha_data.xlsx')
+    def path_result_data(self): return self.config.model_base_path.rslt('detailed_alpha_data.xlsx')
     @property
-    def path_plot(self): return self.config.model_base_path.rslt('detailed_alpha_plot.pdf')
+    def path_result_plot(self): return self.config.model_base_path.rslt('detailed_alpha_plot.pdf')
     @property
     def display_tables(self) -> list[str]: return [name for name in self.DISPLAY_TABLES if name in self.test_results]
     @property
@@ -169,13 +170,18 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def get_factor_for_fmp_test(self , trailing_days : int = 10) -> StockFactor:
         assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
-        test_date_num = sum(self.test_dates > self.trainer.record.resumed_last_pred_date)
-        return self.get_factor(self.test_dates[-test_date_num - trailing_days:])
+        pred_last_date = self.trainer.record.resumed_last_pred_date
+        port_last_date = FactorTestAPI.last_portfolio_date(self.fmp_tasks , self.snap_folder)
+        last_date = min(pred_last_date , port_last_date)
+        test_date_num = sum(self.test_dates > last_date) + trailing_days
+        return self.get_factor(self.test_dates[-test_date_num:])
 
     def factor_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor Perf Test'):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor_for_factor_test()
+            with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level):
+                factor.within_benchmarks()
             with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
                 factor.day_returns()
 
@@ -232,11 +238,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 Logger.caption(f'Figure: {name.title()}:')
                 Logger.Display(self.test_figures[name])
 
-            dfs_to_excel(self.test_results , self.path_data , print_prefix='Analytic datas')
-            figs_to_pdf(self.test_figures , self.path_plot , print_prefix='Analytic plots')
+            dfs_to_excel(self.test_results , self.path_result_data , print_prefix='Analytic datas')
+            figs_to_pdf(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')
 
-            Proj.States.exit_files.append(self.path_data)
-            Proj.States.exit_files.append(self.path_plot)
+            Proj.States.exit_files.append(self.path_result_data)
+            Proj.States.exit_files.append(self.path_result_plot)
 
     def on_test_end(self):
         if not self.tasks:

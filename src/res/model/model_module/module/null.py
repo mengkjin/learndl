@@ -1,7 +1,7 @@
 import torch
 from typing import Any
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.res.model.util import BasePredictorModel , BatchData
 
 class NullPredictor(BasePredictorModel):
@@ -44,7 +44,7 @@ class NullPredictor(BasePredictorModel):
 
     def test(self):
         '''test the model inside'''
-        Logger.remark(f'model {self.model_str} test start' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} test start' , vb_level = Proj.vb_max)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -52,7 +52,7 @@ class NullPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} test done' , vb_level = 10)
+        Logger.remark(f'model {self.model_str} test done' , vb_level = Proj.vb_max)
 
     def collect(self , *args):
         return self.model_dict

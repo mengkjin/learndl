@@ -66,8 +66,7 @@ class AutoRunCatchers:
         if 'html' in self.catchers:
             self._catchers.append(HtmlCatcher(title , category , init_time))
         if 'markdown' in self.catchers:
-            self._catchers.append(MarkdownCatcher(title , category , init_time , 
-                                  to_share_folder=True , add_time_to_title=False))
+            self._catchers.append(MarkdownCatcher(title , category , init_time , to_share_folder=True))
         if 'warning' in self.catchers:
             self._catchers.append(WarningCatcher(self._catch_warnings))
 
@@ -277,7 +276,7 @@ class AutoRunTask:
         """set the verbosity of the task"""
         if 'max_vb' in self.kwargs:
             self.verbosity = 10 * int(self.kwargs['max_vb'])
-        Proj.verbosity = self.verbosity
+        Proj.vb = self.verbosity
 
     def send_email(self):
         """send email with attachment if in server and email is True"""

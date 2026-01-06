@@ -17,7 +17,7 @@ class _Verbosity:
         ProjVerbosity.verbosity = 1 # for int verbosity
     """
     def __init__(self):
-        self.value = _project_settings['verbosity']
+        self.value = _project_settings['vb']
     def __get__(self , instance, owner):
         return self.value
     def __set__(self, instance, value : int | None = None):
@@ -31,21 +31,21 @@ class _Verbosity:
             stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
         self.value = value
 
-class _MaxVerbosity:
+class _VbMax:
     def __init__(self):
-        self.value = _project_settings['max_verbosity']
+        self.value = _project_settings['vb_max']
     def __get__(self , instance, owner):
         return self.value
 
-class _MinVerbosity:
+class _VbMin:
     def __init__(self):
-        self.value = _project_settings['min_verbosity']
+        self.value = _project_settings['vb_min']
     def __get__(self , instance, owner):
         return self.value
 
-class _CallbackVbLevel:
+class _VbLevelCallback:
     def __init__(self):
-        self.value = _project_settings['callback_vb_level']
+        self.value = _project_settings['vb_level_callback']
     def __get__(self , instance, owner):
         return self.value
 
@@ -66,10 +66,10 @@ class _Log_File:
 
 class _ProjMeta(type):
     """meta class of ProjConfig"""
-    verbosity = _Verbosity()
-    max_verbosity = _MaxVerbosity()
-    min_verbosity = _MinVerbosity()
-    callback_vb_level = _CallbackVbLevel()
+    vb = _Verbosity()
+    vb_max = _VbMax()
+    vb_min = _VbMin()
+    vb_level_callback = _VbLevelCallback()
     log_file = _Log_File()
 
     def __call__(cls, *args, **kwargs):
@@ -87,7 +87,7 @@ class Proj(metaclass=_ProjMeta):
         """return the machine info list"""
         return [
             *MACHINE.info(),
-            f'Proj Verbosity : {cls.verbosity}', 
+            f'Proj Verbosity : {cls.vb}', 
             f'Proj Log File  : {cls.log_file}',
             # *cls.States.info(),
         ]

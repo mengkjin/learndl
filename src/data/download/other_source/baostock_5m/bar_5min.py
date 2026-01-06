@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , CALENDAR , DB
+from src.proj import PATH , Logger , CALENDAR , DB , Proj
 from src.data.util import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
@@ -36,7 +36,7 @@ def baostock_secdf(date : int):
     secdf['secid'] = secdf['code'].str.slice(3).astype(int)
     secdf['is_sec'] = ((secdf['market'] == 'sh') * (secdf['secid'] >= 600000) + \
         (secdf['market'] == 'sz') * (secdf['secid'] < 600000)) * (~secdf['code_name'].str.contains('指数'))
-    DB.save_df(secdf , path , vb_level = 10 , prefix = 'Baostock Secdf')
+    DB.save_df(secdf , path , vb_level = Proj.vb_max , prefix = 'Baostock Secdf')
     return secdf
 
 def baostock_past_dates(file_type : Literal['secdf' , '5min']):
@@ -124,7 +124,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 assert rs is not None , f'{rs} is None , corrupted data'
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
-                    DB.save_df(result , tmp_file_path(start_dt , end_dt , code) , vb_level = 10 , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
+                    DB.save_df(result , tmp_file_path(start_dt , end_dt , code) , vb_level = Proj.vb_max , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
 
                 if i % 100 == 0:
                     Logger.success(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
@@ -145,7 +145,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
         df : pd.DataFrame = df_all.query('date == @date_str')
         date = int(str(date_str).replace('-', ''))
         df = df.copy().reset_index(drop = True).assign(date = date)
-        DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = 10 , prefix = f'Baostock 5min bars {date}')
+        DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = Proj.vb_max , prefix = f'Baostock 5min bars {date}')
 
         df = baostock_5min_to_normal_5min(df)
         DB.save(df , 'trade_ts' , '5min' , date = date , indent = 1 , vb_level = 3)

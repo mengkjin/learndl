@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import MACHINE , PATH , Logger
+from src.proj import MACHINE , PATH , Logger , Proj
 from src.proj.calendar import CALENDAR
 from src.proj.func import torch_load
 import src.proj.db as DB
@@ -59,6 +59,9 @@ class ModelPath:
     def snapshot(self , *args) -> Path:
         """model snapshot path"""
         return self('snapshot' , *args)
+    def log(self , *args) -> Path:
+        """model log path"""
+        return self('log' , *args)
     def full_path(self , model_num , model_date , submodel) -> Path:
         """full model path of a given model date / num / submodel"""
         return self('archive', model_num , model_date , submodel)
@@ -75,8 +78,10 @@ class ModelPath:
         if model_nums is not None: 
             [self.archive(mm).mkdir(exist_ok=exist_ok) for mm in model_nums]
         self.conf().mkdir(exist_ok=exist_ok)
-        self.rslt().mkdir(exist_ok=exist_ok)
-        self.snapshot().mkdir(exist_ok=exist_ok)
+        self.rslt().mkdir(exist_ok=True)
+        self.snapshot().mkdir(exist_ok=True)
+        self.log().mkdir(exist_ok=True)
+        
     @property
     def root_path(self) -> Path:
         """root of model path based on name"""
@@ -268,7 +273,7 @@ class DBMappingModel:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},src={self.src},key={self.key},col={self.col})'
 
-    def load_block(self , start_dt : int , end_dt : int , indent = 1 , vb_level : int = 10):
+    def load_block(self , start_dt : int , end_dt : int , indent = 1 , vb_level : int = Proj.vb_max):
         from src.data.loader import BlockLoader
         return BlockLoader(db_src = self.src , db_key = self.key , feature = self.col).load(start_dt , end_dt , indent = indent , vb_level = vb_level)
     
@@ -347,7 +352,7 @@ class PredictionModel(ModelPath):
         if self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 10 , reason = f'column rename from {self.name} to {self.pred_name}')
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = Proj.vb_max , reason = f'column rename from {self.name} to {self.pred_name}')
         return df
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:

@@ -1,3 +1,4 @@
+import shutil
 import pandas as pd
 import numpy as np
 
@@ -5,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Sequence , Any
 
-from src.proj import Proj , Logger , CALENDAR
+from src.proj import Proj , Logger , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -74,7 +75,7 @@ class PortfolioAccountant:
     
     def __init__(self , portfolio : Portfolio):
         self.portfolio = portfolio
-        self.stored_accounts : dict[AccountConfig , pd.DataFrame] = {}
+        self.cached_accounts : dict[str , pd.DataFrame] = {}
         self.account = pd.DataFrame()
         self.config : AccountConfig | None = None
 
@@ -82,13 +83,35 @@ class PortfolioAccountant:
         return f'{self.__class__.__name__}(portfolio={self.portfolio})'
     
     def clear(self):
-        self.stored_accounts.clear()
+        self.cached_accounts.clear()
         self.account = pd.DataFrame()
         self.config = None
         return self
     @property
     def port_dates(self):
         return self.portfolio.available_dates()
+
+    def accounting(self , 
+                   config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
+                   start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
+                   trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
+                   daily = False , cache = False , indent : int = 0 , vb_level : int = 1):
+        '''Accounting portfolio through date, if resume is True, will resume from last account date'''
+        if isinstance(config_or_benchmark , AccountConfig):
+            self.config = config_or_benchmark
+        else:
+            benchmark = AccountConfig.get_benchmark(config_or_benchmark)
+            self.config = AccountConfig(self.portfolio.name , benchmark , start , end , analytic , attribution , 
+                                        trade_engine = trade_engine , daily = daily ,
+                                        indent = indent , vb_level = vb_level)
+        
+        if str(self.config) in self.cached_accounts:
+            self.account = self.cached_accounts[str(self.config)]
+        else:
+            self.setup().make()
+            if cache: 
+                self.cached_accounts[str(self.config)] = self.account
+        return self
     
     def setup(self):
         assert self.config is not None , 'config is not set'
@@ -117,39 +140,41 @@ class PortfolioAccountant:
         assert np.all(model_dates < period_st) , (model_dates , period_st)
         assert np.all(period_st <= period_ed) , (period_st , period_ed)
 
+        self.model_dates = np.concatenate([[-1],model_dates])
+        self.start_dates = np.concatenate([[model_dates[0]],period_st])
+        self.end_dates   = np.concatenate([[model_dates[0]],period_ed])
         self.account = pd.DataFrame({
-            'model_date':np.concatenate([[-1],model_dates]) , 
-            'start':np.concatenate([[model_dates[0]],period_st]) , 
-            'end':np.concatenate([[model_dates[0]],period_ed]) ,
+            'model_date':self.model_dates , 'start':self.start_dates , 'end':self.end_dates ,
             'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. , 'overnight': 0. ,
             'analytic':None , 'attribution':None}).set_index('model_date').sort_index()
-        
+            
         return self
     
     def make(self):
         assert self.config is not None , 'config is not set'
         if self.account.empty: 
             return self
-            
-        port_old = Port.none_port(self.account.index.values[1])
-        Logger.stdout(f'{self.config.name} has {len(self.account) - 1} account dates at {CALENDAR.dates_str([self.account['start'].values[1] , self.account['end'].values[-1]])}' , 
+
+        port_old = Port.none_port(self.model_dates[1])
+        
+        Logger.stdout(f'{self.config.name} has {len(self.account) - 1} account dates at {CALENDAR.dates_str([self.start_dates[1] , self.end_dates[-1]])}' , 
                       indent = self.config.indent , vb_level = self.config.vb_level)
-        for i , (date , ed) in enumerate(zip(self.account.index.values[1:] , self.account['end'].values[1:])):
-            port_new = self.portfolio.get(date) if self.portfolio.has(date) else port_old
-            bench = self.config.benchmark.get(date , True)
+        for i , (mdate , ed) in enumerate(zip(self.model_dates[1:] , self.end_dates[1:])):
+            port_new = self.portfolio.get(mdate) if self.portfolio.has(mdate) else port_old
+            bench = self.config.benchmark.get(mdate , True)
 
             rets = self.get_rets(port_old , port_new , bench , ed)
             turn = port_new.turnover(port_old)
-            self.account.loc[date , ['pf' , 'bm' , 'overnight' , 'turn']] = \
+            self.account.loc[mdate , ['pf' , 'bm' , 'overnight' , 'turn']] = \
                 np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , Proj.Conf.Factor.ROUNDING.ret)
             
             if self.config.analytic: 
-                self.account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
+                self.account.loc[mdate , 'analytic']    = RISK_MODEL.get(mdate).analyze(port_new , bench , port_old) #type:ignore
             if self.config.attribution: 
-                self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
+                self.account.loc[mdate , 'attribution'] = RISK_MODEL.get(mdate).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
             if i > 0 and ((i + 1) % 100 == 0 or i == len(self.account) - 2):
-                Logger.stdout(f'{self.config.name} accounting {i + 1} / {len(self.account) - 1} at {date}' , 
+                Logger.stdout(f'{self.config.name} accounting {i + 1} / {len(self.account) - 1} at {mdate}' , 
                               indent = self.config.indent + 1 , vb_level = self.config.vb_level + 2)
 
         self.account['pf']  = self.account['pf'] - self.account['turn'] * self.config.trade_cost
@@ -181,36 +206,17 @@ class PortfolioAccountant:
         rets['bm'] = bm_ret
         rets['overnight'] = overnight_ret
         return rets
-
-    def accounting(self , 
-                   config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
-                   start : int = -1 , end : int = 99991231 , 
-                   analytic = True , attribution = True , 
-                   trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-                   daily = False , store = False , indent : int = 0 , vb_level : int = 1):
-        '''Accounting portfolio through date, if resume is True, will resume from last account date'''
-        if isinstance(config_or_benchmark , AccountConfig):
-            self.config = config_or_benchmark
-        else:
-            benchmark = AccountConfig.get_benchmark(config_or_benchmark)
-            self.config = AccountConfig(self.portfolio.name , benchmark , start , end , analytic , attribution , trade_engine , 
-                                        daily , indent = indent , vb_level = vb_level)
-        
-        for config in self.stored_accounts:
-            if config == self.config:
-                self.account = self.stored_accounts[config]
-                break
-        else:
-            self.setup().make()
-            if store: 
-                self.stored_accounts[self.config] = self.account
-        return self
     
-    def account_with_index(self , add_index : dict[str,Any] | None = None):
+    @staticmethod
+    def account_with_index(account : pd.DataFrame , add_index : dict[str,Any] | None = None):
         add_index = add_index or {}
         if not add_index: 
-            return self.account
-        return self.account.assign(**add_index).set_index(list(add_index.keys())).sort_values('model_date')
+            return account
+        return account.assign(**add_index).set_index(list(add_index.keys())).sort_values('model_date').sort_index()
+
+    @staticmethod
+    def concat_accounts(accounts : Sequence[pd.DataFrame]):
+        return pd.concat([acc for acc in accounts]).drop_duplicates(subset = ['model_date'] , keep = 'last').sort_values('model_date')
     
     @staticmethod
     def total_account(accounts : Sequence[pd.DataFrame] | dict[str,pd.DataFrame]) -> pd.DataFrame:
@@ -221,15 +227,68 @@ class PortfolioAccountant:
             accounts = list(accounts.values())
 
         df = pd.concat(accounts)
-        old_index = list(df.index.names)
-        df = df.reset_index().sort_values('model_date')
+        old_index = [index for index in df.index.names if index]
+        df = df.reset_index(old_index , drop = False).sort_values('model_date').reset_index(drop = True)
         new_bm = np.setdiff1d(df['benchmark'] , Proj.Conf.Factor.BENCH.categories).tolist()
         df['benchmark'] = pd.Categorical(df['benchmark'] , categories = Proj.Conf.Factor.BENCH.categories + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
         Proj.States.account = df    
         return df
-    
+
+    @classmethod
+    def account_to_dfs(cls , account : pd.DataFrame) -> dict[str,pd.DataFrame]:
+        account = account.set_index('model_date')
+        dfs = {}
+        dfs['basic'] = account.loc[:,['start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight']].reset_index(drop = False)
+        
+        dfs.update(RISK_MODEL.Analytics_to_dfs(account['analytic'].to_dict()))
+        dfs.update(RISK_MODEL.Attributions_to_dfs(account['attribution'].to_dict()))
+        return dfs
+
+    @classmethod
+    def dfs_to_account(cls , dfs : dict[str,pd.DataFrame]) -> pd.DataFrame:
+        if not dfs or 'basic' not in dfs:
+            return pd.DataFrame()
+        account = dfs['basic'].assign(analytic=None, attribution=None).set_index('model_date')
+        analytics = RISK_MODEL.Analytics_from_dfs({k:v for k,v in dfs.items() if k.startswith('analytic_')})
+        attributions = RISK_MODEL.Attributions_from_dfs({k:v for k,v in dfs.items() if k.startswith('attribution_')})
+        for date , v in analytics.items():
+            account.loc[date , 'analytic'] = v #type:ignore
+        for date , v in attributions.items():
+            account.loc[date , 'attribution'] = v #type:ignore
+        return account.reset_index(drop = False)
+
+    def save(self , path : Path | str | None = None):
+        self.save_account(self.account , path)
+        return self
+
+    @classmethod
+    def save_account(cls , account : pd.DataFrame , path : Path | str | None = None , vb_level : int = 1 , indent : int = 0):
+        if path is None or account.empty:
+            return
+        path = Path(path)
+        assert not path.exists() or path.is_dir() , f'{path} is a file'
+        account_dfs = cls.account_to_dfs(account)
+        if path.exists():
+            shutil.rmtree(path)
+            status = 'Overwritten '
+        else:
+            status = 'File Created'
+        path.mkdir(parents=True, exist_ok=True)
+        for name , df in account_dfs.items():
+            DB.save_df(df , path.joinpath(f'{name}.feather') , prefix = 'Account' , vb_level = 99)
+        Logger.stdout(f'Account {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        
+    @classmethod
+    def load(cls , path : Path | str | None = None) -> pd.DataFrame:
+        if path is None:
+            return pd.DataFrame()
+        path = Path(path)
+        assert not path.exists() or path.is_dir() , f'{path} is not a directory'
+        account_dfs = {path.stem:DB.load_df(path) for path in path.glob('*.feather')}
+        return cls.dfs_to_account(account_dfs)
+
 class PortfolioAccountManager:   
     def __init__(self , account_dir : str | Path):
         self.account_dir = Path(account_dir)

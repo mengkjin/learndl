@@ -1,4 +1,5 @@
-import datetime , warnings
+import warnings
+from datetime import datetime
 import pandas as pd
 import numpy as np
 
@@ -7,7 +8,7 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , Logger
+from src.proj import PATH , Logger , DB
 from src.proj.func import dfs_to_excel , figs_to_pdf , camel_to_snake
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
@@ -88,14 +89,13 @@ class BaseFactorAnalyticTest(ABC):
     TEST_TITLE = TestTitle()
 
     def __init__(
-        self , test_name : str | None = None , test_path : Path | str | None = None , 
+        self , test_path : Path | str | None = None , 
         resume : bool = False, save_resumable : bool = False , start_dt : int = -1 , end_dt : int = 99991231 , 
         which : str | list[str] | Literal['all'] = 'all' , **kwargs
     ):
         candidates = {task.task_name():task for task in self.TASK_LIST}
-            
+        self.create_time = datetime.now()
         self.kwargs = kwargs
-        self.test_name = test_name
         self.test_path = test_path
         self.resume = resume
         self.save_resumable = save_resumable
@@ -109,16 +109,15 @@ class BaseFactorAnalyticTest(ABC):
             illegal = np.setdiff1d(which , list(candidates.keys()))
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
             self.tasks = {k:v(**kwargs) for k,v in candidates.items() if k in which}
-        self.get_test_name()
 
     def __repr__(self):
         return f'{self.__class__.__name__}'
 
     @classmethod
     def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
+                test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
                  indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
-        pm = cls(test_name , test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
+        pm = cls(test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
         pm.calc(StockFactor(factor) , benchmark , indent = indent , vb_level = vb_level)
         pm.plot(show = False , indent = indent , vb_level = vb_level)
         return pm
@@ -136,11 +135,13 @@ class BaseFactorAnalyticTest(ABC):
                 task.plot(show = show , indent = indent + 1 , vb_level = vb_level + 1)
         return self
 
-    def get_test_name(self):
-        if self.test_name is None:
-            start_time = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            self.test_name = f'{self.__class__.__name__}_{start_time}'
-        return self.test_name
+    @property
+    def class_snake_name(self) -> str:
+        return camel_to_snake(self.__class__.__name__)
+
+    @property
+    def test_name(self) -> str:
+        return f'{self.class_snake_name}_{self.create_time.strftime('%Y%m%d%H%M%S')}'
 
     @property
     def test_path(self):
@@ -149,7 +150,7 @@ class BaseFactorAnalyticTest(ABC):
         else:
             rslt_dir = PATH.rslt_test.joinpath(self.TEST_TYPE)
             rslt_dir.mkdir(parents=True , exist_ok=True)
-            return rslt_dir.joinpath(self.get_test_name())
+            return rslt_dir.joinpath(self.test_name)
 
     @test_path.setter
     def test_path(self , path : Path | str | None):
@@ -162,13 +163,14 @@ class BaseFactorAnalyticTest(ABC):
         else:
             return self._test_path.joinpath(camel_to_snake(self.__class__.__name__))
 
-    @property
-    def portfolio_resume_path(self):
-        assert self.TEST_TYPE not in ['factor'] , self.TEST_TYPE
-        if self.resume_path is None:
-            return None
+    @classmethod
+    def last_portfolio_date(cls , test_path : Path | str | None = None):
+        if test_path is None:
+            return 19000101
         else:
-            return self.resume_path.joinpath(f'portfolio')
+            portfolio_resume_path = Path(test_path) / camel_to_snake(cls.__name__) / 'portfolio'
+            last_dates = [DB.load_df_max_date(path) for path in portfolio_resume_path.glob('*.feather')]
+            return min(last_dates) if len(last_dates) else 19000101
 
     @property
     def factor_stats_resume_path(self):
