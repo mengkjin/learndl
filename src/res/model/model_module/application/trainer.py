@@ -84,7 +84,7 @@ class ModelTrainer(BaseTrainer):
             if last_operation_time:
                 Logger.alert1(f'[{check_operation}] {title} has been done at {last_operation_time}, skip this operation!')
             else:
-                # trainer.go().log_operation(log_operation)
+                trainer.go().log_operation(log_operation)
                 if isinstance(catcher , HtmlCatcher):
                     catcher.set_export_files(trainer.html_catcher_export_path)
         return trainer
