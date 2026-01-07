@@ -22,11 +22,11 @@ from .storage import MemFileStorage
 
 class ModelStreamLine(ABC):
     """Base class for all model stream lines , e.g. trainer, predictor, data module, etc."""
-    def on_configure_model(self): ...
-    def on_summarize_model(self): ...
     def stage_data(self): ...
     def stage_fit(self):  ...
     def stage_test(self): ...
+    def on_configure_model(self): ...
+    def on_summarize_model(self): ...
     def on_data_end(self): ... 
     def on_data_start(self): ... 
     def on_after_backward(self): ... 
@@ -68,12 +68,81 @@ class ModelStreamLine(ABC):
     def on_before_test_end(self): ...
     def on_after_test_end(self): ...
     def execute_hook(self , hook : str):
-        if hook in dir(self):
-            getattr(self , hook)()
-    
-def possible_hooks() -> list[str]: 
-    """Get the possible hooks for the model stream line"""
-    return [x for x in dir(ModelStreamLine) if not x.startswith('_') and x != 'execute_hook']
+        getattr(self , hook)()
+
+    possible_hooks : list[str] = [
+        'stage_data' ,
+        'stage_fit' ,
+        'stage_test' ,
+        'on_configure_model' ,
+        'on_summarize_model' ,
+        'on_data_end' , 
+        'on_data_start' , 
+        'on_after_backward' , 
+        'on_after_fit_epoch' , 
+        'on_before_backward' , 
+        'on_before_save_model' , 
+        'on_before_fit_epoch_end' , 
+        'on_fit_end' , 
+        'on_fit_epoch_end' , 
+        'on_fit_epoch_start' , 
+        'on_fit_model_end' , 
+        'on_fit_model_start' , 
+        'on_fit_model_date_end' , 
+        'on_fit_model_date_start' , 
+        'on_fit_start' ,
+        'on_test_batch_end' ,
+        'on_test_batch_start' , 
+        'on_test_end' , 
+        'on_test_model_end' , 
+        'on_test_model_start' , 
+        'on_test_model_date_end' , 
+        'on_test_model_date_start' , 
+        'on_test_submodel_end' , 
+        'on_test_submodel_start' , 
+        'on_test_start' , 
+        'on_train_batch_end' , 
+        'on_train_batch_start' , 
+        'on_train_epoch_end' , 
+        'on_train_epoch_start' , 
+        'on_validation_batch_end' , 
+        'on_validation_batch_start' ,
+        'on_validation_epoch_end' ,
+        'on_validation_epoch_start' ,
+        'on_before_data_start' ,
+        'on_after_data_end' ,
+        'on_before_fit_start' ,
+        'on_after_fit_end' ,
+        'on_before_test_start' ,
+        'on_before_test_end' ,
+        'on_after_test_end' ,
+    ]
+
+class HookWrapper:
+    wrap_count : int = 0
+    max_wrap_count = 1
+    raw_hooks : dict[str , Callable] = {}
+
+    @classmethod
+    def wrap(cls , trainer : 'BaseTrainer'):
+        assert cls.wrap_count < cls.max_wrap_count , f'Callbacks are already wrapped {cls.wrap_count} times'
+        for hook in trainer.possible_hooks:
+            cls.raw_hooks[hook] = getattr(trainer , hook)
+            setattr(trainer , hook , cls.wrap_single_hook(trainer , hook))
+        cls.wrap_count += 1
+
+    @classmethod
+    def wrap_single_hook(cls , trainer : 'BaseTrainer' , hook : str):
+        def wrapper(*args , **kwargs) -> None:
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.level_callback)
+            trainer.callback.at_enter(hook , Proj.vb.level_callback)
+            trainer.status.execute_hook(hook)
+            cls.raw_hooks[hook](*args , **kwargs)
+            trainer.model.execute_hook(hook)
+            trainer.record.execute_hook(hook)
+            trainer.callback.at_exit(hook , Proj.vb.level_callback)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.level_callback)
+        return wrapper
 
 @dataclass
 class _EndEpochStamp:
@@ -274,20 +343,20 @@ class TrainerPredRecorder(ModelStreamLine):
             
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb_max)
+        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
 
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
 
     def save_avg_preds(self , model_date : int):
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
-        df = DB.load_df_multi(pred_paths)
+        df = DB.load_dfs(pred_paths)
         if df.empty:
             return
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb_max)
+        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
 
     def pred_records(self): 
         """model_date/model_num of saved predictions"""
@@ -331,7 +400,7 @@ class TrainerPredRecorder(ModelStreamLine):
             if not trim_models.empty:
                 purge_info += f', {len(trim_models)} models(date/num) trimed'
             
-            [Path(path).unlink()  for path in purge_models['path']]
+            [Path(path).unlink() for path in purge_models['path']]
             
             for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
                 self.save_preds(DB.load_df(path).query('date <= @min_retrained_model_date') , model_date , model_num)
@@ -419,7 +488,7 @@ class TrainerPredRecorder(ModelStreamLine):
         if model_num is not None:
             pred_records = pred_records.query('model_num == @model_num')
         assert not pred_records.empty , f'No pred records found for test dates {pred_dates}'
-        df = DB.load_df_multi(pred_records['path'].tolist()).sort_values(by=self.PRED_KEYS).\
+        df = DB.load_dfs(pred_records['path'].tolist()).sort_values(by=self.PRED_KEYS).\
             drop_duplicates(self.PRED_KEYS + self.PRED_IDXS , keep='last').reset_index(drop=True)
         return df.query('date in @pred_dates')
 
@@ -433,7 +502,7 @@ class TrainerPredRecorder(ModelStreamLine):
                 
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         assert not avg_pred_records.empty , f'No avg pred records found for test dates {pred_dates}'
-        df = DB.load_df_multi(avg_pred_records['path'].tolist()).\
+        df = DB.load_dfs(avg_pred_records['path'].tolist()).\
             sort_values(by=['model_date' , 'submodel' , 'date' , 'secid']).\
             drop_duplicates(['submodel' , 'date' , 'secid'] , keep='last').reset_index(drop=True)
         return df.query('date in @pred_dates')
@@ -573,11 +642,14 @@ class BaseDataModule(ABC):
 
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
-    _instance = None
+    _instance : 'BaseTrainer | None' = None
     _raw_hooks : dict[str, Callable] = {}
+    _hooks_wrapped : bool = False
+
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+            HookWrapper.wrap(cls._instance)
             Proj.States.trainer = cls._instance
         return cls._instance
     
@@ -588,7 +660,6 @@ class BaseTrainer(ModelStreamLine):
             self.init_data(**kwargs)
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
-            self.wrap_callbacks()
 
     def __bool__(self): return True
 
@@ -603,29 +674,6 @@ class BaseTrainer(ModelStreamLine):
             self.config.print_out()
         self.status = TrainerStatus(self.config.train_max_epoch)
         self.record = TrainerPredRecorder(self)
-
-    @final
-    def wrap_callbacks(self):
-        # [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
-        for hook in possible_hooks():
-            if hook not in self._raw_hooks:
-                self._raw_hooks[hook] = getattr(self , hook)
-                setattr(self , hook , self.hook_wrapper(hook))
-
-    @classmethod
-    def hook_wrapper(cls , hook : str):
-        trainer = cls._instance
-        assert isinstance(trainer , BaseTrainer)
-        def wrapper(*args , **kwargs) -> None:
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb_level_callback)
-            trainer.callback.at_enter(hook , Proj.vb_level_callback)
-            trainer.status.execute_hook(hook)
-            trainer._raw_hooks[hook](*args , **kwargs)
-            trainer.model.execute_hook(hook)
-            trainer.record.execute_hook(hook)
-            trainer.callback.at_exit(hook , Proj.vb_level_callback)
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb_level_callback)
-        return wrapper
 
     @abstractmethod
     def init_model(self , **kwargs): 
@@ -961,9 +1009,9 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.at_exit(self.__hook_stack.pop())
     def __bool__(self):
         return not self.turn_off
-    def at_enter(self , hook : str , vb_level : int = Proj.vb_max):  
+    def at_enter(self , hook : str , vb_level : int = Proj.vb.max):  
         Logger.stdout(f'{hook} of callback {self.__class__.__name__} start' , vb_level = vb_level)
-    def at_exit(self , hook : str , vb_level : int = Proj.vb_max): 
+    def at_exit(self , hook : str , vb_level : int = Proj.vb.max): 
         getattr(self , hook)()
         Logger.stdout(f'{hook} of callback {self.__class__.__name__} end' , vb_level = vb_level)
 
@@ -972,10 +1020,6 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         while not env.f_code.co_name.startswith('on_'): 
             env = getattr(env , 'f_back')
         return env.f_code.co_name
-    
-    @classmethod
-    def possible_hooks(cls): 
-        return possible_hooks()
 
     @property
     def model(self): return self.trainer.model

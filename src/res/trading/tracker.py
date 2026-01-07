@@ -43,7 +43,7 @@ class TradingPortfolioTracker:
 
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
-            Proj.States.email_attachments.append(path)
+            Proj.email_attachments.append(path)
 
     @classmethod
     def attachment_path(cls , date : int) -> Path:

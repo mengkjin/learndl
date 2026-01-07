@@ -289,14 +289,14 @@ class CacheFactorStats:
         if path is None or not path.exists():
             return
         stats_num = sum([factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        Logger.success(f'Load {stats_num} Factor Stats from {path}' , indent = 0 , vb_level = Proj.vb_max)
+        Logger.success(f'Load {stats_num} Factor Stats from {path}' , indent = 0 , vb_level = Proj.vb.max)
         return self
 
     def save(self , path : Path | None):
         if path is None:
             return
         stats_num = sum([factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = Proj.vb_max)
+        Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = Proj.vb.max)
 
     @property
     def ic(self) -> FactorStats:
@@ -583,8 +583,8 @@ class StockFactor:
     @pseudo_date.setter
     def pseudo_date(self , date : np.ndarray | None):
         if date is not None:
-            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = Proj.vb_max)
-            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = Proj.vb_max)
+            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = Proj.vb.max)
+            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = Proj.vb.max)
         self._pseudo_date = date
 
     def set_pseudo_date(self , date : np.ndarray | None = None):
@@ -632,7 +632,7 @@ class StockFactor:
         """
         load the factor data from the database by factor name and date range
         """
-        df = DB.load_multi('factor' , factor_name , dates = dates , start_dt=start , end_dt=end)
+        df = DB.loads('factor' , factor_name , dates = dates , start_dt=start , end_dt=end)
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):

@@ -349,12 +349,12 @@ class TimedOutput:
     content: str | pd.DataFrame | pd.Series | Figure | None | Any
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
-    vb_level: int | None = None
     
     def __post_init__(self):
         self._time = datetime.now()
         self.type_fmt = self.get_type_fmt()
         self.type_str = self.get_type_str()
+        self.vb_level = Proj.vb.current
 
     def __bool__(self):
         return self.valid
@@ -416,7 +416,6 @@ class TimedOutput:
         """Create a timed output item"""
         infos = {}
         valid = True
-        vb_level = Proj.States.current_vb_level
         if output_type is None:
             if isinstance(content , Figure): 
                 output_type = 'figure'
@@ -446,7 +445,7 @@ class TimedOutput:
             if content == '...': 
                 valid = False
 
-        return cls(output_type, content , infos , valid , vb_level)
+        return cls(output_type, content , infos , valid)
     
     def equivalent(self, other: 'TimedOutput') -> bool:
         """
@@ -607,8 +606,8 @@ class HtmlCatcher(OutputCatcher):
         Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         for export_path in self.export_file_list:
             Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
-        if self.export_file_list:
-            Proj.States.exit_files.append(self.export_file_list[0])
+        if self.is_primary and self.export_file_list:
+            Proj.exit_files.append(self.export_file_list[0])
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:
@@ -1151,8 +1150,7 @@ class MarkdownCatcher(OutputCatcher):
         Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         self.markdown_file.close()
         for filename in self.export_file_list:
-            if filename.exists(): 
-                filename.unlink()
+            filename.unlink(missing_ok=True)
             filename.parent.mkdir(exist_ok=True,parents=True)
             try:
                 shutil.copy(self.running_filename, filename)

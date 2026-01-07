@@ -69,7 +69,7 @@ class OptionsCache:
     @classmethod
     def clear(cls):
         """clear the cache and cache_path"""
-        cls.cache_path.unlink()
+        cls.cache_path.unlink(missing_ok=True)
         cls.cache = {}
 
 class Options:

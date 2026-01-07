@@ -96,11 +96,10 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
-    if vb_level >= 99 or min(vb_level , Proj.vb_max) > Proj.vb:
+    if Proj.vb.ignore(vb_level):
         return
-    Proj.States.current_vb_level = vb_level
-    stdout(*args , indent = indent , color = color , **kwargs)
-    Proj.States.current_vb_level = None
+    with Proj.vb.at_vb_level(vb_level):
+        stdout(*args , indent = indent , color = color , **kwargs)
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
     """
@@ -110,19 +109,17 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
-    if vb_level >= 99 or min(vb_level , Proj.vb_max) > Proj.vb:
+    if Proj.vb.ignore(vb_level):
         return
-    Proj.States.current_vb_level = vb_level
-    stderr(*args , indent = indent , color = color , **kwargs)
-    Proj.States.current_vb_level = None
+    with Proj.vb.at_vb_level(vb_level):
+        stderr(*args , indent = indent , color = color , **kwargs)
 
 def new_logger_output(level : _type_levels , *args , indent : int = 0 , vb_level : int = 0 , **kwargs ):
     """logger wrapper to control the verbosity"""
-    if vb_level >= 99 or min(vb_level , Proj.vb_max) > Proj.vb:
+    if Proj.vb.ignore(vb_level):
         return
-    Proj.States.current_vb_level = vb_level
-    getattr(_raw_logger , level)(FormatStr(*args , indent = indent) , **kwargs)
-    Proj.States.current_vb_level = None
+    with Proj.vb.at_vb_level(vb_level):
+        getattr(_raw_logger , level)(FormatStr(*args , indent = indent) , **kwargs)
 
 def new_special_level_message(*args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , 
                               level_prefix : dict[str, Any] | None = None , vb_level : int | None = None , **kwargs):
@@ -338,7 +335,7 @@ class Logger:
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
-        def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 1 , enter_vb_level : int = Proj.vb_max): 
+        def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 1 , enter_vb_level : int = Proj.vb.max): 
             self.key = '/'.join(args)
             self.silent = silent
             self.indent = indent

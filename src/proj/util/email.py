@@ -82,8 +82,7 @@ class Email:
             attachment_paths = [Path(attachments)]
             
         if project_attachments:
-            attachment_paths.extend([Path(f) for f in Proj.States.email_attachments])
-            Proj.States.email_attachments.clear()
+            attachment_paths.extend(Proj.email_attachments.pop_all())
 
         for attachment in attachment_paths:
             with open(attachment, 'rb') as attach_file:

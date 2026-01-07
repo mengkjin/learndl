@@ -123,8 +123,8 @@ class AutoRunTask:
 
         self.kwargs = kwargs
         
-        self.exit_files = []
-        self.error_messages = []
+        self.exit_files : list[Path] = []
+        self.error_messages : list[str] = []
         
         self.status = 'Starting'
         self.func_return : Any | None = None
@@ -156,8 +156,7 @@ class AutoRunTask:
 
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         
-        self.exit_files = list(set(self.exit_files + [Path(f) for f in Proj.States.exit_files]))
-        Proj.States.exit_files.clear()
+        self.exit_files = list(set(Proj.exit_files.pop_all()))
 
         # send email if not forfeit task
         if not self.forfeit_task:
@@ -276,7 +275,7 @@ class AutoRunTask:
         """set the verbosity of the task"""
         if 'max_vb' in self.kwargs:
             self.verbosity = 10 * int(self.kwargs['max_vb'])
-        Proj.vb = self.verbosity
+        Proj.vb.set_vb(self.verbosity)
 
     def send_email(self):
         """send email with attachment if in server and email is True"""

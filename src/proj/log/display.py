@@ -63,22 +63,21 @@ class Display:
         """
         display the object
         """
-        if Silence.silent or Proj.vb < vb_level:
+        if Silence.silent or Proj.vb.ignore(vb_level):
             return
-        Proj.States.current_vb_level = vb_level
-        for callback in cls._callbacks_before:
-            callback(obj)
-            
-        if isinstance(obj , Figure):
-            cls.figure(obj)
-        elif isinstance(obj , pd.DataFrame):
-            cls.data_frame(obj)
-        else:
-            raw_display(obj)
+        with Proj.vb.at_vb_level(vb_level):
+            for callback in cls._callbacks_before:
+                callback(obj)
+                
+            if isinstance(obj , Figure):
+                cls.figure(obj)
+            elif isinstance(obj , pd.DataFrame):
+                cls.data_frame(obj)
+            else:
+                raw_display(obj)
 
-        for callback in cls._callbacks_after:
-            callback(obj)
-        Proj.States.current_vb_level = None
+            for callback in cls._callbacks_after:
+                callback(obj)
 
     @staticmethod
     def data_frame(df : pd.DataFrame):

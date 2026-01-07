@@ -1,4 +1,6 @@
 import io
+from pathlib import Path
+import threading
 
 from src.proj.env.machine import MACHINE
 from src.proj.abc import stderr
@@ -9,27 +11,6 @@ from . import conf as Conf
 __all__ = ['Proj']
 
 _project_settings = MACHINE.configs('proj' , 'proj_settings')
-
-class _Verbosity:
-    """
-    custom verbosity
-    example:
-        ProjVerbosity.verbosity = 1 # for int verbosity
-    """
-    def __init__(self):
-        self.value = _project_settings['vb']
-    def __get__(self , instance, owner):
-        return self.value
-    def __set__(self, instance, value : int | None = None):
-        if value is None:
-            return
-        assert isinstance(value , int) , f'verbosity must be an integer , got {type(value)} : {value}'
-        value = max(min(value , instance.max_verbosity) , instance.min_verbosity)
-        if value != self.value:
-            stderr(f'Project Verbosity Changed from {self.value} to {value}' , color = 'lightred' , bold = True)
-        else:
-            stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
-        self.value = value
 
 class _VbMax:
     def __init__(self):
@@ -64,12 +45,100 @@ class _Log_File:
     def __get__(self , instance, owner):
         return self.value
 
+class _FileList:
+    _file_lists : dict[str , list[Path]] = {}
+    def __init__(self , name : str):
+        self.name = name
+        self.lock = threading.Lock()
+        self._file_lists[self.name] = []
+
+    @property
+    def file_list(self):
+        return self._file_lists[self.name]
+
+    def pop_all(self):
+        with self.lock:
+            files = self.file_list[:]
+            self.file_list.clear()
+            return files
+
+    def append(self , file : Path | str):
+        with self.lock:
+            self.file_list.append(Path(file))
+
+    def extend(self , *files : Path | str):
+        with self.lock:
+            self.file_list.extend([Path(file) for file in files])
+
+    def remove(self , file : Path | str):
+        with self.lock:
+            self.file_list.remove(Path(file))
+
+    def exclude(self , *patterns : str):
+        from src.proj.log import Logger
+        with self.lock:
+            for file in self.file_list[:]:
+                if any(pattern in str(file) for pattern in patterns):
+                    self.file_list.remove(file)
+                    Logger.alert1(f'Removed file {file} from email_attachments!' , vb_level = Proj.vb.max)
+
+class _Verbosity:
+    def __init__(self):
+        self.vb : int = _project_settings.get('vb' , 1)
+        self.max : int = _project_settings.get('vb_max' , 10)
+        self.min : int = _project_settings.get('vb_min' , 0)
+        self.inf : int = _project_settings.get('vb_inf' , 99)
+        self.level_callback : int = _project_settings.get('vb_level_callback' , 10)
+        self.current : int | None = None
+
+    def __repr__(self):
+        return f'{self.vb}'
+
+    def at_vb_level(self , vb_level : int | None):
+        self.current = vb_level
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self , exc_type , exc_value , exc_traceback):
+        self.current = None
+
+    def set_vb(self , value : int | None = None):
+        if value is None:
+            return
+        assert isinstance(value , int) , f'verbosity must be an integer , got {type(value)} : {value}'
+        value = max(min(value , self.max) , self.min)
+        if value != self.vb:
+            stderr(f'Project Verbosity Changed from {self.vb} to {value}' , color = 'lightred' , bold = True)
+        else:
+            stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
+        self.vb = value
+
+    def ignore(self , vb_level : int = 1):
+        return vb_level >= self.inf or self.vb < min(vb_level , self.max)
+
+    @property
+    def is_max_level(self):
+        return self.vb >= self.max
+
+    def __eq__(self , other : int):
+        return self.vb == other
+    def __ne__(self , other : int):
+        return self.vb != other
+    def __lt__(self , other : int):
+        return self.vb < other
+    def __le__(self , other : int):
+        return self.vb <= other
+    def __gt__(self , other : int):
+        return self.vb > other
+    def __ge__(self , other : int):
+        return self.vb >= other
+    def __bool__(self):
+        return self.vb is not None
+
 class _ProjMeta(type):
     """meta class of ProjConfig"""
-    vb = _Verbosity()
-    vb_max = _VbMax()
-    vb_min = _VbMin()
-    vb_level_callback = _VbLevelCallback()
     log_file = _Log_File()
 
     def __call__(cls, *args, **kwargs):
@@ -78,6 +147,9 @@ class _ProjMeta(type):
 class Proj(metaclass=_ProjMeta):
     States = ProjStates
     Conf = Conf
+    vb = _Verbosity()
+    email_attachments = _FileList('email_attachments')
+    exit_files = _FileList('exit_files')
 
     def __new__(cls , *args , **kwargs):
         raise Exception(f'{cls.__name__} cannot be instantiated')

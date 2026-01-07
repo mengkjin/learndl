@@ -1,7 +1,7 @@
 from contextlib import nullcontext
 from typing import Literal
 from datetime import datetime , timedelta
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Proj  
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
@@ -84,7 +84,7 @@ class ModelTrainer(BaseTrainer):
             if last_operation_time:
                 Logger.alert1(f'[{check_operation}] {title} has been done at {last_operation_time}, skip this operation!')
             else:
-                trainer.go().log_operation(log_operation)
+                # trainer.go().log_operation(log_operation)
                 if isinstance(catcher , HtmlCatcher):
                     catcher.set_export_files(trainer.html_catcher_export_path)
         return trainer
@@ -105,7 +105,8 @@ class ModelTrainer(BaseTrainer):
                        title = f'Updating Model {model.model_path}' , paragraph = True ,
                        check_operation = None if force_update else 'update_models' ,
                        log_operation = 'update_models')
-                
+
+        Proj.exit_files.exclude('detailed_alpha_data' , 'detailed_alpha_plot')
 
     @classmethod
     def resume_testing(cls , models = True , factors = True , force_resume = False):
@@ -135,6 +136,8 @@ class ModelTrainer(BaseTrainer):
                     title = f'Resume Testing Factor {factor}' , paragraph = True ,
                     check_operation = None if force_resume else 'resume_testing' ,
                     log_operation = 'resume_testing')
+
+        Proj.exit_files.exclude('detailed_alpha_data' , 'detailed_alpha_plot')
 
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 

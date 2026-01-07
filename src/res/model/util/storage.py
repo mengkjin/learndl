@@ -79,7 +79,7 @@ class MemFileStorage:
         if isinstance(path , (Path , str)): 
             path = [path]
         if self.memdisk is None:
-            [Path(p).unlink() for p in path]
+            [Path(p).unlink(missing_ok=True) for p in path]
         else:
             [self.memdisk.__delitem__(str(p)) for p in path]
         paths = [str(p) for p in path] # noqa
@@ -197,8 +197,7 @@ class Deposition:
         for path in model_path.iterdir():
             if path.stem.endswith('.stack'):
                 new_path = path.with_stem(path.stem.replace('.stack',''))
-                if new_path.exists(): 
-                    new_path.unlink()
+                new_path.unlink(missing_ok=True)
                 path.rename(new_path)
 
     def load_model(self , model_num , model_date , submodel = 'best'):

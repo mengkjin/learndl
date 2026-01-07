@@ -134,6 +134,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         self.test_results : dict[str , pd.DataFrame] = {}
         self.test_figures : dict[str , Figure] = {}
         self.snap_folder.mkdir(exist_ok=True , parents=True)
+        Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 
     def __bool__(self):
         return not self.turn_off and bool(self.tasks)
@@ -153,10 +154,22 @@ class DetailedAlphaAnalysis(BaseCallBack):
         return self.trainer.model_submodels
     @property
     def test_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
+    @property
+    def factor_test_dates(self) -> np.ndarray:
+        return self.test_dates[::5]
+    @property
+    def fmp_test_dates(self) -> np.ndarray:
+        trailing_days = 10
+        assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
+        pred_last_date = self.trainer.record.resumed_last_pred_date
+        port_last_date = FactorTestAPI.last_portfolio_date(self.fmp_tasks , self.snap_folder)
+        last_date = min(pred_last_date , port_last_date)
+        test_date_num = sum(self.test_dates > last_date) + trailing_days
+        return self.test_dates[-test_date_num:]
 
     def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
         if which == 'first':
-            df = self.trainer.record.get_preds(pred_dates = pred_dates)
+            df = self.trainer.record.get_preds(pred_dates = pred_dates , model_num = 0)
         elif which == 'avg':
             df = self.trainer.record.get_avg_preds(pred_dates = pred_dates)
         else:
@@ -165,21 +178,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factor = StockFactor(df , factor_names = self.factor_names)
         return factor
 
-    def get_factor_for_factor_test(self) -> StockFactor:
-        return self.get_factor(self.test_dates[::5])
-
-    def get_factor_for_fmp_test(self , trailing_days : int = 10) -> StockFactor:
-        assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
-        pred_last_date = self.trainer.record.resumed_last_pred_date
-        port_last_date = FactorTestAPI.last_portfolio_date(self.fmp_tasks , self.snap_folder)
-        last_date = min(pred_last_date , port_last_date)
-        test_date_num = sum(self.test_dates > last_date) + trailing_days
-        return self.get_factor(self.test_dates[-test_date_num:])
-
     def factor_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor Perf Test'):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
-                factor = self.get_factor_for_factor_test()
+                factor = self.get_factor(self.factor_test_dates)
             with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level):
                 factor.within_benchmarks()
             with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
@@ -199,7 +201,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def fmp_test(self , indent : int = 0 , vb_level : int = 1):
         with Logger.ParagraphIII('Factor FMP Test'):
             with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
-                factor = self.get_factor_for_fmp_test()
+                factor = self.get_factor(self.fmp_test_dates)
             with Logger.Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
                 factor.alpha_models()
             with Logger.Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):
@@ -240,9 +242,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
             dfs_to_excel(self.test_results , self.path_result_data , print_prefix='Analytic datas')
             figs_to_pdf(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')
-
-            Proj.States.exit_files.append(self.path_result_data)
-            Proj.States.exit_files.append(self.path_result_plot)
 
     def on_test_end(self):
         if not self.tasks:

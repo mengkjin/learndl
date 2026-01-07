@@ -51,7 +51,7 @@ def extract_js_min(date):
         Logger.error(e)
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
-    DB.save_df(df , target_path , prefix = f'JS min' , vb_level = Proj.vb_max)
+    DB.save_df(df , target_path , prefix = f'JS min' , vb_level = Proj.VB.max)
     return df   
 
 def add_sec_type(df : pd.DataFrame):

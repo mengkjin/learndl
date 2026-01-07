@@ -12,9 +12,9 @@ class CallBackManager(BaseCallBack):
         super().__init__(trainer)   
         self.callbacks : list[BaseCallBack] = [cb for cb in callbacks if bool(cb)]
 
-    def at_enter(self , hook , vb_level : int = Proj.vb_max):
+    def at_enter(self , hook , vb_level : int = Proj.vb.max):
         [cb.at_enter(hook , vb_level) for cb in self.callbacks]
-    def at_exit(self, hook , vb_level : int = Proj.vb_max):
+    def at_exit(self, hook , vb_level : int = Proj.vb.max):
         [cb.at_exit(hook , vb_level) for cb in self.callbacks]
 
     @classmethod

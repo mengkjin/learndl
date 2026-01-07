@@ -101,7 +101,7 @@ class DataVendor:
             names = [names]
         dates = DATAVENDOR.td_within(start_dt , end_dt , step)
 
-        values = [DB.load_multi(factor_type , name , dates , date_colname = 'date') for name in names]
+        values = [DB.loads(factor_type , name , dates , date_colname = 'date') for name in names]
         values = [v.set_index(['secid','date']) for v in values if not v.empty]
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
@@ -240,7 +240,7 @@ class DataVendor:
             f'df must contain "secid" , "start" , "end" columns : {df.columns}'
         df['prev'] = CALENDAR.td_array(df['start'] , -1)
         dates = np.unique(np.concatenate([df['prev'].to_numpy() , df['end'].to_numpy()]))
-        quotes = DB.load_multi('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type , 'adjfactor'])
+        quotes = DB.loads('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type , 'adjfactor'])
         quotes[ret_type] = quotes[ret_type] * quotes['adjfactor']
 
         q0 = df.merge(quotes , left_on = ['secid' , 'prev'] , right_on = ['secid' , 'date'] , how = 'left')[ret_type]

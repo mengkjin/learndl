@@ -19,7 +19,7 @@ class ModelPortfolioBuilder:
     def __init__(self , reg_model : PredictionModel):
         self.reg_model = reg_model
         self.fmp_tables : dict[int , pd.DataFrame] = {}
-        self.accountant = PortfolioAccountManager(reg_model.account_dir)
+        self.account_manager = PortfolioAccountManager(reg_model.account_dir)
         self._update_fmps_record = []
         self._update_account_record = []
 
@@ -105,19 +105,19 @@ class ModelPortfolioBuilder:
 
     def load_accounts(self , resume = True , indent : int = 2 , vb_level : int = 3):
         if resume: 
-            self.accountant.load_dir()
-            Logger.stdout(f'accounts include names: {self.accountant.account_names}' , indent = indent , vb_level = vb_level)
+            self.account_manager.load_dir()
+            Logger.stdout(f'accounts include names: {self.account_manager.account_names}' , indent = indent , vb_level = vb_level)
         return self
     
     def account_last_model_dates(self , fmp_names : list[str] | None = None):
-        last_dates = self.accountant.account_last_model_dates()
+        last_dates = self.account_manager.account_last_model_dates()
         if fmp_names is None: 
             fmp_names = list(self.iter_fmp_names())
         ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start_dt , -1).as_int()) for name in fmp_names}
         return ret
     
     def account_last_end_dates(self , fmp_names : list[str] | None = None):
-        last_dates = self.accountant.account_last_end_dates()
+        last_dates = self.account_manager.account_last_end_dates()
         if fmp_names is None: 
             fmp_names = list(self.iter_fmp_names())
         ret = {name:last_dates.get(name , self.reg_model.start_dt) for name in fmp_names}
@@ -143,11 +143,11 @@ class ModelPortfolioBuilder:
             portfolio = Portfolio.from_dataframe(all_fmp_dfs , name = fmp_name)
             portfolio.accounting(Benchmark(elements['benchmark']) , analytic = elements['lag'] == 0 , attribution = elements['lag'] == 0 , 
                                  indent = indent + 1 , vb_level = vb_level + 2)
-            self.accountant.append_accounts(**{fmp_name : portfolio.account_with_index(get_port_index(fmp_name))})
+            self.account_manager.append_accounts(**{fmp_name : portfolio.account_with_index(get_port_index(fmp_name))})
             Logger.stdout(f'Finished accounting for {fmp_name} at {CALENDAR.dates_str(account_dates)}' , indent = indent + 1 , vb_level=vb_level + 1)
 
         if deploy:
-            self.accountant.deploy(update_fmp_names , True)
+            self.account_manager.deploy(update_fmp_names , True)
             Logger.success(f'Deploy accounts for {self.reg_model} at {CALENDAR.dates_str(account_dates)}' , indent = indent, vb_level = vb_level + 1)
 
         self._update_account_record = account_dates

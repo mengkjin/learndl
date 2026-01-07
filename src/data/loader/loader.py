@@ -66,7 +66,7 @@ class FrameLoader:
     
     def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> pd.DataFrame:
         """Load frame data from database"""
-        df = DB.load_multi(self.db_src , self.db_key , start_dt = start_dt , end_dt = end_dt , use_alt = self.use_alt , indent = indent , vb_level = vb_level)
+        df = DB.loads(self.db_src , self.db_key , start_dt = start_dt , end_dt = end_dt , use_alt = self.use_alt , indent = indent , vb_level = vb_level)
         return df
     
 class FactorLoader(BlockLoader):

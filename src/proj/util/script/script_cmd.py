@@ -122,7 +122,7 @@ end tell
             Logger.error(f"An unexpected error occurred: {e}")
         finally:
             if self.macos_tempfile_method:
-                temp_script_path.unlink(True)
+                temp_script_path.unlink(missing_ok=True)
 
     @staticmethod
     def Popen(cmd : list[str] | str , encoding = 'utf-8' , communicating = False):

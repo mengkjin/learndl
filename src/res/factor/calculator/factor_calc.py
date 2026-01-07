@@ -308,7 +308,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         df = DB.load(self.db_src , self.db_key , date , vb_level = 99)
         return df
 
-    def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb_max) -> pd.DataFrame:
+    def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         try:
             df = self.load_factor(date)
@@ -346,11 +346,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-              indent : int = 1 , vb_level : int = Proj.vb_max
+              indent : int = 1 , vb_level : int = Proj.vb.max
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = DB.load_multi(cls.db_src , cls.db_key , dates , indent = indent , vb_level = vb_level)
+        df = DB.loads(cls.db_src , cls.db_key , dates , indent = indent , vb_level = vb_level)
         if cls.meta_type == 'stock' and normalize:
             df = StockFactor.normalize_df(df , fill_method = fill_method)
         return df
@@ -381,7 +381,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def Factor(cls , dates : np.ndarray | list[int] , normalize = True , 
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-               multi_thread = True , ignore_error = True , indent : int = 0 , vb_level : int = Proj.vb_max) -> StockFactor:
+               multi_thread = True , ignore_error = True , indent : int = 0 , vb_level : int = Proj.vb.max) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
             return StockFactor()
@@ -612,7 +612,7 @@ class StockFactorCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb_max) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path(self.db_src , self.db_key , date).exists(): 
             return False
@@ -656,7 +656,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb_max) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max) -> bool:
         """store factor data after calculate"""
         return False
 
@@ -670,18 +670,18 @@ class AffiliateFactorCalculator(FactorCalculator):
         df = df.rename(columns = {self.load_col_name : self.factor_name})
         return df
 
-    def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb_max) -> pd.DataFrame:
+    def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         return self.load_factor(date)
 
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-              indent : int = 1 , vb_level : int = Proj.vb_max
+              indent : int = 1 , vb_level : int = Proj.vb.max
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = DB.load_multi(cls.load_db_src , cls.load_db_key , dates , indent = indent , vb_level = vb_level).loc[:,['secid' , 'date' , cls.load_col_name]]
+        df = DB.loads(cls.load_db_src , cls.load_db_key , dates , indent = indent , vb_level = vb_level).loc[:,['secid' , 'date' , cls.load_col_name]]
         df = df.rename(columns = {cls.load_col_name : cls.factor_name})
         return df
 
@@ -760,7 +760,7 @@ class MarketFactorCalculator(FactorCalculator):
         df = instance.validate_value(df , calc_date , strict = True)
         return DB.save(df , cls.db_src , cls.db_key , vb_level = vb_level)
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb_max) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max) -> bool:
         """store factor data after calculate"""
         if not DB.path(self.db_src , self.db_key).exists():
             return self.recalculate(date , vb_level = vb_level)
@@ -806,7 +806,7 @@ class MarketFactorCalculator(FactorCalculator):
     @classmethod
     def Loads(cls , start : int | None = None , end : int | None = None , fillna = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median' ,
-              indent : int = 1 , vb_level : int = Proj.vb_max
+              indent : int = 1 , vb_level : int = Proj.vb.max
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         df = DB.load(cls.db_src , cls.db_key , vb_level = 99)
@@ -875,7 +875,7 @@ class PoolingCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb_max) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path(self.db_src , self.db_key , date).exists(): 
             return False
@@ -1012,7 +1012,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
         return df
 
     @classmethod
-    def drop_pooling_weight(cls , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb_max):
+    def drop_pooling_weight(cls , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max):
         """trim pooling weight of a given date range"""
         if not overwrite:
             return

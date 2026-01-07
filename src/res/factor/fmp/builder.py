@@ -118,7 +118,7 @@ class PortfolioBuilder:
         if self.resume_path is None:
             return None
         else:
-            return Path(self.resume_path) / 'account' / f'{self.full_name.lower()}'
+            return Path(self.resume_path) / 'account' / f'{self.full_name.lower()}.tar'
 
     def set_build_on(self , build_on : Portfolio | None = None , start : int = -1 , end : int = 99991231):
         if build_on is None:
@@ -136,7 +136,7 @@ class PortfolioBuilder:
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
             Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
-                           indent = self.indent , vb_level = Proj.vb_max)
+                           indent = self.indent , vb_level = Proj.vb.max)
         return self
 
     def save_portfolio(self , append = False):
@@ -183,7 +183,7 @@ class PortfolioBuilder:
         self.resumed_account = PortfolioAccountant.load(self.resume_path_account)
         if not self.resumed_account.empty:
             Logger.success(f'Load account from {self.resume_path_account} at {CALENDAR.dates_str(self.resumed_account['model_date'])}' , 
-                           indent = self.indent , vb_level = Proj.vb_max)
+                           indent = self.indent , vb_level = Proj.vb.max)
         return self
     
     def accounting(self , start : int = -1 , end : int = 99991231 ,

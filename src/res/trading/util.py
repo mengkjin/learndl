@@ -29,7 +29,7 @@ def all_path_convert():
         new_path = path.with_suffix('.feather')
         df = pd.read_csv(path)
         DB.save_df(df , new_path , vb_level = 99)
-        path.unlink()
+        path.unlink(missing_ok=True)
 
 all_path_convert()
 

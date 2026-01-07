@@ -1,4 +1,3 @@
-import shutil
 import pandas as pd
 import numpy as np
 
@@ -56,6 +55,27 @@ class AccountConfig:
         else:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
+class PortfolioAccount:
+    def __init__(self , df : 'pd.DataFrame | PortfolioAccount' , config : AccountConfig | None = None):
+        if isinstance(df , pd.DataFrame):
+            self.df = df
+        elif isinstance(df , PortfolioAccount):
+            self.df = df.df
+        else:
+            raise ValueError(f'Unknown type: {type(df)}')
+        self.config = config
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(config={self.config})'
+
+    @property
+    def empty(self):
+        return self.df.empty
+
+    def match_config(self , config : AccountConfig):
+        return self.config == config
+    
+
 class PortfolioAccountant:
     '''
     portfolio : Portfolio
@@ -87,6 +107,7 @@ class PortfolioAccountant:
         self.account = pd.DataFrame()
         self.config = None
         return self
+
     @property
     def port_dates(self):
         return self.portfolio.available_dates()
@@ -208,25 +229,28 @@ class PortfolioAccountant:
         return rets
     
     @staticmethod
-    def account_with_index(account : pd.DataFrame , add_index : dict[str,Any] | None = None):
+    def account_with_index(account : pd.DataFrame | PortfolioAccount , add_index : dict[str,Any] | None = None):
+        account = PortfolioAccount(account).df
         add_index = add_index or {}
         if not add_index: 
             return account
         return account.assign(**add_index).set_index(list(add_index.keys())).sort_values('model_date').sort_index()
 
     @staticmethod
-    def concat_accounts(accounts : Sequence[pd.DataFrame]):
-        return pd.concat([acc for acc in accounts]).drop_duplicates(subset = ['model_date'] , keep = 'last').sort_values('model_date')
+    def concat_accounts(accounts : Sequence[pd.DataFrame] | Sequence[PortfolioAccount]):
+        return pd.concat([PortfolioAccount(acc).df for acc in accounts]).drop_duplicates(subset = ['model_date'] , keep = 'last').sort_values('model_date')
     
     @staticmethod
-    def total_account(accounts : Sequence[pd.DataFrame] | dict[str,pd.DataFrame]) -> pd.DataFrame:
+    def total_account(accounts : Sequence[pd.DataFrame] | Sequence[PortfolioAccount] | dict[str,pd.DataFrame] | dict[str,PortfolioAccount]) -> pd.DataFrame:
         if not accounts: 
             return pd.DataFrame()
         
         if isinstance(accounts , dict):
-            accounts = list(accounts.values())
+            dfs = [PortfolioAccount(acc).df for acc in accounts.values()]
+        else:
+            dfs = [PortfolioAccount(acc).df for acc in accounts]
 
-        df = pd.concat(accounts)
+        df = pd.concat(dfs)
         old_index = [index for index in df.index.names if index]
         df = df.reset_index(old_index , drop = False).sort_values('model_date').reset_index(drop = True)
         new_bm = np.setdiff1d(df['benchmark'] , Proj.Conf.Factor.BENCH.categories).tolist()
@@ -237,13 +261,13 @@ class PortfolioAccountant:
         return df
 
     @classmethod
-    def account_to_dfs(cls , account : pd.DataFrame) -> dict[str,pd.DataFrame]:
-        account = account.set_index('model_date')
+    def account_to_dfs(cls , account : pd.DataFrame | PortfolioAccount) -> dict[str,pd.DataFrame]:
+        df = PortfolioAccount(account).df.set_index('model_date')
         dfs = {}
-        dfs['basic'] = account.loc[:,['start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight']].reset_index(drop = False)
+        dfs['basic'] = df.loc[:,['start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight']].reset_index(drop = False)
         
-        dfs.update(RISK_MODEL.Analytics_to_dfs(account['analytic'].to_dict()))
-        dfs.update(RISK_MODEL.Attributions_to_dfs(account['attribution'].to_dict()))
+        dfs.update(RISK_MODEL.Analytics_to_dfs(df['analytic'].to_dict()))
+        dfs.update(RISK_MODEL.Attributions_to_dfs(df['attribution'].to_dict()))
         return dfs
 
     @classmethod
@@ -264,32 +288,27 @@ class PortfolioAccountant:
         return self
 
     @classmethod
-    def save_account(cls , account : pd.DataFrame , path : Path | str | None = None , vb_level : int = 1 , indent : int = 0):
+    def save_account(cls , account : pd.DataFrame | PortfolioAccount , path : Path | str | None = None , vb_level : int = 1 , indent : int = 0):
         if path is None or account.empty:
             return
         path = Path(path)
-        assert not path.exists() or path.is_dir() , f'{path} is a file'
+        assert path.suffix == '.tar' , f'{path} is not a tar file'
         account_dfs = cls.account_to_dfs(account)
-        if path.exists():
-            shutil.rmtree(path)
-            status = 'Overwritten '
-        else:
-            status = 'File Created'
-        path.mkdir(parents=True, exist_ok=True)
-        for name , df in account_dfs.items():
-            DB.save_df(df , path.joinpath(f'{name}.feather') , prefix = 'Account' , vb_level = 99)
-        Logger.stdout(f'Account {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        DB.save_dfs_to_tar(account_dfs , path , prefix = 'Account' , indent = indent , vb_level = vb_level)
         
     @classmethod
     def load(cls , path : Path | str | None = None) -> pd.DataFrame:
         if path is None:
             return pd.DataFrame()
         path = Path(path)
-        assert not path.exists() or path.is_dir() , f'{path} is not a directory'
-        account_dfs = {path.stem:DB.load_df(path) for path in path.glob('*.feather')}
+        assert path.suffix == '.tar' , f'{path} is not a tar file'
+        account_dfs = DB.load_dfs_from_tar(path)
         return cls.dfs_to_account(account_dfs)
 
-class PortfolioAccountManager:   
+class PortfolioAccountManager:
+    """
+    Manage portfolio accounts in a directory.
+    """
     def __init__(self , account_dir : str | Path):
         self.account_dir = Path(account_dir)
         self.accounts : dict[str , pd.DataFrame] = {}
@@ -321,7 +340,12 @@ class PortfolioAccountManager:
     def load_single(self , path : str | Path , missing_ok = True , append = True):
         path = Path(path)
         assert missing_ok or path.exists() , f'{path} not exist'
-        df : pd.DataFrame | Any = pd.read_pickle(path) 
+        pkl_path = path.with_suffix('.pkl')
+        tar_path = path.with_suffix('.tar')
+        if tar_path.exists():
+            df = PortfolioAccountant.load(path)
+        elif pkl_path.exists():
+            df : pd.DataFrame | Any = pd.read_pickle(path)
         if path.stem in self.accounts:
             if append:
                 df = pd.concat([df , self.accounts[path.stem]]).drop_duplicates(subset=['model_date'])
@@ -341,12 +365,12 @@ class PortfolioAccountManager:
     def deploy(self , fmp_names : list[str] | None = None , overwrite = False):
         if fmp_names is None: 
             fmp_names = list(self.accounts.keys())
-        fmp_paths = {name:self.account_dir.joinpath(f'{name}.pkl') for name in fmp_names}
+        fmp_paths = {name:self.account_dir.joinpath(f'{name}.tar') for name in fmp_names}
         if not overwrite:
             existed = [path for path in fmp_paths.values() if path.exists()]
             assert not existed , f'Existed paths : {existed}'
         for name in fmp_names:
-            self.accounts[name].to_pickle(fmp_paths[name])
+            PortfolioAccountant.save_account(self.accounts[name] , fmp_paths[name])
         return self
     
     def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):

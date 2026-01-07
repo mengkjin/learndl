@@ -205,6 +205,8 @@ class Portfolio:
 
     def save(self , path : Path | str , overwrite = False , append = True , indent : int = 1 , vb_level : int = 2):
         """save the portfolio to a path (dataframe)"""
+        if self.is_empty:
+            return
         path = Path(path)
         if path.exists() and not overwrite:
             raise FileExistsError(f'{path} already exists')
@@ -212,7 +214,7 @@ class Portfolio:
         if append:
             prev_port = DB.load_df(path)
             if not prev_port.empty:
-                prev_port = prev_port.query('date not in @self.port_date')
+                prev_port = prev_port.query('date < @self.port_date.min()')
             new_port = self.to_dataframe()
             port = pd.concat([prev_port , new_port]).sort_values(by=['date' , 'secid'])
         else:

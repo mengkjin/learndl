@@ -90,4 +90,4 @@ class DBConnHandler:
             for table in tables:
                 cursor.execute(f'INSERT INTO {table} SELECT * FROM backup.{table}')
         if delete_backup:
-            backup_path.unlink()
+            backup_path.unlink(missing_ok=True)

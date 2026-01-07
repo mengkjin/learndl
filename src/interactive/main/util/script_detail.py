@@ -356,7 +356,7 @@ def show_report_main(runner : ScriptRunner):
                 with st.expander(f":rainbow[:material/preview:] **Exit Files**", expanded=True):
                     for i, file in enumerate(item.exit_files):
                         path = Path(file).absolute()
-                        col0 , col1, col2 = st.columns([9 , 0.5, 0.5] , vertical_alignment = "center")
+                        col0 , col1, col2 = st.columns([4 , 5.5 , 0.5] , vertical_alignment = "center")
                         with col0:
                             if st.button(path.name, key= f"exit-file-open-{path}", 
                                          icon = ":material/open_in_new:" , 
@@ -365,33 +365,36 @@ def show_report_main(runner : ScriptRunner):
                                 direclty_open_file(path)
 
                         with col1:
+                            st.caption(f":material/file_present: /{path.relative_to(PATH.main)}")
+
+                        with col2:
                             preview_key = f"exit-file-preview-{i}" if path != SC.running_report_file_previewer else f"exit-file-preview-select-{i}"
                             st.button(":material/preview:", key=preview_key ,
                                       help = f":blue[**Preview**]: {path}" or f":red[**Preview**]: {path} (File Not Found)", 
                                       disabled = not path.exists() ,
                                       on_click = SC.click_file_preview , args = (path,))
 
-                        with col2.container(key = f"exit-file-download-{path}"):
-                            if path.exists():
-                                with open(path, 'rb') as f:
-                                    if st.download_button(
-                                        ':material/download:', 
-                                        data=f.read(),
-                                        file_name=str(path),
-                                        key = f"download-{path}",
-                                        help = f":blue[**Download**]: {path}",
-                                        on_click=SC.click_file_download , args = (path,)
-                                    ):
-                                        pass
-                            else:
-                                st.download_button(
-                                    ':material/download:', 
-                                    data=b'',
-                                    file_name=str(path),
-                                    key = f"download-{path}",
-                                    help = f":red[**Download**]: {path} (File Not Found)",
-                                    disabled = True ,
-                                )
+                        # with col2.container(key = f"exit-file-download-{path}"):
+                        #     if path.exists():
+                        #         with open(path, 'rb') as f:
+                        #             if st.download_button(
+                        #                 ':material/download:', 
+                        #                 data=f.read(),
+                        #                 file_name=str(path),
+                        #                 key = f"download-{path}",
+                        #                 help = f":blue[**Download**]: {path}",
+                        #                 on_click=SC.click_file_download , args = (path,)
+                        #             ):
+                        #                 pass
+                        #     else:
+                        #         st.download_button(
+                        #             ':material/download:', 
+                        #             data=b'',
+                        #             file_name=str(path),
+                        #             key = f"download-{path}",
+                        #             help = f":red[**Download**]: {path} (File Not Found)",
+                        #             disabled = True ,
+                        #         )
 
                     
                     previewer = FilePreviewer(SC.running_report_file_previewer)

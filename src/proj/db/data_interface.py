@@ -2,6 +2,8 @@ from dask.delayed import delayed
 from dask.base import compute
 import numpy as np
 import pandas as pd
+import tarfile
+import io
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime , timedelta
@@ -14,8 +16,9 @@ from .code_mapper import secid_to_secid
 
 __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
-    'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
-    'file_dates' , 'dir_dates' , 'save_df' , 'append_df' , 'load_df' , 'load_df_multi' , 'load_df_max_date' , 'load_df_min_date' ,
+    'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
+    'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs' , 
+    'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' ,
     'block_path' , 'norm_path' ,
 ]
 
@@ -70,20 +73,58 @@ def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     dates.sort()
     return dates
 
-def _df_loader(path : Path):
+def _df_loader(path : Path | io.BytesIO):
     """load dataframe from path"""
     try:
-        return pd.read_feather(path) if SAVE_OPT_DB == 'feather' else pd.read_parquet(path)
+        if SAVE_OPT_DB == 'feather':
+            return pd.read_feather(path)
+        else:
+            return pd.read_parquet(path , engine='fastparquet')
     except Exception as e:
         Logger.error(f'Error loading {path}: {e}')
         raise e
 
-def _df_saver(df : pd.DataFrame , path : Path):
+def _df_saver(df : pd.DataFrame , path : Path | io.BytesIO):
     """save dataframe to path"""
     if SAVE_OPT_DB == 'feather':
         df.to_feather(path)
     else:
         df.to_parquet(path , engine='fastparquet')
+
+def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
+    """save multiple dataframes to tar file"""
+    with tarfile.open(path, 'w') as tar:  # mode 'w' means not compress
+        for name, df in dfs.items():
+            tarinfo = tarfile.TarInfo(name)
+
+            buffer = io.BytesIO()
+            _df_saver(_reset_index(df) , buffer)
+            
+            # get buffer size and reset pointer
+            tarinfo.size = buffer.tell()
+            buffer.seek(0)
+            
+            # add to tar (fully memory operation, no temporary file)
+            tar.addfile(tarinfo, buffer)
+
+def _tar_loader(path : Path) -> dict[str , pd.DataFrame]:
+    if not path.exists():
+        return {}
+    dfs : dict[str , pd.DataFrame] = {}
+    with tarfile.open(path, 'r') as tar: 
+        try:
+            for member in tar.getmembers():
+                file_obj = tar.extractfile(member)
+                if file_obj is None:
+                    dfs[member.name] = pd.DataFrame()
+                else:
+                    buffer = io.BytesIO(file_obj.read())
+                    df = _df_loader(buffer)
+                    dfs[member.name] = df
+        except Exception as e:
+            Logger.error(f'Error loading {path}: {e}')
+            raise e
+    return dfs
 
 def by_name(db_src : str) -> bool:
     """whether the database is by name"""
@@ -124,20 +165,42 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
 
 def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
     """save dataframe to path"""
-    prefix = prefix or ''
-    path = Path(path)
     if df is None or df.empty: 
         return False
-    elif overwrite or not path.exists(): 
+    prefix = prefix or ''
+    path = Path(path)
+    if overwrite or not path.exists(): 
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.parent.mkdir(parents=True , exist_ok=True)
         _df_saver(df , path)
         Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
-        status = 'File Exists'
+        status = 'File Exists '
         Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
+
+def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+    """save multiple dataframes to path (must be a directory or a tar file)"""
+    if not dfs or all(df.empty for df in dfs.values()):
+        return False
+    prefix = prefix or ''
+    path = Path(path)
+    path.mkdir(parents=True , exist_ok=True)
+    path_dfs = {path.joinpath(name):df for name , df in dfs.items() if not df.empty}
+    if not overwrite and any(path_df.exists() for path_df in path_dfs):
+        exists_paths = [path_df for path_df in path_dfs if path_df.exists()]
+        Logger.alert1(f'{prefix} File Exists While not Overwriting: {path}' , indent = indent , vb_level = vb_level)
+        Logger.alert1(f'{prefix} File Exists : {exists_paths}' , indent = indent + 1 , vb_level = vb_level)
+        return False
+    status : dict[str , int] = {'overwritten':0 , 'created':0}
+    
+    for df_path , df in path_dfs.items():
+        status['overwritten'] += 1 if df_path.exists() else 0
+        status['created'] += 1 if not df_path.exists() else 0
+        _df_saver(df , df_path)
+    Logger.stdout(f'{prefix} {status["overwritten"]} Overwritten , {status["created"]} Created: {path}' , indent = indent , vb_level = vb_level , italic = True)
+    return True
 
 def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : int = 1):
     """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
@@ -154,7 +217,6 @@ def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_c
             status += f'with unique ({",".join(drop_duplicate_cols)})'
         _df_saver(df , path)
         Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
-        
 
 def load_df(path : Path , *, raise_if_not_exist = False):
     """load dataframe from path"""
@@ -181,9 +243,9 @@ def load_df_min_date(path : Path , date_colname : str = 'date') -> int:
     else:
         return int(min(df[date_colname]))
 
-def load_df_multi(paths : dict | list[Path] , key_column : str | None = 'date' , 
-                  parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
-                  mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None):
+def load_dfs(paths : dict | list[Path] , * ,  key_column : str | None = 'date' , 
+             parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+             mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None):
     """
     load dataframe from multiple paths
     Parameters
@@ -235,17 +297,54 @@ def load_df_multi(paths : dict | list[Path] , key_column : str | None = 'date' ,
         df = df.drop(columns = 'empty_column')
     return df
 
+def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+    """save multiple dataframes to tar file"""
+    prefix = prefix or ''
+    path = Path(path)
+    path.parent.mkdir(parents=True , exist_ok=True)
+    assert path.suffix == '.tar' , f'{path} is not a tar file'
+    if overwrite or not path.exists(): 
+        status = 'Overwritten ' if path.exists() else 'File Created'
+        path.unlink(missing_ok=True)
+        _tar_saver(dfs , path)
+        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        return True
+    else:
+        status = 'File Exists '
+        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
+        return False
+
+def load_dfs_from_tar(path : Path , * , raise_if_not_exist = False) -> dict[str , pd.DataFrame]:
+    """load multiple dataframes from tar file"""
+    path = Path(path)
+    if not path.exists():
+        if raise_if_not_exist: 
+            raise FileNotFoundError(path)
+        else: 
+            return {}
+    dfs = _tar_loader(path)
+    for key , df in dfs.items():
+        dfs[key] = _load_df_mapper(df)
+    return dfs
+
+
+def _reset_index(df : pd.DataFrame | Any , reset = True):
+    """reset index which are not None"""
+    if not reset or df is None or df.empty:
+        return df
+    old_index = [index for index in df.index.names if index]
+    df = df.reset_index(old_index , drop = False).reset_index(drop = True)
+    return df
+
 def _load_df_mapper(df : pd.DataFrame):
-    """map dataframe"""
-    old_index = df.index.names if 'secid' in df.index.names else None
-    if old_index is not None: 
-        df = df.reset_index(drop = False)
-    if 'secid' in df.columns:  
-        df['secid'] = secid_to_secid(df['secid'])
-    if old_index is not None: 
-        df = df.set_index(old_index)
     if 'date' in df.index.names and 'date' in df.columns:
         df = df.reset_index('date' , drop = True)
+    old_index = [idx for idx in df.index.names if idx]
+    df = _reset_index(df)
+    if 'secid' in df.columns:  
+        df['secid'] = secid_to_secid(df['secid'])
+    if old_index: 
+        df = df.set_index(old_index)
     return df
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
@@ -263,8 +362,7 @@ def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_
         elif check_na_cols and na_cols.any():
             Logger.alert1(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA' , indent = indent)
 
-    if reset_index and len(df.index.names) > 1 or df.index.name: 
-        df = df.reset_index()
+    df = _reset_index(df , reset_index)
     if ignored_fields: 
         df = df.drop(columns=ignored_fields , errors='ignore')
     return df
@@ -378,8 +476,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
     date: int, default None
         date to be saved, if the db is by date, date is required
     '''
-    if df is not None and (len(df.index.names) > 1 or df.index.name): 
-        df = df.reset_index()
+    df = _reset_index(df , reset = True)
     mark = save_df(df , _db_path(db_src , db_key , date , use_alt = False) , 
                    overwrite = overwrite , prefix = f'{db_src.title()} {reason}' if reason else db_key , indent = indent , vb_level = vb_level)
     return mark
@@ -416,7 +513,7 @@ def load(db_src , db_key , date = None , *,
     return df
 
 # @_db_src_deprecated(0)
-def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
+def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
                date_colname = 'date' , use_alt = False , 
                parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , indent = 1 , vb_level : int = 1 , **kwargs):
     """load multiple dates from database"""
@@ -428,7 +525,7 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
         assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
-    df = load_df_multi(paths , date_colname , parallel)
+    df = load_dfs(paths , key_column = date_colname , parallel = parallel)
     df = _process_df(df , df_syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 

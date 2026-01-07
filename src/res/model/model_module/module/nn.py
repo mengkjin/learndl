@@ -65,7 +65,7 @@ class NNPredictor(BasePredictorModel):
         return self.net(x , *args , **kwargs)
 
     def fit(self):
-        Logger.remark(f'model {self.model_str} fit start' , vb_level = Proj.vb_max)
+        Logger.remark(f'model {self.model_str} fit start' , vb_level = Proj.vb.max)
 
         self.new_model()
         for _ in self.trainer.iter_fit_epoches():
@@ -78,11 +78,11 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} fit done' , vb_level = Proj.vb_max)
+        Logger.remark(f'model {self.model_str} fit done' , vb_level = Proj.vb.max)
 
     def test(self):
         '''test the model inside'''
-        Logger.remark(f'model {self.model_str} test start' , vb_level = Proj.vb_max)
+        Logger.remark(f'model {self.model_str} test start' , vb_level = Proj.vb.max)
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -90,7 +90,7 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.remark(f'model {self.model_str} test done' , vb_level = Proj.vb_max)
+        Logger.remark(f'model {self.model_str} test done' , vb_level = Proj.vb.max)
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)

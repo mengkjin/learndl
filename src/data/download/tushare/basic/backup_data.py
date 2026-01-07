@@ -112,19 +112,16 @@ class TSBackUpDataTransform():
                         path.rename(backed_path)
                     else:
                         path.unlink()   
-                if backed_old_path.exists():
-                    backed_old_path.unlink()
-            self.path_record(date).unlink()
+                backed_old_path.unlink(missing_ok=True)
+            self.path_record(date).unlink(missing_ok=True)
 
     def clear_backed(self , date : int):
         """clear all backed data"""
         for db_key in self.DB_KEYS:
             backed_path = self.db_path_backed(date , db_key)
             backed_old_path = self.db_path_backed_old(date , db_key)
-            if backed_path.exists():
-                backed_path.unlink()
-            if backed_old_path.exists():
-                backed_old_path.unlink()
+            backed_path.unlink(missing_ok=True)
+            backed_old_path.unlink(missing_ok=True)
 
     def path_record(self , date : int):
         """get backed record path"""

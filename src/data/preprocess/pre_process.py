@@ -50,7 +50,7 @@ class DataPreProcessor:
     
     @classmethod
     def proceed(cls , predict = True):
-        return cls.main(predict = True , vb_level = Proj.vb_max if predict else 1)
+        return cls.main(predict = True , vb_level = Proj.vb.max if predict else 1)
 
     @classmethod
     def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
