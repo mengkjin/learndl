@@ -156,7 +156,7 @@ class AutoRunTask:
 
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         
-        self.exit_files = list(set(Proj.exit_files.pop_all()))
+        self.exit_files = Proj.exit_files.pop_all()
 
         # send email if not forfeit task
         if not self.forfeit_task:

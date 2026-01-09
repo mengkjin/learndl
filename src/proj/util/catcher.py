@@ -607,7 +607,7 @@ class HtmlCatcher(OutputCatcher):
         for export_path in self.export_file_list:
             Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
         if self.is_primary and self.export_file_list:
-            Proj.exit_files.append(self.export_file_list[0])
+            Proj.exit_files.insert(0 , self.export_file_list[0])
         
         html_content = self.generate_html()
         for export_path in self.export_file_list:

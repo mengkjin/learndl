@@ -89,7 +89,7 @@ class PortfolioAccount:
 
     def __init__(self , input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None , 
                  config : AccountConfig | None = None , index : dict[Any,Any] | None = None):
-        self._df = self.empty_df()
+        self._df = self.FirstRow(self.empty_df())
         self.config = AccountConfig()
         self.index = index or {}
         self.update(input , config , index)
@@ -176,11 +176,10 @@ class PortfolioAccount:
 
     @classmethod
     def Concat(cls , *accounts : 'PortfolioAccount | None'):
-        accs = [acc for acc in accounts if acc is not None and not acc.empty]
+        accs = [acc for acc in accounts if acc is not None]
         if not accs:
             return cls()
-        df = pd.concat([acc._df for acc in accs]).drop_duplicates(subset = ['model_date'] , keep = 'last').query('model_date >= 0')
-        df = cls.FirstRow(df)
+        df = pd.concat([acc._df for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
         configs = [acc.config for acc in accs if acc.config]
         config = None if not configs else configs[-1]
         add_indexes = [acc.index for acc in accs if acc.index]
@@ -189,9 +188,9 @@ class PortfolioAccount:
     
     @staticmethod
     def Total(*accounts : 'PortfolioAccount | None') -> pd.DataFrame:
-        accs = [acc for acc in accounts if acc is not None and not acc.empty]
+        accs = [acc for acc in accounts if acc is not None]
         if not accs: 
-            return PortfolioAccount.empty_df()
+            return pd.DataFrame()
         df = pd.concat([acc.df for acc in accs])
         old_index = [index for index in df.index.names if index]
         df = df.reset_index(old_index , drop = False).sort_values('model_date').reset_index(drop = True)
@@ -272,7 +271,7 @@ class PortfolioAccount:
 
     @property
     def empty(self):
-        return self._df.empty
+        return self._df.query('model_date >= 0').empty
 
     @property
     def model_date(self) -> pd.Series:
@@ -323,6 +322,15 @@ class PortfolioAccount:
         drawdown = eval_drawdown(self.pf)
         assert isinstance(drawdown , pd.Series) , 'drawdown must be pd.Series'
         return drawdown
+
+    @property
+    def max_model_date(self) -> int:
+        return int(self.model_date.max())
+    
+    @property
+    def max_end_date(self) -> int:
+        return int(self.end.max())
+    
     
 
 class PortfolioAccountant:
@@ -379,9 +387,9 @@ class PortfolioAccountant:
         
         self.resumed_account = PortfolioAccount.load(resume_path)
         if resume_drop_last:
-            last_model_date = self.resumed_account.model_date.max()
+            last_model_date = self.resumed_account.max_model_date
             if len(before_last_model_dates := self.port_dates[self.port_dates <= last_model_date]) > 0:
-                last_model_date = before_last_model_dates.max()
+                last_model_date = int(before_last_model_dates.max())
             self.resumed_account.filter_dates(end = last_model_date - 1)
 
         if resume_end is not None:
@@ -406,10 +414,8 @@ class PortfolioAccountant:
             model_dates = self.port_dates
         else:
             port_min , port_max = self.port_dates.min() , self.port_dates.max()
-            start = np.max([port_min , self.config.start , self.resumed_account.model_date.max() + 1])
+            start = np.max([port_min , self.config.start , self.resumed_account.max_model_date + 1])
             end   = np.min([DATAVENDOR.td(port_max,5) , self.config.end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1)])
-            print(self.resumed_account)
-            print(port_min , self.config.start , self.resumed_account.model_date.max())
             model_dates = DATAVENDOR.td_within(start , end)
 
         if len(model_dates) == 0:
@@ -508,10 +514,10 @@ class PortfolioAccountManager:
         return list(self.accounts.keys())
     
     def account_last_model_dates(self):
-        return {name:account.model_date.max() for name,account in self.accounts.items() if not account.empty}
+        return {name:account.max_model_date for name,account in self.accounts.items()}
     
     def account_last_end_dates(self):
-        return {name:account.end.max() for name,account in self.accounts.items() if not account.empty}
+        return {name:account.max_end_date for name,account in self.accounts.items()}
 
     def load_single(self , path : str | Path , missing_ok = True , append = True):
         path = Path(path)

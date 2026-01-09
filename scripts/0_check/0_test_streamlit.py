@@ -95,6 +95,8 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')
             else:
                 Logger.conclude(f'this is an info: random number {rnd} >= 0.5' , level = 'info')
+
+            raise Exception('test exception')
         
 if __name__ == '__main__':
     main()

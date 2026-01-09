@@ -72,8 +72,8 @@ class Email:
         message['From'] = cls._settings.sender
         message['To'] = cls.recipient(recipient)
         message['Subject'] = f'{title_prefix} {title}'
-        message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
-
+        
+        
         if attachments is None:
             attachment_paths : list[Path] = []
         elif isinstance(attachments , Sequence):
@@ -84,14 +84,19 @@ class Email:
         if project_attachments:
             attachment_paths.extend(Proj.email_attachments.pop_all())
 
-        for attachment in attachment_paths:
-            with open(attachment, 'rb') as attach_file:
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(attach_file.read())
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
-                message.attach(part)
+        body_text = body if body is not None else ''
 
+        for attachment in attachment_paths:
+            if not attachment.exists():
+                body_text += f'\nAttachment not found: {attachment}'
+            else:
+                with open(attachment, 'rb') as attach_file:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(attach_file.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
+                    message.attach(part)
+        message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))        
         return message
     
     @classmethod

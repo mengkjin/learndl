@@ -27,7 +27,7 @@ class _Log_File:
     def __get__(self , instance, owner):
         return self.value
 
-class _FileList:
+class _UniqueFileList:
     _file_lists : dict[str , list[Path]] = {}
     def __init__(self , name : str):
         self.name = name
@@ -46,11 +46,25 @@ class _FileList:
 
     def append(self , file : Path | str):
         with self.lock:
-            self.file_list.append(Path(file))
+            file = Path(file)
+            if file in self.file_list:
+                return
+            self.file_list.append(file)
 
     def extend(self , *files : Path | str):
         with self.lock:
-            self.file_list.extend([Path(file) for file in files])
+            for file in files:
+                file = Path(file)
+                if file in self.file_list:
+                    continue
+                self.file_list.append(file)
+    
+    def insert(self , index : int , file : Path | str):
+        with self.lock:
+            file = Path(file)
+            if file in self.file_list:
+                self.file_list.remove(file)
+            self.file_list.insert(index , file)
 
     def remove(self , file : Path | str):
         with self.lock:
@@ -145,8 +159,8 @@ class Proj(metaclass=_ProjMeta):
     States = ProjStates
     Conf = Conf
     vb = _Verbosity()
-    email_attachments = _FileList('email_attachments')
-    exit_files = _FileList('exit_files')
+    email_attachments = _UniqueFileList('email_attachments')
+    exit_files = _UniqueFileList('exit_files')
 
     def __new__(cls , *args , **kwargs):
         raise Exception(f'{cls.__name__} cannot be instantiated')
