@@ -35,7 +35,7 @@ def extract_js_min(date):
         try:
             df = DB.load_df(target_path)
         except Exception as e:
-            Logger.error(e)
+            Logger.error(f'Failed to load JS min: {e}')
             target_path.unlink()
     if df is None:
         zip_file_path = zip_path.joinpath(f'min.{date}.zip')
@@ -48,10 +48,10 @@ def extract_js_min(date):
     try:
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
-        Logger.error(e)
+        Logger.error(f'Failed to convert ticker to int: {e}')
         df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
-    DB.save_df(df , target_path , prefix = f'JS min' , vb_level = Proj.VB.max)
+    DB.save_df(df , target_path , prefix = f'JS min' , vb_level = Proj.vb.max)
     return df   
 
 def add_sec_type(df : pd.DataFrame):

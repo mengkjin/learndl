@@ -1,4 +1,4 @@
-import platform , re , traceback
+import platform , re
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
@@ -428,7 +428,7 @@ class SellsideSQLDownloader:
             cls.update_since(trace = 0)
         except Exception as e:
             Logger.error(f'In {cls.__name__} : Error in update_since: {e}')
-            traceback.print_exc()
+            Logger.print_exc(e)
         
 if __name__ == '__main__':
     from src.data.download.sellside.from_sql import SellsideSQLDownloader

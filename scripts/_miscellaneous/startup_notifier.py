@@ -229,7 +229,7 @@ def send_email(subject, body, config):
         return False
     except Exception as e:
         logging.error(f"email send failed: unknown error. error: {e}")
-        return False
+        raise e
     finally:
         if 'server' in locals() and server:
             server.quit()

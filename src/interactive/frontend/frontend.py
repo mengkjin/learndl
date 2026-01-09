@@ -1,14 +1,14 @@
 from pathlib import Path
 from typing import Literal , Any , Callable , Sequence
 import streamlit as st
-import base64 , yaml , traceback , shutil
+import base64 , yaml , shutil
 import streamlit.components.v1 as components
 import pandas as pd
 
 from datetime import datetime
 from dataclasses import dataclass
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 
 class CustomCSS:
     def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remove' , 'multi_select']) -> None:
@@ -275,7 +275,7 @@ class ActionLogger:
                     func(*args , **kwargs)
                     cls.record_action(t0 , func.__name__ , *args , **kwargs)
                 except Exception as e:
-                    err_msg = traceback.format_exc()
+                    err_msg = Logger.print_exc(e)
                     cls.record_error(t0 , func.__name__ , err_msg)
                     raise e
             return inner

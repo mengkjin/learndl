@@ -137,6 +137,22 @@ def new_special_level_message(*args , padding_char : None | str = None , padding
     else:
         new_stdout(msg , color = color , bold = True , vb_level = vb_level , **kwargs)
 
+def new_print_exc(e : Exception , color : str = 'lightred' , bold : bool = True) -> str:
+    """Print the exception"""
+    error_msg = ''.join(msg for msg in traceback.format_exception(type(e), e, e.__traceback__)).strip()
+    new_stderr(error_msg , color = 'lightred' , bold = True)
+    return error_msg
+
+def new_print_traceback_stack(color : str = 'lightyellow' , bold : bool = True) -> str:
+    """Print the traceback stack"""
+    stack = traceback.extract_stack()
+    stack_str = ''
+    for i, frame in enumerate(stack[:-1]):  # exclude current frame
+        stack_str += f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}\n"
+        stack_str += f"     {frame.line}\n"
+    new_stderr(stack_str , color = color , bold = bold)
+    return stack_str
+
 _raw_config = log_config()
 _raw_logger = new_log(_raw_config)
 
@@ -333,6 +349,16 @@ class Logger:
         """Get the conclusions"""
         return cls._conclusions[type]
 
+    @classmethod
+    def print_exc(cls , e : Exception , color : str = 'lightred' , bold : bool = True):
+        """Print the exception"""
+        return new_print_exc(e , color = color , bold = bold)
+
+    @classmethod
+    def print_traceback_stack(cls , color : str = 'lightyellow' , bold : bool = True):
+        """Print the exception stack"""
+        return new_print_traceback_stack(color = color , bold = bold)
+
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
         def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 1 , enter_vb_level : int = Proj.vb.max): 
@@ -413,7 +439,7 @@ class Logger:
             self._init_time = datetime.now()
             self.write(f'{self.title} Start'.upper())
 
-        def __exit__(self , exc_type , exc_value , traceback):
+        def __exit__(self , *args , **kwargs):
             self._end_time = datetime.now()
             self.write(f'{self.title} Finished in {Duration(self._end_time - self._init_time)}'.upper())
 
@@ -446,7 +472,7 @@ class Logger:
         def __exit__(self, type , value , trace):
             if type is not None:
                 new_logger_output('error' , f'Error in Profiler ' , type , value)
-                traceback.print_exc()
+                new_print_exc(value)
             elif self.profiling:
                 if self.display:
                     new_stdout(f'Profiler cost time: {Duration(datetime.now() - self.start_time)}')

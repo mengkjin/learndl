@@ -1,4 +1,4 @@
-import operator , joblib , os , gc , itertools , re , traceback
+import operator , joblib , os , gc , itertools , re
 import numpy as np
 import pandas as pd
 import torch
@@ -596,10 +596,10 @@ class gpTimer:
                 torch.cuda.empty_cache()
                 self.gmem_start = torch.cuda.mem_get_info()[0] / MemoryManager.unit
             return self
-        def __exit__(self, type, value, trace):
-            if type is not None:
-                Logger.error(f'Error in PTimer {self.key}' , type , value)
-                traceback.print_exc()
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            if exc_type is not None:
+                Logger.error(f'Error in PTimer {self.key}' , exc_type , exc_value)
+                Logger.print_exc(exc_value)
             else:
                 time_cost = (datetime.now() - self._init_time).total_seconds()
                 if self.memory_check:
@@ -628,10 +628,10 @@ class gpTimer:
             self.clear()
         def __enter__(self):
             self._init_time = datetime.now()
-        def __exit__(self, type, value, trace):
-            if type is not None:
-                Logger.error(f'Error in AccTimer {self.key}' , type , value)
-                traceback.print_exc()
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            if exc_type is not None:
+                Logger.error(f'Error in AccTimer {self.key}' , exc_type , exc_value)
+                Logger.print_exc(exc_value)
             else:
                 self.time  += (datetime.now() - self._init_time).total_seconds()
                 self.count += 1
@@ -649,10 +649,10 @@ class gpTimer:
     class EmptyTimer:
         def __enter__(self):
             pass
-        def __exit__(self, type, value, trace):
-            if type is not None:
-                Logger.error(f'Error in EmptyTimer ' , type , value)
-                traceback.print_exc()
+        def __exit__(self, exc_type, exc_value, exc_traceback):
+            if exc_type is not None:
+                Logger.error(f'Error in EmptyTimer ' , exc_type , exc_value)
+                Logger.print_exc(exc_value)
         
     def __call__(self , key , printing = True , df_cols = True , print_str = None , memory_check = False):
         if df_cols: 

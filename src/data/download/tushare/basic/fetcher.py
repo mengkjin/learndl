@@ -170,6 +170,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             fetcher.update_missing()
         except Exception as e:
             Logger.error(f'{cls.__name__} update failed: {e}')
+            Logger.print_exc(e)
     
     @classmethod
     def rollback(cls , rollback_date : int) -> None:
@@ -181,6 +182,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             fetcher.update_missing()
         except Exception as e:
             Logger.error(f'{cls.__name__} update rollback failed: {e}')
+            Logger.print_exc(e)
 
     def check_server_down(self) -> bool:
         """check if the tushare server is down"""

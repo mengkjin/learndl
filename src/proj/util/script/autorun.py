@@ -1,4 +1,4 @@
-import traceback , sys
+import sys
 
 from datetime import datetime
 from pathlib import Path
@@ -179,11 +179,10 @@ class AutoRunTask:
                         self.func_return = func(*args , **self.kwargs)
                         self.status = 'Success'
                     except Exception as e:
-                        error_msg = ''.join(msg for msg in traceback.format_exception(type(e), e, e.__traceback__)).strip()
-                        traceback.print_exc()
-                        Logger.alert2(error_msg)
                         self.status = 'Error'
+                        error_msg = Logger.print_exc(e)
                         Logger.conclude(error_msg , level = 'error')
+                        
             return self
         return wrapper
 

@@ -261,16 +261,17 @@ class Stock4DData:
         try:
             xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         except Exception as e:
-            Logger.error(e)
-            Logger.stdout(df[df.index.duplicated()])
+            Logger.error(f'Failed to convert DataFrame to NdData: {e}')
+            Logger.print_exc(e)
+            Logger.Display(df[df.index.duplicated()])
             raise e
         try:
             value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
-        except:
+        except Exception as e:
             import src
             setattr(src , 'xarr' , xarr)
             Logger.stdout(xarr)
-            raise
+            raise e
         return value
 
         # return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])

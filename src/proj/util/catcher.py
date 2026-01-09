@@ -1,4 +1,4 @@
-import sys , re , platform , warnings , shutil , traceback
+import sys , re , platform , warnings , shutil
 import pandas as pd
 
 from typing import Any ,Literal , IO , Union
@@ -213,6 +213,8 @@ class OutputCatcher(ABC):
         """Get the catchers of the output catcher"""
         if not hasattr(self , '_catchers'):
             return self
+        else:
+            return self._catchers
 
     @catchers.setter
     def catchers(self , value : dict[type_of_std , type_of_catcher] | type_of_catcher | Any):
@@ -258,8 +260,8 @@ class IOCatcher(OutputCatcher):
         self.catchers : dict[type_of_std , StringIO] = {'stdout': StringIO(), 'stderr': StringIO()}
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._contents = {key: catcher.getvalue() for key , catcher in self.catchers.items()}
         super().__exit__(exc_type, exc_val, exc_tb)
+        self._contents = {key: catcher.getvalue() for key , catcher in self.catchers.items()}    
     
     def get_contents(self):
         return self._contents
@@ -321,13 +323,10 @@ class WarningCatcher:
         """Custom warning show function to catch specific warnings and show call stack"""
         # only catch the warnings we care about
         if any(c in str(message).lower() for c in self.catch_warnings):
-            stack = traceback.extract_stack()
             Logger.alert1(f"\n caught warning: {message}")
             Logger.alert1(f"warning location: {filename}:{lineno}")
             Logger.alert1("call stack:")
-            for i, frame in enumerate(stack[:-1]):  # exclude current frame
-                Logger.alert1(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}")
-                Logger.alert1(f"     {frame.line}")
+            Logger.print_traceback_stack(color = 'lightyellow' , bold = True)
             Logger.alert1("-" * 80)
             
             raise Exception(message)

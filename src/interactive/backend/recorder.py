@@ -116,7 +116,7 @@ class BackendTaskRecorder:
             self.update_msg['status'] = 'error'
             self.update_msg['exit_code'] = 1
             self.update_msg['exit_message'] = str(exc_value)
-            self.update_msg['exit_error'] = traceback.format_exc()
+            self.update_msg['exit_error'] = traceback.format_exception(exc_type, exc_value, exc_traceback)
         TaskDatabase().update_task(self.task_id, backend_updated = True, **self.update_msg)
 
     @dataclass(slots = True)

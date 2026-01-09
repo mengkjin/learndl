@@ -18,8 +18,8 @@ class TempFile:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         try:
             os.remove(self.file_name)
-        except Exception:
-            pass
+        except Exception as e:
+            Logger.error(f'Failed to remove temp file: {e}')
 
 def check_cuda_status():
     if not MACHINE.server:
@@ -42,8 +42,8 @@ def check_cuda_status():
         
         try:
             Email.send(title , body , recipient , confirmation_message='CUDA Status')
-        except Exception:
-            pass
+        except Exception as e:
+            Logger.error(f'Failed to send email to notify CUDA status: {e}')
 
 
 def email_to_fanghan(test = False):
@@ -80,7 +80,6 @@ def email_to_fanghan(test = False):
             task_recorder.mark_finished()
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')
-            return
     Logger.success(f'Email to Fanghan at {today}')
     return
 

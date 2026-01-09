@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import re , traceback
+import re
 
 from importlib import import_module
 from abc import abstractmethod
@@ -504,7 +504,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             done = self.calc_and_deploy(date , overwrite = overwrite , indent = indent , vb_level = vb_level)
         except catch_errors as e:
             Logger.error(f'{prefix} failed: {e}')
-            traceback.print_exc()
+            Logger.print_exc(e)
             return False
         return done
 

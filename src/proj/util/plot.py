@@ -129,7 +129,7 @@ class PlotFactorData:
             df = df.dropna(how='any' if self.dropna != 'all' else 'all')
         return df , self.fig
 
-    def __exit__(self , exc_type , exc_value , traceback):
+    def __exit__(self , *args , **kwargs):
         if self.title or self.full_title:
             full_title = self.full_title if self.full_title else f'{self.title}{self.title_suffix()}'
             plt.suptitle(full_title , fontsize = 14) if self.suptitle else plt.title(full_title , fontsize = 14)

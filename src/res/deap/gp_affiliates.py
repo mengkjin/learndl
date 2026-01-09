@@ -1,7 +1,6 @@
 import re
 import pandas as pd
 import cProfile
-import traceback
 
 from src.proj import Logger
 
@@ -18,7 +17,7 @@ class EmptyTM():
     def __exit__(self, type, value, trace):
         if type is not None:
             Logger.error(f'Error in EmptyTM ' , type , value)
-            traceback.print_exc()
+            Logger.print_exc(value)
 
 class Profiler(cProfile.Profile):
     def __init__(self, doso = False , builtins = True , **kwargs) -> None:
@@ -32,13 +31,13 @@ class Profiler(cProfile.Profile):
         else:
             return self
 
-    def __exit__(self, type , value , trace):
-        if type is not None:
-            Logger.error(f'Error in Profiler ' , type , value)
-            traceback.print_exc()
+    def __exit__(self, exc_type , exc_value , exc_traceback):
+        if exc_type is not None:
+            Logger.error(f'Error in Profiler ' , exc_type , exc_value)
+            Logger.print_exc(exc_value)
         else:
             if self.doso: 
-                return super().__exit__(type , value , trace)
+                return super().__exit__(exc_type , exc_value , exc_traceback)
 
     def get_df(self , sort_on = 'tottime' , highlight = None , output = None):
         if not self.doso: 

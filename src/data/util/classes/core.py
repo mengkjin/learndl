@@ -555,6 +555,8 @@ class ModuleData:
             Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
             data = None
         except Exception as e:
+            Logger.error(f'Failed to load Module Data: {e}')
+            Logger.print_exc(e)
             raise e
 
         cls.datacache_purge_old(data_type_list)

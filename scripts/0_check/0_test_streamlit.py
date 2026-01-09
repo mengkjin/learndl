@@ -49,7 +49,7 @@ import matplotlib.pyplot as plt
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
 def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
     Logger.stdout('This will be caught')
-    with Logger.ParagraphI('main part'):
+    with Logger.ParagraphIII('main part'):
         with Logger.Timer('abc'):
             print('this is a print message')
             Logger.critical('critical message')

@@ -11,7 +11,7 @@ class OptunaSilent:
     def __enter__(self):
         self.old_level = optuna.logging.get_verbosity()
         optuna.logging.set_verbosity(optuna.logging.ERROR)
-    def __exit__(self , exc_type , exc_value , traceback):
+    def __exit__(self , *args , **kwargs):
         optuna.logging.set_verbosity(self.old_level)
 
 class OptunaBooster(GeneralBooster):

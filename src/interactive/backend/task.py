@@ -904,6 +904,7 @@ class TaskItem:
             self.update({'pid': process.real_pid, 'status': 'running', 'start_time': timestamp()} , write_to_db = True)
         except Exception as e:
             self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , write_to_db = True)
+            Logger.print_exc(e)
             raise e
         return self
 
