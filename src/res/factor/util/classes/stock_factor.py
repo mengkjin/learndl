@@ -980,6 +980,8 @@ class StockFactor:
         normalize the dataframe factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
+        if df.empty:
+            return df
         if 'date' not in df.index.names:
             df = df.set_index('date' , append=True)
         if 'secid' not in df.index.names:

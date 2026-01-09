@@ -129,16 +129,19 @@ class FactorCategory1Loader(BlockLoader):
         
     def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> DataBlock:
         """Load factor data , alias for load"""
-        factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
+        factors : list[pd.DataFrame] = []
         with Logger.Timer(f'factor blocks reading [{self.category0} , {self.category1}]' , indent = indent , vb_level = vb_level):
             dates = CALENDAR.td_within(start_dt , end_dt)
             for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = indent + 1 , vb_level = vb_level + 1)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
+        factors = [fac for fac in factors if not fac.empty]
+        if not factors:
+            Logger.alert1(f'no factors found for {self.category0} , {self.category1}')
+            return DataBlock()
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
-            assert len([fac for fac in factors if not fac.empty]) > 0 , f'no factors found for {self.category0} , {self.category1}'
             df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block

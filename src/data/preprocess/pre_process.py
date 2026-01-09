@@ -85,6 +85,9 @@ class DataPreProcessor:
                 block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 3)
             with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 2):
                 data_block = proc.process_blocks(block_dict)
+            if data_block.empty:
+                Logger.alert1(f'[{key}] blocks process is empty! Skip saving...' , indent = indent + 2 , vb_level = vb_level + 2)
+                continue
             with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 2):   
                 data_block = data_block.mask_values(mask = processor.mask)
             with Logger.Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 2):
