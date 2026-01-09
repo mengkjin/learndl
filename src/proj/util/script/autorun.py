@@ -179,9 +179,11 @@ class AutoRunTask:
                         self.func_return = func(*args , **self.kwargs)
                         self.status = 'Success'
                     except Exception as e:
+                        error_msg = ''.join(msg for msg in traceback.format_exception(type(e), e, e.__traceback__)).strip()
                         traceback.print_exc()
+                        Logger.alert2(error_msg)
                         self.status = 'Error'
-                        Logger.conclude(''.join(msg for msg in traceback.format_exception(type(e), e, e.__traceback__)).strip() , level = 'error')
+                        Logger.conclude(error_msg , level = 'error')
             return self
         return wrapper
 

@@ -408,6 +408,7 @@ class PortfolioAccountant:
             port_min , port_max = self.port_dates.min() , self.port_dates.max()
             start = np.max([port_min , self.config.start , self.resumed_account.model_date.max() + 1])
             end   = np.min([DATAVENDOR.td(port_max,5) , self.config.end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1)])
+            print(port_min , self.config.start , self.resumed_account.model_date.max())
             model_dates = DATAVENDOR.td_within(start , end)
 
         if len(model_dates) == 0:
