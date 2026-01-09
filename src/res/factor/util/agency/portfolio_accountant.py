@@ -89,7 +89,8 @@ class PortfolioAccount:
 
     def __init__(self , input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None , 
                  config : AccountConfig | None = None , index : dict[Any,Any] | None = None):
-        self._df = self.FirstRow(self.empty_df())
+        if input is None:
+            input = self.empty_df()
         self.config = AccountConfig()
         self.index = index or {}
         self.update(input , config , index)
