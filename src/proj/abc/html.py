@@ -137,7 +137,7 @@ def figure_to_html(fig: Figure | Any):
     try:
         if fig.get_axes():  # check if figure has content
             if image_base64 := figure_to_base64(fig):
-                content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 2px 0;">'
+                content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border-radius: 5px; margin: 2px 0;">'
     except Exception as e:
         from src.proj import Logger
         Logger.error(f"Error capturing matplotlib figure: {e}")

@@ -12,24 +12,6 @@ __all__ = ['Proj']
 
 _project_settings = MACHINE.configs('proj' , 'proj_settings')
 
-class _VbMax:
-    def __init__(self):
-        self.value = _project_settings['vb_max']
-    def __get__(self , instance, owner):
-        return self.value
-
-class _VbMin:
-    def __init__(self):
-        self.value = _project_settings['vb_min']
-    def __get__(self , instance, owner):
-        return self.value
-
-class _VbLevelCallback:
-    def __init__(self):
-        self.value = _project_settings['vb_level_callback']
-    def __get__(self , instance, owner):
-        return self.value
-
 class _Log_File:
     def __init__(self):
         self.value = None
@@ -83,26 +65,41 @@ class _FileList:
                     Logger.alert1(f'Removed file {file} from email_attachments!' , vb_level = Proj.vb.max)
 
 class _Verbosity:
+    max : int = _project_settings.get('vb_max' , 10)
+    min : int = _project_settings.get('vb_min' , 0)
+    inf : int = _project_settings.get('vb_inf' , 99)
+    level_callback : int = _project_settings.get('vb_level_callback' , 10)
+        
     def __init__(self):
         self.vb : int = _project_settings.get('vb' , 1)
-        self.max : int = _project_settings.get('vb_max' , 10)
-        self.min : int = _project_settings.get('vb_min' , 0)
-        self.inf : int = _project_settings.get('vb_inf' , 99)
-        self.level_callback : int = _project_settings.get('vb_level_callback' , 10)
-        self.current : int | None = None
-
+        self.vb_level : int | None = None
+        
     def __repr__(self):
         return f'{self.vb}'
 
-    def at_vb_level(self , vb_level : int | None):
-        self.current = vb_level
-        return self
+    class WithVbLevel:
+        def __init__(self , vb_level : int | None):
+            self.vb_level = vb_level
 
-    def __enter__(self):
-        return self
+        def __enter__(self):
+            Proj.vb.vb_level = self.vb_level
+            return self
 
-    def __exit__(self , exc_type , exc_value , exc_traceback):
-        self.current = None
+        def __exit__(self , exc_type , exc_value , exc_traceback):
+            Proj.vb.vb_level = None
+
+    class WithVB:
+        def __init__(self , vb : int | None = None):
+            self.vb = vb
+            self.vb_prev : int | None = None
+
+        def __enter__(self):
+            self.vb_prev = Proj.vb.vb
+            Proj.vb.set_vb(self.vb)
+            return self
+
+        def __exit__(self , exc_type , exc_value , exc_traceback):
+            Proj.vb.set_vb(self.vb_prev)
 
     def set_vb(self , value : int | None = None):
         if value is None:

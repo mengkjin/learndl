@@ -65,7 +65,7 @@ class Display:
         """
         if Silence.silent or Proj.vb.ignore(vb_level):
             return
-        with Proj.vb.at_vb_level(vb_level):
+        with Proj.vb.WithVbLevel(vb_level):
             for callback in cls._callbacks_before:
                 callback(obj)
                 

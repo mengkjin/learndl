@@ -16,9 +16,9 @@ plotter = Plotter(test_title(test_type))
 class TopCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
-    def calc(self , account : pd.DataFrame , indent : int = 1 , vb_level : int = 1):
+    def calc(self , account_df : pd.DataFrame , indent : int = 1 , vb_level : int = 1):
         with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
-            self.calc_rslt : pd.DataFrame = self.calculator()(account)
+            self.calc_rslt : pd.DataFrame = self.calculator()(account_df)
         return self
     
 class FrontFace(TopCalc):
@@ -125,14 +125,17 @@ class TopFMPTest(BaseFactorAnalyticTest):
         self.portfolio_group = PortfolioGroupBuilder(
             'top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , 
             caller = self , start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
-        self.account = self.portfolio_group.build().accounts()
+        self.total_account = self.portfolio_group.build().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              n_bests = [20,30,50,100] , indent : int = 0 , vb_level : int = 1 , **kwargs):
         self.generate(factor , benchmark , n_bests = n_bests , indent = indent , vb_level = vb_level)
+        if self.total_account.empty:
+            Logger.error(f'No accounts created for {self.test_name}!')
+            return self
         with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
             for task in self.tasks.values():  
-                task.calc(self.account , indent = indent + 1 , vb_level = vb_level + 1) 
+                task.calc(self.total_account , indent = indent + 1 , vb_level = vb_level + 1) 
         return self
     
     def update_kwargs(self , n_bests = [20,30,50,100] , **kwargs):

@@ -31,7 +31,8 @@ class _Account:
         _project_states[self.name] = None
 
     def __set__(self , instance, value):
-        assert value is None or isinstance(value , pd.DataFrame) , f'value is not a {pd.DataFrame} instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
+        from src.res.factor.util import PortfolioAccount
+        assert value is None or isinstance(value , PortfolioAccount) , f'value is not a PortfolioAccount instance: {type(value)} , cannot be set to {instance.__name__}.{self.name}'
         _project_states[self.name] = value
 
     def __get__(self , instance, owner):
@@ -69,7 +70,7 @@ class ProjStates(metaclass=_ProjStatesMeta):
     custom class to record anything
     example:
         Proj.States.trainer = trainer # for src.res.model.util.classes.BaseTrainer
-        Proj.States.account = account # for pandas.DataFrame portfolio account
+        Proj.States.account = account # for src.res.factor.util.agency.portfolio_accountant.PortfolioAccount
         Proj.States.factor = factor   # for src.res.factor.util.classes.StockFactor
     """
 

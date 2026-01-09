@@ -7,7 +7,7 @@ from typing import Any , Literal
 
 from src.proj import Duration , Logger , CALENDAR , Proj
 
-from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
+from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount
 from .optimizer import OptimizedPortfolioCreator
 from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator , RevScreeningPortfolioCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
@@ -103,10 +103,6 @@ class PortfolioBuilder:
         self._resumed_portfolio_end_date = value
 
     @property
-    def resumed_account_end_date(self) -> int:
-        return min(int(self.resumed_account['model_date'].iloc[-2]) if len(self.resumed_account) > 1 else -1 , self.resumed_portfolio_end_date)
-
-    @property
     def resume_path_portfolio(self):
         if self.resume_path is None:
             return None
@@ -178,34 +174,21 @@ class PortfolioBuilder:
         self.portfolio.append(port_rslt.port.with_name(self.portfolio.name))
         self.port = port_rslt.port
         return self
-
-    def load_account(self):
-        self.resumed_account = PortfolioAccountant.load(self.resume_path_account)
-        if not self.resumed_account.empty:
-            Logger.success(f'Load account from {self.resume_path_account} at {CALENDAR.dates_str(self.resumed_account['model_date'])}' , 
-                           indent = self.indent , vb_level = Proj.vb.max)
-        return self
     
     def accounting(self , start : int = -1 , end : int = 99991231 ,
                    analytic = True , attribution = True , * ,
                    trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
                    daily = False):
         '''Accounting portfolio through date, require at least portfolio'''
-        self.portfolio.accounting(self.benchmark , max(start , self.resumed_account_end_date + 1) , end , 
+        self.portfolio.accounting(self.benchmark , start , end , 
                                   analytic and self.lag == 0 , attribution and self.lag == 0 ,
-                                  trade_engine = trade_engine , daily = daily , indent = self.indent , vb_level = self.vb_level)
-        if hasattr(self , 'resumed_account') and not self.resumed_account.empty:
-            self.account = PortfolioAccountant.concat_accounts([self.resumed_account , self.portfolio.account])
-        else:
-            self.account = self.portfolio.account
+                                  trade_engine = trade_engine , daily = daily , 
+                                  resume_path = self.resume_path_account , 
+                                  resume_end = self.resumed_portfolio_end_date , resume_drop_last = False ,
+                                  indent = self.indent + 1 , vb_level = self.vb_level)
+        self.account = PortfolioAccount.Concat(getattr(self , 'resumed_account' , None) , self.portfolio.account.with_index(self.port_index))
+        self.account.save(self.resume_path_account , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return self
-
-    def save_account(self):
-        PortfolioAccountant.save_account(self.account , self.resume_path_account , indent = self.indent , vb_level = self.vb_level + 1)
-        return self
-
-    def account_with_index(self):
-        return PortfolioAccountant.account_with_index(self.account , self.port_index)
 
     @classmethod
     def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
@@ -407,13 +390,13 @@ class PortfolioGroupBuilder:
         ):
             for builder in self.builders:
                 with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1):
-                    builder.load_account().accounting(self.start_dt , self.end_dt , **self.acc_kwargs).save_account()
+                    builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
         self.accounted = True
         return self
     
-    def accounts(self):
+    def total_account(self):
         assert self.builders , 'No builders to account!'
         if not self.accounted:
             self.accounting()
-        df = PortfolioAccountant.total_account([builder.account_with_index() for builder in self.builders])
+        df = PortfolioAccount.Total(*[builder.account for builder in self.builders])
         return df

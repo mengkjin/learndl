@@ -54,11 +54,11 @@ def calc_ic_decay(
     benchmark : within some benchmark
     '''
     factor = factor.within(benchmark)
-    decay_pnl_df = []
+    decay_pnl_dfs : list[pd.DataFrame] = []
     for lag in range(lag_num):
         decay_pnl = factor.eval_ic(nday , lag_init + lag * nday , ic_type , ret_type)
-        decay_pnl_df.append(pd.DataFrame({'lag_type':f'lag{lag}','ic_mean':decay_pnl.mean()}))
-    decay_pnl_df = pd.concat(decay_pnl_df, axis=0).reset_index()
+        decay_pnl_dfs.append(pd.DataFrame({'lag_type':f'lag{lag}','ic_mean':decay_pnl.mean()}))
+    decay_pnl_df = pd.concat(decay_pnl_dfs, axis=0).reset_index()
     return decay_pnl_df
 
 def calc_ic_indus(  
@@ -164,7 +164,7 @@ def calc_group_curve(
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , excess , ret_type).set_index(['factor_name','group'])
-    min_date : pd.DataFrame | Any = grp_perf.groupby(grp_perf.index.names , observed=False)['date'].min()
+    min_date : pd.Series | Any = grp_perf.groupby(grp_perf.index.names , observed=False)['date'].min()
     grp_perf0 = (min_date - 1).to_frame().assign(group_ret = 0.)
     df = pd.concat([grp_perf0 , grp_perf]).set_index('date' , append=True).sort_values(['group' , 'date'])
     group_ret : pd.Series | Any = df.groupby(['factor_name','group'] , observed=True)['group_ret'].cumsum()
@@ -178,11 +178,11 @@ def calc_group_decay(
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
 
-    decay_grp_perf = []
+    decay_grp_perfs : list[pd.DataFrame] = []
     for lag in range(lag_num):
         grp_perf = factor.eval_group_perf(nday , lag_init + lag * nday , group_num , True , ret_type).drop(columns=['start' , 'end'])
-        decay_grp_perf.append(pd.DataFrame({'lag_type':f'lag{lag}',**grp_perf}))
-    decay_grp_perf = pd.concat(decay_grp_perf, axis=0).reset_index()
+        decay_grp_perfs.append(pd.DataFrame({'lag_type':f'lag{lag}',**grp_perf}))
+    decay_grp_perf = pd.concat(decay_grp_perfs, axis=0).reset_index()
 
     grouped = decay_grp_perf.groupby(['factor_name', 'group', 'lag_type'],observed=False)['group_ret']
 
@@ -241,7 +241,7 @@ def calc_distrib_curve(
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     use_date = factor.date[::int(np.ceil(len(factor.date) / sampling_date_num))]
-    rtn = []
+    rtn_dfs : list[pd.DataFrame] = []
     for factor_name in factor.factor_names:
         hist_dict = {}
         for date in use_date:
@@ -250,8 +250,8 @@ def calc_distrib_curve(
             hist_dict[date] = (cnts, bins)
         hist_df = pd.DataFrame(hist_dict, index=pd.Index(['hist_cnts', 'hist_bins'])).T
         hist_df['factor_name'] = factor_name
-        rtn.append(hist_df)
-    rtn = pd.concat(rtn, axis=0)
+        rtn_dfs.append(hist_df)
+    rtn = pd.concat(rtn_dfs, axis=0)
     rtn.index.rename('date', inplace=True)
     rtn = rtn.reset_index(drop=False).loc[:,['date' , 'factor_name', 'hist_cnts', 'hist_bins']]
     return rtn

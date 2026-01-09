@@ -29,7 +29,7 @@ class TradingPortfolioTracker:
             Logger.alert1(f'No trading portfolios updated on {date}' , indent = indent + 1)
         else:
             Logger.success(f'Trading portfolios updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
-            for port_name in new_ports:
+            for port_name in updated_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
                 message = f'Port {port_name} : total {len(new_ports[port_name])} , in {len(in_secids)} , out {len(out_secids)}'
@@ -40,6 +40,7 @@ class TradingPortfolioTracker:
                     Logger.conclude(message)
                     Logger.conclude(in_detail)
                     Logger.conclude(out_detail)
+                    updated_ports[port_name].analyze()
 
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)

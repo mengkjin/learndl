@@ -143,11 +143,11 @@ class ModelPortfolioBuilder:
             portfolio = Portfolio.from_dataframe(all_fmp_dfs , name = fmp_name)
             portfolio.accounting(Benchmark(elements['benchmark']) , analytic = elements['lag'] == 0 , attribution = elements['lag'] == 0 , 
                                  indent = indent + 1 , vb_level = vb_level + 2)
-            self.account_manager.append_accounts(**{fmp_name : portfolio.account_with_index(get_port_index(fmp_name))})
+            self.account_manager.append_accounts(**{fmp_name : portfolio.account.with_index(get_port_index(fmp_name))})
             Logger.stdout(f'Finished accounting for {fmp_name} at {CALENDAR.dates_str(account_dates)}' , indent = indent + 1 , vb_level=vb_level + 1)
 
         if deploy:
-            self.account_manager.deploy(update_fmp_names , True)
+            self.account_manager.deploy(update_fmp_names , overwrite = True)
             Logger.success(f'Deploy accounts for {self.reg_model} at {CALENDAR.dates_str(account_dates)}' , indent = indent, vb_level = vb_level + 1)
 
         self._update_account_record = account_dates

@@ -20,19 +20,6 @@ TASK_LIST : list[Type[TopCalc]] = [
     Perf_Year ,
 ]
 
-def all_path_convert():
-    file_list = list(PATH.trade_port.glob("**/*.csv"))
-    if not file_list:
-        return
-    Logger.stdout(f'Converting {len(file_list)} csv files to feather files')
-    for path in file_list:
-        new_path = path.with_suffix('.feather')
-        df = pd.read_csv(path)
-        DB.save_df(df , new_path , vb_level = 99)
-        path.unlink(missing_ok=True)
-
-all_path_convert()
-
 @dataclass
 class TradingPort:
     name        : str 
@@ -96,36 +83,50 @@ class TradingPort:
         kwargs = {'name' : name , **port_dict[name]}
         return cls(**kwargs)
 
-    def port_dir(self) -> Path:
+    @property
+    def export_dir(self) -> Path:
         return PATH.trade_port.joinpath(self.name)
         
-    def port_path(self , date : int) -> Path:
-        return self.port_dir().joinpath(f'{self.name}.{date}.feather')
+    def export_path(self , date : int) -> Path:
+        return self.export_dir.joinpath(f'{self.name}.{date}.feather')
     
+    @property
     def result_dir(self) -> Path:
         return PATH.rslt_trade.joinpath(self.name)
+
+    @property
+    def result_path_account(self) -> Path:
+        return self.result_dir.joinpath('account.tar')
+
+    @property
+    def result_path_data(self) -> Path:
+        return self.result_dir.joinpath(f'{self.name}_analytic_data.xlsx')
+
+    @property
+    def result_path_plot(self) -> Path:
+        return self.result_dir.joinpath(f'{self.name}_analytic_plot.pdf')
     
-    def existing_dates(self , min_date : int | None = None , max_date : int | None = None) -> np.ndarray:
-        dates = DB.dir_dates(self.port_dir())
-        if min_date is not None: 
-            dates = dates[dates >= min_date]
-        if max_date is not None: 
-            dates = dates[dates <= max_date]
+    def stored_dates(self , start : int | None = None , end : int | None = None) -> np.ndarray:
+        dates = DB.dir_dates(self.export_dir)
+        if start is not None: 
+            dates = dates[dates >= start]
+        if end is not None: 
+            dates = dates[dates <= end]
         return dates
     
     def is_first_date(self , date : int) -> bool:
         return self.last_date(date) <= 0
 
     def last_date(self , date : int) -> int:
-        dates = self.existing_dates(max_date = date - 1)
+        dates = self.stored_dates(end = date - 1)
         return dates.max() if len(dates) > 1 else -1
         
     def start_date(self) -> int:
-        dates = self.existing_dates()
+        dates = self.stored_dates()
         return dates.min() if len(dates) > 1 else -1
     
     def end_date(self) -> int:
-        dates = self.existing_dates()
+        dates = self.stored_dates()
         return dates.max() if len(dates) > 1 else -1
     
     def updatable(self , date : int , force = False) -> bool:
@@ -143,7 +144,7 @@ class TradingPort:
             return CALENDAR.td(last_date , self.step) <= date
     
     def load_port(self , date : int) -> pd.DataFrame:
-        path = self.port_path(date)
+        path = self.export_path(date)
         if path.exists():
             return DB.load_df(path).assign(date = date , name = self.name)
         else:
@@ -197,9 +198,7 @@ class TradingPort:
             pf['value'] = self.init_value
 
         if export:
-            path = self.port_path(date)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent + 1 , vb_level = vb_level + 2)
+            self.save_port(pf , date , indent = indent + 1 , vb_level = vb_level + 2)
 
         # add columns to include alpha and universe
         if alpha_details:
@@ -228,58 +227,67 @@ class TradingPort:
         for d in date_list:
             pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf , indent = indent + 1 , vb_level = vb_level + 1))
         return pd.DataFrame()
+
+    def save_port(self , pf : pd.DataFrame , date : int , indent : int = 1 , vb_level : int = 2):
+        path = self.export_path(date)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent , vb_level = vb_level)
     
-    def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:
-        dates = self.existing_dates(start , end)
-        paths = [self.port_path(date) for date in dates]
-        dfs = [DB.load_df(path).assign(date = date) for date , path in zip(dates , paths)]
-        df = pd.concat(dfs).assign(name = self.name)
-        return Portfolio.from_dataframe(df , name = self.name)
+    def load_portfolio(self , start : int | None = None , end : int | None = None):
+        dates = self.stored_dates(start , end)
+        #paths = [self.port_path(date) for date in dates]
+        #dfs = [DB.load_df(path).assign(date = date) for date , path in zip(dates , paths)]
+        #df = pd.concat(dfs).assign(name = self.name)
+        df = DB.load_dfs({date:self.export_path(date) for date in dates}).assign(name = self.name)
+        self.portfolio = Portfolio.from_dataframe(df , name = self.name)
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False , 
-                          trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale') -> pd.DataFrame:
-        portfolio = self.load_portfolio(start , end)
+                          trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' ,
+                          indent : int = 1 , vb_level : int = 2):
+        self.load_portfolio(start , end)
         benchmark = Benchmark(self.benchmark)
-        default_index = {
-            'factor_name' : portfolio.name ,
+        index = {
+            'factor_name' : self.portfolio.name ,
             'benchmark'   : benchmark.name ,
             'strategy'    : f'top{self.top_num}' ,
         }
-        portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine = trade_engine)
-        self.portfolio = portfolio
-        return portfolio.account_with_index(default_index)
+        self.portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine = trade_engine ,
+                                  resume_path = self.result_path_account , resume_drop_last = True , indent = 1 , vb_level = 2)
+        return self.portfolio.account.with_index(index)
 
     def analyze(self , start : int | None = None , end : int | None = None , 
-                vb_level : int = 1 , write_down = False , display = True , 
+                indent : int = 0 , vb_level : int = 1 , write_down = False , display_all = False , key_fig = 'top@drawdown', 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
-        if not write_down and not display:
-            Logger.error(f'write_down and display cannot be both False')
+        if not write_down and not display_all:
+            Logger.error(f'write_down and display_all cannot be both False')
             return self
+        Logger.stdout(f'Analyze trading portfolio [{self.name}] start ...' , indent = indent , vb_level = vb_level)
+        
         start = start if start is not None else -1
         end = end if end is not None else 99991231
-        account = self.portfolio_account(start = start , end = end , trade_engine=trade_engine)
+        account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine , indent = indent + 1 , vb_level = vb_level + 1).df
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
-            task.calc(account , vb_level = vb_level + 1) 
-            task.plot(show = False)  
+            task.calc(account_df , indent = indent + 1 , vb_level = vb_level + 2) 
+            task.plot(show = False , indent = indent + 1 , vb_level = vb_level + 2)  
 
         rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
         figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
         if write_down:
-            dfs_to_excel(rslts , self.result_dir().joinpath('analytic_data.xlsx') , print_prefix=f'Analytic Test of TradingPort {self.name} datas')
-            figs_to_pdf(figs   , self.result_dir().joinpath('analytic_plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
+            dfs_to_excel(rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , vb_level = vb_level)
+            figs_to_pdf(figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , vb_level = vb_level)
 
-        if display:
-            for name , fig in figs.items():
+        for name , fig in figs.items():
+            if (key_fig and key_fig.lower() in name.lower()) or display_all:
                 Logger.caption(f'Figure: {name.title()}:' , vb_level = 0)
                 Logger.Display(fig)
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        Logger.success(f'Analyze trading portfolio [{self.name}]!')
+        Logger.success(f'Analyze trading portfolio [{self.name}]!' , indent = indent , vb_level = vb_level)
         return self
 
 @dataclass

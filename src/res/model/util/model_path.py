@@ -347,27 +347,22 @@ class PredictionModel(ModelPath):
     def load_pred(self , date : int , indent = 1 , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
         """load model pred"""
         df = DB.load('pred' , self.pred_name , date , indent = indent , vb_level = vb_level , **kwargs)
-        if df.empty: 
-            return df
-        if self.pred_name not in df.columns:
+        if not df.empty and self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.name:self.pred_name})
             self.save_pred(df , date , overwrite = True , indent = indent , vb_level = Proj.vb.max , reason = f'column rename from {self.name} to {self.pred_name}')
         return df
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:
-        """save model factor portfolio"""
-        if df.empty: 
-            return
+        """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = indent , vb_level = vb_level)
 
     def load_fmp(self , date : int , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
-        """load model factor portfolio"""
+        """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             Logger.alert1(f'{path} does not exist' , vb_level = vb_level)
-            return pd.DataFrame()
         return DB.load_df(path)
     
     @property

@@ -354,7 +354,7 @@ class TimedOutput:
         self._time = datetime.now()
         self.type_fmt = self.get_type_fmt()
         self.type_str = self.get_type_str()
-        self.vb_level = Proj.vb.current
+        self.vb_level = Proj.vb.vb_level
 
     def __bool__(self):
         return self.valid

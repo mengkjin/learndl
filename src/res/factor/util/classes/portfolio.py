@@ -40,7 +40,6 @@ class Portfolio:
     .from_ports(*ports : Port , name : str | None = None) : create a portfolio from a list of ports
     .activate_accountant() : activate the accountant for the portfolio
     .accounting(benchmark : 'Portfolio | str | Any' = None , start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * , start_port : Port | None = None , trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : int = 1) : account the portfolio
-    .account_with_index(add_index : dict[str,Any] | None = None) : return portfolio account with given index
     .save_account(path : Path | str , overwrite = False , append = True , indent : int = 1 , vb_level : int = 2) : save the account to a path (a dir containing multiple dataframes)
     .load_account(path : Path | str) : load the account from a path (a dir containing multiple dataframes)
     .account : return the account of the portfolio
@@ -281,20 +280,19 @@ class Portfolio:
             start : int = -1 , end : int = 99991231 , 
             analytic = True , attribution = True , * ,
             trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-            daily = False , cache = False , indent : int = 0 , vb_level : int = 1
+            daily = False , cache = False , 
+            resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True ,
+            indent : int = 0 , vb_level : int = 1
         ):
         """account the portfolio"""
         if not hasattr(self , 'accountant'): 
             self.activate_accountant()
         self.accountant.accounting(
             benchmark , start , end , analytic , attribution ,
-            trade_engine = trade_engine , daily = daily , cache = cache , indent = indent , vb_level = vb_level)
+            trade_engine = trade_engine , daily = daily , cache = cache , 
+            resume_path = resume_path , resume_end = resume_end , resume_drop_last = resume_drop_last ,
+            indent = indent , vb_level = vb_level)
         return self
-    
-    def account_with_index(self , add_index : dict[str,Any] | None = None):
-        """return portfolio account with given index"""
-        add_index = add_index or {}
-        return self.accountant.account_with_index(self.accountant.account , add_index)
     
     @property
     def account(self):

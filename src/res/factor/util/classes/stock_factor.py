@@ -213,6 +213,12 @@ class FactorStats:
     FactorStats class is used to store and manipulate factor statistics
     """
     available_stats : list[str] = ['ic' , 'ic_indus' , 'group_perf' , 'weighted_pnl' , 'coverage']
+    unique_keys : dict[str,list[str]] = {
+        'ic' : ['date' , 'factor_name'],
+        'ic_indus' : ['date' , 'factor_name' , 'industry'],
+        'group_perf' : ['date' , 'factor_name' , 'group'],
+        'weighted_pnl' : ['weight_type' , 'date'],
+        'coverage' : ['date']}
     def __init__(self , name : str):
         assert name in self.available_stats , f'name {name} is not in {self.available_stats}'
         self.name = name
@@ -235,12 +241,15 @@ class FactorStats:
     def update_stat(self , params : dict[str,Any] , stat : pd.DataFrame):
         self.stats[self.param_to_str(params)] = stat
 
-    def append_stat(self , params : dict[str,Any] , stat : pd.DataFrame , keys : list[str] = []):
+    def append_stat(self , params : dict[str,Any] , stat : pd.DataFrame , keys : list[str] | None = None):
         stat = pd.concat([self.get_stat(params) , stat])
         index_names = [key for key in stat.index.names if key is not None]
         if index_names:
             stat = stat.reset_index(drop=False)
-        stat = stat.drop_duplicates(subset=keys , keep='last').sort_values(by=keys)
+        if keys is None:
+            keys = self.unique_keys[self.name]
+        if keys:
+            stat = stat.drop_duplicates(subset=keys , keep='last').sort_values(by=keys)
         if index_names:
             stat = stat.set_index(index_names)
         self.update_stat(params , stat)
@@ -810,7 +819,7 @@ class StockFactor:
             df = self._eval_group_perf(df , self.factor_names , group_num , excess)
             df['start'] = DATAVENDOR.td_array(df['date'] , lag)
             df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
-            self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name'])
+            self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name' , 'group'])
         stat = self.cache_factor_stats.group_perf.get_stat(params)
         return stat if all_dates else stat.query('date in @self.date')
     

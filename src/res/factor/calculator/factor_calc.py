@@ -22,6 +22,13 @@ __all__ = [
     'StyleFactor' , 'SellsideFactor' , 'MarketEventFactor' , 'WeightedPoolingCalculator' , 'NonlinearPoolingCalculator'
 ]
 
+def _slice_dates(dates : np.ndarray | list[int] , start : int | None = None , end : int | None = None) -> np.ndarray:
+    if start is not None:
+        start = max(0, int(start))
+    if end is not None:
+        end = max(0, int(end))
+    return CALENDAR.slice(dates , start , end)
+
 class _FactorProperty:
     """get any property of a factor calculator , cached"""
     def __init__(self , method : str):
@@ -370,7 +377,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """get factor dates of a given date range"""
         possible_dates = np.union1d(cls.factor_calendar , cls.stored_dates())
         assert step < cls.update_step or step % cls.update_step == 0 , f'step {step} should be a multiple of or less than {cls.update_step}'
-        dates = CALENDAR.slice(possible_dates , start , end)
+        dates = _slice_dates(possible_dates , start , end)
         dates = dates[dates <= CALENDAR.updated()]
         if step > cls.update_step:
             dates = dates[::int(step/cls.update_step)]
@@ -406,7 +413,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """full test of factor values of a given date range"""
         from src.res.model.model_module.application import ModelTrainer
         dates = cls.stored_dates()
-        dates = CALENDAR.slice(dates , start , end)
+        dates = _slice_dates(dates , start , end)
         ModelTrainer.test_factor(cls.factor_name , False , start = dates[0] , end = dates[-1] , **kwargs)
 
     @classmethod
@@ -427,7 +434,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def missing_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
         """returntarget dates of factor updates"""
-        dates = CALENDAR.slice(cls.update_calendar , start , end)
+        dates = _slice_dates(cls.update_calendar , start , end)
         if not overwrite: 
             dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
@@ -438,11 +445,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return cls.missing_dates(start , end , overwrite)
     
     @classmethod
-    def stored_dates(cls , start : int | None = None , end : int | None = None) -> np.ndarray:
+    def stored_dates(cls , start : int | None = None , end : int | None = None , step : int = 1) -> np.ndarray:
         """return stored dates of factor data"""
         dates = DB.dates(cls.db_src , cls.db_key)
-        dates = CALENDAR.slice(dates , start , end)
-        return dates
+        dates = _slice_dates(dates , start , end)
+        return dates[::step]
 
     @classmethod
     def get_min_date(cls) -> int:
@@ -554,7 +561,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def stats_target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> dict[Literal['daily' , 'weekly'] , np.ndarray]:
         """return dates of factor stats"""
-        factor_stored_dates = CALENDAR.slice(cls.stored_dates() , start , end)
+        factor_stored_dates = cls.stored_dates(start , end)
         stats_stored_dates = cls.stats_stored_dates()
         target_dates = {}
         skip_days = {
@@ -719,11 +726,11 @@ class AffiliateFactorCalculator(FactorCalculator):
         return np.array([], dtype = int)
     
     @classmethod
-    def stored_dates(cls , start : int | None = None , end : int | None = None) -> np.ndarray:
+    def stored_dates(cls , start : int | None = None , end : int | None = None , step : int = 1) -> np.ndarray:
         """return stored dates of factor data"""
-        dates = CALENDAR.slice(DB.dates(cls.load_db_src , cls.load_db_key) , cls.init_date)
-        dates = CALENDAR.slice(dates , start , end)
-        return dates
+        dates = _slice_dates(DB.dates(cls.load_db_src , cls.load_db_key) , cls.init_date)
+        dates = _slice_dates(dates , start , end)
+        return dates[::step]
 
     @classmethod
     def get_min_date(cls) -> int:
@@ -829,12 +836,12 @@ class MarketFactorCalculator(FactorCalculator):
         return cls.missing_dates(start , end , overwrite)[-1:]
     
     @classmethod
-    def stored_dates(cls , start : int | None = None , end : int | None = None) -> np.ndarray:
+    def stored_dates(cls , start : int | None = None , end : int | None = None , step : int = 1) -> np.ndarray:
         """return stored dates of factor data"""
         df = DB.load(cls.db_src , cls.db_key , vb_level = 99)
         dates = df['date'].to_numpy(int) if not df.empty else np.array([])
-        dates = CALENDAR.slice(dates , start , end)
-        return dates
+        dates = _slice_dates(dates , start , end)
+        return dates[::step]
 
     @classmethod
     def get_min_date(cls) -> int:
@@ -1059,7 +1066,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
     def update_all_pooling_weight(cls , date : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
         """update all factor data until date"""
         calc = cls()
-        target_dates = CALENDAR.slice(calc.update_calendar , 0 , date)
+        target_dates = _slice_dates(calc.update_calendar , 0 , date)
         if not overwrite:
             old_weights = calc.load_pooling_weight()
             if not old_weights.empty:

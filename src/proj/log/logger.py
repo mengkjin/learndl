@@ -98,7 +98,7 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
     """
     if Proj.vb.ignore(vb_level):
         return
-    with Proj.vb.at_vb_level(vb_level):
+    with Proj.vb.WithVbLevel(vb_level):
         stdout(*args , indent = indent , color = color , **kwargs)
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
@@ -111,14 +111,14 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
     """
     if Proj.vb.ignore(vb_level):
         return
-    with Proj.vb.at_vb_level(vb_level):
+    with Proj.vb.WithVbLevel(vb_level):
         stderr(*args , indent = indent , color = color , **kwargs)
 
 def new_logger_output(level : _type_levels , *args , indent : int = 0 , vb_level : int = 0 , **kwargs ):
     """logger wrapper to control the verbosity"""
     if Proj.vb.ignore(vb_level):
         return
-    with Proj.vb.at_vb_level(vb_level):
+    with Proj.vb.WithVbLevel(vb_level):
         getattr(_raw_logger , level)(FormatStr(*args , indent = indent) , **kwargs)
 
 def new_special_level_message(*args , padding_char : None | str = None , padding_width : int = 100 , color : str | None = None , 
