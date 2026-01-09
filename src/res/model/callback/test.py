@@ -159,7 +159,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         return self.test_dates[::5]
     @property
     def fmp_test_dates(self) -> np.ndarray:
-        trailing_days = 10
+        trailing_days = 5
         assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
         pred_last_date = self.trainer.record.resumed_last_pred_date
         port_last_date = FactorTestAPI.last_portfolio_date(self.fmp_tasks , self.snap_folder)

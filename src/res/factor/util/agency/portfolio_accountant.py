@@ -117,9 +117,9 @@ class PortfolioAccount:
                 pf = input
             dates = np.arange(len(pf))
             df = pd.DataFrame({
-                'model_date' :  dates ,
-                'start' : dates + 1 ,
-                'end' : dates + 1 ,
+                'model_date' :  dates - 1 ,
+                'start' : dates ,
+                'end' : dates ,
                 'pf' : pf ,
                 'bm' : 0. ,
                 'turn' : 0. ,

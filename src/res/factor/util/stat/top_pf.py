@@ -50,7 +50,7 @@ def calc_perf_drawdown(acc : pd.DataFrame):
         sub_index_names = [str(name) for name in sub.index.names]
         sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub_index_names)
         for conditioner in conditioners:
-            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub['raw'] , plot = False)
+            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub['pf'] , plot = False)
         sub = sub.set_index('trade_date' , append=True).drop(columns=['pf','overnight','raw'])
         dfs.append(sub)
     df = pd.concat(dfs)
