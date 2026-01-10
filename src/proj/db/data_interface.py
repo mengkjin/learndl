@@ -87,7 +87,6 @@ def _df_loader(path : Path | io.BytesIO):
 def _df_saver(df : pd.DataFrame , path : Path | io.BytesIO):
     """save dataframe to path"""
     if SAVE_OPT_DB == 'feather':
-        print(df)
         df.to_feather(path)
     else:
         df.to_parquet(path , engine='fastparquet')
@@ -328,13 +327,14 @@ def load_dfs_from_tar(path : Path , * , raise_if_not_exist = False) -> dict[str 
         dfs[key] = _load_df_mapper(df)
     return dfs
 
-
 def _reset_index(df : pd.DataFrame | Any , reset = True):
     """reset index which are not None"""
     if not reset or df is None or df.empty:
         return df
     old_index = [index for index in df.index.names if index]
-    df = df.reset_index(old_index , drop = False).reset_index(drop = True)
+    df = df.reset_index(old_index , drop = False)
+    if isinstance(df.index , pd.RangeIndex):
+        df = df.reset_index(drop = True)
     return df
 
 def _load_df_mapper(df : pd.DataFrame):

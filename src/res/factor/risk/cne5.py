@@ -423,8 +423,8 @@ class TuShareCNE5_Calculator:
             cov = pd.DataFrame(None , index=factors , columns = factors).reset_index().rename(columns={'index':'factor_name'})
             return cov
 
-        coefs = pd.concat([self.get_coef(d,True).assign(date = d) for d in dates]).reset_index().\
-            rename(columns={'index':'factor','coef':'value'})
+        coefs = pd.concat([self.get_coef(d,True).assign(date = d) for d in dates])
+        coefs = coefs.reset_index().rename(columns={'index':'factor','coef':'value'})
         ts , feat = parse_ts_input(coefs)
         corr = ewma_cov(ts , 504 , 180 , 0.33 , True)
         sd   = ewma_sd(ts , 504 , 90)
@@ -482,8 +482,6 @@ class TuShareCNE5_Calculator:
             DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , indent = 1 , vb_level = 3)
             DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , indent = 1 , vb_level = 3)
         elif job == 'risk':
-            C = self.calc_common_risk(date)
-            print(C)
             DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , indent = 1 , vb_level = 3)
             DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , indent = 1 , vb_level = 3)
         else:
