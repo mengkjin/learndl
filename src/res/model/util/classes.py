@@ -708,7 +708,7 @@ class BaseTrainer(ModelStreamLine):
     def batch_aftermath(self): return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 0
     @property
     def batch_resumed(self): 
-        if self.batch_warm_up == 0 and self.config.is_resuming and self.config.resume_option == 'last_pred_date':
+        if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and self.config.resume_option == 'last_pred_date':
             return sum(self.data.model_test_dates <= self.record.resumed_last_pred_date)
         else:
             return 0
