@@ -437,10 +437,12 @@ class Attribution:
 
     @classmethod
     def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'start' , 'end']) -> 'Attribution':
+        print(dfs)
         start = get_unique_date(dfs , 'start')
         end = get_unique_date(dfs , 'end')
         specific = dfs['attribution_specific'].drop(columns=drop_columns , errors='ignore') if 'attribution_specific' in dfs else None
         aggregated = dfs['attribution_aggregated'].drop(columns=drop_columns , errors='ignore') if 'attribution_aggregated' in dfs else None
+        print(aggregated)
         source , industry , style = cls.aggregated_to_others(aggregated)
         return cls(start , end , source , industry , style , specific , aggregated)
 
