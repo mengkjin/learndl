@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any , final , Iterator , Literal , Callable
 
 from src.proj import Proj , Logger , DB , PATH
-from src.proj.util import Filtered
+from src.proj.util import FilteredIterable
 from src.res.algo import AlgoModule
 from src.data import ModuleData
 
@@ -826,11 +826,14 @@ class BaseTrainer(ModelStreamLine):
                         models_trained[max(i,0):] = False
                         break
                 condition = ~models_trained
-                model_iter = Filtered(model_iter , ~condition)
             elif self.status.stage == 'test':
                 resumed_models = self.record.resumed_preds_models.groupby(['model_date' , 'model_num']).groups
-                condition = [(model_date , model_num) not in resumed_models for model_date , model_num in model_iter]
-                model_iter = Filtered(model_iter , condition)
+                resumed = [(model_date , model_num) not in resumed_models for model_date , model_num in model_iter]
+                condition = np.array(resumed)
+            else:
+                Logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')
+                condition = np.full(len(model_iter) , True , dtype = bool)
+            model_iter = FilteredIterable(model_iter , condition)
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
         #    model_iter = []
