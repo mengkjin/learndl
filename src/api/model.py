@@ -1,5 +1,5 @@
 import src.res.model.model_module.application as app
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Proj
 from src.data import DataPreProcessor
 
 from .util import wrap_update
@@ -20,6 +20,8 @@ class ModelAPI:
         wrap_update(cls.Extractor.update , 'update hidden')
         wrap_update(cls.Predictor.update , 'update predictors')
         wrap_update(cls.FmpBuilder.update , 'update predictor portfolios')
+        with Proj.vb.WithVB(1):
+            cls.resume_testing()
 
     
     @classmethod

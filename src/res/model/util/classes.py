@@ -703,9 +703,11 @@ class BaseTrainer(ModelStreamLine):
     @property
     def batch_dates(self): return np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
     @property
-    def batch_warm_up(self): return len(self.data.early_test_dates) if self.status.stage == 'test' else 0
+    def batch_warm_up(self): 
+        return len(self.data.early_test_dates) if self.status.stage == 'test' else 0
     @property
-    def batch_aftermath(self): return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 0
+    def batch_aftermath(self): 
+        return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else np.inf
     @property
     def batch_resumed(self): 
         if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and self.config.resume_option == 'last_pred_date':
@@ -1155,7 +1157,8 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def batch_metrics(self) -> None:
         if self.batch_output.is_empty or self.trainer.batch_idx < self.trainer.batch_warm_up: 
             return
-        self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch(key = self.trainer.batch_dates[self.trainer.batch_idx])
+        batch_key = self.trainer.batch_dates[self.trainer.batch_idx] if self.status.stage == 'test' else self.trainer.batch_idx
+        self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch(key = batch_key)
 
     def batch_backward(self) -> None:
         if self.batch_data.is_empty: 

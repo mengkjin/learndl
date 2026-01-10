@@ -118,9 +118,14 @@ class DetailedAlphaAnalysis(BaseCallBack):
     '''factor and portfolio level analysis'''
     CB_ORDER : int = 50
     CB_KEY_PARAMS = ['tasks']
-    DISPLAY_TABLES = ['factor@frontface']
-    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_return@best' ,
-                       't50@drawdown@best.univ' , 'screen@drawdown@best.univ' , 'revscreen@drawdown@best.univ']
+    TABLE_VB_LEVELS = {'factor@frontface':Proj.vb.max}
+    FIGURE_VB_LEVELS = {
+        'factor@ic_curve@best.market':Proj.vb.max , 
+        'factor@group_return@best':Proj.vb.max ,
+        't50@drawdown@best.univ':1 ,
+        'screen@drawdown@best.univ':1 ,
+        'revscreen@drawdown@best.univ':1
+    }
 
     def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'revscreen'] , **kwargs) -> None:
         assert all(task in FactorTestAPI.TEST_TYPES for task in tasks) , \
@@ -134,7 +139,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
         self.test_results : dict[str , pd.DataFrame] = {}
         self.test_figures : dict[str , Figure] = {}
         self.snap_folder.mkdir(exist_ok=True , parents=True)
-        Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 
     def __bool__(self):
         return not self.turn_off and bool(self.tasks)
@@ -146,9 +150,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def path_result_plot(self): return self.config.model_base_path.rslt('detailed_alpha_plot.pdf')
     @property
-    def display_tables(self) -> list[str]: return [name for name in self.DISPLAY_TABLES if name in self.test_results]
+    def table_vb_levels(self) -> dict[str,int]: return {k:v for k,v in self.TABLE_VB_LEVELS.items() if k in self.test_results}
     @property
-    def display_figures(self) -> list[str]: return [name for name in self.DISPLAY_FIGURES if name in self.test_figures]
+    def figure_vb_levels(self) -> dict[str,int]: return {k:v for k,v in self.FIGURE_VB_LEVELS.items() if k in self.test_figures}
     @property
     def factor_names(self) -> list[str] | Any: 
         return self.trainer.model_submodels
@@ -223,8 +227,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def display_export(self):
         with Logger.ParagraphIII('Display Analytic Results'):
-            for name in self.display_tables:
-                Logger.caption(f'Table: {name.title()}:')
+            for name , vb_level in self.table_vb_levels.items():
+                if Proj.vb.ignore(vb_level):
+                    continue
+                Logger.caption(f'Table: {name.title()}:' , vb_level = vb_level)
                 df = self.test_results[name].copy()
                 df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
                 for col in df.columns:
@@ -234,14 +240,17 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         df[col] = df[col].map(lambda x:f'{x:.3f}')
                     elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
                         df[col] = df[col].map(lambda x:f'{x:.3%}')
-                Logger.Display(df)
+                Logger.Display(df , vb_level = vb_level)
 
-            for name in self.display_figures:
-                Logger.caption(f'Figure: {name.title()}:')
-                Logger.Display(self.test_figures[name])
+            for name , vb_level in self.figure_vb_levels.items():
+                if Proj.vb.ignore(vb_level):
+                    continue
+                Logger.caption(f'Figure: {name.title()}:' , vb_level = vb_level)
+                Logger.Display(self.test_figures[name] , vb_level = vb_level)
 
             dfs_to_excel(self.test_results , self.path_result_data , print_prefix='Analytic datas')
             figs_to_pdf(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')
+            Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 
     def on_test_end(self):
         if not self.tasks:
