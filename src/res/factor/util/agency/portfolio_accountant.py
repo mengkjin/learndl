@@ -160,7 +160,7 @@ class PortfolioAccount:
     @classmethod
     def FirstRow(cls , df : pd.DataFrame):
         print(df)
-        df = df.query('model_date >= 0')
+        df = df.query('model_date >= 0') if not df.empty else pd.DataFrame()
         first_model_date = df['model_date'].min() if not df.empty else 0
         first_row = pd.DataFrame({
             'model_date' : [-1] ,
@@ -174,6 +174,7 @@ class PortfolioAccount:
             'analytic' : None ,
             'attribution' : None
         })
+        print(first_row , df)
         return pd.concat([first_row , df]).sort_values('model_date').reset_index(drop = True)
 
     @classmethod
