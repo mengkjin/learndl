@@ -24,6 +24,9 @@ class AccountConfig:
     trade_engine : str = 'default'
     daily : bool = False
 
+    def __bool__(self):
+        return True
+
     @property
     def key(self):
         return str(self)
@@ -89,11 +92,13 @@ class PortfolioAccount:
 
     def __init__(self , input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None , 
                  config : AccountConfig | None = None , index : dict[Any,Any] | None = None):
-        if input is None:
-            input = self.empty_df()
-        self.config = AccountConfig()
+        if isinstance(input , Portfolio):
+            config = input.account.config
+            index = input.account.index
+            input = input.account.input
+        self.input = input
+        self.config = config or AccountConfig()
         self.index = index or {}
-        self.update(input , config , index)
 
     def __repr__(self):
         return repr(self.df)
@@ -102,20 +107,21 @@ class PortfolioAccount:
     def empty_df(cls) -> pd.DataFrame:
         return pd.DataFrame(columns = cls.columns_all)
 
-    def update(self , 
-               input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None , 
-               config : AccountConfig | None = None , index : dict[str,Any] | None = None):
-        if isinstance(input , Portfolio):
-            df = input.account._df
-            config = input.account.config
-            index = input.account.index
-        elif isinstance(input , (pd.Series , np.ndarray , list)):
-            if isinstance(input , pd.Series):
-                pf = input.to_list()
-            elif isinstance(input , np.ndarray):
-                pf = input.tolist()
+    @property
+    def input(self) -> pd.DataFrame:
+        return self._input
+    
+    @input.setter
+    def input(self , value : 'pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None):
+        if value is None or isinstance(value , pd.DataFrame):
+            df = value
+        else:
+            if isinstance(value , pd.Series):
+                pf = value.to_list()
+            elif isinstance(value , np.ndarray):
+                pf = value.tolist()
             else:
-                pf = input
+                pf = value
             dates = np.arange(len(pf))
             df = pd.DataFrame({
                 'model_date' :  dates - 1 ,
@@ -129,17 +135,12 @@ class PortfolioAccount:
                 'analytic' : None ,
                 'attribution' : None
             })
-        else:
-            df = input
-        if df is not None:
-            self._df = self.FirstRow(df)
-        if config is not None:
-            self.config = config
-        if index is not None:
-            self.index = index
+        self._input = self.AddFirstRow(df)
 
     def clear(self):
-        self.update(self.empty_df() , AccountConfig() , {})
+        self.input = None
+        self.config = AccountConfig()
+        self.index = {}
         return self
 
     def with_index(self , index : dict[str,Any] | None = None):
@@ -149,19 +150,21 @@ class PortfolioAccount:
         return self
 
     def filter_dates(self , start : int | None = None , end : int | None = None):
-        df = self._df
+        df = self.input
         if start is not None:
             df = df.query('model_date >= @start')
         if end is not None:
             df = df.query('model_date <= @end')
-        self._df = self.FirstRow(df)
+        self.input = df
         return self
 
-
     @classmethod
-    def FirstRow(cls , df : pd.DataFrame):
-        df = df.query('model_date >= 0') # if not df.empty else pd.DataFrame()
-        first_model_date = df['model_date'].min() if not df.empty else 0
+    def AddFirstRow(cls , df : pd.DataFrame | None = None):
+        if df is None:
+            df = pd.DataFrame()
+        else:
+            df = df.query('model_date >= 0') if not df.empty else pd.DataFrame()
+        first_model_date = 0 if df.empty else df['model_date'].min()
         first_row = pd.DataFrame({
             'model_date' : [-1] ,
             'start' : first_model_date ,
@@ -187,7 +190,7 @@ class PortfolioAccount:
             config = None if not configs else configs[-1]
             add_indexes = [acc.index for acc in accs if acc.index]
             index = None if not add_indexes else add_indexes[-1]
-            df = pd.concat([acc._df for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
+            df = pd.concat([acc.input for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
             return cls(df , config = config , index = index)
     
     @staticmethod
@@ -206,14 +209,14 @@ class PortfolioAccount:
 
     @property
     def df(self) -> pd.DataFrame:
-        df = self._df
+        df = self.input
         if self.index:
             df = df.assign(**self.index).set_index(list(self.index.keys()))
         return df
 
     def to_dfs(self) -> dict[str,pd.DataFrame]:
         dfs = {}
-        dfs['basic'] = self._df.loc[:,self.columns_basic]
+        dfs['basic'] = self.input.loc[:,self.columns_basic]
         dfs['index'] = pd.DataFrame(self.index , index=[0])
         
         dfs.update(RISK_MODEL.Analytics_to_dfs(dict(zip(self.model_date,self.analytic))))
@@ -275,39 +278,39 @@ class PortfolioAccount:
 
     @property
     def empty(self):
-        return self._df.query('model_date >= 0').empty
+        return self.input.query('model_date >= 0').empty
 
     @property
     def model_date(self) -> pd.Series:
-        return self._df.model_date
+        return self.input.model_date
     
     @property
     def start(self) -> pd.Series:
-        return self._df.start
+        return self.input.start
     
     @property
     def end(self) -> pd.Series:
-        return self._df.end
+        return self.input.end
     
     @property
     def pf(self) -> pd.Series:
-        return self._df.pf
+        return self.input.pf
 
     @property
     def bm(self) -> pd.Series:
-        return self._df.bm
+        return self.input.bm
     
     @property
     def turn(self) -> pd.Series:
-        return self._df.turn
+        return self.input.turn
     
     @property
     def excess(self) -> pd.Series:
-        return self._df.excess
+        return self.input.excess
     
     @property
     def overnight(self) -> pd.Series:
-        return self._df.overnight
+        return self.input.overnight
     
     @property
     def intraday(self) -> pd.Series:
@@ -315,11 +318,11 @@ class PortfolioAccount:
     
     @property
     def analytic(self) -> pd.Series:
-        return self._df.analytic
+        return self.input.analytic
     
     @property
     def attribution(self) -> pd.Series:
-        return self._df.attribution
+        return self.input.attribution
     
     @property
     def drawdown(self) -> pd.Series:
@@ -465,7 +468,7 @@ class PortfolioAccountant:
 
         df['pf']  = df['pf'] - df['turn'] * self.config.trade_cost
         df['excess'] = df['pf'] - df['bm']
-        self.account.update(df.reset_index('model_date' , drop = False))
+        self.account.input = df.reset_index('model_date' , drop = False)
         self.account = PortfolioAccount.Concat(self.resumed_account , self.account)
 
         if cache:
