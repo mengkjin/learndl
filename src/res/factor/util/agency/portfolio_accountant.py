@@ -133,7 +133,6 @@ class PortfolioAccount:
             df = input
         if df is not None:
             self._df = self.FirstRow(df)
-            print(self._df)
         if config is not None:
             self.config = config
         if index is not None:
@@ -155,13 +154,13 @@ class PortfolioAccount:
             df = df.query('model_date >= @start')
         if end is not None:
             df = df.query('model_date <= @end')
-        self._df = df
+        self._df = self.FirstRow(df)
         return self
+
 
     @classmethod
     def FirstRow(cls , df : pd.DataFrame):
-        print(df)
-        df = df.query('model_date >= 0') if not df.empty else pd.DataFrame()
+        df = df.query('model_date >= 0') # if not df.empty else pd.DataFrame()
         first_model_date = df['model_date'].min() if not df.empty else 0
         first_row = pd.DataFrame({
             'model_date' : [-1] ,
@@ -175,10 +174,7 @@ class PortfolioAccount:
             'analytic' : None ,
             'attribution' : None
         })
-        print(first_row , df)
         df = pd.concat([first_row , df]).sort_values('model_date').reset_index(drop = True)
-        print(df)
-        print(df.model_date.min() , df.model_date.max())
         return df
 
     @classmethod
@@ -187,11 +183,11 @@ class PortfolioAccount:
         if not accs:
             return cls()
         else:
-            df = pd.concat([acc._df for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
             configs = [acc.config for acc in accs if acc.config]
             config = None if not configs else configs[-1]
             add_indexes = [acc.index for acc in accs if acc.index]
             index = None if not add_indexes else add_indexes[-1]
+            df = pd.concat([acc._df for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
             return cls(df , config = config , index = index)
     
     @staticmethod
@@ -333,7 +329,6 @@ class PortfolioAccount:
 
     @property
     def max_model_date(self) -> int:
-        print(self._df)
         return int(self.model_date.max())
     
     @property
