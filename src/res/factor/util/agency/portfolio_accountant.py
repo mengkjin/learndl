@@ -175,19 +175,23 @@ class PortfolioAccount:
             'attribution' : None
         })
         print(first_row , df)
-        return pd.concat([first_row , df]).sort_values('model_date').reset_index(drop = True)
+        df = pd.concat([first_row , df]).sort_values('model_date').reset_index(drop = True)
+        print(df)
+        print(df.model_date.min() , df.model_date.max())
+        return df
 
     @classmethod
     def Concat(cls , *accounts : 'PortfolioAccount | None'):
         accs = [acc for acc in accounts if acc is not None]
         if not accs:
             return cls()
-        df = pd.concat([acc._df for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
-        configs = [acc.config for acc in accs if acc.config]
-        config = None if not configs else configs[-1]
-        add_indexes = [acc.index for acc in accs if acc.index]
-        index = None if not add_indexes else add_indexes[-1]
-        return cls(df , config = config , index = index)
+        else:
+            df = pd.concat([acc._df for acc in accs]).query('model_date >= 0').drop_duplicates(subset = ['model_date'] , keep = 'last')
+            configs = [acc.config for acc in accs if acc.config]
+            config = None if not configs else configs[-1]
+            add_indexes = [acc.index for acc in accs if acc.index]
+            index = None if not add_indexes else add_indexes[-1]
+            return cls(df , config = config , index = index)
     
     @staticmethod
     def Total(*accounts : 'PortfolioAccount | None') -> pd.DataFrame:
