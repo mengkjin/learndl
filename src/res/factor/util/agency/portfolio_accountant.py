@@ -159,6 +159,7 @@ class PortfolioAccount:
 
     @classmethod
     def FirstRow(cls , df : pd.DataFrame):
+        print(df)
         df = df.query('model_date >= 0')
         first_model_date = df['model_date'].min() if not df.empty else 0
         first_row = pd.DataFrame({

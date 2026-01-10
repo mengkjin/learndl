@@ -1,7 +1,7 @@
 import sys , re , platform , warnings , shutil
 import pandas as pd
 
-from typing import Any ,Literal , IO , Union
+from typing import Any ,Literal , IO , Union , Callable
 from abc import ABC, abstractmethod
 from io import StringIO , TextIOWrapper
 from pathlib import Path
@@ -37,58 +37,26 @@ class OutputDeflector:
             type : type_of_std ,
             catcher : type_of_catcher, 
             keep_original : bool = True,
-            catcher_function : str = 'write',
         ):
-        self.catcher = catcher
         self.type = type
-
+        self.catcher = catcher
         self.keep_original = keep_original
-        self.catcher_function = catcher_function
-        self._null_initialize()
+        self.original = None
+        self.is_catching = False
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(original={self.original_output}, catcher={self.catcher}, type={self.type})'
-    
-    def _null_initialize(self) -> None:
-        """Null initialize the deflector"""
-        self.original_output = None
-        self.is_catching = False
-        if hasattr(self, '_catcher_write'):
-            delattr(self, '_catcher_write')
-        if hasattr(self, '_catcher_flush'):
-            delattr(self, '_catcher_flush')
+        return f'{self.__class__.__name__}(original={self.original}, catcher={self.catcher}, type={self.type})'
 
-    @property
-    def original_std(self) -> 'OutputDeflector | IO | OutputCatcher':
-        """Get the original output stream"""
-        if self.original_output is not None:
-            return self.original_output
-        elif self.type == 'stdout':
-            return sys.stdout
-        elif self.type == 'stderr':
-            return sys.stderr
+    def get_write_flush(self , output : type_of_catcher) -> tuple[Callable, Callable]:
+        if output is None:
+            return lambda *x: None, lambda: None
+        elif isinstance(output , OutputCatcher):
+            if self.type == 'stdout':
+                return output.write_stdout, output.flush_stdout
+            else:
+                return output.write_stderr, output.flush_stderr
         else:
-            raise ValueError(f"Invalid type: {self.type}")
-        
-    def catcher_write(self , text : str | Any) -> None:
-        """Write to the catcher"""
-        if not hasattr(self, '_catcher_write'):
-            self._catcher_write = getattr(self.catcher, self.catcher_function , lambda *x: None)
-        self._catcher_write(text)
-
-    def catcher_flush(self) -> None:
-        """Flush the catcher"""
-        if not hasattr(self, '_catcher_flush'):
-            self._catcher_flush = getattr(self.catcher, 'flush' , lambda: None)
-        self._catcher_flush()
-
-    def original_write(self, text : str | Any) -> None:
-        """Write to the original output stream"""
-        self.original_std.write(text)
-
-    def original_flush(self) -> None:
-        """Flush the original output stream"""
-        self.original_std.flush()
+            return output.write, output.flush
 
     def start_catching(self):
         """
@@ -97,15 +65,17 @@ class OutputDeflector:
         2. set the deflector to catching mode
         """
         if self.type == 'stdout':
-            self.original_output = sys.stdout
+            self.original = sys.stdout
             sys.stdout = self
         elif self.type == 'stderr':
-            self.original_output = sys.stderr
+            self.original = sys.stderr
             sys.stderr = self
             Logger.reset_logger()
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.is_catching = True
+        self.catcher_write, self.catcher_flush = self.get_write_flush(self.catcher)
+        self.original_write, self.original_flush = self.get_write_flush(self.original)
         return self
     
     def end_catching(self):
@@ -116,14 +86,14 @@ class OutputDeflector:
         3. null initialize the deflector
         """
         if self.type == 'stdout':
-            sys.stdout = self.original_output
+            sys.stdout = self.original
         elif self.type == 'stderr':
-            sys.stderr = self.original_output
+            sys.stderr = self.original
             Logger.reset_logger()
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.close()
-        self._null_initialize()
+        del self.catcher_write , self.catcher_flush , self.original_write , self.original_flush , self.original , self.is_catching
         return self
             
     def write(self, text : str | Any) -> None:
@@ -132,14 +102,12 @@ class OutputDeflector:
             self.original_write(text)
         if self.is_catching:
             self.catcher_write(text)
-        self.flush()
+            self.catcher_flush()
         
     def flush(self) -> None:
         """Flush the original output stream and the catcher"""
-        self.original_std.flush()
-        if self.is_catching:
-            self.catcher_flush()
-
+        self.original_flush()
+            
     def close(self) -> None:
         """Close the catcher"""
         if hasattr(self.catcher, 'close'):
@@ -150,18 +118,10 @@ class OutputDeflector:
                 raise e
 
 class DeflectorGroup:
-    def __init__(self , catchers : dict[type_of_std , type_of_catcher] | type_of_catcher , 
-                 write_functions : dict[type_of_std , str] | str , 
+    def __init__(self , catcher : 'OutputCatcher' , 
                  keep_original : bool = True):
-
-        stdout_catcher = catchers.get('stdout', None) if isinstance(catchers , dict) else catchers
-        stderr_catcher = catchers.get('stderr', None) if isinstance(catchers , dict) else catchers
-
-        stdout_writer = write_functions.get('stdout', 'write') if isinstance(write_functions , dict) else write_functions
-        stderr_writer = write_functions.get('stderr', 'write') if isinstance(write_functions , dict) else write_functions
-
-        self.stdout = OutputDeflector('stdout', stdout_catcher , keep_original , stdout_writer)
-        self.stderr = OutputDeflector('stderr', stderr_catcher , keep_original , stderr_writer)
+        self.stdout = OutputDeflector('stdout', catcher, keep_original)
+        self.stderr = OutputDeflector('stderr', catcher, keep_original)
 
     def start_catching(self):
         self.stdout.start_catching()
@@ -177,24 +137,32 @@ class OutputCatcher(ABC):
     must implement the get_contents method
     can rewrite the stdout_catcher/stderr_catcher or stdout_deflector/stderr_deflector
     """
-    write_functions : dict[type_of_std , str] | str = 'write'
     keep_original : bool = True
     export_suffix : str = '.log'
 
     def __enter__(self):
         """Enter the output catcher , start stdout and stderr redirection"""
-        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
+        self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit the output catcher , end stdout and stderr redirection"""
+        self.contents = self.get_contents()
         self.deflectors.end_catching()
 
-    def write(self, text : str | Any):
-        """Write to the output catcher"""
+    @abstractmethod
+    def write_stdout(self, text : str | Any):
+        """Write to the output catcher, if write_stdout/write_stderr is defined, write to the corresponding catcher"""
+        
+    @abstractmethod
+    def write_stderr(self, text : str | Any):
+        """Write to the output catcher, if write_stdout/write_stderr is defined, write to the corresponding catcher"""
+    
+    def flush_stdout(self):
+        """Flush the stdout of the output catcher"""
         ...
     
-    def flush(self):
+    def flush_stderr(self):
         """Flush the output catcher"""
         ...
 
@@ -206,20 +174,14 @@ class OutputCatcher(ABC):
     @property
     def contents(self) -> Any:
         """Get the contents of the output catcher"""
-        return self.get_contents()
+        if not hasattr(self , '_contents'):
+            self._contents = self.get_contents()
+        return self._contents
 
-    @property
-    def catchers(self) -> dict[type_of_std , type_of_catcher] | type_of_catcher | Any:
-        """Get the catchers of the output catcher"""
-        if not hasattr(self , '_catchers'):
-            return self
-        else:
-            return self._catchers
-
-    @catchers.setter
-    def catchers(self , value : dict[type_of_std , type_of_catcher] | type_of_catcher | Any):
-        """Set the catchers of the output catcher"""
-        self._catchers = value
+    @contents.setter
+    def contents(self, value : Any) -> None:
+        """Get the contents of the stdout of the output catcher"""
+        self._contents = value
 
     @property
     def export_file_list(self) -> list[Path]:
@@ -257,20 +219,31 @@ class IOCatcher(OutputCatcher):
     keep_original = False
     
     def __init__(self):
-        self.catchers : dict[type_of_std , StringIO] = {'stdout': StringIO(), 'stderr': StringIO()}
+        self.stdout_catcher : StringIO = StringIO()
+        self.stderr_catcher : StringIO = StringIO()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        super().__exit__(exc_type, exc_val, exc_tb)
-        self._contents = {key: catcher.getvalue() for key , catcher in self.catchers.items()}    
-    
+    def write_stdout(self, text : str | Any):
+        """Write to the output catcher"""
+        self.stdout_catcher.write(text)
+
+    def write_stderr(self, text : str | Any):
+        """Write to the output catcher"""
+        self.stderr_catcher.write(text)
+        
     def get_contents(self):
-        return self._contents
+        self.stdout_catcher.flush()
+        self.stderr_catcher.flush()
+        return {
+            'stdout': self.stdout_catcher.getvalue(),
+            'stderr': self.stderr_catcher.getvalue()
+        }    
     
     def clear(self):
         """Clear the contents of the output catcher"""
-        for key , catcher in self.catchers.items():
-            catcher.seek(0)
-            catcher.truncate(0)
+        self.stdout_catcher.seek(0)
+        self.stderr_catcher.seek(0)
+        self.stdout_catcher.truncate(0)
+        self.stderr_catcher.truncate(0)
 
 class LogWriter(OutputCatcher):
     """
@@ -299,6 +272,20 @@ class LogWriter(OutputCatcher):
     def __exit__(self, exc_type, exc_val, exc_tb):
         Proj.log_file = None
         super().__exit__(exc_type, exc_val, exc_tb)
+
+    def write_stdout(self, text : str | Any):
+        """Write to the output catcher"""
+        if self.log_file is None:
+            return
+        self.log_file.write(text)
+        self.log_file.flush()
+
+    def write_stderr(self, text : str | Any):
+        """Write to the output catcher"""
+        if self.log_file is None:
+            return
+        self.log_file.write(text)
+        self.log_file.flush()
 
     def get_contents(self):
         if self.log_path is None: 
@@ -487,7 +474,6 @@ class HtmlCatcher(OutputCatcher):
             Logger.stdout('This will be caught')
         contents = catcher.contents
     """
-    write_functions = {'stdout': 'write_stdout', 'stderr': 'write_stderr'}
     export_dir = PATH.log_catcher.joinpath('html')
     export_suffix : str = '.html'
 
@@ -583,7 +569,7 @@ class HtmlCatcher(OutputCatcher):
         self.set_instance()
         self.start_time = datetime.now()
         if self.is_primary:
-            self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
+            self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
             self.redirect_display_function()
         else:
             assert self.PrimaryInstance is not None , f"Primary instance is not set when entering {self}"
@@ -1044,7 +1030,6 @@ class MarkdownCatcher(OutputCatcher):
             Logger.stdout('This will be caught')
         contents = catcher.contents
     """
-    write_functions = {'stdout': 'write_stdout', 'stderr': 'write_stderr'}
     export_dir = PATH.log_catcher.joinpath('markdown')
     export_suffix : str = '.md'
 
@@ -1102,7 +1087,7 @@ class MarkdownCatcher(OutputCatcher):
         }
         
         self.open_markdown_file()
-        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
+        self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
         Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
 
@@ -1191,7 +1176,6 @@ class CrashProtectorCatcher(OutputCatcher):
             Logger.stdout('This will be caught')
         contents = catcher.contents
     """
-    write_functions = {'stdout': 'write_stdout', 'stderr': 'write_stderr'}
     export_dir = PATH.runtime.joinpath('crash_protector')
     export_suffix : str = '.md'
 
@@ -1213,7 +1197,7 @@ class CrashProtectorCatcher(OutputCatcher):
             return self
         self.start_time = datetime.now()
         self.open_markdown_file()
-        self.deflectors = DeflectorGroup(self.catchers , self.write_functions , self.keep_original).start_catching()
+        self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
         Logger.remark(f"{self} Capturing Start" , prefix = True)
         return self
 
