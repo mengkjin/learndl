@@ -482,7 +482,9 @@ class TuShareCNE5_Calculator:
             DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , indent = 1 , vb_level = 3)
             DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , indent = 1 , vb_level = 3)
         elif job == 'risk':
-            DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , indent = 1 , vb_level = 3)
+            C = self.calc_common_risk(date)
+            Logger.Display(C)
+            DB.save(C   , 'models' , 'tushare_cne5_cov'  , date , indent = 1 , vb_level = 3)
             DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , indent = 1 , vb_level = 3)
         else:
             raise KeyError(job)

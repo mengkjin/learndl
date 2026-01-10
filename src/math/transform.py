@@ -306,6 +306,7 @@ def shrink_cov(X : np.ndarray , min_periods : int | None = None , corr = False):
     n , p = X.shape
     Q = np.isfinite(X) * 1
     X = np.nan_to_num(X - np.nanmean(X , axis = 0 , keepdims=True))
+    print(Q)
     S = X.T.dot(X) / (Q.T.dot(Q) - 1)
     m  = S.diagonal().mean()
     d2 = ((S - m * np.eye(p)) ** 2).sum()
