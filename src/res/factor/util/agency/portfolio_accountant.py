@@ -133,6 +133,7 @@ class PortfolioAccount:
             df = input
         if df is not None:
             self._df = self.FirstRow(df)
+            print(self._df)
         if config is not None:
             self.config = config
         if index is not None:
@@ -332,6 +333,7 @@ class PortfolioAccount:
 
     @property
     def max_model_date(self) -> int:
+        print(self._df)
         return int(self.model_date.max())
     
     @property
