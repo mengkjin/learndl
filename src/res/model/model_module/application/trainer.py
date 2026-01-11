@@ -1,3 +1,4 @@
+import re
 from contextlib import nullcontext
 from typing import Literal
 from datetime import datetime , timedelta
@@ -23,10 +24,13 @@ class ModelTrainer(BaseTrainer):
         if category is None:
             return
         else:
-            path = self.config.model_base_path.log(f'{category}_logs.log')
+            path = self.config.model_base_path.log('operation_logs.log')
+            for file in self.config.model_base_path.log().glob('*.log'):
+                if file.stem != path.stem:
+                    file.unlink()
             path.parent.mkdir(exist_ok=True)
             with open(path, 'a') as f:
-                f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+                f.write(f'{category} >> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
         ...
 
     def check_last_operation(self , category : Literal['update_models' , 'resume_testing'] | None = None) -> bool | str:
@@ -35,11 +39,17 @@ class ModelTrainer(BaseTrainer):
         else:
             path = self.config.model_base_path.log(f'{category}_logs.log')
             logs = path.read_text().split('\n') if path.exists() else []
+            logs = [log for log in logs if log.startswith(category)]
             if logs:
-                last_time = datetime.strptime(logs[-1], '%Y-%m-%d %H:%M:%S')
-                if last_time > datetime.now() - timedelta(days=1):
-                    return last_time.strftime('%Y-%m-%d %H:%M:%S')
-                else:
+                try:
+                    time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
+                    last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+                    if last_time > datetime.now() - timedelta(days=1):
+                        return last_time.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        return False
+                except (IndexError, ValueError) as e:
+                    Logger.error(f'Error {e} parsing time string: {logs[-1]}')
                     return False
             else:
                 return False
