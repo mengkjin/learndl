@@ -787,6 +787,13 @@ class TrainConfig(TrainParam):
             0: no
             1: yes
         """
+        # validate
+        if self.model_base_path and 'fit' in self.stage_queue:
+            if value == -1 or value == 1:
+                value = 1
+            else:
+                raise ValueError(f'resume must be -1 or 1 when base_path is not None , got {value}')
+
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
         candidate_name = sorted([m.name for m in self.model_root_path.iterdir() if m.name.split('.')[0] == model_name]) 
@@ -815,6 +822,13 @@ class TrainConfig(TrainParam):
                 0: try to use the raw model_name dir
                 1,2,3,...: choose one by number, start from 1
         '''
+        # validate
+        if self.model_base_path:
+            if value == -1 or value == 0:
+                value = 0
+            else:
+                raise ValueError(f'selection must be -1 or 0 when base_path is not None , got {value}')
+
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
         candidate_name = sorted([m.name for m in self.model_root_path.iterdir() 
@@ -874,14 +888,6 @@ class TrainConfig(TrainParam):
 
     def process_parser(self , stage = -1 , resume = -1 , selection = -1 , vb_level : int = 1):
         if self.model_base_path:
-            if resume == -1 or resume == 1:
-                resume = 1
-            else:
-                raise ValueError(f'resume must be -1 or 1 when base_path is not None , got {resume}')
-            if selection == -1 or selection == 0:
-                selection = 0
-            else:
-                raise ValueError(f'selection must be -1 or 0 when base_path is not None , got {selection}')
             vb_level = 99
         
         self.parser_stage(stage , vb_level)

@@ -112,7 +112,7 @@ end tell
                 _ , stderr = self.process.communicate(input=self.apple_script_cmd)
 
             if self.process.returncode == 0:
-                Logger.success("AppleScript executed successfully.")
+                Logger.success(f"AppleScript executed successfully for script {self.script}")
             else:
                 Logger.error(f"AppleScript failed with return code {self.process.returncode}")
                 Logger.error(f"Errors: {stderr}")

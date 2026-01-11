@@ -272,7 +272,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('Fatal   :' , *args , color = color , vb_level = vb_level , **kwargs)
+        new_stdout('Emergent:' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
     def remark(cls , *args , color = 'lightblue' , prefix = False , padding_char : None | str = None , padding_width : int = 100 , **kwargs):

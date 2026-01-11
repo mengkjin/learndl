@@ -349,7 +349,12 @@ class SessionControl:
             if item.status == 'starting':
                 running_timeout -= 1
             if running_timeout <= 0:
-                raise RuntimeError(f'Script {item.script} running timeout! Still starting')
+                Logger.error(f'Script {item.script} running timeout! Still starting')
+                item.update({
+                    'status': 'error' , 'end_time': datetime.now().timestamp() ,
+                    'exit_code': 1 ,
+                    'exit_error': f'Script {item.script} running timeout! Still starting'} , write_to_db = True)
+                return False
             time.sleep(1)
         return False
    

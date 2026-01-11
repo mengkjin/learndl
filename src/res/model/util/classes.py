@@ -807,7 +807,7 @@ class BaseTrainer(ModelStreamLine):
             self.on_test_model_start()
             self.model.test()
             self.on_test_model_end()
-            if self.status.model_num == self.config.model_num:
+            if self.status.model_num == self.config.model_num_list[-1]:
                 self.on_test_model_date_end()
         self.on_before_test_end()
         self.on_test_end()

@@ -94,10 +94,8 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
         self.generate(factor , benchmark , indent = indent , vb_level = vb_level)
         if self.total_account.empty:
             Logger.error(f'No accounts created for {self.test_name}!')
-            return self
-        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
-            for task in self.tasks.values():  
-                task.calc(self.total_account , indent = indent + 1 , vb_level = vb_level + 1) 
+        else:
+            super().calc(self.total_account , indent = indent , vb_level = vb_level , **kwargs)
         return self
     
     def update_kwargs(self , **kwargs):

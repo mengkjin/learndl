@@ -1,5 +1,4 @@
 import pandas as pd
-from pathlib import Path
 from typing import Any , Type
 from src.proj import Logger
 
@@ -132,10 +131,8 @@ class TopFMPTest(BaseFactorAnalyticTest):
         self.generate(factor , benchmark , n_bests = n_bests , indent = indent , vb_level = vb_level)
         if self.total_account.empty:
             Logger.error(f'No accounts created for {self.test_name}!')
-            return self
-        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
-            for task in self.tasks.values():  
-                task.calc(self.total_account , indent = indent + 1 , vb_level = vb_level + 1) 
+        else:
+            super().calc(self.total_account , indent = indent , vb_level = vb_level , **kwargs)
         return self
     
     def update_kwargs(self , n_bests = [20,30,50,100] , **kwargs):
@@ -147,11 +144,3 @@ class TopFMPTest(BaseFactorAnalyticTest):
         self.kwargs['param_groups'] = {f'Top{n:3d}':{'n_best':n} for n in n_bests}
         self.kwargs.update(kwargs)
         return self
-
-    def save(self , path : Path | str):
-        """save intermediate data to path for future use"""
-        ...
-        
-    def load(self , path : Path | str):
-        """load intermediate data from path for future use"""
-        ...

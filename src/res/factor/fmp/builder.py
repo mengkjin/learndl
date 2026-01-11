@@ -169,7 +169,7 @@ class PortfolioBuilder:
         assert hasattr(self , 'creator') , 'PortfolioBuilder not setup!'
         assert self.alpha.has(date) , f'{self.alpha.name} has no data at {date}'
         init_port = self.portfolio.get(date , latest = True)
-        port_rslt = self.creator.create(date , self.alpha.get(date , lag = self.lag) , self.benchmark , init_port)
+        port_rslt = self.creator.create(date , self.alpha.get(date , lag = self.lag) , self.benchmark , init_port , False)
         self.creations.append(port_rslt)
         self.portfolio.append(port_rslt.port.with_name(self.portfolio.name))
         self.port = port_rslt.port
@@ -313,11 +313,11 @@ class PortfolioGroupBuilder:
                       indent = self.indent , vb_level = self.vb_level)
     
     def builders_setup(self):
-        with Logger.Timer(f'{self.class_name}.setup' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
+        with Logger.Timer(f'{self.class_name}.setup' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 3):
             self.builders.clear()
             self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
-                kwargs = self.param_groups[strategy] | {'strategy':strategy , 'indent':self.indent + 1 , 'vb_level':self.vb_level + 1 , 'resume_path':self.resume_path}
+                kwargs = self.param_groups[strategy] | {'strategy':strategy , 'indent':self.indent + 1 , 'vb_level':self.vb_level + 2 , 'resume_path':self.resume_path}
                 builder = PortfolioBuilder(self.category , alpha , bench , lag , **kwargs).setup()
                 self.builders.append(builder)
         return self
@@ -364,23 +364,30 @@ class PortfolioGroupBuilder:
         self.builders_setup()
         self.builders_resume()
 
-        _t0 = datetime.now()
-        _opt_count = 0
+        t0 = datetime.now()
+        opt_count = 0
             
-        for self._date in self.relevant_dates:
-            for self._builder in self.builders:
-                if not self._builder.alpha.has(self._date): 
-                    continue
-                self._builder.build(self._date)
-                _opt_count += 1
-                if _opt_count % 100 == 0: 
-                    time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].timecost.items()}
-                    Logger.stdout(f'Building of {_opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
-                          f' Finished at {self._date} , time cost (ms) : {time_cost}' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
-        secs = (datetime.now() - _t0).total_seconds()
-        Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building' , 
+        Logger.stdout(f'{self.class_name}.build start...' , indent = self.indent , vb_level = self.vb_level + 3)
+        iter_date_builder = self.iter_date_builder()
+        for i , (date , builder) in enumerate(iter_date_builder):
+            builder.build(date)
+            if (opt_count + 1) % 100 == 0 or i == len(iter_date_builder) - 1: 
+                self.print_build_info(date , opt_count , builder)
+
+        secs = (datetime.now() - t0).total_seconds()
+        Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)*1000):.1f} ms per building' , 
                       indent = self.indent , vb_level = self.vb_level)
         self.save_portfolios()
+        return self
+
+    def iter_date_builder(self):
+        return [(date , builder) for date in self.relevant_dates for builder in self.builders if builder.alpha.has(date)]
+
+    def print_build_info(self , date : int , opt_count : int , builder : PortfolioBuilder):
+        time_cost = {k:float(np.round(v*1000,2)) for k,v in builder.creations[-1].timecost.items()}
+        time_cost_str = ', '.join([f'{k}: {v:.1f}' for k,v in time_cost.items()])
+        Logger.stdout(f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]' + 
+                      f' Finished at {date} , time costs (ms) {time_cost_str}' , indent = self.indent + 1 , vb_level = self.vb_level + 3)
         return self
     
     def accounting(self):
@@ -389,7 +396,7 @@ class PortfolioGroupBuilder:
             Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv')
         ):
             for builder in self.builders:
-                with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1):
+                with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1 , enter_vb_level = self.vb_level + 2):
                     builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
         self.accounted = True
         return self

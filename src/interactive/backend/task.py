@@ -414,7 +414,7 @@ class TaskQueue:
     
     def refresh(self):
         self.reload()
-        changed = [item.refresh() for item in self.queue.values()]
+        changed = [item.refresh() for item in self.queue.values() if item.is_running]
         return any(changed)
     
     def sync(self):
@@ -649,8 +649,8 @@ class TaskItem:
                 raise ValueError(f"Process {self.pid} is {status}")
             if status in ['complete' , 'zombie']:
                 if not self.check_killed():
-                    self.update({'status': 'complete'} , write_to_db = False)
-            else:
+                    self.update({'status': 'complete'} , write_to_db = True)
+            elif status != 'running':
                 self.update({'status': 'running'} , write_to_db = False)
             
         if self.task_db.is_backend_updated(self.id):
@@ -682,6 +682,7 @@ class TaskItem:
             - Exit Error: {self.exit_error}
             - Exit Files: {crash_protector_paths}
             """
+            Logger.alert3(f'Process Killed Unexpectedly for task {self.id}')
             Email.send(title , body , attachments = crash_protector_paths)
             return True
         else:
@@ -690,8 +691,9 @@ class TaskItem:
     def get_crash_protector(self) -> list[str]:
         if self.task_id is None:
             return []
-        long_suffix = '.' + self.task_id.replace('/', '_') + '.md'
-        return [str(path) for path in PATH.runtime.joinpath('crash_protector').glob('*.md') if path.name.endswith(long_suffix)]
+        long_suffix = '.' + self.task_id.replace('/', '_') + '.'
+        crashed_paths = [str(path) for path in PATH.runtime.joinpath('crash_protector').glob('*.md')]
+        return [path for path in crashed_paths if long_suffix in path]
     
     def to_dict(self):
         return {k: v for k, v in asdict(self).items() if v is not None}

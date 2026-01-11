@@ -327,7 +327,6 @@ def show_report_main(runner : ScriptRunner):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
             SC.wait_until_completion(item)
-            item.refresh()
             with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 

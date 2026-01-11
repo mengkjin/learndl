@@ -1184,7 +1184,7 @@ class CrashProtectorCatcher(OutputCatcher):
         self.task_id = task_id
         self.init_time = init_time if init_time else datetime.now()
         
-        self.filename = self.export_dir / f'{self.init_time.strftime("%Y%m%d")}.{str(self.task_id).replace('/' , '_')}.{self.export_suffix}'
+        self.filename = self.export_dir / f'{self.init_time.strftime("%Y%m%d")}.{str(self.task_id).replace('/' , '_')}.md'
     
         self.kwargs = kwargs
         self.seperating_by = seperating_by

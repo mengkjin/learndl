@@ -37,9 +37,9 @@ class PortCreator(ABC):
         t3 = datetime.now()
 
         self.create_result.timecost.update({
-            'parse_input' : (t1 - t0).total_seconds() ,
-             'solve' : (t2 - t1).total_seconds() , 
-             'output' : (t3 - t2).total_seconds()})
+            'parse' : (t1 - t0).total_seconds() ,
+            'solve' : (t2 - t1).total_seconds() , 
+            'output' : (t3 - t2).total_seconds()})
         return self.create_result
     
     @abstractmethod
@@ -53,7 +53,8 @@ class PortCreator(ABC):
 
     @abstractmethod
     def output(self):
-        if self.detail_infos: ...
+        if self.detail_infos: 
+            self.create_result.analyze(self.bench_port , self.init_port)
         return self
 
 class PortCreateUtility:

@@ -122,17 +122,16 @@ class BaseFactorAnalyticTest(ABC):
         pm.plot(show = False , indent = indent , vb_level = vb_level)
         return pm
 
-    @abstractmethod
-    def calc(self , factor : StockFactor , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
-        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
+    def calc(self , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 2):
             for task in self.tasks.values():  
-                task.calc(factor , *args , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs) 
+                task.calc(*args , indent = indent + 1 , vb_level = vb_level + 2 , **kwargs) 
         return self
 
     def plot(self , show = False , indent : int = 0 , vb_level : int = 1):
-        with Logger.Timer(f'{self.__class__.__name__}.plot' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 1):
+        with Logger.Timer(f'{self.__class__.__name__}.plot' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 2):
             for task in self.tasks.values(): 
-                task.plot(show = show , indent = indent + 1 , vb_level = vb_level + 1)
+                task.plot(show = show , indent = indent + 1 , vb_level = vb_level + 2)
         return self
 
     @property
