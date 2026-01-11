@@ -788,11 +788,11 @@ class TrainConfig(TrainParam):
             1: yes
         """
         # validate
-        if self.model_base_path and 'fit' in self.stage_queue:
+        if self.model_base_path:
             if value == -1 or value == 1:
                 value = 1
-            else:
-                raise ValueError(f'resume must be -1 or 1 when base_path is not None , got {value}')
+            elif 'fit' in self.stage_queue:
+                raise ValueError(f'resume must be -1 or 1 when base_path is not None and fit is in stage_queue , got {value}')
 
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
