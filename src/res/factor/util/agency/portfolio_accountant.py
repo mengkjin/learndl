@@ -217,7 +217,7 @@ class PortfolioAccount:
     def to_dfs(self) -> dict[str,pd.DataFrame]:
         dfs = {}
         dfs['basic'] = self.input.loc[:,self.columns_basic]
-        dfs['index'] = pd.DataFrame(self.index , index=[0])
+        dfs['index'] = pd.DataFrame(self.index , index=[0]).reset_index(drop=True)
         
         dfs.update(RISK_MODEL.Analytics_to_dfs(dict(zip(self.model_date,self.analytic))))
         dfs.update(RISK_MODEL.Attributions_to_dfs(dict(zip(self.model_date,self.attribution))))
