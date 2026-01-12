@@ -183,6 +183,8 @@ class PortfolioAccount:
     @classmethod
     def Concat(cls , *accounts : 'PortfolioAccount | None'):
         accs = [acc for acc in accounts if acc is not None]
+        for acc in accs:
+            print(acc.df)
         if not accs:
             return cls()
         else:
@@ -534,8 +536,6 @@ class PortfolioAccountManager:
         account = PortfolioAccount.load(tar_path if tar_path.exists() else pkl_path)
         if path.stem in self.accounts:
             if append:
-                print(self.accounts[path.stem])
-                print(account)
                 self.accounts[path.stem] = PortfolioAccount.Concat(self.accounts[path.stem] , account)
             else:
                 raise KeyError(f'{path.stem} is already in the accounts')
