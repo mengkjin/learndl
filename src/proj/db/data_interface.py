@@ -104,7 +104,10 @@ def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
 
             buffer = io.BytesIO()
             df = _reset_index(df)
-            assert isinstance(df.index , pd.RangeIndex) , f'{df} is not a RangeIndex DataFrame'
+            if not isinstance(df.index , pd.RangeIndex):
+                Logger.error(f'{df} is not a RangeIndex DataFrame')
+                Logger.Display(df)
+                raise ValueError(f'{df} is not a RangeIndex DataFrame')
             _df_saver(df , buffer)
             
             # get buffer size and reset pointer
