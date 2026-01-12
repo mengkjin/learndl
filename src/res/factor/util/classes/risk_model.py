@@ -291,20 +291,32 @@ class RiskAnalytic:
     def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
         dfs = {}
         if self.industry is not None:
-            dfs['analytic_industry'] = self.industry.assign(date=self.date , **kwargs)
+            dfs['analytic_industry'] = self.industry.assign(date=self.date , **kwargs).reset_index(drop=False)
         if self.style is not None:
-            dfs['analytic_style'] = self.style.assign(date=self.date , **kwargs)
+            dfs['analytic_style'] = self.style.assign(date=self.date , **kwargs).reset_index(drop=False)
         if self.risk is not None:
-            dfs['analytic_risk'] = self.risk.assign(date=self.date , **kwargs)
+            dfs['analytic_risk'] = self.risk.assign(date=self.date , **kwargs).reset_index(drop=False)
         print(self.date , dfs)
         return dfs
 
     @classmethod
     def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'date']) -> 'RiskAnalytic':
         date = get_unique_date(dfs , 'date')
-        industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore') if 'analytic_industry' in dfs else None
-        style = dfs['analytic_style'].drop(columns=drop_columns , errors='ignore') if 'analytic_style' in dfs else None
-        risk = dfs['analytic_risk'].drop(columns=drop_columns , errors='ignore') if 'analytic_risk' in dfs else None
+        if 'analytic_industry' in dfs:
+            industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore')
+            industry = industry.set_index('industry')
+        else:
+            industry = None
+        if 'analytic_style' in dfs:
+            style = dfs['analytic_style'].drop(columns=drop_columns , errors='ignore')
+            style = style.set_index('style')
+        else:
+            style = None
+        if 'analytic_risk' in dfs:
+            risk = dfs['analytic_risk'].drop(columns=drop_columns , errors='ignore')
+            risk = risk.set_index('measure')
+        else:
+            risk = None
         return cls(date , industry , style , risk)
 
     @classmethod
@@ -398,6 +410,8 @@ class Attribution:
         specific['style']    = specific.loc[:,_style].sum(1)
         specific = specific.drop(columns = _indus + _style).loc[:,cls.order_list[:-1]]
 
+        print(specific)
+
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
 
     @classmethod
@@ -434,16 +448,24 @@ class Attribution:
         return self
 
     def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
-        dfs = {'attribution_specific':self.specific.assign(start=self.start , end=self.end , **kwargs) , 
-               'attribution_aggregated':self.aggregated.assign(start=self.start , end=self.end , **kwargs)}
+        dfs = {'attribution_specific':self.specific.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False) , 
+               'attribution_aggregated':self.aggregated.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False)}
         return dfs
 
     @classmethod
     def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'start' , 'end']) -> 'Attribution':
         start = get_unique_date(dfs , 'start')
         end = get_unique_date(dfs , 'end')
-        specific = dfs['attribution_specific'].drop(columns=drop_columns , errors='ignore') if 'attribution_specific' in dfs else None
-        aggregated = dfs['attribution_aggregated'].drop(columns=drop_columns , errors='ignore') if 'attribution_aggregated' in dfs else None
+        if 'attribution_specific' in dfs:
+            specific = dfs['attribution_specific'].drop(columns=drop_columns , errors='ignore')
+            specific = specific.set_index('source')
+        else:
+            specific = None
+        if 'attribution_aggregated' in dfs:
+            aggregated = dfs['attribution_aggregated'].drop(columns=drop_columns , errors='ignore')
+            aggregated = aggregated.set_index('source')
+        else:
+            aggregated = None
         source , industry , style = cls.aggregated_to_others(aggregated)
         return cls(start , end , source , industry , style , specific , aggregated)
 
