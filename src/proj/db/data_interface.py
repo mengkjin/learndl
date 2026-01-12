@@ -92,8 +92,8 @@ def _df_saver(df : pd.DataFrame , path : Path | io.BytesIO):
         else:
             df.to_parquet(path , engine='fastparquet')
     except Exception as e:
-        print(df)
-        print(path)
+        Logger.error(f'Error saving {path}: {e}')
+        Logger.Display(df)
         raise e
 
 def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):

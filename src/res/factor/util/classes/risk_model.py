@@ -248,7 +248,13 @@ class RiskAnalytic:
     risk     : pd.DataFrame | Any = None
 
     def __post_init__(self):
-        ...
+        if isinstance(self.industry , pd.DataFrame) and 'industry' in self.industry.columns:
+            self.industry = self.industry.set_index('industry')
+        if isinstance(self.style , pd.DataFrame) and 'style' in self.style.columns:
+            self.style = self.style.set_index('style')
+        if isinstance(self.risk , pd.DataFrame) and 'measure' in self.risk.columns:
+            self.risk = self.risk.set_index('measure')
+
     def __bool__(self): 
         return bool(self.date > 0)
     def __repr__(self):
@@ -303,21 +309,15 @@ class RiskAnalytic:
     def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'date']) -> 'RiskAnalytic':
         date = get_unique_date(dfs , 'date')
         if 'analytic_industry' in dfs:
-            industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore')
-            print(industry)
-            industry = industry.set_index('industry')
+            industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore').set_index('industry')
         else:
             industry = None
         if 'analytic_style' in dfs:
             style = dfs['analytic_style'].drop(columns=drop_columns , errors='ignore')
-            print(style)
-            style = style.set_index('style')
         else:
             style = None
         if 'analytic_risk' in dfs:
             risk = dfs['analytic_risk'].drop(columns=drop_columns , errors='ignore')
-            print(risk)
-            risk = risk.set_index('measure')
         else:
             risk = None
         return cls(date , industry , style , risk)
@@ -367,7 +367,17 @@ class Attribution:
     order_list : ClassVar[list[str]] = ['tot','market','industry','style','excess','specific','cost']
 
     def __post_init__(self):
-        ...
+        if isinstance(self.source , pd.DataFrame) and 'source' in self.source.columns:
+            self.source = self.source.set_index('source')
+        if isinstance(self.industry , pd.DataFrame) and 'industry' in self.industry.columns:
+            self.industry = self.industry.set_index('industry')
+        if isinstance(self.style , pd.DataFrame) and 'style' in self.style.columns:
+            self.style = self.style.set_index('style')
+        if isinstance(self.specific , pd.DataFrame) and 'secid' in self.specific.columns:
+            self.specific = self.specific.set_index('secid')
+        if isinstance(self.aggregated , pd.DataFrame) and 'source' in self.aggregated.columns:
+            self.aggregated = self.aggregated.set_index('source')
+
     def __bool__(self): return self.start > 0 and self.end > 0
     def __repr__(self):
         return f'{self.__class__.__name__}({self.start}-{self.end})'
@@ -412,8 +422,6 @@ class Attribution:
         specific['industry'] = specific.loc[:,_indus].sum(1)
         specific['style']    = specific.loc[:,_style].sum(1)
         specific = specific.drop(columns = _indus + _style).loc[:,cls.order_list[:-1]]
-
-        print(specific)
 
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
 
@@ -461,14 +469,10 @@ class Attribution:
         end = get_unique_date(dfs , 'end')
         if 'attribution_specific' in dfs:
             specific = dfs['attribution_specific'].drop(columns=drop_columns , errors='ignore')
-            print(specific)
-            specific = specific.set_index('source')
         else:
             specific = None
         if 'attribution_aggregated' in dfs:
             aggregated = dfs['attribution_aggregated'].drop(columns=drop_columns , errors='ignore')
-            print(aggregated)
-            aggregated = aggregated.set_index('source')
         else:
             aggregated = None
         source , industry , style = cls.aggregated_to_others(aggregated)
