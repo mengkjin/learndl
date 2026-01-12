@@ -271,8 +271,12 @@ class PortfolioAccount:
             return cls()
         assert path.suffix in ['.pkl' , '.tar'] , f'{path} is not a pkl or tar file'
         if path.suffix == '.pkl':
+            df = pd.read_pickle(path)
+            print(df)
             account = cls(pd.read_pickle(path))
         else:
+            dfs = DB.load_dfs_from_tar(path)
+            print(dfs)
             account = cls.from_dfs(DB.load_dfs_from_tar(path))
         return account
 

@@ -107,7 +107,7 @@ def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
             if not isinstance(df.index , pd.RangeIndex):
                 Logger.error(f'{df} is not a RangeIndex DataFrame')
                 Logger.Display(df)
-                Logger.alert2(type(df.index))
+                print(df.index)
                 raise ValueError(f'{df} is not a RangeIndex DataFrame')
             _df_saver(df , buffer)
             
