@@ -302,7 +302,6 @@ class RiskAnalytic:
             dfs['analytic_style'] = self.style.assign(date=self.date , **kwargs).reset_index(drop=False)
         if self.risk is not None:
             dfs['analytic_risk'] = self.risk.assign(date=self.date , **kwargs).reset_index(drop=False)
-        print(self.date , dfs)
         return dfs
 
     @classmethod
