@@ -86,10 +86,15 @@ def _df_loader(path : Path | io.BytesIO):
 
 def _df_saver(df : pd.DataFrame , path : Path | io.BytesIO):
     """save dataframe to path"""
-    if SAVE_OPT_DB == 'feather':
-        df.to_feather(path)
-    else:
-        df.to_parquet(path , engine='fastparquet')
+    try:
+        if SAVE_OPT_DB == 'feather':
+            df.to_feather(path)
+        else:
+            df.to_parquet(path , engine='fastparquet')
+    except Exception as e:
+        print(df)
+        print(path)
+        raise e
 
 def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
     """save multiple dataframes to tar file"""
