@@ -304,16 +304,19 @@ class RiskAnalytic:
         date = get_unique_date(dfs , 'date')
         if 'analytic_industry' in dfs:
             industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore')
+            print(industry)
             industry = industry.set_index('industry')
         else:
             industry = None
         if 'analytic_style' in dfs:
             style = dfs['analytic_style'].drop(columns=drop_columns , errors='ignore')
+            print(style)
             style = style.set_index('style')
         else:
             style = None
         if 'analytic_risk' in dfs:
             risk = dfs['analytic_risk'].drop(columns=drop_columns , errors='ignore')
+            print(risk)
             risk = risk.set_index('measure')
         else:
             risk = None
@@ -458,11 +461,13 @@ class Attribution:
         end = get_unique_date(dfs , 'end')
         if 'attribution_specific' in dfs:
             specific = dfs['attribution_specific'].drop(columns=drop_columns , errors='ignore')
+            print(specific)
             specific = specific.set_index('source')
         else:
             specific = None
         if 'attribution_aggregated' in dfs:
             aggregated = dfs['attribution_aggregated'].drop(columns=drop_columns , errors='ignore')
+            print(aggregated)
             aggregated = aggregated.set_index('source')
         else:
             aggregated = None
