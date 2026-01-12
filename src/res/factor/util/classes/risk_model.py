@@ -295,13 +295,14 @@ class RiskAnalytic:
             return self.risk.style.format(lambda x:f'{x:.4%}')
 
     def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
-        dfs = {}
+        dfs : dict[str,pd.DataFrame] = {}
         if self.industry is not None:
             dfs['analytic_industry'] = self.industry.assign(date=self.date , **kwargs).reset_index(drop=False)
         if self.style is not None:
             dfs['analytic_style'] = self.style.assign(date=self.date , **kwargs).reset_index(drop=False)
         if self.risk is not None:
             dfs['analytic_risk'] = self.risk.assign(date=self.date , **kwargs).reset_index(drop=False)
+        assert all(isinstance(df.index , pd.RangeIndex) for df in dfs.values()), [df.index for df in dfs.values()]
         return dfs
 
     @classmethod
@@ -333,7 +334,7 @@ class RiskAnalytic:
                     dfs_multi[k] = [v]
                 else:
                     dfs_multi[k].append(v)
-        dfs_combine = {key : pd.concat(values , axis = 0) for key , values in dfs_multi.items()}
+        dfs_combine = {key : pd.concat(values , axis = 0).reset_index(drop=True) for key , values in dfs_multi.items()}
         return dfs_combine
 
     @classmethod
@@ -460,6 +461,7 @@ class Attribution:
     def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
         dfs = {'attribution_specific':self.specific.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False) , 
                'attribution_aggregated':self.aggregated.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False)}
+        assert all(isinstance(df.index , pd.RangeIndex) for df in dfs.values()), [df.index for df in dfs.values()]
         return dfs
 
     @classmethod
@@ -489,7 +491,7 @@ class Attribution:
                     dfs_multi[k] = [v]
                 else:
                     dfs_multi[k].append(v)
-        dfs_combine = {key : pd.concat(values , axis = 0) for key , values in dfs_multi.items()}
+        dfs_combine = {key : pd.concat(values , axis = 0).reset_index(drop=True) for key , values in dfs_multi.items()}
         return dfs_combine
 
     @classmethod
