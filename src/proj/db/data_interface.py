@@ -103,7 +103,10 @@ def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
             tarinfo = tarfile.TarInfo(name)
 
             buffer = io.BytesIO()
-            _df_saver(_reset_index(df) , buffer)
+            df = _reset_index(df)
+            if not isinstance(df.index , pd.RangeIndex):
+                df = df.reset_index(drop = False)
+            _df_saver(df , buffer)
             
             # get buffer size and reset pointer
             tarinfo.size = buffer.tell()

@@ -183,8 +183,6 @@ class PortfolioAccount:
     @classmethod
     def Concat(cls , *accounts : 'PortfolioAccount | None'):
         accs = [acc for acc in accounts if acc is not None]
-        for acc in accs:
-            print(acc.df)
         if not accs:
             return cls()
         else:
