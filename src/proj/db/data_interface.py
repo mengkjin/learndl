@@ -12,6 +12,7 @@ from typing import Any , Literal , Generator , Callable
 
 from src.proj.env import MACHINE , PATH
 from src.proj.log import Logger
+from src.proj.proj import Proj
 from .code_mapper import secid_to_secid
 
 __all__ = [
@@ -360,7 +361,7 @@ def _load_df_mapper(df : pd.DataFrame):
     return df
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
-               df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int = 1):
+               df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int = Proj.vb.max):
     """process dataframe"""
     if date_colname and date is not None: 
         df[date_colname] = date

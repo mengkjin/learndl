@@ -895,7 +895,7 @@ class TrainConfig(TrainParam):
         self.parser_select(selection , vb_level) 
         return self
 
-    def print_out(self , color : str | None = 'lightgreen'):
+    def print_out(self , color : str | None = 'lightgreen' , vb_level : int = 2):
         info_strs : list[tuple[int , str , str]] = [] # indent , key , value
         info_strs.append((0 , 'Model Name' , self.model_name))
         if self.module_type in ['db' , 'factor']:
@@ -947,7 +947,7 @@ class TrainConfig(TrainParam):
         max_key_length = max([len(key) for key in indented_keys])
         infos = [FormatStr(f'{indented_keys:{max_key_length}s} : {value}' , color = color).formatted()
                  for indented_keys , (indent , key , value) in zip(indented_keys , info_strs)]
-        Logger.stdout('\n'.join(infos))
+        Logger.stdout('\n'.join(infos) , vb_level = vb_level)
         return self
 
     @property

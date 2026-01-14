@@ -548,7 +548,7 @@ class PortfolioAccountManager:
         [self.load_single(path , append = append) for path in self.account_dir.iterdir() if path.suffix == '.pkl']
         return self
     
-    def deploy(self , fmp_names : list[str] | None = None , overwrite = False):
+    def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : int = 1):
         if fmp_names is None: 
             fmp_names = list(self.accounts.keys())
         fmp_paths = {name:self.account_dir.joinpath(f'{name}.tar') for name in fmp_names}
@@ -556,7 +556,7 @@ class PortfolioAccountManager:
             existed = [path for path in fmp_paths.values() if path.exists()]
             assert not existed , f'Existed paths : {existed}'
         for name in fmp_names:
-            self.accounts[name].save(fmp_paths[name])
+            self.accounts[name].save(fmp_paths[name] , indent = indent , vb_level = vb_level)
         return self
     
     def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):

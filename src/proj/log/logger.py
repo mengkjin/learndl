@@ -236,9 +236,9 @@ class Logger:
         new_stdout(*args , color = 'white' , bg_color = 'gray' , bold = True , **kwargs)
 
     @classmethod
-    def footnote(cls , *args , **kwargs):
+    def footnote(cls , *args , vb_level : int = 3 , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        new_stdout(f'**{args[0]}' , *args[1:] , color = 'gray' , bold = True , italic = True , **kwargs)
+        new_stdout(f'**{args[0]}' , *args[1:] , color = 'gray' , bold = True , italic = True , vb_level = vb_level , **kwargs)
         
     @classmethod
     def success(cls , *args , **kwargs):
@@ -290,17 +290,17 @@ class Logger:
         new_special_level_message(*args , padding_char = padding_char , padding_width = padding_width , color = color , level_prefix = level_prefix , **kwargs)
 
     @classmethod
-    def debug(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
+    def debug(cls , *args , indent : int = 0 , vb_level : int = 2 , **kwargs):
         """Debug level stderr"""
         new_logger_output('debug' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def info(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
+    def info(cls , *args , indent : int = 0 , vb_level : int = 2 , **kwargs):
         """Info level stderr"""
         new_logger_output('info' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def warning(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
+    def warning(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Warning level stderr"""
         new_logger_output('warning' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
@@ -392,9 +392,10 @@ class Logger:
             with Logger.ParagraphI('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
+        VB_LEVEL = 0
         def __init__(self , title : str , vb_level : int = 0):
             self.title = title
-            self.vb_level = vb_level
+            self.vb_level = max(vb_level , self.VB_LEVEL)
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -411,9 +412,10 @@ class Logger:
             with Logger.ParagraphII('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
+        VB_LEVEL = 1
         def __init__(self , title : str , vb_level : int = 0):
             self.title = title
-            self.vb_level = vb_level
+            self.vb_level = max(vb_level , self.VB_LEVEL)
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -430,11 +432,12 @@ class Logger:
             with Logger.ParagraphIII('Title'):
                 Logger.info('This is the enclosed message...')
         """
+        VB_LEVEL = 2
         def __init__(self , title : str , width : int = 100 , char : Literal['-' , '=' , '*'] = '*', vb_level : int = 0):
             self.title = title.strip().upper()
             self.width = width
             self.char = char
-            self.vb_level = vb_level
+            self.vb_level = max(vb_level , self.VB_LEVEL)
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start'.upper())

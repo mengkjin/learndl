@@ -999,12 +999,12 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         for param in self.CB_KEY_PARAMS:
             assert hasattr(self , param) , f'{self.__class__.__name__} has no attribute {param}'
 
-    def print_info(self , **kwargs):
+    def print_info(self , vb_level : int = 2 , **kwargs):
         args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS} | kwargs
         info = f'Callback {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
         if self.__class__.__doc__: 
             info += f' , {self.__class__.__doc__}'
-        Logger.stdout(info)
+        Logger.stdout(info , vb_level = vb_level)
         return self
 
     def __enter__(self): 

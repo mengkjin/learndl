@@ -176,7 +176,7 @@ class StatusDisplay(BaseCallBack):
         Logger.remark('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts) , prefix = True)
     
     def on_before_test_end(self): 
-        Logger.remark(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}')
+        Logger.remark(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}' , vb_level = 3)
 
     def on_train_batch_end(self):  
         if self.dataloader_info: 

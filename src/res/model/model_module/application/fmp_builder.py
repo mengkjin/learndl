@@ -147,9 +147,9 @@ class ModelPortfolioBuilder:
             Logger.stdout(f'Finished accounting for {fmp_name} at {CALENDAR.dates_str(account_dates)}' , indent = indent + 1 , vb_level=vb_level + 1)
 
         if deploy:
-            self.account_manager.deploy(update_fmp_names , overwrite = True)
-            Logger.success(f'Deploy accounts for {self.reg_model} at {CALENDAR.dates_str(account_dates)}' , indent = indent, vb_level = vb_level + 1)
-
+            with Logger.Timer(f'Deploy accounts for {self.reg_model} at {CALENDAR.dates_str(account_dates)}' , indent = indent , vb_level = vb_level + 1 , enter_vb_level = vb_level + 2):
+                self.account_manager.deploy(update_fmp_names , overwrite = True , indent = indent + 2 , vb_level = vb_level + 2)
+            
         self._update_account_record = account_dates
 
     @classmethod

@@ -40,7 +40,7 @@ class TradingPortfolioTracker:
                     Logger.conclude(message)
                     Logger.conclude(in_detail)
                     Logger.conclude(out_detail)
-                    updated_ports[port_name].analyze()
+                    updated_ports[port_name].analyze(write_down = True , vb_level = vb_level + 1)
 
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)

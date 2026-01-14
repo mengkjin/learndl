@@ -1,4 +1,4 @@
-from src.proj import Logger , MACHINE , CALENDAR
+from src.proj import Logger , MACHINE , CALENDAR , Proj
 from src.proj.func import print_disk_space_info
 
 from .data import DataAPI
@@ -25,6 +25,8 @@ class UpdateAPI:
         FactorAPI.Pooling.update(timeout = 3)
         FactorAPI.Stats.update()
         FactorAPI.Hierarchy.update()
+        with Proj.vb.WithVB(1):
+            ModelAPI.resume_testing()
         TradingAPI.update()
         NotificationAPI.update()
         print_disk_space_info()

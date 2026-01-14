@@ -400,7 +400,7 @@ class CALENDAR:
                 dstr = 'None'
             else:
                 d0 , d1 = min(dates) , max(dates)
-                dstr = f'{d0}~{d1}' if d0 != d1 else str(d0)
+                dstr = f'{d0}~{d1}({len(dates)}days)' if d0 != d1 else str(d0)
         elif isinstance(dates , list):
             valid_dates = [d for d in dates if d is not None]
             if len(valid_dates) == 0:
@@ -410,7 +410,7 @@ class CALENDAR:
                     d0 , d1 = min(valid_dates) , 99991231
                 else:
                     d0 , d1 = min(valid_dates) , max(valid_dates)
-                dstr = f'{d0} ~ {d1}' if d0 != d1 else str(d0)
+                dstr = f'{d0} ~ {d1}({len(valid_dates)}days)' if d0 != d1 else str(d0)
         else:
             dstr = str(dates) if dates is not None else 'None'
         return dstr

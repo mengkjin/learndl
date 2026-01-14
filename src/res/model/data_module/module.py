@@ -413,7 +413,7 @@ class DataModule(BaseDataModule):
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
             if (divlast or histnorm): 
-                Logger.success(f'Pre-Norming {mdt} : {dict(divlast=divlast, histnorm=histnorm)}')
+                Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = 3)
             if divlast: 
                 self.prenorm_divlast.append(mdt)
             if histnorm: 

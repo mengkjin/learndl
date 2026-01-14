@@ -523,7 +523,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , cls.db_key , vb_level = 99)
-        Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} at {CALENDAR.dates_str(dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
     def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:

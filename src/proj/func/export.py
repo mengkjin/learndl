@@ -12,7 +12,7 @@ from src.proj.log import Logger
 __all__ = ['dfs_to_excel' , 'figs_to_pdf']
 
 def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : str | Path , mode : Literal['a','w'] = 'w' , 
-                 name_prefix = '' , print_prefix = None , vb_level : int = 1):
+                 name_prefix = '' , print_prefix = None , vb_level : int = 3):
     os.makedirs(os.path.dirname(path) , exist_ok=True)
     if mode == 'a': 
         mode = 'a' if os.path.exists(path) else 'w'
@@ -23,7 +23,7 @@ def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : str | Path , mode : Lit
         Logger.footnote(f'{print_prefix} saved to {path}' , vb_level = vb_level)
     return path
 
-def figs_to_pdf(figs : dict[str , Figure] , path : str | Path , print_prefix = None , vb_level : int = 1):
+def figs_to_pdf(figs : dict[str , Figure] , path : str | Path , print_prefix = None , vb_level : int = 3):
     os.makedirs(os.path.dirname(path) , exist_ok=True)
     with PdfPages(path) as pdf:
         for key, fig in figs.items():

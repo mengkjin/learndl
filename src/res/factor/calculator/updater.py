@@ -29,7 +29,7 @@ class _BaseJob(ABC):
         return self.calc.factor_name
 
     def __call__(self , **kwargs) -> None:
-        return self.do(**kwargs)
+        return self.go(**kwargs)
         
     @property
     def level(self) -> str: 
@@ -57,7 +57,7 @@ class _BaseJob(ABC):
         """sort key of the job"""
         
     @abstractmethod
-    def do(self , **kwargs) -> None:
+    def go(self , **kwargs) -> None:
         """do the job"""
         
     @abstractmethod
@@ -78,7 +78,7 @@ class _JobFactorDate(_BaseJob):
         """sort key of the job : (level , date , factor_name)"""
         return (self.level , self.date , self.factor_name)
 
-    def do(self , indent : int = 1 , **kwargs) -> None:
+    def go(self , indent : int = 1 , **kwargs) -> None:
         """do the job"""
         # self.preview(indent = indent , vb_level = vb_level) # will not preview since saving will output the information
         self.done = self.calc.update_day_factor(
@@ -104,7 +104,7 @@ class _JobFactorAll(_BaseJob):
         """sort key of the job"""
         return (self.level , self.factor_name)
 
-    def do(self , indent : int = 1 , **kwargs) -> None:
+    def go(self , indent : int = 1 , **kwargs) -> None:
         """do the job"""
         # self.preview(indent = indent , vb_level = self.vb_level) # will not preview since saving will output the information
         self.calc.update_all_factors(
@@ -136,7 +136,7 @@ class _JobFactorStats(_BaseJob):
         """sort key of the job"""
         return (self.year , self.factor_name)
 
-    def do(self , indent : int = 1 , **kwargs) -> None:
+    def go(self , indent : int = 1 , **kwargs) -> None:
         """do the job"""
         # self.preview(indent = indent , vb_level = self.vb_level) # will not preview since saving will output the information
         if self.stats_type == 'daily':
@@ -217,12 +217,12 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             elif cls.update_type in ['stock']:
                 target_dates = calc.target_dates(start , end , overwrite = overwrite)
                 for date in calc.target_dates(start , end , overwrite = overwrite):
-                    cls.jobs.append(_JobFactorDate(calc , date , overwrite , vb_level + 2))
+                    cls.jobs.append(_JobFactorDate(calc , date , overwrite , vb_level + 3))
             elif cls.update_type == 'stats':
                 target_dates = calc.stats_target_dates(start , end , overwrite)
                 for stats_type , dates in target_dates.items():
                     for year in np.unique(dates // 10000):
-                        cls.jobs.append(_JobFactorStats(calc , stats_type , year , dates , overwrite , vb_level + 2))
+                        cls.jobs.append(_JobFactorStats(calc , stats_type , year , dates , overwrite , vb_level + 3))
             else:
                 raise ValueError(f'Invalid update type: {cls.update_type}')
         cls.jobs.sort(key=lambda x: x.sort_key())

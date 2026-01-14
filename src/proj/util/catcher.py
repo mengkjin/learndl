@@ -575,10 +575,11 @@ class HtmlCatcher(OutputCatcher):
             assert self.PrimaryInstance is not None , f"Primary instance is not set when entering {self}"
             self.start_point = len(self.PrimaryInstance.outputs)
 
-        Logger.remark(f"{self} Capturing Start" , prefix = True)
+        Logger.remark(f"{self} Capturing Start" , prefix = True , vb_level = 1 if self.is_primary else 2)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True , vb_level = 1 if self.is_primary else 2)
         self.export()
         if self.is_primary:
             self.deflectors.end_catching()
@@ -588,7 +589,6 @@ class HtmlCatcher(OutputCatcher):
     def export(self):
         """Export the catcher to all paths in the export file list"""
         # log first and then export
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
         for export_path in self.export_file_list:
             Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
         if self.is_primary and self.export_file_list:

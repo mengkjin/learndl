@@ -29,7 +29,7 @@ class BasicTestResult(BaseCallBack):
     def path_result(self): return self.config.model_base_path.rslt('basic_test.xlsx')
     
 
-    def save_test_df(self , vb_level : int = 1):
+    def save_test_df(self , vb_level : int = 3):
         df = self.get_test_df()
         DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 99)
         Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
@@ -182,7 +182,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factor = StockFactor(df , factor_names = self.factor_names)
         return factor
 
-    def factor_test(self , indent : int = 0 , vb_level : int = 1):
+    def factor_test(self , indent : int = 0 , vb_level : int = 2):
         with Logger.ParagraphIII('Factor Perf Test'):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(self.factor_test_dates)
@@ -202,7 +202,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
-    def fmp_test(self , indent : int = 0 , vb_level : int = 1):
+    def fmp_test(self , indent : int = 0 , vb_level : int = 2):
         with Logger.ParagraphIII('Factor FMP Test'):
             with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(self.fmp_test_dates)

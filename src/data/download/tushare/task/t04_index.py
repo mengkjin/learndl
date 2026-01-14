@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , ts_code_to_secid
-from src.proj import DB , CALENDAR , PATH
+from src.proj import DB , CALENDAR , PATH , Proj
 from typing import Any
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
@@ -141,10 +141,10 @@ class ZXIndexDaily(DayFetcher):
                 DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
                 updated_dates.append(date)
             for index , df in index_dfs.items():
-                self.update_index_daily_file(index , df , vb_level = 3)
+                self.update_index_daily_file(index , df , vb_level = Proj.vb.max)
         return np.unique(np.array(updated_dates , dtype = int))
     
-    def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 3):
+    def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 5):
         df_old = DB.load('index_daily_ts' , index , vb_level = 99)
         if not df_old.empty:
             df_old['trade_date'] = df_old['trade_date'].astype(int)

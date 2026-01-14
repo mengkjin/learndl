@@ -277,8 +277,8 @@ class TradingPort:
         figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
         if write_down:
-            dfs_to_excel(rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , vb_level = vb_level)
-            figs_to_pdf(figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , vb_level = vb_level)
+            dfs_to_excel(rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , vb_level = vb_level + 2)
+            figs_to_pdf(figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , vb_level = vb_level + 2)
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:

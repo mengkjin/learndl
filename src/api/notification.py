@@ -80,6 +80,7 @@ def email_to_fanghan(test = False):
             task_recorder.mark_finished()
         except Exception as e:
             Logger.error(f'Failed to send email to fanghan: {e}')
+            Logger.print_exc(e)
     Logger.success(f'Email to Fanghan at {today}')
     return
 

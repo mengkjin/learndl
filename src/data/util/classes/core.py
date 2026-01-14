@@ -546,7 +546,7 @@ class ModuleData:
             data = cls(**torch_load(path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
-                Logger.success(f'Loading Module Data, Try \'{path}\', success!')
+                Logger.success(f'Loading Module Data, Try \'{path}\', success!' , vb_level = 3)
             else:
                 Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None

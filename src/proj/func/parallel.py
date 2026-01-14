@@ -60,7 +60,7 @@ class FuncCall:
         return f'FuncCall(key={self.key},func_input={self.func_input})'
 
     def __call__(self) -> Any:
-        return self.do()
+        return self.go()
 
     @staticmethod
     def unwrap(func_input : INPUT_TYPE , **kwargs) -> tuple[Callable , list , dict]:
@@ -103,11 +103,11 @@ class FuncCall:
             Logger.error(f'{key} >> {func}({args} , {kwargs}) generated an exception: {e}')
             raise e
 
-    def do(self) -> Any:
+    def go(self) -> Any:
         self.try_call(self.func_input , self.key , self.result_dict , self.catch_errors , **self.kwargs)
 
     def submit(self , pool : ThreadPoolExecutor | ProcessPoolExecutor):
-        return pool.submit(self.do)
+        return pool.submit(self.go)
 
     @classmethod
     def from_func_calls(cls , inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , ignore_error : bool = False , **kwargs) -> tuple[dict[Any , Any] , list['FuncCall']]:
