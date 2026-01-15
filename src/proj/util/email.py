@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Literal , Sequence
+from typing import Literal
 
 from src.proj.env import MACHINE
 from src.proj.proj import Proj
@@ -65,7 +65,7 @@ class Email:
     
     @classmethod
     def message(cls , title : str  , body : str | None = None , recipient : str | None = None , * ,
-                attachments : str | Path | Sequence[str | Path] | None = None ,
+                attachments : str | Path | list[Path] | list[str] | None = None ,
                 project_attachments : bool = False ,
                 title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
@@ -76,7 +76,7 @@ class Email:
         
         if attachments is None:
             attachment_paths : list[Path] = []
-        elif isinstance(attachments , Sequence):
+        elif isinstance(attachments , list):
             attachment_paths = [Path(f) for f in attachments]
         else:
             attachment_paths = [Path(attachments)]
@@ -85,7 +85,6 @@ class Email:
             attachment_paths.extend(Proj.email_attachments.pop_all())
 
         body_text = body if body is not None else ''
-
         for attachment in attachment_paths:
             if not attachment.exists():
                 body_text += f'\nAttachment not found: {attachment}'
@@ -107,19 +106,18 @@ class Email:
     def send(cls , title : str  , 
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None , * , 
-             attachments : str | Path | Sequence[str | Path] | None = None ,
+             attachments : str | Path | list[Path] | list[str] | None = None ,
              project_attachments : bool = False ,
              title_prefix : str | None = 'Learndl:' ,
              server : Literal['netease'] = 'netease' , 
              confirmation_message = ''):
         
         if not MACHINE.server:
-            Logger.alert1(f'{MACHINE.name} is not a server, skip sending email')
-            return
+           Logger.alert1(f'{MACHINE.name} is not a server, skip sending email')
+           return
 
         cls.setup_settings(server)
         message = cls.message(title , body , recipient , attachments = attachments , project_attachments = project_attachments , title_prefix = title_prefix)
-
         try:
             with cls.connection() as smtp:
                 smtp.starttls()
