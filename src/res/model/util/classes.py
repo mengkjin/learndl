@@ -385,7 +385,7 @@ class TrainerPredRecorder(ModelStreamLine):
         """
         self.retrained_models.append((self.trainer.model_date , self.trainer.model_num))
 
-    def purge_retrained_model_preds(self , vb_level : int = 1):
+    def purge_retrained_model_preds(self , vb_level : int = 2):
         """purge past predictions when trained new models"""
         if not self.retrained_models:
             return
@@ -407,7 +407,7 @@ class TrainerPredRecorder(ModelStreamLine):
                 
             Logger.remark(purge_info , vb_level = vb_level)
 
-    def setup_resuming_status(self , vb_level : int = 1):
+    def setup_resuming_status(self , vb_level : int = 2):
         """
         setup resuming status for previous saved predictions
         notes:
@@ -841,7 +841,7 @@ class BaseTrainer(ModelStreamLine):
         #    model_iter = []
         else:
             iter_info += f'{num_all_models} to go!'
-        Logger.remark(iter_info)
+        Logger.remark(iter_info , vb_level = 2)
         return model_iter
 
     def iter_model_submodels(self):

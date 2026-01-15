@@ -8,7 +8,7 @@ import traceback
 import pandas as pd
 
 from datetime import datetime
-from typing import Any , Literal , Type
+from typing import Any , Literal , Type , Sequence
 
 from src.proj.env import MACHINE , PATH
 from src.proj.proj import Proj
@@ -220,6 +220,34 @@ class Logger:
         return new_stdout(*args , indent = indent , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
+    def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , color = None , indent = 0 , vb_level : int = 1 , **kwargs):
+        """
+        custom stdout message of multiple messages, each message is a tuple of (indent , message) or a string
+        kwargs:
+            indent: add prefix '  --> ' before the message
+            color , bg_color , bold: color the message
+            sep , end , file , flush: same as stdout
+        """
+
+        msgs = [FormatStr(msg if isinstance(msg , str) else msg[1] , indent = indent if isinstance(msg , tuple) else 0 , color = color).formatted() for msg in msg_list]
+        new_stdout('\n'.join(msgs) , vb_level = vb_level , **kwargs)
+
+    @classmethod
+    def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] , color = None , indent = 0 , vb_level : int = 1 , **kwargs):
+        """
+        custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
+        kwargs:
+            indent: add prefix '  --> ' before the message
+            color , bg_color , bold: color the message
+            sep , end , file , flush: same as stdout
+        """
+        assert 'indent' not in kwargs , 'indent should not be in kwargs but in pair_list'
+        new_pairs = [(FormatStr(pair[0] if len(pair) == 2 else pair[1] , indent = indent if len(pair) == 2 else pair[0]).msg , pair[-1]) for pair in pair_list]
+        max_key_length = max([len(key) for key , _ in new_pairs])
+        infos = [FormatStr(f'{key:{max_key_length}s} : {value}' , color = color).formatted() for key , value in new_pairs]
+        new_stdout('\n'.join(infos) , vb_level = vb_level)
+
+    @classmethod
     def stderr(cls , *args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
         """
         custom stdout message
@@ -295,7 +323,7 @@ class Logger:
         new_logger_output('debug' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def info(cls , *args , indent : int = 0 , vb_level : int = 2 , **kwargs):
+    def info(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         """Info level stderr"""
         new_logger_output('info' , *args , indent = indent , vb_level = vb_level , **kwargs)
 
@@ -392,7 +420,7 @@ class Logger:
             with Logger.ParagraphI('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
-        VB_LEVEL = 0
+        VB_LEVEL = 1
         def __init__(self , title : str , vb_level : int = 0):
             self.title = title
             self.vb_level = max(vb_level , self.VB_LEVEL)
@@ -412,7 +440,7 @@ class Logger:
             with Logger.ParagraphII('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
-        VB_LEVEL = 1
+        VB_LEVEL = 2
         def __init__(self , title : str , vb_level : int = 0):
             self.title = title
             self.vb_level = max(vb_level , self.VB_LEVEL)

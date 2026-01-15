@@ -46,6 +46,10 @@ class TradingPortfolioTracker:
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Proj.email_attachments.append(path)
 
+            for port_name in updated_ports:
+                if port_name in FOCUSED_PORTS:
+                    updated_ports[port_name].analyze(write_down = True , vb_level = vb_level + 1)
+                    
     @classmethod
     def attachment_path(cls , date : int) -> Path:
         path = PATH.rslt_trade.joinpath('trading_ports' , f'trading_ports.{date}.csv')

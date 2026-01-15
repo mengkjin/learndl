@@ -76,7 +76,6 @@ def email_to_fanghan(test = False):
         df = pd.merge(df1 , df2 , on='secid' , how='left')
         df.to_csv(temp_file)
         try:
-            print(f'Sending email to fanghan: {title} {body} {recipient} {attachments}')
             Email.send(title , body , recipient , attachments = attachments)
             task_recorder.mark_finished()
         except Exception as e:

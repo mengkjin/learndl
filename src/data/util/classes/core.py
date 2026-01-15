@@ -142,7 +142,7 @@ class DataBlock(Stock4DData):
     
     @classmethod
     def load_paths(cls , paths : Path | list[Path], fillna = 'guess' , intersect_secid = True ,
-                   start_dt = None , end_dt = None , dtype = torch.float):
+                   start_dt = None , end_dt = None , vb_level = 2 , dtype = torch.float):
         if not isinstance(paths , list): 
             paths = [paths]
         block_names = [Path(path).stem.lower() for path in paths]
@@ -158,10 +158,10 @@ class DataBlock(Stock4DData):
         fillna = fillna.astype(bool)
         
         block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlock [{",".join(block_names)}]'
-        with Logger.Timer(f'Load {block_title}'):
+        with Logger.Timer(f'Load {block_title}' , vb_level = vb_level):
             blocks = [cls.load_path(path) for path in paths]
 
-        with Logger.Timer(f'Align {block_title}' , silent = len(blocks) <= 1):
+        with Logger.Timer(f'Align {block_title}' , silent = len(blocks) <= 1 , vb_level = vb_level):
             # sligtly faster than .align(secid = secid , date = date)
             if intersect_secid:  
                 newsecid = index_intersect([blk.secid for blk in blocks])[0]

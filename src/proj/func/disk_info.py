@@ -33,7 +33,5 @@ def get_disk_space_info():
 def print_disk_space_info():
     info = get_disk_space_info()
     Logger.remark("Disk Space Info:")
-    max_key_length = max(len(key) for key in info.keys())
-    for key, value in info.items():
-        Logger.stdout(f"{key:{max_key_length+1}}: {value}" , color = 'lightgreen' , bold = True)
+    Logger.stdout_pairs(list(info.items()) , indent = 1 , color = 'lightgreen' , bold = True)
     return info

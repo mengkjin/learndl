@@ -590,7 +590,7 @@ class HtmlCatcher(OutputCatcher):
         """Export the catcher to all paths in the export file list"""
         # log first and then export
         for export_path in self.export_file_list:
-            Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1)
+            Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1 , vb_level = 3)
         if self.is_primary and self.export_file_list:
             Proj.exit_files.insert(0 , self.export_file_list[0])
         
@@ -1088,7 +1088,7 @@ class MarkdownCatcher(OutputCatcher):
         
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.remark(f"{self} Capturing Start" , prefix = True)
+        Logger.remark(f"{self} Capturing Start" , prefix = True , vb_level = 1)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1131,7 +1131,7 @@ class MarkdownCatcher(OutputCatcher):
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True , vb_level = 1)
         self.markdown_file.close()
         for filename in self.export_file_list:
             filename.unlink(missing_ok=True)
@@ -1140,7 +1140,7 @@ class MarkdownCatcher(OutputCatcher):
                 shutil.copy(self.running_filename, filename)
             except OSError as e:
                 Logger.error(f"Failed to copy {self.running_filename} to {filename}: {e}")
-            Logger.footnote(f"{self.__class__.__name__} result saved to {filename}" , indent = 1)
+            Logger.footnote(f"{self.__class__.__name__} result saved to {filename}" , indent = 1 , vb_level = 3)
         for path in self.running_filename.parent.glob(f'{self.filename.removesuffix(".md")}.*running.md'):
             path.unlink()
     
@@ -1198,15 +1198,15 @@ class CrashProtectorCatcher(OutputCatcher):
         self.start_time = datetime.now()
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.remark(f"{self} Capturing Start" , prefix = True)
+        Logger.remark(f"{self} Capturing Start" , prefix = True , vb_level = 1)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.task_id is None:
             return
         self.deflectors.end_catching()
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True)
-        Logger.footnote(f"{self.__class__.__name__} file {self.filename} removed" , indent = 1)
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True , vb_level = 1)
+        Logger.footnote(f"{self.__class__.__name__} file {self.filename} removed" , indent = 1 , vb_level = 3)
         self.is_catching = False
     
     def open_markdown_file(self):

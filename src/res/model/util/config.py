@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import PATH , MACHINE , Logger , DB , Proj
-from src.proj.abc import FormatStr
 from src.proj.util import Device 
 from src.proj.func import update_dict
 from src.res.algo import AlgoModule
@@ -943,11 +942,7 @@ class TrainConfig(TrainParam):
         if self.is_resuming:
             info_strs.append((0 , 'Resume Option' , f'{self.resume_option}'))
 
-        indented_keys = [FormatStr(key.title() , indent = indent).msg for indent , key , _ in info_strs]
-        max_key_length = max([len(key) for key in indented_keys])
-        infos = [FormatStr(f'{indented_keys:{max_key_length}s} : {value}' , color = color).formatted()
-                 for indented_keys , (indent , key , value) in zip(indented_keys , info_strs)]
-        Logger.stdout('\n'.join(infos) , vb_level = vb_level)
+        Logger.stdout_pairs(info_strs , color = color , vb_level = vb_level)
         return self
 
     @property

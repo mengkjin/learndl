@@ -132,8 +132,7 @@ class ModelTrainer(BaseTrainer):
             return
 
         Logger.remark(f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:')
-        [Logger.stdout(f'Model : {model}' , color = 'lightgreen') for model in resumable_models]
-        [Logger.stdout(f'Factor: {factor}' , color = 'lightgreen') for factor in resumable_factors]
+        Logger.stdout_pairs([('Model' , model) for model in resumable_models] + [('Factor' , factor) for factor in resumable_factors] , indent = 1 , color = 'lightgreen')
         Logger.divider()
 
         for model in resumable_models:
