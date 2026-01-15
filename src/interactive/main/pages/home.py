@@ -5,7 +5,7 @@ import psutil
 from src.proj import Proj
 from src.interactive.frontend.frontend import expander_subheader
 from src.interactive.backend import ScriptRunner
-from util import SC , set_current_page , show_sidebar_buttons , get_script_page , print_page_header , intro_pages
+from util import SC , get_script_page , print_page_header , intro_pages
 
 PAGE_NAME = 'home'
 
@@ -96,7 +96,7 @@ def show_script_structure():
                 body = f"""
                 <div style="
                     font-size: 18px;
-                    font-weight: 900px;
+                    font-weight: 600;
                     margin-top: 5px;
                     margin-bottom: 5px;
                     letter-spacing: 3px;
@@ -131,14 +131,12 @@ def show_script_runner(runner: ScriptRunner):
 
 
 def main():
-    set_current_page(PAGE_NAME)
     print_page_header(PAGE_NAME)
     show_tutorial()
     show_system_info()
     show_pending_features()
-    show_intro_pages()
-    show_script_structure()
-    show_sidebar_buttons()
+    #show_intro_pages()
+    #show_script_structure()
     
 if __name__ == '__main__':
     main() 

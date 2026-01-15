@@ -1,7 +1,7 @@
 import streamlit as st
 import re
 
-from util import SC , set_current_page , show_sidebar_buttons , get_script_page , print_page_header
+from util import SC , get_script_page , print_page_header
 from src.interactive.backend import ScriptRunner
 
 PAGE_NAME = 'script_structure'
@@ -50,10 +50,8 @@ def show_script_runner(runner: ScriptRunner):
             st.info(f"**{runner.content}**" , icon = ":material/info:")
 
 def main():
-    set_current_page(PAGE_NAME)
     print_page_header(PAGE_NAME)
     show_script_structure() 
-    show_sidebar_buttons()
 
 if __name__ == '__main__':
     main() 

@@ -14,8 +14,8 @@ from src.interactive.frontend import (
 
 from src.proj import PATH , MACHINE
 
-from util.control import SC , set_current_page
-from util.page import get_script_page , print_page_header , runs_page_url
+from util.control import SC
+from util.page import get_script_page , print_page_header , ControlPanel
 
 def on_first_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: 
@@ -36,17 +36,15 @@ def on_next_page(max_page : int):
 
 def show_script_detail(script_key : str):
     """show main part"""
-    set_current_page(script_key)
-    runner = SC.get_script_runner(script_key)
+    
     page = get_script_page(script_key)
     if page is None: 
         return
-    
     print_page_header(script_key , 'script')  
+    runner = SC.get_script_runner(script_key)
     show_script_task_selector(runner)
     show_param_settings(runner)
-    show_main_buttons(runner)
-    show_sidebar_buttons(runner)
+    ControlPanel.buttons['script-runner-run'].refresh(runner)
     show_report_main(runner)
     
 
@@ -236,62 +234,6 @@ def conditional_path(format_str : str , params : dict[str, Any] , root = PATH.ma
         return path
     else:
         return format_str.strip().format(**params)
-
-def run_button_button(runner : ScriptRunner | None , sidebar = False):
-    if runner is None:
-        disabled = True
-        help_text = f"Please Choose a Script to Run First"
-        button_key = f"script-runner-run-disabled-not-selected"
-        params = None
-    else:
-        if SC.param_inputs_form is None:
-            raise ValueError("ParamInputsForm is not initialized")
-        params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
-        
-        if SC.get_script_runner_validity(params):
-            disabled = False
-            preview_cmd = SC.get_script_runner_cmd(runner , params)
-            if preview_cmd: 
-                help_text = preview_cmd
-            else:
-                help_text = f"Parameters valid, run {runner.script_key}"
-            button_key = f"script-runner-run-enabled-{runner.script_key}"
-        else:
-            disabled = True
-            help_text = f"Parameters invalid, please check required ones"
-            button_key = f"script-runner-run-disabled-{runner.script_key}"
-        
-    if sidebar: 
-        button_key += "-sidebar"
-    return st.button(":material/mode_off_on:", key=button_key , 
-                    help = help_text , disabled = disabled , 
-                    on_click = SC.click_script_runner_run , args = (runner, params))
-
-def show_main_buttons(runner : ScriptRunner):
-    with st.session_state['box-main-button']:
-        cols = st.columns(2 , vertical_alignment = "center")
-        with cols[0]:
-            run_button_button(runner , sidebar = False)
-        with cols[1]:
-            key = 'current-script-latest-task-button'
-            if key not in st.session_state:
-                st.session_state[key] = st.empty()
-            with st.session_state[key]:
-                item = SC.get_latest_task_item(runner.script_key)
-                if item is None:
-                    st.button(":material/slideshow:", key=f"{key}-disabled-init" , 
-                              help = "Please Run a Task of This Script First" , disabled = True)
-                else:
-                    if st.button(":material/slideshow:", key=f"{key}-enable-{item.id}" , 
-                                help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
-                                on_click = SC.click_show_complete_report , args = (item,) ,
-                                disabled = False):
-                        st.switch_page(runs_page_url(item.script_key))
-            
-def show_sidebar_buttons(runner : ScriptRunner | None = None):
-    if button_placeholder := st.session_state.get('sidebar-runner-button' , None):
-        with button_placeholder: 
-            run_button_button(runner , sidebar = True)
 
 @clear_and_show
 def show_report_main(runner : ScriptRunner):

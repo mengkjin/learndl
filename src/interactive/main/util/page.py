@@ -1,19 +1,21 @@
 import streamlit as st
 from pathlib import Path
 from typing import Literal
-import re
-from src.proj import Proj
+import re , subprocess
+from abc import abstractmethod , ABC
+
+from src.proj import Proj , MACHINE
 from src.interactive.backend import PathItem
-from .control import SC
+from src.interactive.backend import ScriptRunner
+
+from .control import SC , set_current_page
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 
 INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
-PAGE_TITLES = {
-    'home' : f":rainbow[:material/rocket_launch: {Proj.Conf.Interactive.page_title} (_v{Proj.Conf.Interactive.version}_)]"
-}
+PAGE_TITLE = f":rainbow[:material/rocket_launch: {Proj.Conf.Interactive.page_title} (_v{Proj.Conf.Interactive.version}_)]"
 
 PAGE_ICONS = {
     'home' : ':material/home:' ,
@@ -113,18 +115,230 @@ def make_script_detail_file(item : PathItem):
         return
     with open(runs_page_path(item.script_key), 'w') as f:
         f.write(f"""
-from util import show_script_detail , set_current_page
+from util import show_script_detail
 
 def main():
-    set_current_page({repr(item.script_key)}) 
     show_script_detail({repr(item.script_key)}) 
 
 if __name__ == '__main__':
     main()
 """)
+
+class ControlPanelButton(ABC):
+    """control panel button"""
+    key : str = ''
+    icon : str = ''
+    title : str = ''
+
+    @abstractmethod
+    def button(self , script_key : str | None = None):
+        ...
+
+    def refresh(self , *args , **kwargs):
+        pass
+
+    def show(self , script_key : str | None = None):
+        if self.key not in st.session_state:
+            st.session_state[self.key] = st.empty()
+        with st.session_state[self.key]:
+            with st.container():
+                self.button(script_key = script_key)
+                self.print_title()
+
+    def print_title(self):
+        body = f"""
+        <div style="
+            margin-bottom: 0px;
+            margin-top: -10px;
+            padding: 0px;
+            font-size: 12px;
+            color: rgb(0, 104, 201);
+            font-weight: 600;
+            white-space: nowrap;
+        ">{self.title.upper()}</div>
+        """       
+        st.markdown(body , unsafe_allow_html = True)
+
+class ScriptRunnerRunButton(ControlPanelButton):
+    key = f"script-runner-run"
+    icon = f":material/mode_off_on:"
+    title = f"Run Script"
+
+    def button(self , script_key : str | None = None):
+        help = f"Please Choose a Script to Run First" if script_key is None else f"Please Fill Required Parameters"
+        st.button(self.icon, key=f'{self.key}-disabled' , help = help)
+
+    def refresh(self , runner : ScriptRunner):
+        with st.session_state[self.key]:
+            if SC.param_inputs_form is None:
+                raise ValueError("ParamInputsForm is not initialized")
+            params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
+            
+            if SC.get_script_runner_validity(params):
+                disabled = False
+                preview_cmd = SC.get_script_runner_cmd(runner , params)
+                if preview_cmd: 
+                    help_text = preview_cmd
+                else:
+                    help_text = f"Parameters valid, run {runner.script_key}"
+                button_key = f"{self.key}-enabled-{runner.script_key}"
+            else:
+                disabled = True
+                help_text = f"Parameters invalid, please check required ones"
+                button_key = f"{self.key}-disabled-{runner.script_key}"
+
+            with st.container():
+                st.button(self.icon, key=button_key , 
+                        help = help_text , disabled = disabled , 
+                        on_click = SC.click_script_runner_run , args = (runner, params)) 
+                self.print_title()
+
+class GlobalScriptLatestTaskButton(ControlPanelButton):
+    key = f"global-script-latest-task"
+    icon = f":material/reply_all:"
+    title = f"Latest for All"
+
+    def button(self , script_key : str | None = None):
+        item = SC.get_latest_task_item()
+        if item is None:
+            st.button(self.icon, key=f"{self.key}-disabled" , 
+                    help = "Please Run a Task First" , disabled = True)
+        else:
+            if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
+                        help = f":blue[**Show Latest Task**]: {item.id}" , 
+                        on_click = SC.click_show_complete_report , args = (item,) ,
+                        disabled = False):
+                st.switch_page(runs_page_url(item.script_key))
+
+
+class CurrentScriptLatestTaskButton(ControlPanelButton):
+    key = f"current-script-latest-task"
+    icon = f":material/reply:"
+    title = f"Current Latest"
+
+    def button(self , script_key : str | None = None):
+        item = SC.get_latest_task_item(script_key) if script_key is not None else None
+        if item is None:
+            st.button(self.icon, key=f"{self.key}-disabled" , 
+                        help = "Please Run a Task of This Script First" if script_key is not None else "Please Choose a Script First" , disabled = True)
+        else:
+            if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
+                        help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
+                        on_click = SC.click_show_complete_report , args = (item,) ,
+                        disabled = False):
+                st.switch_page(runs_page_url(item.script_key))
+
+class ControlRefreshTaskQueueButton(ControlPanelButton):
+    key = f"control-refresh-task-queue"
+    icon = f":material/refresh:"
+    title = f"Refresh Tasks"
+
+    def button(self , script_key : str | None = None):
+        st.button(self.icon, key=f"{self.key}-enabled" , help = "Refresh Task Queue" , 
+                        on_click = SC.click_queue_refresh , disabled = False)
+
+class ControlGitClearPullButton(ControlPanelButton):
+    key = f"control-git-clear-pull"
+    icon = f":material/cloud_download:"
+    title = f"Git Pull"
+
+    def button(self , script_key : str | None = None):
+        st.button(self.icon, key=f"{self.key}-enabled" , help = "Clear Local Changes and Pull Latest Code" , disabled = False, on_click = self.clear_git_pull)
         
+    def clear_git_pull(self):
+        if not MACHINE.coding_platform:
+            raise ValueError("Git Pull is not available on coding platform")
+        else:
+            subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
+            subprocess.run(['git', 'clean', '-fd'], check=True)
+            subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
+
+
+class ControlPanel:
+    """control panel"""
+    control_panel_key = "page-control-panel"
+    buttons : dict[str, ControlPanelButton] = {
+        'script-runner-run' : ScriptRunnerRunButton(),
+        'global-script-latest-task' : GlobalScriptLatestTaskButton(),
+        'current-script-latest-task' : CurrentScriptLatestTaskButton(),
+        'control-refresh-task-queue' : ControlRefreshTaskQueueButton(),
+        'control-git-clear-pull' : ControlGitClearPullButton(),
+    }
+    
+    def show(self , script_key : str | None = None):
+        with st.container(key = self.control_panel_key):
+            buttons , settings = st.tabs(['**Global Control**' , '**Global Settings**'])
+            with buttons:
+                self.show_buttons(script_key = script_key)
+            with settings:
+                self.show_settings(script_key = script_key)
+
+    def show_buttons(self , script_key : str | None = None):
+        with st.container(key = f"{self.control_panel_key}-buttons"):
+            cols = st.columns(len(self.buttons) , gap = 'small' , vertical_alignment = 'center')
+            for col , button in zip(cols, self.buttons.values()):
+                with col:
+                    button.show(script_key = script_key)
+
+    def show_settings(self , script_key : str | None = None):
+        with st.container(key = f"{self.control_panel_key}-settings"):
+            verbosity , email , mode = st.columns(3 , gap = 'small' , vertical_alignment = 'center')
+            with verbosity:
+                # max verbosity, yes for 10 , no for 0 , None for default (2 if not set), passed to script params
+                st.segmented_control("**:blue[Max Verbosity]**" , ['yes' , 'no'] , default = None , 
+                                     key = 'global-settings-maxvb'  , 
+                                     help="""Should use max verbosity or min? Not selected will use default.""")
+
+            with email:
+                # email notification, yes , no , None for default, passed to script params
+                st.segmented_control("**:blue[Email Notification]**" , ['yes' , 'no'] , default = None , 
+                                     key = 'global-settings-email'  , 
+                                     help="""If email after the script is complete? Not selected will use script header value.""")
+
+            with mode:    
+                # run mode, shell , os , or default , used in SessionControl.click_script_runner_run()
+                st.segmented_control("**:blue[Run Mode]**" , ['shell' , 'os'] , default = None , 
+                                     key = 'global-settings-mode'  , 
+                                     help="""Which mode should the script be running in?
+                                     :blue[**shell**] will start a commend terminal to run;
+                                     :blue[**os**] will run in backend.
+                                     Not selected will use script header value.""")
+          
+          
+def global_settings(script_key : str | None = None):
+    with st.container(key = "control-global-settings"):
+        vb , em , md = st.columns([1,1,1] , gap = 'small' , vertical_alignment = 'center')
+        with vb:
+            # max verbosity, yes for 10 , no for 0 , None for default (2 if not set), passed to script params
+            cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
+            cols[0].markdown(":blue-badge[Max Verbosity]" , 
+                            help="""Should use max verbosity or min? Not selected will use default (2 if not set).""")
+            cols[1].segmented_control('MaxVB' , ['yes' , 'no'] , default = None , 
+                                    key = 'global-settings-maxvb'  , label_visibility = 'collapsed')
+
+        with em:
+            # email notification, yes , no , None for default, passed to script params
+            cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
+            cols[0].markdown(":blue-badge[Email Notification]" , 
+                            help="""If email after the script is complete? Not selected will use script header value.""")
+            cols[1].segmented_control('Email' , ['yes' , 'no'] , default = None , 
+                                    key = 'global-settings-email'  , label_visibility = 'collapsed')
+
+        with md:    
+            # run mode, shell , os , or default , used in SessionControl.click_script_runner_run()
+            cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
+            cols[0].markdown(":blue-badge[Run Mode]" , 
+                            help='''Which mode should the script be running in?
+                            :blue[**shell**] will start a commend terminal to run;
+                            :blue[**os**] will run in backend.
+                            Not selected will use script header value.''')
+            cols[1].segmented_control('Mode' , ['shell' , 'os'] , default = None , 
+                                    key = 'global-settings-mode' , label_visibility = 'collapsed')
+
 def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro'):
+    set_current_page(page_name)
     if type == 'intro':
+        script_key = None
         self_page = get_intro_page(page_name) 
     elif type == 'script':
         script_key = page_name
@@ -134,9 +348,10 @@ def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'in
             return
     else:
         raise ValueError(f"type {type} should be 'intro' or 'script'")
-    title = PAGE_TITLES.get(page_name , f":rainbow[{self_page['icon']} {self_page['head']}]")
-    helps = self_page['help'].split('\n')
-    st.session_state['box-title'].title(title)
-    # st.session_state['box-main-button'].write('')
-    for h in helps: 
-        st.warning(h , icon = ":material/info:")
+    
+    st.title(PAGE_TITLE)
+    st.header(f"*_:rainbow[{self_page['icon']} {self_page['head']}]_*" , help = self_page['help'])
+    if 'control-panel' not in st.session_state:
+        st.session_state['control-panel'] = ControlPanel()
+    st.session_state['control-panel'].show(script_key = script_key)
+    

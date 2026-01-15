@@ -2,7 +2,7 @@ import streamlit as st
 
 from src.interactive.frontend.frontend import expander_subheader # , ActionLogger
 
-from util import SC , set_current_page , show_sidebar_buttons , print_page_header
+from util import SC , print_page_header
 
 PAGE_NAME = 'developer_info'
 
@@ -63,10 +63,8 @@ def show_developer_info(H = 500):
                 content['operation']()
         
 def main():
-    set_current_page(PAGE_NAME)
     print_page_header(PAGE_NAME)
     show_developer_info()
-    show_sidebar_buttons()
         
 if __name__ == '__main__':
     main() 

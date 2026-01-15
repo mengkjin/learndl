@@ -482,99 +482,101 @@ def style():
                 color: white !important;
             }  
         }
-    } 
-    .stElementContainer[class*="script-runner-run"] {
-        button {
-            min-width: 60px !important;
-            height: 60px !important;
-            width: 60px !important;
-            background-color: green !important;
-            color: white !important;
-            border-radius: 25%;
-            border: none;
-            display: flex;
-            margin: 10px !important;
-            &:hover {background-color: darkgreen !important;}
-        }
-        p {
-            font-size: 48px !important;
-            font-weight: bold !important;
-        }
-        &[class*="-disabled"] button {
-            background-color: lightgray !important;
-            color: white !important;
-            border: 1px solid lightgray !important;
-            &:hover {
-                background-color: lightgray !important;
-            }
-        } 
-        .stTooltipIcon {justify-content: flex-end !important;}
-        &[class*="-sidebar"] {
-            .stTooltipIcon {
-                justify-content: center !important;
-            }
+    }
+    .stVerticalBlock[class*="control-panel"] {
+        padding-left: 10% !important;
+        padding-right: 10% !important;
+        [data-baseweb*="tab-list"] {
             button {
-                margin-top: 0px !important;
+                height: 24px !important;
+                min-width: 10% !important;
+                display: flex;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: radial-gradient(circle,white 50%, lightgray 200%) !important;
+            }
+        }
+        [data-baseweb*="tab-panel"]{
+            height: 100px !important;
+            min-height: 100px !important;
+            .stVerticalBlock[class*="control-panel-buttons"] {
+                padding: 0px !important;
                 margin-bottom: 0px !important;
-                padding-top: 0px !important;
-                padding-bottom: 0px !important;
+                margin-top: 0px !important;
+                .stTooltipIcon {
+                    justify-content: center !important;
+                }
+                .stElementContainer {
+                    justify-content: center !important;
+                }
+                button {
+                    min-width: 60px !important;
+                    min-height: 60px !important;
+                    height: 60px !important;
+                    width: 60px !important;
+                    border-radius: 50%;
+                    border: none;
+                    display: flex;
+                }
+                .stElementContainer[class*="script-runner-run"] {
+                    button {
+                        background-color: green !important;
+                        color: white !important;
+                        &:hover {background-color: darkgreen !important;}
+                    }
+                }
+                .stElementContainer[class*="global-script-latest-task"] {
+                    button {
+                        background-color: lightblue !important;
+                        color: white !important;
+                        &:hover {background-color: #2196F3 !important;}
+                    }
+                }
+                .stElementContainer[class*="current-script-latest-task"] {
+                    button {
+                        background-color: lightcyan !important;
+                        color: white !important;
+                        &:hover {background-color: #00BCD4 !important;}
+                    }
+                }
+                .stElementContainer[class*="control-refresh-task-queue"] {
+                    button {
+                        background-color: lightgreen !important;
+                        color: white !important;
+                        &:hover {background-color: #4CAF50 !important;}
+                    }
+                }
+                .stElementContainer[class*="git-clear-pull"] {
+                    button {
+                        background-color: coral !important;
+                        color: white !important;
+                        &:hover {background-color: #F44336 !important;}
+                    }
+                }
+                .stElementContainer[class*="-disabled"] button {
+                    background-color: lightgray !important;
+                    color: white !important;
+                    border: 1px solid lightgray !important;
+                    &:hover {
+                        background-color: lightgray !important;
+                    }
+                }
+                p {
+                    font-size: 40px !important;
+                    font-weight: bold !important;
+                }
             }
-        }
-    }
-    .stElementContainer[class*="script-latest-task"] {
-        button {
-            min-width: 60px !important;
-            height: 60px !important;
-            width: 60px !important;
-            background-color: blue !important;
-            color: white !important;
-            border-radius: 25%;
-            border: none;
-            display: flex;
-            margin-top: 0px !important;
-            margin-bottom: 0px !important;
-            padding-top: 0px !important;
-            padding-bottom: 0px !important;
-            &:hover {background-color: darkblue !important;}
-        }
-        p {
-            font-size: 48px !important;
-            font-weight: bold !important;
-        }
-        &[class*="-disabled"] button {
-            background-color: lightgray !important;
-            color: white !important;
-            border: 1px solid lightgray !important;
-            &:hover {
-                background-color: lightgray !important;
+            .stVerticalBlock[class*="control-panel-settings"] {   
+                .stColumn {
+                    .stButtonGroup {
+                        button {
+                            p {
+                                font-size: 12px !important;
+                            }
+                        }
+                    }
+                }
             }
-        } 
-        .stTooltipIcon {
-            justify-content: center !important;
-        }
-    }
-    .stElementContainer[class*="sidebar-refresh-task-queue"] {
-        button {
-            min-width: 60px !important;
-            height: 60px !important;
-            width: 60px !important;
-            background-color: lightgreen !important;
-            color: white !important;
-            border-radius: 25%;
-            border: none;
-            display: flex;
-            margin-top: 0px !important;
-            margin-bottom: 0px !important;
-            padding-top: 0px !important;
-            padding-bottom: 0px !important;
-            &:hover {background-color: darkblue !important;}
-        }
-        p {
-            font-size: 48px !important;
-            font-weight: bold !important;
-        }
-        .stTooltipIcon {
-            justify-content: center !important;
         }
     }
     .stElementContainer[class*="exit-file"] {
@@ -599,31 +601,6 @@ def style():
             margin-top: 0px !important;
             margin-bottom: 0px !important;
             padding-bottom: 5px !important;
-        }
-        .stVerticalBlock[class*="sidebar-global-settings"] {
-            .stColumn {
-                margin-top: 0px !important;
-                margin-bottom: 0px !important;
-                padding-top: 0px !important;
-                padding-bottom: 0px !important;
-                padding-left: 10px !important;
-                height: 16px !important;
-                .stButtonGroup {
-                    button {
-                        min-width: 40px !important;
-                        margin-top: 0px !important;
-                        margin-bottom: 0px !important;
-                        padding-top: 0px !important;
-                        padding-bottom: 0px !important;
-                        padding-left: 5px !important;
-                        padding-right: 5px !important;
-                        height: 28px !important;
-                        p {
-                            font-size: 11px !important;
-                        }
-                    }
-                }
-            }
         }
         .stVerticalBlock[class*="sidebar-intro-links"] {
             padding-top: 10px !important;
@@ -670,7 +647,7 @@ def style():
         .stVerticalBlock[class*="sidebar-script-links"] {
             .stPageLink {
                 margin-top: 0px !important;
-                margin-bottom: -10px !important;
+                margin-bottom: -5px !important;
                 padding-top: 0px !important;
                 padding-bottom: 0px !important;
                 padding-left: 10px !important;
@@ -683,7 +660,7 @@ def style():
                 height: 24px !important;
                 width: 24px !important;
                 margin-top: 0px !important;
-                margin-bottom: -10px !important;
+                margin-bottom: -5px !important;
                 padding-top: 0px !important;
                 padding-bottom: 0px !important;
                 border-radius: 50% !important;

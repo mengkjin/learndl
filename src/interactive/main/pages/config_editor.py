@@ -4,7 +4,7 @@ import streamlit as st
 from src.proj import PATH
 from src.interactive.frontend.frontend import YAMLFileEditor
 
-from util import SC , set_current_page , show_sidebar_buttons , print_page_header
+from util import SC , print_page_header
     
 PAGE_NAME = 'config_editor'
 
@@ -18,10 +18,8 @@ def show_config_editor():
         config_editor.show_yaml_editor(files, default_file=default_file)
 
 def main():
-    set_current_page(PAGE_NAME)
-    print_page_header(PAGE_NAME)  
+    print_page_header(PAGE_NAME)
     show_config_editor()
-    show_sidebar_buttons()
     
 if __name__ == '__main__':
     main() 

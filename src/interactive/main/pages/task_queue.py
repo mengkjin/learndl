@@ -3,7 +3,7 @@ from typing import Literal
 
 from src.proj import PATH
 
-from util import SC , runs_page_url , set_current_page , show_sidebar_buttons , print_page_header
+from util import SC , runs_page_url , print_page_header
 
 PAGE_NAME = 'task_queue'
 
@@ -198,10 +198,8 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
                         st.error(f'Script Failed' , icon = ":material/error:")
             
 def main():
-    set_current_page(PAGE_NAME)
     print_page_header(PAGE_NAME)
-    show_task_queue() 
-    show_sidebar_buttons()
+    show_task_queue()
 
 if __name__ == '__main__':
     main() 

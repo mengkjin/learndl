@@ -136,7 +136,7 @@ class SessionControl:
             if pvalue.required and params.get(pname) is None:
                 return False
         return True
-    
+   
     def click_queue_item(self , item : TaskItem):
         """click queue item"""
         if self.running_report_queue is not None and self.running_report_queue == item.id:

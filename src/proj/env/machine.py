@@ -66,6 +66,7 @@ class MACHINE:
     is_linux = system_name == 'Linux' and os.name == 'posix'
     is_windows = system_name == 'Windows'
     is_macos = system_name == 'Darwin'
+    coding_platform = is_macos
 
     cpu_count = os.cpu_count() or 1
     best_device = _get_best_device()
