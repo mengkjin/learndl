@@ -150,7 +150,7 @@ class ControlPanelButton(ABC):
         <div style="
             margin-bottom: 0px;
             margin-top: -10px;
-            padding: 0px;
+            padding: 0 0 20px 0;
             font-size: 12px;
             color: rgb(0, 104, 201);
             font-weight: 600;
@@ -247,7 +247,7 @@ class ControlGitClearPullButton(ControlPanelButton):
         
     def clear_git_pull(self):
         if MACHINE.coding_platform:
-            raise ValueError("Git Pull is not available on coding platform")
+            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.info()}")
         else:
             subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
             subprocess.run(['git', 'clean', '-fd'], check=True)
@@ -349,7 +349,7 @@ def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'in
     else:
         raise ValueError(f"type {type} should be 'intro' or 'script'")
     
-    st.title(PAGE_TITLE)
+    # st.title(PAGE_TITLE)
     st.header(f"*_:rainbow[{self_page['icon']} {self_page['head']}]_*" , help = self_page['help'])
     if 'control-panel' not in st.session_state:
         st.session_state['control-panel'] = ControlPanel()

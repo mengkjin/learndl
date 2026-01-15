@@ -1,7 +1,7 @@
 import streamlit as st
 
 from .control import SC 
-from .page import intro_pages , script_pages
+from .page import intro_pages , script_pages , PAGE_TITLE
 from .logo import get_logo
 
 def page_navigation():
@@ -18,7 +18,7 @@ def page_navigation():
 def sidebar_navigation():
     with st.sidebar:
         st.logo(**get_logo() , link = 'https://github.com/mengkjin/learndl')
-        
+        st.subheader(PAGE_TITLE)
         with st.container(key = "sidebar-quick-links"):
             intro_links()
             script_links()

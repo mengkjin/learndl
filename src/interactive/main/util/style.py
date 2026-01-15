@@ -24,6 +24,7 @@ class CustomCSS:
             font-weight: 900 !important;
             padding: 10px !important;
             letter-spacing: 5px !important;
+            padding: 12px 0 !important;
             border-bottom: 2px solid #1E90FF !important;
             margin-bottom: 20px !important;
         }
@@ -33,12 +34,17 @@ class CustomCSS:
             letter-spacing: 3px !important;
             white-space: nowrap !important;
             color: darkblue !important;
+            padding: 8px 0 !important;
+            border-bottom: 2px solid #1E90FF !important;
+            margin-bottom: 10px !important;
         }
         h3 {
             font-size: 24px !important;
             font-weight: 900 !important;
             letter-spacing: 3px !important;
             white-space: nowrap !important;
+            padding: 4px 0 !important;
+            margin-bottom: 5px !important;
         }
         button {
             align-items: center;
@@ -51,6 +57,9 @@ class CustomCSS:
             box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15) !important;
             background-color: lightblue !important;
             border: none !important;
+        }
+        .stMainBlockContainer {
+            padding-top: 40px !important;
         }
         .stCaptionContainer {
             margin: -10px !important;
@@ -497,18 +506,20 @@ def style():
             }
         }
         [data-baseweb*="tab-panel"]{
-            height: 100px !important;
-            min-height: 100px !important;
+            min-height: 120px !important;
+            margin-bottom: -10px !important;
+            border-bottom: 2px solid #1E90FF !important;
+            .stElementContainer {
+                justify-content: center !important;
+            }
             .stVerticalBlock[class*="control-panel-buttons"] {
-                padding: 0px !important;
+                padding: 0 !important;
                 margin-bottom: 0px !important;
                 margin-top: 0px !important;
                 .stTooltipIcon {
                     justify-content: center !important;
                 }
-                .stElementContainer {
-                    justify-content: center !important;
-                }
+                
                 button {
                     min-width: 60px !important;
                     min-height: 60px !important;
@@ -567,12 +578,10 @@ def style():
                 }
             }
             .stVerticalBlock[class*="control-panel-settings"] {   
-                .stColumn {
-                    .stButtonGroup {
-                        button {
-                            p {
-                                font-size: 12px !important;
-                            }
+                .stButtonGroup {
+                    button {
+                        p {
+                            font-size: 12px !important;
                         }
                     }
                 }
