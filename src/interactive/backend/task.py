@@ -554,7 +554,6 @@ class TaskItem:
 
     @property
     def relative(self):
-        raise ValueError(self.absolute)
         return self.absolute.relative_to(PATH.scpt)
     
     @property
@@ -563,7 +562,7 @@ class TaskItem:
         if abs_path.is_relative_to(PATH.scpt):
             return abs_path
         else:
-            return PATH.scpt.joinpath(str(abs_path).split('scripts' , 1)[-1].removeprefix('/'))
+            return PATH.scpt.joinpath(str(abs_path).split('scripts' , 1)[-1].replace('\\', '/').removeprefix('/'))
 
     @property
     def stem(self):
