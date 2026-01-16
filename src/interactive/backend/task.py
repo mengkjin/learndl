@@ -559,11 +559,11 @@ class TaskItem:
     @property
     def absolute(self):
         abs_path = self.path.absolute()
-        print(abs_path)
+        raise ValueError(abs_path)
         if abs_path.is_relative_to(PATH.scpt):
             return abs_path
         else:
-            print(PATH.scpt.joinpath(str(abs_path).split('scripts' , 1)[-1].removeprefix('/')))
+            raise ValueError(PATH.scpt.joinpath(str(abs_path).split('scripts' , 1)[-1].removeprefix('/')))
             return PATH.scpt.joinpath(str(abs_path).split('scripts' , 1)[-1].removeprefix('/'))
 
     @property
