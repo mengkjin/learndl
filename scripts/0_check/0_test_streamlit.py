@@ -41,7 +41,8 @@
 #       default : 42.
 import random , sys , tqdm
 from src.proj import Logger
-from src.proj.util import ScriptTool
+from src.proj.util import ScriptTool 
+from src.proj.func import print_disk_space_info
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -90,6 +91,8 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
 
             for i in tqdm.tqdm(range(100) , desc='processing'):
                 pass
+
+            print_disk_space_info()
 
             if (rnd := random.random()) < 0.5:
                 Logger.conclude(f'this is an error: random number {rnd} < 0.5' , level = 'error')

@@ -1,10 +1,21 @@
 import streamlit as st
 
+from src.proj import Proj
+from .style import style
 from .control import SC 
 from .page import intro_pages , script_pages , PAGE_TITLE
 from .logo import get_logo
 
-def page_navigation():
+def page_config():
+    st.set_page_config(
+        page_title=Proj.Conf.Interactive.page_title,
+        page_icon=":material/rocket_launch:",
+        layout= 'wide' , # 'centered',
+        initial_sidebar_state="expanded"
+    )
+    style()
+
+def top_navigation():
     pages = {}
     pages['Intro'] = [page['page'] for page in intro_pages().values()]
     for page in script_pages().values():
@@ -18,7 +29,7 @@ def page_navigation():
 def sidebar_navigation():
     with st.sidebar:
         st.logo(**get_logo() , link = 'https://github.com/mengkjin/learndl')
-        st.subheader(PAGE_TITLE)
+        st.subheader(f'*_{PAGE_TITLE}_*')
         with st.container(key = "sidebar-quick-links"):
             intro_links()
             script_links()
@@ -62,3 +73,9 @@ def script_links(show_dir = False):
             with cols[1]:
                 st.page_link(page['page'] , label = ' > '.join([f'**{parts[0].upper()}**' , *parts[1:]]) , icon = page['icon'] , help = page['help'])
             group = page['group']
+
+def page_setup():
+    page_config()
+    pg = top_navigation()
+    sidebar_navigation()
+    return pg

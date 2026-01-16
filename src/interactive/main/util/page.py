@@ -152,7 +152,6 @@ class ControlPanelButton(ABC):
             margin-top: -10px;
             padding: 0 0 20px 0;
             font-size: 12px;
-            color: rgb(0, 104, 201);
             font-weight: 600;
             white-space: nowrap;
         ">{self.title.upper()}</div>
@@ -291,7 +290,7 @@ class ControlPanel:
 
             with email:
                 # email notification, yes , no , None for default, passed to script params
-                st.segmented_control("**:blue[Email Notification]**" , ['yes' , 'no'] , default = None , 
+                st.segmented_control("**:blue[Send Email]**" , ['yes' , 'no'] , default = None , 
                                      key = 'global-settings-email'  , 
                                      help="""If email after the script is complete? Not selected will use script header value.""")
 
@@ -305,36 +304,6 @@ class ControlPanel:
                                      Not selected will use script header value.""")
           
           
-def global_settings(script_key : str | None = None):
-    with st.container(key = "control-global-settings"):
-        vb , em , md = st.columns([1,1,1] , gap = 'small' , vertical_alignment = 'center')
-        with vb:
-            # max verbosity, yes for 10 , no for 0 , None for default (2 if not set), passed to script params
-            cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
-            cols[0].markdown(":blue-badge[Max Verbosity]" , 
-                            help="""Should use max verbosity or min? Not selected will use default (2 if not set).""")
-            cols[1].segmented_control('MaxVB' , ['yes' , 'no'] , default = None , 
-                                    key = 'global-settings-maxvb'  , label_visibility = 'collapsed')
-
-        with em:
-            # email notification, yes , no , None for default, passed to script params
-            cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
-            cols[0].markdown(":blue-badge[Email Notification]" , 
-                            help="""If email after the script is complete? Not selected will use script header value.""")
-            cols[1].segmented_control('Email' , ['yes' , 'no'] , default = None , 
-                                    key = 'global-settings-email'  , label_visibility = 'collapsed')
-
-        with md:    
-            # run mode, shell , os , or default , used in SessionControl.click_script_runner_run()
-            cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
-            cols[0].markdown(":blue-badge[Run Mode]" , 
-                            help='''Which mode should the script be running in?
-                            :blue[**shell**] will start a commend terminal to run;
-                            :blue[**os**] will run in backend.
-                            Not selected will use script header value.''')
-            cols[1].segmented_control('Mode' , ['shell' , 'os'] , default = None , 
-                                    key = 'global-settings-mode' , label_visibility = 'collapsed')
-
 def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro'):
     set_current_page(page_name)
     if type == 'intro':

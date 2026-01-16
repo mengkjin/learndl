@@ -24,7 +24,7 @@ class CustomCSS:
             font-weight: 900 !important;
             padding: 10px !important;
             letter-spacing: 5px !important;
-            padding: 12px 0 !important;
+            padding: 12px 0 0 0 !important;
             border-bottom: 2px solid #1E90FF !important;
             margin-bottom: 20px !important;
         }
@@ -34,7 +34,7 @@ class CustomCSS:
             letter-spacing: 3px !important;
             white-space: nowrap !important;
             color: darkblue !important;
-            padding: 8px 0 !important;
+            padding: 8px 0 0 0 !important;
             border-bottom: 2px solid #1E90FF !important;
             margin-bottom: 10px !important;
         }
@@ -43,8 +43,9 @@ class CustomCSS:
             font-weight: 900 !important;
             letter-spacing: 3px !important;
             white-space: nowrap !important;
-            padding: 4px 0 !important;
-            margin-bottom: 5px !important;
+            padding: 6px 0 0 0 !important;
+            border-bottom: 2px solid #1E90FF !important;
+            margin-bottom: 10px !important;
         }
         button {
             align-items: center;
@@ -502,13 +503,17 @@ def style():
                 display: flex;
                 margin: 0 !important;
                 padding: 0 !important;
-                background: radial-gradient(circle,white 50%, lightgray 200%) !important;
+                /* background: radial-gradient(circle,white 50%, lightgray 200%) !important; */
+            }
+            p {
+                font-size: 16px !important;
+                font-weight: bold !important;
             }
         }
         [data-baseweb*="tab-panel"]{
-            min-height: 120px !important;
+            min-height: 110px !important;
             margin-bottom: -10px !important;
-            border-bottom: 2px solid #1E90FF !important;
+            border-bottom: 2px solid lightgray !important;
             .stElementContainer {
                 justify-content: center !important;
             }
@@ -578,12 +583,8 @@ def style():
                 }
             }
             .stVerticalBlock[class*="control-panel-settings"] {   
-                .stButtonGroup {
-                    button {
-                        p {
-                            font-size: 12px !important;
-                        }
-                    }
+                p {
+                    font-size: 16px !important;
                 }
             }
         }
@@ -606,11 +607,6 @@ def style():
         margin-bottom: 0px !important;
     }
     div[data-testid*="stSidebarUserContent"] {
-        h3 {
-            margin-top: 0px !important;
-            margin-bottom: 0px !important;
-            padding-bottom: 5px !important;
-        }
         .stVerticalBlock[class*="sidebar-intro-links"] {
             padding-top: 10px !important;
             .stTooltipIcon {
