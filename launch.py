@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-import sys , os
+import os , platform
 
 if __name__ == '__main__':
-    if sys.platform == 'Windows':
-        os.system('runs/launch.bat')
+    if platform.system() == 'Windows':
+        os.system('cmd /c runs\\launch.bat')
     else:
         os.system('runs/launch.sh')
