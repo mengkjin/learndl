@@ -52,7 +52,7 @@ class ScriptCmd:
         py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         if MACHINE.is_windows:
             py_cmd = f'"{MACHINE.python_path}" -c "{self.script} {args_str}"'
-            py_cmd = py_cmd.replace("'" , "\\'").replace('"' , '\\"')
+            py_cmd = py_cmd.replace("'" , "\\'").replace('"' , '\\"').replace('\\' , '/')
         else:
             py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         self.py_cmd = py_cmd
