@@ -224,6 +224,11 @@ class DataModule(BaseDataModule):
             raise KeyError(self.stage)
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
+        if self.step_len <= 0:
+            Logger.alert2(f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , d1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
+            if self.stage in ['predict' , 'test']:
+                Logger.alert2(f'Test dates: {test_dates}')
+            raise ValueError(f'Step length is less than 0')
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * self.data_step , [0])
         self.date_idx = self.d0 + self.step_idx
 
