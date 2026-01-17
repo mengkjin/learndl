@@ -181,6 +181,11 @@ class TaskDatabase:
             ])
             params = list(kwargs.values()) + [task_id]
             cursor.execute(query, params)
+            new_status = self.check_task_status(task_id)
+            if 'status' in kwargs and kwargs['status'] != new_status:
+                Logger.alert2(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+                raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+            
             if exit_files:
                 cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))
                 for file_path in exit_files:
@@ -193,6 +198,12 @@ class TaskDatabase:
                 INSERT INTO task_backend_updated (task_id, updated_time)
                 VALUES (?, ?)
                 ''', (task_id, timestamp()))
+
+    def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
+        """Check task status"""
+        with self.conn_handler as (conn, cursor):
+            cursor.execute('SELECT status FROM task_records WHERE task_id = ?', (task_id,))
+            return cursor.fetchone()['status']
 
     def get_backend_updated_tasks(self) -> list[str]:
         """Get backend updated tasks"""
