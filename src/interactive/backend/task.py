@@ -574,7 +574,7 @@ class TaskItem:
 
     @property
     def id(self):
-        return f"{str(self.relative)}@{self.time_id}" if self.script else ''
+        return f"{str(self.relative)}@{self.time_id}".replace('\\' , '/') if self.script else ''
     
     @property
     def format_path(self):

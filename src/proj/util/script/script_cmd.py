@@ -12,7 +12,7 @@ class ScriptCmd:
     macos_tempfile_method = False
     def __init__(self , script : str | Path , params : dict | None = None , 
                  mode: Literal['shell', 'os'] = 'shell'):
-        self.script = str(script.absolute()) if isinstance(script , Path) else script
+        self.script = (str(script.absolute()) if isinstance(script , Path) else script).replace('\\' , '/')
         self.params = params or {}
         assert mode in ['shell', 'os'] , f'Invalid mode: {mode}'
         self.mode = mode
@@ -51,8 +51,7 @@ class ScriptCmd:
         args_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in self.params.items() if v != ''])
         py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         if MACHINE.is_windows:
-            py_cmd = f'"{MACHINE.python_path}" -c "{self.script} {args_str}"'
-            py_cmd = py_cmd.replace("'" , "\\'").replace('"' , '\\"').replace('\\' , '/')
+            py_cmd = f'"{MACHINE.python_path}" "{self.script}” {args_str}'
         else:
             py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         self.py_cmd = py_cmd
@@ -67,9 +66,7 @@ class ScriptCmd:
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
         elif MACHINE.is_windows:
             # self.shell_cmd = f'start cmd /c "{self.py_cmd} && echo. && echo "Task complete. Press any key to exit..." && pause >nul"'
-            self.shell_cmd = f'''
-start cmd /c "{self.py_cmd} && echo. && echo Task complete. Press any key to exit... && timeout /t -1 >nul"
-'''.replace('\n', ' ').replace('\r' , '')
+            self.shell_cmd = f'start cmd /c "{self.py_cmd} & echo. & echo Task complete. Press any key to exit... & timeout /t -1 >nul"'
         elif MACHINE.is_macos:
             self.shell_cmd = ["osascript"] if self.macos_tempfile_method else ["osascript", "-"]
             self.apple_script_cmd = f'''
