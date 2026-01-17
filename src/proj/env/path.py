@@ -121,7 +121,7 @@ class PATH:
             yaml.dump(data , f , **kwargs)
 
     @staticmethod
-    def read_json(json_file : str | Path , **kwargs) -> dict[str, Any]:
+    def read_json(json_file : str | Path , encoding = 'utf-8' , **kwargs) -> dict[str, Any]:
         """Read json file"""
         json_file = Path(json_file)
         if json_file.suffix == '' and json_file.with_suffix('.json').exists():
@@ -129,7 +129,7 @@ class PATH:
         if not json_file.exists():
             sys.stderr.write(f'\u001b[31m\u001b[1m{json_file} does not exist!\u001b[0m\n')
             return {}
-        with open(json_file , 'r' , **kwargs) as f:
+        with open(json_file , 'r' , encoding = encoding , **kwargs) as f:
             d = json.load(f)
         return d
 

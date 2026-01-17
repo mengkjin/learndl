@@ -85,18 +85,49 @@ end tell
 
     def run(self):
         if self.mode == 'os':
-            self.process = self.Popen(self.os_cmd)
-        elif MACHINE.is_linux or MACHINE.is_windows:
-            self.process = self.Popen(self.shell_cmd)
-        elif MACHINE.is_macos:
-            self.run_in_darwin()
+            self.run_in_os()
         else:
-            raise ValueError(f'Unsupported platform: {MACHINE.system_name}')
+            self.run_in_shell()
         return self
 
-    def run_in_darwin(self):
+    def run_in_os(self):
+        try:
+            self.process = self.Popen(self.os_cmd, communicating = True)
+            _ , stderr = self.process.communicate()
+
+            if self.process.returncode == 0:
+                Logger.success(f"OS command executed successfully : {self.os_cmd}")
+            else:
+                Logger.alert2(f"OS command executed failed : {self.os_cmd}")
+                Logger.alert2(f"Return Code: {self.process.returncode}")
+                Logger.alert2(f"Error Outputs: {stderr}")
+        except subprocess.CalledProcessError as e:
+            Logger.error(f"OS command executed failed with CalledProcessError : {self.os_cmd}")
+            Logger.error(f"Return Code: {e.returncode}")
+            Logger.error(f"Error Outputs: {e.stderr}")
+
+    def run_in_shell(self):
+        if MACHINE.is_macos:
+            self.run_in_shell_darwin()
+            return
+        try:
+            self.process = self.Popen(self.shell_cmd, communicating = True)
+            _ , stderr = self.process.communicate()
+
+            if self.process.returncode == 0:
+                Logger.success(f"Shell command executed successfully : {self.shell_cmd}")
+            else:
+                Logger.alert2(f"Shell command executed failed : {self.shell_cmd}")
+                Logger.alert2(f"Return Code: {self.process.returncode}")
+                Logger.alert2(f"Error Outputs: {stderr}")
+        except subprocess.CalledProcessError as e:
+            Logger.error(f"Shell command executed failed with CalledProcessError : {self.shell_cmd}")
+            Logger.error(f"Return Code: {e.returncode}")
+            Logger.error(f"Error Outputs: {e.stderr}")
+
+    def run_in_shell_darwin(self):
         assert self.mode == 'shell' , 'darwin mode does not support os mode'
-        assert MACHINE.is_macos , f'Unsupported platform for run_in_darwin: {MACHINE.system_name}'
+        assert MACHINE.is_macos , f'Unsupported platform for run_in_shell_darwin: {MACHINE.system_name}'
 
         if self.macos_tempfile_method:
             with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
@@ -112,17 +143,23 @@ end tell
                 _ , stderr = self.process.communicate(input=self.apple_script_cmd)
 
             if self.process.returncode == 0:
-                Logger.success(f"AppleScript executed successfully for script {self.script}")
+                Logger.success(f"AppleScript executed successfully : {self.script}")
             else:
-                Logger.error(f"AppleScript failed with return code {self.process.returncode}")
-                Logger.error(f"Errors: {stderr}")
-        except subprocess.CalledProcessError as e:
-            Logger.error(f"AppleScript failed with error:\n{e.stderr}")
-        except Exception as e:
-            Logger.error(f"An unexpected error occurred: {e}")
-        finally:
+                Logger.alert2(f"AppleScript executed failed : {self.script}")
+                Logger.alert2(f"Return Code: {self.process.returncode}")
+                Logger.alert2(f"Error Outputs: {stderr}")
             if self.macos_tempfile_method:
                 temp_script_path.unlink(missing_ok=True)
+        except subprocess.CalledProcessError as e:
+            Logger.error(f"AppleScript executed failed with CalledProcessError : {self.script}")
+            Logger.error(f"Return Code: {e.returncode}")
+            Logger.error(f"Error Outputs: {e.stderr}")
+            if self.macos_tempfile_method:
+                temp_script_path.unlink(missing_ok=True)
+        except Exception as e:
+            if self.macos_tempfile_method:
+                temp_script_path.unlink(missing_ok=True)
+            raise e
 
     @staticmethod
     def Popen(cmd : list[str] | str , encoding = 'utf-8' , communicating = False):

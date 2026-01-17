@@ -287,7 +287,6 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-        Logger.stdout(f'run script: {item.id}')
         item.run_script()
 
     # @ActionLogger.log_action()
