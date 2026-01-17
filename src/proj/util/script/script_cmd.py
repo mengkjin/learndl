@@ -67,7 +67,9 @@ class ScriptCmd:
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
         elif MACHINE.is_windows:
             # self.shell_cmd = f'start cmd /c "{self.py_cmd} && echo. && echo "Task complete. Press any key to exit..." && pause >nul"'
-            self.shell_cmd = f'start cmd /c "{self.py_cmd} && echo. && echo "Task complete. Press any key to exit..." && timeout /t -1 >nul"'
+            self.shell_cmd = f'''
+start cmd /c "{self.py_cmd} && echo. && echo Task complete. Press any key to exit... && timeout /t -1 >nul"
+'''.replace('\n', ' ').replace('\r' , '')
         elif MACHINE.is_macos:
             self.shell_cmd = ["osascript"] if self.macos_tempfile_method else ["osascript", "-"]
             self.apple_script_cmd = f'''
