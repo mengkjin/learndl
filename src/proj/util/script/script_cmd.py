@@ -12,7 +12,7 @@ class ScriptCmd:
     macos_tempfile_method = False
     def __init__(self , script : str | Path , params : dict | None = None , 
                  mode: Literal['shell', 'os'] = 'shell'):
-        self.script = (str(script.absolute()) if isinstance(script , Path) else script).replace('\\' , '/')
+        self.script = (str(script.absolute()) if isinstance(script , Path) else script)
         self.params = params or {}
         assert mode in ['shell', 'os'] , f'Invalid mode: {mode}'
         self.mode = mode

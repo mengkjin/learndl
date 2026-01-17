@@ -181,10 +181,6 @@ class TaskDatabase:
             ])
             params = list(kwargs.values()) + [task_id]
             cursor.execute(query, params)
-            new_status = self.check_task_status(task_id)
-            if 'status' in kwargs and kwargs['status'] != new_status:
-                Logger.alert2(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
-                raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
             
             if exit_files:
                 cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))
@@ -198,6 +194,12 @@ class TaskDatabase:
                 INSERT INTO task_backend_updated (task_id, updated_time)
                 VALUES (?, ?)
                 ''', (task_id, timestamp()))
+
+        new_status = self.check_task_status(task_id)
+        if 'status' in kwargs and kwargs['status'] != new_status:
+            Logger.alert2(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+            raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
         """Check task status"""
@@ -585,7 +587,7 @@ class TaskItem:
 
     @property
     def id(self):
-        return f"{str(self.relative)}@{self.time_id}".replace('\\' , '/') if self.script else ''
+        return f"{str(self.relative)}@{self.time_id}" if self.script else ''
     
     @property
     def format_path(self):
