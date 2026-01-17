@@ -196,11 +196,11 @@ class TaskDatabase:
                 ''', (task_id, timestamp()))
 
         new_status = self.check_task_status(task_id)
-        if 'status' in kwargs and kwargs['status'] != new_status:
-            Logger.alert2(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
-            raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
-        else:
-            Logger.success(f"Task status updated successfully for task {task_id} , expected {kwargs['status']} and got {new_status}")
+        if 'status' in kwargs:
+            if kwargs['status'] != new_status:
+                raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+            else:
+                Logger.success(f"Task status updated successfully for task {task_id} , updates: {kwargs}")
 
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
