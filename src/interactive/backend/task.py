@@ -199,6 +199,8 @@ class TaskDatabase:
         if 'status' in kwargs and kwargs['status'] != new_status:
             Logger.alert2(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
             raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+        else:
+            Logger.success(f"Task status updated successfully for task {task_id} , expected {kwargs['status']} and got {new_status}")
 
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
@@ -915,8 +917,9 @@ class TaskItem:
         cmd = self._script_cmd
         assert cmd is not None , 'script cmd is not set'
         try:
+            start_time = timestamp()
             process = cmd.run()
-            self.update({'pid': process.real_pid, 'status': 'running', 'start_time': timestamp()} , write_to_db = True)
+            self.update({'pid': process.real_pid, 'status': 'running', 'start_time': start_time} , write_to_db = True)
         except Exception as e:
             self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , write_to_db = True)
             Logger.print_exc(e)
