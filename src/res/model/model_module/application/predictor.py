@@ -154,7 +154,7 @@ class ModelPredictor:
     @classmethod
     def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : int = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        Logger.remark(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
+        Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         if start_dt is not None or end_dt is not None:
             Logger.stdout(f'Update from {start_dt} to {end_dt}' , indent = indent + 1 , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)
@@ -177,7 +177,7 @@ class ModelPredictor:
     @classmethod
     def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : int = 1):
         """Recalculate all model predictions"""
-        Logger.remark(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
+        Logger.note(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
         if start_dt is not None or end_dt is not None:
             Logger.stdout(f'Recalculate from {start_dt} to {end_dt}' , indent = indent + 1 , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)

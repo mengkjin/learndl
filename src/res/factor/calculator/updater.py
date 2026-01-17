@@ -307,21 +307,21 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def update(cls , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         """update pooling factor data according"""
-        Logger.remark(f'Update : {cls.__name__} since last update!')
+        Logger.note(f'Update : {cls.__name__} since last update!')
         cls.process_jobs(start = start , end = end , all = True , timeout = timeout)
 
     @classmethod
     def recalculate(cls , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         """recalculate factors between start and end date"""
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
-        Logger.remark(f'Update : {cls.__name__} recalculate all factors!')
+        Logger.note(f'Update : {cls.__name__} recalculate all factors!')
         cls.process_jobs(start = start , end = end , all = True , overwrite = True , timeout = timeout)
 
     @classmethod
     def rollback(cls , rollback_date : int , timeout : int = -1 , **kwargs) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         start = int(CALENDAR.td(rollback_date , 1))
-        Logger.remark(f'Update : {cls.__name__} rollback from {rollback_date}!')
+        Logger.note(f'Update : {cls.__name__} rollback from {rollback_date}!')
         cls.process_jobs(start = start , all = True , overwrite = True , timeout = timeout)
         
     @classmethod
@@ -329,7 +329,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         assert factors , 'factors are required for fix'
         factors = [factor for factor in cls.factors() if factor in factors]
         if factors:
-            Logger.remark(f'Fixing : {cls.__name__} {factors} from {start} to {end}!')
+            Logger.note(f'Fixing : {cls.__name__} {factors} from {start} to {end}!')
             cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , timeout = timeout)
 
     @classmethod

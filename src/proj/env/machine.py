@@ -2,7 +2,7 @@
 import sys , socket , platform , os , torch
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal , Any
 
 __all__ = ['MACHINE']
 
@@ -77,16 +77,16 @@ class MACHINE:
     assert python_path , f'python_path not set for {name}'
 
     @classmethod
-    def info(cls) -> list[str]:
+    def info(cls) -> dict[str, Any]:
         """return the machine info list"""
-        return [
-            f'Machine Name   : {cls.name}', 
-            f'Is Server      : {cls.server}', 
-            f'System         : {cls.system_name}', 
-            f'Main Path      : {cls.main_path}' , 
-            f'Python Path    : {cls.python_path}' ,
-            f'Best Device    : {cls.best_device}' ,
-        ]
+        return {
+            'Machine Name' : cls.name, 
+            'Is Server' : cls.server, 
+            'System' : cls.system_name, 
+            'Main Path' : cls.main_path, 
+            'Python Path' : cls.python_path,
+            'Best Device' : cls.best_device,
+        }
 
     @classmethod
     def machine_names(cls):

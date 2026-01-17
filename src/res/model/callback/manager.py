@@ -19,7 +19,7 @@ class CallBackManager(BaseCallBack):
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):
-        with Logger.ParagraphIII('Callback Setup'):
+        with Logger.Paragraph('Callback Setup' , 3):
             available_cbs = cls.get_available_cbs()
             if trainer.model.AVAILABLE_CALLBACKS:
                 available_cbs = [cb for cb in trainer.model.AVAILABLE_CALLBACKS if cb in available_cbs]

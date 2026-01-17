@@ -96,7 +96,7 @@ class FormatStr(str):
 
     @classmethod
     def level_prefix(cls , level: str , color : str | None = None , bg_color : str | None = None , bold : bool = True) -> str:
-        msg = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level:9s}|'
+        msg = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|{level:10s}|'
         return _ansi_styler(msg , color = color , bg_color = bg_color , bold = bold)
         
     def write(self , stdout = False , stderr = False , file = None , end : str = '\n' , flush = False , **kwargs):

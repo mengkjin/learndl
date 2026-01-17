@@ -79,7 +79,7 @@ class ModelTrainer(BaseTrainer):
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
            log_operation : Literal['update_models' , 'resume_testing'] | None = None , **kwargs):
         if title and paragraph:
-            paragraph_context = Logger.ParagraphI(title.title())
+            paragraph_context = Logger.Paragraph(title.title() , 1)
         else:
             paragraph_context = nullcontext()
             
@@ -131,8 +131,9 @@ class ModelTrainer(BaseTrainer):
             Logger.alert1('No models or factors to resume testing!')
             return
 
-        Logger.remark(f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:')
-        Logger.stdout_pairs([('Model' , model) for model in resumable_models] + [('Factor' , factor) for factor in resumable_factors] , indent = 1 , color = 'lightgreen')
+        Logger.stdout(f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:' , color = 'lightgreen' , bold = True)
+        Logger.stdout_pairs([('Model' , model) for model in resumable_models] + [('Factor' , factor) for factor in resumable_factors] , 
+                            indent = 1 , color = 'lightgreen' , bold = True , vb_level = 99)
         Logger.divider()
 
         for model in resumable_models:

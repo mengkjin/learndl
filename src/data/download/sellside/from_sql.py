@@ -416,14 +416,14 @@ class SellsideSQLDownloader:
         prompt = f'Download: {cls.__name__} allaround!'
         assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
         assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        Logger.remark(prompt)
+        Logger.note(prompt)
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('all' , connection)
 
     @classmethod
     def update(cls):
-        Logger.remark(f'Download: {cls.__name__} since last update!')
+        Logger.note(f'Download: {cls.__name__} since last update!')
         try:
             cls.update_since(trace = 0)
         except Exception as e:

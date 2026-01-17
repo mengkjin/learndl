@@ -11,7 +11,7 @@ FOCUSED_PORTS = ['use_daily']
 class TradingPortfolioTracker:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
-        Logger.remark(f'Update: {cls.__name__} since last update!' , indent = indent)
+        Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         ports = TradingPort.portfolio_dict()

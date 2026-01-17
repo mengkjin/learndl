@@ -67,7 +67,7 @@ class DataPreProcessor:
         else:
             blocks = data_types
         processor = cls(predict , blocks)
-        Logger.remark(f'Data PreProcessing start with {len(processor.blocks)} datas and predict = {predict}!' , indent = indent , vb_level = vb_level)
+        Logger.note(f'Data PreProcessing start with {len(processor.blocks)} datas and predict = {predict}!' , indent = indent , vb_level = vb_level)
         Logger.stdout(f'Will process {str(list(processor.blocks))} at {CALENDAR.dates_str([processor.load_start_dt,processor.load_end_dt])}' , 
                         indent = indent + 1 , vb_level = vb_level + 1)
         # return processor

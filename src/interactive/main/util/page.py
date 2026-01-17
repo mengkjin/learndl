@@ -246,7 +246,7 @@ class ControlGitClearPullButton(ControlPanelButton):
         
     def clear_git_pull(self):
         if MACHINE.coding_platform:
-            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.info()}")
+            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
         else:
             subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
             subprocess.run(['git', 'clean', '-fd'], check=True)

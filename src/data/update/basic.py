@@ -41,18 +41,18 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
 
     @classmethod
     def update(cls):
-        Logger.remark(f'Update: {cls.__name__} since last update!')
+        Logger.note(f'Update: {cls.__name__} since last update!')
         cls.update_all('update')
 
     @classmethod
     def rollback(cls , rollback_date : int):
-        Logger.remark(f'Update: {cls.__name__} rollback from {rollback_date}!')
+        Logger.note(f'Update: {cls.__name__} rollback from {rollback_date}!')
         cls.set_rollback_date(rollback_date)
         cls.update_all('rollback')
 
     @classmethod
     def recalculate_all(cls):
-        Logger.remark(f'Update: {cls.__name__} recalculate all!')
+        Logger.note(f'Update: {cls.__name__} recalculate all!')
         cls.update_all('recalc')
 
     @classmethod

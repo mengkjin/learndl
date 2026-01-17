@@ -1,6 +1,7 @@
 import io
 from pathlib import Path
 import threading
+from typing import Any
 
 from src.proj.env.machine import MACHINE
 from src.proj.abc import stderr
@@ -166,14 +167,9 @@ class Proj(metaclass=_ProjMeta):
         raise Exception(f'{cls.__name__} cannot be instantiated')
 
     @classmethod
-    def info(cls) -> list[str]:
+    def info(cls) -> dict[str, Any]:
         """return the machine info list"""
-        return [
-            *MACHINE.info(),
-            f'Proj Verbosity : {cls.vb}', 
-            f'Proj Log File  : {cls.log_file}',
-            # *cls.States.info(),
-        ]
+        return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_file}
 
     @classmethod
     def print_info(cls , script_level : bool = True , identifier = 'project_initialized'):
@@ -184,8 +180,8 @@ class Proj(metaclass=_ProjMeta):
         import torch , os
         from src.proj.log import Logger
         def _print_project_info():
-            Logger.remark('Project Info:')
-            Logger.stdout_msgs(cls.info() , indent = 1 , color = 'lightgreen' , bold = True)
+            Logger.stdout('Project Info:' , color = 'lightgreen' , bold = True)
+            Logger.stdout_pairs(cls.info() , indent = 1 , color = 'lightgreen' , bold = True)
             if MACHINE.server and not torch.cuda.is_available():
                 Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
 
@@ -195,3 +191,8 @@ class Proj(metaclass=_ProjMeta):
         elif not script_level and identifier not in os.environ:
             _print_project_info()
             os.environ[identifier] = "1"
+
+    @classmethod
+    def print_disk_info(cls):
+        from src.proj.func.disk_info import print_disk_space_info
+        print_disk_space_info()

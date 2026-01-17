@@ -40,7 +40,7 @@ class SellsideFTPDownloader(object):
     @classmethod
     def update(cls):
         return
-        Logger.remark(f'Download: {cls.__name__} since last update!')
+        Logger.note(f'Download: {cls.__name__} since last update!')
 
 def main():
     connector = SellsideFTPDownloader()

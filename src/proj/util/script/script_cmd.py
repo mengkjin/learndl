@@ -51,7 +51,7 @@ class ScriptCmd:
         args_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in self.params.items() if v != ''])
         py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         if MACHINE.is_windows:
-            py_cmd = f'"{MACHINE.python_path}" "{self.script}” {args_str}'
+            py_cmd = f'"{MACHINE.python_path}" "{self.script}" {args_str}'
         else:
             py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         self.py_cmd = py_cmd

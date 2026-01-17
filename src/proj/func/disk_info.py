@@ -4,7 +4,7 @@ import shutil
 from src.proj.env import PATH
 from src.proj.log import Logger
 
-__all__ = [ 'print_disk_space_info']
+__all__ = ['print_disk_space_info']
 
 def format_bytes(bytes_num):
     suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -32,6 +32,6 @@ def get_disk_space_info():
 
 def print_disk_space_info():
     info = get_disk_space_info()
-    Logger.remark("Disk Space Info:")
-    Logger.stdout_pairs(list(info.items()) , indent = 1 , color = 'lightgreen' , bold = True)
+    Logger.stdout("Disk Space Info:" , color = 'lightgreen' , bold = True)
+    Logger.stdout_pairs(info , indent = 1 , color = 'lightgreen' , bold = True)
     return info

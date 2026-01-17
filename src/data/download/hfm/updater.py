@@ -205,7 +205,7 @@ class JSDataUpdater():
         assert not MACHINE.server , f'{MACHINE.name} is a server, must on terminal machine'
         if not MACHINE.belong_to_hfm: 
             return
-        with Logger.ParagraphIII('Update JSData Update Files'):
+        with Logger.Paragraph('Update JSData Update Files' , 3):
             Updater = cls()
             Updater.fetch_all()
             Updater.download_all()
@@ -216,7 +216,7 @@ class JSDataUpdater():
     def update_server(cls):
         assert MACHINE.server , f'{MACHINE.name} is not a server, must on server machine'
 
-        with Logger.ParagraphIII('Unpack JSData Update Files'):
+        with Logger.Paragraph('Unpack JSData Update Files' , 3):
             cls.unpack_exist_updaters(del_after_dumping=True)
             cls.transform_datas()
 

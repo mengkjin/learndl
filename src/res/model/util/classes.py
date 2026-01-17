@@ -233,7 +233,7 @@ class TrainerStatus(ModelStreamLine):
     def on_test_model_start(self): self.dataset = 'test'
     def on_fit_model_start(self):
         if self.fit_iter_num == 0:
-            Logger.highlight(f'First Iterance: ({self.model_date} , {self.model_num})')
+            Logger.note(f'First Iterance: ({self.model_date} , {self.model_num})')
         self.fit_iter_num += 1
         self.attempt = -1
         self.best_attempt_metric = None
@@ -405,7 +405,7 @@ class TrainerPredRecorder(ModelStreamLine):
             for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
                 self.save_preds(DB.load_df(path).query('date <= @min_retrained_model_date') , model_date , model_num)
                 
-            Logger.remark(purge_info , vb_level = vb_level)
+            Logger.note(purge_info , vb_level = vb_level)
 
     def setup_resuming_status(self , vb_level : int = 2):
         """
@@ -442,7 +442,7 @@ class TrainerPredRecorder(ModelStreamLine):
         if pred_records.empty:
             resume_info += f', no saved preds found'
 
-        Logger.remark(resume_info , vb_level = vb_level)
+        Logger.note(resume_info , vb_level = vb_level)
     
     def append_batch_preds(self):
         if self.pred_idx in self.pred_dict.keys(): 
@@ -655,7 +655,7 @@ class BaseTrainer(ModelStreamLine):
     
     @final
     def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs):
-        with Logger.ParagraphII('Stage [Setup]'):
+        with Logger.Paragraph('Stage [Setup]' , 2):
             self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
             self.init_data(**kwargs)
             self.init_model(**kwargs)
@@ -669,7 +669,7 @@ class BaseTrainer(ModelStreamLine):
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
         '''initialized configuration'''
-        with Logger.ParagraphIII('Config Setup'):
+        with Logger.Paragraph('Config Setup' , 3):
             self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
             self.config.print_out()
         self.status = TrainerStatus(self.config.train_max_epoch)
@@ -753,15 +753,15 @@ class BaseTrainer(ModelStreamLine):
             raise Exception("stage_queue is empty , please check src.proj.Proj.States.trainer")
 
         if 'data' in self.stage_queue:
-            with Logger.ParagraphII('Stage [Data]'):
+            with Logger.Paragraph('Stage [Data]' , 2):
                 self.stage_data()
 
         if 'fit' in self.stage_queue:  
-            with Logger.ParagraphII('Stage [Fit]'):
+            with Logger.Paragraph('Stage [Fit]' , 2):
                 self.stage_fit()
 
         if 'test' in self.stage_queue: 
-            with Logger.ParagraphII('Stage [Test]'):
+            with Logger.Paragraph('Stage [Test]' , 2):
                 self.stage_test()
         
         self.on_summarize_model()
@@ -788,7 +788,7 @@ class BaseTrainer(ModelStreamLine):
             if self.status.model_num == 0:
                 self.on_fit_model_date_start()
             if self.status.fit_iter_num == 0:
-                Logger.highlight(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
+                Logger.note(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
             self.on_fit_model_start()
             self.model.fit()
             self.on_fit_model_end()
@@ -841,7 +841,7 @@ class BaseTrainer(ModelStreamLine):
         #    model_iter = []
         else:
             iter_info += f'{num_all_models} to go!'
-        Logger.remark(iter_info , vb_level = 2)
+        Logger.note(iter_info , vb_level = 2)
         return model_iter
 
     def iter_model_submodels(self):

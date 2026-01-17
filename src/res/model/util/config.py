@@ -768,13 +768,13 @@ class TrainConfig(TrainParam):
             stage_queue = ['data' , 'test']
         else:
             if value < 0:
-                Logger.remark(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
+                Logger.note(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
                 value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
             if value > 0:
                 stage_queue = ['data' , stage_queue[value]]
             elif value < 0:
                 raise Exception(f'Error input : {value}')
-        Logger.remark('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , 
+        Logger.note('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , 
                       color = 'lightblue' , vb_level = vb_level)
         self._stage_queue = stage_queue
 
@@ -800,11 +800,11 @@ class TrainConfig(TrainParam):
             if not candidate_name:
                 value = 0
             else:
-                Logger.remark(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
+                Logger.note(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
                 user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
         self.is_resuming = value > 0 
-        Logger.remark(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!' , vb_level = vb_level)
+        Logger.note(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!' , vb_level = vb_level)
 
     def parser_select(self , value = -1 , vb_level : int = 1):
         '''
@@ -836,13 +836,13 @@ class TrainConfig(TrainParam):
             ...
         elif 'fit' in self.stage_queue:
             if value < 0 or (value == 0 and self.is_resuming and model_name not in candidate_name):
-                Logger.remark(f'--Model dirs of {model_name} exists, input number to choose!')
+                Logger.note(f'--Model dirs of {model_name} exists, input number to choose!')
                 if self.is_resuming:
-                    Logger.remark(f'    0: use the raw model_name [{model_name}] to resume training!')
+                    Logger.note(f'    0: use the raw model_name [{model_name}] to resume training!')
                 else:
-                    Logger.remark(f'    0: create a new model_name dir!')
+                    Logger.note(f'    0: create a new model_name dir!')
                 for i , mn in enumerate(candidate_name):
-                    Logger.remark(f'    {i+1}: [{mn}]')
+                    Logger.note(f'    {i+1}: [{mn}]')
                 value = int(input(f'which one to use? '))
             if value < 0:
                 raise Exception(f'value {value} is out of range , must be 0 ~ {len(candidate_name)}')
@@ -851,11 +851,11 @@ class TrainConfig(TrainParam):
                     if model_name not in candidate_name:
                         Logger.error(f'The raw model_name [{model_name}] does not exist! You have to start a new training or manually delete the existing model_name dir!')
                         raise Exception(f'the raw model_name [{model_name}] does not exist!')
-                    Logger.remark(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
+                    Logger.note(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
                 else:
                     if model_name in candidate_name:
                         model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-                    Logger.remark(f'Input 0 to create a new model_name dir! New model_name is {model_name}')
+                    Logger.note(f'Input 0 to create a new model_name dir! New model_name is {model_name}')
             else:
                 model_name = candidate_name[value-1]
                 if not self.is_resuming:
@@ -865,10 +865,10 @@ class TrainConfig(TrainParam):
             if len(candidate_name) == 1 and candidate_name[0] == model_name:
                 value = 0 # use the raw model_name dir
             elif value < 0 or (value == 0 and model_name not in candidate_name):
-                Logger.remark(f'--Model dirs of {model_name} exists, input number to choose!')
-                Logger.remark(f'    0: try to use raw model_name [{model_name}]!')
+                Logger.note(f'--Model dirs of {model_name} exists, input number to choose!')
+                Logger.note(f'    0: try to use raw model_name [{model_name}]!')
                 for i , mn in enumerate(candidate_name):
-                    Logger.remark(f'    {i+1}: [{mn}]')
+                    Logger.note(f'    {i+1}: [{mn}]')
                 value = int(input(f'which one to use? '))
             if value < 0:
                 raise Exception(f'value {value} is out of range , must be 0 ~ {len(candidate_name)}')
@@ -881,7 +881,7 @@ class TrainConfig(TrainParam):
         else:
             raise Exception(f'Invalid stage queue: {self.stage_queue}')
 
-        Logger.remark(f'--Model_name is set to {model_name}!' , vb_level = vb_level)  
+        Logger.note(f'--Model_name is set to {model_name}!' , vb_level = vb_level)  
         self.Train.reset_base_path(model_name)
         self.Model.reset_base_path(model_name)
 
@@ -942,7 +942,7 @@ class TrainConfig(TrainParam):
         if self.is_resuming:
             info_strs.append((0 , 'Resume Option' , f'{self.resume_option}'))
 
-        Logger.stdout_pairs(info_strs , color = color , vb_level = vb_level)
+        Logger.stdout_pairs(info_strs , color = color , bold = True , vb_level = vb_level)
         return self
 
     @property

@@ -70,7 +70,6 @@ class OutputDeflector:
         elif self.type == 'stderr':
             self.original = sys.stderr
             sys.stderr = self
-            Logger.reset_logger()
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.is_catching = True
@@ -89,7 +88,6 @@ class OutputDeflector:
             sys.stdout = self.original
         elif self.type == 'stderr':
             sys.stderr = self.original
-            Logger.reset_logger()
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.close()
@@ -575,11 +573,11 @@ class HtmlCatcher(OutputCatcher):
             assert self.PrimaryInstance is not None , f"Primary instance is not set when entering {self}"
             self.start_point = len(self.PrimaryInstance.outputs)
 
-        Logger.remark(f"{self} Capturing Start" , prefix = True , vb_level = 1 if self.is_primary else 2)
+        Logger.remark(f"{self} Capturing Start" , vb_level = 1 if self.is_primary else 2)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True , vb_level = 1 if self.is_primary else 2)
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1 if self.is_primary else 2)
         self.export()
         if self.is_primary:
             self.deflectors.end_catching()
@@ -1088,7 +1086,7 @@ class MarkdownCatcher(OutputCatcher):
         
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.remark(f"{self} Capturing Start" , prefix = True , vb_level = 1)
+        Logger.note(f"{self} Capturing Start" , vb_level = 1)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1131,7 +1129,7 @@ class MarkdownCatcher(OutputCatcher):
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True , vb_level = 1)
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1)
         self.markdown_file.close()
         for filename in self.export_file_list:
             filename.unlink(missing_ok=True)
@@ -1198,14 +1196,14 @@ class CrashProtectorCatcher(OutputCatcher):
         self.start_time = datetime.now()
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.remark(f"{self} Capturing Start" , prefix = True , vb_level = 1)
+        Logger.remark(f"{self} Capturing Start" , vb_level = 1)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.task_id is None:
             return
         self.deflectors.end_catching()
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , prefix = True , vb_level = 1)
+        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1)
         Logger.footnote(f"{self.__class__.__name__} file {self.filename} removed" , indent = 1 , vb_level = 3)
         self.is_catching = False
     

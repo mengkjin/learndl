@@ -1,5 +1,4 @@
 from src.proj import Logger , MACHINE , CALENDAR , Proj
-from src.proj.func import print_disk_space_info
 
 from .data import DataAPI
 from .factor import FactorAPI
@@ -29,7 +28,7 @@ class UpdateAPI:
             ModelAPI.resume_testing()
         TradingAPI.update()
         NotificationAPI.update()
-        print_disk_space_info()
+        Proj.print_disk_info()
 
     @classmethod
     def rollback(cls , rollback_date : int):

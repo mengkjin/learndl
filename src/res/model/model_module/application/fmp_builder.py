@@ -155,7 +155,7 @@ class ModelPortfolioBuilder:
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
         '''Update prediction models' factor model portfolios'''
-        Logger.remark(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
+        Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, build fmps for all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)

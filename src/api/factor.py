@@ -114,7 +114,7 @@ class FactorAPI:
                        start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
                        write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
                        **kwargs):
-            with Logger.ParagraphIII(' test factor performance '):
+            with Logger.Paragraph('test factor performance' , 3):
                 factor = get_factor(names , factor_type , start_dt , end_dt , step)
                 ret = FactorTestAPI.FactorPerf(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
@@ -126,7 +126,7 @@ class FactorAPI:
                      write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
                      prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
                      **kwargs):
-            with Logger.ParagraphIII(' test optimized fmp '):
+            with Logger.Paragraph('test optimized fmp' , 3):
                 factor = get_factor(names , factor_type , start_dt , end_dt , step)
                 ret = FactorTestAPI.FmpOptim(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , prob_type = prob_type ,**kwargs)
             return ret
@@ -137,7 +137,7 @@ class FactorAPI:
                    start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
                    write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
                    **kwargs):
-            with Logger.ParagraphIII(' test top fmp '):
+            with Logger.Paragraph('test top fmp' , 3):
                 factor = get_factor(names , factor_type , start_dt , end_dt , step)
                 ret = FactorTestAPI.FmpTop(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
@@ -162,5 +162,5 @@ class FactorAPI:
     def resume_testing_factors(cls):
         from src.api import ModelAPI
         for factor in Options.available_factors():
-            with Logger.ParagraphI(f'Resume Testing Factor {factor}'):
+            with Logger.Paragraph(f'Resume Testing Factor {factor}' , 1):
                 ModelAPI.test_factor(factor , resume = 1)

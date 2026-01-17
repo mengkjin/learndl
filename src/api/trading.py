@@ -34,7 +34,7 @@ class TradingAPI:
         if ports:
             Logger.stdout(f'multiple backtest ports found for {port_name_starter}: {ports}')
             for port in ports:
-                with Logger.ParagraphIII(f'backtest {port}'):
+                with Logger.Paragraph(f'backtest {port}' , 3):
                     TradingPortfolioBacktestor.analyze(port , start , end , **kwargs)
         elif len(ports) == 0:
             Logger.error(f'no backtest ports found starting with {port_name_starter}')

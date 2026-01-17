@@ -47,7 +47,6 @@ def show_script_detail(script_key : str):
     ControlPanel.buttons['script-runner-run'].refresh(runner)
     show_report_main(runner)
     
-
 def clear_and_show(show_func : Callable):
     name = show_func.__name__.removeprefix('show_').replace('_', '-')
     placeholder_key = f'{name}-placeholder'
@@ -55,6 +54,7 @@ def clear_and_show(show_func : Callable):
         if placeholder_key not in st.session_state: 
             st.session_state[placeholder_key] = st.empty()
         with st.session_state[placeholder_key]:
+            st.write('')
             show_func(*args , **kwargs)
     return wrapper
 
@@ -160,7 +160,7 @@ def show_queue_item_list(runner : ScriptRunner , queue : dict[str, TaskItem] , o
                     if st.button(item.button_str_long(index + 1),  
                                 help=item.button_help_text() , key=key , 
                                 use_container_width=True , on_click = SC.click_choose_item_selectbox , args = (item_id,)):
-                        show_script_task_selector(runner)
+                        show_report_main(runner)
 
                 cols[3].button(":violet-badge[:material/remove:]", 
                             key=f"script-queue-item-delist-{item_id}", help="Delist from Queue", 

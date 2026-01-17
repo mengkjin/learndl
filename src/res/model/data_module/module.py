@@ -87,7 +87,7 @@ class DataModule(BaseDataModule):
 
         if self.empty_x:
             Logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
-            Logger.remark(f'{self.input_type} input keys: {self.input_keys}')
+            Logger.note(f'{self.input_type} input keys: {self.input_keys}')
             self.config.stage_queue.remove('fit')
             self.config.stage_queue.remove('test')
         return self

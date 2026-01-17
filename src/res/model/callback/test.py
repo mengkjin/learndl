@@ -61,7 +61,7 @@ class BasicTestResult(BaseCallBack):
         if df_date.empty:
             return
 
-        with Logger.ParagraphIII('Test Summary'): 
+        with Logger.Paragraph('Test Summary' , 3): 
             Logger.caption(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
 
             if df_date['model_date'].nunique() == 1 or self.config.module_type in ['factor' , 'db']:
@@ -183,7 +183,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         return factor
 
     def factor_test(self , indent : int = 0 , vb_level : int = 2):
-        with Logger.ParagraphIII('Factor Perf Test'):
+        with Logger.Paragraph('Factor Perf Test' , 3):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(self.factor_test_dates)
             with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level):
@@ -203,7 +203,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
     def fmp_test(self , indent : int = 0 , vb_level : int = 2):
-        with Logger.ParagraphIII('Factor FMP Test'):
+        with Logger.Paragraph('Factor FMP Test' , 3):
             with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor(self.fmp_test_dates)
             with Logger.Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
@@ -226,7 +226,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
     def display_export(self):
-        with Logger.ParagraphIII('Display Analytic Results'):
+        with Logger.Paragraph('Display Analytic Results' , 3):
             for name , vb_level in self.table_vb_levels.items():
                 if Proj.vb.ignore(vb_level):
                     continue
