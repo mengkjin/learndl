@@ -19,7 +19,8 @@ __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
     'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
     'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs' , 
-    'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' ,
+    'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 
+    'pack_files_to_tar' , 'unpack_files_from_tar' ,
     'block_path' , 'norm_path' ,
 ]
 
@@ -338,6 +339,38 @@ def load_dfs_from_tar(path : Path , * , raise_if_not_exist = False) -> dict[str 
     for key , df in dfs.items():
         dfs[key] = _load_df_mapper(df)
     return dfs
+
+def pack_files_to_tar(files : list[Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+    """save multiple dataframes to tar file"""
+    prefix = prefix or ''
+    path = Path(path)
+    path.parent.mkdir(parents=True , exist_ok=True)
+    assert path.suffix == '.tar' , f'{path} is not a tar file'
+    if overwrite or not path.exists(): 
+        status = 'Overwritten ' if path.exists() else 'File Created'
+        path.unlink(missing_ok=True)
+        with tarfile.open(path, 'a') as tar:  
+            for file in files:
+                tar.add(file , arcname = file.relative_to(PATH.main))
+        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        return True
+    else:
+        status = 'File Exists '
+        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
+        return False
+
+def unpack_files_from_tar(path : Path | str , target : Path | str , overwrite = False , indent = 1 , vb_level : int = 1) -> None:
+    """unpack files from tar file"""
+    path = Path(path)
+    target = Path(target)
+    assert path.suffix == '.tar' , f'{path} is not a tar file'
+    with tarfile.open(path, 'r') as tar:  
+        for member in tar.getmembers():
+            if not overwrite and target.joinpath(member.name).exists():
+                Logger.alert1(f"Tar File member {member.name} to {target} already exists." , indent = indent , vb_level = vb_level)
+            else:
+                tar.extract(member, path)
+                Logger.success(f"Unpacked {member.name} to {target}" , indent = indent , vb_level = vb_level , italic = True)
 
 def _reset_index(df : pd.DataFrame | Any , reset = True):
     """reset index which are not None"""

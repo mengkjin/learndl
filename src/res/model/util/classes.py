@@ -358,6 +358,15 @@ class TrainerPredRecorder(ModelStreamLine):
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
         DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
 
+    def archive_model_records(self):
+        records : list[pd.DataFrame] = []
+        for model_num , model_date , _ , _ in self.trainer.config.model_base_path.iter_model_archives():
+            records.append(pd.DataFrame({'model_num' : model_num , 'model_date' : model_date}))
+        df = pd.concat(records) if records else pd.DataFrame(columns = ['model_num' , 'model_date']).astype(int)
+        df = df.drop_duplicates().sort_values(by=['model_num' , 'model_date'])
+        df['next_model_date'] = df.groupby('model_num')['model_date'].shift(-1)
+        return df
+
     def pred_records(self): 
         """model_date/model_num of saved predictions"""
         return pd.DataFrame([[path , *path.name.split('.')[:4]] for path in self.folder_preds.glob('*.feather')], columns = ['path' , 'model_num' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
@@ -400,12 +409,29 @@ class TrainerPredRecorder(ModelStreamLine):
             if not trim_models.empty:
                 purge_info += f', {len(trim_models)} models(date/num) trimed'
             
-            [Path(path).unlink() for path in purge_models['path']]
-            
             for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
-                self.save_preds(DB.load_df(path).query('date <= @min_retrained_model_date') , model_date , model_num)
+                df = DB.load_df(path).query('date <= @min_retrained_model_date')
+                Path(path).unlink()
+                self.save_preds(df , model_date , model_num)
                 
             Logger.note(purge_info , vb_level = vb_level)
+
+    def purge_outdated_model_preds(self , vb_level : int = 2):
+        archive_records = self.archive_model_records()
+        pred_records = self.pred_records()
+        new_pred_records = archive_records.merge(pred_records , on=['model_num' , 'model_date'] , how='outer')
+        new_pred_records['next_model_date'] = new_pred_records['next_model_date'].fillna(99991231)
+        df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
+        if df.empty:
+            return
+
+        purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
+        Logger.note(purge_info , vb_level = vb_level)
+        Logger.Display(df , vb_level = vb_level)
+        for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
+            df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
+            Path(path).unlink()
+            self.save_preds(df , model_date , model_num)
 
     def setup_resuming_status(self , vb_level : int = 2):
         """
@@ -419,6 +445,7 @@ class TrainerPredRecorder(ModelStreamLine):
         
         resume_info = f'Resume testing'
         pred_records = self.pred_records()
+
         latest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
         pred_records = pred_records.query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
         min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
@@ -514,6 +541,7 @@ class TrainerPredRecorder(ModelStreamLine):
         self.purge_retrained_model_preds()
 
     def on_test_start(self):
+        self.purge_outdated_model_preds()
         self.setup_resuming_status()
                 
     def on_test_batch_end(self): 

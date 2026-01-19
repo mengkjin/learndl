@@ -103,6 +103,28 @@ class ModelPath:
     def model_submodels(self):
         """model submodels"""
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
+    def iter_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231):
+        if not self.archive().exists():
+            return
+        for model_num_path in self.archive().iterdir():
+            if model_num_path.is_file():
+                continue
+            model_num = int(model_num_path.name)
+            for model_date_path in model_num_path.iterdir():
+                if model_date_path.is_file():
+                    continue
+                model_date = int(model_date_path.name)
+                if model_date < start_model_date or model_date > end_model_date:
+                    continue
+                for submodel_path in model_date_path.iterdir():
+                    if submodel_path.is_file():
+                        continue
+                    submodel = submodel_path.name
+                    for file in submodel_path.rglob('*.*'):
+                        if file.is_dir():
+                            continue
+                        yield model_num , model_date , submodel , file
+                        
     def load_config(self):
         """load model config"""
         from src.res.model.util.config import TrainConfig
@@ -112,7 +134,10 @@ class ModelPath:
         from src.proj.calendar import CALENDAR
         config = self.load_config()
         return CALENDAR.td(self.model_dates[-1] , config.model_interval).as_int()
-    
+    def collect_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
+        """collect model archive paths"""
+        return [p for _,_,_,p in self.iter_model_archives(start_model_date , end_model_date)]
+
 class HiddenPath:
     """hidden factor path for nn models , used for extracting hidden states"""
     def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
@@ -317,7 +342,25 @@ class PredictionModel(ModelPath):
         if isinstance(pred_names , str): 
             pred_names = [pred_names]
         return [cls(key) for key in pred_names]
-    
+
+    @classmethod
+    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
+        paths : list[Path] = []
+        for model in cls.SelectModels(pred_names):
+            paths.extend(model.model_path.collect_model_archives(start_model_date , end_model_date))
+        return paths
+
+    @classmethod
+    def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
+        files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
+        path = PATH.main.joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
+        DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
+        return path
+
+    @classmethod
+    def UnpackModelArchives(cls , path : Path | str) -> None:
+        DB.unpack_files_from_tar(path , PATH.main , overwrite = True , indent = 0 , vb_level = Proj.vb.max)
+
     @property
     def pred_dates(self) -> np.ndarray:
         """model pred dates"""
