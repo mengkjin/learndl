@@ -366,11 +366,13 @@ def unpack_files_from_tar(path : Path | str , target : Path | str , overwrite = 
     assert path.suffix == '.tar' , f'{path} is not a tar file'
     with tarfile.open(path, 'r') as tar:  
         for member in tar.getmembers():
-            if not overwrite and target.joinpath(member.name).exists():
-                Logger.alert1(f"Tar File member {member.name} to {target} already exists." , indent = indent , vb_level = vb_level)
+            target_path = target.joinpath(member.name)
+            if not overwrite and target_path.exists():
+                Logger.alert1(f"{target_path} already exists, skip unpacking" , indent = indent + 1 , vb_level = vb_level + 1)
             else:
-                tar.extract(member, path)
-                Logger.success(f"Unpacked {member.name} to {target}" , indent = indent , vb_level = vb_level , italic = True)
+                tar.extract(member, target)
+                Logger.success(f"Unpacked {member.name} to {target}" , indent = indent + 1 , vb_level = vb_level + 1 , italic = True)
+    Logger.stdout(f"Unpacked {path} to {target}" , indent = indent , vb_level = vb_level , italic = True)
 
 def _reset_index(df : pd.DataFrame | Any , reset = True):
     """reset index which are not None"""

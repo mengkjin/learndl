@@ -358,9 +358,17 @@ class PredictionModel(ModelPath):
         return path
 
     @classmethod
-    def UnpackModelArchives(cls , path : Path | str) -> None:
-        DB.unpack_files_from_tar(path , PATH.main , overwrite = True , indent = 0 , vb_level = Proj.vb.max)
-
+    def UnpackModelArchives(cls , path : Path | str | None = None , delete_tar = True , overwrite = False) -> None:
+        if path is None:
+            paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
+        else:
+            paths = [Path(path)]
+        
+        for path in paths:
+            DB.unpack_files_from_tar(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
+            if delete_tar:
+                path.unlink()
+            
     @property
     def pred_dates(self) -> np.ndarray:
         """model pred dates"""
