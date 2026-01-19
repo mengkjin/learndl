@@ -353,7 +353,7 @@ class PredictionModel(ModelPath):
     @classmethod
     def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
         files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
-        path = PATH.main.joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
+        path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
         DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
         return path
 
@@ -361,6 +361,7 @@ class PredictionModel(ModelPath):
     def UnpackModelArchives(cls , path : Path | str | None = None , delete_tar = True , overwrite = False) -> None:
         if path is None:
             paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
+            paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]
         else:
             paths = [Path(path)]
         

@@ -13,13 +13,14 @@
 #       required : True
 #       default : 20240101
 
+from src.proj import Proj
 from src.proj.util import ScriptTool
-
 from src.res.model.util import PredictionModel
 
 @ScriptTool('pack_model_files')
 def main(start_model_date : int = 20240101 , **kwargs):
-    PredictionModel.PackModelArchives(start_model_date = start_model_date)
+    path = PredictionModel.PackModelArchives(start_model_date = start_model_date)
+    Proj.email_attachments.append(path)
     
 if __name__ == '__main__':
     main()
