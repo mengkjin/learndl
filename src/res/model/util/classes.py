@@ -359,10 +359,10 @@ class TrainerPredRecorder(ModelStreamLine):
         DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
 
     def archive_model_records(self):
-        records : list[pd.DataFrame] = []
+        records : list[tuple[int,int]] = []
         for model_num , model_date , _ , _ in self.trainer.config.model_base_path.iter_model_archives():
-            records.append(pd.DataFrame({'model_num' : model_num , 'model_date' : model_date}))
-        df = pd.concat(records) if records else pd.DataFrame(columns = ['model_num' , 'model_date']).astype(int)
+            records.append((model_num , model_date))
+        df = pd.DataFrame(records , columns = ['model_num' , 'model_date']) if records else pd.DataFrame(columns = ['model_num' , 'model_date']).astype(int)
         df = df.drop_duplicates().sort_values(by=['model_num' , 'model_date'])
         df['next_model_date'] = df.groupby('model_num')['model_date'].shift(-1)
         return df
@@ -415,6 +415,8 @@ class TrainerPredRecorder(ModelStreamLine):
                 self.save_preds(df , model_date , model_num)
                 
             Logger.note(purge_info , vb_level = vb_level)
+        else:
+            Logger.note(f'No retrained models found, no purge needed' , vb_level = vb_level)
 
     def purge_outdated_model_preds(self , vb_level : int = 2):
         archive_records = self.archive_model_records()
@@ -423,6 +425,7 @@ class TrainerPredRecorder(ModelStreamLine):
         new_pred_records['next_model_date'] = new_pred_records['next_model_date'].fillna(99991231)
         df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
         if df.empty:
+            Logger.note(f'No outdated predictions found, no purge needed' , vb_level = vb_level)
             return
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'

@@ -84,81 +84,54 @@ end tell
 
     def run(self):
         if self.mode == 'os':
-            self.run_in_os()
+            self.process = self.run_cmd(self.os_cmd, cmd_type = 'OS')
         else:
-            self.run_in_shell()
+            # run in shell
+            if MACHINE.is_macos:
+                if self.macos_tempfile_method:
+                    self.run_in_shell_darwin_tempfile()
+                else:
+                    self.process = self.run_cmd(self.shell_cmd, cmd_type = 'AppleScript', input = self.apple_script_cmd)
+            else:
+                self.process = self.run_cmd(self.shell_cmd, cmd_type = 'Shell')
         return self
 
-    def run_in_os(self):
+    @classmethod
+    def run_cmd(cls , cmd : list[str] | str , cmd_type : str = 'Subprocess' , 
+                communicating = True , input : str | None = None ,
+                encoding = 'utf-8' , ):
         try:
-            self.process = self.Popen(self.os_cmd, communicating = True)
-            _ , stderr = self.process.communicate()
+            process = cls.Popen(cmd, encoding = encoding, communicating = communicating)
+            _ , stderr = process.communicate(input = input)
 
-            if self.process.returncode == 0:
-                Logger.success(f"OS command executed successfully : {self.os_cmd}")
+            if process.returncode == 0:
+                Logger.success(f"{cmd_type} command executed successfully : {cmd}")
             else:
-                Logger.alert2(f"OS command executed failed : {self.os_cmd}")
-                Logger.alert2(f"Return Code: {self.process.returncode}")
+                Logger.alert2(f"{cmd_type} command executed failed : {cmd}")
+                Logger.alert2(f"Return Code: {process.returncode}")
                 Logger.alert2(f"Error Outputs: {stderr}")
         except subprocess.CalledProcessError as e:
-            Logger.error(f"OS command executed failed with CalledProcessError : {self.os_cmd}")
+            Logger.error(f"{cmd_type} command executed failed with CalledProcessError : {cmd}")
             Logger.error(f"Return Code: {e.returncode}")
             Logger.error(f"Error Outputs: {e.stderr}")
 
-    def run_in_shell(self):
-        if MACHINE.is_macos:
-            self.run_in_shell_darwin()
-            return
-        try:
-            self.process = self.Popen(self.shell_cmd, communicating = True)
-            _ , stderr = self.process.communicate()
+        return process
 
-            if self.process.returncode == 0:
-                Logger.success(f"Shell command executed successfully : {self.shell_cmd}")
-            else:
-                Logger.alert2(f"Shell command executed failed : {self.shell_cmd}")
-                Logger.alert2(f"Return Code: {self.process.returncode}")
-                Logger.alert2(f"Error Outputs: {stderr}")
-        except subprocess.CalledProcessError as e:
-            Logger.error(f"Shell command executed failed with CalledProcessError : {self.shell_cmd}")
-            Logger.error(f"Return Code: {e.returncode}")
-            Logger.error(f"Error Outputs: {e.stderr}")
-
-    def run_in_shell_darwin(self):
+    def run_in_shell_darwin_tempfile(self):
         assert self.mode == 'shell' , 'darwin mode does not support os mode'
         assert MACHINE.is_macos , f'Unsupported platform for run_in_shell_darwin: {MACHINE.system_name}'
+        assert self.macos_tempfile_method , 'macos_tempfile_method must be True'
 
-        if self.macos_tempfile_method:
-            with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
-                temp_script.write(self.apple_script_cmd)
-                temp_script_path = Path(temp_script.name)
+        with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
+            temp_script.write(self.apple_script_cmd)
+            temp_script_path = Path(temp_script.name)
 
         try:
-            if self.macos_tempfile_method:
-                self.process = self.Popen([*self.shell_cmd , str(temp_script_path)], communicating = True)
-                _ , stderr = self.process.communicate()
-            else:
-                self.process = self.Popen(self.shell_cmd, communicating = True)
-                _ , stderr = self.process.communicate(input=self.apple_script_cmd)
+            self.process = self.run_cmd([*self.shell_cmd , str(temp_script_path)], cmd_type = 'AppleScript')
+        finally:
+            temp_script_path.unlink(missing_ok=True)
 
-            if self.process.returncode == 0:
-                Logger.success(f"AppleScript executed successfully : {self.script}")
-            else:
-                Logger.alert2(f"AppleScript executed failed : {self.script}")
-                Logger.alert2(f"Return Code: {self.process.returncode}")
-                Logger.alert2(f"Error Outputs: {stderr}")
-            if self.macos_tempfile_method:
-                temp_script_path.unlink(missing_ok=True)
-        except subprocess.CalledProcessError as e:
-            Logger.error(f"AppleScript executed failed with CalledProcessError : {self.script}")
-            Logger.error(f"Return Code: {e.returncode}")
-            Logger.error(f"Error Outputs: {e.stderr}")
-            if self.macos_tempfile_method:
-                temp_script_path.unlink(missing_ok=True)
-        except Exception as e:
-            if self.macos_tempfile_method:
-                temp_script_path.unlink(missing_ok=True)
-            raise e
+        return self
 
     @staticmethod
     def Popen(cmd : list[str] | str , encoding = 'utf-8' , communicating = False):
