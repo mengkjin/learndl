@@ -22,8 +22,8 @@ class TempFile:
             Logger.error(f'Failed to remove temp file: {e}')
 
 def check_cuda_status():
-    if not MACHINE.server:
-        Logger.skipping(f'{MACHINE.name} is not a server, skip checking cuda status')
+    if not MACHINE.platform_server:
+        Logger.skipping(f'{MACHINE.name} is not platform server, skip checking cuda status')
     elif torch.cuda.is_available(): 
         Logger.success(f'Server {MACHINE.name} CUDA is available')
     else:
@@ -47,8 +47,8 @@ def check_cuda_status():
 
 
 def email_to_fanghan(test = False):
-    if not MACHINE.server:
-        Logger.skipping(f'{MACHINE.name} is not a server, skip emailing to fanghan')
+    if not MACHINE.platform_server:
+        Logger.skipping(f'{MACHINE.name} is not platform server, skip emailing to fanghan')
         return
     today = CALENDAR.updated()
     task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))

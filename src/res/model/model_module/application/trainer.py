@@ -107,7 +107,7 @@ class ModelTrainer(BaseTrainer):
         #     for model in PredictionModel.SelectModels():
         #         with Logger.ParagraphI(f'Updating Model {model.model_path}'):
         #             cls.initialize(0 , 1 , 0 , model.model_path).go()
-        if not MACHINE.server:
+        if not MACHINE.cuda_server:
             Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             for model in PredictionModel.SelectModels():

@@ -307,7 +307,7 @@ class PredictionModel(ModelPath):
     for a prediction model to predict recent/history data
     model dict stored in configs/proj/model_settings.yaml file under prediction section
     '''
-    START_DT = 20170101 if MACHINE.server else 20170101
+    START_DT = 20170101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['prediction']
 

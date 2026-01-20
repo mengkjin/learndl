@@ -18,7 +18,7 @@ class JSDataUpdater():
     '''
     UPDATER_BASE        = PATH.data
     UPDATER_TITLE       = 'DB_updater'
-    UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MACHINE.server else [PATH.updater]
+    UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MACHINE.platform_server else [PATH.updater]
 
     def __init__(self) -> None:
         self.Updater = self.get_new_updater()
@@ -37,7 +37,7 @@ class JSDataUpdater():
     
     @classmethod
     def unpack_exist_updaters(cls , del_after_dumping = True):
-        assert MACHINE.server , f'must on server'
+        assert MACHINE.platform_server , f'must on platform server , but got {MACHINE.name}'
 
         paths : list[Path] = []
         for sdir in cls.UPDATER_SEARCH_DIRS:
@@ -202,7 +202,7 @@ class JSDataUpdater():
 
     @classmethod
     def update_hfm_terminal(cls):
-        assert not MACHINE.server , f'{MACHINE.name} is a server, must on terminal machine'
+        assert not MACHINE.platform_server , f'{MACHINE.name} is platform server, must on terminal machine'
         if not MACHINE.belong_to_hfm: 
             return
         with Logger.Paragraph('Update JSData Update Files' , 3):
@@ -214,7 +214,7 @@ class JSDataUpdater():
             
     @classmethod
     def update_server(cls):
-        assert MACHINE.server , f'{MACHINE.name} is not a server, must on server machine'
+        assert MACHINE.platform_server , f'{MACHINE.name} is not platform server, must on platform server machine'
 
         with Logger.Paragraph('Unpack JSData Update Files' , 3):
             cls.unpack_exist_updaters(del_after_dumping=True)
@@ -227,7 +227,7 @@ class JSDataUpdater():
         1. In terminal, update js source data from R project to updaters
         2. In server, unpack update files and move to Database
         '''
-        if MACHINE.server:
+        if MACHINE.platform_server:
             cls.update_server()
         elif MACHINE.belong_to_jinmeng and MACHINE.belong_to_hfm:
             cls.update_hfm_terminal()

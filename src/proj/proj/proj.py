@@ -182,7 +182,7 @@ class Proj(metaclass=_ProjMeta):
         def _print_project_info():
             Logger.stdout('Project Info:' , color = 'lightgreen' , bold = True)
             Logger.stdout_pairs(cls.info() , indent = 1 , color = 'lightgreen' , bold = True)
-            if MACHINE.server and not torch.cuda.is_available():
+            if MACHINE.cuda_server and not torch.cuda.is_available():
                 Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
 
         if script_level and not getattr(cls.States , identifier , False):

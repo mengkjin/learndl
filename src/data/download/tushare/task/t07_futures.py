@@ -35,7 +35,7 @@ class FuturesBasic(InfoFetcher):
 
 class FuturesDailyQuote(DayFetcher):
     """futures daily quote"""
-    START_DATE = 20180101 if MACHINE.server else 20241215
+    START_DATE = 20180101 if MACHINE.updatable else 20241215
     DB_KEY = 'fut_day'
     def get_data(self , date : int):
         date_str = str(date)

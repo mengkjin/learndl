@@ -29,7 +29,7 @@ class ModelAPI:
         a. for laptop, do nothing
         b. for server, continue training prediction models in model'
         '''
-        if MACHINE.server:
+        if MACHINE.cuda_server:
             wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
             cls.Trainer.update_models(force_update = force_update)
         else:

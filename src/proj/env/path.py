@@ -1,5 +1,5 @@
 # please check this path before running the code
-import shutil , yaml , os , sys , json
+import shutil , yaml , sys , json
 
 from datetime import datetime
 from pathlib import Path
@@ -116,8 +116,8 @@ class PATH:
         assert isinstance(data , dict) , type(data)
         yaml_file = Path(yaml_file)
         assert yaml_file.suffix == '.yaml' , yaml_file
-        assert not yaml_file.exists() or not os.path.getsize(yaml_file) , f'{yaml_file} already exists'
-        with open(yaml_file , 'a' if os.path.exists(yaml_file) else 'w') as f:
+        assert not yaml_file.exists() or not yaml_file.stat().st_size , f'{yaml_file} already exists'
+        with open(yaml_file , 'a' if yaml_file.exists() else 'w') as f:
             yaml.dump(data , f , **kwargs)
 
     @staticmethod
@@ -139,7 +139,7 @@ class PATH:
         assert isinstance(data , dict) , type(data)
         json_file = Path(json_file)
         assert json_file.suffix == '.json' , json_file
-        assert not json_file.exists() or not os.path.getsize(json_file) , f'{json_file} already exists'
+        assert not json_file.exists() or not json_file.stat().st_size , f'{json_file} already exists'
         with open(json_file , 'w' , **kwargs) as f:
             json.dump(data , f , ensure_ascii = ensure_ascii , indent = indent , **kwargs)
 
@@ -163,16 +163,18 @@ class PATH:
     @staticmethod
     def file_modified_date(path : Path | str , default = 19970101) -> int:
         """Get the modified date of the file"""
-        if Path(path).exists():
-            return int(datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y%m%d'))
+        path = Path(path)
+        if path.exists():
+            return int(datetime.fromtimestamp(path.stat().st_mtime).strftime('%Y%m%d'))
         else:
             return default
 
     @staticmethod
     def file_modified_time(path : Path | str , default = 19970101000000) -> int:
         """Get the modified time of the file"""
-        if Path(path).exists():
-            return int(datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y%m%d%H%M%S'))
+        path = Path(path)
+        if path.exists():
+            return int(datetime.fromtimestamp(path.stat().st_mtime).strftime('%Y%m%d%H%M%S'))
         else:
             return default
         
@@ -190,8 +192,7 @@ class PATH:
         if isinstance(directory , str): 
             directory = Path(directory)
         if recur:
-            paths : list[Path] = []
-            paths = [Path(dirpath).joinpath(filename) for dirpath, _, filenames in os.walk(directory) for filename in filenames]
+            paths = [p for p in directory.rglob('*') if p.is_file()]
         else:
             paths = [p for p in directory.iterdir()]
         paths = [p.absolute() for p in paths] if fullname else [p.relative_to(directory) for p in paths]

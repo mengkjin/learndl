@@ -101,7 +101,7 @@ class StatusDisplay(BaseCallBack):
     # callbacks
     def on_summarize_model(self):
         """export test summary to json"""
-        if self.status.test_summary.empty or not MACHINE.server: 
+        if self.status.test_summary.empty or not MACHINE.cuda_server: 
             return
         test_scores = {
             '{}.{}'.format(*col):'|'.join([f'{k}({self.status.test_summary[col].round(v).loc[k]})' for k,v in self.SUMMARY_NDIGITS.items() 

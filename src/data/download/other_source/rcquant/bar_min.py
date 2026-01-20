@@ -17,7 +17,7 @@ def src_start_date(data_type : DATA_TYPES):
     never = 20401231
     if data_type == 'sec':
         return never if MACHINE.belong_to_hfm else 20241101
-    elif not MACHINE.server:
+    elif not MACHINE.updatable:
         return never
     else:
         assert data_type in ['etf' , 'fut' , 'cb'] , f'unsupported data type: {data_type}'

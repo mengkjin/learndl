@@ -112,8 +112,8 @@ class Email:
              server : Literal['netease'] = 'netease' , 
              confirmation_message = ''):
         
-        if not MACHINE.server:
-           Logger.alert1(f'{MACHINE.name} is not a server, skip sending email')
+        if not MACHINE.emailable:
+           Logger.alert1(f'{MACHINE.name} is not available for email, skip sending email')
            return
 
         cls.setup_settings(server)

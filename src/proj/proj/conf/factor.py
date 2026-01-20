@@ -10,11 +10,11 @@ class FactorUpdateConfig:
     @property
     def start(self) -> int:
         """start date of factor update"""
-        return 20110101 if MACHINE.server else 20241101
+        return 20110101 if MACHINE.updatable else 20241101
     @property
     def end(self) -> int:
         """end date of factor update"""
-        return 20401231 if MACHINE.server else 20241231
+        return 20401231 if MACHINE.updatable else 20241231
     @property
     def step(self) -> int:
         """step of factor update"""

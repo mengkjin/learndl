@@ -393,7 +393,7 @@ class PortfolioGroupBuilder:
     def accounting(self):
         with (
             Logger.Timer(f'{self.class_name} accounting' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 1) , 
-            Logger.Profiler(False , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv')
+            Logger.Profiler(None , output = f'{self.caller.__class__.__name__}_{self.__class__.__name__}_accounting.csv')
         ):
             for builder in self.builders:
                 with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1 , enter_vb_level = self.vb_level + 2):

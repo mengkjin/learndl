@@ -122,7 +122,7 @@ class TrainParam:
     
     @property
     def should_be_short_test(self):
-        return not self.base_path and not MACHINE.server
+        return not self.base_path and not MACHINE.cuda_server
 
     def special_adjustment(self):
         if 'short_test' in self.override: 

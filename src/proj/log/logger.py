@@ -404,6 +404,7 @@ class Logger:
             self.write(f'{self.title} Finish at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}, Cost {Duration(self._end_time - self._init_time)}')
         def write(self , message : str):
             Logger.divider(char = self.char , msg = message , color = self.color , bold = True , vb_level = self.vb_level)
+    
     class Profiler(cProfile.Profile):
         """Profiler class for profiling the code, show the profile result in the best way"""
         def __init__(self, title : str | None = None , builtins = False , display = True , n_head = 20 , 

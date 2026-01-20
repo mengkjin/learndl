@@ -1,33 +1,64 @@
 # please check this path before running the code
 import sys , socket , platform , os , torch
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Any
 
 __all__ = ['MACHINE']
 
-_machine_dict = {
-    # machine name :    (is_server , main_path , updatable)
-    'mengkjin-server':  (True , '/home/mengkjin/workspace/learndl'),
-    'HST-jinmeng':      (False , 'E:/workspace/learndl'),
-    'Mathews-Mac':      (False , '/Users/mengkjin/workspace/learndl' , False),
-    'longcl-server':    (True , '/home/longcl/workspace/learndl'),
-    'zhuhy-server':     (True , '/home/zhuhy/workspace/learndl'),
-    'HNO-JINMENG01':    (False , 'D:/Coding/learndl/learndl'),
-    'HPO-LONGCL05':     (False , ''),
-    'HPO-ZHUHY01':      (False , ''),
-}
+@dataclass
+class _Mach:
+    name : str
+    cuda_server : bool
+    main_path : Path
+    python_path : str
+    mosek_lic_path : Path | None = None
+    updatable : bool = False
+    emailable : bool = False
 
-def _get_python_path(machine_name : str , main_path : Path):
-    """Get the Python path of the machine"""
-    if machine_name in ['Mathews-Mac']:
-        return str(main_path) + '/.venv/bin/python'
-    elif machine_name in ['HST-jinmeng']:
-        return 'E:/workspace/learndl/.venv/Scripts/python.exe'
-    elif machine_name in ['mengkjin-server']:
-        return str(main_path) + '/.venv/bin/python' #'python3.10'
-    else:
-        return 'python'
+    @property
+    def belong_to_hfm(self) -> bool:
+        return self.name.lower().startswith(('hno' , 'hpo'))
+    @property
+    def belong_to_jinmeng(self) -> bool:
+        return 'jinmeng' in self.name.lower()
+    @property
+    def hfm_factor_dir(self) -> Path | None:
+        return Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if self.belong_to_hfm else None
+
+    system_name = platform.system()
+    is_linux = system_name == 'Linux' and os.name == 'posix'
+    is_windows = system_name == 'Windows'
+    is_macos = system_name == 'Darwin'
+    
+
+_machine_settings : dict[str , _Mach] = {
+    'mengkjin-server' : _Mach(
+        name = 'mengkjin-server' , 
+        cuda_server = True , 
+        main_path = Path('/home/mengkjin/workspace/learndl') , 
+        python_path = '/home/mengkjin/workspace/learndl/.venv/bin/python' , 
+        mosek_lic_path = Path('/home/mengkjin/mosek/mosek.lic') , 
+        updatable = True , 
+        emailable = True),
+    'HST-jinmeng' : _Mach(
+        name = 'HST-jinmeng' , 
+        cuda_server = False , 
+        main_path = Path('E:/workspace/learndl') , 
+        python_path = 'E:/workspace/learndl/.venv/Scripts/python.exe' , 
+        mosek_lic_path = Path('C:/Users/Administrator/mosek/mosek.lic') , 
+        updatable = True , 
+        emailable = True),
+    'Mathews-Mac' : _Mach(
+        name = 'Mathews-Mac' , 
+        cuda_server = False , 
+        main_path = Path('/Users/mengkjin/workspace/learndl') , 
+        python_path = '/Users/mengkjin/workspace/learndl/.venv/bin/python' , 
+        mosek_lic_path = Path('/Users/mengkjin/mosek/mosek.lic') , 
+        updatable = False , 
+        emailable = False),
+}
 
 def _get_best_device():
     """Get the best device for the machine: CUDA, MPS, or CPU"""
@@ -38,37 +69,56 @@ def _get_best_device():
     else:
         return 'CPU'
 
+def _get_os_name():
+    """Get the OS name"""
+    return os.name
+
 class MACHINE:
     """
     Machine setting for the project
     name : str , machine_name
     server : bool , is this machine a server
     main_path : str , main_path of the project
-    updatable : bool , updatable
     python_path : str , python_path
+    mosek_lic_path : str | None , mosek license path
+    updatable : bool , updatable
+    emailable : bool , emailable
 
     belong_to_hfm : bool , belong to HFM
     belong_to_jinmeng : bool , belong to Jinmeng
     hfm_factor_dir : Path | None , HFM factor directory
+
+    platform_server : bool , is this machine a platform server
+    platform_reserve : bool , is this machine a platform reserved
+    platform_coding : bool , is this machine a platform coding
+
     """
     name : str = socket.gethostname().split('.')[0]
-    settings : tuple = _machine_dict[name]
-    server : bool = settings[0]
-    main_path : Path = Path(settings[1])
-    updatable : bool = settings[2] if len(settings) > 2 else True
-    python_path : str = _get_python_path(name , main_path)
-
-    belong_to_hfm : bool = name.lower().startswith(('hno' , 'hpo'))
-    belong_to_jinmeng : bool = 'jinmeng' in name.lower()
-    hfm_factor_dir : Path | None = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if belong_to_hfm else None
-
     system_name = platform.system()
+
+    setting : _Mach = _machine_settings[name]
+    assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
+    
+    cuda_server = setting.cuda_server
+    main_path = setting.main_path
+    python_path = setting.python_path
+    mosek_lic_path = setting.mosek_lic_path
+    updatable = setting.updatable
+    emailable = setting.emailable
+
+    belong_to_hfm = setting.belong_to_hfm
+    belong_to_jinmeng = setting.belong_to_jinmeng
+    hfm_factor_dir = setting.hfm_factor_dir
+
     is_linux = system_name == 'Linux' and os.name == 'posix'
     is_windows = system_name == 'Windows'
     is_macos = system_name == 'Darwin'
-    coding_platform = is_macos
+    
+    platform_server = name == 'mengkjin-server'
+    platform_coding = is_macos
 
     cpu_count = os.cpu_count() or 1
+    max_workers = 40 if platform_server else cpu_count
     best_device = _get_best_device()
     
     assert main_path.exists() , f'main_path not exists: {main_path}'
@@ -81,7 +131,7 @@ class MACHINE:
         """return the machine info list"""
         return {
             'Machine Name' : cls.name, 
-            'Is Server' : cls.server, 
+            'Is Server' : cls.cuda_server, 
             'System' : cls.system_name, 
             'Main Path' : cls.main_path, 
             'Python Path' : cls.python_path,
@@ -89,14 +139,9 @@ class MACHINE:
         }
 
     @classmethod
-    def machine_names(cls):
-        """Select the machine setting"""
-        return list(_machine_dict.keys())
-
-    @classmethod
     def machine_main_path(cls , machine_name : str) -> Path:
         """Get the main path at another machine"""
-        return Path(_machine_dict[machine_name][1])
+        return _machine_settings[machine_name].main_path
     
     @classmethod
     def PATH(cls):

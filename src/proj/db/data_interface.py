@@ -47,8 +47,6 @@ _db_alternatives : dict[str , str] = {
 _load_parallel : Literal['thread' , 'process' , 'dask' , 'none'] = 'thread'
 # in Mac-Matthew , thread > dask > none > process
 
-_load_max_workers : int | Any = 40 if MACHINE.server else MACHINE.cpu_count
-
 _deprecated_db_by_name  : list[str] = ['information_js']
 _deprecated_db_by_date  : list[str] = ['trade' , 'labels' , 'benchmark' , 'trade_js' , 'labels_js' , 'benchmark_js'] 
 
@@ -299,7 +297,7 @@ def load_dfs(paths : dict | list[Path] , * ,  key_column : str | None = 'date' ,
         dfs = compute(ddfs)[0]
     else:
         assert parallel == 'thread' or not MACHINE.is_windows, (parallel , MACHINE.system_name)
-        max_workers = min(_load_max_workers , max(len(paths) // 5 , 1))
+        max_workers = min(MACHINE.max_workers , max(len(paths) // 5 , 1))
         PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(loader , p):d for d,p in paths.items()}

@@ -13,7 +13,7 @@ class ConvertibleBasic(InfoFetcher):
 
 class ConvertibleDailyQuote(DayFetcher):
     """convertible daily quote"""
-    START_DATE = 20180101 if MACHINE.server else 20241215
+    START_DATE = 20180101 if MACHINE.updatable else 20241215
     DB_KEY = 'cb_day'
     def get_data(self , date : int):
         date_str = str(date)
