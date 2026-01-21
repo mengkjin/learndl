@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp  
 
+from string import Template
 from dataclasses import dataclass
 from datetime import datetime
 from pypinyin import lazy_pinyin
@@ -80,31 +81,19 @@ _default_factors : dict[str,dict[str,Any]] = {
     #     'factor_src' : 'haitong' ,
     #     'factor_set' : 'hf_factors' ,
     #     'date_col' : 'trade_dt' ,
-    #     'start_dt' : 20130101 ,
-    #     'startdt_query' : 'select min(trade_dt) from daily_factor_db.dbo.JSJJHFFactors' ,
-    #     'default_query' : ('select * from daily_factor_db.dbo.JSJJHFFactors t ' +             
-    #                    'where t.trade_dt between \'{start_dt}\' and \'{end_dt}\'') ,
+    #     'start_dt' : 20130101 , 
     # } ,
     # 'haitong.dl_factors' :{
     #     'factor_src' : 'haitong' ,
     #     'factor_set' : 'dl_factors' ,
     #     'date_col' : 'trade_dt' ,
     #     'start_dt' : 20161230 ,
-    #     'startdt_query' : 'select min(trade_dt) daily_factor_db.dbo.JSJJDeepLearnFactorsV2' ,
-    #     'default_query' : ('select s_info_windcode , trade_dt , f_value , model ' +
-    #                    'from daily_factor_db.dbo.JSJJDeepLearnFactorsV2 t where ' + 
-    #                    't.trade_dt between \'{start_dt}\' and \'{end_dt}\'') ,
-    # } ,
     'dongfang.hfq_chars' :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'hfq_chars' ,
         'date_col' : 'trade_dt' ,
         'start_dt' : 20050101 ,
         'date_fmt' : '%Y%m%d' ,
-        'startdt_query' : 'select min(trade_dt) daily_factor_db.dbo.JSJJDeepLearnFactorsV2' ,
-        'default_query' : ('select s_info_windcode , trade_dt , f_value , model ' +
-                       'from daily_factor_db.dbo.JSJJDeepLearnFactorsV2 t where ' + 
-                       't.trade_dt between \'{start_dt}\' and \'{end_dt}\'') ,
     } ,
     'dongfang.l2_chars'  :{
         'factor_src' : 'dongfang' ,
@@ -215,7 +204,6 @@ _default_factors : dict[str,dict[str,Any]] = {
         'start_dt' : 20171229 ,
         'date_fmt' : '%Y-%m-%d' ,
     } ,
-
     # 'guosheng.gs_pv_set1':{
     #     'factor_src' : 'guosheng' ,
     #     'factor_set' : 'gs_pv_set1' ,
@@ -228,16 +216,15 @@ _default_factors : dict[str,dict[str,Any]] = {
     #     'factor_set' : 'positive' ,
     #     'date_col' : 'date' ,
     #     'start_dt' : 20140130 ,
-    #     'startdt_query' : 'select min(date) from public.smart_money' ,
-    #     'default_query' : ('select * from public.smart_money where date >= \'{start_dt}\' and date <= \'{end_dt}\'') ,
+    #     'sub_factors' : ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
+    #               'offense_defense','high_freq_shareholder','pe_change'] ,
     # } ,
     # 'kaiyuan.negative' :{
     #     'factor_src' : 'kaiyuan' ,
     #     'factor_set' : 'negative' ,
     #     'date_col' : 'date' ,
     #     'start_dt' : 20140130 ,
-    #     'startdt_query' : 'select min(date) from public.smart_money' ,
-    #     'default_query' : ('select * from public.smart_money where date >= \'{start_dt}\' and date <= \'{end_dt}\'') ,
+    #     'sub_factors' : ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error'] ,
     # } ,
     'huatai.dl_factors' :{
         'factor_src' : 'huatai' ,
@@ -245,8 +232,7 @@ _default_factors : dict[str,dict[str,Any]] = {
         'date_col' : 'datetime' ,
         'start_dt' : 20170101 ,
         'date_fmt' : '%Y-%m-%d' ,
-        'startdt_query' : 'select min(datetime) from price_volume_nn' ,
-        'default_query' : ('select * from price_volume_nn where datetime >= \'{start_dt}\' and datetime <= \'{end_dt}\'') ,
+        'sub_factors' : ['price_volume_nn','text_fadt_bert'] ,
     } ,
     'huatai.master_combined' :{
         'factor_src' : 'huatai' ,
@@ -254,8 +240,6 @@ _default_factors : dict[str,dict[str,Any]] = {
         'date_col' : 'datetime' ,
         'start_dt' : 20170101 ,
         'date_fmt' : '%Y-%m-%d' ,
-        'startdt_query' : 'select min(datetime) from master_combined' ,
-        'default_query' : ('select * from master_combined where datetime >= \'{start_dt}\' and datetime <= \'{end_dt}\'') ,
     } ,
     'huatai.fundamental_value' :{
         'factor_src' : 'huatai' ,
@@ -263,9 +247,7 @@ _default_factors : dict[str,dict[str,Any]] = {
         'date_col' : 'datetime' ,
         'start_dt' : 20170101 ,
         'date_fmt' : '%Y-%m-%d' ,
-        'startdt_query' : 'select min(datetime) from fundamental_value' ,
-        'default_query' : ('select * from fundamental_value where datetime >= \'{start_dt}\' and datetime <= \'{end_dt}\'') ,
-    } ,
+   } ,
 }
         
 
@@ -367,9 +349,7 @@ class SellsideSQLDownloader:
     start_dt        : int
     end_dt          : int = 99991231
     date_fmt        : str | None = None
-    factors         : list | None = None
-    startdt_query   : str = 'select min({date_col}) from {factor_set}'
-    default_query   : str = 'select * from {factor_set} where {date_col} between \'{start_dt}\' and \'{end_dt}\''
+    sub_factors     : list | None = None
     connection_key  : str = ''
     DB_SRC : ClassVar[str] = 'sellside'
     FREQ   : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
@@ -379,6 +359,44 @@ class SellsideSQLDownloader:
         self.db_key = self.factor_src + '.' + self.factor_set
         if self.connection_key == '':
             self.connection_key = self.factor_src
+
+    def sqlline_start_dt(self) -> str:
+        if self.factor_src == 'haitong':
+            if self.factor_set == 'hf_factors':
+                template = Template('select min(${date_col}) from daily_factor_db.dbo.JSJJHFFactors')
+            else:
+                template = Template('select min(${date_col}) from daily_factor_db.dbo.JSJJHFFactors2')
+        elif self.factor_src == 'huatai':
+            if self.factor_set == 'dl_factors':
+                template = Template('select min(${date_col}) from price_volume_nn')
+            else:
+                template = Template('select min(${date_col}) from ${factor_set}')
+        elif self.factor_src == 'kaiyuan':
+            template = Template('select min(${date_col}) from public.smart_money')
+        elif self.factor_src in ['dongfang' , 'huayuan' , 'guosheng' , 'guojin']:
+            template = Template('select min(${date_col}) from ${factor_set}')
+        else:
+            raise ValueError(f'Undefined startdt query for factor source: {self.factor_src}')
+        return template.substitute(date_col = self.date_col , factor_set = self.factor_set)
+
+    def sqlline_factor_values(self , start_dt : int | str , end_dt : int | str , sub_factor : str | None = None) -> str:
+        if self.factor_src == 'haitong':
+            if self.factor_set == 'hf_factors':
+                template = Template('select * from daily_factor_db.dbo.JSJJHFFactors t where t.${date_col} between \'${start_dt}\' and \'${end_dt}\'')
+            else:
+                template = Template('select s_info_windcode , trade_dt , f_value , model from daily_factor_db.dbo.JSJJHFFactors2 t where t.${date_col} between \'${start_dt}\' and \'${end_dt}\'')
+        elif self.factor_src == 'huatai':
+            if self.factor_set == 'dl_factors':
+                template = Template('select * from ${sub_factor} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
+            else:
+                template = Template('select * from ${factor_set} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
+        elif self.factor_src == 'kaiyuan':
+            template = Template('select * from public.{sub_factor} where {date_col} >= \'{start_dt}\' and {date_col} <= \'{end_dt}\'')
+        elif self.factor_src in ['dongfang' , 'huayuan' , 'guosheng' , 'guojin']:
+            template = Template('select * from {factor_set} where {date_col} between \'{start_dt}\' and \'{end_dt}\'')
+        else:
+            raise ValueError(f'Undefined factor values query for factor source: {self.factor_src}')
+        return template.substitute(date_col = self.date_col , factor_set = self.factor_set , start_dt = start_dt , end_dt = end_dt , sub_factor = sub_factor)
 
     def get_connection(self):
         return Connection.connection(self.connection_key)
@@ -423,7 +441,7 @@ class SellsideSQLDownloader:
         if connection is None:
             connection = self.get_connection()
         t0 = datetime.now()
-        df = self.query_default(start , end , connection)
+        df = self.query_factor_values(start , end , connection)
         if (num_dates := self.save_data(df)) > 0:
             Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1)
         else:
@@ -433,25 +451,10 @@ class SellsideSQLDownloader:
     def query_start_dt(self , connection : Connection | None = None):
         if connection is None:
             connection = self.get_connection()
-        return self.make_query(self.startdt_query , connection = connection)
+        conn = connection.connect()
+        return pd.read_sql_query(self.sqlline_start_dt() , conn)
     
-    def query_default(self , start_dt = 20230101 , end_dt = 20230131 , connection : Connection | None = None , retry = 1):
-        if connection is None:
-            connection = self.get_connection()
-        i , df = 0 , None
-        while i <= retry:
-            try:
-                df = self.make_query(self.default_query , start_dt , end_dt , connection = connection)
-            except exc.ResourceClosedError:
-                Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
-                conn = connection.connect(reconnect = True)
-            i += 1
-        if not connection.stay_connect: 
-            conn.close()
-        df = self.df_process(df)
-        return df
-
-    def make_query(self , query , start_dt = None , end_dt = None , connection : Connection | None = None):
+    def query_factor_values(self , start_dt = 20230101 , end_dt = 20230131 , connection : Connection | None = None , retry = 1):
         if connection is None:
             connection = self.get_connection()
         conn = connection.connect()
@@ -460,38 +463,26 @@ class SellsideSQLDownloader:
                 start_dt = CALENDAR.format(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
             if end_dt:   
                 end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
-        kwargs = {'factor_src' : self.factor_src , 
-                  'factor_set' : self.factor_set , 
-                  'date_col'   : self.date_col ,
-                  'start_dt'   : start_dt , 
-                  'end_dt'     : end_dt}
-        if self.factors is None:
-            df_input = pd.read_sql_query(query.format(**kwargs) , conn)
-        else:
-            df_input = {factor:pd.read_sql_query(query.format(factor = factor , **kwargs) , conn) for factor in self.factors}
-        return df_input
-
-    def save_data(self , data : pd.DataFrame | None) -> int:
-        if data is None or data.empty or len(data) == 0: 
-            return 0
-        data = data.sort_values(['date' , 'secid']).set_index('date')
-        status = 0
-        for d in data.index.unique():
-            data_at_d = data.loc[d]
-            if len(data_at_d) == 0: 
-                continue
-            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = 2 , vb_level = 3)
-            status += 1
-        return status
-
-    @classmethod
-    def convert_id(cls , x):
-        if isinstance(x , (bytes)):
-            return int(x.decode('utf-8').split('.')[0].split('!')[0])
-        if isinstance(x , (str)):
-            return int(x.split('.')[0].split('!')[0])
-        else:
-            return type(x)([cls.convert_id(xx) for xx in x])
+        
+        i , df = 0 , None
+        while i <= retry:
+            try:
+                if self.sub_factors is None:
+                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_dt , end_dt) , conn)
+                else:
+                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_dt , end_dt , sub_factor) , conn) for sub_factor in self.sub_factors}
+            except exc.ResourceClosedError:
+                Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
+                conn = connection.connect(reconnect = True)
+            except Exception as e:
+                Logger.error(f'In {self.__class__.__name__} : Error in query_factor_values: {e}')
+                Logger.print_exc(e)
+                break
+            i += 1
+        if not connection.stay_connect: 
+            conn.close()
+        df = self.df_process(df_input)
+        return df
 
     def df_process(self , df_input : pd.DataFrame | dict[Any, pd.DataFrame] | None):
         if df_input is None: 
@@ -548,6 +539,19 @@ class SellsideSQLDownloader:
         df = df.fillna(np.nan)
         return df
 
+    def save_data(self , data : pd.DataFrame | None) -> int:
+        if data is None or data.empty or len(data) == 0: 
+            return 0
+        data = data.sort_values(['date' , 'secid']).set_index('date')
+        status = 0
+        for d in data.index.unique():
+            data_at_d = data.loc[d]
+            if len(data_at_d) == 0: 
+                continue
+            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = 2 , vb_level = 3)
+            status += 1
+        return status
+
     @classmethod
     def default_factors(cls , keys = None):
         if keys is None:
@@ -563,7 +567,6 @@ class SellsideSQLDownloader:
     def factors_and_conns(cls , keys = None):
         factors = cls.default_factors(keys)
         conns   = Connection.default_connections()
-        # return [(factor , conns[factor.factor_src]) for factor in factors.values()]
         return [(factor , conns[factor.connection_key]) for factor in factors.values()]
 
     @classmethod
@@ -594,11 +597,7 @@ class SellsideSQLDownloader:
     @classmethod
     def update(cls):
         Logger.note(f'Download: {cls.__name__} since last update!')
-        try:
-            cls.update_since(trace = 0)
-        except Exception as e:
-            Logger.error(f'In {cls.__name__} : Error in update_since: {e}')
-            Logger.print_exc(e)
+        cls.update_since(trace = 0)
         
 if __name__ == '__main__':
     from src.data.download.sellside.from_sql import SellsideSQLDownloader
@@ -609,4 +608,4 @@ if __name__ == '__main__':
 
     factors_set = SellsideSQLDownloader.factors_and_conns('dongfang.hfq_chars')
     factor , connection = factors_set[0]
-    df = factor.query_default(start_dt , end_dt , connection)
+    df = factor.query_factor_values(start_dt , end_dt , connection)

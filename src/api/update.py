@@ -24,7 +24,7 @@ class UpdateAPI:
         FactorAPI.Pooling.update(timeout = 3)
         FactorAPI.Stats.update()
         FactorAPI.Hierarchy.update()
-        with Proj.vb.WithVB(1):
+        with Proj.vb.WithVB(10):
             ModelAPI.resume_testing()
         TradingAPI.update()
         NotificationAPI.update()
