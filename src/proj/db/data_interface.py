@@ -432,7 +432,7 @@ def src_path(db_src : str) -> Path:
     """get database source path"""
     return _db_parent(db_src)
 
-def _db_path(db_src , db_key , date = None , use_alt = False) -> Path:
+def _db_path(db_src , db_key , date = None , use_alt = False , closest = False , indent = 1 , vb_level : int = 1) -> Path:
     """
     Get path of database
     Parameters
@@ -446,15 +446,39 @@ def _db_path(db_src , db_key , date = None , use_alt = False) -> Path:
     """
     parent = _db_parent(db_src , db_key)
     if db_src in DB_BY_NAME + EXPORT_BY_NAME:
+        closest = False
         new_path = parent.joinpath(f'{db_key}.{SAVE_OPT_DB}')
     else:
         assert date is not None , f'{db_src} use date type but date is None'
         new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{SAVE_OPT_DB}')
-    if not new_path.exists() and db_src in _db_alternatives and use_alt:
-        alt_path = _db_path(_db_alternatives[db_src] , db_key , date , use_alt = False)
-        if alt_path.exists(): 
+
+    if not new_path.exists() and use_alt:
+        alt_path = _db_path_alt(db_src , db_key , date , closest = False)
+        if alt_path is not None:
+            new_path = alt_path 
+            Logger.stdout(f'{db_src} {db_key} use alternative path: {new_path}' , indent = indent , vb_level = vb_level , italic = True)
+
+    if not new_path.exists() and closest:
+        dates = dir_dates(parent)
+        assert date is not None , f'{db_src} {db_key} has no dates'
+        dates = dates[dates <= date]
+        if len(dates) > 0:
+            new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(max(dates))}.{SAVE_OPT_DB}')
+            Logger.stdout(f'{db_src} {db_key} use closest path: {new_path}' , indent = indent , vb_level = vb_level , italic = True)
+
+    if not new_path.exists() and use_alt and closest:
+        alt_path = _db_path_alt(db_src , db_key , date , closest = True)
+        if alt_path is not None:
             new_path = alt_path
+            Logger.stdout(f'{db_src} {db_key} use alternative closest path: {new_path}' , indent = indent , vb_level = vb_level , italic = True)
     return new_path
+
+def _db_path_alt(db_src , db_key , date = None , closest = False) -> Path | None:
+    path = None
+    if db_src in _db_alternatives:
+        path = _db_path(_db_alternatives[db_src] , db_key , date , use_alt = False , closest = closest)
+    if path is not None and path.exists():
+        return path
 
 def _db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
     """get dates from any database data"""
@@ -529,7 +553,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
 
 # @_db_src_deprecated(0)
 def load(db_src , db_key , date = None , *, 
-         date_colname = None , use_alt = False , 
+         date_colname = None , use_alt = False , closest = False , 
          raise_if_not_exist = False , indent = 1 , vb_level : int = 1 , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
@@ -553,7 +577,7 @@ def load(db_src , db_key , date = None , *,
         reset_index: bool, default True
             if True, reset index (no drop index)
     '''
-    path = _db_path(db_src , db_key , date , use_alt = use_alt)
+    path = _db_path(db_src , db_key , date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level)
     df = load_df(path , raise_if_not_exist = raise_if_not_exist)
     df = _process_df(df , date , date_colname , df_syntax = f'{db_src}/{db_key}/{date}' , indent = indent , vb_level = vb_level , **kwargs)
     return df

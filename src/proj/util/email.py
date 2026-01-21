@@ -67,12 +67,11 @@ class Email:
     def message(cls , title : str  , body : str | None = None , recipient : str | None = None , * ,
                 attachments : str | Path | list[Path] | list[str] | None = None ,
                 project_attachments : bool = False ,
-                title_prefix : str | None = 'Learndl:'):
+                title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:'):
         message = MIMEMultipart()
         message['From'] = cls._settings.sender
         message['To'] = cls.recipient(recipient)
         message['Subject'] = f'{title_prefix} {title}'
-        
         
         if attachments is None:
             attachment_paths : list[Path] = []
@@ -108,7 +107,7 @@ class Email:
              recipient : str | None = None , * , 
              attachments : str | Path | list[Path] | list[str] | None = None ,
              project_attachments : bool = False ,
-             title_prefix : str | None = 'Learndl:' ,
+             title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:' ,
              server : Literal['netease'] = 'netease' , 
              confirmation_message = ''):
         

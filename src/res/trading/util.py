@@ -327,25 +327,15 @@ class CompositeAlpha:
             alpha_name = exprs[1]
             alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
             if alpha_type == 'sellside':
-                stored_dates = DB.dates(alpha_type , alpha_name)
+                df = DB.load(alpha_type , alpha_name , date , closest = True , vb_level = 99)
             elif alpha_type == 'factor':
-                factor = StockFactorHierarchy.get_factor(alpha_name)
-                stored_dates = factor.stored_dates()
+                df = StockFactorHierarchy.get_factor(alpha_name).Load(date , closest = True)
             else:
                 raise Exception(f'{alpha_type} is not a valid alpha type')
-            
-            stored_dates = stored_dates[stored_dates <= date]
-            if len(stored_dates) > 0:
-                use_date = stored_dates.max()
-                df = factor.Load(use_date) if alpha_type == 'factor' else DB.load(alpha_type , alpha_name , use_date , vb_level = 99)
-                if df.empty:
-                    df = pd.DataFrame(columns=['secid' , 'date' , alpha_column])
-                else:
-                    df = df.loc[:,['secid' , alpha_column]].assign(date = date)
-            else:
-                df = pd.DataFrame(columns=['secid' , 'date' , alpha_column])
+            df = pd.DataFrame(columns=['secid' , 'date' , alpha_column]) if df.empty else df.assign(date = date).loc[:,['secid' , 'date' , alpha_column]]
         else:
             raise Exception(f'{alpha_name} is not a valid alpha')
+
         factor = StockFactor(df)
         assert len(factor.factor_names) == 1 , f'expect 1 factor name , got {factor.factor_names}'
         return factor.normalize().alpha_model()

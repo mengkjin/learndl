@@ -8,7 +8,7 @@ from typing import Literal , Any
 __all__ = ['MACHINE']
 
 @dataclass
-class _Mach:
+class _MachineSettings:
     name : str
     cuda_server : bool
     main_path : Path
@@ -16,6 +16,11 @@ class _Mach:
     mosek_lic_path : Path | None = None
     updatable : bool = False
     emailable : bool = False
+    nickname : str = ''
+
+    def __post_init__(self):
+        if not self.nickname:
+            self.nickname = self.name
 
     @property
     def belong_to_hfm(self) -> bool:
@@ -33,31 +38,34 @@ class _Mach:
     is_macos = system_name == 'Darwin'
     
 
-_machine_settings : dict[str , _Mach] = {
-    'mengkjin-server' : _Mach(
-        name = 'mengkjin-server' , 
-        cuda_server = True , 
-        main_path = Path('/home/mengkjin/workspace/learndl') , 
-        python_path = '/home/mengkjin/workspace/learndl/.venv/bin/python' , 
-        mosek_lic_path = Path('/home/mengkjin/mosek/mosek.lic') , 
-        updatable = True , 
-        emailable = True),
-    'HST-jinmeng' : _Mach(
-        name = 'HST-jinmeng' , 
-        cuda_server = False , 
-        main_path = Path('E:/workspace/learndl') , 
-        python_path = 'E:/workspace/learndl/.venv/Scripts/python.exe' , 
-        mosek_lic_path = Path('C:/Users/Administrator/mosek/mosek.lic') , 
-        updatable = True , 
-        emailable = True),
-    'Mathews-Mac' : _Mach(
-        name = 'Mathews-Mac' , 
-        cuda_server = False , 
-        main_path = Path('/Users/mengkjin/workspace/learndl') , 
-        python_path = '/Users/mengkjin/workspace/learndl/.venv/bin/python' , 
-        mosek_lic_path = Path('/Users/mengkjin/mosek/mosek.lic') , 
-        updatable = False , 
-        emailable = False),
+_machine_settings : dict[str , dict[str , Any]] = {
+    'mengkjin-server' : {
+        'name' : 'mengkjin-server' , 
+        'cuda_server' : True , 
+        'main_path' : Path('/home/mengkjin/workspace/learndl') , 
+        'python_path' : '/home/mengkjin/workspace/learndl/.venv/bin/python' , 
+        'mosek_lic_path' : Path('/home/mengkjin/mosek/mosek.lic') , 
+        'updatable' : True , 
+        'emailable' : True ,
+        'nickname' : 'Ubuntu'},
+    'HST-jinmeng' : {
+        'name' : 'HST-jinmeng' , 
+        'cuda_server' : False , 
+        'main_path' : Path('E:/workspace/learndl') , 
+        'python_path' : 'E:/workspace/learndl/.venv/Scripts/python.exe' , 
+        'mosek_lic_path' : Path('C:/Users/Administrator/mosek/mosek.lic') , 
+        'updatable' : True , 
+        'emailable' : True ,
+        'nickname' : 'Windows'},
+    'Mathews-Mac' : {
+        'name' : 'Mathews-Mac' , 
+        'cuda_server' : False , 
+        'main_path' : Path('/Users/mengkjin/workspace/learndl') , 
+        'python_path' : '/Users/mengkjin/workspace/learndl/.venv/bin/python' , 
+        'mosek_lic_path' : Path('/Users/mengkjin/mosek/mosek.lic') , 
+        'updatable' : False , 
+        'emailable' : False ,
+        'nickname' : 'Mac'},
 }
 
 def _get_best_device():
@@ -96,7 +104,7 @@ class MACHINE:
     name : str = socket.gethostname().split('.')[0]
     system_name = platform.system()
 
-    setting : _Mach = _machine_settings[name]
+    setting = _MachineSettings(**_machine_settings[name])
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
     
     cuda_server = setting.cuda_server
@@ -105,6 +113,7 @@ class MACHINE:
     mosek_lic_path = setting.mosek_lic_path
     updatable = setting.updatable
     emailable = setting.emailable
+    nickname = setting.nickname
 
     belong_to_hfm = setting.belong_to_hfm
     belong_to_jinmeng = setting.belong_to_jinmeng
@@ -141,7 +150,7 @@ class MACHINE:
     @classmethod
     def machine_main_path(cls , machine_name : str) -> Path:
         """Get the main path at another machine"""
-        return _machine_settings[machine_name].main_path
+        return _machine_settings[machine_name]['main_path']
     
     @classmethod
     def PATH(cls):

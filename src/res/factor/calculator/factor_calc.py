@@ -310,9 +310,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """validate factor value of a given date"""
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
-    def load_factor(self , date : int | None = None) -> pd.DataFrame:
+    def load_factor(self , date : int | None = None , closest = False) -> pd.DataFrame:
         """load full factor value of a given date"""
-        df = DB.load(self.db_src , self.db_key , date , vb_level = 99)
+        df = DB.load(self.db_src , self.db_key , date , closest = closest , vb_level = 99)
         return df
 
     def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
@@ -346,9 +346,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return cls().calc_factor(date)
     
     @classmethod
-    def Load(cls , date : int | None) -> pd.DataFrame:
+    def Load(cls , date : int | None , closest = False) -> pd.DataFrame:
         """load factor value of a given date"""
-        return cls().load_factor(date)
+        return cls().load_factor(date , closest = closest)
 
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
@@ -674,8 +674,8 @@ class AffiliateFactorCalculator(FactorCalculator):
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
     @classmethod
-    def load_from_db(cls , src : str , key : str , date : int , col : str | None = None) -> pd.DataFrame:
-        df = DB.load(src , key , date , vb_level = 99)
+    def load_from_db(cls , src : str , key : str , date : int , col : str | None = None , closest = False) -> pd.DataFrame:
+        df = DB.load(src , key , date , closest = closest , vb_level = 99)
         if df.empty:
             return pd.DataFrame(columns = ['secid' , cls.factor_name])
         if not col:
@@ -705,10 +705,15 @@ class AffiliateFactorCalculator(FactorCalculator):
         df = df.loc[:,['secid' , 'date' , col]].rename(columns = {col : cls.factor_name})
         return df
 
-    def load_factor(self , date : int) -> pd.DataFrame:
+    def load_factor(self , date : int , closest = False) -> pd.DataFrame:
         """load full factor value of a given date"""
+        if closest and not self.has_date(date):
+            stored_dates = self.stored_dates()
+            stored_dates = stored_dates[stored_dates <= date]
+            if len(stored_dates) > 0:
+                date = stored_dates.max()
         df = self.load_from_db(self.load_db_src , self.load_db_key , date , self.load_db_col)
-        if df.empty:
+        if df.empty and self.alternative_dbs:
             for alt_db in self.alternative_dbs:
                 df = self.load_from_db(**alt_db , date = date)
                 if not df.empty:
