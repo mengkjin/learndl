@@ -466,6 +466,7 @@ class SellsideSQLDownloader:
             if end_dt:   
                 end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
+        df_input = None
         i = 0
         while i <= retry:
             try:
