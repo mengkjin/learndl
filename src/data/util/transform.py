@@ -4,7 +4,8 @@ import numpy as np
 from typing import Any
 from src.proj import DB
 
-def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol' , 'instrument'] , 
+def secid_adjust(df : pd.DataFrame , 
+                 code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol' , 'instrument' , 'ts_code' , 'stockid'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):
     '''switch various type of codes into secid'''
 
