@@ -4,27 +4,30 @@ import numpy as np
 from typing import Any
 from src.proj import DB
 
-def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
+def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):
     '''switch various type of codes into secid'''
 
     if isinstance(code_cols , str): 
         code_cols = [code_cols]
-    code_cols = [col for col in df.columns.values if str(col).lower() in code_cols]
+    code_cols = [col for col in df.columns if col.lower() in code_cols]
     if not code_cols: 
-        code_cols = ['secid']
+        code_col = 'secid'
     elif len(code_cols) > 1: 
         raise ValueError(f'Duplicated {code_cols} not supported')
-    code_cols = code_cols[0]
-    if (code_cols not in df.columns): 
+    else:
+        code_col = code_cols[0]
+    if (code_col not in df.columns): 
         if raise_if_no_secid: 
             raise ValueError(f'secid not found')
         else: 
             return df
 
-    df['secid'] = DB.code_to_secid(df[code_cols] , decode_first = decode_first)
-    if drop_old and (code_cols != 'secid'): 
-        df = df.drop(columns=[code_cols])
+    df[code_col]  = DB.code_to_secid(df[code_col] , decode_first = decode_first)
+    if drop_old: 
+        df = df.rename(columns={code_col:'secid'})
+    else:
+        df['secid'] = df[code_col]
 
     return df
 

@@ -248,9 +248,27 @@ class ControlGitClearPullButton(ControlPanelButton):
         if MACHINE.platform_coding:
             raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
         else:
+            import shutil
+            from src.proj import PATH , Logger
+
             subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
             subprocess.run(['git', 'clean', '-fd'], check=True)
             subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
+            
+            for folder in [*PATH.main.joinpath('src').rglob('*/') , *PATH.main.joinpath('configs').rglob('*/')][::-1]:
+                if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
+                    subfiles = [x for x in folder.rglob('*') if x.is_file()]
+                    if not len(subfiles):
+                        Logger.stdout(f"Removing empty folder: {folder}")
+                        folder.rmdir()
+                    else:
+                        if all([x.suffix == '.pyc' for x in subfiles]):
+                            Logger.stdout(f"Removing folder with only pyc files: {folder}")
+                            shutil.rmtree(folder)
+                        else:
+                            Logger.error(f"Error removing folder: {folder}:")
+                            Logger.error(f"Subfiles: {subfiles}")
+            Logger.success("Git Pull Finished")
 
 
 class ControlPanel:

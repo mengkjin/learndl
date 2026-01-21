@@ -655,9 +655,11 @@ class StockFactorCalculator(FactorCalculator):
 
 class AffiliateFactorCalculator(FactorCalculator):
     """base class of affiliate factor calculator (no need to calculate at all)"""
-    load_db_src : str = 'models'
-    load_db_key : str = 'tushare_cne5_exp'
-    load_col_name : str = ''
+    load_db_src : str = '' # 'models' / 'sellside'
+    load_db_key : str = '' # 'tushare_cne5_exp' / 'dongfang.scores_v0' / 'huatai.master_combined' ...
+    load_db_col : str = ''
+
+    alternative_dbs : list[dict[Literal['src' , 'key' , 'col'] , str]] = [] # [{'src' : 'sellside' , 'key' : 'huayuan.scores_v0'}]
 
     def calc_history(self , date : int) -> pd.DataFrame:
         """no need to validate value for affiliate factor"""
@@ -671,10 +673,46 @@ class AffiliateFactorCalculator(FactorCalculator):
         """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
+    @classmethod
+    def load_from_db(cls , src : str , key : str , date : int , col : str | None = None) -> pd.DataFrame:
+        df = DB.load(src , key , date , vb_level = 99)
+        if df.empty:
+            return pd.DataFrame(columns = ['secid' , cls.factor_name])
+        if not col:
+            if key in df.columns:
+                col = key
+            else:
+                colnames = df.columns.difference(['secid' , 'date']).tolist()
+                assert len(colnames) == 1 , f'{src}@{key} at {date} has multiple columns : {colnames}'
+                col = colnames[0]
+        df = df.loc[:,['secid' , col]].rename(columns = {col : cls.factor_name})
+        return df
+
+    @classmethod
+    def loads_from_db(cls , src : str , key : str , dates : np.ndarray | list[int] , col : str | None = None , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
+        if len(dates) == 0:
+            return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
+        df = DB.loads(src , key , dates , indent = indent , vb_level = vb_level)
+        if df.empty:
+            return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
+        if not col:
+            if key in df.columns:
+                col = key
+            else:
+                colnames = df.columns.difference(['secid' , 'date']).tolist()
+                assert len(colnames) == 1 , f'{src}@{key} has multiple columns : {colnames}'
+                col = colnames[0]
+        df = df.loc[:,['secid' , 'date' , col]].rename(columns = {col : cls.factor_name})
+        return df
+
     def load_factor(self , date : int) -> pd.DataFrame:
         """load full factor value of a given date"""
-        df = DB.load(self.load_db_src , self.load_db_key , date).loc[:,['secid' , self.load_col_name]]
-        df = df.rename(columns = {self.load_col_name : self.factor_name})
+        df = self.load_from_db(self.load_db_src , self.load_db_key , date , self.load_db_col)
+        if df.empty:
+            for alt_db in self.alternative_dbs:
+                df = self.load_from_db(**alt_db , date = date)
+                if not df.empty:
+                    break
         return df
 
     def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
@@ -688,8 +726,11 @@ class AffiliateFactorCalculator(FactorCalculator):
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = DB.loads(cls.load_db_src , cls.load_db_key , dates , indent = indent , vb_level = vb_level).loc[:,['secid' , 'date' , cls.load_col_name]]
-        df = df.rename(columns = {cls.load_col_name : cls.factor_name})
+        df = cls.loads_from_db(cls.load_db_src , cls.load_db_key , dates , cls.load_db_col , indent = indent , vb_level = vb_level)
+        for alt_db in cls.alternative_dbs:
+            df0 = cls.loads_from_db(**alt_db , dates = np.setdiff1d(dates , df['date']) , indent = indent , vb_level = vb_level)
+            if not df0.empty:
+                df = pd.concat([df , df0])
         return df
 
     @classmethod
@@ -728,24 +769,36 @@ class AffiliateFactorCalculator(FactorCalculator):
     @classmethod
     def stored_dates(cls , start : int | None = None , end : int | None = None , step : int = 1) -> np.ndarray:
         """return stored dates of factor data"""
-        dates = _slice_dates(DB.dates(cls.load_db_src , cls.load_db_key) , cls.init_date)
+        dates = DB.dates(cls.load_db_src , cls.load_db_key)
+        for alt_db in cls.alternative_dbs:
+            dates = np.union1d(dates , DB.dates(alt_db['src'] , alt_db['key']))
+        dates = _slice_dates(dates , cls.init_date)
         dates = _slice_dates(dates , start , end)
         return dates[::step]
 
     @classmethod
     def get_min_date(cls) -> int:
         """return minimum date of stored factor data"""
-        return max(cls.init_date , DB.min_date(cls.load_db_src , cls.load_db_key))
+        min_date = DB.min_date(cls.load_db_src , cls.load_db_key)
+        for alt_db in cls.alternative_dbs:
+            min_date = min(min_date , DB.min_date(alt_db['src'] , alt_db['key']))
+        return max(cls.init_date , min_date)
 
     @classmethod
     def get_max_date(cls) -> int:
         """return maximum date of stored factor data"""
-        return min(cls.final_date , DB.max_date(cls.load_db_src , cls.load_db_key))
+        max_date = DB.max_date(cls.load_db_src , cls.load_db_key)
+        for alt_db in cls.alternative_dbs:
+            max_date = max(max_date , DB.max_date(alt_db['src'] , alt_db['key']))
+        return min(cls.final_date , max_date)
     
     @classmethod
     def has_date(cls , date : int) -> bool:
         """check if factor data exists for a given date"""
-        return DB.path(cls.load_db_src , cls.load_db_key , date).exists()
+        has_date = DB.path(cls.load_db_src , cls.load_db_key , date).exists()
+        for alt_db in cls.alternative_dbs:
+            has_date = has_date or DB.path(alt_db['src'] , alt_db['key'] , date).exists()
+        return has_date
 
     @classmethod
     def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:

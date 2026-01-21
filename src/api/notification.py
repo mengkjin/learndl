@@ -69,8 +69,8 @@ def email_to_fanghan(test = False):
 
         from src.res.trading.util import CompositeAlpha
         df2 = CompositeAlpha('use_daily' , [
-            'sellside@huatai.master_combined@master_combined' ,
-            'sellside@dongfang.scores_v0@avg' ,
+            'factor@ht_master_combined' ,
+            'factor@df_scores_v0' ,
             'gru_day_V1'
         ]).get(use_date).item().to_dataframe().rename(columns={'alpha' : 'use_daily'})
         df = pd.merge(df1 , df2 , on='secid' , how='left')

@@ -3,14 +3,14 @@ test0:
     universe: csi800+csi1000+csi2000
 
 test1:
-    alpha: sellside@dongfang.scores_v0@avg
+    alpha: factor@df_scores_v0
     universe: top-1000
 
 use_daily:
     alpha: big_combine
     components:
         - sellside@huatai.master_combined@master_combined
-        - sellside@dongfang.scores_v0@avg
+        - factor@df_scores_v0
         - gru_day_V1
     weights:
         - 1.0
@@ -23,8 +23,8 @@ use_daily:
 use_daily.backtest:
     alpha: big_combine
     components:
-        - sellside@huatai.master_combined@master_combined
-        - sellside@dongfang.scores_v0@avg
+        - factor@ht_master_combined
+        - factor@df_scores_v0
         - gru_day_V1
     weights:
         - 1.0
@@ -39,8 +39,8 @@ use_daily.backtest:
 use_daily.backtest2:
     alpha: big_combine
     components:
-        - sellside@huatai.master_combined@master_combined
-        - sellside@dongfang.scores_v0@avg
+        - factor@ht_master_combined
+        - factor@df_scores_v0
         - gru_day_V1
     weights:
         - 1.0
@@ -56,8 +56,8 @@ use_daily.backtest2:
 use_daily.backtest3:
     alpha: big_combine
     components:
-        - sellside@huatai.master_combined@master_combined
-        - sellside@dongfang.scores_v0@avg
+        - factor@ht_master_combined
+        - factor@df_scores_v0
         - gru_day_V1
     weights:
         - 1.0
@@ -71,7 +71,7 @@ use_daily.backtest3:
     buffer_zone: 0.95
 
 master_daily:
-    alpha: sellside@huatai.master_combined@master_combined
+    alpha: factor@ht_master_combined
     universe: top-1000
     top_num: 50
     freq: 1

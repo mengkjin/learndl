@@ -10,6 +10,7 @@ from src.proj.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
+from src.res.factor.calculator import StockFactorHierarchy
 from src.res.model.util import PredictionModel
 
 TASK_LIST : list[Type[TopCalc]] = [
@@ -319,19 +320,32 @@ class CompositeAlpha:
         if alpha_name in PredictionModel.MODEL_DICT:
             reg_model = PredictionModel.SelectModels(alpha_name)[0]
             dates = reg_model.pred_dates
-            df = reg_model.load_pred(dates[dates <= date].max())
+            df = reg_model.load_pred(dates[dates <= date].max()).assign(date = date)
         elif '@' in alpha_name:
             exprs = alpha_name.split('@')
             alpha_type = exprs[0]
             alpha_name = exprs[1]
             alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
-            assert alpha_type in ['sellside' , 'factor'] , f'{alpha_type} is not a valid alpha type'
-            dates = DB.dates(alpha_type , alpha_name)
-            assert len(dates) > 0 , f'no dates found for {alpha_name}'
-            use_date = dates[dates <= date].max()
-            df = DB.load(alpha_type , alpha_name , use_date , vb_level = 99).loc[:,['secid' , alpha_column]]
+            if alpha_type == 'sellside':
+                stored_dates = DB.dates(alpha_type , alpha_name)
+            elif alpha_type == 'factor':
+                factor = StockFactorHierarchy.get_factor(alpha_name)
+                stored_dates = factor.stored_dates()
+            else:
+                raise Exception(f'{alpha_type} is not a valid alpha type')
+            
+            stored_dates = stored_dates[stored_dates <= date]
+            if len(stored_dates) > 0:
+                use_date = stored_dates.max()
+                df = factor.Load(use_date) if alpha_type == 'factor' else DB.load(alpha_type , alpha_name , use_date , vb_level = 99)
+                if df.empty:
+                    df = pd.DataFrame(columns=['secid' , 'date' , alpha_column])
+                else:
+                    df = df.loc[:,['secid' , alpha_column]].assign(date = date)
+            else:
+                df = pd.DataFrame(columns=['secid' , 'date' , alpha_column])
         else:
             raise Exception(f'{alpha_name} is not a valid alpha')
-        factor = StockFactor(df.assign(date = date))
+        factor = StockFactor(df)
         assert len(factor.factor_names) == 1 , f'expect 1 factor name , got {factor.factor_names}'
         return factor.normalize().alpha_model()
