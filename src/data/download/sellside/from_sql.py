@@ -91,7 +91,7 @@ _default_factors : dict[str,dict[str,Any]] = {
     'dongfang.hfq_chars' :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'hfq_chars' ,
-        'date_col' : 'trade_dt' ,
+        'date_col' : 'tradingdate' ,
         'start_dt' : 20050101 ,
         'date_fmt' : '%Y%m%d' ,
     } ,
@@ -378,7 +378,6 @@ class SellsideSQLDownloader:
         else:
             raise ValueError(f'Undefined startdt query for factor source: {self.factor_src}')
         sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set)
-        print(sqlline)
         return sqlline
 
     def sqlline_factor_values(self , start_dt : int | str , end_dt : int | str , sub_factor : str | None = None) -> str:
@@ -399,7 +398,6 @@ class SellsideSQLDownloader:
         else:
             raise ValueError(f'Undefined factor values query for factor source: {self.factor_src}')
         sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set , start_dt = start_dt , end_dt = end_dt , sub_factor = sub_factor)
-        print(sqlline)
         return sqlline
 
     def get_connection(self):
