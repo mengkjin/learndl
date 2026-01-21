@@ -217,7 +217,7 @@ _default_factors : dict[str,dict[str,Any]] = {
     #     'date_col' : 'date' ,
     #     'start_dt' : 20140130 ,
     #     'sub_factors' : ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
-    #               'offense_defense','high_freq_shareholder','pe_change'] ,
+    #                      'offense_defense','high_freq_shareholder','pe_change'] ,
     # } ,
     # 'kaiyuan.negative' :{
     #     'factor_src' : 'kaiyuan' ,
@@ -250,37 +250,36 @@ _default_factors : dict[str,dict[str,Any]] = {
    } ,
 }
         
-
 def factor_name_pinyin_conversion(text : str):
+    """convert a factor name with chinese characters to pinyin"""
     text = text.replace('\'' , '2').replace('因子' , '')
     hanzi_pattern = re.compile(r'[\u4e00-\u9fff]+')
-    
     hanzi_parts = hanzi_pattern.findall(text)
-    
     pinyin_parts = ['_'.join(lazy_pinyin(part)) for part in hanzi_parts]
-    
     for hanzi, pinyin in zip(hanzi_parts, pinyin_parts):
         text = text.replace(hanzi, pinyin)
-    
     return text
 
-def _date_offset(date : Any , offset : int = 0 , astype = int):
+def date_offset(date : Any , offset : int = 0 , astype = int):
+    """offset a date by a given number of days"""
     iterable_input = isinstance(date , Iterable)
     date = pd.DatetimeIndex(np.array(date).astype(str) if iterable_input else [str(date)])
     dseries : pd.DatetimeIndex = (date + pd.DateOffset(n=offset))
     new_date = dseries.strftime('%Y%m%d').to_numpy(astype)
     return new_date if iterable_input else new_date[0]
 
-def _date_seg(start_dt , end_dt , freq='QE' , astype : Any = int) -> list[tuple[int,int]]:
+def dates_segements(start_dt , end_dt , freq='QE' , astype : Any = int) -> list[tuple[int,int]]:
+    """segregate dates into date intervals"""
     if start_dt >= end_dt: 
         return []
     dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
-    dt_starts = [_date_offset(start_dt) , *_date_offset(dt_list[:-1],1)]
-    dt_ends = [*dt_list[:-1] , _date_offset(end_dt)]
+    dt_starts = [date_offset(start_dt) , *date_offset(dt_list[:-1],1)]
+    dt_ends = [*dt_list[:-1] , date_offset(end_dt)]
     return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
 
 @dataclass
 class Connection:
+    """a connection to a sellside sql database"""
     dialect     : str
     username    : str
     password    : str
@@ -295,7 +294,7 @@ class Connection:
 
     @property
     def url(self) -> str:
-        connect_url = '{dialect}://{username}:{password}@{host}:{port}/{database}'.format(
+        connect_url = Template('${dialect}://${username}:${password}@${host}:${port}/${database}').substitute(
             dialect  = self.dialect,
             username = self.username,
             password = self.password,
@@ -343,6 +342,7 @@ class Connection:
 
 @dataclass
 class SellsideSQLDownloader:
+    """a downloader for sellside sql data"""
     factor_src      : str
     factor_set      : str
     date_col        : str
@@ -351,14 +351,18 @@ class SellsideSQLDownloader:
     date_fmt        : str | None = None
     sub_factors     : list | None = None
     connection_key  : str = ''
+
     DB_SRC : ClassVar[str] = 'sellside'
     FREQ   : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
     MAX_WORKERS: ClassVar[int] = 1
 
-    def __post_init__(self):
-        self.db_key = self.factor_src + '.' + self.factor_set
-        if self.connection_key == '':
-            self.connection_key = self.factor_src
+    @property
+    def db_key(self) -> str:
+        return f'{self.factor_src}.{self.factor_set}'
+
+    @property
+    def use_connection(self) -> str:
+        return self.connection_key if self.connection_key else self.factor_src
 
     def sqlline_start_dt(self) -> str:
         if self.factor_src == 'haitong':
@@ -401,7 +405,7 @@ class SellsideSQLDownloader:
         return sqlline
 
     def get_connection(self):
-        return Connection.connection(self.connection_key)
+        return Connection.connection(self.use_connection)
     
     def download(self , option : Literal['since' , 'dates' , 'all'] ,
                  dates = [] , trace = 1 , start_dt = 20000101, end_dt = 99991231 , 
@@ -420,7 +424,7 @@ class SellsideSQLDownloader:
                     start_dt = max(start_dt , last1_dt)
 
             end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to())).as_int()
-            date_intervals = _date_seg(start_dt , end_dt , self.FREQ , astype=int)
+            date_intervals = dates_segements(start_dt , end_dt , self.FREQ , astype=int)
         if not date_intervals: 
             return 
 
@@ -443,7 +447,12 @@ class SellsideSQLDownloader:
         if connection is None:
             connection = self.get_connection()
         t0 = datetime.now()
-        df = self.query_factor_values(start , end , connection)
+        try:
+            df = self.query_factor_values(start , end , connection)
+        except Exception as e:
+            Logger.error(f'In {self.__class__.__name__} : Error in download_period: {e}')
+            Logger.print_exc(e)
+            return False
         if (num_dates := self.save_data(df)) > 0:
             Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1)
         else:
@@ -477,10 +486,6 @@ class SellsideSQLDownloader:
             except exc.ResourceClosedError:
                 Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
                 conn = connection.connect(reconnect = True)
-            except Exception as e:
-                Logger.error(f'In {self.__class__.__name__} : Error in query_factor_values: {e}')
-                Logger.print_exc(e)
-                break
             i += 1
         if not connection.stay_connect: 
             conn.close()
@@ -570,7 +575,7 @@ class SellsideSQLDownloader:
     def factors_and_conns(cls , keys = None):
         factors = cls.default_factors(keys)
         conns   = Connection.default_connections()
-        return [(factor , conns[factor.connection_key]) for factor in factors.values()]
+        return [(factor , conns[factor.use_connection]) for factor in factors.values()]
 
     @classmethod
     def update_since(cls , trace = 0 , keys = None):

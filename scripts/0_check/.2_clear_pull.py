@@ -9,11 +9,14 @@
 
 import subprocess , shutil
 from pathlib import Path
-from src.proj import Logger
+from src.proj import Logger , MACHINE
 from src.interactive.backend import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
+    if MACHINE.platform_coding:
+        raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
+    
     # clean local changes
     Logger.highlight("Clean local changes...")
     subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
