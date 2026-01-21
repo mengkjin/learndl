@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any
 from src.proj import DB
 
-def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol'] , 
+def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol' , 'instrument'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):
     '''switch various type of codes into secid'''
 
@@ -19,7 +19,7 @@ def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 
         code_col = code_cols[0]
     if (code_col not in df.columns): 
         if raise_if_no_secid: 
-            raise ValueError(f'secid not found in {df.columns}')
+            raise ValueError(f'secid column {code_col} not found in {df.columns}')
         else: 
             return df
 
