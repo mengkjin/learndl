@@ -522,13 +522,16 @@ class SellsideSQLDownloader:
             df = pd.DataFrame(columns = pd.Index([self.date_col,'code'])).astype(int)
             for k,subdf in dfs.items():
                 df = df.merge(subdf.rename(columns = {'factor':k}),how='outer',on=[self.date_col,'code'])
-        
-        elif self.factor_src == 'huatai':
+        elif self.factor_src == 'huatai' and self.factor_set == 'dl_factors':
             assert isinstance(df_input , dict) , f'huatai {type(df_input)} is not a dict'
             df = pd.DataFrame(columns = pd.Index([self.date_col,'instrument'])).astype(int)
             for k , subdf in dfs.items():
                 assert self.date_col in subdf.columns , subdf.columns
-                df = df.merge(subdf.rename(columns = {'factor':k}),how='outer',on=[self.date_col,'instrument'])
+                df = df.merge(subdf.rename(columns = {'value':k}),how='outer',on=[self.date_col,'instrument'])
+
+        elif self.factor_src == 'huatai':
+            assert isinstance(df_input , pd.DataFrame) , f'huatai {type(df_input)} is not a pd.DataFrame'
+            df = df.rename(columns = {'value':self.factor_set})
 
         elif self.factor_src == 'guojin':
             ...
