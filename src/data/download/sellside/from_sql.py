@@ -377,7 +377,9 @@ class SellsideSQLDownloader:
             template = Template('select min(${date_col}) from ${factor_set}')
         else:
             raise ValueError(f'Undefined startdt query for factor source: {self.factor_src}')
-        return template.substitute(date_col = self.date_col , factor_set = self.factor_set)
+        sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set)
+        print(sqlline)
+        return sqlline
 
     def sqlline_factor_values(self , start_dt : int | str , end_dt : int | str , sub_factor : str | None = None) -> str:
         if self.factor_src == 'haitong':
@@ -391,12 +393,14 @@ class SellsideSQLDownloader:
             else:
                 template = Template('select * from ${factor_set} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
         elif self.factor_src == 'kaiyuan':
-            template = Template('select * from public.{sub_factor} where {date_col} >= \'{start_dt}\' and {date_col} <= \'{end_dt}\'')
+            template = Template('select * from public.${sub_factor} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
         elif self.factor_src in ['dongfang' , 'huayuan' , 'guosheng' , 'guojin']:
-            template = Template('select * from {factor_set} where {date_col} between \'{start_dt}\' and \'{end_dt}\'')
+            template = Template('select * from ${factor_set} where ${date_col} between \'${start_dt}\' and \'${end_dt}\'')
         else:
             raise ValueError(f'Undefined factor values query for factor source: {self.factor_src}')
-        return template.substitute(date_col = self.date_col , factor_set = self.factor_set , start_dt = start_dt , end_dt = end_dt , sub_factor = sub_factor)
+        sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set , start_dt = start_dt , end_dt = end_dt , sub_factor = sub_factor)
+        print(sqlline)
+        return sqlline
 
     def get_connection(self):
         return Connection.connection(self.connection_key)
@@ -464,7 +468,7 @@ class SellsideSQLDownloader:
             if end_dt:   
                 end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
-        i , df = 0 , None
+        i = 0
         while i <= retry:
             try:
                 if self.sub_factors is None:
