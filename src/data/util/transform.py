@@ -19,7 +19,7 @@ def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 
         code_col = code_cols[0]
     if (code_col not in df.columns): 
         if raise_if_no_secid: 
-            raise ValueError(f'secid not found')
+            raise ValueError(f'secid not found in {df.columns}')
         else: 
             return df
 
