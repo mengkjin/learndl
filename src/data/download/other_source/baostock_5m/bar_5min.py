@@ -142,9 +142,8 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
     df_all = pd.concat([DB.load_df(d) for d in tmp_dir.iterdir()])
 
     for date_str in df_all['date'].unique():
-        df : pd.DataFrame = df_all.query('date == @date_str')
         date = int(str(date_str).replace('-', ''))
-        df = df.copy().reset_index(drop = True).assign(date = date)
+        df : pd.DataFrame = df_all.query('date == @date_str').reset_index(drop = True).assign(date = date)
         DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = Proj.vb.max , prefix = f'Baostock 5min bars {date}')
 
         df = baostock_5min_to_normal_5min(df)

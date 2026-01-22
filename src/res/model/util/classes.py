@@ -350,7 +350,7 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def save_avg_preds(self , model_date : int):
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
-        df = DB.load_dfs(pred_paths)
+        df = DB.load_dfs_in_one(pred_paths)
         if df.empty:
             return
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
@@ -518,9 +518,8 @@ class TrainerPredRecorder(ModelStreamLine):
         if model_num is not None:
             pred_records = pred_records.query('model_num == @model_num')
         assert not pred_records.empty , f'No pred records found for test dates {pred_dates}'
-        df = DB.load_dfs(pred_records['path'].tolist()).sort_values(by=self.PRED_KEYS).\
-            drop_duplicates(self.PRED_KEYS + self.PRED_IDXS , keep='last').reset_index(drop=True)
-        return df.query('date in @pred_dates')
+        df = DB.load_dfs_in_one(pred_records['path'].tolist()).query('date in @pred_dates')
+        return df
 
     def get_avg_preds(self , pred_dates : np.ndarray) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
@@ -532,10 +531,8 @@ class TrainerPredRecorder(ModelStreamLine):
                 
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         assert not avg_pred_records.empty , f'No avg pred records found for test dates {pred_dates}'
-        df = DB.load_dfs(avg_pred_records['path'].tolist()).\
-            sort_values(by=['model_date' , 'submodel' , 'date' , 'secid']).\
-            drop_duplicates(['submodel' , 'date' , 'secid'] , keep='last').reset_index(drop=True)
-        return df.query('date in @pred_dates')
+        df = DB.load_dfs_in_one(avg_pred_records['path'].tolist()).query('date in @pred_dates')
+        return df
 
     def on_fit_model_end(self):
         self.append_retrained_model()

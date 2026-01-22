@@ -18,7 +18,7 @@ from .code_mapper import secid_to_secid
 __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
     'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
-    'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs' , 
+    'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs_in_one' ,  'load_dfs' , 
     'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 
     'pack_files_to_tar' , 'unpack_files_from_tar' ,
     'block_path' , 'norm_path' ,
@@ -69,7 +69,7 @@ def _today(offset = 0 , astype : Any = int):
 def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     """get dates from paths"""
     datestrs = [p.stem[-8:] for p in paths]
-    dates = np.array([ds for ds in datestrs if ds.isdigit() and len(ds) == 8]).astype(int)
+    dates = np.array([ds for ds in datestrs if ds.isdigit() and len(ds) == 8] , dtype = int)
     dates.sort()
     return dates
 
@@ -254,9 +254,41 @@ def load_df_min_date(path : Path , date_colname : str = 'date') -> int:
     else:
         return int(min(df[date_colname]))
 
-def load_dfs(paths : dict | list[Path] , * ,  key_column : str | None = 'date' , 
-             parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
-             mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None):
+def _parallel_loader(paths : dict | list[Path] , * , key_column : str | None = 'date' , parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+                     mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None) -> dict[int | Any, pd.DataFrame]:
+    if parallel is None: 
+        parallel = _load_parallel
+    if mapper is None:
+        def loader(p : Path):
+            return _df_loader(p)
+    else:
+        def loader(p : Path):
+            return mapper(_df_loader(p))
+    if isinstance(paths , dict):
+        paths = {d:p for d,p in paths.items() if p.exists()}
+        assign_col = key_column if key_column else 'empty_column'
+    else:
+        paths = {i:p for i,p in enumerate(paths) if p.exists()}
+        assign_col = 'empty_column'
+    if not paths:
+        return {}
+    if parallel is None or parallel == 'none':
+        dfs = {d:loader(p).assign(**{assign_col:d}) for d,p in paths.items() if not loader(p).empty}
+    elif parallel == 'dask':
+        ddfs = [delayed(loader)(p).assign(**{assign_col:d}) for d,p in paths.items() if not loader(p).empty]
+        dfs = {d:df for d,df in zip(paths.keys() , compute(ddfs)[0])}
+    else:
+        assert parallel == 'thread' or not MACHINE.is_windows, (parallel , MACHINE.system_name)
+        max_workers = min(MACHINE.max_workers , max(len(paths) // 5 , 1))
+        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
+        with PoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(loader , p):d for d,p in paths.items()}
+            dfs = {futures[future]:future.result().assign(**{assign_col:futures[future]}) for future in as_completed(futures)}
+    return dfs
+
+def load_dfs_in_one(paths : dict | list[Path] , * ,  key_column : str | None = 'date' , 
+                    parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+                    mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None) -> pd.DataFrame:
     """
     load dataframe from multiple paths
     Parameters
@@ -270,43 +302,47 @@ def load_dfs(paths : dict | list[Path] , * ,  key_column : str | None = 'date' ,
     mapper : Callable[[pd.DataFrame], pd.DataFrame]
         mapper function to execute on each dataframe
     """
-    if parallel is None: 
-        parallel = _load_parallel
-
-    if mapper is None:
-        def loader(p : Path):
-            return _df_loader(p)
-    else:
-        def loader(p : Path):
-            return mapper(_df_loader(p))
-    
-    if isinstance(paths , dict):
-        paths = {d:p for d,p in paths.items() if p.exists()}
-        assign_col = key_column if key_column else 'empty_column'
-    else:
-        paths = {i:p for i,p in enumerate(paths) if p.exists()}
-        assign_col = 'empty_column'
-
-    if not paths:
+    dfs = _parallel_loader(paths , key_column = key_column , parallel = parallel , mapper = mapper)
+    if not dfs:
         return pd.DataFrame()
-    
-    if parallel is None or parallel == 'none':
-        dfs = [loader(p).assign(**{assign_col:d}) for d,p in paths.items()]
-    elif parallel == 'dask':
-        ddfs = [delayed(loader)(p).assign(**{assign_col:d}) for d,p in paths.items()]
-        dfs = compute(ddfs)[0]
-    else:
-        assert parallel == 'thread' or not MACHINE.is_windows, (parallel , MACHINE.system_name)
-        max_workers = min(MACHINE.max_workers , max(len(paths) // 5 , 1))
-        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
-        with PoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(loader , p):d for d,p in paths.items()}
-            dfs = [future.result().assign(**{assign_col:futures[future]}) for future in as_completed(futures)]
-
-    df = _load_df_mapper(pd.concat([v for v in dfs if not v.empty]))
+    df = _load_df_mapper(pd.concat(dfs.values()))
     if key_column is None:
         df = df.drop(columns = 'empty_column')
     return df
+
+def load_dfs(paths : dict | list[Path] , * ,  key_column : str | None = 'date' , 
+             parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+             mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None) -> dict[int | Any, pd.DataFrame]:
+    """
+    load dataframe from multiple paths
+    Parameters
+    ----------
+    paths : dict[int, Path]
+        paths to load , key is date
+    key_column : str | None
+        key column name , if None, use date column
+    parallel : Literal['thread' , 'process' , 'dask' , 'none']
+        parallel mode
+    mapper : Callable[[pd.DataFrame], pd.DataFrame]
+        mapper function to execute on each dataframe
+    """
+    if mapper is None:
+        if key_column is None:
+            def wrapped_mapper(df : pd.DataFrame) -> pd.DataFrame:
+                return _load_df_mapper(df).drop(columns = 'empty_column')
+        else:
+            def wrapped_mapper(df : pd.DataFrame) -> pd.DataFrame:
+                return _load_df_mapper(df)
+    else:
+        if key_column is None:
+            def wrapped_mapper(df : pd.DataFrame) -> pd.DataFrame:
+                return _load_df_mapper(mapper(df)).drop(columns = 'empty_column')
+        else:
+            def wrapped_mapper(df : pd.DataFrame) -> pd.DataFrame:
+                return _load_df_mapper(mapper(df))
+
+    dfs = _parallel_loader(paths , key_column = key_column , parallel = parallel , mapper = wrapped_mapper)
+    return dfs
 
 def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
     """save multiple dataframes to tar file"""
@@ -595,7 +631,7 @@ def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
         assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
-    df = load_dfs(paths , key_column = date_colname , parallel = parallel)
+    df = load_dfs_in_one(paths , key_column = date_colname , parallel = parallel)
     df = _process_df(df , df_syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 

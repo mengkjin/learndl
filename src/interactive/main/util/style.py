@@ -50,7 +50,7 @@ class CustomCSS:
         button {
             align-items: center;
             justify-content: center;
-            margin: 0px !important;
+            margin: 0 !important;
             min-height: 10px !important;
         }
         button:hover {
@@ -98,10 +98,10 @@ class CustomCSS:
         .stNumberInput button {
             width: 20px !important;
             align-self: flex-end !important;
-            margin-top: 0px !important;
+            margin-top: 0 !important;
         }
         .element-container {
-            margin-bottom: 0px;
+            margin-bottom: 0;
             display: flex;
         }
         .stMarkdown {
@@ -120,12 +120,12 @@ class CustomCSS:
             
         }
         .stContainer {
-            padding-top: 0px;
-            padding-bottom: 0px;
+            padding-top: 0;
+            padding-bottom: 0;
         } 
         .stExpander .stElementContainer {
-            margin-bottom: 0px !important;
-            padding-bottom: 0px !important;
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
         }
         .stExpander summary {
             padding-top: 4px !important;
@@ -149,8 +149,8 @@ class CustomCSS:
             justify-content: right;
             font-size: 14px !important;
             padding: 0.25rem 0.5rem !important;
-            margin-top: 0px !important;
-            margin-bottom: 0px !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
         }
         .stColumn {
             display: flex;
@@ -166,7 +166,7 @@ class CustomCSS:
             padding-left: 10px !important;
         }
         .stVerticalBlock[class*="task-stats"] .stMarkdown {
-            margin-bottom: 0px !important;
+            margin-bottom: 0 !important;
             margin-top: -10px !important;
             padding-left: 15px !important;
         }
@@ -231,7 +231,7 @@ class CustomCSS:
         .help-icon {
             position: absolute;
             top: 5px;
-            left: 0px;
+            left: 0;
             color: gray !important;
             background-color: transparent !important;
             font-size: 24px !important;
@@ -267,7 +267,7 @@ class CustomCSS:
             background-color: red !important; 
             fill: white !important; 
             color: white !important; 
-            margin: 0px !important;
+            margin: 0 !important;
         }
         '''
     
@@ -466,7 +466,7 @@ def style():
         }
     }
     .stVerticalBlock[class*="script-structure"] {
-        margin-top: 0px !important;
+        margin-top: 0 !important;
         margin-bottom: -10px !important;
         &[class*="-level-1"] button {margin-left: 45px !important;}
         &[class*="-level-2"] button {margin-left: 90px !important;}
@@ -519,8 +519,8 @@ def style():
             }
             .stVerticalBlock[class*="control-panel-buttons"] {
                 padding: 0 !important;
-                margin-bottom: 0px !important;
-                margin-top: 0px !important;
+                margin-bottom: 0 !important;
+                margin-top: 0 !important;
                 .stTooltipIcon {
                     justify-content: center !important;
                 }
@@ -602,10 +602,30 @@ def style():
         }
     }
     div[data-testid*="stSidebarHeader"] {
-        padding-bottom: 0px !important;
-        margin-top: 0px !important;
-        margin-bottom: 0px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        height: 60px !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        img[data-testid*="stSidebarLogo"] {
+            margin: 0 !important;
+            position: absolute !important;
+            height: 40px !important;
+            max-width: 1000px !important;
+            z-index: 1 !important;
+            left: 0 !important;
+            top: 10px !important;
+        }
+        div[data-testid*="stSidebarCollapseButton"] {
+            button {
+                background-color: rgb(241 242 246) !important;
+            }
+            display: block !important;
+            position: relative !important;
+            z-index: 10000 !important;
+        }
     }
+    
     div[data-testid*="stSidebarUserContent"] {
         .stVerticalBlock[class*="sidebar-intro-links"] {
             padding-top: 10px !important;
@@ -651,10 +671,10 @@ def style():
         } 
         .stVerticalBlock[class*="sidebar-script-links"] {
             .stPageLink {
-                margin-top: 0px !important;
+                margin-top: 0 !important;
                 margin-bottom: -5px !important;
-                padding-top: 0px !important;
-                padding-bottom: 0px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
                 padding-left: 10px !important;
             }
             button {
@@ -664,10 +684,10 @@ def style():
                 }
                 height: 24px !important;
                 width: 24px !important;
-                margin-top: 0px !important;
+                margin-top: 0 !important;
                 margin-bottom: -5px !important;
-                padding-top: 0px !important;
-                padding-bottom: 0px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
                 border-radius: 50% !important;
             }
             div[class*="-enabled"] button {
@@ -733,10 +753,10 @@ def style():
     }
     .stVerticalBlock[class*="detail-exit-info-container"] {
         p {
-            margin-top: 0px !important;
-            margin-bottom: 0px !important;
-            padding-top: 0px !important;
-            padding-bottom: 0px !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
         }
     }
     .stElementContainer[class*="param-inputs-form"] {

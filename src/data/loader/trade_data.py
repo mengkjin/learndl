@@ -10,7 +10,7 @@ from .access import DateDataAccess
 db_key_dict = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
 @singleton
 class TradeDataAccess(DateDataAccess):
-    MAX_LEN = 3000
+    MAX_LEN = 5000
     DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
     
     def data_loader(self , date , data_type) -> pd.DataFrame:
@@ -19,6 +19,16 @@ class TradeDataAccess(DateDataAccess):
         else:
             raise KeyError(data_type)
         return df
+
+    def load_trd_within(self , start_dt : int | TradeDate , end_dt : int | TradeDate , overwrite = False):
+        dates = CALENDAR.td_within(start_dt , end_dt)
+        dates = self.collections['trd'].date_diffs(dates , overwrite)
+        if len(dates) == 0:
+            return 
+        paths = {date:DB.path('trade_ts' , db_key_dict['trd'] , date) for date in dates}
+        dfs = DB.load_dfs(paths)
+        for date , df in dfs.items():
+            self.collections['trd'].add(date , df)
     
     def latest_date(self , data_type : str , date : int | None = None) -> int:
         if data_type in db_key_dict:

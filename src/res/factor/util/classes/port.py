@@ -17,18 +17,21 @@ class Port:
         if port is None or port.empty:
             df = pd.DataFrame(columns=pd.Index(['secid','weight'])).astype({'secid':int,'weight':float})
         else:
-            df = port.groupby('secid')['weight'].sum().reset_index()
-        self.port : pd.DataFrame = df.query('weight != 0')
+            df = port[port['weight'] != 0]
+            if df.duplicated(subset=['secid']).any():
+                df = df.groupby('secid')['weight'].sum().reset_index()
+            else:
+                df = df.reset_index(drop=True)
+        self.port = df
         self.date = date
         self._name = name
         self.value = value
-        self.sort()
     def __len__(self): 
         return len(self.port)
     def __bool__(self): 
         return self.exists
     def __repr__(self): 
-        return '\n'.join([f'Portfolio <date={self.date}> <name={self.name}> <value={self.value}>: ', str(self.port)])
+        return '\n'.join([f'Portfolio <date={self.date}> <name={self.name}> <value={self.value}>: ', str(self.sorted())])
     def __add__(self , other): 
         return self.merge(other)
     def __mul__(self , other):  
@@ -55,9 +58,8 @@ class Port:
     @property
     def size(self): return len(self.port)
 
-    def sort(self , by : Literal['secid' , 'weight'] = 'weight' , ascending=False):
-        self.port = self.port.sort_values(by , ascending=ascending).reset_index(drop=True)
-        return self
+    def sorted(self , by : Literal['secid' , 'weight'] = 'weight' , ascending=False) -> pd.DataFrame:
+        return self.port.sort_values(by , ascending=ascending).reset_index(drop=True)
 
     def is_emtpy(self): return not self.exists or self.port.empty
 
@@ -136,8 +138,8 @@ class Port:
     @classmethod
     def create(cls , secid : np.ndarray | Any , weight : np.ndarray | Any , **kwargs):
         weight = weight * ((weight >= cls.weight_eps) + (weight <= -cls.weight_eps))
-        df = pd.DataFrame({'secid':secid , 'weight' : weight})
-        df = df.query('weight != 0')
+        valid = weight != 0
+        df = pd.DataFrame({'secid':secid[valid] , 'weight' : weight[valid]})
         return cls(df , **kwargs)
     
     @classmethod
@@ -159,10 +161,9 @@ class Port:
         
     def to_dataframe(self):
         if len(self.port):
-            return self.port.assign(name = self.name , date = self.date , value = self.value).filter(
-                items=['name' , 'date' , 'secid' , 'weight' , 'value'])
+            return self.port.assign(name = self.name , date = self.date , value = self.value)
         else:
-            return pd.DataFrame().filter(items=['date','secid','weight'])
+            return pd.DataFrame(columns=['name','date','secid','weight','value']).astype({'name':str,'date':int,'secid':int,'weight':float,'value':float})
         
     @property
     def secid(self): 

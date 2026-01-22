@@ -94,7 +94,7 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     if df['minute'].max() == max_nbar: 
         df['minute'] = df['minute'] -1
     if x_min_new != 1: 
-        df = df.query('minute >= 0')
+        df = df[df['minute'] >= 0].copy()
     df['minute'] = df['minute'].clip(lower=0) // by
     agg_dict = {'open':'first','high':'max','low':'min','close':'last','amount':'sum','volume':'sum'}
     if 'num_trades' in df.columns: 

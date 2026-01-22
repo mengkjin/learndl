@@ -152,10 +152,10 @@ class DataVendor:
         dates = self.td_within(target_start , target_end)
 
         if len(early_dates := dates[dates < block0.min_date]) > 0:
-            block = BlockLoader(db_src , db_key).load(early_dates.min() , early_dates.max() , vb_level = 99).adjust_price()
+            block = BlockLoader(db_src , db_key).load(early_dates.min() , early_dates.max() , vb_level = Proj.vb.max).adjust_price()
             block0 = block0.merge_others(block , inplace = True)
         if len(late_dates := dates[dates > block0.max_date]) > 0:
-            block = BlockLoader(db_src , db_key).load(late_dates.min() , late_dates.max() , vb_level = 99).adjust_price()
+            block = BlockLoader(db_src , db_key).load(late_dates.min() , late_dates.max() , vb_level = Proj.vb.max).adjust_price()
             block0 = block0.merge_others(block , inplace = True)
         Logger.success(f'DATAVENDOR.{data_key} expand from {CALENDAR.dates_str([loaded_start,loaded_end])} to {CALENDAR.dates_str([target_start,target_end])}')
         setattr(self , f'_block_{data_key}' , block0)
@@ -208,7 +208,7 @@ class DataVendor:
         q1 = self.day_quote(date1 , price1)
         if q0.empty or q1.empty: 
             return pd.DataFrame(columns = ['secid' , 'ret']).set_index('secid')
-        q = q0.query('price != 0').merge(q1 , on = 'secid')
+        q = q0[q0['price'] != 0].merge(q1 , on = 'secid')
         q['ret'] = q['price_y'] / q['price_x'] - 1
         q = q[['secid' , 'ret']].set_index('secid')
         if secid is not None:

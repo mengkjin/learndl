@@ -724,6 +724,9 @@ class StockFactor:
         """
         get the daily quotes for the factor
         """
+        if len(self.date) == 0:
+            return DataBlock()
+        DATAVENDOR.TRADE.load_trd_within(self.date.min() , self.date.max() , overwrite = False)
         return DATAVENDOR.get_quotes_block(self.date if load else None , extend = 60)
 
     def day_quotes(self , load = True):

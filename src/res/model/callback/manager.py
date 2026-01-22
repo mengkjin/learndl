@@ -10,7 +10,7 @@ SEARCH_MODS = [fit , display , test]
 class CallBackManager(BaseCallBack):
     def __init__(self , trainer , *callbacks : BaseCallBack):
         super().__init__(trainer)   
-        self.callbacks : list[BaseCallBack] = [cb for cb in callbacks if bool(cb)]
+        self.callbacks : list[BaseCallBack] = list(callbacks)
 
     def at_enter(self , hook , vb_level : int = Proj.vb.max):
         [cb.at_enter(hook , vb_level) for cb in self.callbacks]
@@ -32,7 +32,8 @@ class CallBackManager(BaseCallBack):
                 callback_classes.append(specific_cb)
 
             callback_classes = sorted(callback_classes, key=lambda x: x.CB_ORDER)
-            callbacks = [cb_type(trainer , **trainer.config.callbacks.get(cb_type.__name__ , {})).print_info() for cb_type in callback_classes]
+            callbacks = [cb_type(trainer , **trainer.config.callbacks.get(cb_type.__name__ , {})) for cb_type in callback_classes]
+            callbacks = [cb.print_info() for cb in callbacks if cb]
         return cls(trainer , *callbacks)
 
     @classmethod

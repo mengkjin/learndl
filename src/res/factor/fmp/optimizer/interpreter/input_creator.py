@@ -114,8 +114,8 @@ def append_bound_limit(opt_input : Any):
 
     if ld := limitation.get('list_days'):
         df = DATAVENDOR.all_stocks
-        latest_list_dt = DATAVENDOR.td(model_date , -ld) # noqa
-        pool = df.query('list_dt > @latest_list_dt')['secid'].to_numpy()
+        latest_list_dt = DATAVENDOR.td(model_date , -ld)
+        pool = df[df['list_dt'] > latest_list_dt]['secid'].to_numpy()
         bound_limit.intersect(StockPool.bnd_ub(secid , pool , 0))
 
     if limitation.get('kcb_no_buy'):

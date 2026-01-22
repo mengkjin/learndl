@@ -50,7 +50,7 @@ class ModelPortfolioBuilder:
         table = self.last_fmp_table(date)
         if table.empty: 
             return None
-        table = table.query('name == @port_name')
+        table = table[table['name'] == port_name]
         return Portfolio.from_dataframe(table , name = port_name)
     
     def iter_builder_kwargs(self , date : int | None = None , indent : int = 0 , vb_level : int = 1):

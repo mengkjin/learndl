@@ -11,9 +11,9 @@ def _filter_account(acc : pd.DataFrame , lag0 = True , pos_model_date = False):
         if 'lag' in acc.index.names: 
             acc = acc.reset_index('lag',drop=False)
         if 'lag' in acc.columns: 
-            acc = acc.query('lag==0').drop(columns=['lag'])
+            acc = acc[acc['lag'] == 0].drop(columns=['lag'])
     if pos_model_date:
-        acc = acc.query('model_date>0')
+        acc = acc[acc['model_date'] > 0]
     return acc
 
 def calc_frontface(acc : pd.DataFrame):

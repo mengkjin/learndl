@@ -51,7 +51,7 @@ def extract_js_min(date):
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
         Logger.error(f'Failed to convert ticker to int: {e}')
-        df = df.query('ticker.str.isdigit()')
+        df = df[df['ticker'].str.isdigit()].copy()
         df['ticker'] = df['ticker'].astype(int)
 
     return df
@@ -91,8 +91,8 @@ def add_sec_type(df : pd.DataFrame):
     }).drop_duplicates()
     df_sec['range'] = df_sec['ticker'] // 1000
     df_sec['sec_type'] = 'notspecified'
-    sz_sec = df_sec.query('exchangecd == "XSHE"')
-    sh_sec = df_sec.query('exchangecd == "XSHG"')
+    sz_sec = df_sec[df_sec['exchangecd'] == "XSHE"]
+    sh_sec = df_sec[df_sec['exchangecd'] == "XSHG"]
 
     # sz
     for (start , end) , sec_type in SZ_types.items():
@@ -114,7 +114,7 @@ def filter_sec(
     sec_type : Literal['sec' , 'etf' , 'cb'] | str ,
     sec_type_map : dict[str,str] = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
 ):
-    return df.query('sec_type == @sec_type_map[@sec_type]')
+    return df[df['sec_type'] == sec_type_map[sec_type]]
 
 def transform_sec(df : pd.DataFrame):
     

@@ -167,7 +167,7 @@ class JSFetcher:
         if key == 'industry':
             path_dict = f'D:/Coding/ChinaShareModel/ModelParameters/setting/indus_dictionary_sw.csv'
             ind_dict : pd.DataFrame = pd.read_csv(path_dict , encoding='gbk')
-            ind_dict = ind_dict.query('version == 2021')        
+            ind_dict = ind_dict[ind_dict['version'] == 2021]        
             for i in range(3): 
                 df[f'ind_code_{i+1}'] = df['ind_code'].str.slice(0 , 4 + 2*i)
                 tmp = {
@@ -410,7 +410,7 @@ class JSFetcher:
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path , sep='\t' , low_memory=False)
             if df['ticker'].dtype in (object,str):  
-                df = df.query('ticker.str.isdigit()') 
+                df = df[df['ticker'].str.isdigit()].copy() 
             df['ticker'] = df['ticker'].astype(int)
             def cond_stock(x,y):
                 return ((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
