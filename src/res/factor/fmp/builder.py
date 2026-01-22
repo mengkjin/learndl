@@ -127,12 +127,13 @@ class PortfolioBuilder:
 
     def load_portfolio(self , start : int = -1 , end : int = 99991231):
         if self.resume_path_portfolio is not None:
-            port = Portfolio.load(self.resume_path_portfolio)
-            dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
-            self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
-            self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
-            Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
-                           indent = self.indent , vb_level = Proj.vb.max)
+            with Logger.Profiler(f'{self.__class__.__name__}.load_portfolio.{self.resume_path_portfolio.name}' , indent = self.indent , vb_level = self.vb_level):
+                port = Portfolio.load(self.resume_path_portfolio)
+                dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
+                self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
+                self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
+                Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
+                            indent = self.indent , vb_level = Proj.vb.max)
         return self
 
     def save_portfolio(self , append = False):
@@ -333,7 +334,7 @@ class PortfolioGroupBuilder:
     def save_portfolios(self):
         if self.resume_path is None:
             return
-        with Logger.Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
+        with Logger.Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2) , Logger.Profiler(f'{self.class_name}.export'):
             for builder in self.builders:
                 builder.save_portfolio(append = True)
         return self

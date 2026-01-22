@@ -718,7 +718,7 @@ class StockFactor:
         """
         pre-load benchmarked factors
         """
-        return [self.within(bm) for bm in ['market' , 'csi300' , 'csi500' , 'csi1000']]
+        return [self.within(bm) for bm in Benchmark.TESTS]
 
     def day_returns(self , load = True):
         """

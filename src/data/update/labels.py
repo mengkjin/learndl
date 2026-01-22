@@ -33,10 +33,13 @@ class ClassicLabelsUpdater(BasicUpdater):
                     raise ValueError(f'Invalid update type: {update_type}')
                 end_date     = CALENDAR.td(CALENDAR.updated() , - days - lag1)
                 update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
+                if len(update_dates) == 0:
+                    Logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , indent = indent , vb_level = vb_level)
+                    continue
                 for date in update_dates:
                     cls.update_one(date , days , lag1 , label_name , indent = indent + 1 , vb_level = vb_level + 2)
 
-            Logger.success(f'Update {cls.DB_SRC}/{label_name} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
+                Logger.success(f'Update {cls.DB_SRC}/{label_name} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
     def update_one(cls , date : int , days : int , lag1 : bool , label_name : str , indent : int = 2 , vb_level : int = 2):

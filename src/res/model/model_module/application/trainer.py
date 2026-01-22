@@ -133,7 +133,7 @@ class ModelTrainer(BaseTrainer):
 
         Logger.stdout(f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:' , color = 'lightgreen' , bold = True)
         Logger.stdout_pairs([('Model' , model) for model in resumable_models] + [('Factor' , factor) for factor in resumable_factors] , 
-                            indent = 1 , color = 'lightgreen' , bold = True , vb_level = 99)
+                            indent = 1 , color = 'lightgreen' , bold = True)
         Logger.divider()
 
         for model in resumable_models:
@@ -141,7 +141,10 @@ class ModelTrainer(BaseTrainer):
                    title = f'Resume Testing Model {model}' , paragraph = True , 
                    check_operation = None if force_resume else 'resume_testing' ,
                    log_operation = 'resume_testing')
+            break
+
         for factor in resumable_factors:
+            break
             cls.GO(2 , 1, 0 , module = f'factor@{factor}' , short_test = False ,
                     title = f'Resume Testing Factor {factor}' , paragraph = True ,
                     check_operation = None if force_resume else 'resume_testing' ,

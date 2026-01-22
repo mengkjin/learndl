@@ -432,7 +432,7 @@ class SellsideSQLDownloader:
             connection = self.get_connection()
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {len(date_intervals)} periods' , indent = 1)
+        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
             connection.stay_connect = True
@@ -454,7 +454,7 @@ class SellsideSQLDownloader:
             Logger.print_exc(e)
             return False
         if (num_dates := self.save_data(df)) > 0:
-            Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1)
+            Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1 , vb_level = 1)
         else:
             Logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}' , indent = 1)
         return True

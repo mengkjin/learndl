@@ -26,6 +26,10 @@ class DailyRiskUpdater(BasicUpdater):
             
         end_date = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
         update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
+        if len(update_dates) == 0:
+            Logger.skipping(f'{cls.DB_SRC}/{cls.DB_KEY} is up to date' , indent = indent , vb_level = vb_level)
+            return
+
         for date in update_dates:
             cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 2)
 

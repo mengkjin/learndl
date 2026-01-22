@@ -31,7 +31,7 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
         return benchmarks
     
 class FrontFace(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , ic_type : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type} , **kwargs)
@@ -39,14 +39,14 @@ class FrontFace(FactorPerfCalc):
     def plotter(self): return plotter.plot_frontface
 
 class Coverage(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_coverage
     def plotter(self): return plotter.plot_coverage
 
 class IC_Curve(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , ma_windows : int | list[int] = [10,20] ,
                  ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
@@ -58,7 +58,7 @@ class IC_Curve(FactorPerfCalc):
     def plotter(self): return plotter.plot_ic_curve
 
 class IC_Decay(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
                  ic_type : Literal['pearson' , 'spearman'] = 'spearman' , 
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
@@ -89,7 +89,7 @@ class IC_Year(FactorPerfCalc):
     def plotter(self): return plotter.plot_ic_year
 
 class IC_Benchmark(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.AVAILABLES
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
@@ -107,7 +107,7 @@ class IC_Monotony(FactorPerfCalc):
     def plotter(self): return plotter.plot_ic_monotony
 
 class PnL_Curve(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , direction : Literal[1,0,-1] = 0 , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type ,
@@ -131,7 +131,7 @@ class Style_Corr_Distrib(FactorPerfCalc):
     def plotter(self): return plotter.plot_style_corr_distrib
 
 class Group_Return(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 20 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
@@ -140,7 +140,7 @@ class Group_Return(FactorPerfCalc):
     def plotter(self): return plotter.plot_group_return
 
 class Group_Curve(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
@@ -149,7 +149,7 @@ class Group_Curve(FactorPerfCalc):
     def plotter(self): return plotter.plot_group_curve
 
 class Group_Decay(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
                  lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag_init' : lag_init , 'group_num' : group_num , 
@@ -159,7 +159,7 @@ class Group_Decay(FactorPerfCalc):
     def plotter(self): return plotter.plot_group_decay
 
 class Group_IR_Decay(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
                  lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag_init' : lag_init , 'group_num' : group_num , 
@@ -169,7 +169,7 @@ class Group_IR_Decay(FactorPerfCalc):
     def plotter(self): return plotter.plot_group_ir_decay
 
 class Group_Year(FactorPerfCalc):
-    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}

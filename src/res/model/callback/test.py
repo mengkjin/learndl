@@ -184,11 +184,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def factor_test(self , indent : int = 0 , vb_level : int = 2):
         with Logger.Paragraph('Factor Perf Test' , 3):
-            with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.get_factor'):
                 factor = self.get_factor(self.factor_test_dates)
-            with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.within_benchmarks'):
                 factor.within_benchmarks()
-            with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
+            with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.load_day_rets'):
                 factor.day_returns()
 
             for task in self.factor_tasks:

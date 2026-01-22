@@ -432,7 +432,7 @@ def src_path(db_src : str) -> Path:
     """get database source path"""
     return _db_parent(db_src)
 
-def _db_path(db_src , db_key , date = None , use_alt = False , closest = False , indent = 1 , vb_level : int = 1) -> Path:
+def _db_path(db_src , db_key , date = None , use_alt = False , closest = False , indent = 1 , vb_level : int = Proj.vb.max) -> Path:
     """
     Get path of database
     Parameters

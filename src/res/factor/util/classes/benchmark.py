@@ -18,6 +18,7 @@ class Benchmark(Portfolio):
     
     AVAILABLES = Proj.Conf.Factor.BENCH.availables
     DEFAULTS   = Proj.Conf.Factor.BENCH.defaults
+    TESTS      = Proj.Conf.Factor.BENCH.tests
     CATEGORIES = Proj.Conf.Factor.BENCH.categories
     NONE       = Proj.Conf.Factor.BENCH.none
     

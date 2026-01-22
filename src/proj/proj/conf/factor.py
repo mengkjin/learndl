@@ -68,6 +68,10 @@ class BenchmarksConfig:
         """default benchmarks that will be used if not specified"""
         return ['csi500' , 'csi1000']
     @property
+    def tests(self) -> list[str]:
+        """test benchmarks that will be used if not specified"""
+        return ['market' , 'csi300' , 'csi500' , 'csi1000']
+    @property
     def categories(self) -> list[str]:
         """categories of benchmarks that can be used"""
         return ['default' , 'none' , 'market' , 'csi300' , 'csi500' , 'csi800' , 'csi1000' , 'csi2000']
