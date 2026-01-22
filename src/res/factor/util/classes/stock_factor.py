@@ -627,6 +627,15 @@ class StockFactor:
         else:
             assert self.input_blk is not None , 'input_blk and input_df cannot be both None'
             return self.input_blk
+
+    @classmethod
+    def random(cls) -> 'StockFactor':
+        """
+        return a random factor
+        """
+        secid = DATAVENDOR.secid(20241231)
+        prior_input = pd.DataFrame({'secid' : secid, 'random_factor' : np.random.randn(len(secid)) , 'date' : 20241231})
+        return cls(prior_input)
         
     @classmethod
     def Load(cls , factor_name : str , date : int):

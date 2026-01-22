@@ -15,9 +15,9 @@ class Port:
                  name : str | Any = 'default' , value : float = 1.) -> None:
         self.exists = port is not None 
         if port is None or port.empty:
-            df = pd.DataFrame(columns=pd.Index(['secid','weight'])).astype({'secid':int,'weight':float})
+            df = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
         else:
-            df = port[port['weight'] != 0]
+            df = port.loc[port['weight'] != 0,['secid','weight']]
             if df.duplicated(subset=['secid']).any():
                 df = df.groupby('secid')['weight'].sum().reset_index()
             else:

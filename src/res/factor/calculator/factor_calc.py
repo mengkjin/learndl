@@ -674,6 +674,10 @@ class AffiliateFactorCalculator(FactorCalculator):
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
     @classmethod
+    def full_dbs(cls) -> list[dict[Literal['src' , 'key' , 'col'] , str]]:
+        return [{'src':cls.load_db_src , 'key':cls.load_db_key , 'col':cls.load_db_col} , *cls.alternative_dbs]
+
+    @classmethod
     def load_from_db(cls , src : str , key : str , date : int , col : str | None = None , closest = False) -> pd.DataFrame:
         df = DB.load(src , key , date , closest = closest , vb_level = 99)
         if df.empty:
@@ -712,12 +716,10 @@ class AffiliateFactorCalculator(FactorCalculator):
             stored_dates = stored_dates[stored_dates <= date]
             if len(stored_dates) > 0:
                 date = stored_dates.max()
-        df = self.load_from_db(self.load_db_src , self.load_db_key , date , self.load_db_col)
-        if df.empty and self.alternative_dbs:
-            for alt_db in self.alternative_dbs:
-                df = self.load_from_db(**alt_db , date = date)
-                if not df.empty:
-                    break
+        for db in self.full_dbs():
+            df = self.load_from_db(**db , date = date)
+            if not df.empty:
+                break
         return df
 
     def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
@@ -731,11 +733,15 @@ class AffiliateFactorCalculator(FactorCalculator):
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = cls.loads_from_db(cls.load_db_src , cls.load_db_key , dates , cls.load_db_col , indent = indent , vb_level = vb_level)
-        for alt_db in cls.alternative_dbs:
-            df0 = cls.loads_from_db(**alt_db , dates = np.setdiff1d(dates , df['date']) , indent = indent , vb_level = vb_level)
-            if not df0.empty:
-                df = pd.concat([df , df0])
+        dfs : list[pd.DataFrame] = []
+        for db in cls.full_dbs():
+            df = cls.loads_from_db(**db , dates = dates , indent = indent , vb_level = vb_level)
+            if not df.empty:
+                dfs.append(df)
+                dates = np.setdiff1d(dates , df['date'])
+            if len(dates) == 0:
+                break
+        df = pd.concat(dfs) if dfs else pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         return df
 
     @classmethod
@@ -774,9 +780,9 @@ class AffiliateFactorCalculator(FactorCalculator):
     @classmethod
     def stored_dates(cls , start : int | None = None , end : int | None = None , step : int = 1) -> np.ndarray:
         """return stored dates of factor data"""
-        dates = DB.dates(cls.load_db_src , cls.load_db_key)
-        for alt_db in cls.alternative_dbs:
-            dates = np.union1d(dates , DB.dates(alt_db['src'] , alt_db['key']))
+        dates = np.array([], dtype = int)
+        for db in cls.full_dbs():
+            dates = np.union1d(dates , DB.dates(db['src'] , db['key']))
         dates = _slice_dates(dates , cls.init_date)
         dates = _slice_dates(dates , start , end)
         return dates[::step]
@@ -784,26 +790,22 @@ class AffiliateFactorCalculator(FactorCalculator):
     @classmethod
     def get_min_date(cls) -> int:
         """return minimum date of stored factor data"""
-        min_date = DB.min_date(cls.load_db_src , cls.load_db_key)
-        for alt_db in cls.alternative_dbs:
-            min_date = min(min_date , DB.min_date(alt_db['src'] , alt_db['key']))
-        return max(cls.init_date , min_date)
+        min_dates = [DB.min_date(db['src'] , db['key']) for db in cls.full_dbs()]
+        return max(cls.init_date , min(min_dates))
 
     @classmethod
     def get_max_date(cls) -> int:
         """return maximum date of stored factor data"""
-        max_date = DB.max_date(cls.load_db_src , cls.load_db_key)
-        for alt_db in cls.alternative_dbs:
-            max_date = max(max_date , DB.max_date(alt_db['src'] , alt_db['key']))
-        return min(cls.final_date , max_date)
+        max_dates = [DB.max_date(db['src'] , db['key']) for db in cls.full_dbs()]
+        return min(cls.final_date , max(max_dates))
     
     @classmethod
     def has_date(cls , date : int) -> bool:
         """check if factor data exists for a given date"""
-        has_date = DB.path(cls.load_db_src , cls.load_db_key , date).exists()
-        for alt_db in cls.alternative_dbs:
-            has_date = has_date or DB.path(alt_db['src'] , alt_db['key'] , date).exists()
-        return has_date
+        for db in cls.full_dbs():
+            if DB.path(db['src'] , db['key'] , date).exists():
+                return True
+        return False
 
     @classmethod
     def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : int = 1) -> None:
