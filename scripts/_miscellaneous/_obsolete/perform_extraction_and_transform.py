@@ -45,12 +45,7 @@ def extract_js_min(date):
             zip_ref.extract(txt_file_path , zip_path)
             df = pd.read_csv(zip_path.joinpath(txt_file_path) , sep = '\t' , low_memory=False)
             zip_path.joinpath(txt_file_path).unlink()
-    try:
-        df['ticker'] = df['ticker'].astype(int)
-    except Exception as e:
-        Logger.error(f'Failed to convert ticker to int: {e}')
-        df = df[df['ticker'].str.isdigit()].copy()
-        df['ticker'] = df['ticker'].astype(int)
+    df = df.query('ticker.str.isdigit()').astype({'ticker':int})
     DB.save_df(df , target_path , prefix = f'JS min' , vb_level = Proj.vb.max)
     return df   
 

@@ -545,9 +545,7 @@ class SellsideSQLDownloader:
 
         int_columns = df.columns.to_numpy(str)[df.columns.isin(['date', 'secid'])]
         flt_columns = df.columns.difference(int_columns.tolist())  
-        df[int_columns] = df[int_columns].astype(int)  
-        df[flt_columns] = df[flt_columns].astype(float)
-        df = df.fillna(np.nan)
+        df = df.astype({col:int for col in int_columns} | {col:float for col in flt_columns}).fillna(np.nan)
         return df
 
     def save_data(self , data : pd.DataFrame | None) -> int:

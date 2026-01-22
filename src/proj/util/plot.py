@@ -116,10 +116,7 @@ class PlotFactorData:
 
         numeric_cols = self.raw_data.select_dtypes(include=['number']).columns
         self.raw_data[numeric_cols] = self.raw_data[numeric_cols].round(rounding)
-        
-        for col in self.raw_data.columns: 
-            if str(col).endswith('date'): 
-                self.raw_data[col] = self.raw_data[col].astype(str)
+        self.raw_data = self.raw_data.astype({col:str for col in self.raw_data.columns if col.endswith('date')})
 
     def __enter__(self):
         df = self.raw_data.sort_values(self.sort_keys).drop(columns=self.drop_keys , errors='ignore')

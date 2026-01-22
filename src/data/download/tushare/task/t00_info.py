@@ -15,15 +15,13 @@ class Calendar(InfoFetcher):
                    'is_open'  : 'trade'}
         fields : str | Any = list(renamer.keys()) if renamer else None
         df = self.pro.trade_cal(fields = fields , exchange='SSE').rename(columns=renamer)
-        df = df.sort_values('calendar').reset_index(drop = True)
+        df = df.astype({'calendar':int}).sort_values('calendar').reset_index(drop = True)
 
         # process
-        df['calendar'] = df['calendar']
         trd = df.query('trade == 1').reset_index(drop=True)
         trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
-        trd = df.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
+        trd = df.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').astype(int).ffill()
         trd['td_index'] = trd['trade'].cumsum()
-        trd = trd.astype(int)
 
         return trd
     
@@ -46,10 +44,7 @@ class Description(InfoFetcher):
             self.pro.stock_basic(fields = fields , list_status = 'P')
         ]).rename(columns=renamer)
 
-        df = ts_code_to_secid(df , drop_old=False)
-        df['list_dt'] = df['list_dt'].fillna(-1).astype(int)
-        df['delist_dt'] = df['delist_dt'].fillna(99991231).astype(int)
-        df = df.reset_index(drop = True)
+        df = ts_code_to_secid(df , drop_old=False).fillna({'list_dt':-1 , 'delist_dt':99991231}).astype({'list_dt':int , 'delist_dt':int}).reset_index(drop=True)
         return df
     
 class SWIndustry(InfoFetcher):
@@ -61,10 +56,7 @@ class SWIndustry(InfoFetcher):
         df2 = self.iterate_fetch(self.pro.index_member_all , limit = 2000 , is_new = 'N')
 
         df = pd.concat([df1 , df2])
-        df = ts_code_to_secid(df)
-        df['in_date'] = df['in_date'].fillna(99991231).astype(int)
-        df['out_date'] = df['out_date'].fillna(99991231).astype(int)
-        df = df.reset_index(drop=True)
+        df = ts_code_to_secid(df).fillna({'in_date':99991231 , 'out_date':99991231}).astype({'in_date':int , 'out_date':int}).reset_index(drop=True)
         return df
 
 class ZXIndustry(InfoFetcher):
@@ -76,10 +68,7 @@ class ZXIndustry(InfoFetcher):
         df2 = self.iterate_fetch(self.pro.ci_index_member , limit = 2000 , is_new = 'N')
 
         df = pd.concat([df1 , df2])
-        df = ts_code_to_secid(df)
-        df['in_date'] = df['in_date'].fillna(99991231).astype(int)
-        df['out_date'] = df['out_date'].fillna(99991231).astype(int)
-        df = df.reset_index(drop=True)
+        df = ts_code_to_secid(df).fillna({'in_date':99991231 , 'out_date':99991231}).astype({'in_date':int , 'out_date':int}).reset_index(drop=True)
         return df
     
 class ChangeName(InfoFetcher):
@@ -88,10 +77,7 @@ class ChangeName(InfoFetcher):
     def get_data(self , date = None):
 
         df = self.iterate_fetch(self.pro.namechange , limit = 5000)
-        df = ts_code_to_secid(df)
-        df['start_date'] = df['start_date'].fillna(-1).astype(int)
-        df['ann_date'] = df['ann_date'].fillna(-1).astype(int)
-        df['end_date'] = df['end_date'].fillna(99991231).astype(int)
+        df = ts_code_to_secid(df).fillna({'start_date':-1 , 'ann_date':-1 , 'end_date':99991231}).astype({'start_date':int , 'ann_date':int , 'end_date':int})
         df['entry_dt'] = np.where(df['ann_date'] > 0 , np.minimum(df['start_date'] , df['ann_date']) , df['ann_date'])
         df['remove_dt'] = df['end_date']
         assert df['change_reason'].isin(self._dangerous_type() + self._safe_type()).all , \

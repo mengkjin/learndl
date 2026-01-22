@@ -87,8 +87,7 @@ class IndexDaily(TimeSeriesFetcher):
                     start_date = int(old_df['trade_date'].max()) + 1
                     old_df = _df
             df = self.get_data(index , start_date , end_dt)
-            df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).sort_values('trade_date')
-            df['trade_date'] = df['trade_date'].astype(int)
+            df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).astype({'trade_date':int}).sort_values('trade_date')
             DB.save(df , self.DB_SRC , index , indent = 1 , vb_level = 3)
             updated_dates.extend(df['trade_date'].unique())
         return np.unique(np.array(updated_dates , dtype = int))
@@ -105,7 +104,7 @@ class ZXIndexDaily(DayFetcher):
             end_date = date
         df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end_date))
         if not df.empty:
-            df['trade_date'] = df['trade_date'].astype(int)
+            df = df.astype({'trade_date':int})
         return df
 
     def get_zx_index_quotes(self , start_date : int , end_date : int):
@@ -147,8 +146,7 @@ class ZXIndexDaily(DayFetcher):
     def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 5):
         df_old = DB.load('index_daily_ts' , index , vb_level = 99)
         if not df_old.empty:
-            df_old['trade_date'] = df_old['trade_date'].astype(int)
-            df = pd.concat([df_old , df]).drop_duplicates('trade_date' , keep = 'last')
+            df = pd.concat([df_old.astype({'trade_date':int}) , df]).drop_duplicates('trade_date' , keep = 'last')
         df = df.sort_values('trade_date').reset_index(drop = True)
         DB.save(df , 'index_daily_ts' , index , indent = 1 , vb_level = vb_level)
     

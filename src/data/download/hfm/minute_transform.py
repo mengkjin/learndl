@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Literal
 
 from src.data.util import trade_min_fillna
-from src.proj import PATH , Logger , DB
+from src.proj import PATH , DB
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')
@@ -47,13 +47,7 @@ def extract_js_min(date):
                 df.columns = df.columns.str.lower()
             break
     assert df is not None , f'no data found for {date}'
-    try:
-        df['ticker'] = df['ticker'].astype(int)
-    except Exception as e:
-        Logger.error(f'Failed to convert ticker to int: {e}')
-        df = df[df['ticker'].str.isdigit()].copy()
-        df['ticker'] = df['ticker'].astype(int)
-
+    df = df.query('ticker.str.isdigit()').astype({'ticker':int})
     return df
 
 def add_sec_type(df : pd.DataFrame):

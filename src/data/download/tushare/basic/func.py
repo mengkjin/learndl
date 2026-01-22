@@ -32,7 +32,7 @@ def dates_to_update(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : in
     """get dates to update given last date and frequency"""
     update_to = update_to or CALENDAR.update_to()
     if last_date >= update_to: 
-        return np.array([])
+        return np.array([] , dtype=int)
     if freq == 'd':
         date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').to_numpy(int)[1:]
     elif freq == 'w':

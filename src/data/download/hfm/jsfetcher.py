@@ -259,10 +259,9 @@ class JSFetcher:
                 path = Path(f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt')
                 if not path.exists():
                     return FailedData('longcl_exp' , date)
-                else:
-                    df_new = pd.read_csv(path, header=None , delimiter='\t',dtype=float)
-                    df_new.columns = colnames
-                df_new['secid'] = df_new['secid'].astype(int)
+                
+                df_new = pd.read_csv(path, header=None , delimiter='\t',dtype=float).astype({'secid':int})
+                df_new.columns = colnames
                 df = pd.merge(df , df_new.set_index('secid') , how='outer' , on='secid')
             df = adjust_precision(df).reset_index()
         if with_date: 
@@ -408,15 +407,12 @@ class JSFetcher:
         if not path.exists(): 
             return FailedData('min' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
-            df = pd.read_csv(path , sep='\t' , low_memory=False)
-            if df['ticker'].dtype in (object,str):  
-                df = df[df['ticker'].str.isdigit()].copy() 
-            df['ticker'] = df['ticker'].astype(int)
+            df = pd.read_csv(path , sep='\t' , low_memory=False).query('ticker.str.isdigit()').astype({'ticker':int})
             def cond_stock(x,y):
                 return ((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
             df = row_filter(df,('ticker','exchangecd'),cond_stock)
             df = df.loc[:,list(data_params.keys())].rename(columns=data_params)
-            df['minute'] = (df['minute']/60).astype(int)
+            df['minute'] = (df['minute'] / 60).astype(int)
             df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
             df = df.sort_values(['secid','minute'])
             df = trade_min_fillna(df)

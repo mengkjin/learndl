@@ -32,12 +32,10 @@ class FDataAccess(DateDataAccess):
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
         assert self.SINGLE_TYPE , 'SINGLE_TYPE must be set'
         ann_dt = self.gets(CALENDAR.qe_trailing(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , self.ANN_DATA_COL]).\
-            rename(columns = {self.ANN_DATA_COL : 'ann_date'}).dropna(subset = ['ann_date']).reset_index(drop = False)
+            rename(columns = {self.ANN_DATA_COL : 'ann_date'}).dropna(subset = ['ann_date']).reset_index(drop = False).\
+            astype({'end_date':int , 'ann_date':int}).sort_values(['end_date' , 'ann_date']).drop_duplicates(['secid' , 'end_date'])
         #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
-        ann_dt['end_date'] = ann_dt['end_date'].astype(int)
-        ann_dt['ann_date'] = ann_dt['ann_date'].astype(int)
-        ann_dt = ann_dt.sort_values(['end_date' , 'ann_date']).drop_duplicates(['secid' , 'end_date'])
         ann_dt['td_backward'] = CALENDAR.td_array(ann_dt['ann_date'] , backward = True)
         ann_dt['td_forward']  = CALENDAR.td_array(ann_dt['ann_date'] , backward = False)
         ann_dt = ann_dt.loc[ann_dt['td_forward'] <= date , :]
@@ -126,11 +124,8 @@ class FDataAccess(DateDataAccess):
         field = ['secid' , self.ANN_DATA_COL , 'update_flag' , val]
         
         df_acc = self.gets(dates , data_type , field , rename_date_key = 'end_date').\
-            rename(columns = {self.ANN_DATA_COL : 'ann_date'}).\
-            reset_index(drop = False).dropna(subset = ['ann_date' , 'end_date'])
-        # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
-        df_acc['ann_date'] = df_acc['ann_date'].astype(int)
-        df_acc['end_date'] = df_acc['end_date'].astype(int)
+            rename(columns = {self.ANN_DATA_COL : 'ann_date'}).reset_index(drop = False).dropna(subset = ['ann_date' , 'end_date']).\
+            astype({'end_date':int , 'ann_date':int})
         df_acc = df_acc.query('ann_date <= @date and end_date in @dates and secid >= 0')
         df_acc = df_acc.sort_values('update_flag').drop_duplicates(['secid' , 'end_date'] , keep = 'last')\
             [['secid','end_date',val]].set_index(['secid' , 'end_date']).sort_index()

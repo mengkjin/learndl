@@ -37,13 +37,15 @@ class ModelTrainer(BaseTrainer):
         if category is None:
             return False
         else:
-            path = self.config.model_base_path.log(f'{category}_logs.log')
+            path = self.config.model_base_path.log(f'operation_logs.log')
             logs = path.read_text().split('\n') if path.exists() else []
             logs = [log for log in logs if log.startswith(category)]
             if logs:
                 try:
                     time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
                     last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+                    print(last_time)
+                    print(datetime.now() - timedelta(days=1))
                     if last_time > datetime.now() - timedelta(days=1):
                         return last_time.strftime('%Y-%m-%d %H:%M:%S')
                     else:

@@ -24,8 +24,7 @@ def get_pead_df(date : int , price_type : Literal['open' , 'low'] , rank_pct : b
     start_date = CALENDAR.td(dates.min() , -20)
     ann_cal = ann_cal.reset_index('date' , drop = True).\
         melt(var_name = 'prev_day' , value_name = 'date' , ignore_index = False).\
-        reset_index(drop = False).set_index(['date' , 'secid'])
-    ann_cal['prev_day'] = ann_cal['prev_day'].astype(int)
+        reset_index(drop = False).set_index(['date' , 'secid']).astype({'prev_day':int})
 
     quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['preclose' , price_type])
     mv = DATAVENDOR.TRADE.get_mv(start_date , end_date , 'circ_mv')
@@ -87,8 +86,7 @@ class _pead_calculator:
         start_date = CALENDAR.td(dates.min() , -20)
         ann_cal = ann_cal.reset_index('date' , drop = True).\
             melt(var_name = 'prev_day' , value_name = 'date' , ignore_index = False).\
-            reset_index(drop = False).set_index(['date' , 'secid'])
-        ann_cal['prev_day'] = ann_cal['prev_day'].astype(int)
+            reset_index(drop = False).set_index(['date' , 'secid']).astype({'prev_day':int})
         self.ann_cal = ann_cal
         self.start_date = start_date
         self.end_date = end_date

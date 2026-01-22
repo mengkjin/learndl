@@ -90,7 +90,7 @@ class Portfolio:
     @property
     def port_secid(self): 
         """return the secids of the ports"""
-        return np.unique(np.concatenate([port.secid for port in self.ports.values()])) if self.ports else np.array([]).astype(int)
+        return np.unique(np.concatenate([port.secid for port in self.ports.values()])) if self.ports else np.array([] , dtype = int)
 
     @classmethod
     def random(cls):  

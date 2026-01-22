@@ -18,9 +18,8 @@ class FundInfo(InfoFetcher):
         df = pd.concat([df1 , df2]).rename(columns=renamer)
         if df.empty: 
             return df
-        for col in ['found_date' , 'due_date' , 'list_date' , 'issue_date' , 'delist_date']:
-            df[col] = df[col].fillna(99991231).astype(int)
-        df = df.reset_index(drop=True)
+        int_cols = df.columns.intersection(['found_date' , 'due_date' , 'list_date' , 'issue_date' , 'delist_date'])
+        df = df.fillna({col:99991231 for col in int_cols}).astype({col:int for col in int_cols}).reset_index(drop=True)
         return df
 
 class FundPortfolioFetcher(TushareFetcher):
@@ -45,9 +44,8 @@ class FundPortfolioFetcher(TushareFetcher):
         if df.empty: 
             return df
         df = ts_code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)
-        for col in ['ann_date' , 'end_date']: 
-            df[col] = df[col].fillna(99991231).astype(int)
-        df = df.reset_index(drop=True)
+        int_cols = df.columns.intersection(['ann_date' , 'end_date'])
+        df = df.fillna({col:99991231 for col in int_cols}).astype({col:int for col in int_cols}).reset_index(drop=True)
         return df
 
 class ETFDailyQuote(DayFetcher):

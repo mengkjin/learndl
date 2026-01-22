@@ -15,7 +15,7 @@ _cached_data = {}
 def get_market_event_dates(events = ['high_level_switch' , 'platform_breakout' , 'selloff_rebound']):
     if 'market_event_dates' not in _cached_data:
         market_events = [DB.load('market_factor' , event).query(f'{event} == 1')['date'].to_numpy() for event in events]
-        market_event_dates = np.unique(np.concatenate(market_events)) if market_events else np.array([]).astype(int)
+        market_event_dates = np.unique(np.concatenate(market_events)) if market_events else np.array([] , dtype = int)
         _cached_data['market_event_dates'] = market_event_dates
     return _cached_data['market_event_dates']  
 
