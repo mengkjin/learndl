@@ -18,7 +18,7 @@ from .code_mapper import secid_to_secid
 __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
     'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
-    'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs_in_one' ,  'load_dfs' , 
+    'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs' ,  'load_dfs_seperately' , 
     'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 
     'pack_files_to_tar' , 'unpack_files_from_tar' ,
     'block_path' , 'norm_path' ,
@@ -286,9 +286,12 @@ def _parallel_loader(paths : dict | list[Path] , * , key_column : str | None = '
             dfs = {futures[future]:future.result().assign(**{assign_col:futures[future]}) for future in as_completed(futures)}
     return dfs
 
-def load_dfs_in_one(paths : dict | list[Path] , * ,  key_column : str | None = 'date' , 
-                    parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
-                    mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None) -> pd.DataFrame:
+def load_dfs(
+    paths : dict | list[Path] , * ,  
+    key_column : str | None = 'date' , 
+    parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+    mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None
+) -> pd.DataFrame:
     """
     load dataframe from multiple paths
     Parameters
@@ -310,9 +313,12 @@ def load_dfs_in_one(paths : dict | list[Path] , * ,  key_column : str | None = '
         df = df.drop(columns = 'empty_column')
     return df
 
-def load_dfs(paths : dict | list[Path] , * ,  key_column : str | None = 'date' , 
-             parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
-             mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None) -> dict[int | Any, pd.DataFrame]:
+def load_dfs_seperately(
+    paths : dict | list[Path] , * ,  
+    key_column : str | None = 'date' , 
+    parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
+    mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None
+) -> dict[int | Any, pd.DataFrame]:
     """
     load dataframe from multiple paths
     Parameters
@@ -631,7 +637,7 @@ def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
         assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
-    df = load_dfs_in_one(paths , key_column = date_colname , parallel = parallel)
+    df = load_dfs(paths , key_column = date_colname , parallel = parallel)
     df = _process_df(df , df_syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 

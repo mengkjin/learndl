@@ -239,7 +239,7 @@ class TradingPort:
         #paths = [self.port_path(date) for date in dates]
         #dfs = [DB.load_df(path).assign(date = date) for date , path in zip(dates , paths)]
         #df = pd.concat(dfs).assign(name = self.name)
-        df = DB.load_dfs_in_one({date:self.export_path(date) for date in dates}).assign(name = self.name)
+        df = DB.load_dfs({date:self.export_path(date) for date in dates}).assign(name = self.name)
         self.portfolio = Portfolio.from_dataframe(df , name = self.name)
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,

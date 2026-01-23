@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Any , Literal
 
 from src.proj import CALENDAR , TradeDate , DB 
-from src.proj.func import singleton
+from src.proj.func import singleton , parallel
 from src.data.util import INFO
 
 from .access import DateDataAccess
@@ -25,10 +25,9 @@ class TradeDataAccess(DateDataAccess):
         dates = self.collections['trd'].date_diffs(dates , overwrite)
         if len(dates) == 0:
             return 
-        paths = {date:DB.path('trade_ts' , db_key_dict['trd'] , date) for date in dates}
-        dfs = DB.load_dfs(paths)
-        for date , df in dfs.items():
-            self.collections['trd'].add(date , df)
+        func_calls = {date:(self.data_loader , {'date' : date , 'data_type' : 'trd'}) for date in dates}
+        dfs = parallel(func_calls)
+        [self.collections['trd'].add(date , df) for date , df in dfs.items()]
     
     def latest_date(self , data_type : str , date : int | None = None) -> int:
         if data_type in db_key_dict:

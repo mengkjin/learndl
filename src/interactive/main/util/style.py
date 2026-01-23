@@ -625,6 +625,10 @@ def style():
             z-index: 10000 !important;
         }
     }
+    img[data-testid*="stHeaderLogo"] {
+        margin: 0 !important;
+        height: 40px !important;
+    }
     
     div[data-testid*="stSidebarUserContent"] {
         .stVerticalBlock[class*="sidebar-intro-links"] {

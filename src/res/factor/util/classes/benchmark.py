@@ -68,17 +68,22 @@ class Benchmark(Portfolio):
             return port
         if not latest: 
             return Port.none_port(date , self.name)
-        use_date = self.latest_avail_date(date)
-        if use_date in self.ports:
-            port = self.ports[use_date].evolve_to_date(date)
-        elif use_date in self.available_dates():
-            port = Port(DB.load('benchmark_ts' , self.name , use_date , use_alt = True) , use_date , self.name)
-            if use_date != date: 
-                self.append(port)
-            self.benchmark_attempted_dates.append(use_date)
+        if DB.path('benchmark_ts' , f'{self.name}_projected' , date , use_alt = True).exists():
+            port = Port(DB.load('benchmark_ts' , f'{self.name}_projected' , date) , date , self.name)
         else:
-            port = Port.none_port(date , self.name)
-        port = port.evolve_to_date(date)
+            use_date = self.latest_avail_date(date)
+            if use_date in self.ports:
+                port = self.ports[use_date].evolve_to_date(date)
+            elif use_date in self.available_dates():
+                port = Port(DB.load('benchmark_ts' , self.name , use_date , use_alt = True) , use_date , self.name)
+                if use_date != date: 
+                    self.append(port)
+                self.benchmark_attempted_dates.append(use_date)
+                port = port.evolve_to_date(date)
+                if not port.is_emtpy():
+                    DB.save(port.to_dataframe() , 'benchmark_ts' , f'{self.name}_projected' , date)
+            else:
+                port = Port.none_port(date , self.name)
         assert port.date == date , (port.date , date)
         self.append(port)
         return port

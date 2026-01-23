@@ -190,7 +190,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 factor.day_returns()
             with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.within_benchmarks'):
                 factor.within_benchmarks()
-            
 
             for task in self.factor_tasks:
                 Logger.divider(vb_level = vb_level)

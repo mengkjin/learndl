@@ -182,7 +182,7 @@ class Portfolio:
         
         portfolio = cls(name)
         for date , subdf in df.groupby('date'):
-            portfolio.append(Port(subdf.filter(items=['secid' , 'weight']) , date , name , subdf['value'].iloc[0]))
+            portfolio.append(Port(subdf , date , name , subdf['value'].iloc[0]))
         return portfolio
     
     def to_dataframe(self) -> pd.DataFrame:

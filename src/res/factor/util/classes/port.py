@@ -160,10 +160,11 @@ class Port:
             return pd.DataFrame(columns=pd.Index(['date','secid','weight'])).astype({'date':int,'secid':int,'weight':float})
         
     def to_dataframe(self):
-        if len(self.port):
-            return self.port.assign(name = self.name , date = self.date , value = self.value)
-        else:
+        if self.is_emtpy():
             return pd.DataFrame(columns=['name','date','secid','weight','value']).astype({'name':str,'date':int,'secid':int,'weight':float,'value':float})
+        else:
+            df = self.port
+            return df.assign(name = self.name , date = self.date , value = self.value)
         
     @property
     def secid(self): 
