@@ -81,7 +81,7 @@ class Benchmark(Portfolio):
                 self.benchmark_attempted_dates.append(use_date)
                 port = port.evolve_to_date(date)
                 if not port.is_emtpy():
-                    DB.save(port.to_dataframe() , 'benchmark_ts' , f'{self.name}_projected' , date)
+                    DB.save(port.to_dataframe() , 'benchmark_ts' , f'{self.name}_projected' , date , vb_level = Proj.vb.max)
             else:
                 port = Port.none_port(date , self.name)
         assert port.date == date , (port.date , date)

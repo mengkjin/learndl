@@ -143,8 +143,8 @@ class DFCollection(_df_collection):
     def add_one_day(self , date : int , df : pd.DataFrame):
         '''add a DataFrame with given (1) date'''
         df = df.reset_index([i for i in df.index.names if i] , drop = False).\
-            assign(**{self.date_key:date}).set_index(self.date_key)
-        self.data_frames[date] = df.dropna(how = 'all')
+            assign(**{self.date_key:date}).set_index(self.date_key).dropna(how = 'all')
+        self.data_frames[date] = df
     
     def get_one_day(self , date : int | TradeDate) -> pd.DataFrame:
         '''get a DataFrame with given (1) date , fields and set_index'''
@@ -162,6 +162,16 @@ class DFCollection(_df_collection):
         df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
         return df
 
+    def add_long_frame(self , long_frame : pd.DataFrame):
+        if long_frame.empty:
+            return
+        long_frame = long_frame.reset_index([i for i in long_frame.index.names if i] , drop = False).dropna(how = 'all').set_index(self.date_key)
+        if self.long_frame.empty:
+            self.long_frame = long_frame
+        else:
+            self.long_frame = pd.concat([self.long_frame , long_frame] , copy = False)
+        self.long_frame = self.long_frame.sort_index()
+
     def to_long_frame(self):
         # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
         dates_to_do = list(self.data_frames.keys())
@@ -170,7 +180,7 @@ class DFCollection(_df_collection):
         dfs = [df for df in ([self.long_frame] + [v for v in self.data_frames.values()]) if df is not None and not df.empty]
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
-            self.long_frame = pd.concat(dfs, copy=False).sort_values(self.date_key)
+            self.long_frame = pd.concat(dfs, copy=False).sort_index()
         self.data_frames.clear()
 
 class PLDFCollection(_df_collection):

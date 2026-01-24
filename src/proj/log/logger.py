@@ -457,7 +457,7 @@ class Logger:
             column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'percall' , 'where' , 'memory' , 'full_name', 'caller']
             df = df.loc[:,column_order]
             if self.title is not None: 
-                path = PATH.log_profile.joinpath(f'{self.title}.csv')
+                path = PATH.log_profile.joinpath(f'{self.title.replace(" ","_")}.csv')
                 df.to_csv(path)
                 Logger.footnote(f'Profile result saved to {path}')
             if isinstance(highlight , str): 

@@ -17,11 +17,13 @@ class Port:
         if port is None or port.empty:
             df = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
         else:
-            df = port.loc[port['weight'] != 0,['secid','weight']]
+            df = port
+            if (df['weight'] == 0).any():
+                df = df[df['weight'] != 0]
             if df.duplicated(subset=['secid']).any():
                 df = df.groupby('secid')['weight'].sum().reset_index()
             else:
-                df = df.reset_index(drop=True)
+                df = df[['secid','weight']].reset_index(drop=True)
         self.port = df
         self.date = date
         self._name = name

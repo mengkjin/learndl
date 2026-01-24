@@ -190,7 +190,8 @@ class Portfolio:
         if len(self.ports) == 0: 
             return pd.DataFrame()
         else:
-            df : pd.DataFrame | Any = pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)
+            df = pd.concat({(port.date , port.value) : port.port for port in self.ports.values()} , axis = 0 , names = ['date' , 'value']).\
+                reset_index(['date' , 'value'] , drop=False).reset_index(drop=True).assign(name = self.name)
             return df
 
     @classmethod

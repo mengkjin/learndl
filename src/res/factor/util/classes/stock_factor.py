@@ -208,6 +208,20 @@ def param_match(args1 : dict[str,Any] , args2 : dict[str,Any]) -> bool:
     matches = [k in args2 and args2[k] == v for k , v in args1.items()]
     return all(matches) 
 
+def common_elements(lists : list[np.ndarray]) -> np.ndarray:
+    """
+    find the common elements of the lists
+    """
+    if len(lists) == 0:
+        return np.array([] , dtype=int)
+    elif len(lists) == 1:
+        return lists[0]
+    else:
+        ds = lists[0]
+        for list in lists[1:]:
+            ds = np.intersect1d(ds , list)
+        return ds
+
 class FactorStats:
     """
     FactorStats class is used to store and manipulate factor statistics
@@ -229,6 +243,23 @@ class FactorStats:
     
     def __str__(self):
         return self.__repr__()
+
+    @classmethod
+    def get_dates(cls , stat : pd.DataFrame) -> np.ndarray:
+        if stat.empty:
+            return np.array([] , dtype=int)
+        if 'date' in stat.index.names:
+            return stat.index.get_level_values('date').unique().to_numpy(int)
+        else:
+            return stat['date'].unique().astype(int)
+
+    @property
+    def dates(self) -> np.ndarray:
+        """
+        get the common dates of the stats
+        """
+        dates = [self.get_dates(stat) for stat in self.stats.values()]
+        return common_elements(dates)
 
     @staticmethod
     def param_to_str(params : dict[str,Any]) -> str:
@@ -306,6 +337,10 @@ class CacheFactorStats:
             return
         stats_num = sum([factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
         Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = Proj.vb.max)
+
+    def common_dates(self , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf']) -> np.ndarray:
+        dates = [self.factor_stats[subset].dates for subset in subsets]
+        return common_elements(dates)
 
     @property
     def ic(self) -> FactorStats:
