@@ -310,7 +310,7 @@ def load_dfs(
     if key_column is None:
         df = df.drop(columns = 'concat_df_index')
     else:
-        df = df.rename(columns = {'concat_df_index':key_column})
+        df = df.drop(columns = [key_column], errors='ignore').rename(columns = {'concat_df_index':key_column})
     return df
 
 def load_dfs_seperately(
@@ -630,8 +630,8 @@ def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
     """load multiple dates from database"""
     if db_src in DB_BY_NAME + EXPORT_BY_NAME:
         df = load(db_src , db_key , dates = dates , start_dt = start_dt , end_dt = end_dt , 
-                    date_colname = date_colname , use_alt = use_alt , 
-                    parallel = parallel , indent = indent , vb_level = vb_level , **kwargs)
+                  date_colname = date_colname , use_alt = use_alt , 
+                  parallel = parallel , indent = indent , vb_level = vb_level , **kwargs)
     else:
         if dates is None:
             assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'

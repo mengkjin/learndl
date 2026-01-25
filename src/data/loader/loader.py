@@ -73,7 +73,7 @@ class FactorLoader(BlockLoader):
     """
     Loader for factor data given factor names
     example:
-        loader = FactorLoader(name = ['df_scores_v0'])
+        loader = FactorLoader(names = ['df_scores_v0'])
         df = loader.load(start_dt = 20250101 , end_dt = 20250331)
     """
     def __init__(
@@ -104,7 +104,6 @@ class FactorLoader(BlockLoader):
             return DataBlock()
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
             df = pd.concat([fac for fac in factors if not fac.empty])
-            print(df)
             df = df.pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block
@@ -145,7 +144,6 @@ class FactorCategory1Loader(BlockLoader):
             return DataBlock()
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
             df = pd.concat([fac for fac in factors if not fac.empty])
-            print(df)
             df = df.pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block
