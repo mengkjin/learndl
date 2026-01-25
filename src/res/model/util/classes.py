@@ -543,7 +543,10 @@ class TrainerPredRecorder(ModelStreamLine):
         [self.save_avg_preds(model_date) for model_date in np.setdiff1d(pred_records['model_date'] , avg_pred_records['model_date'])]
                 
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
-        assert not avg_pred_records.empty , f'No avg pred records found for test dates {pred_dates}'
+        if avg_pred_records.empty:
+            Logger.error(f'No avg pred records found for test dates {pred_dates}')
+            Logger.error(f'Pred records: {pred_records}')
+            return self.empty_preds()
         df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
         return df
 

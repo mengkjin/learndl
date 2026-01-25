@@ -405,17 +405,19 @@ class StockFactor:
                  normalized : bool | None = None , 
                  benchmark : Benchmark | str | None = None , 
                  cache_factor_stats : CacheFactorStats | None = None ,
+                 pseudo_date : np.ndarray | None = None ,
                  factor_names : list[str] | None = None):
         if factor is None:
             assert factor_names , 'factor_names must be provided if factor input is None'
             factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
+
         self.normalized = False
         self.benchmark = None
-        
         self.cache_alpha_models : dict[str,AlphaModel] = {}
         self.cache_benchmark_subsets : dict[str,StockFactor] = {}
-        self.cache_factor_stats : CacheFactorStats = cache_factor_stats if cache_factor_stats else CacheFactorStats()
-        self.update(factor , normalized , benchmark)
+        self.cache_factor_stats : CacheFactorStats = CacheFactorStats()
+        
+        self.update(factor , normalized , benchmark , cache_factor_stats , pseudo_date)
 
     def __repr__(self):
         format_str = f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={{}})'
@@ -434,45 +436,55 @@ class StockFactor:
         """
         return self.prior_input.empty
 
-    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , 
-               normalized : bool | None = None , benchmark : Benchmark | str | None = None):
+    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None' = None , 
+               normalized : bool | None = None , benchmark : Benchmark | str | None = None ,
+               cache_factor_stats : CacheFactorStats | None = None , 
+               pseudo_date : np.ndarray | None = None):
         """
         update the factor data
         """
-        if isinstance(factor , StockFactor):
-            if normalized is not None:
-                assert factor.normalized == normalized , f'normalized must be the same as the original factor : {factor.normalized} != {normalized}'
-            if benchmark is not None:
-                assert factor.benchmark == benchmark.name if isinstance(benchmark , Benchmark) else benchmark , f'benchmark must be the same as the original factor : {factor.benchmark} != {benchmark}'
-            return factor
+        if factor is not None:
+            if isinstance(factor , StockFactor):
+                if normalized is not None:
+                    assert factor.normalized == normalized , f'normalized must be the same as the original factor : {factor.normalized} != {normalized}'
+                if benchmark is not None:
+                    assert factor.benchmark == benchmark.name if isinstance(benchmark , Benchmark) else benchmark , f'benchmark must be the same as the original factor : {factor.benchmark} != {benchmark}'
+                return factor
 
-        if isinstance(factor , dict):
-            factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
-                                for d , f in factor.items() if not f.empty])
-        elif isinstance(factor , pd.Series):
-            factor = factor.to_frame()
-            
-        assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or DataBlock , but got {type(factor)} : {factor}'
+            if isinstance(factor , dict):
+                factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
+                                    for d , f in factor.items() if not f.empty])
+            elif isinstance(factor , pd.Series):
+                factor = factor.to_frame()
+                
+            assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or DataBlock , but got {type(factor)} : {factor}'
 
-        if isinstance(factor , pd.DataFrame):
-            factor = factor.reset_index().drop(columns=['index'] , errors='ignore')
-            if 'date' in factor.columns: 
-                factor = factor.set_index('date' , append=True)
-            if 'secid' in factor.columns: 
-                factor = factor.set_index('secid' , append=True)
-            if None in factor.index.names:
-                factor = factor.reset_index([None] , drop=True)
-            self.input_df = factor
-        elif isinstance(factor , DataBlock):
-            self.input_blk = factor
-        else:
-            raise TypeError(f'Unknown factor type: {type(factor)}')
+            if isinstance(factor , pd.DataFrame):
+                factor = factor.reset_index().drop(columns=['index'] , errors='ignore')
+                if 'date' in factor.columns: 
+                    factor = factor.set_index('date' , append=True)
+                if 'secid' in factor.columns: 
+                    factor = factor.set_index('secid' , append=True)
+                if None in factor.index.names:
+                    factor = factor.reset_index([None] , drop=True)
+                self.input_df = factor
+            elif isinstance(factor , DataBlock):
+                self.input_blk = factor
+            else:
+                raise TypeError(f'Unknown factor type: {type(factor)}')
 
         if normalized is not None:
             self.normalized = normalized
+
         if benchmark is not None:
             self.benchmark = benchmark.name if isinstance(benchmark , Benchmark) else benchmark
 
+        if cache_factor_stats is not None:
+            assert isinstance(cache_factor_stats , CacheFactorStats) , f'cache_factor_stats must be a CacheFactorStats , but got {type(cache_factor_stats)} : {cache_factor_stats}'
+            self.cache_factor_stats = cache_factor_stats
+
+        if pseudo_date is not None:
+            self.set_pseudo_date(pseudo_date)
         return self
 
     @property
@@ -509,16 +521,33 @@ class StockFactor:
         """
         return deepcopy(self)
 
+    def twin(self , 
+             factor : 'pd.DataFrame | pd.Series | DataBlock | StockFactor | dict[int,pd.Series] | None' = None , 
+             normalized : bool | None = None , 
+             benchmark : Benchmark | str | None = None , 
+             cache_factor_stats : CacheFactorStats | None = None , 
+             pseudo_date : np.ndarray | None = None ,
+             ):
+        """make a twin factor with the same everything unless specified otherwise"""
+        twin = StockFactor(
+            factor = factor if factor is not None else self.prior_input , 
+            normalized = normalized if normalized is not None else self.normalized , 
+            benchmark = benchmark if benchmark is not None else self.benchmark , 
+            cache_factor_stats = cache_factor_stats if cache_factor_stats is not None else self.cache_factor_stats , 
+            pseudo_date = pseudo_date if pseudo_date is not None else self.pseudo_date)
+        return twin
+
     def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
         """
         filter the factor data by dates or other index
         """
         if self.empty or dates is None:
             return self
-        if not inplace:
-            self = self.copy()
         df = self.frame().query('date not in @dates' if exclude else 'date in @dates')
-        return self.update(df)
+        if inplace:
+            return self.update(df)
+        else:
+            return self.twin(factor = df)
 
     def filter_dates_between(self , start_dt : int , end_dt : int , inplace = False):
         """
@@ -531,10 +560,12 @@ class StockFactor:
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         if self.empty or secid is None:
             return self
-        if not inplace:
-            self = self.copy()
+        
         df = self.frame().query('secid not in @secid' if exclude else 'secid in @secid')
-        return self.update(df)
+        if inplace:
+            return self.update(df)
+        else:
+            return self.twin(factor = df)
 
     def filter_by(self , step : int = 1):
         """
@@ -728,11 +759,11 @@ class StockFactor:
             df = df.set_index(['date' , 'secid'])
             if factor_name is not None: 
                 df = df[factor_name]
-            return StockFactor(df)
+            return self.twin(factor = df)
         else:
-            return StockFactor(prior_input.align(secid , date , factor_name))
+            return self.twin(factor = prior_input.align(secid , date , factor_name))
 
-    def within(self , benchmark : Benchmark | str | None , use_cache = True , share_cache_factor_stats = True) -> 'StockFactor':
+    def within(self , benchmark : Benchmark | str | None , use_cache = True) -> 'StockFactor':
         """
         use benchmark to mask factor , only keep the factors that are in the benchmark
         """
@@ -742,8 +773,7 @@ class StockFactor:
             return self
         if benchmark.name not in self.cache_benchmark_subsets or not use_cache:
             factor_input = benchmark(self.prior_input) if benchmark else self.prior_input
-            cache_factor_stats = self.cache_factor_stats if share_cache_factor_stats else None
-            subset = StockFactor(factor_input , normalized = self.normalized , benchmark = benchmark.name , cache_factor_stats = cache_factor_stats)
+            subset = self.twin(factor = factor_input , benchmark = benchmark.name)
             self.cache_benchmark_subsets[benchmark.name] = subset
         return self.cache_benchmark_subsets[benchmark.name]
     
@@ -970,9 +1000,10 @@ class StockFactor:
         if not order:
             return self
         df = self.normalize_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
-        if not inplace:
-            self = self.copy()
-        return self.update(df , normalized = True)
+        if inplace:
+            return self.update(df , normalized = True)
+        else:
+            return self.twin(factor = df , normalized = True)
     
     def select_analytic(self , task_name : str , **kwargs):
         """

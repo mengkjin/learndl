@@ -140,10 +140,8 @@ class ModelTrainer(BaseTrainer):
                    title = f'Resume Testing Model {model}' , paragraph = True , 
                    check_operation = None if force_resume else 'resume_testing' ,
                    log_operation = 'resume_testing')
-            break
 
         for factor in resumable_factors:
-            break
             cls.GO(2 , 1, 0 , module = f'factor@{factor}' , short_test = False ,
                     title = f'Resume Testing Factor {factor}' , paragraph = True ,
                     check_operation = None if force_resume else 'resume_testing' ,
