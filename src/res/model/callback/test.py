@@ -120,7 +120,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     CB_KEY_PARAMS = ['tasks']
     TABLE_VB_LEVELS = {'factor@frontface':Proj.vb.max}
     FIGURE_VB_LEVELS = {
-        'factor@ic_curve@best.market':Proj.vb.max , 
+        'factor@ic_curve@best.market':1 , 
         'factor@group_return@best':Proj.vb.max ,
         't50@drawdown@best.univ':1 ,
         'screen@drawdown@best.univ':1 ,
@@ -158,19 +158,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         return self.trainer.model_submodels
     @property
     def test_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
-    @property
-    def factor_test_dates(self) -> np.ndarray:
-        return self.test_dates[::5]
-    @property
-    def fmp_test_dates(self) -> np.ndarray:
-        trailing_days = 5
-        assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
-        pred_last_date = self.trainer.record.resumed_last_pred_date
-        port_last_date = FactorTestAPI.last_portfolio_date(self.fmp_tasks , self.snap_folder)
-        last_date = min(pred_last_date , port_last_date)
-        test_date_num = sum(self.test_dates > last_date) + trailing_days
-        return self.test_dates[-test_date_num:]
-
+    
     def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
         if which == 'first':
             df = self.trainer.record.get_preds(pred_dates = pred_dates , model_num = 0)
@@ -182,10 +170,36 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factor = StockFactor(df , factor_names = self.factor_names)
         return factor
 
+    def get_factor_for_factor_test(self):
+        test_dates = self.test_dates[::5]
+        if Proj.Conf.Model.TRAIN.resume_test_factor_perf is False:
+            return self.get_factor(test_dates)
+        else:
+            saved_dates = FactorTestAPI.factor_stats_saved_dates(self.snap_folder)
+            target_dates = np.setdiff1d(test_dates , saved_dates)
+            if len(target_dates) == 0:
+                target_dates = test_dates[-1:]
+            return self.get_factor(target_dates).set_pseudo_date(test_dates)
+
+    def get_factor_for_fmp_test(self):
+        if Proj.Conf.Model.TRAIN.resume_test_fmp is False:
+            return self.get_factor(self.test_dates)
+        elif Proj.Conf.Model.TRAIN.resume_test_fmp.startswith('trailing_'):
+            trailing_days = int(Proj.Conf.Model.TRAIN.resume_test_fmp.removeprefix('trailing_'))
+            assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
+            pred_last_date = self.trainer.record.resumed_last_pred_date
+            port_last_date = FactorTestAPI.last_portfolio_date(self.snap_folder , self.fmp_tasks)
+            last_date = min(pred_last_date , port_last_date)
+            test_date_num = sum(self.test_dates > last_date) + trailing_days
+            return self.get_factor(self.test_dates[-test_date_num:])
+        else:
+            raise ValueError(f'Invalid resuming test fmp option: {Proj.Conf.Model.TRAIN.resume_test_fmp}')
+
+
     def factor_test(self , indent : int = 0 , vb_level : int = 2):
         with Logger.Paragraph('Factor Perf Test' , 3):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.get_factor'):
-                factor = self.get_factor(self.factor_test_dates)
+                factor = self.get_factor_for_factor_test()
             with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.load_day_rets'):
                 factor.day_returns()
             with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level) , Logger.Profiler('FactorPerfTest.within_benchmarks'):
@@ -205,7 +219,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def fmp_test(self , indent : int = 0 , vb_level : int = 2):
         with Logger.Paragraph('Factor FMP Test' , 3):
             with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
-                factor = self.get_factor(self.fmp_test_dates)
+                factor = self.get_factor_for_fmp_test()
             with Logger.Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
                 factor.alpha_models()
             with Logger.Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):

@@ -74,7 +74,15 @@ class DataVendor:
         if date not in self.day_secids:
             self.day_secids[date] = self.INFO.get_secid(date)
         return self.day_secids[date]
-    
+
+    def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
+        if df.empty:
+            return
+        if db_src == 'trade_ts':
+            for data_type , data_key  in self.TRADE.DB_KEYS.items():
+                if data_key == db_key:
+                    self.TRADE.collections[data_type].add_long_frame(df.set_index(self.TRADE.DATE_KEY))
+        
     @classmethod
     def td_within(cls , start_dt : int | None = None , end_dt : int | None = None , step : int = 1 , updated = False , extend = 0):
         if extend > 0:

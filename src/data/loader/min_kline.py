@@ -11,17 +11,24 @@ from .access import DateDataAccess
 @singleton
 class MinKLineAccess(DateDataAccess):
     MAX_LEN = 60
-    PL_DATA_TYPE_LIST = ['min' , '5min']
+    DB_SRC = 'trade_ts'
+    DB_KEYS = {
+        'min' : 'min' , 
+        '5min' : '5min'
+    }
+    LOAD_AS_PL = ['min' , '5min']
+    
+    def get_secid(self , date : int):
+        return INFO.get_secid(date)
     
     def data_loader(self , date , data_type):
-        if data_type in self.PL_DATA_TYPE_LIST: 
-            df = DB.load('trade_ts' , data_type , date , vb_level = 99 , use_alt = True)
-            if not df.empty: 
-                secid = INFO.get_secid(date) # noqa
-                df = df.query('secid in @secid')
-        else:
-            raise KeyError(data_type)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99 , use_alt = True)
+        if not df.empty: 
+            df = df.query('secid in @self.get_secid(@date)')
         return df
+
+    def db_loads_callback(self , *args , **kwargs):
+        return
     
     @staticmethod
     def reform_mkline(df : pl.DataFrame , with_ret : bool = False):

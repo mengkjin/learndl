@@ -443,7 +443,7 @@ class TrainerPredRecorder(ModelStreamLine):
         - only resume predictions before the last model date if resume option is 'last_model_date'
         - only resume predictions with all submodels
         """ 
-        if not self.trainer.config.is_resuming:
+        if not self.trainer.config.is_resuming or not Proj.Conf.Model.TRAIN.resume_test:
             return
         
         resume_info = f'Resume testing'
@@ -456,18 +456,18 @@ class TrainerPredRecorder(ModelStreamLine):
         if not pred_records.empty:
             if self.min_test_date < min_pred_date:
                 resume_info += f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
-            elif self.trainer.config.resume_option == 'last_model_date':
+            elif Proj.Conf.Model.TRAIN.resume_test == 'last_model_date':
                 pred_records = pred_records.query('model_date < @latest_model_date')
                 if not pred_records.empty:
                     self.resumed_preds_models = pred_records.loc[:,['model_date' , 'model_num']].reset_index(drop=True)
                     self.resumed_last_pred_date = min(pred_records['max_pred_date'].max() , self.max_test_date)
                     resume_info += f', recognize past saved preds before model date {latest_model_date}'
-            elif self.trainer.config.resume_option == 'last_pred_date':
+            elif Proj.Conf.Model.TRAIN.resume_test == 'last_pred_date':
                 self.resumed_preds_models = pred_records.loc[:,['model_date' , 'model_num']].reset_index(drop=True)
                 self.resumed_last_pred_date = min(pred_records['max_pred_date'].max() , self.max_test_date)
                 resume_info += f', recognize past saved preds before prediction date {self.resumed_last_pred_date}'
             else:
-                raise ValueError(f'Invalid resuming option: {self.trainer.config.resume_option}')
+                raise ValueError(f'Invalid resuming testing option: {Proj.Conf.Model.TRAIN.resume_test}')
             
         if pred_records.empty:
             resume_info += f', no saved preds found'
@@ -738,7 +738,7 @@ class BaseTrainer(ModelStreamLine):
         return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else np.inf
     @property
     def batch_resumed(self): 
-        if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and self.config.resume_option == 'last_pred_date':
+        if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and Proj.Conf.Model.TRAIN.resume_test == 'last_pred_date':
             return sum(self.data.model_test_dates <= self.record.resumed_last_pred_date)
         else:
             return 0

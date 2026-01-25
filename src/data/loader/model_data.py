@@ -5,15 +5,21 @@ from .access import DateDataAccess
 @singleton
 class RiskModelAccess(DateDataAccess):
     MAX_LEN = 2000
-    DATA_TYPE_LIST = ['res' , 'exp' , 'spec' , 'cov' , 'coef']  
+    DB_SRC = 'models'
+    DB_KEYS = {
+        'res' : 'tushare_cne5_res' , 
+        'exp' : 'tushare_cne5_exp' , 
+        'spec' : 'tushare_cne5_spec' , 
+        'cov' : 'tushare_cne5_cov' , 
+        'coef' : 'tushare_cne5_coef'
+    }
     
     def data_loader(self , date , data_type):
-        if data_type in self.DATA_TYPE_LIST: 
-            df = DB.load('models' , f'tushare_cne5_{data_type}' , date , vb_level = 99)
-        else:
-            raise KeyError(data_type)
-        # if df is not None: df = df.reset_index().assign(date = date)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99)
         return df
+
+    def db_loads_callback(self , *args , **kwargs):
+        return
 
     def get_res(self , date , field = None):
         return self.get(date , 'res' , field)

@@ -2,6 +2,7 @@ import pandas as pd
 
 from typing import Any ,Literal , Type
 
+from src.proj import Proj
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.util.plot.factor import Plotter
 from src.res.factor.util.stat import factor as Stat
@@ -242,7 +243,8 @@ class FactorPerfTest(BaseFactorAnalyticTest):
     def calc(self , factor : StockFactor , benchmarks: list[Benchmark|Any] | Any = None , * , 
              indent : int = 0 , vb_level : int = 1 , **kwargs):
         factor = factor.filter_dates_between(self.start_dt , self.end_dt)
-        factor.cache_factor_stats.load(self.factor_stats_resume_path)
+        if Proj.Conf.Model.TRAIN.resume_test_factor_perf:
+            factor.cache_factor_stats.load(self.factor_stats_resume_path)
         super().calc(factor , benchmarks , indent = indent , vb_level = vb_level , **kwargs)
         factor.cache_factor_stats.save(self.factor_stats_resume_path)
         return self

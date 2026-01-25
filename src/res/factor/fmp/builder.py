@@ -187,7 +187,7 @@ class PortfolioBuilder:
                                   resume_path = self.resume_path_account , 
                                   resume_end = self.resumed_portfolio_end_date , resume_drop_last = False ,
                                   indent = self.indent + 1 , vb_level = self.vb_level)
-        self.account = PortfolioAccount.Concat(getattr(self , 'resumed_account' , None) , self.portfolio.account.with_index(self.port_index))
+        self.account = self.portfolio.account.with_index(self.port_index)
         self.account.save(self.resume_path_account , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return self
 

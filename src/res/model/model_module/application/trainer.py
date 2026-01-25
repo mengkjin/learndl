@@ -44,8 +44,6 @@ class ModelTrainer(BaseTrainer):
                 try:
                     time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
                     last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-                    print(last_time)
-                    print(datetime.now() - timedelta(days=1))
                     if last_time > datetime.now() - timedelta(days=1):
                         return last_time.strftime('%Y-%m-%d %H:%M:%S')
                     else:
@@ -133,9 +131,8 @@ class ModelTrainer(BaseTrainer):
             Logger.alert1('No models or factors to resume testing!')
             return
 
-        Logger.stdout(f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:' , color = 'lightgreen' , bold = True)
         Logger.stdout_pairs([('Model' , model) for model in resumable_models] + [('Factor' , factor) for factor in resumable_factors] , 
-                            indent = 1 , color = 'lightgreen' , bold = True)
+                            title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:')
         Logger.divider()
 
         for model in resumable_models:

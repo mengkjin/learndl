@@ -114,13 +114,16 @@ class BaseFactorAnalyticTest(ABC):
         return f'{self.__class__.__name__}'
 
     @classmethod
-    def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-                test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
-                 indent : int = 0 , vb_level : int = 1 , start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
-        pm = cls(test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
-        pm.calc(StockFactor(factor) , benchmark , indent = indent , vb_level = vb_level)
-        pm.plot(show = False , indent = indent , vb_level = vb_level)
-        return pm
+    def create(cls , test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
+               start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
+        testor = cls(test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
+        return testor
+
+    def proceed(self , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+                indent : int = 0 , vb_level : int = 1 , **kwargs):
+        self.calc(StockFactor(factor) , benchmark , indent = indent , vb_level = vb_level)
+        self.plot(show = False , indent = indent , vb_level = vb_level)
+        return self
 
     def calc(self , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
         with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 2):
@@ -178,6 +181,15 @@ class BaseFactorAnalyticTest(ABC):
             return None
         else:
             return self.resume_path.joinpath(f'factor_stats')
+
+    @classmethod
+    def factor_stats_saved_dates(cls , test_path : Path | str | None = None) -> np.ndarray:
+        if test_path is None:
+            return np.array([] , dtype=int)
+        else:
+            from src.res.factor.util.classes.stock_factor import CacheFactorStats
+            stats_path = Path(test_path) / camel_to_snake(cls.__name__) / 'factor_stats'
+            return CacheFactorStats.saved_dates(stats_path)
 
     def get_rslts(self):
         return {k:v.calc_rslt for k,v in self.tasks.items()}

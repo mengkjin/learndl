@@ -14,8 +14,18 @@ ANN_DATA_COLS : list[str] = ['f_ann_date' , 'ann_date']
 class FDataAccess(DateDataAccess):
     MAX_LEN = 40
     DATE_KEY = 'end_date'
-    DATA_TYPE_LIST = ['income' , 'cashflow' , 'balance' , 'dividend' , 'disclosure' ,
-                      'express' , 'forecast' , 'mainbz' , 'indicator']
+    DB_SRC = 'financial_ts'
+    DB_KEYS = {
+        'income' : 'income' ,
+        'cashflow' : 'cashflow' ,
+        'balance' : 'balance' ,
+        'dividend' : 'dividend' ,
+        'disclosure' : 'disclosure' ,
+        'express' : 'express' ,
+        'forecast' : 'forecast' ,
+        'mainbz' : 'mainbz' ,
+        'indicator' : 'indicator'
+    }
     ANN_DATA_COL : str = 'ann_date'
     SINGLE_TYPE : str | Any = None
     FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
@@ -24,10 +34,7 @@ class FDataAccess(DateDataAccess):
     DEFAULT_YOY_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'ttm'
 
     def data_loader(self , date , data_type):
-        if data_type in self.DATA_TYPE_LIST: 
-            return DB.load('financial_ts' , data_type , date , check_na_cols=False)
-        else:
-            raise KeyError(data_type)
+        return DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , check_na_cols=False)
     
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
         assert self.SINGLE_TYPE , 'SINGLE_TYPE must be set'
@@ -336,8 +343,13 @@ class IncomeStatementAccess(FDataAccess):
   
 @singleton
 class FinancialDataAccess(FDataAccess):
-    DATA_TYPE_LIST = ['dividend' , 'disclosure' , 'express' , 'forecast' , 'mainbz']
-    DATA_TYPE_LIST_TYPE = Literal['dividend' , 'disclosure' , 'express' , 'forecast' , 'mainbz']
+    DB_KEYS = {
+        'dividend' : 'dividend' ,
+        'disclosure' : 'disclosure' ,
+        'express' : 'express' ,
+        'forecast' : 'forecast' ,
+        'mainbz' : 'mainbz'
+    }
 
 INDI = IndicatorDataAccess()
 BS   = BalanceSheetAccess()

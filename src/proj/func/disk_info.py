@@ -32,6 +32,5 @@ def get_disk_space_info():
 
 def print_disk_space_info():
     info = get_disk_space_info()
-    Logger.stdout("Disk Space Info:" , color = 'lightgreen' , bold = True)
-    Logger.stdout_pairs(info , indent = 1 , color = 'lightgreen' , bold = True)
+    Logger.stdout_pairs(info , title = 'Disk Space Info:')
     return info

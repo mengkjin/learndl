@@ -180,8 +180,7 @@ class Proj(metaclass=_ProjMeta):
         import torch , os
         from src.proj.log import Logger
         def _print_project_info():
-            Logger.stdout('Project Info:' , color = 'lightgreen' , bold = True)
-            Logger.stdout_pairs(cls.info() , indent = 1 , color = 'lightgreen' , bold = True)
+            Logger.stdout_pairs(cls.info() , title = 'Project Info:')
             if MACHINE.cuda_server and not torch.cuda.is_available():
                 Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
 

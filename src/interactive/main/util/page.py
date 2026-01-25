@@ -225,7 +225,7 @@ class CurrentScriptLatestTaskButton(ControlPanelButton):
                         help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
                         on_click = SC.click_show_complete_report , args = (item,) ,
                         disabled = False):
-                st.switch_page(runs_page_url(item.script_key))
+                st.rerun()
 
 class ControlRefreshTaskQueueButton(ControlPanelButton):
     key = f"control-refresh-task-queue"

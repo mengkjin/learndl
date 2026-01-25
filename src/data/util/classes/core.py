@@ -189,7 +189,7 @@ class DataBlock(Stock4DData):
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
         dates = CALENDAR.td_within(start_dt , end_dt)
-        df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt)
+        df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True)
 
         if len(df) == 0: 
             return cls()

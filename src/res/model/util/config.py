@@ -699,10 +699,7 @@ class TrainConfig(TrainParam):
     @property
     def model_labels(self) -> list[str]: 
         return self.Train.model_labels[:self.Model.max_num_output]
-    @property
-    def resume_option(self) -> Literal['last_model_date' , 'last_pred_date']:
-        return Proj.Conf.Model.TRAIN.resume_option
-
+    
     def update(self, update = None , **kwargs):
         update = update or {}
         for k,v in update.items(): 
@@ -894,7 +891,7 @@ class TrainConfig(TrainParam):
         self.parser_select(selection , vb_level) 
         return self
 
-    def print_out(self , color : str | None = 'lightgreen' , vb_level : int = 2):
+    def print_out(self , color : str | None = 'auto' , vb_level : int = 2):
         info_strs : list[tuple[int , str , str]] = [] # indent , key , value
         info_strs.append((0 , 'Model Name' , self.model_name))
         if self.module_type in ['db' , 'factor']:
@@ -940,9 +937,12 @@ class TrainConfig(TrainParam):
             info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
             info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
         if self.is_resuming:
-            info_strs.append((0 , 'Resume Option' , f'{self.resume_option}'))
+            info_strs.append((1 , 'Resume Test' , f'{Proj.Conf.Model.TRAIN.resume_test}'))
+            info_strs.append((1 , 'Resume Perf' , f'{Proj.Conf.Model.TRAIN.resume_test_factor_perf}'))
+            info_strs.append((1 , 'Resume FMP' , f'{Proj.Conf.Model.TRAIN.resume_test_fmp}'))
+            info_strs.append((1 , 'Resume Account' , f'{Proj.Conf.Model.TRAIN.resume_test_fmp_account}'))
 
-        Logger.stdout_pairs(info_strs , color = color , bold = True , vb_level = vb_level)
+        Logger.stdout_pairs(info_strs , title = 'Model Config Info:' , color = color , vb_level = vb_level)
         return self
 
     @property

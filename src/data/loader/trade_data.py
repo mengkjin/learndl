@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from typing import Any , Literal
 
 from src.proj import CALENDAR , TradeDate , DB 
@@ -7,38 +8,37 @@ from src.data.util import INFO
 
 from .access import DateDataAccess
 
-db_key_dict = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
 @singleton
 class TradeDataAccess(DateDataAccess):
     MAX_LEN = 5000
-    DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
+    DB_SRC = 'trade_ts'
+    DB_KEYS = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
     
     def data_loader(self , date , data_type) -> pd.DataFrame:
-        if data_type in db_key_dict: 
-            df = DB.load('trade_ts' , db_key_dict[data_type] , date , vb_level = 99)
-        else:
-            raise KeyError(data_type)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99)
         return df
-
-    def load_trd_within(self , start_dt : int | TradeDate , end_dt : int | TradeDate , overwrite = False):
-        dates = CALENDAR.td_within(start_dt , end_dt)
-        dates = self.collections['trd'].date_diffs(dates , overwrite)
-        if len(dates) == 0:
-            return 
-        # func_calls = {date:(self.data_loader , {'date' : date , 'data_type' : 'trd'}) for date in dates}
-        # dfs = parallel(func_calls)
-        # [self.collections['trd'].add(date , df) for date , df in dfs.items()]
-        long_frame = DB.loads('trade_ts' , 'day' , dates = dates , date_colname = self.DATE_KEY).set_index(self.DATE_KEY)
-        self.collections['trd'].add_long_frame(long_frame)
     
     def latest_date(self , data_type : str , date : int | None = None) -> int:
-        if data_type in db_key_dict:
-            dates = DB.dates('trade_ts' , db_key_dict[data_type])
-            if date: 
-                dates = dates[dates <= date]
-            return dates.max()
-        else:
-            raise KeyError(data_type)
+        dates = DB.dates(self.DB_SRC , self.DB_KEYS[data_type])
+        if date: 
+            dates = dates[dates <= date]
+        return dates.max() if len(dates) else -1
+
+    def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
+        """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""
+        if db_src != self.DB_SRC:
+            return
+        for data_type , data_key  in self.DB_KEYS.items():
+            if data_key == db_key:
+                self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
+
+    def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str):
+        if dates is None:
+            return 
+        elif isinstance(dates , int):
+            dates = [dates]
+        df = DB.loads(self.DB_SRC , self.DB_KEYS[data_type] , dates , vb_level = 99)
+        self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 
     def get_val(self , date , field = None) -> pd.DataFrame:
         return self.get(date , 'val' , field)

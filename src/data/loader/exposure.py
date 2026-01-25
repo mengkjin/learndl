@@ -11,15 +11,13 @@ from .access import DateDataAccess
 @singleton
 class ExposureAccess(DateDataAccess):
     MAX_LEN = 300
-    DATA_TYPE_LIST = ['daily_risk']
+    DB_SRC = 'exposure'
+    DB_KEYS = {'daily_risk' : 'daily_risk'}
     
     def data_loader(self , date , data_type):
-        if data_type in self.DATA_TYPE_LIST: 
-            df : pd.DataFrame = DB.load('exposure' , data_type , date , vb_level = 99 , use_alt = True)
-            if not df.empty: 
-                df = df[df['secid'].isin(INFO.get_secid(date))]
-        else:
-            raise KeyError(data_type)
+        df : pd.DataFrame = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99 , use_alt = True)
+        if not df.empty: 
+            df = df[df['secid'].isin(INFO.get_secid(date))]
         return df
     
     def get_daily_risk(self , date):

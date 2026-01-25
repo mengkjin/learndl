@@ -8,18 +8,14 @@ from src.proj.func import singleton
 
 from .access import DateDataAccess
 
-
 @singleton
 class AnalystDataAccess(DateDataAccess):
     MAX_LEN = 2000
-    DATA_TYPE_LIST = ['report']
+    DB_SRC = 'analyst_ts'
+    DB_KEYS = {'report' : 'report'}
 
     def data_loader(self , date , data_type):
-        db_key_dict = {'report' : 'report'}
-        if data_type in db_key_dict: 
-            df = DB.load('analyst_ts' , db_key_dict[data_type] , date , vb_level = 99)
-        else:
-            raise KeyError(data_type)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99)
         return df
 
     def get_report(self , date , field = None):

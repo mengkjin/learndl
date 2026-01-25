@@ -392,19 +392,22 @@ class PortfolioAccountant:
         self.benchmark = AccountConfig.get_benchmark(config_or_benchmark)
         self.account.config = config
         
-        self.resumed_account = PortfolioAccount.load(resume_path)
-        if resume_drop_last:
-            last_model_date = self.resumed_account.max_model_date
-            if len(before_last_model_dates := self.port_dates[self.port_dates <= last_model_date]) > 0:
-                last_model_date = int(before_last_model_dates.max())
-            self.resumed_account.filter_dates(end = last_model_date - 1)
+        if Proj.Conf.Model.TRAIN.resume_test_fmp_account:
+            self.resumed_account = PortfolioAccount.load(resume_path)
+            if resume_drop_last:
+                last_model_date = self.resumed_account.max_model_date
+                if len(before_last_model_dates := self.port_dates[self.port_dates <= last_model_date]) > 0:
+                    last_model_date = int(before_last_model_dates.max())
+                self.resumed_account.filter_dates(end = last_model_date - 1)
 
-        if resume_end is not None:
-            self.resumed_account.filter_dates(end = resume_end)
+            if resume_end is not None:
+                self.resumed_account.filter_dates(end = resume_end)
 
-        if not self.resumed_account.empty:
-            Logger.success(f'Load Account from {resume_path} at {CALENDAR.dates_str(self.resumed_account.model_date)}' , 
-                           indent = indent + 1 , vb_level = Proj.vb.max)
+            if not self.resumed_account.empty:
+                Logger.success(f'Load Account from {resume_path} at {CALENDAR.dates_str(self.resumed_account.model_date)}' , 
+                            indent = indent + 1 , vb_level = Proj.vb.max)
+        else:
+            self.resumed_account = PortfolioAccount()
         self.go(cache = cache , indent = indent , vb_level = vb_level)
         return self
 

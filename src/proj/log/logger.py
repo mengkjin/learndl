@@ -120,7 +120,9 @@ class Logger:
         return new_stdout(*args , indent = indent , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , color = None , indent = 0 , vb_level : int = 1 , **kwargs):
+    def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , 
+                    title : str | None = None , title_kwargs : dict[str , Any] = {'indent' : 0 , 'bold' : True , 'color' : 'lightgreen'} , 
+                    color = 'auto' , indent = 0 , vb_level : int = 1 , bold = True , italic = True , **kwargs):
         """
         custom stdout message of multiple messages, each message is a tuple of (indent , message) or a string
         kwargs:
@@ -128,12 +130,26 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
-        msgs = [(indent , msg) if isinstance(msg , str) else msg for msg in msg_list]
-        msgs = [FormatStr(msg , indent = indent , color = color , **kwargs).formatted() for indent , msg in msgs]
+
+        def color_selector(color : str | None , indent : int):
+            return (None if indent <= 1 else 'gray') if color == 'auto' else color
+
+        if title:
+            new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)
+            add_indent = 1
+        else:
+            add_indent = 0
+        
+        msgs = [(indent + add_indent , msg) if isinstance(msg , str) else (msg[0] + add_indent , *msg[1:]) for msg in msg_list]
+        msgs = [FormatStr(msg , indent = indent , color = color_selector(color , indent) , 
+                          bold = bold , italic = italic , **kwargs).formatted() for indent , msg in msgs]
         new_stdout('\n'.join(msgs) , vb_level = vb_level)
 
     @classmethod
-    def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , indent = 0 , vb_level : int = 1 , **kwargs):
+    def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
+                     title : str | None = None , 
+                     title_kwargs : dict[str , Any] = {'indent' : 0 , 'bold' : True , 'color' : 'lightgreen'} , 
+                     indent = 0 , vb_level : int = 1 , bold = True , italic = True , **kwargs):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
         kwargs:
@@ -141,11 +157,24 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
+        def color_selector(color : str | None , indent : int):
+            return (None if indent <= 1 else 'gray') if color == 'auto' else color
+
+        if title:
+            new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)
+            add_indent = 1
+        else:
+            add_indent = 0
+        
         if isinstance(pair_list , dict):
             pair_list = list(pair_list.items())
-        pairs = [pair if len(pair) == 3 else (indent , *pair) for pair in pair_list]
-        max_key_length = max([len(key) for _ , key , _ in pairs])
-        pairs = [FormatStr(f'{key:{max_key_length}s} : {value}' , indent = indent , color = color , **kwargs).formatted() for indent , key , value in pairs]
+
+        pairs = [(pair[0] + add_indent , *pair[1:]) if len(pair) == 3 else (indent + add_indent , *pair) for pair in pair_list]
+        pairs = [(indent , f'{FormatStr.indent_str(indent)}{key}' , value) for indent , key , value in pairs]
+        
+        max_key_length = max([len(indented_key) for indent , indented_key , _ in pairs])
+        pairs = [FormatStr(f'{indented_key:{max_key_length}s} : {value}' , color = color_selector(color , indent) , 
+                          bold = bold , italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
     @classmethod

@@ -9,17 +9,18 @@ from src.data.util import INFO , DFCollection , PLDFCollection
 
 class DateDataAccess(ABC):
     MAX_LEN = -1
-    DATA_TYPE_LIST = []     # pandas DataFrame
-    PL_DATA_TYPE_LIST = []   # polars DataFrame (large size data)
     DATE_KEY = 'date'
+    DB_SRC = ''
+    DB_KEYS : dict[str , str] = {}
+    LOAD_AS_PL : list[str] = []
 
     def __init__(self) -> None:
         self.collections : dict[str , DFCollection] = {
             data_type : DFCollection(self.MAX_LEN , self.DATE_KEY) 
-            for data_type in self.DATA_TYPE_LIST}
+            for data_type in self.DB_KEYS.keys() if data_type not in self.LOAD_AS_PL}
         self.pl_collections : dict[str , PLDFCollection] = {
             data_type : PLDFCollection(self.MAX_LEN , self.DATE_KEY) 
-            for data_type in self.PL_DATA_TYPE_LIST}
+            for data_type in self.DB_KEYS.keys() if data_type in self.LOAD_AS_PL}
        
     @abstractmethod
     def data_loader(self , date , data_type : str) -> pd.DataFrame | None:
@@ -29,8 +30,11 @@ class DateDataAccess(ABC):
         if DataFrame is returned , it will be added to the collection , even if it is empty
         '''
 
+    def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
+        """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""
+
     def truncate(self , data_type : str | None = None):
-        data_type_list = [data_type] if isinstance(data_type , str) else self.DATA_TYPE_LIST + self.PL_DATA_TYPE_LIST
+        data_type_list = [data_type] if isinstance(data_type , str) else list(self.DB_KEYS.keys())
         for data_type in data_type_list:
             if data_type in self.collections: 
                 self.collections[data_type].truncate()

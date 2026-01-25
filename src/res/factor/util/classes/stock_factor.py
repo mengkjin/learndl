@@ -16,7 +16,7 @@ from .risk_model import RISK_MODEL
 from .benchmark import Benchmark
 from .universe import Universe
 
-__all__ = ['StockFactor']
+__all__ = ['StockFactor' , 'CacheFactorStats' , 'FactorStats']
 
 def append_indus(df : pd.DataFrame) -> pd.DataFrame:
     """
@@ -288,13 +288,18 @@ class FactorStats:
     def get_stat(self , params : dict[str,Any]) -> pd.DataFrame:
         return self.stats.get(self.param_to_str(params) , pd.DataFrame())
 
+    @classmethod
+    def stat_dates(cls , stat : pd.DataFrame) -> np.ndarray:
+        if stat.empty:
+            return np.array([] , dtype=int)
+        if 'date' in stat.index.names:
+            return stat.index.get_level_values('date').unique().to_numpy(int)
+        else:
+            return stat['date'].unique().astype(int)
+
     def dates_not_in_stat(self , params : dict[str,Any] , dates : np.ndarray) -> np.ndarray:
         stat = self.get_stat(params)
-        if stat.empty:
-            stat_dates = np.array([])
-        else:
-            stat_dates = stat.index.get_level_values('date').unique() if 'date' in stat.index.names else stat['date'].unique()
-        return np.setdiff1d(dates, stat_dates)
+        return np.setdiff1d(dates, self.stat_dates(stat))
 
     def load(self , path : Path) -> int:
         if not path.exists():
@@ -342,6 +347,21 @@ class CacheFactorStats:
         dates = [self.factor_stats[subset].dates for subset in subsets]
         return common_elements(dates)
 
+    @classmethod
+    def saved_dates(cls , path : Path | str , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
+                    exclude_csi2000 : bool = True) -> np.ndarray:
+        path = Path(path)
+        if not path.exists():
+            return np.array([] , dtype=int)
+        assert path.is_dir() , f'path {path} is not a directory'
+        dates : list[np.ndarray] = []
+        for name in subsets:
+            for file in path.joinpath(name).glob('*.feather'):
+                if exclude_csi2000 and 'bm=csi2000' in file.stem:
+                    continue
+                dates.append(FactorStats.stat_dates(DB.load_df(file)))
+        return common_elements(dates)
+
     @property
     def ic(self) -> FactorStats:
         return self.factor_stats['ic']
@@ -361,7 +381,6 @@ class CacheFactorStats:
     @property
     def coverage(self) -> FactorStats:
         return self.factor_stats['coverage']
-
 
 class StockFactor:
     """
@@ -496,8 +515,10 @@ class StockFactor:
         """
         if self.empty or dates is None:
             return self
+        if not inplace:
+            self = self.copy()
         df = self.frame().query('date not in @dates' if exclude else 'date in @dates')
-        return self.update(df) if inplace else StockFactor(df , normalized = self.normalized , benchmark = self.benchmark)
+        return self.update(df)
 
     def filter_dates_between(self , start_dt : int , end_dt : int , inplace = False):
         """
@@ -510,8 +531,10 @@ class StockFactor:
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         if self.empty or secid is None:
             return self
+        if not inplace:
+            self = self.copy()
         df = self.frame().query('secid not in @secid' if exclude else 'secid in @secid')
-        return self.update(df) if inplace else StockFactor(df , normalized = self.normalized , benchmark = self.benchmark)
+        return self.update(df)
 
     def filter_by(self , step : int = 1):
         """
@@ -632,7 +655,8 @@ class StockFactor:
         self._pseudo_date = date
 
     def set_pseudo_date(self , date : np.ndarray | None = None):
-        self.pseudo_date = date
+        self._pseudo_date = date
+        return self
         
     @property
     def factor_names(self) -> np.ndarray:
@@ -768,14 +792,13 @@ class StockFactor:
         """
         get the daily quotes for the factor
         """
-        DATAVENDOR.TRADE.load_trd_within(self.date.min() , self.date.max() , overwrite = False)
-        return DATAVENDOR.get_quotes_block(self.date if load else None , extend = 60)
+        return DATAVENDOR.get_quotes_block(self.data_date if load else None , extend = 60)
 
     def day_quotes(self , load = True):
         """
         get the daily quotes for the factor
         """
-        return DATAVENDOR.TRADE.loads(self.date if load else None , 'trd')
+        return DATAVENDOR.TRADE.loads(self.data_date if load else None , 'trd')
 
     def _get_alpha_model(self , name : str):
         """
@@ -947,10 +970,9 @@ class StockFactor:
         if not order:
             return self
         df = self.normalize_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
-        if inplace: 
-            return self.update(df , normalized = True)
-        else:
-            return StockFactor(df , normalized = True , benchmark = self.benchmark)
+        if not inplace:
+            self = self.copy()
+        return self.update(df , normalized = True)
     
     def select_analytic(self , task_name : str , **kwargs):
         """
