@@ -149,7 +149,7 @@ class Logger:
     def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
                      title : str | None = None , 
                      title_kwargs : dict[str , Any] = {'indent' : 0 , 'bold' : True , 'color' : 'lightgreen'} , 
-                     indent = 0 , vb_level : int = 1 , bold = True , italic = True , **kwargs):
+                     indent = 0 , vb_level : int = 1 , italic = True , **kwargs):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
         kwargs:
@@ -174,7 +174,7 @@ class Logger:
         
         max_key_length = max([len(indented_key) for indent , indented_key , _ in pairs])
         pairs = [FormatStr(f'{indented_key:{max_key_length}s} : {value}' , color = color_selector(color , indent) , 
-                          bold = bold , italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
+                          italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
     @classmethod

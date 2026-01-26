@@ -106,12 +106,19 @@ class TrainParam:
     def load_param(self):
         self.train_param : dict[str,Any] = {}
         for cfg in TRAIN_CONFIG_LIST:
-            p : dict[str,Any] = PATH.read_yaml(conf_path(self.base_path , 'train', cfg))
+            path = conf_path(self.base_path, 'train', cfg)
+            if not path.exists():
+                path = conf_path(None, 'train', cfg)
+            p : dict[str,Any] = PATH.read_yaml(path)
             self.train_param.update({f'{cfg}.{k}':v for k,v in p.items()})
 
         self.update_schedule_param()
         self.special_adjustment()
         self.make_model_name()
+
+        if self.base_path and self.base_path.root_path == PATH.null_model:
+            self.model_module = self.base_path.name
+        
         return self
     
     def update_schedule_param(self):
@@ -271,6 +278,9 @@ class TrainParam:
     @property
     def model_module(self): 
         return str(self.Param['model.module']).lower()
+    @model_module.setter
+    def model_module(self , value : str):
+        self.Param['model.module'] = value.lower()
     @property
     def model_input_type(self) -> Literal['db' , 'data' , 'hidden' , 'factor' , 'combo']: 
         if self.module_type == 'db':

@@ -34,6 +34,13 @@ class _UniqueFileList:
         self.name = name
         self.lock = threading.Lock()
         self._file_lists[self.name] = []
+        self.ban_patterns = []
+
+    def alter1(self , *args , **kwargs):
+        if not hasattr(self , '_logger'):
+            from src.proj.log import Logger
+            self._logger = Logger
+        self._logger.alert1(*args , **kwargs)
 
     @property
     def file_list(self):
@@ -50,19 +57,28 @@ class _UniqueFileList:
             file = Path(file)
             if file in self.file_list:
                 return
+            if any(pattern in str(file) for pattern in self.ban_patterns):
+                self.alter1(f'Fail to append {file} to {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
+                return
             self.file_list.append(file)
 
     def extend(self , *files : Path | str):
         with self.lock:
             for file in files:
                 file = Path(file)
-                if file in self.file_list:
+                if file in self.file_list: 
+                    continue
+                if any(pattern in str(file) for pattern in self.ban_patterns):
+                    self.alter1(f'Fail to append {file} to {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
                     continue
                 self.file_list.append(file)
     
     def insert(self , index : int , file : Path | str):
         with self.lock:
             file = Path(file)
+            if any(pattern in str(file) for pattern in self.ban_patterns):
+                self.alter1(f'Fail to insert {file} to {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
+                return
             if file in self.file_list:
                 self.file_list.remove(file)
             self.file_list.insert(index , file)
@@ -71,13 +87,18 @@ class _UniqueFileList:
         with self.lock:
             self.file_list.remove(Path(file))
 
+    def ban(self , *patterns : str):
+        self.ban_patterns.extend(patterns)
+
+    def unban(self , *patterns : str):
+        self.ban_patterns = [pattern for pattern in self.ban_patterns if pattern not in patterns]
+
     def exclude(self , *patterns : str):
-        from src.proj.log import Logger
         with self.lock:
             for file in self.file_list[:]:
                 if any(pattern in str(file) for pattern in patterns):
                     self.file_list.remove(file)
-                    Logger.alert1(f'Removed file {file} from email_attachments!' , vb_level = Proj.vb.max)
+                    self.alter1(f'Removed file {file} from {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
 
 class _Verbosity:
     max : int = _project_settings.get('vb_max' , 10)

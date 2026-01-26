@@ -1,12 +1,11 @@
-import re
 from contextlib import nullcontext
 from typing import Literal
-from datetime import datetime , timedelta
+from pathlib import Path
 from src.proj import PATH , MACHINE , Logger , Proj  
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
-from src.res.model.util import BaseTrainer , PredictionModel
+from src.res.model.util import BaseTrainer , PredictionModel , ModelPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
 from src.res.model.model_module.module import get_predictor_module
@@ -20,40 +19,8 @@ class ModelTrainer(BaseTrainer):
     def init_callbacks(self , **kwargs) -> None: 
         self.callback = CallBackManager.setup(self)
 
-    def log_operation(self , category : Literal['update_models' , 'resume_testing'] | None = None):
-        if category is None:
-            return
-        else:
-            path = self.config.model_base_path.log('operation_logs.log')
-            for file in self.config.model_base_path.log().glob('*.log'):
-                if file.stem != path.stem:
-                    file.unlink()
-            path.parent.mkdir(exist_ok=True)
-            with open(path, 'a') as f:
-                f.write(f'{category} >> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
-        ...
-
-    def check_last_operation(self , category : Literal['update_models' , 'resume_testing'] | None = None) -> bool | str:
-        if category is None:
-            return False
-        else:
-            path = self.config.model_base_path.log(f'operation_logs.log')
-            logs = path.read_text().split('\n') if path.exists() else []
-            logs = [log for log in logs if log.startswith(category)]
-            if logs:
-                try:
-                    time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
-                    last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-                    if last_time > datetime.now() - timedelta(days=1):
-                        return last_time.strftime('%Y-%m-%d %H:%M:%S')
-                    else:
-                        return False
-                except (IndexError, ValueError) as e:
-                    Logger.error(f'Error {e} parsing time string: {logs[-1]}')
-                    return False
-            else:
-                return False
-        ...
+    def log_operation(self , category : str | None = None):
+        self.config.model_base_path.log_operation(category)
 
     @classmethod
     def initialize(cls , stage = -1 , resume = -1 , selection = -1 , base_path = None , 
@@ -75,7 +42,7 @@ class ModelTrainer(BaseTrainer):
         return app
 
     @classmethod
-    def GO(cls , *args , title : str | None = None , paragraph = False , html_catcher = True, 
+    def GO(cls , *args , base_path : ModelPath | Path | str |None = None , title : str | None = None , paragraph = False , html_catcher = True, 
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
            log_operation : Literal['update_models' , 'resume_testing'] | None = None , **kwargs):
         if title and paragraph:
@@ -88,16 +55,18 @@ class ModelTrainer(BaseTrainer):
         else:
             html_catcher_context = nullcontext()
 
+        base_path = ModelPath(base_path)
+        if base_path:
+            last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
+            if skip:
+                Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
+                return None
+
         with paragraph_context, html_catcher_context as catcher:
-            trainer = cls.initialize(*args , **kwargs)
-            last_operation_time = trainer.check_last_operation(check_operation)
-            if last_operation_time:
-                Logger.alert1(f'[{check_operation}] {title} has been done at {last_operation_time}, skip this operation!')
-            else:
-                trainer.go().log_operation(log_operation)
-                if isinstance(catcher , HtmlCatcher):
-                    catcher.set_export_files(trainer.html_catcher_export_path)
-        return trainer
+            trainer = cls.initialize(*args , base_path = base_path , **kwargs)
+            trainer.go().log_operation(log_operation)
+            if isinstance(catcher , HtmlCatcher):
+                catcher.set_export_files(trainer.html_catcher_export_path)
 
     @classmethod
     def update_models(cls , force_update = False):
@@ -110,13 +79,12 @@ class ModelTrainer(BaseTrainer):
         if not MACHINE.cuda_server:
             Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
+            Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
             for model in PredictionModel.SelectModels():
-                cls.GO(0 , 1 , 0 , model.model_path , 
+                cls.GO(0 , 1 , 0 , base_path = model.model_path , 
                        title = f'Updating Model {model.model_path}' , paragraph = True ,
                        check_operation = None if force_update else 'update_models' ,
                        log_operation = 'update_models')
-
-        Proj.exit_files.exclude('detailed_alpha_data' , 'detailed_alpha_plot')
 
     @classmethod
     def resume_testing(cls , models = True , factors = True , force_resume = False):
@@ -131,24 +99,20 @@ class ModelTrainer(BaseTrainer):
             Logger.alert1('No models or factors to resume testing!')
             return
 
-        Logger.stdout_pairs([('Model' , model) for model in resumable_models] + [('Factor' , factor) for factor in resumable_factors] , 
-                            title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} models and factors:')
+        Logger.stdout_pairs([('Factor' , factor) for factor in resumable_factors] + [('Model' , model) for model in resumable_models] , 
+                            title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} factors and models:')
         Logger.divider()
+        Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
 
-        for model in resumable_models:
-            cls.GO(2 , 1, 0 , base_path = PATH.model.joinpath(model) , short_test = False ,
-                   title = f'Resume Testing Model {model}' , paragraph = True , 
+        bases = [f'factor@{factor}' for factor in resumable_factors] + [model for model in resumable_models]
+        for base in bases:
+            title_object = f'Factor {base.removeprefix('factor@')}' if base.startswith('factor@') else f'Model {base}'
+            cls.GO(2 , 1, 0 , base_path = base , short_test = False ,
+                   title = f'Resume Testing {title_object}' , paragraph = True , 
                    check_operation = None if force_resume else 'resume_testing' ,
                    log_operation = 'resume_testing')
 
-        for factor in resumable_factors:
-            cls.GO(2 , 1, 0 , module = f'factor@{factor}' , short_test = False ,
-                    title = f'Resume Testing Factor {factor}' , paragraph = True ,
-                    check_operation = None if force_resume else 'resume_testing' ,
-                    log_operation = 'resume_testing')
-
-        Proj.exit_files.exclude('detailed_alpha_data' , 'detailed_alpha_plot')
-
+        
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 
               start : int | None = None , end : int | None = None , **kwargs):

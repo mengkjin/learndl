@@ -1086,7 +1086,7 @@ class MarkdownCatcher(OutputCatcher):
         
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.note(f"{self} Capturing Start" , vb_level = 1)
+        Logger.remark(f"{self} Capturing Start" , vb_level = 1)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

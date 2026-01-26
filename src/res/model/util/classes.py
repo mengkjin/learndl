@@ -288,26 +288,26 @@ class TrainerPredRecorder(ModelStreamLine):
         self._preds_dict = value
 
     @property
-    def resumed_models_full(self) -> pd.DataFrame:
+    def resumed_models_finished(self) -> pd.DataFrame:
         """models dataframe for resumed testing"""
-        if not hasattr(self , '_resumed_models_full'):
-            self._resumed_models_full = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models_full
+        if not hasattr(self , '_resumed_models_finished'):
+            self._resumed_models_finished = pd.DataFrame(columns = ['model_num' , 'model_date'])
+        return self._resumed_models_finished
 
-    @resumed_models_full.setter
-    def resumed_models_full(self , value : pd.DataFrame):
-        self._resumed_models_full = value
+    @resumed_models_finished.setter
+    def resumed_models_finished(self , value : pd.DataFrame):
+        self._resumed_models_finished = value
 
     @property
-    def resumed_models_partial(self) -> pd.DataFrame:
+    def resumed_models_unfinished(self) -> pd.DataFrame:
         """models dataframe for resumed testing"""
-        if not hasattr(self , '_resumed_models_partial'):
-            self._resumed_models_partial = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models_partial
+        if not hasattr(self , '_resumed_models_unfinished'):
+            self._resumed_models_unfinished = pd.DataFrame(columns = ['model_num' , 'model_date'])
+        return self._resumed_models_unfinished
 
-    @resumed_models_partial.setter
-    def resumed_models_partial(self , value : pd.DataFrame):
-        self._resumed_models_partial = value
+    @resumed_models_unfinished.setter
+    def resumed_models_unfinished(self , value : pd.DataFrame):
+        self._resumed_models_unfinished = value
 
     @property
     def resumed_last_pred_date(self) -> int:
@@ -462,24 +462,30 @@ class TrainerPredRecorder(ModelStreamLine):
 
         latest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
         pred_records = pred_records.query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
-        min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
-
+        
         if not pred_records.empty:
+            min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
+            max_pred_date = pred_records.groupby('model_num')['max_pred_date'].max().min()
             if self.min_test_date < min_pred_date:
                 resume_info += f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
             else:
-                models_full = pred_records.query('model_date < @latest_model_date').loc[:,['model_date' , 'model_num']].reset_index(drop=True)
-                models_partial = pred_records.query('max_pred_date >= @latest_model_date').loc[:,['model_date' , 'model_num']].reset_index(drop=True)
-
-                if not models_full.empty:
-                    self.resumed_models_full = models_full
-
-                if Proj.Conf.Model.TRAIN.resume_test == 'last_model_date' and not models_full.empty:
-                    self.resumed_last_pred_date = min(models_full['max_pred_date'].max() , self.max_test_date)
+                models_all = pred_records.query('model_date <= @latest_model_date')
+                models_previous = pred_records.query('model_date < @latest_model_date')
+                
+                if Proj.Conf.Model.TRAIN.resume_test == 'last_model_date' and not models_previous.empty:
+                    self.resumed_models_finished = models_previous[['model_date' , 'model_num']].reset_index(drop=True)
+                    self.resumed_last_pred_date = min(models_previous['max_pred_date'].max() , self.max_test_date)
+                    self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
                     resume_info += f', recognize past saved preds before model date {latest_model_date}'
-                elif Proj.Conf.Model.TRAIN.resume_test == 'last_pred_date' and not pred_records.empty:
-                    self.resumed_last_pred_date = min(pred_records['max_pred_date'].max() , self.max_test_date)
-                    self.resumed_models_partial = models_partial
+                elif Proj.Conf.Model.TRAIN.resume_test == 'last_pred_date':
+                    if max_pred_date < self.max_test_date:
+                        self.resumed_models_finished = models_previous[['model_date' , 'model_num']]
+                        self.resumed_last_pred_date = max_pred_date
+                        self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
+                    else:
+                        self.resumed_models_finished = models_all[['model_date' , 'model_num']]
+                        self.resumed_last_pred_date = self.max_test_date
+                        self.resumed_models_unfinished = pd.DataFrame(columns = ['model_date' , 'model_num']).astype(int)
                     resume_info += f', recognize past saved preds before prediction date {self.resumed_last_pred_date}'
             
         if pred_records.empty:
@@ -545,7 +551,6 @@ class TrainerPredRecorder(ModelStreamLine):
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         if avg_pred_records.empty:
             Logger.error(f'No avg pred records found for test dates {pred_dates}')
-            Logger.error(f'Pred records: {pred_records}')
             return self.empty_preds()
         df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
         return df
@@ -873,8 +878,8 @@ class BaseTrainer(ModelStreamLine):
                         break
                 condition = ~models_trained
             elif self.status.stage == 'test':
-                resumed_models_full = self.record.resumed_models_full.groupby(['model_date' , 'model_num']).groups
-                resumed = [(model_date , model_num) not in resumed_models_full for model_date , model_num in model_iter]
+                resumed_models_finished = self.record.resumed_models_finished.groupby(['model_date' , 'model_num']).groups
+                resumed = [(model_date , model_num) not in resumed_models_finished for model_date , model_num in model_iter]
                 condition = np.array(resumed)
             else:
                 Logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')

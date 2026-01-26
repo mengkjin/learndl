@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import pandas as pd
 
+import re
+from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
@@ -137,6 +139,48 @@ class ModelPath:
     def collect_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
         """collect model archive paths"""
         return [p for _,_,_,p in self.iter_model_archives(start_model_date , end_model_date)]
+
+    def log_operation(self , category : str | None = None):
+        if category is None:
+            return
+        else:
+            path = self.log('operation_logs.log')
+            path.parent.mkdir(exist_ok=True)
+            with open(path, 'a') as f:
+                f.write(f'{category} >> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+
+    def check_last_operation(self , category : str | None = None , interval_hours : int = 24) -> tuple[datetime | None , timedelta , bool]:
+        """check if the last operation is within the interval
+        Args:
+            category (str | None): the category of the operation
+            interval_hours (int): the interval in hours
+        Returns:
+            tuple[last_time , time_elapsed , skip]: the last operation time, the time elapsed, and whether to skip the operation
+            - last_time: the time of the last operation , if no operation logs are found, return None
+            - time_elapsed: the time elapsed since the last operation
+            - skip: if the last operation is inside the interval and should be skipped
+        """
+        
+        if category is None:
+            return None , timedelta(0) , False
+        else:
+            path = self.log(f'operation_logs.log')
+            logs = path.read_text().split('\n') if path.exists() else []
+            logs = [log for log in logs if log.startswith(category)]
+            if logs:
+                try:
+                    time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
+                    last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+                    time_elapsed = datetime.now() - last_time
+                    if time_elapsed > timedelta(hours=interval_hours):
+                        return last_time , time_elapsed , True
+                    else:
+                        return last_time , time_elapsed , False
+                except (IndexError, ValueError) as e:
+                    Logger.error(f'Error {e} parsing time string: {logs[-1]}')
+                    return None , timedelta(0) , False
+            else:
+                return None , timedelta(0) , False
 
 class HiddenPath:
     """hidden factor path for nn models , used for extracting hidden states"""
