@@ -16,9 +16,9 @@ class _EmailSettings:
 
     def __init__(self , server : Literal['netease'] = 'netease' , *args , **kwargs):
         self.server = server
-        self.email_conf = self.Settings[server]
-        if MACHINE.name in self.email_conf:
-            self.email_conf.update(self.email_conf[MACHINE.name])
+        self.email_conf = {key.lower() : value for key, value in self.Settings[server].items()}
+        if MACHINE.name.lower() in self.email_conf:
+            self.email_conf.update(self.email_conf[MACHINE.name.lower()])
 
     def __repr__(self) -> str:
         return f'EmailSettings(server={self.server}, email_conf={self.email_conf})'
