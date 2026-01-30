@@ -901,7 +901,7 @@ class TrainConfig(TrainParam):
         self.parser_select(selection , vb_level) 
         return self
 
-    def print_out(self , color : str | None = 'auto' , vb_level : int = 2):
+    def print_out(self , color : str | None = None , vb_level : int = 2):
         info_strs : list[tuple[int , str , str]] = [] # indent , key , value
         info_strs.append((0 , 'Model Name' , self.model_name))
         if self.module_type in ['db' , 'factor']:
@@ -952,7 +952,7 @@ class TrainConfig(TrainParam):
             info_strs.append((1 , 'Resume FMP' , f'{Proj.Conf.Model.TRAIN.resume_test_fmp}'))
             info_strs.append((1 , 'Resume Account' , f'{Proj.Conf.Model.TRAIN.resume_test_fmp_account}'))
 
-        Logger.stdout_pairs(info_strs , title = 'Model Config Info:' , color = color , vb_level = vb_level)
+        Logger.stdout_pairs(info_strs , title = 'Train Config Initiated:' , color = color , vb_level = vb_level)
         return self
 
     @property

@@ -20,6 +20,13 @@ class _EmailSettings:
         if MACHINE.name in self.email_conf:
             self.email_conf.update(self.email_conf[MACHINE.name])
 
+    def __repr__(self) -> str:
+        return f'EmailSettings(server={self.server}, email_conf={self.email_conf})'
+
+    def print_info(self):
+        infos = {'server' : self.server , **self.email_conf}
+        Logger.stdout_pairs(infos , title = 'Email Settings:')
+
     @property
     def smtp_server(self) -> str:
         return self.email_conf['smtp_server']
@@ -126,3 +133,9 @@ class Email:
                 Logger.success(f'Send email {confirmation_message}')
         except Exception as e:
             Logger.error(f'Error : sending email went wrong: {e}')
+
+    @classmethod
+    def test(cls):
+        cls._settings.print_info()
+        return cls.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'mengkjin@163.com')
+    

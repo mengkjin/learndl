@@ -182,9 +182,10 @@ class DataBlock(Stock4DData):
         return cls.load_path(cls.block_path(key , predict , alias_search))
 
     @classmethod
-    def load_keys(cls , keys : list[str] , predict = False , alias_search = True , **kwargs):
+    def load_keys(cls , keys : list[str] , predict = False , alias_search = True , vb_level = 2 , **kwargs):
         paths = [cls.block_path(key , predict , alias_search) for key in keys]
-        return {key:val for key,val in zip(keys , cls.load_paths(paths , **kwargs))}
+        blocks = cls.load_paths(paths , vb_level = vb_level , **kwargs)
+        return {key:val for key,val in zip(keys , blocks)}
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
@@ -453,7 +454,8 @@ class ModuleData:
                    predict : bool = False , dtype : str | Any = torch.float , 
                    save_upon_loading : bool = True , 
                    factor_start_dt : int | None = None , 
-                   factor_end_dt : int | None = None):
+                   factor_end_dt : int | None = None , 
+                   vb_level = 2):
         '''
         load all x/y data if input_type is data or factor
         if predict is True, only load recent data
@@ -467,10 +469,10 @@ class ModuleData:
             data = None
         else:
             last_date = DataBlock.last_data_date()
-            data = cls.datacache_load(last_date , data_type_list , y_labels)
+            data = cls.datacache_load(last_date , data_type_list , y_labels , vb_level = vb_level)
 
         if data is None:
-            blocks = DataBlock.load_keys(['y' , *data_type_list], predict , dtype = dtype)
+            blocks = DataBlock.load_keys(['y' , *data_type_list], predict , dtype = dtype , vb_level = vb_level)
             norms  = DataBlockNorm.load_keys(['y' , *data_type_list], predict , dtype = dtype)
 
             y : DataBlock = blocks['y']
@@ -487,7 +489,7 @@ class ModuleData:
 
         if factor_names:
             factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
-            with Logger.Timer(f'Load {factor_title}'):
+            with Logger.Timer(f'Load {factor_title}' , vb_level = vb_level):
                 from src.data.loader import FactorLoader
                 start_dt = max(factor_start_dt or data.date[0] , data.date[0])
                 end_dt = min(factor_end_dt or data.date[-1] , data.date[-1])
@@ -537,7 +539,7 @@ class ModuleData:
         return PATH.datacache.joinpath(data_cache_key , f'{date}.pt')
 
     @classmethod
-    def datacache_load(cls , date : int | None , data_type_list : list[str] , y_labels : list[str] | None = None):
+    def datacache_load(cls , date : int | None , data_type_list : list[str] , y_labels : list[str] | None = None , vb_level = 2):
         if date is None:
             return None
         path = cls.datacache_path(date , data_type_list)
@@ -547,7 +549,7 @@ class ModuleData:
             data = cls(**torch_load(path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
-                Logger.success(f'Loading Module Data, Try \'{path}\', success!' , vb_level = 3)
+                Logger.success(f'Loading Module Data, Try \'{path}\', success!' , vb_level = vb_level)
             else:
                 Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None

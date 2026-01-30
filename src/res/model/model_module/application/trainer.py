@@ -5,19 +5,17 @@ from src.proj import PATH , MACHINE , Logger , Proj
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
-from src.res.model.util import BaseTrainer , PredictionModel , ModelPath
+from src.res.model.util import BaseTrainer , BasePredictorModel , PredictionModel , ModelPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
-
-from src.res.model.model_module.module import get_predictor_module
 
 class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
     def init_data(self , **kwargs): 
-        self.data     = DataModule(self.config)
+        self.data     = DataModule.initiate(self.config)
     def init_model(self , **kwargs):
-        self.model    = get_predictor_module(self.config , **kwargs).bound_with_trainer(self)
+        self.model    = BasePredictorModel.initiate(self.config , self , **kwargs)
     def init_callbacks(self , **kwargs) -> None: 
-        self.callback = CallBackManager.setup(self)
+        self.callback = CallBackManager.initiate(self)
 
     def log_operation(self , category : str | None = None):
         self.config.model_base_path.log_operation(category)
@@ -61,7 +59,11 @@ class ModelTrainer(BaseTrainer):
             if skip:
                 Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
                 return None
-
+            elif last_time:
+                Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = Proj.vb.max)
+            else:
+                Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = Proj.vb.max)
+                
         with paragraph_context, html_catcher_context as catcher:
             trainer = cls.initialize(*args , base_path = base_path , **kwargs)
             trainer.go().log_operation(log_operation)

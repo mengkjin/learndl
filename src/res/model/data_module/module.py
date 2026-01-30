@@ -41,7 +41,7 @@ class DataModule(BaseDataModule):
     DataModule for model fitting / testing / predicting
     """
     _config_instance_for_batch_data : dict[TrainConfig,'DataModule'] = {}
-    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit'):
+    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , info : bool = False):
         '''
         1. load Package of BlockDatas of x , y , norms and index
         2. Setup model_date dataloaders
@@ -53,6 +53,8 @@ class DataModule(BaseDataModule):
         self.use_data = use_data
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
+        if info:
+            Logger.stdout_pairs({'Use Data' : use_data} , title = 'Module Data Initiated:' , vb_level=2)
 
     def __repr__(self): 
         keys = self.input_keys

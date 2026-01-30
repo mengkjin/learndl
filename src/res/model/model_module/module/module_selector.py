@@ -19,7 +19,6 @@ def get_predictor_module(module : str | TrainConfig , *args , **kwargs):
         mod = NullPredictor
     else:
         raise ValueError(f'invalid module type: {module_type}')
-    predictor = mod(*args , **kwargs)
-    predictor.bound_with_config(module)
+    predictor = mod(*args , **kwargs).bound_with(module)
     return predictor
     

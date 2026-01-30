@@ -160,10 +160,8 @@ class ModelPath:
             - time_elapsed: the time elapsed since the last operation
             - skip: if the last operation is inside the interval and should be skipped
         """
-        
-        if category is None:
-            return None , timedelta(0) , False
-        else:
+        last_time = None
+        if category:
             path = self.log(f'operation_logs.log')
             logs = path.read_text().split('\n') if path.exists() else []
             logs = [log for log in logs if log.startswith(category)]
@@ -171,16 +169,11 @@ class ModelPath:
                 try:
                     time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
                     last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-                    time_elapsed = datetime.now() - last_time
-                    if time_elapsed > timedelta(hours=interval_hours):
-                        return last_time , time_elapsed , True
-                    else:
-                        return last_time , time_elapsed , False
                 except (IndexError, ValueError) as e:
                     Logger.error(f'Error {e} parsing time string: {logs[-1]}')
-                    return None , timedelta(0) , False
-            else:
-                return None , timedelta(0) , False
+        time_elapsed = datetime.now() - last_time if last_time else timedelta(0)
+        skip = time_elapsed.total_seconds() / 3600  < interval_hours if last_time else False
+        return last_time , time_elapsed , skip
 
 class HiddenPath:
     """hidden factor path for nn models , used for extracting hidden states"""

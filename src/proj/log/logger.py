@@ -130,9 +130,8 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
-
         def color_selector(color : str | None , indent : int):
-            return (None if indent <= 1 else 'gray') if color == 'auto' else color
+            return (None if indent <= 1 else 'gray') if color is None or color == 'auto' else color
 
         if title:
             new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)
@@ -158,7 +157,7 @@ class Logger:
             sep , end , file , flush: same as stdout
         """
         def color_selector(color : str | None , indent : int):
-            return (None if indent <= 1 else 'gray') if color == 'auto' else color
+            return (None if indent <= 1 else 'gray') if color is None or color == 'auto' else color
 
         if title:
             new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)

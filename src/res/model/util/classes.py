@@ -577,7 +577,8 @@ class TrainerPredRecorder(ModelStreamLine):
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
     @abstractmethod
-    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit'):
+    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , * , 
+                 info : bool = False):
         self.config   : TrainConfig
         self.use_data : Literal['fit','predict','both'] 
         self.storage  : MemFileStorage
@@ -606,6 +607,9 @@ class BaseDataModule(ABC):
     def test_dataloader(self)   -> Iterator[BatchData]: '''return test dataloaders'''
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchData]: '''return predict dataloaders'''
+    @classmethod
+    def initiate(cls , config : TrainConfig | None = None , *args , info = True , **kwargs):
+        return cls(config , *args , info = info , **kwargs)
     def on_before_batch_transfer(self , batch , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch , device = None , dataloader_idx = None): return batch
     def on_after_batch_transfer(self , batch , dataloader_idx = None): return batch
@@ -709,6 +713,7 @@ class BaseTrainer(ModelStreamLine):
             self.init_data(**kwargs)
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
+            self.init_utils(**kwargs)
 
     def __bool__(self): return True
 
@@ -718,11 +723,7 @@ class BaseTrainer(ModelStreamLine):
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
         '''initialized configuration'''
-        with Logger.Paragraph('Config Setup' , 3):
-            self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
-            self.config.print_out()
-        self.status = TrainerStatus(self.config.train_max_epoch)
-        self.record = TrainerPredRecorder(self)
+        self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs).print_out()
 
     @abstractmethod
     def init_model(self , **kwargs): 
@@ -738,6 +739,10 @@ class BaseTrainer(ModelStreamLine):
     def init_data(self , **kwargs): 
         '''initialized data_module'''
         self.data : BaseDataModule
+
+    def init_utils(self , **kwargs):
+        self.status = TrainerStatus(self.config.train_max_epoch)
+        self.record = TrainerPredRecorder(self)
 
     @property
     def device(self): return self.config.device
@@ -1048,13 +1053,18 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         for param in self.CB_KEY_PARAMS:
             assert hasattr(self , param) , f'{self.__class__.__name__} has no attribute {param}'
 
-    def print_info(self , vb_level : int = 2 , **kwargs):
-        args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS} | kwargs
-        info = f'Callback {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
-        if self.__class__.__doc__: 
-            info += f' , {self.__class__.__doc__}'
-        Logger.stdout(info , vb_level = vb_level)
+    def print_info(self , vb_level : int = 2):
+        info = self.get_info()
+        info_str = f'CallBack {info[0]}({info[1]})'
+        if info[2]:
+            info_str += f', {info[2]}'
+        Logger.stdout(info_str , vb_level = vb_level)
         return self
+
+    def get_info(self) -> tuple[str , str , str]:
+        args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS}
+        info = ','.join([f'{k}={v}' for k,v in args.items()])
+        return self.__class__.__name__ , info , self.__class__.__doc__ or ''
 
     def __enter__(self): 
         self.__hook_stack.append(self.trace_hook_name())
@@ -1100,6 +1110,16 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     
     def __repr__(self): 
         return f'{self.__class__.__name__}(model_full_name={self.model_full_name})'
+
+    @classmethod
+    def initiate(cls , config : TrainConfig , trainer : BaseTrainer | None = None , * , info = True , **kwargs):
+        from src.res.model.model_module.module import get_predictor_module
+        binder = config if trainer is None else trainer
+        model = get_predictor_module(config , **kwargs).bound_with(binder)
+        infos = {'Module Type' : model.__class__.__name__ , 'Bound Type' : binder.__class__.__name__}
+        if info:
+            Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level=2)
+        return model
     
     def multiloss_params(self): return {}
 
@@ -1107,6 +1127,12 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         self.trainer : BaseTrainer | Any = None
         self._config : TrainConfig | Any = None
         return self
+
+    def bound_with(self , binder : TrainConfig | BaseTrainer):
+        if isinstance(binder , TrainConfig):
+            return self.bound_with_config(binder)
+        else:
+            return self.bound_with_trainer(binder)
 
     def bound_with_config(self , config : TrainConfig):
         assert self.trainer is None , 'Cannot bound with config if bound with trainer first'
