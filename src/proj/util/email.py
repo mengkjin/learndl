@@ -18,14 +18,16 @@ class EmailSetting:
         server_settings = self.EmailSettings.get(server , {})
         machine_settings = self.EmailSettings.get(server , {}).get(MACHINE.name.lower() , {})
         settings = server_settings | machine_settings
-        
+
         self.name = name
-        self.value = settings[name.lower()]
+        self.server = server
+        self.value = settings.get(name.lower() , None)
 
     def __get__(self , instance : Any , owner : Any) -> Any:
         if self.name == 'smtp_port':
             return 25 if MACHINE.platform_server else 465
             raise Exception('smtp_port is not set and will use default port 465/587/25')
+        assert self.value is not None , f'{self.name} is not set in {self.server} email settings'
         return self.value
         
 
