@@ -5,43 +5,40 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Literal
+from typing import Any , Literal
 
 from src.proj.env import MACHINE
 from src.proj.proj import Proj
 from src.proj.log import Logger
 
-class _EmailSettings:
-    Settings : dict[str , dict] = MACHINE.local_settings('email')
+class EmailSetting:
+    EmailSettings = MACHINE.local_settings('email')
+    MachineEmailSettings = EmailSettings.get(MACHINE.name.lower() , {})
 
-    def __init__(self , server : Literal['netease'] = 'netease' , *args , **kwargs):
-        self.server = server
-        self.email_conf = {key.lower() : value for key, value in self.Settings[server].items()}
-        if MACHINE.name.lower() in self.email_conf:
-            self.email_conf.update(self.email_conf[MACHINE.name.lower()])
+    def __init__(self , name : str , server : Literal['netease'] = 'netease'):
+        self.name = name
+        self.value = (self.EmailSettings[server] | self.MachineEmailSettings)[name.lower()]
 
-    def __repr__(self) -> str:
-        return f'EmailSettings(server={self.server}, email_conf={self.email_conf})'
+    def __get__(self , instance : Any , owner : Any) -> Any:
+        if self.name == 'smtp_port':
+            return 25 if MACHINE.platform_server else 465
+            raise Exception('smtp_port is not set and will use default port 465/587/25')
+        return self.value
+        
+    @classmethod
+    def email_configurations(cls , server : Literal['netease'] = 'netease'):
+        return cls.EmailSettings[server] | cls.MachineEmailSettings
 
-    def print_info(self):
-        infos = {'server' : self.server , **self.email_conf}
-        Logger.stdout_pairs(infos , title = 'Email Settings:')
+class EmailMeta(type):
+    smtp_server = EmailSetting('smtp_server')
+    smtp_port = EmailSetting('smtp_port')
+    sender = EmailSetting('sender')
+    password = EmailSetting('password')
 
-    @property
-    def smtp_server(self) -> str:
-        return self.email_conf['smtp_server']
-    @property
-    def smtp_port(self) -> int:
-        raise Exception('smtp_port is not set and will use default port 465/587/25')
-        return self.email_conf['smtp_port']
-    @property
-    def sender(self) -> str:
-        return self.email_conf['sender']
-    @property
-    def password(self) -> str:
-        return self.email_conf['password']
+    def __call__(cls , *args , **kwargs):
+        raise Exception('EmailMeta subclass is not meant to be instantiated')
 
-class Email:
+class Email(metaclass=EmailMeta):
     """
     Email class for sending email with attachment
     example:
@@ -49,24 +46,11 @@ class Email:
         Proj.States.email_attachments.append('path/to/attachment.txt')
         Email.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'test@example.com' , send_attachments = True , additional_attachments = ['path/to/additional.txt'])
     """
-    _instance = None
-    SETTINGS = _EmailSettings()
-
-    def __new__(cls , *args , **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    @classmethod
-    def setup_settings(cls , server : Literal['netease'] = 'netease'):
-        if cls.SETTINGS.server != server:
-            cls.SETTINGS = _EmailSettings(server)
-        return cls.SETTINGS
 
     @classmethod
     def recipient(cls , recipient : str | None = None):
         if recipient is None: 
-            recipient = str(cls.SETTINGS.sender)
+            recipient = str(cls.sender)
         assert recipient , 'recipient is required'
         assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
         return recipient
@@ -77,7 +61,7 @@ class Email:
                 project_attachments : bool = False ,
                 title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:'):
         message = MIMEMultipart()
-        message['From'] = cls.SETTINGS.sender
+        message['From'] = cls.sender
         message['To'] = cls.recipient(recipient)
         message['Subject'] = f'{title_prefix} {title}'
         
@@ -107,22 +91,24 @@ class Email:
 
     @classmethod
     def send_with_smtplib(cls , message : MIMEMultipart , recipient : str | None = None , confirmation_message : str | None = None ,
-                          smtp_port : Literal['auto' , 25 , 465 , 587] = 'auto' , timeout : int = 20):
-        if smtp_port == 'auto':
-            smtp_port = 465 if MACHINE.platform_server else 25
+                          timeout : int = 20):
+        if cls.smtp_port == 'auto':
+            smtp_port = 25 if MACHINE.platform_server else 465
+        else:
+            smtp_port = cls.smtp_port
         assert smtp_port in [465, 587, 25] , f'smtp_port must be 465, 587, or 25, got {smtp_port}'
         
         try:
             default_context = ssl.create_default_context()
             if smtp_port == 465:
-                smtp_server = smtplib.SMTP_SSL(cls.SETTINGS.smtp_server, smtp_port, context=default_context, timeout=timeout)
+                smtp_server = smtplib.SMTP_SSL(cls.smtp_server, smtp_port, context=default_context, timeout=timeout)
             else:
-                smtp_server = smtplib.SMTP(cls.SETTINGS.smtp_server, smtp_port, timeout=timeout)
+                smtp_server = smtplib.SMTP(cls.smtp_server, smtp_port, timeout=timeout)
             with smtp_server as server:
-                if isinstance(smtp_server , smtplib.SMTP):
+                if smtp_port != 465:
                     server.starttls(context=default_context)
-                server.login(cls.SETTINGS.sender, cls.SETTINGS.password)
-                server.send_message(message , from_addr=cls.SETTINGS.sender, to_addrs=cls.recipient(recipient))
+                server.login(cls.sender, cls.password)
+                server.send_message(message , from_addr=cls.sender, to_addrs=cls.recipient(recipient))
             if confirmation_message:
                 Logger.success(f'Send email {confirmation_message}')
         except Exception as e:
@@ -135,13 +121,16 @@ class Email:
              attachments : str | Path | list[Path] | list[str] | None = None ,
              project_attachments : bool = False ,
              title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:' ,
-             server : Literal['netease'] = 'netease' , 
              confirmation_message = ''):
         
         if not MACHINE.emailable:
            Logger.alert1(f'{MACHINE.name} is not available for email, skip sending email')
            return
 
-        cls.setup_settings(server)
         message = cls.message(title , body , recipient , attachments = attachments , project_attachments = project_attachments , title_prefix = title_prefix)
         cls.send_with_smtplib(message , recipient , confirmation_message)
+
+    @classmethod
+    def print_info(cls , server : Literal['netease'] = 'netease'):
+        infos = {'server' : server , 'smtp_server' : cls.smtp_server , 'smtp_port' : cls.smtp_port , 'sender' : cls.sender , 'password' : cls.password}
+        Logger.stdout_pairs(infos , title = 'Email Settings:')
