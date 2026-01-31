@@ -13,11 +13,14 @@ from src.proj.log import Logger
 
 class EmailSetting:
     EmailSettings = MACHINE.local_settings('email')
-    MachineEmailSettings = EmailSettings.get(MACHINE.name.lower() , {})
 
     def __init__(self , name : str , server : Literal['netease'] = 'netease'):
+        server_settings = self.EmailSettings.get(server , {})
+        machine_settings = self.EmailSettings.get(server , {}).get(MACHINE.name.lower() , {})
+        settings = server_settings | machine_settings
+        
         self.name = name
-        self.value = (self.EmailSettings[server] | self.MachineEmailSettings)[name.lower()]
+        self.value = settings[name.lower()]
 
     def __get__(self , instance : Any , owner : Any) -> Any:
         if self.name == 'smtp_port':
@@ -25,9 +28,6 @@ class EmailSetting:
             raise Exception('smtp_port is not set and will use default port 465/587/25')
         return self.value
         
-    @classmethod
-    def email_configurations(cls , server : Literal['netease'] = 'netease'):
-        return cls.EmailSettings[server] | cls.MachineEmailSettings
 
 class EmailMeta(type):
     smtp_server = EmailSetting('smtp_server')
