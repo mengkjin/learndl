@@ -1,4 +1,4 @@
-import smtplib
+import smtplib , ssl
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -32,6 +32,7 @@ class _EmailSettings:
         return self.email_conf['smtp_server']
     @property
     def smtp_port(self) -> int:
+        raise Exception('smtp_port is not set and will use default port 465/587/25')
         return self.email_conf['smtp_port']
     @property
     def sender(self) -> str:
@@ -49,7 +50,7 @@ class Email:
         Email.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'test@example.com' , send_attachments = True , additional_attachments = ['path/to/additional.txt'])
     """
     _instance = None
-    _settings = _EmailSettings()
+    SETTINGS = _EmailSettings()
 
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
@@ -58,14 +59,14 @@ class Email:
 
     @classmethod
     def setup_settings(cls , server : Literal['netease'] = 'netease'):
-        if cls._settings.server != server:
-            cls._settings = _EmailSettings(server)
-        return cls._settings
+        if cls.SETTINGS.server != server:
+            cls.SETTINGS = _EmailSettings(server)
+        return cls.SETTINGS
 
     @classmethod
     def recipient(cls , recipient : str | None = None):
         if recipient is None: 
-            recipient = str(cls._settings.sender)
+            recipient = str(cls.SETTINGS.sender)
         assert recipient , 'recipient is required'
         assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
         return recipient
@@ -76,7 +77,7 @@ class Email:
                 project_attachments : bool = False ,
                 title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:'):
         message = MIMEMultipart()
-        message['From'] = cls._settings.sender
+        message['From'] = cls.SETTINGS.sender
         message['To'] = cls.recipient(recipient)
         message['Subject'] = f'{title_prefix} {title}'
         
@@ -103,10 +104,29 @@ class Email:
                     message.attach(part)
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))        
         return message
-    
+
     @classmethod
-    def connection(cls):
-        return smtplib.SMTP(cls._settings.smtp_server, cls._settings.smtp_port)
+    def send_with_smtplib(cls , message : MIMEMultipart , recipient : str | None = None , confirmation_message : str | None = None ,
+                          smtp_port : Literal['auto' , 25 , 465 , 587] = 'auto' , timeout : int = 20):
+        if smtp_port == 'auto':
+            smtp_port = 465 if MACHINE.platform_server else 25
+        assert smtp_port in [465, 587, 25] , f'smtp_port must be 465, 587, or 25, got {smtp_port}'
+        
+        try:
+            default_context = ssl.create_default_context()
+            if smtp_port == 465:
+                smtp_server = smtplib.SMTP_SSL(cls.SETTINGS.smtp_server, smtp_port, context=default_context, timeout=timeout)
+            else:
+                smtp_server = smtplib.SMTP(cls.SETTINGS.smtp_server, smtp_port, timeout=timeout)
+            with smtp_server as server:
+                if isinstance(smtp_server , smtplib.SMTP):
+                    server.starttls(context=default_context)
+                server.login(cls.SETTINGS.sender, cls.SETTINGS.password)
+                server.send_message(message , from_addr=cls.SETTINGS.sender, to_addrs=cls.recipient(recipient))
+            if confirmation_message:
+                Logger.success(f'Send email {confirmation_message}')
+        except Exception as e:
+            Logger.error(f'Error : sending email went wrong: {e}')
 
     @classmethod
     def send(cls , title : str  , 
@@ -124,18 +144,4 @@ class Email:
 
         cls.setup_settings(server)
         message = cls.message(title , body , recipient , attachments = attachments , project_attachments = project_attachments , title_prefix = title_prefix)
-        try:
-            with cls.connection() as smtp:
-                smtp.starttls()
-                smtp.login(cls._settings.sender, cls._settings.password)
-                smtp.sendmail(cls._settings.sender, cls.recipient(recipient), message.as_string())
-            if confirmation_message:
-                Logger.success(f'Send email {confirmation_message}')
-        except Exception as e:
-            Logger.error(f'Error : sending email went wrong: {e}')
-
-    @classmethod
-    def test(cls):
-        cls._settings.print_info()
-        return cls.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'mengkjin@163.com')
-    
+        cls.send_with_smtplib(message , recipient , confirmation_message)

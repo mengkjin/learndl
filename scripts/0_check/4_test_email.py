@@ -12,7 +12,7 @@ from src.proj.util import ScriptTool
 
 @ScriptTool('test_email' , lock_timeout = 10)
 def main(**kwargs):
-    Email.test()
+    Email.SETTINGS.print_info()
         
 if __name__ == '__main__':
     main()
