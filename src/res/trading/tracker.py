@@ -6,20 +6,18 @@ from pathlib import Path
 from src.proj import PATH , Logger , Proj , CALENDAR
 from src.res.trading.util import TradingPort
 
-FOCUSED_PORTS = ['use_daily']
-
 class TradingPortfolioTracker:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
         Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
-        ports = TradingPort.portfolio_dict()
-
-        assert not reset_ports or all([port in ports for port in reset_ports]) , \
+        
+        assert not reset_ports or all([port in Proj.Conf.TradingPort.portfolio_dict for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
             
-        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , indent = indent + 1 , vb_level = vb_level + 2) for k,v in ports.items()}
+        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , indent = indent + 1 , vb_level = vb_level + 2) 
+                         for k,v in Proj.Conf.TradingPort.portfolio_dict.items()}
         updated_ports = {k:v for k,v in updated_ports.items() if not v.new_ports[date].empty}
 
         new_ports = {k:v.new_ports[date] for k,v in updated_ports.items()}
@@ -34,20 +32,19 @@ class TradingPortfolioTracker:
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
                 message = f'Port {port_name} : total {len(new_ports[port_name])} , in {len(in_secids)} , out {len(out_secids)}'
                 Logger.stdout(message , indent = indent + 2 , vb_level = vb_level + 1)
-                if port_name in FOCUSED_PORTS:
+                if port_name in Proj.Conf.TradingPort.focused_ports:
                     in_detail = f'include new secids: {in_secids}'
                     out_detail = f'exclude old secids: {out_secids}'
                     Logger.conclude(message)
                     Logger.conclude(in_detail)
                     Logger.conclude(out_detail)
-                    updated_ports[port_name].analyze(write_down = True , vb_level = vb_level + 1)
-
+                    
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Proj.email_attachments.append(path)
 
             for port_name in updated_ports:
-                if port_name in FOCUSED_PORTS:
+                if port_name in Proj.Conf.TradingPort.focused_ports:
                     updated_ports[port_name].analyze(write_down = True , vb_level = vb_level + 1)
                     
     @classmethod

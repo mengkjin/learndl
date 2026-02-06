@@ -133,7 +133,7 @@ class PlotFactorData:
         plt.tight_layout()
         plt.close(self.fig)
         if self.show: 
-            Logger.Display(self.fig)
+            Logger.display(self.fig , caption = 'Plot of PlotFactorData')
 
     def title_suffix(self):
         if self.name_key:

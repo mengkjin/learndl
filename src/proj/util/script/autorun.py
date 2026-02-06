@@ -54,6 +54,7 @@ class AutoRunCatchers:
     _catch_warnings = [
         'must accept context and return_scalar arguments' ,
         'an item of incompatible dtype' ,
+        'parameter is deprecated and will be removed in Pillow 13'
     ]
     def __init__(self , catchers : list[str] = ['crash_protector' , 'html' , 'markdown' , 'warning'] , task_id : str | None = None):
         self.catchers = catchers

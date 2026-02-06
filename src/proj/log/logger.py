@@ -5,7 +5,7 @@ import traceback
 import pandas as pd
 
 from datetime import datetime
-from typing import Any , Literal , Sequence
+from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH
 from src.proj.proj import Proj
@@ -68,7 +68,6 @@ def new_print_traceback_stack(color : str = 'lightyellow' , bold : bool = True) 
     return stack_str
 
 class Logger:
-    Display = Display
     """
     custom colored log , config at PATH.conf / 'proj' / 'logger_settings.yaml'
     method include:
@@ -352,13 +351,13 @@ class Logger:
 
             with cls.Timer('Timer'):
                 df = pd.DataFrame({'a':[1,2,3,4,5,6,7,8,9,10],'b':[4,5,6,7,8,9,10,11,12,13]})
-                cls.Display(df)
+                cls.display(df)
                 fig = plt.figure()
                 plt.plot([1,2,3],[4,5,6])
                 plt.close(fig)
                 
             with cls.Paragraph('ParagraphIV' , 4):
-                cls.Display(fig)
+                cls.display(fig)
 
             with cls.Profiler('Profiler'):
                 for i in tqdm.tqdm(range(100) , desc='processing'):
@@ -372,6 +371,34 @@ class Logger:
                 cls.print_exc(e)
                 cls.print_traceback_stack()
                 cls.conclude(f'test exception: {e}' , level = 'error')
+
+    @classmethod
+    def display(cls , obj , caption : str | None = None , vb_level : int = 1):
+        """
+        display the object
+        """
+        if caption is not None:
+            cls.caption(caption , vb_level = vb_level)
+        Display(obj , vb_level = vb_level)
+
+    @classmethod
+    def set_display_callbacks(cls , callbacks_before : list[Callable] | None = None, callbacks_after : list[Callable] | None = None):
+        """
+        set the callbacks before and after the display
+        example:
+            Logger.set_display_callbacks(callback_before , callback_after)
+            means:
+                before the display, the callback_before will be called
+                after the display, the callback_after will be called
+        """
+        Display.set_callbacks(callbacks_before , callbacks_after)
+
+    @classmethod
+    def reset_display_callbacks(cls):
+        """
+        reset the callbacks before and after the display
+        """
+        Display.reset_callbacks()
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""

@@ -1,4 +1,4 @@
-import argparse , gc , inspect , torch
+import argparse , inspect , torch # gc
 import numpy as np
 
 from abc import ABC , abstractmethod
@@ -75,30 +75,30 @@ class DataPreProcessor:
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
                 time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level)
+                Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level + 1)
                 continue
 
             tt1 = datetime.now()
-            Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 2)
+            Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 3)
 
-            with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 2 , enter_vb_level = vb_level + 3):
-                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 3)
-            with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 2):
+            with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 3 , enter_vb_level = vb_level + 5):
+                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 5)
+            with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block = proc.process_blocks(block_dict)
             if data_block.empty:
-                Logger.alert1(f'[{key}] blocks process is empty! Skip saving...' , indent = indent + 2 , vb_level = vb_level + 2)
+                Logger.alert1(f'[{key}] blocks process is empty! Skip saving...' , indent = indent + 2 , vb_level = vb_level + 3)
                 continue
-            with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 2):   
+            with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 3):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Logger.Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 2):
+            with Logger.Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
-            with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 2):
+            with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
-            gc.collect()
+            # gc.collect()
             Logger.success(f'Preprocess [{key.upper()}] with predict={predict} finished! Cost {Duration(since = tt1)}' , 
                            indent = indent + 1 , vb_level = vb_level + 1)
-            Logger.divider(vb_level = vb_level + 2)
+            Logger.divider(vb_level = vb_level + 3)
 
 class TypePreProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']

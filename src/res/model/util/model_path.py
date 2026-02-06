@@ -30,7 +30,7 @@ class ModelPath:
         elif model_name is None:
             name = ''
         else:
-            name = model_name
+            name = model_name.removeprefix('model@')
         self.name = name
 
     @staticmethod

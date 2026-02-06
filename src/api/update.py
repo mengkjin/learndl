@@ -5,6 +5,7 @@ from .factor import FactorAPI
 from .model import ModelAPI
 
 from .trading import TradingAPI
+from .summary import SummaryAPI
 from .notification import NotificationAPI
 
 class UpdateAPI:
@@ -24,9 +25,10 @@ class UpdateAPI:
         FactorAPI.Pooling.update(timeout = 3)
         FactorAPI.Stats.update()
         FactorAPI.Hierarchy.update()
-        with Proj.vb.WithVB(10):
+        with Proj.vb.WithVB(1):
             ModelAPI.resume_testing()
         TradingAPI.update()
+        SummaryAPI.update()
         NotificationAPI.update()
         Proj.print_disk_info()
 

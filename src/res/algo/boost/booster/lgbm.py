@@ -108,7 +108,7 @@ class LgbmPlot:
             plt.yscale(yscale)
         plt.close(fig)
         if show_plot: 
-            Logger.Display(fig)
+            Logger.display(fig , caption = 'Training process of Lgbm')
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)

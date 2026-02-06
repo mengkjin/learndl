@@ -263,7 +263,7 @@ class Stock4DData:
         except Exception as e:
             Logger.error(f'Failed to convert DataFrame to NdData: {e}')
             Logger.print_exc(e)
-            Logger.Display(df[df.index.duplicated()])
+            Logger.display(df[df.index.duplicated()] , caption = 'Duplicate index in DataFrame')
             raise e
         try:
             value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])

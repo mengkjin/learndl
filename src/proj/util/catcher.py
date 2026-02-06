@@ -599,11 +599,11 @@ class HtmlCatcher(OutputCatcher):
         
     def redirect_display_function(self):
         """redirect Logger.Display to catcher"""
-        Logger.Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
+        Logger.set_display_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
 
     def restore_display_function(self):
         """restore Logger.Display functions"""
-        Logger.Display.reset_callbacks()
+        Logger.reset_display_callbacks()
     
     def generate_html(self):
         """generate html file with time ordered outputs"""

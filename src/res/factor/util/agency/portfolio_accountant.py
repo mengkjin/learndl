@@ -8,6 +8,7 @@ from typing import Literal , Any
 from src.proj import Proj , Logger , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
+from src.res.factor.util.stat.aggregate import eval_period_ret
 
 from ..stat import eval_drawdown
 
@@ -338,7 +339,15 @@ class PortfolioAccount:
     def max_end_date(self) -> int:
         return int(self.end.max())
     
-    
+    def eval_period_ret(self) -> pd.Series:
+        return eval_period_ret(self.df.reset_index().loc[:,['end' , 'pf']].rename(columns = {'end' : 'date'}))
+
+    @classmethod
+    def EvalPeriodRet(cls , paths : dict[str , str] | dict[str , Path]) -> pd.DataFrame:
+        accounts = {name : cls.load(path) for name , path in paths.items() if Path(path).exists()}
+        if not accounts:
+            return pd.DataFrame()
+        return pd.concat({name : account.eval_period_ret() for name , account in accounts.items()}, axis = 1)
 
 class PortfolioAccountant:
     """

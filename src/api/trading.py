@@ -1,12 +1,12 @@
-from src.res.trading import TradingPort , TradingPortfolioTracker , TradingPortfolioBacktestor
+from src.res.trading import TradingPortfolioTracker , TradingPortfolioBacktestor
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from .util import wrap_update
 
 class TradingAPI:
     @classmethod
     def available_ports(cls , backtest : bool | None = None) -> list[str]:
-        tradeports = TradingPort.portfolio_dict()
+        tradeports = Proj.Conf.TradingPort.portfolio_dict
         if backtest is None:
             return list(tradeports.keys())
         elif backtest:

@@ -277,7 +277,7 @@ class TrainParam:
         return self.Param['model.submodels']
     @property
     def model_module(self): 
-        return str(self.Param['model.module']).lower()
+        return str(self.Param['model.module']).lower().removeprefix('model@')
     @model_module.setter
     def model_module(self , value : str):
         self.Param['model.module'] = value.lower()

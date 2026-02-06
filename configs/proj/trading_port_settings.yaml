@@ -1,51 +1,55 @@
-test0:
+focused_ports:
+  - use_daily
+
+portfolio_dict:
+  test0:
     alpha: gru_day_V1
     universe: csi800+csi1000+csi2000
 
-test1:
+  test1:
     alpha: factor@df_scores_v0
     universe: top-1000
 
-use_daily:
+  use_daily:
     alpha: big_combine
     components:
-        - sellside@huatai.master_combined@master_combined
-        - factor@df_scores_v0
-        - gru_day_V1
+      - sellside@huatai.master_combined@master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
     weights:
-        - 1.0
-        - 1.0
-        - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
     universe: top-1000
     top_num: 50
     freq: 1
 
-use_daily.backtest:
+  use_daily.backtest:
     alpha: big_combine
     components:
-        - factor@ht_master_combined
-        - factor@df_scores_v0
-        - gru_day_V1
+      - factor@ht_master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
     weights:
-        - 1.0
-        - 1.0
-        - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
     universe: top-1000
     top_num: 50
     freq: 1
     backtest: True
     test_start: 20190101
 
-use_daily.backtest2:
+  use_daily.backtest2:
     alpha: big_combine
     components:
-        - factor@ht_master_combined
-        - factor@df_scores_v0
-        - gru_day_V1
+      - factor@ht_master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
     weights:
-        - 1.0
-        - 1.0
-        - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
     universe: top-1000
     top_num: 50
     freq: 1
@@ -53,16 +57,16 @@ use_daily.backtest2:
     test_start: 20190101
     buffer_zone: 0.9
 
-use_daily.backtest3:
+  use_daily.backtest3:
     alpha: big_combine
     components:
-        - factor@ht_master_combined
-        - factor@df_scores_v0
-        - gru_day_V1
+      - factor@ht_master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
     weights:
-        - 1.0
-        - 1.0
-        - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
     universe: top-1000
     top_num: 50
     freq: 1
@@ -70,19 +74,19 @@ use_daily.backtest3:
     test_start: 20190101
     buffer_zone: 0.95
 
-master_daily:
+  master_daily:
     alpha: factor@ht_master_combined
     universe: top-1000
     top_num: 50
     freq: 1
 
-gru_daily:
+  gru_daily:
     alpha: gru_day_V1
     universe: top-1000
     top_num: 50
     freq: 1
 
-event_factor_momentum.backtest:
+  event_factor_momentum.backtest:
     alpha: factor@event_factor_momentum
     category: screen
     universe: top-1000
@@ -91,7 +95,7 @@ event_factor_momentum.backtest:
     backtest: True
     test_start: 20190101
 
-event_factor_momentum.backtest1:
+  event_factor_momentum.backtest1:
     alpha: factor@event_factor_momentum
     category: screen
     universe: top-1000
@@ -101,7 +105,7 @@ event_factor_momentum.backtest1:
     test_start: 20190101
     screen_ratio: 0.4
 
-event_factor_momentum.backtest2:
+  event_factor_momentum.backtest2:
     alpha: factor@event_factor_momentum
     category: screen
     universe: top-1000
@@ -111,7 +115,7 @@ event_factor_momentum.backtest2:
     test_start: 20190101
     screen_ratio: 0.3
 
-event_factor_momentum.backtest3:
+  event_factor_momentum.backtest3:
     alpha: factor@event_factor_momentum
     category: screen
     universe: top-1000

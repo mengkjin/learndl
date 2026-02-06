@@ -100,7 +100,7 @@ class BasicTestResult(BaseCallBack):
             df_display = self.status.test_summary
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]           
-            Logger.Display(df_display)
+            Logger.display(df_display , caption = 'Table: Test Summary:')
             
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}
@@ -244,7 +244,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
             for name , vb_level in self.table_vb_levels.items():
                 if Proj.vb.ignore(vb_level):
                     continue
-                Logger.caption(f'Table: {name.title()}:' , vb_level = vb_level)
                 df = self.test_results[name].copy()
                 df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
                 for col in df.columns:
@@ -254,13 +253,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         df[col] = df[col].map(lambda x:f'{x:.3f}')
                     elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
                         df[col] = df[col].map(lambda x:f'{x:.3%}')
-                Logger.Display(df , vb_level = vb_level)
+                Logger.display(df , caption = f'Table: {name.title()}:' , vb_level = vb_level)
 
             for name , vb_level in self.figure_vb_levels.items():
                 if Proj.vb.ignore(vb_level):
                     continue
-                Logger.caption(f'Figure: {name.title()}:' , vb_level = vb_level)
-                Logger.Display(self.test_figures[name] , vb_level = vb_level)
+                Logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:' , vb_level = vb_level)
 
             dfs_to_excel(self.test_results , self.path_result_data , print_prefix='Analytic datas')
             figs_to_pdf(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')

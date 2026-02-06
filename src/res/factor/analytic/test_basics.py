@@ -198,7 +198,7 @@ class BaseFactorAnalyticTest(ABC):
         return {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
     
     def display_figs(self):
-        [Logger.Display(fig) for fig in self.get_figs().values()]
+        [Logger.display(fig) for fig in self.get_figs().values()]
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()

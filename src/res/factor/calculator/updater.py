@@ -254,7 +254,10 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         """after process jobs"""
         failed_jobs = [job for job in cls.jobs if not job.done]
         if failed_jobs:
-            Logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: {failed_jobs}', indent = indent)
+            if len(failed_jobs) <= 10:
+                Logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', indent = indent)
+            else:
+                Logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', indent = indent)
         elif len(cls.jobs) > 0:
             Logger.success(f'All {len(cls.jobs)} Jobs are Processed Successfully!' , indent = indent , vb_level = vb_level)
 

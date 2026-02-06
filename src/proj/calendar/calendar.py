@@ -136,6 +136,20 @@ class CALENDAR:
     def time() -> int: 
         return int(datetime.now().strftime('%H%M%S'))
     @staticmethod
+    def datetime(year : int = 2000 , month : int = 1 , day : int = 1 , * , lock_month = False) -> int:
+        if month > 12 or month <= 0:
+            year += (month - 1) // 12
+            month = (month - 1) % 12 + 1
+        date1 = datetime(year , month , 1)
+        real_month = date1.month if lock_month else None
+        date = date1 + timedelta(days=day - 1)
+        if real_month is not None and date.month != real_month:
+            if date.month < real_month:
+                date = date1.replace(day = 1)
+            else:
+                date = date1.replace(month = real_month + 1 , day = 1) - timedelta(days = 1)
+        return int(date.strftime('%Y%m%d'))
+    @staticmethod
     def clock(date : int = 0 , h = 0 , m = 0 , s = 0):
         if date <=0:
             date_time = (datetime.today() + timedelta(days=date))
@@ -303,13 +317,33 @@ class CALENDAR:
         return int(md)
 
     @staticmethod
-    def td_start_end(reference_date , period_num : int , 
-                     freq : Literal['d','w','m','q','y'] = 'm' , 
+    def td_start_end(reference_date , period_num : int = 1 , 
+                     freq : Literal['d','w','m','q','y'] | str = 'm' , 
                      lag_num : int = 0):
         td = TradeDate(reference_date)
         pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[freq]
         start_dt = td - pdays * (period_num + lag_num) + 1
         end_dt   = td - pdays * lag_num
+        return start_dt , end_dt
+
+    @classmethod
+    def cd_start_end(cls , reference_date , period_num : int = 1 , 
+                     freq : Literal['d','w','m','q','y'] | str = 'm' , 
+                     lag_num : int = 0):
+        cd = int(reference_date)
+        if freq in ['d' , 'w']:
+            pdays = {'d':1 , 'w':7}[freq]
+            start_dt = cd - pdays * (period_num + lag_num) + 1
+            end_dt   = cd - pdays * lag_num
+        elif freq in ['m' , 'q' , 'y']:
+            year , month , day = cd // 10000 , cd % 10000 // 100 , cd % 100
+            pmonths = {'m':1 , 'q':3 , 'y':12}[freq]
+            start_month = month - pmonths * (period_num + lag_num)
+            end_month = month - pmonths * lag_num
+            start_dt = cls.cd(cls.datetime(year , start_month , day , lock_month = True) , 1)
+            end_dt = cls.datetime(year , end_month , day , lock_month = True)
+        else:
+            raise ValueError(f'Invalid frequency: {freq}')
         return start_dt , end_dt
     
     @staticmethod
@@ -410,7 +444,7 @@ class CALENDAR:
                     d0 , d1 = min(valid_dates) , 99991231
                 else:
                     d0 , d1 = min(valid_dates) , max(valid_dates)
-                dstr = f'{d0} ~ {d1}({len(valid_dates)}days)' if d0 != d1 else str(d0)
+                dstr = f'{d0} ~ {d1}' if d0 != d1 else str(d0)
         else:
             dstr = str(dates) if dates is not None else 'None'
         return dstr

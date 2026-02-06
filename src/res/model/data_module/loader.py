@@ -38,7 +38,7 @@ class BatchDataLoader:
         return batch_data
 
     def enable_tqdm(self , disable = False):
-        if Proj.vb.is_max_level or not self.tqdm or disable: 
+        if not Proj.vb.is_max_level or not self.tqdm or disable: 
             return self
         if not isinstance(self.loader , tqdm): 
             self.loader = tqdm(self.loader , total=len(self.loader) , desc=self.desc)

@@ -93,7 +93,7 @@ def _df_saver(df : pd.DataFrame , path : Path | io.BytesIO):
             df.to_parquet(path , engine='fastparquet')
     except Exception as e:
         Logger.error(f'Error saving {path}: {e}')
-        Logger.Display(df)
+        Logger.display(df , caption = 'Error saving DataFrame')
         raise e
 
 def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
@@ -106,8 +106,7 @@ def _tar_saver(dfs : dict[str , pd.DataFrame] , path : Path | str):
             df = _reset_index(df)
             if not isinstance(df.index , pd.RangeIndex):
                 Logger.error(f'{df} is not a RangeIndex DataFrame')
-                Logger.Display(df)
-                Logger.stderr(df.index)
+                Logger.display(df , caption = 'Error saving DataFrame')
                 raise ValueError(f'{df} is not a RangeIndex DataFrame')
             _df_saver(df , buffer)
             

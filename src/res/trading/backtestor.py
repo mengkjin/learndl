@@ -1,10 +1,10 @@
-from src.proj import CALENDAR
+from src.proj import Proj ,CALENDAR
 from src.res.trading.util import TradingPort
 
 class TradingPortfolioBacktestor:
     @classmethod
     def available_ports(cls) -> list[str]:
-        return [key for key, value in TradingPort.portfolio_dict().items() if value.get('backtest' , False)]
+        return [key for key, value in Proj.Conf.TradingPort.portfolio_dict.items() if value.get('backtest' , False)]
 
     @classmethod
     def analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs): 

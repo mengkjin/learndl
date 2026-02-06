@@ -101,15 +101,15 @@ class ModelTrainer(BaseTrainer):
             Logger.alert1('No models or factors to resume testing!')
             return
 
-        Logger.stdout_pairs([('Factor' , factor) for factor in resumable_factors] + [('Model' , model) for model in resumable_models] , 
-                            title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} factors and models:')
+        testees = [('Factor' , factor) for factor in resumable_factors] + [('Model' , model) for model in resumable_models]
+                            
+        Logger.stdout_pairs(testees , title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} factors and models:')
         Logger.divider()
         Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
 
-        bases = [f'factor@{factor}' for factor in resumable_factors] + [model for model in resumable_models]
-        for base in bases:
-            title_object = f'Factor {base.removeprefix('factor@')}' if base.startswith('factor@') else f'Model {base}'
-            cls.GO(2 , 1, 0 , base_path = base , short_test = False ,
+        for test_type , test_name in testees:
+            title_object = f'{test_type.title()} {test_name}'
+            cls.GO(2 , 1, 0 , base_path = f'{test_type.lower()}@{test_name}' , short_test = False ,
                    title = f'Resume Testing {title_object}' , paragraph = True , 
                    check_operation = None if force_resume else 'resume_testing' ,
                    log_operation = 'resume_testing')

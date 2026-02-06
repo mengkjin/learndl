@@ -1,25 +1,9 @@
 import pandas as pd
-import os
 import torch
 from datetime import datetime
 from src.proj import MACHINE , Logger , CALENDAR , DB
-from src.proj.util import Options , Email
-from src.proj.util import TaskRecorder
-
+from src.proj.util import Options , Email , TempFile , TaskRecorder
 from .util import wrap_update
-
-class TempFile:
-    def __init__(self, file_name: str):
-        self.file_name = file_name
-
-    def __enter__(self):
-        return self.file_name
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        try:
-            os.remove(self.file_name)
-        except Exception as e:
-            Logger.error(f'Failed to remove temp file: {e}')
 
 def check_cuda_status():
     if not MACHINE.platform_server:

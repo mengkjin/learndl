@@ -33,8 +33,7 @@ class CallbackTimer(BaseCallBack):
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5)
-            Logger.caption('Table: Callback Time Costs:')
-            Logger.Display(df)  
+            Logger.display(df , caption = 'Table: Callback Time Costs:')  
             
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''

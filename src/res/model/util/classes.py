@@ -440,8 +440,7 @@ class TrainerPredRecorder(ModelStreamLine):
             return
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
-        Logger.note(purge_info , vb_level = vb_level)
-        Logger.Display(df , vb_level = vb_level)
+        Logger.display(df , caption = purge_info , vb_level = vb_level)
         for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
             df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
             Path(path).unlink()

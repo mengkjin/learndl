@@ -5,7 +5,7 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type
 
-from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
+from src.proj import PATH , Proj , Logger , CALENDAR , DB
 from src.proj.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
@@ -72,15 +72,11 @@ class TradingPort:
 
         self.new_ports : dict[int , pd.DataFrame] = {}
         self.last_ports : dict[int , pd.DataFrame] = {}
-
-    @classmethod
-    def portfolio_dict(cls) -> dict[str , dict]:
-        return MACHINE.configs('trade' , 'portfolio_dict')
     
     @classmethod
     def load(cls , name : str) -> 'TradingPort':
-        port_dict = cls.portfolio_dict()
-        assert name in port_dict , f'{name} is not in portfolio_dict'
+        port_dict = Proj.Conf.TradingPort.portfolio_dict
+        assert name in port_dict , f'{name} is not in {port_dict}'
         kwargs = {'name' : name , **port_dict[name]}
         return cls(**kwargs)
 
@@ -283,8 +279,7 @@ class TradingPort:
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:
-                Logger.caption(f'Figure: {name.title()}:' , vb_level = 0)
-                Logger.Display(fig)
+                Logger.display(fig , caption = f'Figure: {name.title()}:')
 
         self.analyze_results = rslts
         self.analyze_figs = figs
