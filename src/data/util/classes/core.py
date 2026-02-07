@@ -157,7 +157,7 @@ class DataBlock(Stock4DData):
         fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
         
         block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
-        with Logger.Timer(f'Load {block_title}' , vb_level = vb_level):
+        with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
             blocks : dict[str,'DataBlock'] = {}
             for key , path in zip(keys , paths):
                 block = cls(**cls.load_dict(path))
@@ -165,7 +165,10 @@ class DataBlock(Stock4DData):
                     block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
                 blocks[key] = block
 
-        with Logger.Timer(f'Align {block_title}' , silent = len(blocks) <= 1 , vb_level = vb_level):
+        if len(blocks) <= 1:
+            return blocks
+
+        with Logger.Timer(f'Align {block_title} (predict={predict})' , vb_level = vb_level):
             # sligtly faster than .align(secid = secid , date = date)
             if intersect_secid:  
                 newsecid = index_intersect([blk.secid for blk in blocks.values()])[0]
@@ -423,9 +426,6 @@ class ModuleData:
             hist_data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
             pred_data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
 
-            print(hist_data.y.date)
-            print(pred_data.y.date)
-
             hist_data.y = hist_data.y.merge_others([pred_data.y] , inplace = True)
             hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
             for x_key in hist_data.x:
@@ -482,10 +482,10 @@ class ModuleData:
         if not factor_names:
             return self
         factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
-        with Logger.Timer(f'Load {factor_title}' , vb_level = vb_level):
+        start_dt = max(start_dt or self.date[0] , self.date[0])
+        end_dt = min(end_dt or self.date[-1] , self.date[-1])
+        with Logger.Timer(f'Load {factor_title} ({start_dt} - {end_dt})' , vb_level = vb_level):
             from src.data.loader import FactorLoader
-            start_dt = max(start_dt or self.date[0] , self.date[0])
-            end_dt = min(end_dt or self.date[-1] , self.date[-1])
             self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 99).align_secid_date(self.secid , self.date , inplace = True)
         return self
 

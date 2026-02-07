@@ -110,8 +110,6 @@ class DataModule(BaseDataModule):
             else:
                 self.model_date_list = dates[::self.config.model_interval]
 
-        raise ValueError('stop here')
-
     @property
     def beg_date(self):
         return -1 if self.use_data == 'predict' else self.config.beg_date
