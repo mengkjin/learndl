@@ -734,10 +734,11 @@ class BaseTrainer(ModelStreamLine):
         return cls._instance
     
     @final
-    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs):
+    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , 
+                 use_data : Literal['fit','predict','both'] = 'fit' , **kwargs):
         with Logger.Paragraph('Stage [Setup]' , 2):
             self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
-            self.init_data(**kwargs)
+            self.init_data(use_data = use_data , **kwargs)
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
             self.init_utils(**kwargs)
@@ -763,7 +764,7 @@ class BaseTrainer(ModelStreamLine):
         self.callback : BaseCallBack
 
     @abstractmethod
-    def init_data(self , **kwargs): 
+    def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
         '''initialized data_module'''
         self.data : BaseDataModule
 
