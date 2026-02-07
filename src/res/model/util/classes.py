@@ -233,7 +233,7 @@ class TrainerStatus(ModelStreamLine):
     def on_test_model_start(self): self.dataset = 'test'
     def on_fit_model_start(self):
         if self.fit_iter_num == 0:
-            Logger.note(f'First Iterance: ({self.model_date} , {self.model_num})')
+            Logger.note(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})')
         self.fit_iter_num += 1
         self.attempt = -1
         self.best_attempt_metric = None
@@ -425,9 +425,9 @@ class TrainerPredRecorder(ModelStreamLine):
                 Path(path).unlink()
                 self.save_preds(df , model_date , model_num)
                 
-            Logger.note(purge_info , vb_level = vb_level)
+            Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
         else:
-            Logger.note(f'No retrained models found, no purge needed' , vb_level = vb_level)
+            Logger.stdout(f'{self.__class__.__name__} : No retrained models found, no purge needed' , vb_level = vb_level)
 
     def purge_outdated_model_preds(self , vb_level : int = 2):
         archive_records = self.archive_model_records()
@@ -436,7 +436,7 @@ class TrainerPredRecorder(ModelStreamLine):
         new_pred_records['next_model_date'] = new_pred_records['next_model_date'].fillna(99991231)
         df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
         if df.empty:
-            Logger.note(f'No outdated predictions found, no purge needed' , vb_level = vb_level)
+            Logger.stdout(f'{self.__class__.__name__} : No outdated predictions found, no purge needed' , vb_level = vb_level)
             return
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
@@ -468,7 +468,7 @@ class TrainerPredRecorder(ModelStreamLine):
             for path in obsolete_avg_records['path']:
                 Path(path).unlink()
         purge_info += f' deleted!'
-        Logger.note(purge_info , vb_level = vb_level)
+        Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
 
     def setup_resuming_status(self , vb_level : int = 2):
         """
@@ -514,7 +514,7 @@ class TrainerPredRecorder(ModelStreamLine):
         if pred_records.empty:
             resume_info += f', no saved preds found'
 
-        Logger.note(resume_info , vb_level = vb_level)
+        Logger.stdout(f'{self.__class__.__name__} : {resume_info}' , vb_level = vb_level)
     
     def append_batch_preds(self):
         if self.pred_idx in self.pred_dict.keys(): 
@@ -551,10 +551,7 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def collect_avg_preds(self):
         self.save_avg_preds(self.trainer.model_date)
-        avg_pred_records = self.avg_pred_records()
-        if not avg_pred_records.empty:
-            Logger.note(f'avg model preds updated to {avg_pred_records["max_pred_date"].max()}')
-
+        
     def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
@@ -599,7 +596,12 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def on_test_model_date_end(self):
         self.collect_avg_preds()
+
+    def on_test_end(self):
         self.purge_obsolete_model_preds()
+        avg_pred_records = self.avg_pred_records()
+        if not avg_pred_records.empty:
+            Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 1)
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -869,8 +871,6 @@ class BaseTrainer(ModelStreamLine):
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             if self.status.model_num == 0:
                 self.on_fit_model_date_start()
-            if self.status.fit_iter_num == 0:
-                Logger.note(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
             self.on_fit_model_start()
             self.model.fit()
             self.on_fit_model_end()

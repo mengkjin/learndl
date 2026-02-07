@@ -281,7 +281,6 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                 Logger.alert1(f'Terminated at {group}', indent = indent + 1)
                 break
         cls.after_process_jobs(indent = indent + 1 , vb_level = vb_level + 1)
-        
 
     @classmethod
     def grouped_jobs_by(cls , keys : list[str]) -> Generator[tuple[dict , list[Any]] , None , None]:
