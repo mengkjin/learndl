@@ -433,28 +433,32 @@ class ModuleData:
         
         assert fit or predict , (fit , predict)
         if not predict: 
-            return cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
+            data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
         elif not fit:
-            return cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
+            data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
         else:
-            hist_data = cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
-            pred_data = cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
+            hist_data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
+            pred_data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
+
+            print(hist_data.y.date)
+            print(pred_data.y.date)
 
             hist_data.y = hist_data.y.merge_others([pred_data.y] , inplace = True)
             hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
             for x_key in hist_data.x:
                 hist_data.x[x_key] = hist_data.x[x_key].merge_others([pred_data.x[x_key]] , inplace = True).align_secid_date(hist_data.secid , hist_data.date , inplace = True)
 
-            return hist_data
+            data = hist_data
+            print(data.y.date)
+
+        data.load_factor(factor_names , factor_start_dt , factor_end_dt)
+        return data
 
     @classmethod
     def load_datas(cls , data_type_list : list[str] , 
                    y_labels : list[str] | None = None , 
-                   factor_names : list[str] | None = None ,
                    predict : bool = False , dtype : str | Any = torch.float , 
                    save_upon_loading : bool = True , 
-                   factor_start_dt : int | None = None , 
-                   factor_end_dt : int | None = None , 
                    vb_level = 2):
         '''
         load all x/y data if input_type is data or factor
@@ -487,16 +491,21 @@ class ModuleData:
                 cls.datacache_save(data , last_date or y.date[-1] , data_type_list)
             data = cls(**data)
 
-        if factor_names:
-            factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
-            with Logger.Timer(f'Load {factor_title}' , vb_level = vb_level):
-                from src.data.loader import FactorLoader
-                start_dt = max(factor_start_dt or data.date[0] , data.date[0])
-                end_dt = min(factor_end_dt or data.date[-1] , data.date[-1])
-                data.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 99).align_secid_date(data.secid , data.date , inplace = True)
         data.y.align_feature(y_labels , inplace = True)
         return data
-    
+
+    def load_factor(self , factor_names : list[str] | None , start_dt : int | None = None , end_dt : int | None = None , vb_level = 2):
+        '''load factor data'''
+        if not factor_names:
+            return self
+        factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
+        with Logger.Timer(f'Load {factor_title}' , vb_level = vb_level):
+            from src.data.loader import FactorLoader
+            start_dt = max(start_dt or self.date[0] , self.date[0])
+            end_dt = min(end_dt or self.date[-1] , self.date[-1])
+            self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 99).align_secid_date(self.secid , self.date , inplace = True)
+        return self
+
     @staticmethod
     def abbr(data_type : str): 
         return data_type_abbr(data_type)
