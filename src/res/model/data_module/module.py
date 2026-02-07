@@ -110,8 +110,6 @@ class DataModule(BaseDataModule):
             else:
                 self.model_date_list = dates[::self.config.model_interval]
 
-        print(self.test_full_dates)
-        print(self.model_date_list)
         raise ValueError('stop here')
 
     @property
@@ -214,8 +212,6 @@ class DataModule(BaseDataModule):
             self.model_test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
             
             test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-            print(test_dates)
-            print(self.test_full_dates)
             
             if test_dates.size == 0:
                 self.d0 = len(self.datas.date) - x_extend
@@ -424,7 +420,7 @@ class DataModule(BaseDataModule):
         for mdt in self.input_keys: 
             method : dict = self.config.model_data_prenorm.get(mdt , {})
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
-            histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
+            histnorm = method.get('histnorm' , True) and (mdt in DataBlockNorm.HISTNORM)
             if (divlast or histnorm): 
                 Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = Proj.vb.max)
             if divlast: 

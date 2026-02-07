@@ -4,7 +4,7 @@ import pandas as pd
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any , ClassVar
+from typing import Any , ClassVar , Literal
 
 from src.proj import PATH , Logger , CALENDAR , DB
 from src.proj.func import torch_load
@@ -137,55 +137,49 @@ class DataBlock(Stock4DData):
         return data
     
     @classmethod
-    def load_path(cls , path : Path): 
-        return cls(**cls.load_dict(path))
-    
-    @classmethod
-    def load_paths(cls , paths : Path | list[Path], fillna = 'guess' , intersect_secid = True ,
-                   start_dt = None , end_dt = None , vb_level = 2 , dtype = torch.float):
-        if not isinstance(paths , list): 
-            paths = [paths]
-        block_names = [Path(path).stem.lower() for path in paths]
-        def _guess(names : list[str] , excl : tuple[str,...] = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')) -> list[bool]:
-            return [x.startswith(excl) == 0 for x in names]
+    def load_key(cls , key : str , predict = False , alias_search = True , dtype = None):
+        path = cls.block_path(key , predict , alias_search)
+        return cls(**cls.load_dict(path)).as_type(dtype)
+
+    @staticmethod
+    def guess_fillna(name : str , fillna : Literal['guess'] | bool | None = 'guess' , 
+                     excl : tuple[str,...] = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')) -> bool:
         if fillna == 'guess':
-            fillna = np.array(_guess(block_names))
-        elif fillna is None or isinstance(fillna , bool):
-            fillna = np.repeat(fillna , len(paths))
+            return name.startswith(excl) == 0
         else:
-            assert len(paths) == len(fillna) , (len(paths) , len(fillna))
-            fillna = np.array(fillna)
-        fillna = fillna.astype(bool)
+            return bool(fillna)
+
+    @classmethod
+    def load_keys(cls , keys : list[str] , predict = False , alias_search = True , 
+                  fillna : Literal['guess'] | bool | None = 'guess' , intersect_secid = True ,
+                  start_dt = None , end_dt = None , dtype : str | Any = torch.float , vb_level = 2 , **kwargs):
+        paths = [cls.block_path(key , predict , alias_search) for key in keys]
+        fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
         
-        block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlock [{",".join(block_names)}]'
+        block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
         with Logger.Timer(f'Load {block_title}' , vb_level = vb_level):
-            blocks = [cls.load_path(path) for path in paths]
+            blocks : dict[str,'DataBlock'] = {}
+            for key , path in zip(keys , paths):
+                block = cls(**cls.load_dict(path))
+                if predict and key == 'y' and not block.empty:
+                    block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
+                blocks[key] = block
 
         with Logger.Timer(f'Align {block_title}' , silent = len(blocks) <= 1 , vb_level = vb_level):
             # sligtly faster than .align(secid = secid , date = date)
             if intersect_secid:  
-                newsecid = index_intersect([blk.secid for blk in blocks])[0]
+                newsecid = index_intersect([blk.secid for blk in blocks.values()])[0]
             else:
                 newsecid = None
             
-            newdate : np.ndarray | Any = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
-            for blk in blocks: 
-                newdate = newdate[newdate >= min(blk.date)]
+            max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
+            newdate : np.ndarray | Any = index_union([blk.date for blk in blocks.values()] , start_dt , end_dt)[0]
+            newdate = newdate[newdate >= max_min_date]
             
-            for i , blk in enumerate(blocks):
-                blk.align_secid_date(newsecid , newdate , inplace = True).ffill(fillna[i]).as_tensor().as_type(dtype)
+            for key , blk in blocks.items():
+                blk.align_secid_date(newsecid , newdate , inplace = True).ffill(fillnas[key]).as_tensor().as_type(dtype)
 
         return blocks
-    
-    @classmethod
-    def load_key(cls , key : str , predict = False , alias_search = True , dtype = None):
-        return cls.load_path(cls.block_path(key , predict , alias_search))
-
-    @classmethod
-    def load_keys(cls , keys : list[str] , predict = False , alias_search = True , vb_level = 2 , **kwargs):
-        paths = [cls.block_path(key , predict , alias_search) for key in keys]
-        blocks = cls.load_paths(paths , vb_level = vb_level , **kwargs)
-        return {key:val for key,val in zip(keys , blocks)}
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
@@ -376,25 +370,14 @@ class DataBlockNorm:
 
     def save(self , key):
         DataBlock.save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
-
-    @classmethod
-    def load_path(cls , path : Path , dtype = None):
-        if not path.exists(): 
-            return None
-        data = DataBlock.load_dict(path)
-        return cls(data['avg'] , data['std'] , dtype)
-
-    @classmethod
-    def load_paths(cls , paths : Path | list[Path] , dtype = None):
-        if not isinstance(paths , list): 
-            paths = [paths]
-        norms = [cls.load_path(path , dtype) for path in paths]
-        return norms
     
     @classmethod
     def load_key(cls , key : str , predict = False , alias_search = True , dtype = None):
         path = cls.norm_path(key , predict , alias_search)
-        return cls.load_path(path)
+        if not path.exists(): 
+            return None
+        data = DataBlock.load_dict(path)
+        return cls(data['avg'] , data['std'] , dtype)
 
     @classmethod
     def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None):
@@ -449,7 +432,6 @@ class ModuleData:
                 hist_data.x[x_key] = hist_data.x[x_key].merge_others([pred_data.x[x_key]] , inplace = True).align_secid_date(hist_data.secid , hist_data.date , inplace = True)
 
             data = hist_data
-            print(data.y.date)
 
         data.load_factor(factor_names , factor_start_dt , factor_end_dt)
         return data
@@ -482,7 +464,8 @@ class ModuleData:
             y : DataBlock = blocks['y']
             x : dict[str,DataBlock] = {cls.abbr(key):val for key,val in blocks.items() if key != 'y'}
             norms = {cls.abbr(key):val for key,val in norms.items() if val is not None and key != 'y'}
-            secid , date = y.secid , y.date
+            secid = y.secid
+            date = y.date
 
             assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
