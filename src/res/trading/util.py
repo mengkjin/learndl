@@ -250,10 +250,9 @@ class TradingPort:
             'strategy'    : f'top{self.top_num}' ,
         }
         self.portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine = trade_engine ,
-                                  resume_path = self.result_path_account , resume_drop_last = True , indent = indent , vb_level = vb_level)
-        account = self.portfolio.account.with_index(index)
-        account.save(self.result_path_account , indent = indent , vb_level = vb_level)
-        return account
+                                  with_index = index , resume_path = self.result_path_account , resume_drop_last = True , 
+                                  save_after = True , indent = indent , vb_level = vb_level)
+        return self.portfolio.account
 
     def analyze(self , start : int | None = None , end : int | None = None , 
                 indent : int = 0 , vb_level : int = 1 , write_down = False , display_all = False , key_fig = 'top@drawdown', 

@@ -246,22 +246,18 @@ class PortfolioAccount:
         return cls(account.reset_index(drop = False) , index = index)
 
     def save(self , path : Path | str | None = None , vb_level : int = 1 , indent : int = 0):
-        self.save_account(self , path , vb_level = vb_level , indent = indent)
-        return self
-
-    @classmethod
-    def save_account(cls , account : 'PortfolioAccount' , path : Path | str | None = None , vb_level : int = 1 , indent : int = 0):
-        if path is None or account.empty:
-            return
+        if path is None or self.empty:
+            return self
         path = Path(path)
         assert path.suffix in ['.pkl' , '.tar'] , f'{path} is not a pkl or tar file'
         if path.suffix == '.pkl':
-            account.df.to_pickle(path)
+            self.df.to_pickle(path)
             Logger.stdout(f'Account Saved to {path}' , indent = indent , vb_level = vb_level , italic = True)
         else:
-            account_dfs = account.to_dfs()
+            account_dfs = self.to_dfs()
             DB.save_dfs_to_tar(account_dfs , path , prefix = 'Account' , indent = indent , vb_level = vb_level)
-        
+        return self
+
     @classmethod
     def load(cls , path : Path | str | None = None) -> 'PortfolioAccount':
         """load portfolio account from a path (a tar file or a pickle file)"""
@@ -385,12 +381,22 @@ class PortfolioAccountant:
     def port_dates(self):
         return self.portfolio.available_dates()
 
+    @property
+    def resume_path(self) -> Path | str | None:
+        if not hasattr(self , '_resume_path'):
+            self._resume_path = None
+        return Path(self._resume_path) if self._resume_path else None
+
+    @resume_path.setter
+    def resume_path(self , value : Path | str | None):
+        self._resume_path = Path(value) if value else None
+
     def accounting(self , 
                    config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
                    start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-                   daily = False , cache = False , 
-                   resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True ,
+                   daily = False , cache = False , with_index : dict[str,Any] | None = None ,
+                   resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
                    indent : int = 0 , vb_level : int = 1):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
@@ -400,9 +406,10 @@ class PortfolioAccountant:
                                    trade_engine = trade_engine , daily = daily , )
         self.benchmark = AccountConfig.get_benchmark(config_or_benchmark)
         self.account.config = config
-        
+        self.resume_path = resume_path
+
         if Proj.Conf.Model.TRAIN.resume_test_fmp_account:
-            self.resumed_account = PortfolioAccount.load(resume_path)
+            self.resumed_account = PortfolioAccount.load(self.resume_path)
             if resume_drop_last:
                 last_model_date = self.resumed_account.max_model_date
                 if len(before_last_model_dates := self.port_dates[self.port_dates <= last_model_date]) > 0:
@@ -413,11 +420,14 @@ class PortfolioAccountant:
                 self.resumed_account.filter_dates(end = resume_end)
 
             if not self.resumed_account.empty:
-                Logger.success(f'Load Account from {resume_path} at {CALENDAR.dates_str(self.resumed_account.model_date)}' , 
+                Logger.success(f'Load Account from {self.resume_path} at {CALENDAR.dates_str(self.resumed_account.model_date)}' , 
                             indent = indent + 1 , vb_level = Proj.vb.max)
         else:
             self.resumed_account = PortfolioAccount()
         self.go(cache = cache , indent = indent , vb_level = vb_level)
+        self.account.with_index(with_index)
+        if save_after:
+            self.account.save(self.resume_path , indent = indent , vb_level = vb_level + 1)
         return self
 
     @property

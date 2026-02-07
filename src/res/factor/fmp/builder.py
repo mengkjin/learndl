@@ -148,6 +148,10 @@ class PortfolioBuilder:
     @property
     def port_index(self):
         return get_port_index(self.full_name)
+
+    @property
+    def account(self):
+        return self.portfolio.account
     
     def setup(self):
         match self.category:
@@ -182,12 +186,10 @@ class PortfolioBuilder:
         '''Accounting portfolio through date, require at least portfolio'''
         self.portfolio.accounting(self.benchmark , start , end , 
                                   analytic and self.lag == 0 , attribution and self.lag == 0 ,
-                                  trade_engine = trade_engine , daily = daily , 
-                                  resume_path = self.resume_path_account , 
-                                  resume_end = self.resumed_portfolio_end_date , resume_drop_last = False ,
+                                  trade_engine = trade_engine , daily = daily , with_index = self.port_index ,
+                                  resume_path = self.resume_path_account , resume_end = self.resumed_portfolio_end_date , 
+                                  resume_drop_last = False , save_after = True ,
                                   indent = self.indent + 1 , vb_level = self.vb_level)
-        self.account = self.portfolio.account.with_index(self.port_index)
-        self.account.save(self.resume_path_account , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return self
 
     @classmethod

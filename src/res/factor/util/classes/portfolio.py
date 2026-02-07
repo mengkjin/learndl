@@ -281,8 +281,8 @@ class Portfolio:
             start : int = -1 , end : int = 99991231 , 
             analytic = True , attribution = True , * ,
             trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-            daily = False , cache = False , 
-            resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True ,
+            daily = False , cache = False , with_index = None ,
+            resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
             indent : int = 0 , vb_level : int = 1
         ):
         """account the portfolio"""
@@ -290,8 +290,8 @@ class Portfolio:
             self.activate_accountant()
         self.accountant.accounting(
             benchmark , start , end , analytic , attribution ,
-            trade_engine = trade_engine , daily = daily , cache = cache , 
-            resume_path = resume_path , resume_end = resume_end , resume_drop_last = resume_drop_last ,
+            trade_engine = trade_engine , daily = daily , cache = cache , with_index = with_index ,
+            resume_path = resume_path , resume_end = resume_end , resume_drop_last = resume_drop_last , save_after = save_after ,
             indent = indent , vb_level = vb_level)
         return self
     
