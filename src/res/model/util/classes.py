@@ -962,6 +962,7 @@ class BaseTrainer(ModelStreamLine):
         for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
             self.on_test_batch_start()
             yield self.batch_idx , self.batch_data
+            print(self.data.batch_date0(self.batch_data))
             self.on_test_batch_end()
 
     def iter_predict_dataloader(self , given_loader = None):

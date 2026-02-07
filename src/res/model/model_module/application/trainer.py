@@ -117,6 +117,7 @@ class ModelTrainer(BaseTrainer):
                    title = f'Resume Testing {title_object}' , paragraph = True , 
                    check_operation = None if force_resume else 'resume_testing' ,
                    log_operation = 'resume_testing' , use_data = 'both')
+            break
 
         
     @classmethod

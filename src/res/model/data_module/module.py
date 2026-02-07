@@ -210,6 +210,8 @@ class DataModule(BaseDataModule):
             self.model_test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
             
             test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
+            print(test_dates)
+            print(self.test_full_dates)
             
             if test_dates.size == 0:
                 self.d0 = len(self.datas.date) - x_extend
