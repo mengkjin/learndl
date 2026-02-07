@@ -858,11 +858,11 @@ class TrainConfig(TrainParam):
                     if model_name not in candidate_name:
                         Logger.error(f'The raw model_name [{model_name}] does not exist! You have to start a new training or manually delete the existing model_name dir!')
                         raise Exception(f'the raw model_name [{model_name}] does not exist!')
-                    Logger.note(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
+                    Logger.note(f'Input 0 to use the raw model_name [{model_name}] to resume training!' , vb_level = Proj.vb.max)
                 else:
                     if model_name in candidate_name:
                         model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-                    Logger.note(f'Input 0 to create a new model_name dir! New model_name is {model_name}')
+                    Logger.note(f'Input 0 to create a new model_name dir! New model_name is {model_name}' , vb_level = Proj.vb.max)
             else:
                 model_name = candidate_name[value-1]
                 if not self.is_resuming:

@@ -478,12 +478,12 @@ class TuShareCNE5_Calculator:
         '''update a given date of a given job of "exposure" or "risk"'''
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
-            DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , indent = 1 , vb_level = 3)
-            DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , indent = 1 , vb_level = 3)
-            DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , indent = 1 , vb_level = 3)
+            DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , indent = 2 , vb_level = 3)
+            DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , indent = 2 , vb_level = 3)
+            DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , indent = 2 , vb_level = 3)
         elif job == 'risk':
-            DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , indent = 1 , vb_level = 3)
-            DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , indent = 1 , vb_level = 3)
+            DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , indent = 2 , vb_level = 3)
+            DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , indent = 2 , vb_level = 3)
         else:
             raise KeyError(job)
         

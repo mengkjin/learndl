@@ -446,6 +446,30 @@ class TrainerPredRecorder(ModelStreamLine):
             Path(path).unlink()
             self.save_preds(df , model_date , model_num)
 
+    def purge_obsolete_model_preds(self , vb_level : int = 2):
+        """purge obsolete model predictions"""
+        
+        pred_records = self.pred_records()
+        pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
+        obsolete_records = pred_records[pred_records.duplicated(subset = ['model_date' , 'model_num'])]
+
+        avg_pred_records = self.avg_pred_records()
+        avg_pred_records = avg_pred_records.sort_values(by = ['model_date' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , False , True])
+        obsolete_avg_records = avg_pred_records[avg_pred_records.duplicated(subset = ['model_date'])]
+        if obsolete_records.empty and obsolete_avg_records.empty:
+            return
+        purge_info = f'Purged obsolete predictions'
+        if not obsolete_records.empty:
+            purge_info += f', {len(obsolete_records)} model preds'
+            for path in obsolete_records['path']:
+                Path(path).unlink()
+        if not obsolete_avg_records.empty:
+            purge_info += f', {len(obsolete_avg_records)} avg model preds'
+            for path in obsolete_avg_records['path']:
+                Path(path).unlink()
+        purge_info += f' deleted!'
+        Logger.note(purge_info , vb_level = vb_level)
+
     def setup_resuming_status(self , vb_level : int = 2):
         """
         setup resuming status for previous saved predictions
@@ -527,6 +551,9 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def collect_avg_preds(self):
         self.save_avg_preds(self.trainer.model_date)
+        avg_pred_records = self.avg_pred_records()
+        if not avg_pred_records.empty:
+            Logger.note(f'avg model preds updated to {avg_pred_records["max_pred_date"].max()}')
 
     def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
@@ -572,6 +599,7 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def on_test_model_date_end(self):
         self.collect_avg_preds()
+        self.purge_obsolete_model_preds()
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -607,8 +635,8 @@ class BaseDataModule(ABC):
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchData]: '''return predict dataloaders'''
     @classmethod
-    def initiate(cls , config : TrainConfig | None = None , *args , info = True , **kwargs):
-        return cls(config , *args , info = info , **kwargs)
+    def initiate(cls , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , info = True , **kwargs):
+        return cls(config , use_data = use_data , *args , info = info , **kwargs)
     def on_before_batch_transfer(self , batch , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch , device = None , dataloader_idx = None): return batch
     def on_after_batch_transfer(self , batch , dataloader_idx = None): return batch

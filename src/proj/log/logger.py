@@ -170,8 +170,9 @@ class Logger:
         pairs = [(pair[0] + add_indent , *pair[1:]) if len(pair) == 3 else (indent + add_indent , *pair) for pair in pair_list]
         pairs = [(indent , f'{FormatStr.indent_str(indent)}{key}' , value) for indent , key , value in pairs]
         
-        max_key_length = max([len(indented_key) for indent , indented_key , _ in pairs])
-        pairs = [FormatStr(f'{indented_key:{max_key_length}s} : {value}' , color = color_selector(color , indent) , 
+        max_key_length = max([len(indented_key) for _ , indented_key , _ in pairs])
+        min_indent = min([indent for indent , _ , _ in pairs])
+        pairs = [FormatStr(f'{indented_key:{max_key_length + 2*(indent - min_indent)}s} : {value}' , color = color_selector(color , indent) , 
                           italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 

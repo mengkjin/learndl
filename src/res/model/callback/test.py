@@ -28,7 +28,6 @@ class BasicTestResult(BaseCallBack):
     @property
     def path_result(self): return self.config.model_base_path.rslt('basic_test.xlsx')
     
-
     def save_test_df(self , vb_level : int = 3):
         df = self.get_test_df()
         DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 99)
@@ -62,8 +61,6 @@ class BasicTestResult(BaseCallBack):
             return
 
         with Logger.Paragraph('Test Summary' , 3): 
-            Logger.caption(f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
-
             if df_date['model_date'].nunique() == 1 or self.config.module_type in ['factor' , 'db']:
                 # only one model_date, calculate by year
                 df_date['model_date'] = (df_date['date'].astype(int) // 10000).apply(lambda x:f'Y{x}')
@@ -100,7 +97,7 @@ class BasicTestResult(BaseCallBack):
             df_display = self.status.test_summary
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]           
-            Logger.display(df_display , caption = 'Table: Test Summary:')
+            Logger.display(df_display , caption = f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
             
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}

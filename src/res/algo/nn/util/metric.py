@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Callable , Any , Literal
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.math import mse , pearson , ccc , spearman
 from .multiloss import MultiHeadLosses
 
@@ -151,7 +151,7 @@ class MetricCalculator:
     def display(self):
         if self.DISPLAY_LOG.get(f'{self.metric_type}.{self.criterion}' , False): 
             return
-        Logger.success(f'{self.__class__.__name__} {self.metric_type} {self.criterion} calculated!')
+        Logger.success(f'{self.__class__.__name__} {self.metric_type} {self.criterion} calculated!' , vb_level = Proj.vb.max)
         self.DISPLAY_LOG[f'{self.metric_type}.{self.criterion}'] = True
 
     @classmethod

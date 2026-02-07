@@ -6,7 +6,7 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , CALENDAR
+from src.proj import PATH , Logger , CALENDAR , Proj
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.math import tensor_standardize_and_weight , match_values
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader , HiddenPath
@@ -420,7 +420,7 @@ class DataModule(BaseDataModule):
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
             if (divlast or histnorm): 
-                Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = 3)
+                Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = Proj.vb.max)
             if divlast: 
                 self.prenorm_divlast.append(mdt)
             if histnorm: 

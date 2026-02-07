@@ -10,8 +10,9 @@ from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
 class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
-    def init_data(self , **kwargs): 
-        self.data     = DataModule.initiate(self.config)
+    def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
+        assert use_data != 'predict' , 'use_data cannot be predict when training models'
+        self.data     = DataModule.initiate(self.config , use_data = use_data)
     def init_model(self , **kwargs):
         self.model    = BasePredictorModel.initiate(self.config , self , **kwargs)
     def init_callbacks(self , **kwargs) -> None: 
@@ -24,6 +25,7 @@ class ModelTrainer(BaseTrainer):
     def initialize(cls , stage = -1 , resume = -1 , selection = -1 , base_path = None , 
                    override : dict | None = None , schedule_name = None ,
                    module = None , short_test = None , start = None , end = None ,
+                   use_data : Literal['fit','predict','both'] = 'fit' ,
                    **kwargs):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
@@ -36,13 +38,15 @@ class ModelTrainer(BaseTrainer):
         if short_test is not None: 
             override['short_test'] = short_test
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , selection = selection , 
-                  schedule_name = schedule_name , start = start , end = end , **kwargs)
+                  schedule_name = schedule_name , start = start , end = end , use_data = use_data , **kwargs)
         return app
 
     @classmethod
     def GO(cls , *args , base_path : ModelPath | Path | str |None = None , title : str | None = None , paragraph = False , html_catcher = True, 
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
-           log_operation : Literal['update_models' , 'resume_testing'] | None = None , **kwargs):
+           log_operation : Literal['update_models' , 'resume_testing'] | None = None , 
+           use_data : Literal['fit','predict','both'] = 'fit' ,
+           **kwargs):
         if title and paragraph:
             paragraph_context = Logger.Paragraph(title.title() , 1)
         else:
@@ -65,7 +69,7 @@ class ModelTrainer(BaseTrainer):
                 Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = Proj.vb.max)
                 
         with paragraph_context, html_catcher_context as catcher:
-            trainer = cls.initialize(*args , base_path = base_path , **kwargs)
+            trainer = cls.initialize(*args , base_path = base_path , use_data = use_data , **kwargs)
             trainer.go().log_operation(log_operation)
             if isinstance(catcher , HtmlCatcher):
                 catcher.set_export_files(trainer.html_catcher_export_path)
@@ -86,7 +90,7 @@ class ModelTrainer(BaseTrainer):
                 cls.GO(0 , 1 , 0 , base_path = model.model_path , 
                        title = f'Updating Model {model.model_path}' , paragraph = True ,
                        check_operation = None if force_update else 'update_models' ,
-                       log_operation = 'update_models')
+                       log_operation = 'update_models' , use_data = 'both')
 
     @classmethod
     def resume_testing(cls , models = True , factors = True , force_resume = False):
@@ -109,10 +113,10 @@ class ModelTrainer(BaseTrainer):
 
         for test_type , test_name in testees:
             title_object = f'{test_type.title()} {test_name}'
-            cls.GO(2 , 1, 0 , base_path = f'{test_type.lower()}@{test_name}' , short_test = False ,
+            cls.GO(2 , 1 , 0 , base_path = f'{test_type.lower()}@{test_name}' , short_test = False ,
                    title = f'Resume Testing {title_object}' , paragraph = True , 
                    check_operation = None if force_resume else 'resume_testing' ,
-                   log_operation = 'resume_testing')
+                   log_operation = 'resume_testing' , use_data = 'both')
 
         
     @classmethod
