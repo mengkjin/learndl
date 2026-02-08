@@ -9,10 +9,10 @@ prediction:
     submodel: swalast
     num: 0
 
-  # gruRTN_day_V0:
-  #   name: gruRTN_day
-  #   submodel: swalast
-  #   num: 0
+  gruRTN_day_V0:
+    name: gruRTN_day
+    submodel: swalast
+    num: 0
 
   gru_day_V1:
     name: gru_avg

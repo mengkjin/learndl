@@ -109,6 +109,8 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.model_interval]
+        print(self.model_date_list)
+        raise Exception('stop')
 
     @property
     def beg_date(self):
