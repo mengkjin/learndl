@@ -94,10 +94,12 @@ class DataPreProcessor:
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
             with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
-            del data_block
+            
             # gc.collect()
-            Logger.success(f'Preprocess [{key.upper()}] with predict={predict} finished! Cost {Duration(since = tt1)}' , 
+            Logger.success(f'Preprocess [{key.upper()}] (predict={predict},{CALENDAR.dates_str(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
                            indent = indent + 1 , vb_level = vb_level + 1)
+
+            del data_block
             Logger.divider(vb_level = vb_level + 3)
 
 class TypePreProcessor(ABC):
