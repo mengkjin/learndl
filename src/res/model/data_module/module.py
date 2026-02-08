@@ -100,7 +100,7 @@ class DataModule(BaseDataModule):
         # check if dates is align with CALENDAR
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
         calendar_dates = CALENDAR.td_within(min(dates) , max(dates))
-        if not np.all(np.isin(dates , calendar_dates)) and not np.all(np.isin(calendar_dates , dates)):
+        if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
             Logger.error(f'dates is not align with CALENDAR: {dates} , {calendar_dates}')
             Logger.alert2(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
             Logger.alert2(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
@@ -117,11 +117,6 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.model_interval]
-
-        print(dates[dates >= 20241129][:121])
-        print(self.model_date_list)
-        print(CALENDAR.td(20241129 , 120))
-        raise Exception('stop')
  
 
     @property
