@@ -101,10 +101,12 @@ class DataModule(BaseDataModule):
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
         calendar_dates = CALENDAR.td_within(min(dates) , max(dates))
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
-            Logger.error(f'dates is not align with CALENDAR: {dates} , {calendar_dates}')
-            Logger.alert2(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
-            Logger.alert2(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
-            raise ValueError(f'dates is not align with CALENDAR: {dates} , {calendar_dates}')
+            Logger.error(f'dates is not align with calendar dates!')
+            if len(np.setdiff1d(dates , calendar_dates)) > 0:
+                Logger.alert2(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
+            if len(np.setdiff1d(calendar_dates , dates)) > 0:
+                Logger.alert2(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
+            raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
 
         if self.config.module_type in ['factor' , 'db']:
