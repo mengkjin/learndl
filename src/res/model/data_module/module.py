@@ -117,6 +117,11 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.model_interval]
+
+        print(dates[dates >= 20241129][:121])
+        print(self.model_date_list)
+        print(CALENDAR.td(20241129 , 120))
+        raise Exception('stop')
  
 
     @property
