@@ -121,10 +121,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
         'factor@group_return@best':Proj.vb.max ,
         't50@drawdown@best.univ':1 ,
         'screen@drawdown@best.univ':1 ,
-        'revscreen@drawdown@best.univ':1
+        'revscreen@drawdown@best.univ':1 ,
+        'reinforce@drawdown@best.univ':1 ,
     }
 
-    def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'revscreen'] , **kwargs) -> None:
+    def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'reinforce'] , **kwargs) -> None:
         assert all(task in FactorTestAPI.TEST_TYPES for task in tasks) , \
             f'TASKS must be a list of valid tasks: {FactorTestAPI.TEST_TYPES} , but got {tasks}'
 

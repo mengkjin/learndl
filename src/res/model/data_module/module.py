@@ -6,7 +6,7 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , CALENDAR , Proj
+from src.proj import PATH , Logger , CALENDAR , Proj , MACHINE
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.math import tensor_standardize_and_weight , match_values
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader , HiddenPath
@@ -106,7 +106,8 @@ class DataModule(BaseDataModule):
                 Logger.alert2(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
             if len(np.setdiff1d(calendar_dates , dates)) > 0:
                 Logger.alert2(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
-            raise ValueError(f'dates is not align with calendar dates!')
+            if not MACHINE.platform_coding:
+                raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
 
         if self.config.module_type in ['factor' , 'db']:
@@ -119,7 +120,6 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.model_interval]
- 
 
     @property
     def beg_date(self):

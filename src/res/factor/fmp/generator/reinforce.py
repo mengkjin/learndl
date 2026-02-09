@@ -13,7 +13,7 @@ DEFAULT_SCREEN_RATIO = 0.5
 DEFAULT_SCREENER = ('pred' , 'gru_day_V1' , None) # (db_src , db_key , column_name)
 
 @dataclass(slots = True)
-class RevScreeningPortfolioCreatorConfig:
+class ReinforcePortfolioCreatorConfig:
     '''
     Config for Reverse Screening Portfolio Generator
     Screen (by screener) + Sorting (by target alpha) = (RevScreen) = (Reinforce)
@@ -87,12 +87,12 @@ class RevScreeningPortfolioCreatorConfig:
                 raise ValueError(f'alpha column not found in {df.columns}')
         return df
     
-class RevScreeningPortfolioCreator(PortCreator):
+class ReinforcePortfolioCreator(PortCreator):
     DEFAULT_SCREEN_RATIO = DEFAULT_SCREEN_RATIO
     DEFAULT_SCREEN_ALPHA = DEFAULT_SCREENER
 
     def setup(self , indent : int = 1 , vb_level : int = 3 , **kwargs):
-        self.conf = RevScreeningPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
+        self.conf = ReinforcePortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         return self
     
     def parse_input(self):

@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
@@ -10,29 +9,28 @@ from src.proj import Logger , DB
 from src.data import DATAVENDOR
 
 DEFAULT_SCREEN_RATIO = 0.5
-DEFAULT_SORTING_ALPHA = ('pred' , 'gru_day_V1' , None) # (db_src , db_key , column_name)
+DEFAULT_SORTER = ('pred' , 'gru_day_V1' , None) # (db_src , db_key , column_name)
 
 @dataclass(slots = True)
 class ScreeningPortfolioCreatorConfig:
     '''
     Config for Screening Portfolio Generator
+    Screen (by target alpha) + Sorting (by sorter) = Screening
+    Screening is based on the target alpha to screen stocks (e.g. choose top 50% of stocks with the target alpha)
+    Then, the stocks are sorted by a sorting alpha (e.g. choose top 50 of gru_day_V1)
+
     kwargs:
         screen_ratio    : float = DEFAULT_SCREEN_RATIO , ratio of stocks to be screened (used as pool of top stocks)
-        sorting_alpha   : tuple[str , str , str | None] = (db_src , db_key , column_name) , source and key of alpha to be used for sorting
+        sorter          : tuple[str , str , str | None] = (db_src , db_key , column_name) , source and key of alpha to be used for sorting
     '''
+    sorter          : tuple[str , str , str | None] | tuple[str , str] = DEFAULT_SORTER
     screen_ratio    : float = DEFAULT_SCREEN_RATIO
-    sorting_alpha   : tuple[str , str , str | None] | tuple[str , str] = DEFAULT_SORTING_ALPHA
     n_best          : int = 50
     turn_control    : float = 0.1
     buffer_zone     : float = 0.8
     no_zone         : float = 0.5
     indus_control   : float = 0.1
-    sorting_alpha_dates : np.ndarray | Any = None
-
-    def __post_init__(self):
-        if self.sorting_alpha_dates is None:
-            self.sorting_alpha_dates = DB.dates(*self.sa_src_key)
-
+    
     @classmethod
     def init_from(cls , indent : int = 1 , vb_level : int = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v is not None}
@@ -49,17 +47,10 @@ class ScreeningPortfolioCreatorConfig:
         return cls(**use_kwargs)
 
     def get_sorting_alpha(self , model_date : int , indus = True) -> pd.DataFrame:
-        if model_date not in self.sorting_alpha_dates:
-            if model_date < self.sorting_alpha_dates[0]:
-                return pd.DataFrame()
-            else:
-                date = self.sorting_alpha_dates[self.sorting_alpha_dates < model_date].max()
-        else:
-            date = model_date
-        df = DB.load(*self.sa_src_key , date)
-        df = self.sa_rename(df)
+        df = DB.load(*self.sorter_src_key , model_date , closest = True)
+        df = self.sorter_rename(df)
         if indus:
-            df = DATAVENDOR.INFO.add_indus(df , date , 'unknown')
+            df = DATAVENDOR.INFO.add_indus(df , model_date , 'unknown')
         return df
 
     @property
@@ -71,19 +62,19 @@ class ScreeningPortfolioCreatorConfig:
         return self.n_best * self.indus_control
 
     @property
-    def sa_src_key(self) -> tuple[str , str]:
-       return self.sorting_alpha[:2]
+    def sorter_src_key(self) -> tuple[str , str]:
+       return self.sorter[:2]
 
     @property
-    def sa_col_name(self) -> str:
-        if len(self.sorting_alpha) == 3 and self.sorting_alpha[2] is not None:
-            return self.sorting_alpha[2]
+    def sorter_col(self) -> str:
+        if len(self.sorter) == 3 and self.sorter[2] is not None:
+            return self.sorter[2]
         else:
-            return self.sorting_alpha[1]
+            return self.sorter[1]
 
-    def sa_rename(self , df : pd.DataFrame) -> pd.DataFrame:
+    def sorter_rename(self , df : pd.DataFrame) -> pd.DataFrame:
         if 'alpha' not in df.columns:
-            df = df.rename(columns={self.sa_col_name : 'alpha'})
+            df = df.rename(columns={self.sorter_col : 'alpha'})
         if 'alpha' not in df.columns:
             if len(remcols := [col for col in df.columns if col not in ['secid' , 'alpha' , 'index' , 'indus']]) == 1:
                 df = df.rename(columns={remcols[0] : 'alpha'})
@@ -93,10 +84,7 @@ class ScreeningPortfolioCreatorConfig:
     
 class ScreeningPortfolioCreator(PortCreator):
     DEFAULT_SCREEN_RATIO = DEFAULT_SCREEN_RATIO
-    DEFAULT_SORTING_ALPHA = DEFAULT_SORTING_ALPHA
-
-    def __init__(self , name : str):
-        super().__init__(name)
+    DEFAULT_SORTING_ALPHA = DEFAULT_SORTER
 
     def setup(self , indent : int = 1 , vb_level : int = 3 , **kwargs):
         self.conf = ScreeningPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)

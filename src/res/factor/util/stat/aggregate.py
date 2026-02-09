@@ -48,8 +48,8 @@ def eval_basic_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Serie
     datas = [
         ('StartDate' , str(start_date)),
         ('EndDate' , str(end_date)),
-        ('Total' , total_return),
-        ('Annualized' , annualized_return),
+        ('Total' , f'{total_return * 100:.2f}%'),
+        ('Annualized' , f'{annualized_return * 100:.2f}%'),
     ]
     return pd.DataFrame(datas , columns = ['feature' , 'ret']).set_index('feature')['ret']
 
@@ -59,6 +59,7 @@ def eval_year_ret(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
         return pd.Series()
     df = ret.assign(feature = ret['date'] // 10000).groupby('feature')['ret'].apply(_period_ret).reset_index(drop = False)
     df['feature'] = 'Y' + df['feature'].astype(str)
+    df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('feature')['ret']
 
 def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1 , periods : list[str] = ['w' , 'm' , 'q' , 'y']) -> pd.Series:
@@ -78,6 +79,7 @@ def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : 
         datas.append((period_names[period] , _period_ret(ret.query('date <= @end_dt and date >= @start_dt')['ret'])))
     
     df = pd.DataFrame(datas , columns = ['feature' , 'ret'])
+    df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('feature')['ret']
 
 def eval_period_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1) -> pd.Series:

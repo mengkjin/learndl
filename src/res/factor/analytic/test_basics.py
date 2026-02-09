@@ -13,8 +13,8 @@ from src.proj.func import dfs_to_excel , figs_to_pdf , camel_to_snake
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
-TYPE_of_TEST = Literal['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen']
-TEST_TYPES : list[TYPE_of_TEST] = ['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen']
+TYPE_of_TEST = Literal['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen' , 'reinforce']
+TEST_TYPES : list[TYPE_of_TEST] = ['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen' , 'reinforce']
 
 def test_title(test_type : str) -> str:
     assert test_type in TEST_TYPES , f'Invalid test type: {test_type}'

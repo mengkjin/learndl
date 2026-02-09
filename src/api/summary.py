@@ -8,7 +8,7 @@ from .util import wrap_update
 
 def summary_account_period_ret():
     acc_paths : dict[str , dict[str , Path]] = {}
-    fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rev' : 'rev_screen'}
+    fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rein' : 'reinforce'}
     for model in ModelTrainer.resumable_models():
         acc_paths[model] = {}
         for col , fmp in fmp_types.items():

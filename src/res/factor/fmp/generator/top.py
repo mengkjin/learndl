@@ -50,8 +50,6 @@ class TopStocksPortfolioCreatorConfig:
     
 class TopStocksPortfolioCreator(PortCreator):
     DEFAULT_N_BEST = DEFAULT_N_BEST
-    def __init__(self , name : str):
-        super().__init__(name)
 
     def setup(self , indent : int = 1 , vb_level : int = 3 , **kwargs):
         self.conf = TopStocksPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)

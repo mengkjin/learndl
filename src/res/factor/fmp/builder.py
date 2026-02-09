@@ -9,7 +9,7 @@ from src.proj import Duration , Logger , CALENDAR , Proj
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount
 from .optimizer import OptimizedPortfolioCreator
-from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator , RevScreeningPortfolioCreator
+from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator , RevScreeningPortfolioCreator , ReinforcePortfolioCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name)
 
@@ -41,7 +41,7 @@ class PortfolioBuilder:
         indus_control : float = 0.1
     screen accepted kwargs:
         screen_ratio : float = 0.5
-        sorting_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+        sorter : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
@@ -49,14 +49,22 @@ class PortfolioBuilder:
         indus_control : float = 0.1
     revscreen accepted kwargs:
         screen_ratio : float = 0.5
-        screen_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+        screener : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+        n_best : int = 50
+        turn_control : float = 0.2
+        buffer_zone : float = 0.8
+        no_zone : float = 0.5
+        indus_control : float = 0.1
+    reinforce accepted kwargs:
+        screen_ratio : float = 0.5
+        screener : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
         no_zone : float = 0.5
         indus_control : float = 0.1
     '''
-    def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any , 
+    def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
                  build_on : Portfolio | None = None , resume_path : Path | str | None = None , 
@@ -163,6 +171,8 @@ class PortfolioBuilder:
                 creator_class = ScreeningPortfolioCreator
             case 'revscreen':
                 creator_class = RevScreeningPortfolioCreator
+            case 'reinforce':
+                creator_class = ReinforcePortfolioCreator
             case _:
                 raise ValueError(f'Unknown category: {self.category}')
 
@@ -199,7 +209,7 @@ class PortfolioBuilder:
         return cls(alpha = alpha , build_on = build_on , indent = indent , vb_level = vb_level , **elements , **kwargs)
     
     @staticmethod
-    def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen'] , alpha : AlphaModel | str , 
+    def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] , alpha : AlphaModel | str , 
                       benchmark : Portfolio | Benchmark | str | None = None , 
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
@@ -240,7 +250,7 @@ class PortfolioGroupBuilder:
     '''
     def __init__(
         self , 
-        category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any ,
+        category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any ,
         alpha_models : AlphaModel | list[AlphaModel] , 
         benchmarks : str | None | list = None , 
         add_lag : int = 0 , 
@@ -311,7 +321,8 @@ class PortfolioGroupBuilder:
                f'{len(self.lags)}lag,{len(self.param_groups)}kwgs] & {len(self.relevant_dates)} dates, totaling {self.n_builds} builds)'
 
     def builders_info(self):
-        Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs) {self.n_builds} builds (x {len(self.relevant_dates)} dates)' , 
+        Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs)' ,  
+                      f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {CALENDAR.dates_str(self.relevant_dates)})' , 
                       indent = self.indent , vb_level = self.vb_level)
     
     def builders_setup(self):
@@ -350,6 +361,8 @@ class PortfolioGroupBuilder:
             return 'Screening'
         elif self.category == 'revscreen':
             return 'RevScreening'
+        elif self.category == 'reinforce':
+            return 'Reinforce'
         else:
             return self.category.title()
     

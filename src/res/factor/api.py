@@ -3,7 +3,9 @@ from pathlib import Path
 
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
-from src.res.factor.analytic import TEST_TYPES , TYPE_of_TEST , FactorPerfTest , OptimFMPTest , TopFMPTest , T50FMPTest , ScreenFMPTest , RevScreenFMPTest
+from src.res.factor.analytic import (
+    TEST_TYPES , TYPE_of_TEST , FactorPerfTest , OptimFMPTest , 
+    TopFMPTest , T50FMPTest , ScreenFMPTest , RevScreenFMPTest , ReinforceFMPTest)
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
     AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
@@ -83,6 +85,8 @@ class FactorTestAPI:
             return ScreenFMPTest
         elif test_type == 'revscreen':
             return RevScreenFMPTest
+        elif test_type == 'reinforce':
+            return ReinforceFMPTest
         else:
             raise ValueError(f'Invalid test type: {test_type}')
 

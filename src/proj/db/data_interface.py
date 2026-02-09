@@ -363,7 +363,7 @@ def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, over
         Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def load_dfs_from_tar(path : Path , * , raise_if_not_exist = False) -> dict[str , pd.DataFrame]:
+def load_dfs_from_tar(path : str | Path , * , raise_if_not_exist = False) -> dict[str , pd.DataFrame]:
     """load multiple dataframes from tar file"""
     path = Path(path)
     if not path.exists():
@@ -376,7 +376,7 @@ def load_dfs_from_tar(path : Path , * , raise_if_not_exist = False) -> dict[str 
         dfs[key] = _load_df_mapper(df)
     return dfs
 
-def pack_files_to_tar(files : list[Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -387,7 +387,7 @@ def pack_files_to_tar(files : list[Path] , path : Path | str , *, overwrite = Tr
         path.unlink(missing_ok=True)
         with tarfile.open(path, 'a') as tar:  
             for file in files:
-                tar.add(file , arcname = file.relative_to(PATH.main))
+                tar.add(file , arcname = Path(file).relative_to(PATH.main))
         Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
