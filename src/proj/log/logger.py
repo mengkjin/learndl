@@ -120,7 +120,7 @@ class Logger:
 
     @classmethod
     def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , 
-                    title : str | None = None , title_kwargs : dict[str , Any] = {'indent' : 0 , 'bold' : True , 'color' : 'lightgreen'} , 
+                    title : str | None = None , title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
                     color = 'auto' , indent = 0 , vb_level : int = 1 , bold = True , italic = True , **kwargs):
         """
         custom stdout message of multiple messages, each message is a tuple of (indent , message) or a string
@@ -146,7 +146,7 @@ class Logger:
     @classmethod
     def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
                      title : str | None = None , 
-                     title_kwargs : dict[str , Any] = {'indent' : 0 , 'bold' : True , 'color' : 'lightgreen'} , 
+                     title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
                      indent = 0 , vb_level : int = 1 , italic = True , **kwargs):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)

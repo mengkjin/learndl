@@ -4,7 +4,7 @@
 # date: 2024-11-27
 # description: test me
 # content: very short script to test streamlit
-# email: True
+# email: False
 # mode: shell
 
 from src.proj import Logger

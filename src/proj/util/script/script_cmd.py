@@ -115,7 +115,7 @@ end tell
             if communicate_input is not None:
                 self.process.communicate(input = communicate_input)
 
-            if self.process.returncode == 0:
+            if not self.process.returncode:
                 Logger.success(f"{self.cmd_type} command executed successfully : {cmd}")
             else:
                 Logger.alert2(f"{self.cmd_type} command executed failed : {cmd}")

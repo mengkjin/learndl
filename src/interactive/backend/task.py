@@ -201,7 +201,7 @@ class TaskDatabase:
             if kwargs['status'] != new_status:
                 raise ValueError(f"Task {task_id} status update failed , expected {kwargs['status']} but got {new_status}")
             else:
-                Logger.success(f"Task {task_id} status updated : {",".join([f"{k}={v}" for k, v in kwargs.items()])}")
+                Logger.stdout_pairs(kwargs , title = f"Task {task_id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
         """Check task status"""
@@ -745,9 +745,9 @@ class TaskItem:
     def reload(self):
         new_task = self.task_db.get_task(self.id)
         assert new_task is not None , f'Task {self.id} not found'
-        changed_items = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k)}
+        changed_items = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k) and v is not None}
         if changed_items:
-            Logger.success(f"Task {self.id} status updated : {",".join([f"{k}={v}" for k, v in changed_items.items() if v is not None])}")
+            Logger.stdout_pairs(changed_items , title = f"Task {self.id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
             self.update(changed_items)
         return self
     
