@@ -1,15 +1,13 @@
-import time
 import streamlit as st
 
 from dataclasses import dataclass , field
-from typing import Any , ClassVar
+from typing import Any , ClassVar , Callable
 from pathlib import Path
 from datetime import datetime
 
 from src.proj import PATH , Logger
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache # , ActionLogger
-
 
 def set_current_page(key: str) -> None:
     st.session_state["current_page"] = key
@@ -18,6 +16,14 @@ def set_current_page(key: str) -> None:
 def get_cached_task_db() -> TaskDatabase:
     """get cached task database manager"""
     return TaskDatabase()
+
+def universal_action(func : Callable):
+    def wrapper(*args , **kwargs):
+        ret = func(*args , **kwargs)
+        if SessionControl._instance is not None:
+            SessionControl._instance.task_queue.refresh()
+        return ret
+    return wrapper
 
 @dataclass
 class SessionControl:
@@ -43,6 +49,7 @@ class SessionControl:
     _instance : 'ClassVar[SessionControl | None]' = None
     
     def __post_init__(self):
+        self.__class__._instance = self
         self.task_db = get_cached_task_db()
         self.task_queue = TaskQueue(task_db = self.task_db)
         self.path_items = PathItem.iter_folder(PATH.scpt, min_level = 0, max_level = 2)
@@ -53,6 +60,10 @@ class SessionControl:
 
     def __str__(self):
         return f"SessionControl()"
+
+    @universal_action
+    def switch_page(self , page_name : str):
+        self.current_page_name = page_name 
     
     def get_script_runner(self , script_key : str) -> ScriptRunner:
         if script_key not in self.script_runners: 
@@ -137,6 +148,7 @@ class SessionControl:
                 return False
         return True
    
+    @universal_action
     def click_queue_item(self , item : TaskItem):
         """click queue item"""
         if self.running_report_queue is not None and self.running_report_queue == item.id:
@@ -145,28 +157,29 @@ class SessionControl:
             self.running_report_queue = item.id
         self.queue_last_action = None
     
-    def click_queue_filter_status(self):
+    def change_queue_filter_status(self):
         """click task queue filter status"""
         self.queue_last_action = f"Task Filter Status: {st.session_state.get('task-filter-status')}" , True
 
-    def click_queue_filter_source(self):
+    def change_queue_filter_source(self):
         """click task queue filter source"""
         self.queue_last_action = f"Task Filter Source: {st.session_state.get('task-filter-source')}" , True
 
-    def click_queue_filter_path_folder(self):
+    def change_queue_filter_path_folder(self):
         """click task queue filter path folder"""
         folder_options = st.session_state.get('task-filter-path-folder')
         if folder_options is not None:
             folder_options = [item.name for item in folder_options]
         self.queue_last_action = f"Task Filter Path Folder: {folder_options}" , True
         
-    def click_queue_filter_path_file(self):
+    def change_queue_filter_path_file(self):
         """click task queue filter path file"""
         file_options = st.session_state.get('task-filter-path-file')
         if file_options is not None:
             file_options = [item.name for item in file_options]
         self.queue_last_action = f"Task Filter Path File: {file_options}" , True
 
+    @universal_action
     def click_log_clear_confirmation(self):
         """click log clear confirmation"""
         def on_confirm():
@@ -177,18 +190,21 @@ class SessionControl:
         action_confirmation(on_confirm , on_abort , title = "Are You Sure about Clearing Logs (This Action is Irreversible)?")
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_sync(self):
         """click task queue sync"""
         self.task_queue.sync()
         self.queue_last_action = f"Queue Manually Synced at {datetime.now().strftime('%H:%M:%S')}" , True
    
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_refresh(self):
         """click task queue refresh"""
         self.task_queue.refresh()
         self.queue_last_action = f"Queue Manually Refreshed at {datetime.now().strftime('%H:%M:%S')}" , True
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_clean(self):
         """click task queue refresh confirmation"""
         items = [item for item in self.task_queue.values() if item.is_error or item.is_killed]
@@ -196,12 +212,14 @@ class SessionControl:
         self.queue_last_action = f"Queue Cleaned All Error Tasks at {datetime.now().strftime('%H:%M:%S')}" , True
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_delist_all(self):
         """click task queue delist all"""
         self.task_queue.empty()
         self.queue_last_action = f"Entire Queue Delisted" , True
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_remove_all(self):
         """click task queue refresh confirmation"""
         def on_confirm():
@@ -213,12 +231,14 @@ class SessionControl:
                             title = "Are You Sure about Removing All Tasks in Queue (Will be Auto Backuped)?")
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_delist_item(self , item : TaskItem):
         """click task queue delist item"""
         self.task_queue.delist(item)
         self.queue_last_action = f"Delist Success: {item.id}" , True
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_queue_remove_item(self , item : TaskItem):
         """click task queue remove item"""
         def on_confirm():
@@ -236,6 +256,7 @@ class SessionControl:
             on_confirm()
 
     # @ActionLogger.log_action()
+    @universal_action
     @st.dialog("Are You Sure about Restoring from Backup?")
     def click_queue_restore_all(self):
         """click task queue restore all"""
@@ -261,6 +282,7 @@ class SessionControl:
             self.queue_last_action = f"Restore Aborted" , False
             st.rerun()
         
+    @universal_action
     def click_script_runner_filter(self , runner : ScriptRunner):
         """click script runner filter"""
         st.session_state['task-filter-status'] = 'All'
@@ -269,6 +291,7 @@ class SessionControl:
         st.session_state['task-filter-path-file'] = [runner.path.path]
         
     # @ActionLogger.log_action()
+    @universal_action
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
         run_params = self.get_global_settings()
@@ -304,6 +327,7 @@ class SessionControl:
         # TODO: things to do before download
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_show_complete_report(self , item : TaskItem):
         """click show complete report"""
         self.current_task_item = item.id
@@ -312,6 +336,7 @@ class SessionControl:
         self.running_report_file_previewer = None
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_item_choose_select(self , item : TaskItem):
         """click choose task item"""
         new_id = item.id if self.current_task_item != item.id else None
@@ -322,6 +347,7 @@ class SessionControl:
         self.running_report_file_previewer = None
 
     # @ActionLogger.log_action()
+    @universal_action
     def click_choose_item_selectbox(self , item_id : str | None = None):
         """click choose task item"""
         if item_id is None: 
@@ -339,22 +365,8 @@ class SessionControl:
         # st.session_state['script-task-selector-placeholder'].write('')
     
     @staticmethod
-    def wait_until_completion(item : TaskItem , running_timeout : int = 20):
+    def wait_until_completion(item : TaskItem , starting_timeout : int = 20):
         """wait for complete"""
-        while True:
-            item.refresh()
-            if not item.is_running:
-                return True
-            if item.status == 'starting':
-                running_timeout -= 1
-            if running_timeout <= 0:
-                Logger.error(f'Script {item.script} running timeout! Still starting')
-                item.update({
-                    'status': 'error' , 'end_time': datetime.now().timestamp() ,
-                    'exit_code': 1 ,
-                    'exit_error': f'Script {item.script} running timeout! Still starting'} , write_to_db = True)
-                return False
-            time.sleep(1)
-        return False
+        return item.wait_until_completion(starting_timeout)
    
 SC = SessionControl()

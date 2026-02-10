@@ -36,7 +36,6 @@ def on_next_page(max_page : int):
 
 def show_script_detail(script_key : str):
     """show main part"""
-    
     page = get_script_page(script_key)
     if page is None: 
         return
@@ -268,7 +267,7 @@ def show_report_main(runner : ScriptRunner):
             with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
-            SC.wait_until_completion(item)
+            item.wait_until_completion()
             with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 

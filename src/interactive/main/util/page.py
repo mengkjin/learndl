@@ -207,8 +207,12 @@ class GlobalScriptLatestTaskButton(ControlPanelButton):
                         help = f":blue[**Show Latest Task**]: {item.id}" , 
                         on_click = SC.click_show_complete_report , args = (item,) ,
                         disabled = False):
-                st.switch_page(runs_page_url(item.script_key))
-
+                if SC.current_page_name != repr(item.script_key):
+                    st.switch_page(runs_page_url(item.script_key))
+                else:
+                    #from .script_detail import show_report_main
+                    #show_report_main(SC.get_script_runner(item.script_key))
+                    st.rerun()
 
 class CurrentScriptLatestTaskButton(ControlPanelButton):
     key = f"current-script-latest-task"
@@ -225,6 +229,8 @@ class CurrentScriptLatestTaskButton(ControlPanelButton):
                         help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
                         on_click = SC.click_show_complete_report , args = (item,) ,
                         disabled = False):
+                #from .script_detail import show_report_main
+                #show_report_main(SC.get_script_runner(item.script_key))
                 st.rerun()
 
 class ControlRefreshTaskQueueButton(ControlPanelButton):
@@ -324,6 +330,7 @@ class ControlPanel:
           
 def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro'):
     set_current_page(page_name)
+    SC.switch_page(page_name)
     if type == 'intro':
         script_key = None
         self_page = get_intro_page(page_name) 

@@ -9,7 +9,7 @@ PAGE_NAME = 'developer_info'
 def developer_info_selected_change():
     selected = getattr(st.session_state , 'developer-info-selected' , [])
     if 'All' in selected:
-        st.session_state['developer-info-selected'] = ['Session Control' , 'Session States' , 'Task Queue' , 'Action Logs' , 'Error Logs']
+        st.session_state['developer-info-selected'] = ['Session Control' , 'Session States' , 'Task Queue'] # , 'Action Logs' , 'Error Logs']
     if 'None' in selected:
         st.session_state['developer-info-selected'] = []
     

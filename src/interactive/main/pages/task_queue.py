@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Literal
+from typing import Literal , Callable
 
 from src.proj import PATH
 
@@ -32,6 +32,21 @@ def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter
             show_task_filters()
         show_queue_item_list(queue_type)
 
+def show_task_queue_header_button(name : str, click_on : Callable, icon : str, help : str , title : str):
+    with st.container():
+        st.button(icon, key=f"task-queue-{name}",  help = help , on_click=click_on)
+        body = f"""
+        <div style="
+            margin-bottom: 0px;
+            margin-top: -10px;
+            padding: 0 0 20px 0;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        ">{title.title()}</div>
+        """       
+        st.markdown(body , unsafe_allow_html = True)
+
 def show_queue_header():
     with st.container(key = "queue-header-buttons"):
         buttons = {
@@ -39,37 +54,43 @@ def show_queue_header():
                 'call' : SC.click_queue_sync , 
                 'icon' : ":material/directory_sync:" ,
                 'help' : "Sync Historical Tasks into Current Queue" ,
+                'title' : "Sync Queue" ,
             } ,
             'refresh' : {
                 'call' : SC.click_queue_refresh , 
                 'icon' : ":material/refresh:" ,
                 'help' : "Refresh Queue" ,
+                'title' : "Refresh Queue" ,
             } ,
             'clean' : {
                 'call' : SC.click_queue_clean , 
                 'icon' : ":material/mop:" ,
                 'help' : "Remove All Error Tasks (Irreversible)" ,
+                'title' : "Remove Errors" ,
             } ,
             'delist-all' : {
                 'call' : SC.click_queue_delist_all , 
                 'icon' : ":material/clear_all:" ,
                 'help' : "Delist All Tasks in Queue" ,
+                'title' : "Delist All" ,
             } ,
             'remove-all' : {
                 'call' : SC.click_queue_remove_all , 
                 'icon' : ":material/delete_history:" ,
                 'help' : "Backup and Remove All" ,
+                'title' : "Remove/Backup All" ,
             } ,
             'restore-all' : {
                 'call' : SC.click_queue_restore_all , 
                 'icon' : ":material/restore:" ,
                 'help' : "Restore from Backup" ,
+                'title' : "Restore Backup" ,
             } ,
         }
-        cols = st.columns(min(len(buttons) * 2 , 10) , gap = "small" , vertical_alignment = "center")
-        
-        for col , (name , but) in zip(cols[:len(buttons)] , buttons.items()):
-            col.button(but['icon'], key=f"task-queue-{name}",  help = but['help'] , on_click=but['call'])
+        cols = st.columns(len(buttons) + 2 , gap = "small" , vertical_alignment = "center")
+        for col , (name , but) in zip(cols[1:-1] , buttons.items()):
+            with col:
+                show_task_queue_header_button(name , but['call'] , but['icon'] , but['help'] , but['title'])
             
     if SC.queue_last_action:
         if SC.queue_last_action[1]:
@@ -91,15 +112,15 @@ def show_task_filters():
         folder_options = [item.path for item in SC.path_items if item.is_dir]
         file_options = [item.path for item in SC.path_items if item.is_file]
         st.radio(":blue-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True ,
-                 on_change = SC.click_queue_filter_status)
+                 on_change = SC.change_queue_filter_status)
         st.radio(":blue-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True ,
-                    on_change = SC.click_queue_filter_source)
+                    on_change = SC.change_queue_filter_source)
         st.multiselect(":blue-badge[**Script Folder**]" , folder_options , key = "task-filter-path-folder" ,
                         format_func = lambda x: str(x.relative_to(PATH.scpt)) ,
-                        on_change = SC.click_queue_filter_path_folder)
+                        on_change = SC.change_queue_filter_path_folder)
         st.multiselect(":blue-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
                         format_func = lambda x: x.name ,
-                        on_change = SC.click_queue_filter_path_file)    
+                        on_change = SC.change_queue_filter_path_file)    
         
 def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
     if queue_type == 'full':
@@ -122,7 +143,6 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
         st.info(f"**:material/bar_chart: Stats: Filtered Tasks**")
         st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message(queue)}")
         st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message(queue)}")
-    
 
     item_ids = list(queue.keys())
     if SC.running_report_queue is not None and SC.running_report_queue in item_ids:
@@ -191,7 +211,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
                     }
 
                     st.dataframe(item.dataframe() , row_height = 20 , column_config = col_config)
-                    SC.wait_until_completion(item)
+                    item.wait_until_completion()
                     if item.status == 'complete':
                         st.success(f'Script Completed' , icon = ":material/add_task:")
                     elif item.status == 'error':

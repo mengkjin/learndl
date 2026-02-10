@@ -315,11 +315,7 @@ def style():
     css.add("""
     
     .stVerticalBlock[class*="queue-header-buttons"] {
-        div {justify-content: flex-start !important;}
-        * {
-            font-weight: bold !important;
-            font-size: 24px !important;
-        }
+        div {justify-content: center !important;}
         button {
             min-width: 60px !important;
             height: 60px !important;

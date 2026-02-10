@@ -32,6 +32,10 @@ class ScriptCmd:
     def shell(self):
         return self.mode == 'shell'
 
+    @property
+    def cmd_type(self):
+        return 'OS' if self.mode == 'os' else 'AppleScript' if MACHINE.is_macos else 'Shell'
+
     def __str__(self):
         if self.mode == 'os':
             return str(self.py_cmd)
@@ -83,39 +87,12 @@ end tell
             raise ValueError(f'Unsupported platform: {MACHINE.system_name}')
 
     def run(self):
-        if self.mode == 'os':
-            self.process = self.run_cmd(self.os_cmd, cmd_type = 'OS')
-        else:
-            # run in shell
-            if MACHINE.is_macos:
-                if self.macos_tempfile_method:
-                    self.run_in_shell_darwin_tempfile()
-                else:
-                    self.process = self.run_cmd(self.shell_cmd, cmd_type = 'AppleScript', input = self.apple_script_cmd)
-            else:
-                self.process = self.run_cmd(self.shell_cmd, cmd_type = 'Shell')
+        if self.mode == 'shell' and MACHINE.is_macos and self.macos_tempfile_method:
+            return self.run_in_shell_darwin_tempfile()
+        communicate_input = self.apple_script_cmd if MACHINE.is_macos and self.mode == 'shell' else None
+        cmd = self.os_cmd if self.mode == 'os' else self.shell_cmd
+        self.run_cmd(cmd, communicate_input = communicate_input)
         return self
-
-    @classmethod
-    def run_cmd(cls , cmd : list[str] | str , cmd_type : str = 'Subprocess' , 
-                communicating = True , input : str | None = None ,
-                encoding = 'utf-8' , ):
-        try:
-            process = cls.Popen(cmd, encoding = encoding, communicating = communicating)
-            _ , stderr = process.communicate(input = input)
-
-            if process.returncode == 0:
-                Logger.success(f"{cmd_type} command executed successfully : {cmd}")
-            else:
-                Logger.alert2(f"{cmd_type} command executed failed : {cmd}")
-                Logger.alert2(f"Return Code: {process.returncode}")
-                Logger.alert2(f"Error Outputs: {stderr}")
-        except subprocess.CalledProcessError as e:
-            Logger.error(f"{cmd_type} command executed failed with CalledProcessError : {cmd}")
-            Logger.error(f"Return Code: {e.returncode}")
-            Logger.error(f"Error Outputs: {e.stderr}")
-
-        return process
 
     def run_in_shell_darwin_tempfile(self):
         assert self.mode == 'shell' , 'darwin mode does not support os mode'
@@ -125,13 +102,29 @@ end tell
         with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
             temp_script.write(self.apple_script_cmd)
             temp_script_path = Path(temp_script.name)
-
         try:
-            self.process = self.run_cmd([*self.shell_cmd , str(temp_script_path)], cmd_type = 'AppleScript')
+            self.run_cmd([*self.shell_cmd , str(temp_script_path)])
         finally:
             temp_script_path.unlink(missing_ok=True)
 
         return self
+
+    def run_cmd(self , cmd : list[str] | str , communicate_input : str | None = None, encoding = 'utf-8'):
+        try:
+            self.process = self.Popen(cmd, encoding = encoding, communicating = communicate_input is not None)
+            if communicate_input is not None:
+                self.process.communicate(input = communicate_input)
+
+            if self.process.returncode == 0:
+                Logger.success(f"{self.cmd_type} command executed successfully : {cmd}")
+            else:
+                Logger.alert2(f"{self.cmd_type} command executed failed : {cmd}")
+                Logger.alert2(f"Return Code: {self.process.returncode}")
+                Logger.alert2(f"Error Outputs: {self.process.stderr}")
+        except subprocess.CalledProcessError as e:
+            Logger.error(f"{self.cmd_type} command executed failed with CalledProcessError : {cmd}")
+            Logger.error(f"Return Code: {e.returncode}")
+            Logger.error(f"Error Outputs: {e.stderr}")
 
     @staticmethod
     def Popen(cmd : list[str] | str , encoding = 'utf-8' , communicating = False):

@@ -1,4 +1,4 @@
-import os , sys , re
+import os , sys , re , time
 import pandas as pd
 from typing import Any , Literal , Sequence
 from dataclasses import dataclass , field , asdict
@@ -121,6 +121,7 @@ class TaskDatabase:
             cursor.execute('DELETE FROM queue_records')
             cursor.execute('DELETE FROM task_queues')
             cursor.execute('DELETE FROM task_backend_updated')
+            cursor.execute('DELETE FROM sqlite_sequence')
         self.initialize_database()
     
     def new_task(self, task: 'TaskItem' , overwrite: bool = False):
@@ -198,10 +199,9 @@ class TaskDatabase:
         new_status = self.check_task_status(task_id)
         if 'status' in kwargs:
             if kwargs['status'] != new_status:
-                raise ValueError(f"Task status update failed for task {task_id} , expected {kwargs['status']} but got {new_status}")
+                raise ValueError(f"Task {task_id} status update failed , expected {kwargs['status']} but got {new_status}")
             else:
-                Logger.success(f"Task status updated successfully for task {task_id} , updates: {kwargs}")
-
+                Logger.success(f"Task {task_id} status updated : {",".join([f"{k}={v}" for k, v in kwargs.items()])}")
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
         """Check task status"""
@@ -351,7 +351,7 @@ class TaskQueue:
         self.queue_id = queue_id or self.task_db.active_queue()
         self.task_db.new_queue(self.queue_id , exist_ok = True)
         self.max_queue_size = max_queue_size
-        self.refresh()
+        self.reload()
     
     def __iter__(self):
         return iter(self.queue.keys())
@@ -384,6 +384,7 @@ class TaskQueue:
 
     def reload(self):
         self.queue = {task.id: task.set_task_db(self.task_db) for task in self.task_db.get_queue_tasks(self.queue_id, self.max_queue_size)}
+        self.refresh()
 
     def queue_content(self):
         self.refresh()
@@ -428,14 +429,16 @@ class TaskQueue:
         return [item.status for item in self.queue.values()].count(status)
     
     def refresh(self):
-        self.reload()
-        changed = [item.refresh() for item in self.queue.values() if item.is_running]
-        return any(changed)
+        backend_updated_item_ids = self.task_db.get_backend_updated_tasks()
+        running_item_ids = [item.id for item in self.queue.values() if item.is_running]
+        item_ids = list(set(backend_updated_item_ids + running_item_ids))
+        changed = [self.queue[item_id].refresh() for item_id in item_ids if item_id in self.queue]
+        return changed and any(changed)
     
     def sync(self):
         '''sync tasks in record into current queue'''
         self.task_db.sync_queue(self.queue_id)
-        self.refresh()
+        self.reload()
             
     def status_message(self , queue : dict[str, 'TaskItem'] | None = None):
         if queue is None: 
@@ -656,8 +659,14 @@ class TaskItem:
         item.set_task_db(task_db)
         return item
     
-    def refresh(self) -> None:
+    def refresh(self) -> bool:
         '''refresh task item status , return True if status changed'''
+        changed = False
+        if self.task_db.is_backend_updated(self.id):
+            self.reload()
+            self.task_db.del_backend_updated_task(self.id)  
+            changed = True
+
         if self.pid and self.is_running:
             status = check_process_status(self.pid)
             if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
@@ -665,12 +674,11 @@ class TaskItem:
             if status in ['complete' , 'zombie']:
                 if not self.check_killed():
                     self.update({'status': 'complete'} , write_to_db = True)
+                    return True
             elif status != 'running':
                 self.update({'status': 'running'} , write_to_db = False)
-            
-        if self.task_db.is_backend_updated(self.id):
-            self.reload()
-            self.task_db.del_backend_updated_task(self.id)
+                return True
+        return changed
 
     def check_killed(self) -> bool:
         crash_protector_paths = self.get_crash_protector()
@@ -703,6 +711,24 @@ class TaskItem:
         else:
             return False
 
+    def wait_until_completion(self , starting_timeout : int = 20):
+        """wait for complete"""
+        if not self.is_running:
+            return True
+        while self.is_running:
+            self.refresh()
+            if self.status == 'starting':
+                starting_timeout = starting_timeout - 1
+            if starting_timeout <= 0:
+                Logger.error(f'Script {self.script} running timeout! Still starting')
+                self.update({
+                    'status': 'error' , 'end_time': datetime.now().timestamp() ,
+                    'exit_code': 1 ,
+                    'exit_error': f'Script {self.script} running timeout! Still starting'} , write_to_db = True)
+                return False
+            time.sleep(1)
+        return True
+
     def get_crash_protector(self) -> list[str]:
         if self.task_id is None:
             return []
@@ -719,7 +745,11 @@ class TaskItem:
     def reload(self):
         new_task = self.task_db.get_task(self.id)
         assert new_task is not None , f'Task {self.id} not found'
-        self.update(new_task.to_dict())
+        changed_items = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k)}
+        if changed_items:
+            Logger.success(f"Task {self.id} status updated : {",".join([f"{k}={v}" for k, v in changed_items.items() if v is not None])}")
+            self.update(changed_items)
+        return self
     
     def update(self, updates : dict[str, Any] | None = None , write_to_db : bool = False):
         if updates is None: 
@@ -877,7 +907,7 @@ class TaskItem:
 
     def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all' ,
                   sep_exit_files : bool = True) -> list[tuple[str, str]]:
-        self.reload()
+        self.refresh()
         enter_info : list[tuple[str, str]] = []
         if info_type in ['all' , 'enter']:
             enter_info.append(('Item ID', self.id))
