@@ -17,10 +17,10 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
             Logger.warning(f'Recalculate all market daily risk is not supported yet for {cls.__name__}')
             stored_dates = np.array([])
         elif update_type == 'update':
-            stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)
+            stored_dates = DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))['date'].to_numpy(int)
         elif update_type == 'rollback':
             rollback_date = CALENDAR.td(cls._rollback_date)
-            stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , cls.DB_KEY) , 0 , rollback_date - 1)
+            stored_dates = CALENDAR.slice(DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))['date'].to_numpy(int) , 0 , rollback_date - 1)
         else:
             raise ValueError(f'Invalid update type: {update_type}')
             
@@ -125,13 +125,13 @@ def market_day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame ,
 def market_day_5min_ret_volatility(quote : pd.DataFrame , min : pd.DataFrame , val : pd.DataFrame , **kwargs) -> float:
     min = min.assign(ret = lambda x: x['close'] / x['close'].shift(1) - 1)
     weight = (val['float_share'] * quote['preclose']).fillna(0).rename('weight')
-    min_ret = min.join(weight).groupby('minute').apply(lambda x: x['ret'].mul(x['weight']).sum() / x['weight'].sum()).rename('ret').to_frame()
+    min_ret = min.join(weight).groupby('minute')[['ret' , 'weight']].apply(lambda x: x['ret'].mul(x['weight']).sum() / x['weight'].sum()).rename('ret').to_frame()
     ret_volatility = min_ret.query('minute >= 1')['ret'].std()
     return ret_volatility
 
 def market_day_5min_ret_skewness(quote : pd.DataFrame , min : pd.DataFrame , val : pd.DataFrame , **kwargs) -> float | Any:
     min = min.assign(ret = lambda x: x['close'] / x['close'].shift(1) - 1)
     weight = (val['float_share'] * quote['preclose']).fillna(0).rename('weight')
-    min_ret = min.join(weight).groupby('minute').apply(lambda x: x['ret'].mul(x['weight']).sum() / x['weight'].sum()).rename('ret').to_frame()
+    min_ret = min.join(weight).groupby('minute')[['ret' , 'weight']].apply(lambda x: x['ret'].mul(x['weight']).sum() / x['weight'].sum()).rename('ret').to_frame()
     ret_skewness = min_ret.query('minute >= 1')['ret'].skew()
     return ret_skewness
