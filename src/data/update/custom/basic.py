@@ -32,9 +32,8 @@ class BasicCustomUpdater(metaclass=BasicCustomUpdaterMeta):
     def import_updaters(cls):
         if cls._imported:
             return
-        folders = [folder for folder in Path(__file__).parent.iterdir() if folder.is_dir() and folder.name not in ['hfm']]
-        paths = sorted([path for folder in folders for path in folder.rglob('*.py') 
-                        if path.is_file() and path.stem not in ['__init__']])
+        paths = sorted([path for path in Path(__file__).parent.rglob('*.py') 
+                        if not path.name.startswith('_') and path != Path(__file__)])
         for path in paths:
             module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
             import_module(module_name)
