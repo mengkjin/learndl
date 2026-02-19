@@ -16,7 +16,8 @@ class CustomIndexMeta(ABCMeta):
         new_cls = super().__new__(cls , name , bases , dct)
         assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
             f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
-        cls.registry[name] = new_cls
+        if not new_cls.__abstractmethods__:
+            cls.registry[name] = new_cls
         return new_cls
 
 class CustomIndexName:
@@ -129,6 +130,10 @@ class CustomIndex(metaclass=CustomIndexMeta):
 
 class CustomIndexUpdater(BasicCustomUpdater):
     START_DATE = START_DATE
+
+    @classmethod
+    def custom_indices(cls):
+        return list(CustomIndex.iter_custom_indices())
     
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
