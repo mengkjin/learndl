@@ -17,10 +17,13 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
             Logger.warning(f'Recalculate all market daily risk is not supported yet for {cls.__name__}')
             stored_dates = np.array([])
         elif update_type == 'update':
-            stored_dates = DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))['date'].to_numpy(int)
+            stored_df = DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))
+            stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
         elif update_type == 'rollback':
             rollback_date = CALENDAR.td(cls._rollback_date)
-            stored_dates = CALENDAR.slice(DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))['date'].to_numpy(int) , 0 , rollback_date - 1)
+            stored_df = DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))
+            stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
+            stored_dates = CALENDAR.slice(stored_dates , 0 , rollback_date - 1)
         else:
             raise ValueError(f'Invalid update type: {update_type}')
             
