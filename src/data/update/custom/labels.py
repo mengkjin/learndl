@@ -6,9 +6,9 @@ from typing import Literal
 from src.proj import CALENDAR , DB , Logger
 from src.data.loader import TRADE , RISK
 
-from .basic import BasicUpdater
+from src.data.update.custom.basic import BasicCustomUpdater
 
-class ClassicLabelsUpdater(BasicUpdater):
+class ClassicLabelsUpdater(BasicCustomUpdater):
     START_DATE = 20050101
     DB_SRC = 'labels_ts'
 

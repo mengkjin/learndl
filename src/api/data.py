@@ -1,5 +1,5 @@
 from src.proj import Logger , CALENDAR
-from src.data import CoreDataUpdater , SellsideDataUpdater , AffiliatedDataUpdater , DataPreProcessor
+from src.data import CoreDataUpdater , SellsideDataUpdater , CustomDataUpdater , DataPreProcessor
 # from src.data import JSDataUpdater
 from src.res.factor.api import RiskModelUpdater
 
@@ -26,7 +26,7 @@ class DataAPI:
         wrap_update(RiskModelUpdater.update , 'update risk models' , skip = not risk)
 
         # update other datas , include labels , so must be after RiskModelUpdater
-        wrap_update(AffiliatedDataUpdater.update , 'update affiliated data' , skip = not affiliated)
+        wrap_update(CustomDataUpdater.update , 'update affiliated data' , skip = not affiliated)
 
 
     @classmethod
@@ -36,7 +36,7 @@ class DataAPI:
         """
         wrap_update(CoreDataUpdater.rollback , 'rollback download core data' ,rollback_date = rollback_date)
         wrap_update(RiskModelUpdater.rollback , 'rollback risk models' , skip = not risk , rollback_date = rollback_date)
-        wrap_update(AffiliatedDataUpdater.rollback , 'rollback affiliated datas' , skip = not affiliated , rollback_date = rollback_date)
+        wrap_update(CustomDataUpdater.rollback , 'rollback affiliated datas' , skip = not affiliated , rollback_date = rollback_date)
         
     @classmethod
     def prepare_predict_data(cls): 

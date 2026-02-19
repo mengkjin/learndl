@@ -29,7 +29,8 @@ SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
-DB_BY_NAME  : list[str] = ['information_js' , 'information_ts' , 'index_daily_ts']
+DB_BY_NAME  : list[str] = ['information_js' , 'information_ts' , 'index_daily_ts' , 
+                           'index_daily_custom' , 'market_daily']
 DB_BY_DATE  : list[str] = ['models' , 'sellside' , 'exposure' ,
                            'trade_js' , 'labels_js' , 'benchmark_js' , 
                            'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts'
@@ -228,8 +229,9 @@ def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_c
         _df_saver(df , path)
         Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
 
-def load_df(path : Path , *, raise_if_not_exist = False):
+def load_df(path : Path | str , *, raise_if_not_exist = False):
     """load dataframe from path"""
+    path = Path(path)
     if not path.exists():
         if raise_if_not_exist: 
             raise FileNotFoundError(path)
@@ -239,15 +241,17 @@ def load_df(path : Path , *, raise_if_not_exist = False):
     df = _load_df_mapper(df)
     return df
 
-def load_df_max_date(path : Path , date_colname : str = 'date') -> int:
+def load_df_max_date(path : Path | str , date_colname : str = 'date') -> int:
     """load dataframe from path"""
+    path = Path(path)
     if not path.exists() or (df := load_df(path)).empty:
         return 19000101
     else:
         return int(max(df[date_colname]))
 
-def load_df_min_date(path : Path , date_colname : str = 'date') -> int:
+def load_df_min_date(path : Path | str , date_colname : str = 'date') -> int:
     """load dataframe from path"""
+    path = Path(path)
     if not path.exists() or (df := load_df(path)).empty:
         return 99991231
     else:

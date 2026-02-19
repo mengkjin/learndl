@@ -49,6 +49,7 @@ dependencies = [
     "tushare>=1.4.24",
     "xarray>=2025.8.0",
     "xgboost>=3.0.4",
+    "tsfresh>=0.21.1",
 ]
 
 [tool.setuptools.dynamic]

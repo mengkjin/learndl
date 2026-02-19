@@ -3,9 +3,9 @@ import numpy as np
 from typing import Any , Literal
 from src.proj import CALENDAR , DB , Logger
 
-from .basic import BasicUpdater
+from src.data.update.custom.basic import BasicCustomUpdater
 
-class MultiKlineUpdater(BasicUpdater):
+class MultiKlineUpdater(BasicCustomUpdater):
     START_DATE = 20050101
     DB_SRC = 'trade_ts'
 

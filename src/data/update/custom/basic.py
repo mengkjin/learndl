@@ -4,9 +4,9 @@ from pathlib import Path
 
 from src.proj import PATH , Logger , CALENDAR
 
-class BasicUpdaterMeta(type):
+class BasicCustomUpdaterMeta(type):
     """meta class of BasicUpdater"""
-    registry : dict[str , Type['BasicUpdater'] | Any] = {}
+    registry : dict[str , Type['BasicCustomUpdater'] | Any] = {}
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
         if name != 'BasicUpdater':
@@ -17,7 +17,7 @@ class BasicUpdaterMeta(type):
             cls.registry[name] = new_cls
         return new_cls
 
-class BasicUpdater(metaclass=BasicUpdaterMeta):
+class BasicCustomUpdater(metaclass=BasicCustomUpdaterMeta):
     """
     base class of basic updater
     must implement update_all method
@@ -32,8 +32,9 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
     def import_updaters(cls):
         if cls._imported:
             return
-        paths = sorted([path for path in Path(__file__).parent.rglob('*.py') 
-                        if path.is_file() and path.stem not in ['basic' , '__init__']])
+        folders = [folder for folder in Path(__file__).parent.iterdir() if folder.is_dir() and folder.name not in ['hfm']]
+        paths = sorted([path for folder in folders for path in folder.rglob('*.py') 
+                        if path.is_file() and path.stem not in ['__init__']])
         for path in paths:
             module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
             import_module(module_name)

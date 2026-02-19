@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
 
-from typing import Literal
+from typing import Literal , Callable
 from src.proj import Logger , CALENDAR , DB
 
-from .basic import BasicUpdater
+from src.data.update.custom.basic import BasicCustomUpdater
 
-class DailyRiskUpdater(BasicUpdater):
+class DailyRiskUpdater(BasicCustomUpdater):
     START_DATE = max(20100101 , DB.min_date('trade_ts' , '5min' , use_alt=True))
     DB_SRC = 'exposure'
     DB_KEY = 'daily_risk'
@@ -48,7 +48,7 @@ def calc_daily_risk(date : int):
     for name , df in inputs.items():
         if not df.empty:
             inputs[name] = df.set_index('secid')
-    funcs = [
+    funcs : list[Callable[[pd.DataFrame,] , pd.Series]] = [
         day_true_range , 
         day_turnover ,
         day_largebuy_price_deviation , 
@@ -62,27 +62,27 @@ def calc_daily_risk(date : int):
     result = pd.concat([df.reindex(inputs['quote'].index) for df in results.values()] , axis = 1)
     return result.reset_index()
 
-def day_true_range(quote : pd.DataFrame , **kwargs):
+def day_true_range(quote : pd.DataFrame , **kwargs) -> pd.Series:
     tr = pd.concat([quote['high'] - quote['low'] , (quote['high'] - quote['preclose']).abs() , (quote['low'] - quote['preclose']).abs()] , axis = 1).max(axis = 1)
     tr = (tr / quote['preclose']).rename('true_range')
     return tr
 
-def day_turnover(quote : pd.DataFrame , **kwargs):
+def day_turnover(quote : pd.DataFrame , **kwargs) -> pd.Series:
     turnover = quote['turn_fl'] / 100
     return turnover.rename('turnover')
 
-def day_largebuy_price_deviation(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs):
+def day_largebuy_price_deviation(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
     q = quote.join(moneyflow.loc[:,['buy_elg_amount' , 'buy_elg_vol' , 'buy_lg_amount' , 'buy_lg_vol']])
     q['lbp'] = (q['buy_elg_amount'] + q['buy_lg_amount']) / (q['buy_elg_vol'] + q['buy_lg_vol']) * 100
     q['large_buy_pdev'] = abs(q['lbp'] - q['vwap']) / q['vwap']
     return q['large_buy_pdev']
 
-def day_smallbuy_percentage(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs):
+def day_smallbuy_percentage(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
     q = quote.join(moneyflow.loc[:,['buy_sm_amount']])
     q['small_buy_pct'] = (q['buy_sm_amount']) / q['amount'] * 10
     return q['small_buy_pct']
 
-def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs):
+def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
     if not min.empty and 'num_trades' in min.columns:
         num_trades = min.groupby('secid')['num_trades'].sum()
     else:
@@ -100,18 +100,18 @@ def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd
     q['sqrt_avg_size'] = (q['amount'] / q['num_trades']).pow(0.5)
     return q['sqrt_avg_size']
 
-def day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame , **kwargs):
+def day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
     ocamount = min.query('minute <= 5 or minute >= 42').groupby('secid')['amount'].sum().rename('open_close_amount')
-    q = quote.join(ocamount)
+    q = quote.join(ocamount)    
     q['open_close_pct'] = q['open_close_amount'] / q['amount'] / 1000
     return q['open_close_pct']
 
-def day_5min_ret_volatility(quote : pd.DataFrame , min : pd.DataFrame , **kwargs):
+def day_5min_ret_volatility(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
     min = min.assign(ret = lambda x: x['close'] / x['close'].shift(1) - 1)
     ret_volatility = min.query('minute >= 1').groupby('secid')['ret'].std().rename('ret_volatility')
     return quote.join(ret_volatility)['ret_volatility']
 
-def day_5min_ret_skewness(quote : pd.DataFrame , min : pd.DataFrame , **kwargs):
+def day_5min_ret_skewness(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
     min = min.assign(ret = lambda x: x['close'] / x['close'].shift(1) - 1)
     ret_skewness = min.query('minute >= 1').groupby('secid')['ret'].skew().rename('ret_skewness')
     return quote.join(ret_skewness)['ret_skewness']

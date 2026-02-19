@@ -37,17 +37,25 @@ class IndexBasic(InfoFetcher):
 class IndexDaily(TimeSeriesFetcher):
     """
     index daily quotes
+    000016.SH: 上证50指数
     000300.SH: 沪深300指数
     000905.SH: 中证500指数
     000906.SH: 中证800指数
     000852.SH: 中证1000指数
     932000.CSI: 中证2000指数
     000985.CSI: 中证全指指数
+    399005.SZ: 中小板指
+    399006.SZ: 创业板指
+    000688.SH: 科创50指数
+    000001.SH: 上证指数
+    399001.SZ: 深证成指
     """
     START_DATE = 20100101
     DB_SRC = 'index_daily_ts'
     DB_KEY = 'ignore'
-    TARGET_INDEX = ['000300.SH' , '000905.SH' , '000906.SH' , '000852.SH' , '932000.CSI' , '000985.CSI']
+    TARGET_INDEX = [
+        '000016.SH' , '000300.SH' , '000905.SH' , '000906.SH' , '000852.SH' , '932000.CSI' , '000985.CSI' , 
+        '399005.SZ' , '399006.SZ' , '000688.SH' , '000001.SH' , '399001.SZ']
 
     def last_update_date(self) -> int:
         target_path = DB.path(self.DB_SRC , self.TARGET_INDEX[-1])

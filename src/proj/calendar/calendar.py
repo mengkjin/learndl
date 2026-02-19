@@ -360,6 +360,8 @@ class CALENDAR:
 
     @classmethod
     def slice(cls , dates , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
+        if isinstance(dates , list):
+            dates = np.array(dates)
         dates = dates[(dates >= cls.start_dt(start_dt)) & (dates <= cls.end_dt(end_dt))]
         if year  is not None: 
             dates = dates[(dates // 10000) == year]
