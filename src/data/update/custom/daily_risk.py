@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from typing import Literal , Callable
+from typing import Any , Literal , Callable
 from src.proj import Logger , CALENDAR , DB
 
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -39,7 +39,10 @@ class DailyRiskUpdater(BasicCustomUpdater):
     def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):
         DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
 
-def calc_daily_risk(date : int):
+def fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
+    return series.where(np.isfinite(series) , fill_value)
+
+def get_inputs(date : int) -> dict[str , pd.DataFrame]:
     inputs : dict[str , pd.DataFrame] = {
         'quote' : DB.load('trade_ts' , 'day' , date) ,
         'moneyflow' : DB.load('trade_ts' , 'day_moneyflow' , date),
@@ -48,6 +51,10 @@ def calc_daily_risk(date : int):
     for name , df in inputs.items():
         if not df.empty:
             inputs[name] = df.set_index('secid')
+    return inputs
+
+def calc_daily_risk(date : int):
+    inputs = get_inputs(date)
     funcs : list[Callable[[pd.DataFrame,] , pd.Series]] = [
         day_true_range , 
         day_turnover ,
@@ -59,12 +66,12 @@ def calc_daily_risk(date : int):
         day_5min_ret_skewness
     ]
     results = {func.__name__ : func(**inputs) for func in funcs}
-    result = pd.concat([df.reindex(inputs['quote'].index) for df in results.values()] , axis = 1)
-    return result.reset_index()
+    result = pd.concat([df.reindex(inputs['quote'].index) for df in results.values()] , axis = 1).reset_index()
+    return result
 
 def day_true_range(quote : pd.DataFrame , **kwargs) -> pd.Series:
     tr = pd.concat([quote['high'] - quote['low'] , (quote['high'] - quote['preclose']).abs() , (quote['low'] - quote['preclose']).abs()] , axis = 1).max(axis = 1)
-    tr = (tr / quote['preclose']).rename('true_range')
+    tr = fillinf((tr / quote['preclose']).rename('true_range') , 0)
     return tr
 
 def day_turnover(quote : pd.DataFrame , **kwargs) -> pd.Series:
@@ -74,12 +81,12 @@ def day_turnover(quote : pd.DataFrame , **kwargs) -> pd.Series:
 def day_largebuy_price_deviation(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
     q = quote.join(moneyflow.loc[:,['buy_elg_amount' , 'buy_elg_vol' , 'buy_lg_amount' , 'buy_lg_vol']])
     q['lbp'] = (q['buy_elg_amount'] + q['buy_lg_amount']) / (q['buy_elg_vol'] + q['buy_lg_vol']) * 100
-    q['large_buy_pdev'] = abs(q['lbp'] - q['vwap']) / q['vwap']
+    q['large_buy_pdev'] = fillinf(abs(q['lbp'] - q['vwap']) / q['vwap'] , np.nan)
     return q['large_buy_pdev']
 
 def day_smallbuy_percentage(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
     q = quote.join(moneyflow.loc[:,['buy_sm_amount']])
-    q['small_buy_pct'] = (q['buy_sm_amount']) / q['amount'] * 10
+    q['small_buy_pct'] = fillinf((q['buy_sm_amount']) / q['amount'] * 10 , 0)
     return q['small_buy_pct']
 
 def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
@@ -97,13 +104,13 @@ def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd
         num_trades = num_trades.rename('num_trades')
 
     q = quote.join(num_trades)
-    q['sqrt_avg_size'] = (q['amount'] / q['num_trades']).pow(0.5)
+    q['sqrt_avg_size'] = fillinf((q['amount'] / q['num_trades']).pow(0.5) , np.nan)
     return q['sqrt_avg_size']
 
 def day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
     ocamount = min.query('minute <= 5 or minute >= 42').groupby('secid')['amount'].sum().rename('open_close_amount')
     q = quote.join(ocamount)    
-    q['open_close_pct'] = q['open_close_amount'] / q['amount'] / 1000
+    q['open_close_pct'] = fillinf(q['open_close_amount'] / q['amount'] / 1000 , 0)
     return q['open_close_pct']
 
 def day_5min_ret_volatility(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:

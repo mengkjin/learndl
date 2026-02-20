@@ -135,7 +135,7 @@ def get_input_data():
     from src.proj import DB
     market_risk = DB.load('market_daily' , 'risk')
     if not market_risk.empty:
-        df = df.join(market_risk.set_index('date') , how = 'left')
+        df = df.join(market_risk.fillna(0).set_index('date') , how = 'left')
 
     return df
 

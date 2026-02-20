@@ -7,8 +7,8 @@
 # email: True
 # mode: shell
 
-from data.update.custom.daily_risk import DailyRiskUpdater
-from data.update.custom.market_daily_risk import MarketDailyRiskUpdater
+from src.data.update.custom.daily_risk import DailyRiskUpdater
+from src.data.update.custom.market_daily_risk import MarketDailyRiskUpdater
 from src.proj.util import ScriptTool 
 
 @ScriptTool('temporary_fix')
