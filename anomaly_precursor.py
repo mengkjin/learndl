@@ -20,7 +20,7 @@ max_depth=6
 max_leaf_nodes=None
 min_impurity_decrease=0.0
 class_weight={0: 1, 1: 3}
-# should be high precision with moderately bad events or moderate precision with very bad events
+# should be high precision with moderately label events or moderate precision with very label events
 
 DT_PARAMS = {
     'min_samples_leaf': min_samples_leaf,
@@ -91,14 +91,14 @@ def generate_input_data(L = 1000 , horizon = 5, delay = 1 , incomplete_x10 : boo
             df[col] = df[col].fillna(0)
 
     threshold = df['y'].rolling(horizon).sum().expanding(1).apply(lambda x : x.quantile(0.1))
-    df['bad'] = (df['y'].rolling(horizon).sum().shift(-horizon+1-delay) < threshold.where(threshold < -0.01, -0.01)).fillna(False).astype(int)
+    df['label'] = (df['y'].rolling(horizon).sum().shift(-horizon+1-delay) < threshold.where(threshold < -0.01, -0.01)).fillna(False).astype(int)
 
     df = df.set_index(['id' , 'time']).sort_index()
 
-    print(f"bad event ratio: {df['bad'].mean():.3f}")
+    print(f"label event ratio: {df['label'].mean():.3f}")
     return df
 
-def get_input_data(horizon = 5 , delay = 1):
+def get_input_data():
     """
     generate input data for anomaly precursor
     Args:
@@ -132,32 +132,38 @@ def get_input_data(horizon = 5 , delay = 1):
     df['y'] = y['y'].where(~y['y'].isna() , index_inputs['000852.SH']['pct_chg'] / 100)
     df = df.assign(time = np.arange(len(df)) , id = 1).set_index(['id' , 'time'] , append=True)
 
+    from src.proj import DB
+    market_risk = DB.load('market_daily' , 'risk')
+    if not market_risk.empty:
+        df = df.join(market_risk.set_index('date') , how = 'left')
+
     return df
 
 def preprocess(df : pd.DataFrame , horizon = 5 , delay = 1 , bad_percentage : float = 0.5 , bad_threshold : float = 0):
     # standardize the data based on training set
+    cols = df.columns.to_list()
     threshold = df['y'].rolling(horizon).sum().rolling(750 , min_periods=1).quantile(bad_percentage)
     df['y_rolling'] = df['y'].rolling(horizon).sum()
     df['threshold'] = threshold.where(threshold < bad_threshold, bad_threshold)
 
-    df['bad'] = (df['y_rolling'].shift(-horizon+1-delay) < df['threshold']).fillna(False).astype(int)
-    df.loc[df.index[:20] , 'bad'] = -1
+    df['label'] = (df['y_rolling'].shift(-horizon+1-delay) < df['threshold']).fillna(False).astype(int)
+    df.loc[df.index[:20] , 'label'] = -1
     df['y_raw'] = df['y']
 
-    means = df.query('date < 20170101').loc[:,['x0','x1','x2','x3','x4','x5','x6','x7','y']].mean(axis = 0)
-    stds = df.query('date < 20170101').loc[:,['x0','x1','x2','x3','x4','x5','x6','x7','y']].std(axis = 0)
+    means = df.query('date < 20170101').loc[:,cols].mean(axis = 0)
+    stds = df.query('date < 20170101').loc[:,cols].std(axis = 0)
     means = means.fillna(0)
     stds = stds.fillna(0).where(stds.fillna(0) != 0 , 1)
 
-    df.loc[:,['x0','x1','x2','x3','x4','x5','x6','x7','y']] = (df.loc[:,['x0','x1','x2','x3','x4','x5','x6','x7','y']] - means) / stds
+    df.loc[:,cols] = (df.loc[:,cols] - means) / stds
 
-    for col in df.columns.difference(['y']):
+    for col in cols:
         if df[col].isna().sum() > 0:
             df[f'{col}_missing'] = df[col].isna().astype(int)
             df[col] = df[col].fillna(0)
 
     df = df.sort_index()
-    print(f"bad event ratio: {len(df.query('bad == 1')) / len(df.query('bad != -1')):.3f} , compare to bad_percentage: {bad_percentage:.2f} , bad_threshold: {bad_threshold:.2f}")
+    print(f"label event ratio: {len(df.query('label == 1')) / len(df.query('label != -1')):.3f} , compare to bad_percentage: {bad_percentage:.2f} , bad_threshold: {bad_threshold:.2f}")
     return df.drop(columns=['y_raw' , 'threshold' , 'y_rolling'])
 
 def get_rule(tree_obj, feature_names, leaf_id):
@@ -211,7 +217,7 @@ class ClassicDecisionTree:
         features : list[pd.DataFrame] = []
         for window_size in [5, 10, 20]:
             df_rolled = roll_time_series(
-                self.df.reset_index(drop=False).drop(columns=['bad'] , errors='ignore').dropna(axis=1 , how = 'any'),
+                self.df.reset_index(drop=False).drop(columns=['label'] , errors='ignore').dropna(axis=1 , how = 'any'),
                 column_id='id',
                 column_sort='time',
                 max_timeshift=window_size,  # produces windows of length 1..20
@@ -231,8 +237,8 @@ class ClassicDecisionTree:
         df = self.df
         for df_feature in self.features:
             df = df.join(df_feature.reset_index(drop = False).rename(columns = {'level_0' : 'id' , 'level_1' : 'time'}).set_index(['id' , 'time']))
-        self.dataset['train'] = df.query('date < 20220101').query('bad != -1').iloc[::data_step]
-        self.dataset['valid'] = df.query('date >= 20220101').query('bad != -1')
+        self.dataset['train'] = df.query('date < 20220101').query('label != -1').iloc[::data_step]
+        self.dataset['valid'] = df.query('date >= 20220101').query('label != -1')
 
     def fit(self):
         # 5. Decision tree for high precision patterns
@@ -245,22 +251,22 @@ class ClassicDecisionTree:
             class_weight=class_weight,
             random_state=random_seed,
         )
-        dt.fit(self.dataset['train'].drop(['time','y','bad'], axis=1 , errors='ignore'), self.dataset['train']['bad'])
+        dt.fit(self.dataset['train'].drop(['time','y','label'], axis=1 , errors='ignore'), self.dataset['train']['label'])
         self.dt = dt
 
     def evaluate(self):
-        # 6. Extract paths with >= min_precision bad in training leaves
+        # 6. Extract paths with >= min_precision label in training leaves
         # Evaluate precision on validation set
-        y_pred = self.dt.predict(self.dataset['valid'].drop(['time','y','bad'], axis=1 , errors='ignore'))
+        y_pred = self.dt.predict(self.dataset['valid'].drop(['time','y','label'], axis=1 , errors='ignore'))
         if y_pred.sum() == 0:
             precision = 0
         else:
-            precision = (self.dataset['valid']['bad'] & y_pred).sum() / y_pred.sum()
+            precision = (self.dataset['valid']['label'] & y_pred).sum() / y_pred.sum()
         print(f"Overall precision: {precision:.2f}")
 
         # Inspect leaf probabilities
-        leaf_ids_train = self.dt.apply(self.dataset['train'].drop(['time','y','bad'], axis=1 , errors='ignore'))
-        train_labels = self.dataset['train']['bad']
+        leaf_ids_train = self.dt.apply(self.dataset['train'].drop(['time','y','label'], axis=1 , errors='ignore'))
+        train_labels = self.dataset['train']['label']
 
         leaf_stats = {}
         for leaf in np.unique(leaf_ids_train):
@@ -281,8 +287,8 @@ class ClassicDecisionTree:
                 f"support={leaf_stats[leaf]['support']}, rule: {rule}")
 
     def validate(self):
-        val_leaf_ids = self.dt.apply(self.dataset['valid'].drop(['time','y','bad'], axis=1 , errors='ignore'))
-        val_labels = self.dataset['valid']['bad']
+        val_leaf_ids = self.dt.apply(self.dataset['valid'].drop(['time','y','label'], axis=1 , errors='ignore'))
+        val_labels = self.dataset['valid']['label']
         val_precisions = []
         val_nums = []
         for leaf in self.high_prec_leaves:
@@ -295,7 +301,7 @@ class ClassicDecisionTree:
             else:
                 val_precisions.append(0)
                 print(f"Leaf {leaf} has no validation samples")
-        print(f"ratio of bad events in validation set: {self.dataset['valid']['bad'].mean():.2%} ({self.dataset['valid']['bad'].sum().astype(int).item()}/{len(self.dataset['valid']['bad'])})")
+        print(f"ratio of label events in validation set: {self.dataset['valid']['label'].mean():.2%} ({self.dataset['valid']['label'].sum().astype(int).item()}/{len(self.dataset['valid']['label'])})")
         if val_precisions:
             print(f"Average val precision of high-precision leaves: {sum(val_precisions) / sum(val_nums):.2%} ({sum(val_precisions)}/{sum(val_nums)} samples)")
         else:
@@ -455,7 +461,7 @@ class NNDecisionTree:
         Parameters
         ----------
         df : pd.DataFrame
-            Must contain columns 'time', 'y', 'bad' and all feature columns.
+            Must contain columns 'time', 'y', 'label' and all feature columns.
         nn_type : str
             One of {'cnn', 'gru', 'lstm', 'transformer'}.
         embedding_dim : int
@@ -496,12 +502,12 @@ class NNDecisionTree:
         Create rolling windows and train/validation split.
         Assumes df is sorted by time.
         """
-        feature_columns = [c for c in self.df.columns if c not in ['time', 'y', 'bad']]
+        feature_columns = [c for c in self.df.columns if c not in ['time', 'y', 'label']]
 
         # Split indices chronologically (80% train, 20% val)
         split_idx = int(0.8 * len(self.df))
-        df_train = self.df.iloc[:split_idx].query('bad != -1').iloc[::data_step]
-        df_val = self.df.iloc[split_idx - window_length:].query('bad != -1')  # allow overlap for windows
+        df_train = self.df.iloc[:split_idx].query('label != -1').iloc[::data_step]
+        df_val = self.df.iloc[split_idx - window_length:].query('label != -1')  # allow overlap for windows
 
         X_data, y_data = [], []
         train_indices = []
@@ -509,7 +515,7 @@ class NNDecisionTree:
         # Training windows
         for t in range(window_length, len(df_train)):
             window = df_train[feature_columns].iloc[t-window_length:t].values
-            label = df_train['bad'].iloc[t]
+            label = df_train['label'].iloc[t]
             X_data.append(window)
             y_data.append(label)
             train_indices.append(len(X_data)-1)
@@ -518,7 +524,7 @@ class NNDecisionTree:
         # Validation windows
         for t in range(window_length, len(df_val)):
             window = df_val[feature_columns].iloc[t-window_length:t].values
-            label = df_val['bad'].iloc[t]
+            label = df_val['label'].iloc[t]
             X_data.append(window)
             y_data.append(label)
             val_indices.append(len(X_data)-1)
@@ -680,7 +686,7 @@ class NNDecisionTree:
                 print(f"Leaf {leaf} val prec: {prec:.3f} (n={mask.sum()})")
             else:
                 print(f"Leaf {leaf} has no validation samples")
-        print(f"ratio of bad events in validation set: {val_labels.mean():.2%} ({val_labels.sum().astype(int).item()}/{len(val_labels)})")
+        print(f"ratio of label events in validation set: {val_labels.mean():.2%} ({val_labels.sum().astype(int).item()}/{len(val_labels)})")
         if val_precisions:
             print(f"Average val precision of high-precision leaves: {sum(val_precisions) / sum(val_nums):.2%} ({sum(val_precisions)}/{sum(val_nums)} samples)")
         else:

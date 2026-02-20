@@ -51,7 +51,7 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
         old_df = DB.load(cls.DB_SRC , cls.DB_KEY)
         df = pd.concat([old_df , new_df])
         if not df.empty:
-            df = df.drop_duplicates('date')
+            df = df.drop_duplicates('date' , keep = 'last').reset_index(drop = True).sort_values('date')
             DB.save(df , cls.DB_SRC , cls.DB_KEY , indent = indent , vb_level = vb_level)
 
 def calc_market_daily_risk(date : int):
