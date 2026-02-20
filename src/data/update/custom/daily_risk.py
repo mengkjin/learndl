@@ -14,7 +14,7 @@ class DailyRiskUpdater(BasicCustomUpdater):
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all daily risk is not supported yet for {cls.__name__}')
+            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
             stored_dates = np.array([])
         elif update_type == 'update':
             stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)

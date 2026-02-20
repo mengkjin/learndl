@@ -138,7 +138,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance!')
+            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
 
         total_dates = []
         custom_indices = list(CustomIndex.iter_custom_indices())
