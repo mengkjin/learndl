@@ -17,20 +17,20 @@ def specific_cb(module_name : str) -> Type[BaseCallBack] | None:
         return None
     
 class SpecCB_TRA(BaseCallBack):
-    '''in TRA fill [y] [hist_loss] in batch_data.kwargs , update hist_loss in data.buffer'''
+    '''in TRA fill [y] [hist_loss] in batch_input.kwargs , update hist_loss in data.buffer'''
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         
     @property
     def net(self) -> torch.nn.Module: return getattr(self.trainer.model , 'net')
     def fill_batch_data(self):
-        self.i0 = self.batch_data.i[:,0].cpu()
-        self.i1 = self.batch_data.i[:,1].cpu()
-        y = self.batch_data.y
+        self.i0 = self.batch_input.i[:,0].cpu()
+        self.i1 = self.batch_input.i[:,1].cpu()
+        y = self.batch_input.y
         hl = self.data.buffer['hist_loss']
         rw = getattr(self.net , 'hist_loss_seq_len')
         hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rw] for j in range(rw)],dim=-2)
-        self.batch_data.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
+        self.batch_input.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
     def init_buffer(self):
         hist_loss_shape = list(self.data.y_std.shape)
         hist_loss_shape[2] = getattr(self.net , 'num_states')
@@ -60,7 +60,7 @@ class SpecCB_TRA(BaseCallBack):
         self.update_buffer()
 
 class SpecCB_VAE(BaseCallBack):
-    '''in VAE fill [y] [alpha_noise] [factor_noise] in batch_data.kwargs'''
+    '''in VAE fill [y] [alpha_noise] [factor_noise] in batch_input.kwargs'''
     CB_KEY_PARAMS = ['manual_seed']
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -79,13 +79,13 @@ class SpecCB_VAE(BaseCallBack):
             return torch.randn((numel,)).to(object_tensor)
         
     def on_train_batch_start(self):
-        y = self.batch_data.y
-        self.batch_data.kwargs = {
+        y = self.batch_input.y
+        self.batch_input.kwargs = {
             'y': y , 'alpha_noise' : self.reparameterize(y) , 'factor_noise' : self.reparameterize(y , getattr(self.net , 'factor_num')) ,
         }
 
 class SpecCB_DSize(BaseCallBack):
-    '''in _dsize model fill [size] in batch_data.kwargs'''
+    '''in _dsize model fill [size] in batch_input.kwargs'''
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.size_block = None
@@ -95,10 +95,10 @@ class SpecCB_DSize(BaseCallBack):
             self.size_block = BlockLoader('models', 'tushare_cne5_exp', ['size']).load().as_tensor()
         self.data.buffer['size'] = self.size_block.align(self.data.y_secid , self.data.y_date).values.squeeze()
     def fill_batch_data(self):
-        i0 = self.batch_data.i[:,0].cpu()
-        i1 = self.batch_data.i[:,1].cpu()
-        size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.batch_data.y.device)
-        self.batch_data.kwargs = {'size': size}
+        i0 = self.batch_input.i[:,0].cpu()
+        i1 = self.batch_input.i[:,1].cpu()
+        size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.batch_input.y.device)
+        self.batch_input.kwargs = {'size': size}
 
     def on_fit_model_start(self):           
         self.init_buffer()

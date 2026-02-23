@@ -215,7 +215,7 @@ class SessionControl:
     @universal_action
     def click_queue_delist_all(self):
         """click task queue delist all"""
-        self.task_queue.empty()
+        self.task_queue.clear_queue_only()
         self.queue_last_action = f"Entire Queue Delisted" , True
 
     # @ActionLogger.log_action()

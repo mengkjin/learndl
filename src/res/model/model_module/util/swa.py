@@ -6,7 +6,7 @@ from torch import nn , no_grad
 from torch.optim.swa_utils import AveragedModel
 from typing import Any , Literal
 
-from src.res.model.util import BaseTrainer , BatchData , Checkpoint , Metrics
+from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , Metrics
 
 def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
     '''get a subclass of _BaseEnsembler'''
@@ -49,10 +49,10 @@ class SWAModel:
         return self
      
     def bn_loader(self , trainer : BaseTrainer):
-        for batch_data in trainer.data.train_dataloader(): 
-            assert isinstance(batch_data, BatchData) , f'{type(batch_data)} is not a BatchData'
+        for batch_input in trainer.data.train_dataloader(): 
+            assert isinstance(batch_input, BatchInput) , f'{type(batch_input)} is not a BatchInput'
             trainer.on_train_batch_start()
-            yield (batch_data.x , batch_data.kwargs)
+            yield (batch_input.x , batch_input.kwargs)
 
     @property
     def module(self) -> nn.Module: return self.avgmodel.module
@@ -90,7 +90,7 @@ class EnsembleBestOne(SWAEnsembler):
         if metrics.better_epoch(self.metric_fix):
             self.ckpt.disjoin(self , self.epoch_fix)
             self.epoch_fix = epoch
-            self.metric_fix = metrics.last_metric # value
+            self.metric_fix = metrics.last_epoch_metric # value
             self.ckpt.join(self , epoch , net)
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
@@ -120,7 +120,7 @@ class EnsembleSWABest(SWAEnsembler):
 
         if len(self.metric_list) < self.n_best:
             # self.metric_list.append(value)
-            self.metric_list.append(metrics.last_metric)
+            self.metric_list.append(metrics.last_epoch_metric)
             self.candidates.append(epoch)
             self.ckpt.join(self , epoch , net)
 
@@ -148,7 +148,7 @@ class EnsembleSWALast(SWAEnsembler):
     def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
         if metrics.better_epoch(self.metric_fix):
             self.epoch_fix = epoch
-            self.metric_fix = metrics.last_metric 
+            self.metric_fix = metrics.last_epoch_metric 
 
         candidates = self._full_candidates(epoch)
         [self.ckpt.disjoin(self , candid) for candid in self.candidates if candid < min(candidates)]

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import Proj , DB , Logger
+from src.proj.func import properties
 from src.math import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -254,7 +255,7 @@ class FactorStats:
             return stat['date'].unique().astype(int)
 
     @property
-    def dates(self) -> np.ndarray:
+    def date(self) -> np.ndarray:
         """
         get the common dates of the stats
         """
@@ -347,7 +348,7 @@ class CacheFactorStats:
         Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = Proj.vb.max)
 
     def common_dates(self , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf']) -> np.ndarray:
-        dates = [self.factor_stats[subset].dates for subset in subsets]
+        dates = [self.factor_stats[subset].date for subset in subsets]
         return common_elements(dates)
 
     @classmethod
@@ -434,10 +435,8 @@ class StockFactor:
 
     @property
     def empty(self) -> bool:
-        """
-        return True if the factor is empty
-        """
-        return self.prior_input.empty
+        """return True if the factor is empty"""
+        return properties.empty(self.prior_input)
 
     def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None' = None , 
                normalized : bool | None = None , benchmark : Benchmark | str | None = None ,

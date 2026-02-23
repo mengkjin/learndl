@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.proj import PATH , Logger , Duration
-from src.proj.func import check_process_status , kill_process
+from src.proj.func import properties , check_process_status , kill_process
 from src.proj.util import ScriptCmd , DBConnHandler , Email
 
 def timestamp():
@@ -87,7 +87,8 @@ class TaskDatabase:
                 )
                 ''')
             
-    def is_empty(self):
+    @property
+    def empty(self):
         """Check if database is empty"""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT * FROM task_records')
@@ -379,8 +380,9 @@ class TaskQueue:
     def items(self):
         return self.queue.items()
     
-    def is_empty(self):
-        return not self.queue
+    @property
+    def empty(self):
+        return properties.empty(self.queue)
 
     def reload(self):
         self.queue = {task.id: task.set_task_db(self.task_db) for task in self.task_db.get_queue_tasks(self.queue_id, self.max_queue_size)}
@@ -415,7 +417,7 @@ class TaskQueue:
         self.task_db.del_queue_task(self.queue_id, item.id)
         self.task_db.del_task(item.id , check = True , force = force)
 
-    def empty(self):
+    def clear_queue_only(self):
         for key in list(self.queue.keys()):
             self.queue.pop(key)
         self.task_db.clear_queue(self.queue_id)

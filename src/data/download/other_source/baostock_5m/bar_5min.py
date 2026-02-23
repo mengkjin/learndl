@@ -112,7 +112,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 if first_n > 0: 
                     sec_df = sec_df.iloc[:first_n]
             downloaded = [d.name for d in tmp_dir.iterdir()]
-            task_codes = np.setdiff1d(sec_df['code'].to_numpy() , downloaded)
+            task_codes = np.setdiff1d(sec_df['code'].to_numpy() , downloaded) if 'code' in sec_df.columns else []
             if len(task_codes) == 0: 
                 bs.logout()
                 break
@@ -170,6 +170,12 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
 def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
     pending_dt = pending_date()
     end_dt = CALENDAR.update_to() if date is None else date
+    prev_dates = updated_dates(5)
+    target_dates = CALENDAR.td_within(max(prev_dates) , end_dt) if len(prev_dates) > 0 else []
+    if len(target_dates) == 0:
+        Logger.skipping(f'Other source 5min {end_dt} already updated' , indent = 1)
+        return True
+
     if pending_dt == end_dt: 
         pending_dt = -1
 

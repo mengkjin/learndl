@@ -2,7 +2,9 @@ short_test:
   model.beg_date:   20240701
   model.end_date:   20240930 # 20240229
   model.train_window: 240
-  train.max_epoch:  2
-  env.verbosity:  10
+  train.max_epoch:  3
+  model.input_filter.secid: random.200
+  model.input_filter.date: 20220101-20240930
+  callbacks.DetailedAlphaAnalysis:  {tasks: ['factor' , 't50']}
 transformer:
   callbacks.ResetOptimizer:  {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }

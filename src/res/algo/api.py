@@ -3,8 +3,10 @@ import torch
 from typing import Any , Literal
 
 from src.proj import PATH
-from .nn.api import get_nn_module , get_multiloss_params , get_nn_category , get_nn_datatype , AVAILABLE_NNS
+from .nn.api import get_nn_module , get_nn_category , get_nn_datatype , AVAILABLE_NNS
 from .boost.api import AVAILABLE_BOOSTERS , OptunaBooster , GeneralBooster
+
+__all__ = ['AlgoModule' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 'OptunaBooster' , 'GeneralBooster']
 
 class AlgoModule:
     _availables = {'booster' : AVAILABLE_BOOSTERS , 'nn' : AVAILABLE_NNS}
@@ -77,8 +79,5 @@ class AlgoModule:
         if model_dict is not None: 
             booster.load_dict(model_dict , cuda = bool(cuda) , seed = seed)
         return booster
-
-    @classmethod
-    def multiloss_params(cls , module : torch.nn.Module | Any): return get_multiloss_params(module)
 
 AlgoModule.export_available_modules()

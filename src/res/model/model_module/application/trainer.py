@@ -56,23 +56,26 @@ class ModelTrainer(BaseTrainer):
             html_catcher_context = HtmlCatcher(title = title.title())
         else:
             html_catcher_context = nullcontext()
-
-        base_path = ModelPath(base_path)
-        if base_path:
-            last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
-            if skip:
-                Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
-                return None
-            elif last_time:
-                Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = Proj.vb.max)
-            else:
-                Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = Proj.vb.max)
-                
+       
         with paragraph_context, html_catcher_context as catcher:
+            base_path = ModelPath(base_path)
             trainer = cls.initialize(*args , base_path = base_path , use_data = use_data , **kwargs)
+            
+            if base_path:
+                last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
+                if skip:
+                    Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
+                    return trainer
+                elif last_time:
+                    Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = Proj.vb.max)
+                else:
+                    Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = Proj.vb.max)
+         
             trainer.go().log_operation(log_operation)
             if isinstance(catcher , HtmlCatcher):
                 catcher.set_export_files(trainer.html_catcher_export_path)
+
+        return trainer
 
     @classmethod
     def update_models(cls , force_update = False):

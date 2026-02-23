@@ -2,7 +2,7 @@ import torch
 
 from src.proj import Logger , Proj
 from src.res.algo import AlgoModule
-from src.res.model.util import BasePredictorModel , BatchData
+from src.res.model.util import BasePredictorModel , BatchInput
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
 
 class BoostPredictor(BasePredictorModel):
@@ -25,7 +25,7 @@ class BoostPredictor(BasePredictorModel):
                                         optuna = self.config.model_booster_optuna , n_trials = self.config.model_booster_optuna_n_trials)
 
         self.model_dict.reset()
-        self.metrics.new_model(param)
+        self.complete_model_param = param
         return self
     
     def new_model(self , *args , **kwargs):
@@ -41,11 +41,11 @@ class BoostPredictor(BasePredictorModel):
         self.booster.load_dict(model_file['booster_dict'])
         return self
     
-    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs): 
+    def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: 
+        if len(batch_input) == 0: 
             return None
-        x = batch_data_flatten_x(batch_data) if isinstance(batch_data , BatchData) else batch_data
+        x = batch_data_flatten_x(batch_input) if isinstance(batch_input , BatchInput) else batch_input
         pred = self.booster(x , *args , **kwargs)
         return pred
     
@@ -59,8 +59,6 @@ class BoostPredictor(BasePredictorModel):
     
     def fit(self):
         Logger.note(f'model {self.model_str} fit start' , vb_level = Proj.vb.max)
-
-        self.new_model()
 
         self.booster.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
 
@@ -78,7 +76,6 @@ class BoostPredictor(BasePredictorModel):
         Logger.note(f'model {self.model_str} test start' , vb_level = Proj.vb.max)
 
         for _ in self.trainer.iter_model_submodels():
-            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

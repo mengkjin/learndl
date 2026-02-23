@@ -18,7 +18,7 @@ class Portfolio:
     .__getitem__(date) : return the port for the given date
     .__setitem__(date , port) : set the port for the given date
     .copy() : return a copy of the portfolio
-    .is_empty : return True if the portfolio is empty
+    .empty : return True if the portfolio is empty
     .name : return the lower-case name of the portfolio
     .port_date : return the dates of the ports
     .port_secid : return the secids of the ports
@@ -75,7 +75,7 @@ class Portfolio:
         """return a copy of the portfolio"""
         return deepcopy(self)
     @property
-    def is_empty(self):
+    def empty(self):
         """return True if the portfolio is empty"""
         return len(self) == 0
     @property
@@ -205,7 +205,7 @@ class Portfolio:
 
     def save(self , path : Path | str , overwrite = False , append = True , indent : int = 1 , vb_level : int = 2):
         """save the portfolio to a path (dataframe)"""
-        if self.is_empty:
+        if self.empty:
             return
         path = Path(path)
         if path.exists() and not overwrite:
@@ -223,7 +223,7 @@ class Portfolio:
     
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         """filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid"""
-        if secid is None or self.is_empty: 
+        if secid is None or self.empty: 
             return self
         if not inplace:
             self = self.copy()
@@ -233,7 +233,7 @@ class Portfolio:
 
     def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
         """filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates"""
-        if dates is None or self.is_empty: 
+        if dates is None or self.empty: 
             return self
         if not inplace:
             self = self.copy()

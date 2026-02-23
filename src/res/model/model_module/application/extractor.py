@@ -110,10 +110,10 @@ class ModelHiddenExtractor:
         # something wrong here , exclude_dates is not working
         desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'
         hiddens : list[pd.DataFrame] = []
-        for batch_data in loader:
-            date  = self.data.batch_date(batch_data)
-            secid = self.data.batch_secid(batch_data)
-            df = self.model(batch_data).hidden_df(secid , date)
+        for batch_input in loader:
+            date  = self.data.batch_date(batch_input)
+            secid = self.data.batch_secid(batch_input)
+            df = self.model(batch_input).hidden_df(secid , date)
             if df is not None: 
                 hiddens.append(df)
             loader.display(f'{desc}/{date[0]}')

@@ -61,18 +61,18 @@ def clear_and_show(show_func : Callable):
 def show_script_task_selector(runner : ScriptRunner):
     """show script task selector"""
     script_queue = SC.task_queue.filter(file = [runner.path.path])
-    is_empty = not script_queue
+    emtpy_queue = not script_queue
     wkey = 'script-task-selector'
     header = 'Historical Tasks'
     icon = ':material/history:'
-    if is_empty: 
+    if emtpy_queue: 
         help = "Empty. No Past Task Item is Recorded for This Script."
     else:
         help = "Choose Any Task Item from the Expanders Below."
     subheader = expander_subheader(wkey , header , icon , False , help = help)
 
     with subheader:
-        if is_empty: 
+        if emtpy_queue: 
             return
         
         status_options = ["All" , "Running" , "Complete" , "Error"]
@@ -177,11 +177,11 @@ def show_param_settings(runner : ScriptRunner):
         return
     param_inputs = runner.header.get_param_inputs()
     
-    is_empty = not param_inputs
+    empty_param = not param_inputs
     wkey = 'script-param-setting'
     header = 'Parameters Setting'
     icon = ':material/settings:'
-    if is_empty:
+    if empty_param:
         help = "Empty. No Parameter is Required for This Script."
     else:
         help = "Input Parameters for This Script in the Expanders Below, Mind the Required Ones."
@@ -190,7 +190,7 @@ def show_param_settings(runner : ScriptRunner):
     with subheader:
         param_controls = st.empty()
         SC.param_inputs_form = ParamInputsForm(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
-        if is_empty: 
+        if empty_param: 
             return
 
         cols = param_controls.columns(4)

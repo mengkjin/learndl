@@ -12,9 +12,10 @@ from typing import Any , final , Iterator , Literal , Callable
 from src.proj import Proj , Logger , DB , PATH
 from src.proj.util import FilteredIterable
 from src.res.algo import AlgoModule
+from src.res.algo.nn.loss import MultiHeadLosses
 from src.data import ModuleData
 
-from .batch import BatchData , BatchOutput
+from .batch import BatchInput , BatchOutput , BatchData
 from .buffer import BaseBuffer
 from .config import TrainConfig
 from .model_path import ModelDict
@@ -119,6 +120,16 @@ class ModelStreamLine(ABC):
     ]
 
 class HookWrapper:
+    """
+    Wrapper for hooks, used to wrap the hooks of the trainer and the model
+    The order of the hooks is:
+    - callback enter hook
+    - status hooks
+    - trainer hooks
+    - model hooks
+    - predrecorder hooks
+    - callback exit hooks
+    """
     wrap_count : int = 0
     max_wrap_count = 1
     raw_hooks : dict[str , Callable] = {}
@@ -257,352 +268,7 @@ class TrainerStatus(ModelStreamLine):
     def add_event(self , event : str | None):
         if event: 
             self.epoch_event.append(event)
-
-class TrainerPredRecorder(ModelStreamLine):
-    """Trainer predictor recorder class, used to record the predictor results"""
-    PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
-    PRED_IDXS = ['secid' , 'date']
-    PRED_COLS = ['pred' , 'label']
-    def __init__(self , trainer : 'BaseTrainer') -> None:
-        self.trainer = trainer
-        self.folder_preds.mkdir(exist_ok=True , parents=True)
-        self.folder_avg_preds.mkdir(exist_ok=True , parents=True)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}(trainer={self.trainer})'
-
-    @property
-    def pred_idx(self):
-        """unique index for each prediction batch"""
-        return f'{self.trainer.model_num}.{self.trainer.model_date}.{self.trainer.model_submodel}.{self.trainer.batch_idx}'
-
-    @property
-    def pred_dict(self) -> dict[str,pd.DataFrame]:
-        """stored predictions for each batch"""
-        if not hasattr(self , '_preds_dict'):
-            self._preds_dict = {}
-        return self._preds_dict
-
-    @pred_dict.setter
-    def pred_dict(self , value : dict[str,pd.DataFrame]):
-        self._preds_dict = value
-
-    @property
-    def resumed_models_finished(self) -> pd.DataFrame:
-        """models dataframe for resumed testing"""
-        if not hasattr(self , '_resumed_models_finished'):
-            self._resumed_models_finished = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models_finished
-
-    @resumed_models_finished.setter
-    def resumed_models_finished(self , value : pd.DataFrame):
-        self._resumed_models_finished = value
-
-    @property
-    def resumed_models_unfinished(self) -> pd.DataFrame:
-        """models dataframe for resumed testing"""
-        if not hasattr(self , '_resumed_models_unfinished'):
-            self._resumed_models_unfinished = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models_unfinished
-
-    @resumed_models_unfinished.setter
-    def resumed_models_unfinished(self , value : pd.DataFrame):
-        self._resumed_models_unfinished = value
-
-    @property
-    def resumed_last_pred_date(self) -> int:
-        """last predicted date for resumed testing"""
-        if not hasattr(self , '_resumed_last_pred_date'):
-            self._resumed_last_pred_date = 19000101
-        return self._resumed_last_pred_date
-
-    @resumed_last_pred_date.setter
-    def resumed_last_pred_date(self , value : int):
-        self._resumed_last_pred_date = value
-
-    @property
-    def snap_folder(self) -> Path: 
-        """folder to save model predictions"""
-        return self.trainer.config.model_base_path.snapshot('pred_recorder')
-    @property
-    def folder_preds(self) -> Path:
-        """folder to save model predictions"""
-        return self.snap_folder.joinpath('preds')
-    @property
-    def folder_avg_preds(self) -> Path:
-        """folder to save averaged model predictions"""
-        return self.snap_folder.joinpath('avg_preds')
-    @property
-    def min_test_date(self) -> int:
-        """minimum test date"""
-        return self.trainer.data.test_full_dates.min() if len(self.trainer.data.test_full_dates) > 0 else 99991231
-
-    @property
-    def max_test_date(self) -> int:
-        """maximum test date"""
-        return self.trainer.data.test_full_dates.max() if len(self.trainer.data.test_full_dates) > 0 else 19000101
-
-    def save_preds(self , df : pd.DataFrame , model_date : int , model_num : int , append = False):
-        if df.empty:
-            return
-        
-        old_path = [path for path in self.folder_preds.glob('*.feather') if path.name.startswith(f'{model_num}.{model_date}.')]
-        assert len(old_path) <= 1 , f'Multiple old paths found for model {model_num} at date {model_date}: {old_path}'
-        if old_path and append:
-            old_df = DB.load_df(old_path[0])
-            df = pd.concat([old_df , df]).drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
-            
-        min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
-        path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
-
-        if old_path and path != old_path[0]:
-            Path(old_path[0]).unlink()
-
-    def save_avg_preds(self , model_date : int):
-        pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
-        df = DB.load_dfs(pred_paths)
-        if df.empty:
-            return
-        df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
-        min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
-        path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
-
-    def archive_model_records(self):
-        records : list[tuple[int,int]] = []
-        for model_num , model_date , _ , _ in self.trainer.config.model_base_path.iter_model_archives():
-            records.append((model_num , model_date))
-        df = pd.DataFrame(records , columns = ['model_num' , 'model_date']) if records else pd.DataFrame(columns = ['model_num' , 'model_date']).astype(int)
-        df = df.drop_duplicates().sort_values(by=['model_num' , 'model_date'])
-        df['next_model_date'] = df.groupby('model_num')['model_date'].shift(-1)
-        return df
-
-    def pred_records(self): 
-        """model_date/model_num of saved predictions"""
-        return pd.DataFrame([[path , *path.name.split('.')[:4]] for path in self.folder_preds.glob('*.feather')], columns = ['path' , 'model_num' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
-            astype({'model_num' : int , 'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
-
-    def avg_pred_records(self):
-        return pd.DataFrame([[path , *path.name.split('.')[:3]] for path in self.folder_avg_preds.glob('*.feather')], columns = ['path' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
-            astype({'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
-        
-    @property
-    def retrained_models(self) -> list[tuple[int,int]]:
-        """retrained models for resumed testing , must be tested"""
-        if not hasattr(self , '_retrained_models'):
-            self._retrained_models = []
-        return self._retrained_models
-
-    @classmethod
-    def empty_preds(cls) -> pd.DataFrame:
-        """empty predictions dataframe"""
-        return pd.DataFrame(columns = cls.PRED_KEYS + cls.PRED_IDXS + cls.PRED_COLS)
-
-    def append_retrained_model(self):
-        """
-        append retrained model to retrained_models list
-        """
-        self.retrained_models.append((self.trainer.model_date , self.trainer.model_num))
-
-    def purge_retrained_model_preds(self , vb_level : int = 2):
-        """purge past predictions when trained new models"""
-        if not self.retrained_models:
-            return
-        min_retrained_model_date = min([model_date for model_date , _ in self.retrained_models])
-        pred_records = self.pred_records()
-        purge_models = pred_records.query('model_date >= @min_retrained_model_date')
-        trim_models = pred_records.query('model_date < @min_retrained_model_date and max_pred_date > @min_retrained_model_date')
-        if not purge_models.empty or not trim_models.empty:
-            purge_info = f'Purged saved predictions after retrained model date {min_retrained_model_date}'
-            if not purge_models.empty:
-                purge_info += f', {len(purge_models)} models(date/num) purged'
-            if not trim_models.empty:
-                purge_info += f', {len(trim_models)} models(date/num) trimed'
-            
-            for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
-                df = DB.load_df(path).query('date <= @min_retrained_model_date')
-                Path(path).unlink()
-                self.save_preds(df , model_date , model_num)
-                
-            Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
-        else:
-            Logger.stdout(f'{self.__class__.__name__} : No retrained models found, no purge needed' , vb_level = vb_level)
-
-    def purge_outdated_model_preds(self , vb_level : int = 2):
-        archive_records = self.archive_model_records()
-        pred_records = self.pred_records()
-        new_pred_records = archive_records.merge(pred_records , on=['model_num' , 'model_date'] , how='outer')
-        new_pred_records['next_model_date'] = new_pred_records['next_model_date'].fillna(99991231)
-        df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
-        if df.empty:
-            Logger.stdout(f'{self.__class__.__name__} : No outdated predictions found, no purge needed' , vb_level = vb_level)
-            return
-
-        purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
-        Logger.display(df , caption = purge_info , vb_level = vb_level)
-        for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
-            df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
-            Path(path).unlink()
-            self.save_preds(df , model_date , model_num)
-
-    def purge_obsolete_model_preds(self , vb_level : int = 2):
-        """purge obsolete model predictions"""
-        
-        pred_records = self.pred_records()
-        pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
-        obsolete_records = pred_records[pred_records.duplicated(subset = ['model_date' , 'model_num'])]
-
-        avg_pred_records = self.avg_pred_records()
-        avg_pred_records = avg_pred_records.sort_values(by = ['model_date' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , False , True])
-        obsolete_avg_records = avg_pred_records[avg_pred_records.duplicated(subset = ['model_date'])]
-        if obsolete_records.empty and obsolete_avg_records.empty:
-            return
-        purge_info = f'Purged obsolete predictions'
-        if not obsolete_records.empty:
-            purge_info += f', {len(obsolete_records)} model preds'
-            for path in obsolete_records['path']:
-                Path(path).unlink()
-        if not obsolete_avg_records.empty:
-            purge_info += f', {len(obsolete_avg_records)} avg model preds'
-            for path in obsolete_avg_records['path']:
-                Path(path).unlink()
-        purge_info += f' deleted!'
-        Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
-
-    def setup_resuming_status(self , vb_level : int = 2):
-        """
-        setup resuming status for previous saved predictions
-        notes:
-        - only resume predictions before the last model date if resume option is 'last_model_date'
-        - only resume predictions with all submodels
-        """ 
-        if not self.trainer.config.is_resuming or not Proj.Conf.Model.TRAIN.resume_test:
-            return
-        
-        resume_info = f'Resume testing'
-        pred_records = self.pred_records()
-
-        latest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
-        pred_records = pred_records.query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
-        
-        if not pred_records.empty:
-            min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
-            max_pred_date = pred_records.groupby('model_num')['max_pred_date'].max().min()
-            if self.min_test_date < min_pred_date:
-                resume_info += f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
-            else:
-                models_all = pred_records.query('model_date <= @latest_model_date')
-                models_previous = pred_records.query('model_date < @latest_model_date')
-                
-                if Proj.Conf.Model.TRAIN.resume_test == 'last_model_date' and not models_previous.empty:
-                    self.resumed_models_finished = models_previous[['model_date' , 'model_num']].reset_index(drop=True)
-                    self.resumed_last_pred_date = min(models_previous['max_pred_date'].max() , self.max_test_date)
-                    self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
-                    resume_info += f', recognize past saved preds before model date {latest_model_date}'
-                elif Proj.Conf.Model.TRAIN.resume_test == 'last_pred_date':
-                    if max_pred_date < self.max_test_date:
-                        self.resumed_models_finished = models_previous[['model_date' , 'model_num']]
-                        self.resumed_last_pred_date = max_pred_date
-                        self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
-                    else:
-                        self.resumed_models_finished = models_all[['model_date' , 'model_num']]
-                        self.resumed_last_pred_date = self.max_test_date
-                        self.resumed_models_unfinished = pd.DataFrame(columns = ['model_date' , 'model_num']).astype(int)
-                    resume_info += f', recognize past saved preds before prediction date {self.resumed_last_pred_date}'
-            
-        if pred_records.empty:
-            resume_info += f', no saved preds found'
-
-        Logger.stdout(f'{self.__class__.__name__} : {resume_info}' , vb_level = vb_level)
-    
-    def append_batch_preds(self):
-        if self.pred_idx in self.pred_dict.keys(): 
-            return
-        if self.trainer.batch_output.is_empty: 
-            return
-        
-        which_output = self.trainer.model_param.get('which_output' , 0)
-        
-        secid = self.trainer.data.batch_secid(self.trainer.batch_data)
-        date  = self.trainer.data.batch_date(self.trainer.batch_data)
-        pred = self.trainer.batch_output.pred_df(secid , date).dropna()
-        pred = pred.query('date in @self.trainer.data.test_full_dates')
-        if len(pred) == 0: 
-            return
-
-        label = pd.DataFrame({'secid' : secid , 'date' : date , 'label' : self.trainer.data.batch_label(self.trainer.batch_data)})
-        
-        df = pred.merge(label , on=self.PRED_IDXS)
-        if which_output is None:
-            df['pred'] = df.loc[:,[col for col in df.columns if col.startswith('pred.')]].mean(axis=1)
-        else:
-            df['pred'] = df[f'pred.{which_output}']
-        df = df.assign(model_num = self.trainer.model_num , submodel = self.trainer.model_submodel , model_date = self.trainer.model_date , batch_idx = self.trainer.batch_idx)
-        df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
-
-        self.pred_dict[self.pred_idx] = df
-
-    def collect_model_preds(self):
-        if not self.pred_dict:
-            return self.empty_preds()
-        self.save_preds(pd.concat(self.pred_dict.values()) , self.trainer.model_date , self.trainer.model_num , append = True)
-        self.pred_dict.clear()
-
-    def collect_avg_preds(self):
-        self.save_avg_preds(self.trainer.model_date)
-        
-    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None) -> pd.DataFrame:
-        # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
-        if len(pred_dates) == 0:
-            return self.empty_preds()
-        pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
-        if model_num is not None:
-            pred_records = pred_records.query('model_num == @model_num')
-        assert not pred_records.empty , f'No pred records found for test dates {pred_dates}'
-        df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
-        return df
-
-    def get_avg_preds(self , pred_dates : np.ndarray) -> pd.DataFrame:
-        # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
-        if len(pred_dates) == 0:
-            return self.empty_preds()
-        avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
-        pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
-        [self.save_avg_preds(model_date) for model_date in np.setdiff1d(pred_records['model_date'] , avg_pred_records['model_date'])]
-                
-        avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
-        if avg_pred_records.empty:
-            Logger.error(f'No avg pred records found for test dates {pred_dates}')
-            return self.empty_preds()
-        df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
-        return df
-
-    def on_fit_model_end(self):
-        self.append_retrained_model()
-
-    def on_fit_end(self):
-        self.purge_retrained_model_preds()
-
-    def on_test_start(self):
-        self.purge_outdated_model_preds()
-        self.setup_resuming_status()
-                
-    def on_test_batch_end(self): 
-        self.append_batch_preds()
-
-    def on_test_model_end(self):
-        self.collect_model_preds()
-
-    def on_test_model_date_end(self):
-        self.collect_avg_preds()
-
-    def on_test_end(self):
-        self.purge_obsolete_model_preds()
-        avg_pred_records = self.avg_pred_records()
-        if not avg_pred_records.empty:
-            Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 1)
-        
+  
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
     @abstractmethod
@@ -629,13 +295,13 @@ class BaseDataModule(ABC):
         self.early_test_dates : np.ndarray
         self.model_test_dates : np.ndarray
     @abstractmethod
-    def train_dataloader(self)  -> Iterator[BatchData]: '''return train dataloaders'''
+    def train_dataloader(self)  -> Iterator[BatchInput]: '''return train dataloaders'''
     @abstractmethod
-    def val_dataloader(self)    -> Iterator[BatchData]: '''return valid dataloaders'''
+    def val_dataloader(self)    -> Iterator[BatchInput]: '''return valid dataloaders'''
     @abstractmethod
-    def test_dataloader(self)   -> Iterator[BatchData]: '''return test dataloaders'''
+    def test_dataloader(self)   -> Iterator[BatchInput]: '''return test dataloaders'''
     @abstractmethod
-    def predict_dataloader(self)-> Iterator[BatchData]: '''return predict dataloaders'''
+    def predict_dataloader(self)-> Iterator[BatchInput]: '''return predict dataloaders'''
     @classmethod
     def initiate(cls , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , info = True , **kwargs):
         return cls(config , use_data = use_data , *args , info = info , **kwargs)
@@ -653,19 +319,19 @@ class BaseDataModule(ABC):
         late_dates = self.model_date_list[self.model_date_list > model_date]
         return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
         
-    def batch_date(self , batch_data : BatchData):
-        return self.y_date[batch_data.i.cpu()[:,1]]
+    def batch_date(self , batch_input : BatchInput):
+        return self.y_date[batch_input.i.cpu()[:,1]]
     
-    def batch_secid(self , batch_data : BatchData):
-        return self.y_secid[batch_data.i.cpu()[:,0]]
+    def batch_secid(self , batch_input : BatchInput):
+        return self.y_secid[batch_input.i.cpu()[:,0]]
     
-    def batch_date0(self , batch_data : BatchData):
-        batch_date = self.batch_date(batch_data)
+    def batch_date0(self , batch_input : BatchInput):
+        batch_date = self.batch_date(batch_input)
         assert (batch_date == batch_date[0]).all() , batch_date
         return batch_date[0]
 
-    def batch_label(self , batch_data : BatchData):
-        label = batch_data.y.cpu().squeeze().numpy()
+    def batch_label(self , batch_input : BatchInput):
+        label = batch_input.y.cpu().squeeze().numpy()
         if label.ndim == 1:
             return label
         elif label.ndim == 2:
@@ -772,7 +438,7 @@ class BaseTrainer(ModelStreamLine):
 
     def init_utils(self , **kwargs):
         self.status = TrainerStatus(self.config.train_max_epoch)
-        self.record = TrainerPredRecorder(self)
+        self.record = PredRecorder(self)
 
     @property
     def device(self): return self.config.device
@@ -784,6 +450,8 @@ class BaseTrainer(ModelStreamLine):
     def deposition(self): return self.config.deposition   
     @property
     def stage_queue(self): return self.config.stage_queue
+    @property
+    def batch_data(self): return BatchData(self.batch_input , self.batch_output)
     @property
     def batch_dates(self): return np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
     @property
@@ -814,8 +482,6 @@ class BaseTrainer(ModelStreamLine):
     def model_submodels(self): return self.config.model_submodels
     @property
     def if_transfer(self): return self.config.train_trainer_transfer     
-    @property
-    def batch_output(self): return self.model.batch_output
     @property
     def html_catcher_export_path(self): 
         if 'fit' in self.stage_queue and 'test' in self.stage_queue:
@@ -927,6 +593,7 @@ class BaseTrainer(ModelStreamLine):
         return model_iter
 
     def iter_model_submodels(self):
+        assert self.status.stage != 'fit' , f'{self.status.stage} is not allowed to iter model submodels'
         for self.status.model_submodel in self.model_submodels: 
             self.on_test_submodel_start()
             yield self.status
@@ -939,60 +606,61 @@ class BaseTrainer(ModelStreamLine):
             self.on_before_fit_epoch_end()
             self.on_fit_epoch_end()
 
+    def iter_dataloader(self):
+        for idx , batch_input in enumerate(self.dataloader):
+            self.batch_idx = idx
+            self.batch_input = batch_input
+            self.batch_output = BatchOutput()
+            yield None
+
     def iter_train_dataloader(self , given_loader = None):
         self.dataloader = self.data.train_dataloader() if given_loader is None else given_loader
         self.on_train_epoch_start()
-        for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
+        for _ in self.iter_dataloader(): 
             self.on_train_batch_start()
-            yield self.batch_idx , self.batch_data
+            yield self.batch_idx , self.batch_input
             self.on_train_batch_end()
         self.on_train_epoch_end()
 
     def iter_val_dataloader(self , given_loader = None):
         self.dataloader = self.data.val_dataloader() if given_loader is None else given_loader
         self.on_validation_epoch_start()
-        for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
+        for _ in self.iter_dataloader(): 
             self.on_validation_batch_start()
-            yield self.batch_idx , self.batch_data
+            yield self.batch_idx , self.batch_input
             self.on_validation_batch_end()
         self.on_validation_epoch_end()
 
     def iter_test_dataloader(self , given_loader = None):
         self.dataloader = self.data.test_dataloader() if given_loader is None else given_loader
-        for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
+        for _ in self.iter_dataloader(): 
             self.on_test_batch_start()
-            yield self.batch_idx , self.batch_data
+            yield self.batch_idx , self.batch_input
             self.on_test_batch_end()
 
     def iter_predict_dataloader(self , given_loader = None):
         self.dataloader = self.data.predict_dataloader() if given_loader is None else given_loader
-        for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
+        for _ in self.iter_dataloader(): 
             self.on_test_batch_start()
-            yield self.batch_idx , self.batch_data
+            yield self.batch_idx , self.batch_input
             self.on_test_batch_end()
-
-    def stack_model(self):
-        '''temporaly save self to somewhere'''
-        self.on_before_save_model()
-        for submodel in self.model_submodels:
-            model_dict = self.model.collect(submodel)
-            self.deposition.stack_model(model_dict , self.model_num , self.model_date , submodel) 
-
-    def save_model(self):
-        '''save self to somewhere'''
-        if self.metrics.better_attempt(self.status.best_attempt_metric): 
-            self.stack_model()
-        [self.deposition.dump_model(self.model_num , self.model_date , submodel) for submodel in self.model_submodels]
 
     def on_configure_model(self):  
         self.config.set_config_environment()
         
     def on_fit_model_start(self):
         self.data.setup('fit' , self.model_param , self.model_date)
+        self.model.new_model()
+        self.metrics.new_model(self.model , self.model.complete_model_param , **self.status.status)
+        self.metrics.new_attempt(**self.status.status)
 
     def on_fit_model_end(self): 
-        self.save_model()
-
+        if self.metrics.better_attempt(self.status.best_attempt_metric): 
+            self.model.stack_model()
+        self.model.dump_model()
+        self.metrics.collect_attempt()
+        self.metrics.collect_model()
+        
     def on_fit_epoch_start(self): ...
 
     def on_fit_epoch_end(self): ...
@@ -1011,15 +679,16 @@ class BaseTrainer(ModelStreamLine):
     
     def on_test_model_start(self):
         self.data.setup('test' , self.model_param , self.model_date)
-    
+
     def on_test_submodel_start(self):
-        self.metrics.new_epoch(**self.status.status)
+        self.model.load_model(submodel=self.model_submodel)
+        self.metrics.new_all(self.model , self.model.complete_model_param , **self.status.status)
         
     def on_test_submodel_end(self): 
-        self.metrics.collect_epoch()
+        self.metrics.collect_all()
 
     def on_test_batch_start(self):
-        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.batch_date0(self.batch_data)) 
+        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.batch_date0(self.batch_input)) 
 
     @property
     def penalty_kwargs(self): return {}
@@ -1058,9 +727,16 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     @property
     def data(self): return self.trainer.data
     @property
-    def batch_data(self): return self.trainer.batch_data
+    def batch_input(self): return self.trainer.batch_input
     @property
     def batch_idx(self): return self.trainer.batch_idx
+    @property
+    def batch_output(self): return self.trainer.batch_output
+    @batch_output.setter
+    def batch_output(self , value : BatchOutput): 
+        self.trainer.batch_output = value
+    @property
+    def batch_data(self): return self.trainer.batch_data
     @property
     def model_date(self): return self.trainer.model_date
     @property
@@ -1073,7 +749,7 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
 class BaseCallBack(ModelStreamLineWithTrainer):
     CB_ORDER : int = 0
     CB_KEY_PARAMS : list[str] = []
-    def __init__(self , trainer , turn_off = False) -> None:
+    def __init__(self , trainer : BaseTrainer , turn_off = False) -> None:
         self.bound_with_trainer(trainer)
         self.turn_off : bool = turn_off
         self.__hook_stack = []
@@ -1116,6 +792,352 @@ class BaseCallBack(ModelStreamLineWithTrainer):
     @property
     def model(self): return self.trainer.model
 
+class PredRecorder(ModelStreamLineWithTrainer):
+    """Trainer predictor recorder class, used to record the predictor results"""
+    PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
+    PRED_IDXS = ['secid' , 'date']
+    PRED_COLS = ['pred' , 'label']
+    def __init__(self , trainer : BaseTrainer) -> None:
+        self.bound_with_trainer(trainer)
+        self.folder_preds.mkdir(exist_ok=True , parents=True)
+        self.folder_avg_preds.mkdir(exist_ok=True , parents=True)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(trainer={self.trainer})'
+
+    @property
+    def pred_idx(self):
+        """unique index for each prediction batch"""
+        return f'{self.model_num}.{self.model_date}.{self.model_submodel}.{self.batch_idx}'
+
+    @property
+    def pred_dict(self) -> dict[str,pd.DataFrame]:
+        """stored predictions for each batch"""
+        if not hasattr(self , '_preds_dict'):
+            self._preds_dict = {}
+        return self._preds_dict
+
+    @pred_dict.setter
+    def pred_dict(self , value : dict[str,pd.DataFrame]):
+        self._preds_dict = value
+
+    @property
+    def resumed_models_finished(self) -> pd.DataFrame:
+        """models dataframe for resumed testing"""
+        if not hasattr(self , '_resumed_models_finished'):
+            self._resumed_models_finished = pd.DataFrame(columns = ['model_num' , 'model_date'])
+        return self._resumed_models_finished
+
+    @resumed_models_finished.setter
+    def resumed_models_finished(self , value : pd.DataFrame):
+        self._resumed_models_finished = value
+
+    @property
+    def resumed_models_unfinished(self) -> pd.DataFrame:
+        """models dataframe for resumed testing"""
+        if not hasattr(self , '_resumed_models_unfinished'):
+            self._resumed_models_unfinished = pd.DataFrame(columns = ['model_num' , 'model_date'])
+        return self._resumed_models_unfinished
+
+    @resumed_models_unfinished.setter
+    def resumed_models_unfinished(self , value : pd.DataFrame):
+        self._resumed_models_unfinished = value
+
+    @property
+    def resumed_last_pred_date(self) -> int:
+        """last predicted date for resumed testing"""
+        if not hasattr(self , '_resumed_last_pred_date'):
+            self._resumed_last_pred_date = 19000101
+        return self._resumed_last_pred_date
+
+    @resumed_last_pred_date.setter
+    def resumed_last_pred_date(self , value : int):
+        self._resumed_last_pred_date = value
+
+    @property
+    def snap_folder(self) -> Path: 
+        """folder to save model predictions"""
+        return self.config.model_base_path.snapshot('pred_recorder')
+    @property
+    def folder_preds(self) -> Path:
+        """folder to save model predictions"""
+        return self.snap_folder.joinpath('preds')
+    @property
+    def folder_avg_preds(self) -> Path:
+        """folder to save averaged model predictions"""
+        return self.snap_folder.joinpath('avg_preds')
+    @property
+    def min_test_date(self) -> int:
+        """minimum test date"""
+        return self.data.test_full_dates.min() if len(self.data.test_full_dates) > 0 else 99991231
+
+    @property
+    def max_test_date(self) -> int:
+        """maximum test date"""
+        return self.data.test_full_dates.max() if len(self.data.test_full_dates) > 0 else 19000101
+
+    def save_preds(self , df : pd.DataFrame , model_date : int , model_num : int , append = False):
+        if df.empty:
+            return
+        
+        old_path = [path for path in self.folder_preds.glob('*.feather') if path.name.startswith(f'{model_num}.{model_date}.')]
+        assert len(old_path) <= 1 , f'Multiple old paths found for model {model_num} at date {model_date}: {old_path}'
+        if old_path and append:
+            old_df = DB.load_df(old_path[0])
+            df = pd.concat([old_df , df]).drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
+            
+        min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
+        path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
+        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
+
+        if old_path and path != old_path[0]:
+            Path(old_path[0]).unlink()
+
+    def save_avg_preds(self , model_date : int):
+        pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
+        df = DB.load_dfs(pred_paths)
+        if df.empty:
+            return
+        df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
+        min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
+        path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
+        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
+
+    def archive_model_records(self):
+        records : list[tuple[int,int]] = []
+        for model_num , model_date , _ , _ in self.config.model_base_path.iter_model_archives():
+            records.append((model_num , model_date))
+        df = pd.DataFrame(records , columns = ['model_num' , 'model_date']) if records else pd.DataFrame(columns = ['model_num' , 'model_date']).astype(int)
+        df = df.drop_duplicates().sort_values(by=['model_num' , 'model_date'])
+        df['next_model_date'] = df.groupby('model_num')['model_date'].shift(-1)
+        return df
+
+    def pred_records(self): 
+        """model_date/model_num of saved predictions"""
+        return pd.DataFrame([[path , *path.name.split('.')[:4]] for path in self.folder_preds.glob('*.feather')], columns = ['path' , 'model_num' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
+            astype({'model_num' : int , 'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
+
+    def avg_pred_records(self):
+        return pd.DataFrame([[path , *path.name.split('.')[:3]] for path in self.folder_avg_preds.glob('*.feather')], columns = ['path' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
+            astype({'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
+        
+    @property
+    def retrained_models(self) -> list[tuple[int,int]]:
+        """retrained models for resumed testing , must be tested"""
+        if not hasattr(self , '_retrained_models'):
+            self._retrained_models = []
+        return self._retrained_models
+
+    @classmethod
+    def empty_preds(cls) -> pd.DataFrame:
+        """empty predictions dataframe"""
+        return pd.DataFrame(columns = cls.PRED_KEYS + cls.PRED_IDXS + cls.PRED_COLS)
+
+    def append_retrained_model(self):
+        """
+        append retrained model to retrained_models list
+        """
+        self.retrained_models.append((self.model_date , self.model_num))
+
+    def purge_retrained_model_preds(self , vb_level : int = 2):
+        """purge past predictions when trained new models"""
+        if not self.retrained_models:
+            return
+        min_retrained_model_date = min([model_date for model_date , _ in self.retrained_models])
+        pred_records = self.pred_records()
+        purge_models = pred_records.query('model_date >= @min_retrained_model_date')
+        trim_models = pred_records.query('model_date < @min_retrained_model_date and max_pred_date > @min_retrained_model_date')
+        if not purge_models.empty or not trim_models.empty:
+            purge_info = f'Purged saved predictions after retrained model date {min_retrained_model_date}'
+            if not purge_models.empty:
+                purge_info += f', {len(purge_models)} models(date/num) purged'
+            if not trim_models.empty:
+                purge_info += f', {len(trim_models)} models(date/num) trimed'
+            
+            for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
+                df = DB.load_df(path).query('date <= @min_retrained_model_date')
+                Path(path).unlink()
+                self.save_preds(df , model_date , model_num)
+                
+            Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
+        else:
+            Logger.stdout(f'{self.__class__.__name__} : No retrained models found, no purge needed' , vb_level = vb_level)
+
+    def purge_outdated_model_preds(self , vb_level : int = 2):
+        archive_records = self.archive_model_records()
+        pred_records = self.pred_records()
+        new_pred_records = archive_records.merge(pred_records , on=['model_num' , 'model_date'] , how='outer')
+        new_pred_records['next_model_date'] = new_pred_records['next_model_date'].fillna(99991231)
+        df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
+        if df.empty:
+            Logger.stdout(f'{self.__class__.__name__} : No outdated predictions found, no purge needed' , vb_level = vb_level)
+            return
+
+        purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
+        Logger.display(df , caption = purge_info , vb_level = vb_level)
+        for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
+            df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
+            Path(path).unlink()
+            self.save_preds(df , model_date , model_num)
+
+    def purge_obsolete_model_preds(self , vb_level : int = 2):
+        """purge obsolete model predictions"""
+        
+        pred_records = self.pred_records()
+        pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
+        obsolete_records = pred_records[pred_records.duplicated(subset = ['model_date' , 'model_num'])]
+
+        avg_pred_records = self.avg_pred_records()
+        avg_pred_records = avg_pred_records.sort_values(by = ['model_date' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , False , True])
+        obsolete_avg_records = avg_pred_records[avg_pred_records.duplicated(subset = ['model_date'])]
+        if obsolete_records.empty and obsolete_avg_records.empty:
+            return
+        purge_info = f'Purged obsolete predictions'
+        if not obsolete_records.empty:
+            purge_info += f', {len(obsolete_records)} model preds'
+            for path in obsolete_records['path']:
+                Path(path).unlink()
+        if not obsolete_avg_records.empty:
+            purge_info += f', {len(obsolete_avg_records)} avg model preds'
+            for path in obsolete_avg_records['path']:
+                Path(path).unlink()
+        purge_info += f' deleted!'
+        Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
+
+    def setup_resuming_status(self , vb_level : int = 2):
+        """
+        setup resuming status for previous saved predictions
+        notes:
+        - only resume predictions before the last model date if resume option is 'last_model_date'
+        - only resume predictions with all submodels
+        """ 
+        if not self.config.is_resuming or not Proj.Conf.Model.TRAIN.resume_test:
+            return
+        
+        resume_info = f'Resume testing'
+        pred_records = self.pred_records()
+
+        latest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
+        pred_records = pred_records.query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
+        
+        if not pred_records.empty:
+            min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
+            max_pred_date = pred_records.groupby('model_num')['max_pred_date'].max().min()
+            if self.min_test_date < min_pred_date:
+                resume_info += f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
+            else:
+                models_all = pred_records.query('model_date <= @latest_model_date')
+                models_previous = pred_records.query('model_date < @latest_model_date')
+                
+                if Proj.Conf.Model.TRAIN.resume_test == 'last_model_date' and not models_previous.empty:
+                    self.resumed_models_finished = models_previous[['model_date' , 'model_num']].reset_index(drop=True)
+                    self.resumed_last_pred_date = min(models_previous['max_pred_date'].max() , self.max_test_date)
+                    self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
+                    resume_info += f', recognize past saved preds before model date {latest_model_date}'
+                elif Proj.Conf.Model.TRAIN.resume_test == 'last_pred_date':
+                    if max_pred_date < self.max_test_date:
+                        self.resumed_models_finished = models_previous[['model_date' , 'model_num']]
+                        self.resumed_last_pred_date = max_pred_date
+                        self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
+                    else:
+                        self.resumed_models_finished = models_all[['model_date' , 'model_num']]
+                        self.resumed_last_pred_date = self.max_test_date
+                        self.resumed_models_unfinished = pd.DataFrame(columns = ['model_date' , 'model_num']).astype(int)
+                    resume_info += f', recognize past saved preds before prediction date {self.resumed_last_pred_date}'
+            
+        if pred_records.empty:
+            resume_info += f', no saved preds found'
+
+        Logger.stdout(f'{self.__class__.__name__} : {resume_info}' , vb_level = vb_level)
+    
+    def append_batch_preds(self):
+        if self.pred_idx in self.pred_dict.keys(): 
+            return
+        if self.batch_output.empty: 
+            return
+        
+        which_output = self.trainer.model_param.get('which_output' , 0)
+        
+        secid = self.data.batch_secid(self.batch_input)
+        date  = self.data.batch_date(self.batch_input)
+        pred = self.batch_output.pred_df(secid , date).dropna()
+        pred = pred.query('date in @self.data.test_full_dates')
+        if len(pred) == 0: 
+            return
+
+        label = pd.DataFrame({'secid' : secid , 'date' : date , 'label' : self.data.batch_label(self.batch_input)})
+        
+        df = pred.merge(label , on=self.PRED_IDXS)
+        if which_output is None:
+            df['pred'] = df.loc[:,[col for col in df.columns if col.startswith('pred.')]].mean(axis=1)
+        else:
+            df['pred'] = df[f'pred.{which_output}']
+        df = df.assign(model_num = self.model_num , submodel = self.model_submodel , model_date = self.model_date , batch_idx = self.batch_idx)
+        df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
+
+        self.pred_dict[self.pred_idx] = df
+
+    def collect_model_preds(self):
+        if not self.pred_dict:
+            return self.empty_preds()
+        self.save_preds(pd.concat(self.pred_dict.values()) , self.model_date , self.model_num , append = True)
+        self.pred_dict.clear()
+
+    def collect_avg_preds(self):
+        self.save_avg_preds(self.model_date)
+        
+    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None) -> pd.DataFrame:
+        # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
+        if len(pred_dates) == 0:
+            return self.empty_preds()
+        pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
+        if model_num is not None:
+            pred_records = pred_records.query('model_num == @model_num')
+        assert not pred_records.empty , f'No pred records found for test dates {pred_dates}'
+        df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
+        return df
+
+    def get_avg_preds(self , pred_dates : np.ndarray) -> pd.DataFrame:
+        # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
+        if len(pred_dates) == 0:
+            return self.empty_preds()
+        avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
+        pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
+        [self.save_avg_preds(model_date) for model_date in np.setdiff1d(pred_records['model_date'] , avg_pred_records['model_date'])]
+                
+        avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
+        if avg_pred_records.empty:
+            Logger.error(f'No avg pred records found for test dates {pred_dates}')
+            return self.empty_preds()
+        df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
+        return df
+
+    def on_fit_model_end(self):
+        self.append_retrained_model()
+
+    def on_fit_end(self):
+        self.purge_retrained_model_preds()
+
+    def on_test_start(self):
+        self.purge_outdated_model_preds()
+        self.setup_resuming_status()
+    
+    def on_test_batch_end(self): 
+        self.append_batch_preds()
+
+    def on_test_model_end(self):
+        self.collect_model_preds()
+
+    def on_test_model_date_end(self):
+        self.collect_avg_preds()
+
+    def on_test_end(self):
+        self.purge_obsolete_model_preds()
+        avg_pred_records = self.avg_pred_records()
+        if not avg_pred_records.empty:
+            Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 1)
+      
+
 class BasePredictorModel(ModelStreamLineWithTrainer):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = []
@@ -1123,9 +1145,10 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     
     def __init__(self, *args , **kwargs) -> None:
         self.reset()
+        self.net : torch.nn.Module | Any = None
         self.model_dict = ModelDict()
 
-    def __call__(self , input : BatchData | torch.Tensor | Any | int | None , *args , **kwargs):
+    def __call__(self , input : BatchInput | torch.Tensor | Any | int | None , *args , **kwargs):
         if isinstance(input , int):
             from src.res.model.data_module import DataModule
             input = DataModule.get_date_batch_data(self.config , input)
@@ -1144,12 +1167,13 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         from src.res.model.model_module.module import get_predictor_module
         binder = config if trainer is None else trainer
         model = get_predictor_module(config , **kwargs).bound_with(binder)
-        infos = {'Module Type' : model.__class__.__name__ , 'Bound Type' : binder.__class__.__name__}
+        infos = {'Module Type' : model.__class__.__name__}
         if info:
             Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level=2)
         return model
     
-    def multiloss_params(self): return {}
+    def multiloss_params(self): 
+        return MultiHeadLosses.get_params(getattr(self , 'net' , None))
 
     def reset(self):
         self.trainer : BaseTrainer | Any = None
@@ -1197,6 +1221,15 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return self.trainer.model_submodel if self.trainer else self._model_submodel
     @property
     def model_param(self): return self.config.model_param[self.model_num]
+    @property
+    def complete_model_param(self) -> dict[str,Any]:
+        if not hasattr(self , '_complete_model_param') or self._complete_model_param is None:
+            return self.model_param
+        else:
+            return self._complete_model_param
+    @complete_model_param.setter
+    def complete_model_param(self , value : dict[str,Any] | None):
+        self._complete_model_param : dict[str,Any] | None = value
     
     def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
@@ -1225,7 +1258,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         '''call when testing new model'''
         return self
     @abstractmethod
-    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
     @abstractmethod
     def fit(self) -> None:
@@ -1234,40 +1267,39 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def collect(self , submodel = 'best' , *args) -> ModelDict: 
         '''collect model params, called before stacking model'''
 
+    def stack_model(self):
+        '''temporaly save self to somewhere'''
+        self.trainer.on_before_save_model()
+        for submodel in self.trainer.model_submodels:
+            self.deposition.stack_model(self.collect(submodel) , self.model_num , self.model_date , submodel) 
+
+    def dump_model(self):
+        '''dump model to somewhere'''
+        for submodel in self.trainer.model_submodels:
+            self.deposition.dump_stacked_model(self.model_num , self.model_date , submodel) 
+
     def test(self):
         '''test the model inside'''
         for _ in self.trainer.iter_model_submodels():
-            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
-
-    def metric_kwargs(self):
-        kwargs = {}
-        kwargs['pred'] = self.batch_output.pred
-        kwargs['label'] = self.batch_data.y
-        kwargs['weight'] = self.batch_data.w
-        kwargs.update(self.multiloss_params())
-        kwargs.update(self.batch_output.other)
-        return kwargs
     
     def batch_forward(self) -> None: 
-        if self.trainer.batch_idx < self.trainer.batch_resumed or self.trainer.batch_idx >= self.trainer.batch_aftermath: 
-            self.batch_output = BatchOutput()
-        else:
-            self.batch_output = self(self.batch_data)
+        if self.batch_idx >= self.trainer.batch_resumed and self.batch_idx < self.trainer.batch_aftermath: 
+            self.batch_output = self(self.batch_input)
 
     def batch_metrics(self) -> None:
-        if self.batch_output.is_empty or self.trainer.batch_idx < self.trainer.batch_warm_up: 
+        if self.batch_output.empty or self.batch_idx < self.trainer.batch_warm_up: 
             return
-        batch_key = self.trainer.batch_dates[self.trainer.batch_idx] if self.status.stage == 'test' else self.trainer.batch_idx
-        self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch(key = batch_key)
+        batch_key = self.batch_idx if self.status.stage == 'fit' else self.trainer.batch_dates[self.batch_idx]
+        self.metrics.calculate(self.status.dataset , batch_key , self.batch_data)
 
     def batch_backward(self) -> None:
-        if self.batch_data.is_empty: 
+        if self.batch_input.empty: 
             return
         assert self.status.dataset == 'train' , self.status.dataset
         self.trainer.on_before_backward()
-        self.optimizer.backward(self.metrics.output)
+        self.optimizer.backward(self.metrics.batch_metrics)
         self.trainer.on_after_backward()
 

@@ -13,17 +13,36 @@ trainer.scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'step_size
 trainer.learn_rate: {'base' : 0.005 , 'transfer_multiplier' : {'encoder' : 0.1 , 'decoder' : 1.0, }}
 trainer.gradient.clip_value: 10.0
 
-criterion.loss:      ccc  # mse, pearson, ccc
-criterion.score:     spearman # mse, pearson, ccc, spearman
-criterion.penalty:   
-  hidden_corr:  {'lamb' :  0.001 ,}
-criterion.weight.fit:    'equal' # 'top'
-criterion.weight.test:   'equal' # 'top'
+# loss params , should be a dict, 
+# keys (e.g. 'ccc', 'hidden_corr', 'hidden_corr_deprecated') and loss_kwargs (e.g. {'lamb' :  0.001 ,}) 
+# the first key is the primary one to be used for multilosses
+criterion.loss: 
+  ccc: {}  
+  # mse: {}
+  # pearson: {}
+  hidden_corr:  {'lamb' :  0. ,}
+  hidden_corr_deprecated:  {'lamb' :  0.001 ,}
 
-multilosses.type: hybrid
-multilosses.param.dwa: {'tau' : 2}
-multilosses.param.ruw: {'phi' : null}
-multilosses.param.ewa: {}
-multilosses.param.gls: {}
-multilosses.param.rws: {}
-multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
+# score params , should be a dict, can be one of mse, pearson, ccc, spearman
+# it is used for validation set calculation and early stopping
+# only one score criterion is allowed
+criterion.score:     
+  spearman: {which_output: [0] , which_label: [0]}
+  # mse, pearson, ccc, spearman
+
+criterion.weight:
+  fit:    'equal' # 'top'
+  test:   'equal' # 'top'
+
+# multilosses params , should be a dict, 
+# keys (e.g. 'hybrid', 'dwa', 'ruw', 'ewa', 'gls', 'rws') and multilosses_kwargs (e.g. {'phi' : null , 'tau' : 2}) 
+# only one multilosses criterion is allowed
+criterion.multilosses:
+  name: hybrid # ewa, hybrid, dwa, ruw, gls, rws
+  params:  {'phi' : null , 'tau' : 2}
+  # hybrid: {'phi' : null , 'tau' : 2}
+  # dwa: {'tau' : 2}
+  # ruw: {'phi' : null}
+  # ewa: {}
+  # gls: {}
+  # rws: {}

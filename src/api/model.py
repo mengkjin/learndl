@@ -1,5 +1,5 @@
 import src.res.model.model_module.application as app
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Proj
 from src.data import DataPreProcessor
 
 from .util import wrap_update
@@ -98,8 +98,10 @@ class ModelAPI:
         '''
         train a model
         '''
-        return cls.Trainer.train(module , short_test , start = start , end = end , 
-                                 stage = 0 , resume = 0 , selection = 1 , **kwargs)
+        with Proj.vb.WithVB(Proj.vb.max if short_test else None):
+            trainer = cls.Trainer.train(module , short_test , start = start , end = end , 
+                                    stage = 0 , resume = 0 , selection = 1 , **kwargs)
+        return trainer
 
     @classmethod
     def resume_model(cls , model_name : str):

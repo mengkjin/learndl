@@ -1,26 +1,35 @@
 import torch
 
-from src.res.model.util import TrainConfig , BatchData
+from src.proj import Logger
+from src.res.model.util import TrainConfig , BatchInput
 from .module import DataModule
 
 
-def get_realistic_batch_data(model_data_types='day') -> BatchData:
+def get_realistic_batch_data(model_data_types='day') -> BatchInput:
     '''
-    get a sample of realistic batch_data , 'day' , 'day+style' , '15m+style' ...
+    get a sample of realistic batch_input , 'day' , 'day+style' , '15m+style' ...
     day : stock_num x seq_len x 6
     30m : stock_num x seq_len x 8 x 6
     style : stock_num x 1 x 10
     indus : stock_num x 1 x 35
     ...
     '''
-    model_config = TrainConfig.default().update(short_test=True, model_data_types=model_data_types)
+    override = {
+        'model.module':'gru',
+        'model.input_type':'data',
+        'short_test':True,
+        'model.data.types':model_data_types
+    }
+    model_config = TrainConfig(None, override=override, test_mode=True)
     data = DataModule(model_config , 'predict').load_data()
     data.setup('predict' , model_date = data.datas.y.date[-50])
-    return data.predict_dataloader()[0]
+    batch_input = data.predict_dataloader()[0]
+    Logger.stdout(batch_input.info)
+    return batch_input
 
-def get_random_batch_data(dims = (30 , 6) , batch_size = 10 , predict_steps = 1) -> BatchData:
+def get_random_batch_data(dims = (30 , 6) , batch_size = 10 , predict_steps = 1) -> BatchInput:
     '''
-    get a sample of random batch_data , 'day' , 'day+style' , '15m+style' ...
+    get a sample of random batch_input , 'day' , 'day+style' , '15m+style' ...
     '''
 
     x = torch.rand(batch_size , *dims)
@@ -30,4 +39,4 @@ def get_random_batch_data(dims = (30 , 6) , batch_size = 10 , predict_steps = 1)
     i = torch.Tensor([])
     v = torch.Tensor([])
     
-    return BatchData(x , y , w , i , v)
+    return BatchInput(x , y , w , i , v)

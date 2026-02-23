@@ -2,7 +2,7 @@ import torch
 from typing import Any
 
 from src.proj import Logger , Proj
-from src.res.model.util import BasePredictorModel , BatchData
+from src.res.model.util import BasePredictorModel , BatchInput
 
 class NullPredictor(BasePredictorModel):
     """null predictor for factor / db module (just pass through the data)"""
@@ -14,7 +14,7 @@ class NullPredictor(BasePredictorModel):
         if testor_mode: 
             self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         self.model_dict.reset()
-        self.metrics.new_model({})
+        self.complete_model_param = {}
         return self
 
     def new_model(self , *args , **kwargs):
@@ -25,11 +25,11 @@ class NullPredictor(BasePredictorModel):
         '''call when testing new model'''
         return self.init_model(*args , **kwargs)
     
-    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: 
+        if len(batch_input) == 0: 
             return None
-        x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
+        x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input
         assert isinstance(x , torch.Tensor) , f'{type(x)} is not a torch.Tensor'
         if x.ndim > 2:
             x = x.squeeze()
@@ -40,14 +40,13 @@ class NullPredictor(BasePredictorModel):
 
     def fit(self):
         """db model does not have fit stage"""
-        raise NotImplementedError('db model does not have fit stage')
+        raise NotImplementedError('null model does not have fit stage')
 
     def test(self):
         '''test the model inside'''
         Logger.note(f'model {self.model_str} test start' , vb_level = Proj.vb.max)
 
         for _ in self.trainer.iter_model_submodels():
-            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

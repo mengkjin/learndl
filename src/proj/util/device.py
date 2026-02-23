@@ -26,7 +26,7 @@ def send_to(x : Any , device = None) -> Any:
     else:
         return x
     
-def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any):
+def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch.device:
     if isinstance(obj , torch.Tensor):
         return obj.device
     elif isinstance(obj , Module):
@@ -35,12 +35,10 @@ def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any):
         return get_device(obj[0])
     elif isinstance(obj , dict):
         return get_device(list(obj.values()))
-    elif obj.__class__.__name__ == 'BatchData':
+    elif hasattr(obj , 'device'):
         return obj.device
-    elif obj.__class__.__name__ == 'BatchOutput':
-        return get_device(obj.pred)
     else:
-        raise ValueError(f'{obj.__class__.__name__} is not a valid object')
+        raise ValueError(f'{obj} is not a valid object')
 
 class Device:
     '''cpu / cuda / mps device , callable'''
@@ -48,6 +46,14 @@ class Device:
         self.device = self.use_device(try_cuda)
     def __repr__(self): return str(self.device)
     def __call__(self, obj): return send_to(obj , self.device)
+    def __eq__(self , other : Any) -> bool:
+        return self.compare_devices(self.device , other)
+
+    @staticmethod
+    def compare_devices(device1 : 'torch.device | Device' , device2 : 'torch.device | Device') -> bool:
+        dev1 = device1 if isinstance(device1 , torch.device) else device1.device
+        dev2 = device2 if isinstance(device2 , torch.device) else device2.device
+        return (dev1.type == dev2.type) and ((dev1.index or 0) == (dev2.index or 0))
 
     @classmethod
     def use_device(cls , try_cuda = True) -> torch.device:

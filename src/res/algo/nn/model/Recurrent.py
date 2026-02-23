@@ -5,7 +5,7 @@ from torch import nn , Tensor
 from .. import layer as Layer
 from .Attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
 from .CNN import mod_resnet_1d , mod_tcn
-from ..util import add_multiloss_params
+from ..loss import MultiHeadLosses
 
 def get_rnn_mod(rnn_type):
     return {'transformer':mod_transformer,'lstm':mod_lstm,'gru':mod_gru,'tcn':mod_tcn,}[rnn_type]
@@ -80,7 +80,7 @@ class rnn_univariate(nn.Module):
         self.decoder = Layer.Parallel(uni_rnn_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
         self.mapping = Layer.Parallel(uni_rnn_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
 
-        add_multiloss_params(self , num_output)
+        MultiHeadLosses.add_params(self , num_output)
 
     def forward(self , x : Tensor) -> tuple[Tensor,dict]:
         '''
@@ -147,7 +147,7 @@ class rnn_multivariate(nn.Module):
         self.decoder = Layer.Parallel(mod_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
         self.mapping = Layer.Parallel(mod_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
 
-        add_multiloss_params(self , num_output)
+        MultiHeadLosses.add_params(self , num_output)
     
     def forward(self, x : Tensor) -> tuple[Tensor,dict]:
         '''

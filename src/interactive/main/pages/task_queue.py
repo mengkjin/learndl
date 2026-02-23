@@ -98,7 +98,7 @@ def show_queue_header():
         else:
             st.error(SC.queue_last_action[0] , icon = ":material/error:")
         
-    if SC.task_queue.is_empty():
+    if SC.task_queue.empty:
         st.warning("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
         return
 

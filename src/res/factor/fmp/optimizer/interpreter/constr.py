@@ -21,7 +21,9 @@ class LinearConstraint:
 
     def __bool__(self): return len(self) > 0
     def __len__(self): return len(self.A)
-    def is_empty(self): return len(self) == 0
+
+    @property
+    def empty(self): return len(self) == 0
 
     def check(self , N : int | None = None):
         if N is None:
@@ -61,7 +63,7 @@ class LinearConstraint:
         return new_con
     
     @classmethod
-    def empty(cls , N : int = 1):
+    def unconstrained(cls , N : int = 1):
         return cls(np.zeros((0,N)) , np.array([]) , np.array([]) , np.array([]))
 
     @classmethod

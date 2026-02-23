@@ -4,7 +4,7 @@ from typing import Any
 
 from src.proj import Logger , Proj
 from src.res.algo import AlgoModule
-from src.res.model.util import BasePredictorModel , BatchData , Optimizer
+from src.res.model.util import BasePredictorModel , BatchInput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
 
 class NNPredictor(BasePredictorModel):
@@ -24,7 +24,7 @@ class NNPredictor(BasePredictorModel):
         self.reset_submodels(*args , **kwargs)
 
         self.model_dict.reset()
-        self.metrics.new_model(param , self.net)
+        self.complete_model_param = param
         return self
     
     def reset_submodels(self , *args , **kwargs):
@@ -55,19 +55,16 @@ class NNPredictor(BasePredictorModel):
         self.net.load_state_dict(model_file['state_dict'])
         return self
     
-    def multiloss_params(self): return AlgoModule.multiloss_params(self.net)
-    
-    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: 
+        if len(batch_input) == 0: 
             return None
-        x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
+        x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input
         return self.net(x , *args , **kwargs)
 
     def fit(self):
         Logger.note(f'model {self.model_str} fit start' , vb_level = Proj.vb.max)
 
-        self.new_model()
         for _ in self.trainer.iter_fit_epoches():
             for _ in self.trainer.iter_train_dataloader():
                 self.batch_forward()
@@ -85,7 +82,6 @@ class NNPredictor(BasePredictorModel):
         Logger.note(f'model {self.model_str} test start' , vb_level = Proj.vb.max)
 
         for _ in self.trainer.iter_model_submodels():
-            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

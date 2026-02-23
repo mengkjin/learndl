@@ -130,7 +130,7 @@ class PortfolioBuilder:
         else:
             dates = build_on.port_date[(build_on.port_date >= start) & (build_on.port_date <= end) & (build_on.port_date < self.min_alpha_date)]
             self.portfolio = build_on.filter_dates(dates = dates).rename(self.full_name)
-            self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
+            self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
         return self
 
     def load_portfolio(self , start : int = -1 , end : int = 99991231):
@@ -138,7 +138,7 @@ class PortfolioBuilder:
             port = Portfolio.load(self.resume_path_portfolio)
             dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
-            self.resumed_portfolio_end_date = -1 if self.portfolio.is_empty else self.portfolio.port_date.max()
+            self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
             Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
                         indent = self.indent , vb_level = Proj.vb.max)
         return self

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from .. import layer as Layer
-from ..util import add_multiloss_params
+from ..loss import MultiHeadLosses
 
 __all__ = ['ple_gru']
 
@@ -46,7 +46,7 @@ class ple_gru(nn.Module):
             ) for _ in range(num_output)
         ])
 
-        add_multiloss_params(self , num_output)
+        MultiHeadLosses.add_params(self , num_output)
 
     def forward(self , x):
         shared_output , task_outputs = None , []
@@ -121,7 +121,7 @@ class ExpertNetwork(nn.Module):
     
 if __name__ == '__main__' :
     from src.res.model.data_module import get_realistic_batch_data
-    batch_data = get_realistic_batch_data('day')
+    batch_input = get_realistic_batch_data('day')
 
     rau = ple_gru(indus_embed=True)
-    rau(batch_data.x).shape
+    rau(batch_input.x).shape

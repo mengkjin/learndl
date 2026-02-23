@@ -48,8 +48,8 @@ class BasicTestResult(BaseCallBack):
             'model_num' : self.status.model_num , 
             'model_date' : self.status.model_date ,
             'submodel' : self.status.model_submodel ,
-            'date' : self.metrics.score_keys[-len(self.model_test_dates):] ,
-            'value' : self.metrics.scores[-len(self.model_test_dates):]
+            'date' : self.metrics.epoch_batch_keys[-len(self.model_test_dates):] ,
+            'value' : self.metrics.epoch_batch_scores[-len(self.model_test_dates):]
         }).query('date in @self.model_test_dates')
         self.test_df_date = pd.concat([self.test_df_date , df_date])
 
@@ -96,8 +96,9 @@ class BasicTestResult(BaseCallBack):
             # more than 100 rows of test_df_model means the cycle is month / day
             df_display = self.status.test_summary
             if len(df_display) > 100: 
-                df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]           
-            Logger.display(df_display , caption = f'Table: Test Summary ({self.config.train_criterion_score}) for Models:')
+                df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
+            score_criterion = list(self.config.train_criterion_score.keys())[0]
+            Logger.display(df_display , caption = f'Table: Test Summary ({score_criterion}) for Models:')
             
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}

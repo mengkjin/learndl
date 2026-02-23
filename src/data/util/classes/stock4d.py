@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.proj import Logger
+from src.proj.func import properties
 from src.math import match_values , index_union , index_stack , to_numpy
 
 from .nd import NdData
-
 
 @dataclass
 class Stock4DData:
@@ -59,21 +59,26 @@ class Stock4DData:
         else:
             return 'uninitiate ' + str(self.__class__) 
     @property
-    def initiate(self): return self.values is not None
+    def initiate(self): 
+        return self.values is not None
     @property
-    def shape(self): return [] if self.values is None else self.values.shape 
+    def shape(self): 
+        return properties.shape(self.values)
     @property
-    def dtype(self): return None if self.values is None else self.values.dtype
+    def dtype(self): 
+        return None if self.values is None else self.values.dtype
     @property
-    def ndim(self): return None if self.values is None else self.values.ndim
+    def ndim(self): 
+        return None if self.values is None else self.values.ndim
     @property
-    def empty(self): return self.values is None or self.values.size == 0
+    def empty(self): 
+        return properties.empty(self.values)
     @property
-    def dates(self): return self.date if not self.empty else np.array([])
+    def max_date(self): 
+        return properties.max_date(self.date)
     @property
-    def max_date(self): return -1 if self.empty else self.date.max()
-    @property
-    def min_date(self): return 99991231 if self.empty else self.date.min()
+    def min_date(self): 
+        return properties.min_date(self.date)
 
     def update(self , **kwargs):
         if 'values' in kwargs:

@@ -21,7 +21,7 @@ class _Trainer:
 
     def __get__(self , instance, owner):
         value = _project_states.get(self.name , None)
-        assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        assert isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
         return value
 
 class _Account:
@@ -37,7 +37,7 @@ class _Account:
 
     def __get__(self , instance, owner):
         value = _project_states.get(self.name , None)
-        assert value is None or isinstance(value , pd.DataFrame) , f'value is not a {pd.DataFrame} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        assert isinstance(value , pd.DataFrame) , f'value is not a {pd.DataFrame} instance: {type(value)} , cannot be get from {owner}.{self.name}'
         return value
 class _Factor:
     """custom class to record factor instance"""
@@ -53,7 +53,7 @@ class _Factor:
 
     def __get__(self , instance, owner):
         value = _project_states.get(self.name , None)
-        assert value is None or isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
+        assert isinstance(value , self._assertion_class) , f'value is not a {self._assertion_class} instance: {type(value)} , cannot be get from {owner}.{self.name}'
         return value
 
 class _ProjStatesMeta(type):

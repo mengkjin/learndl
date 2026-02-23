@@ -4,12 +4,12 @@ from typing import Any
 
 from src.proj import Logger , Proj
 from src.res.algo import AlgoModule
-from src.res.model.util import BasePredictorModel , BatchData , BatchOutput , Optimizer
+from src.res.model.util import BasePredictorModel , BatchInput , BatchOutput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
 class NNBooster(BasePredictorModel):
-    '''a group of ensemble models , of same net structure'''    
+    '''a group of ensemble models , of same net structure, still a nn model'''    
     AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
 
     @property
@@ -40,7 +40,7 @@ class NNBooster(BasePredictorModel):
         self.booster = AlgoModule.get_booster(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
 
         self.model_dict.reset()
-        self.metrics.new_model(nn_param | boost_param)
+        self.complete_model_param = nn_param | boost_param
         return self
     
     def reset_submodels(self , *args , **kwargs):
@@ -73,23 +73,21 @@ class NNBooster(BasePredictorModel):
         self.booster.load_dict(model_file['booster_head'])
         return self
 
-    def multiloss_params(self): return AlgoModule.multiloss_params(self.net)
+    def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
+        return self.forward_full(batch_input , *args , **kwargs)
 
-    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
-        return self.forward_full(batch_data , *args , **kwargs)
-
-    def forward_net(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
+    def forward_net(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: 
+        if len(batch_input) == 0: 
             return None
-        x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
+        x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input
         return self.net(x , *args , **kwargs)
     
-    def forward_full(self , batch_data : BatchData | torch.Tensor , *args , **kwargs): 
+    def forward_full(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: 
+        if len(batch_input) == 0: 
             return None
-        hidden = BatchOutput(self.forward_net(batch_data , *args , **kwargs)).other['hidden']
+        hidden = BatchOutput(self.forward_net(batch_input , *args , **kwargs)).other['hidden']
         pred = self.booster(hidden , *args , **kwargs)
         return pred
 
@@ -103,9 +101,6 @@ class NNBooster(BasePredictorModel):
     
     def fit(self):
         Logger.note(f'model {self.model_str} fit start' , vb_level = Proj.vb.max)
-
-        self.new_model()
-
         # fit net
         for _ in self.trainer.iter_fit_epoches():
             self.net.train()
@@ -145,7 +140,6 @@ class NNBooster(BasePredictorModel):
         Logger.note(f'model {self.model_str} test start' , vb_level = Proj.vb.max)
 
         for _ in self.trainer.iter_model_submodels():
-            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
@@ -153,7 +147,7 @@ class NNBooster(BasePredictorModel):
         Logger.note(f'model {self.model_str} test done' , vb_level = Proj.vb.max)
 
     def batch_forward_net(self) -> None: 
-        self.batch_output = BatchOutput(self.forward_net(self.batch_data))
+        self.batch_output = BatchOutput(self.forward_net(self.batch_input))
 
     def collect_net(self , submodel = 'best' , *args):
         self.net = self.submodels[submodel].collect(self.trainer , *args)

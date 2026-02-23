@@ -1,4 +1,5 @@
 from src.proj.abc.singleton import singleton
+from . import properties
 
 from .basic import *
 from .export import *

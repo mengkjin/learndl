@@ -2,12 +2,13 @@ import torch , json
 import numpy as np
 import pandas as pd
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar , Literal
 
 from src.proj import PATH , Logger , CALENDAR , DB
-from src.proj.func import torch_load
+from src.proj.func import torch_load , properties
 from src.math import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
@@ -404,6 +405,41 @@ class ModuleData:
     @property
     def empty_x(self):
         return len(self.x) == 0 or all([x.empty for x in self.x.values()])
+
+    @property
+    def shape(self):
+        return properties.shape(self , ['x' , 'y' , 'secid' , 'date'])
+
+    def copy(self):
+        return deepcopy(self)
+
+    def filter_dates(self , start_dt : int | None = None , end_dt : int | None = None , inplace = False):
+        if start_dt is None and end_dt is None:
+            return self
+        if not inplace:
+            self = self.copy()
+        if start_dt is not None:
+            self.date = self.date[self.date >= start_dt]
+        if end_dt is not None:
+            self.date = self.date[self.date <= end_dt]
+        for x_key in self.x:
+            self.x[x_key] = self.x[x_key].align_date(self.date , inplace = True)
+        self.y = self.y.align_date(self.date , inplace = True)
+        return self
+
+    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
+        if secid is None:
+            return self
+        if not inplace:
+            self = self.copy()
+        if exclude:
+            self.secid = self.secid[~np.isin(self.secid , secid)]
+        else:
+            self.secid = self.secid[np.isin(self.secid , secid)]
+        for x_key in self.x:
+            self.x[x_key] = self.x[x_key].align_secid(self.secid , inplace = True)
+        self.y = self.y.align_secid(self.secid , inplace = True)
+        return self
 
     def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]

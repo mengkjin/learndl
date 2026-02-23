@@ -2,9 +2,9 @@ import numpy as np
 from tqdm import tqdm
 
 from src.proj import Proj
-from src.res.model.util import BaseDataModule , BatchData
+from src.res.model.util import BaseDataModule , BatchInput
     
-class BatchDataLoader:
+class BatchInputLoader:
     '''wrap loader to impletement DataModule Callbacks'''
     def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
         self.loader      = raw_loader
@@ -21,21 +21,21 @@ class BatchDataLoader:
     def __len__(self):  return len(self.loader)
     def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
     def __iter__(self):
-        for batch_i , batch_data in enumerate(self.loader):
-            assert isinstance(batch_data , BatchData) , f'{type(batch_data)} is not a BatchData'
+        for batch_i , batch_input in enumerate(self.loader):
+            assert isinstance(batch_input , BatchInput) , f'{type(batch_input)} is not a BatchInput'
             if self.exclude_dates is not None or self.include_dates is not None:
-                batch_date  = self.data_module.batch_date0(batch_data)
+                batch_date  = self.data_module.batch_date0(batch_input)
                 if self.exclude_dates is not None and np.isin(batch_date , self.exclude_dates): 
                     continue
                 if self.include_dates is not None and ~np.isin(batch_date , self.include_dates): 
                     continue
-            yield self.process(batch_data , batch_i)        
+            yield self.process(batch_input , batch_i)        
     
-    def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
-        batch_data = self.data_module.on_before_batch_transfer(batch_data , batch_i)
-        batch_data = self.data_module.transfer_batch_to_device(batch_data , self.device , batch_i)
-        batch_data = self.data_module.on_after_batch_transfer(batch_data , batch_i)
-        return batch_data
+    def process(self , batch_input : BatchInput , batch_i : int) -> BatchInput:
+        batch_input = self.data_module.on_before_batch_transfer(batch_input , batch_i)
+        batch_input = self.data_module.transfer_batch_to_device(batch_input , self.device , batch_i)
+        batch_input = self.data_module.on_after_batch_transfer(batch_input , batch_i)
+        return batch_input
 
     def enable_tqdm(self , disable = False):
         if not Proj.vb.is_max_level or not self.tqdm or disable: 
@@ -57,7 +57,7 @@ class BatchDataLoader:
 
     def of_date(self , date : int):
         assert self.data_module.config.train_sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.train_sample_method , self.data_module.stage)
-        for batch_data in self:
-            if self.data_module.batch_date(batch_data)[0] == date:
-                return batch_data
+        for batch_input in self:
+            if self.data_module.batch_date(batch_input)[0] == date:
+                return batch_input
         raise ValueError(f'date {date} not found in loader')

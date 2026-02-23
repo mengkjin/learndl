@@ -218,13 +218,16 @@ class BoosterInput:
         return df
 
     @property
-    def feat_idx(self): return match_values(self.use_feature , self.feature)
+    def feat_idx(self): 
+        return match_values(self.use_feature , self.feature)
 
     @property
-    def shape(self): return self.x.shape
+    def shape(self): 
+        return self.x.shape
 
     @property
-    def nfeat(self): return len(self.feature) if self.use_feature is None else len(self.use_feature)
+    def nfeat(self): 
+        return len(self.feature) if self.use_feature is None else len(self.use_feature)
 
     def to_dataframe(self):
         df = pd.DataFrame(self.X().cpu().numpy() , columns = self.feature)

@@ -96,7 +96,7 @@ class MemFileStorage:
         gc.collect()
 
 class StoredFileLoader:
-    ''''retrieve batch_data from a Storage'''
+    ''''retrieve batch_input from a Storage'''
     def __init__(self, loader_storage : MemFileStorage , file_list : list , 
                  shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
         self.storage  = loader_storage
@@ -192,7 +192,7 @@ class Deposition:
     def stack_model(self , model_dict : ModelDict , model_num , model_date , submodel = 'best'):
         model_dict.save(self.model_path(model_num , model_date , submodel) , stack = True)
 
-    def dump_model(self , model_num , model_date , submodel = 'best'):
+    def dump_stacked_model(self , model_num , model_date , submodel = 'best'):
         model_path = self.model_path(model_num , model_date , submodel)
         for path in model_path.iterdir():
             if path.stem.endswith('.stack'):

@@ -82,12 +82,12 @@ class ModelPredictor:
                 within = np.isin(tdates , df_sub.query('calculated == 0')['pred_dates'])
                 loader = self.data_module.predict_dataloader()
 
-                for tdate , do_calc , batch_data in zip(tdates , within , loader):
-                    if not do_calc or len(batch_data) == 0: 
+                for tdate , do_calc , batch_input in zip(tdates , within , loader):
+                    if not do_calc or len(batch_input) == 0: 
                         continue
-                    # secid = data_module.datas.secid[batch_data.i[:,0].cpu().numpy()]
-                    secid = self.data_module.batch_secid(batch_data)
-                    df = model(batch_data).pred_df(secid , tdate , colnames = self.model_name , model_num = model_num)
+                    # secid = data_module.datas.secid[batch_input.i[:,0].cpu().numpy()]
+                    secid = self.data_module.batch_secid(batch_input)
+                    df = model(batch_input).pred_df(secid , tdate , colnames = self.model_name , model_num = model_num)
                     df_list.append(df)
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
 

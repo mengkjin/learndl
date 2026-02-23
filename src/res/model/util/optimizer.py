@@ -8,7 +8,7 @@ from typing import Any
 from src.proj import Logger
 from src.res.algo.nn.optimizer import sam
 
-from .metrics import BatchMetric
+from .metrics import BatchMetrics
 from .config import TrainConfig
 
 NAN_GRADS_HALT = False
@@ -60,11 +60,11 @@ class Optimizer:
     def load_scheduler(cls , optimizer , shd_param : dict):
         return cls.base_scheduler(optimizer, shd_param['name'], **shd_param['param'])
 
-    def backward(self , batch_metric : BatchMetric):
+    def backward(self , batch_metrics : BatchMetrics):
         '''BP of optimizer.parameters'''
         self.optimizer.zero_grad()
-        batch_metric.loss.backward(retain_graph = NAN_GRADS_HALT)
-        self.check_nan_gradients(batch_metric)
+        batch_metrics.total_loss.backward(retain_graph = NAN_GRADS_HALT)
+        self.check_nan_gradients(batch_metrics)
         self.clip_gradients()
         self.optimizer.step()
 
@@ -105,7 +105,7 @@ class Optimizer:
             scheduler = optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
         return scheduler
     
-    def check_nan_gradients(self , metric : BatchMetric):
+    def check_nan_gradients(self , metric : BatchMetrics):
         if not NAN_GRADS_HALT: 
             return
         for param in self.net.parameters():
@@ -114,7 +114,7 @@ class Optimizer:
             
         from src import api
         setattr(api , 'mod', self.trainer)
-        Logger.stdout('total loss has nan gradients: ' , metric.loss)
+        Logger.stdout('total loss has nan gradients: ' , metric.total_loss)
 
         for key , loss in metric.losses.items():
             Logger.stdout(key , loss)

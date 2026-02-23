@@ -141,9 +141,8 @@ class TrainParam:
         
         if self.should_be_short_test and ('env.short_test' not in self.override): 
             self.override['env.short_test'] = True
-        for override_key in self.override:
-            assert override_key in self.Param.keys() , override_key
-        self.Param.update(self.override)
+
+        self.Param.update({k:v for k,v in self.override.items() if k in self.Param})
 
         if self.short_test:
             new_dict = {k:v for k,v in self.Param.get('conditional.short_test' , {}).items() if k not in self.override}
@@ -204,10 +203,11 @@ class TrainParam:
 
         return self
     
-    def generate_model_param(self , update_inplace = True , **kwargs):
+    def generate_model_param(self , update_inplace = True):
         module = self.model_booster_type if self.module_type == 'booster' else self.model_module
         assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.short_test , self.schedule_name , **kwargs).expand()
+        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.short_test , self.schedule_name ,
+                                 override = {k:v for k,v in self.override.items() if k not in self.Param.keys()}).expand()
         if update_inplace: 
             self.update_model_param(model_param)
         return model_param
@@ -273,7 +273,7 @@ class TrainParam:
     def end_date(self) -> int: 
         return int(self.Param['model.end_date'])
     @property
-    def model_submodels(self) -> list: 
+    def model_submodels(self) -> list[str]: 
         return self.Param['model.submodels']
     @property
     def model_module(self): 
@@ -288,6 +288,12 @@ class TrainParam:
         assert self.Param['model.input_type'] in ['data' , 'hidden' , 'factor' , 'combo'] , self.Param['model.input_type']
         return self.Param['model.input_type']
     @property
+    def model_input_filter_secid(self) -> str | None: 
+        return self.Param.get('model.input_filter.secid' , None)
+    @property
+    def model_input_filter_date(self) -> str | None: 
+        return self.Param.get('model.input_filter.date' , None)
+    @property
     def model_labels(self) -> list[str]: 
         return self.Param['model.labels']
     @property
@@ -299,6 +305,9 @@ class TrainParam:
         else:
             data_types = []
         return str(data_types).split('+') if isinstance(data_types , str) else list(data_types)
+    @model_data_types.setter
+    def model_data_types(self , value : list[str]):
+        self.Param['model.data.types'] = value
     @property
     def model_data_prenorm(self) -> dict[str,Any]: 
         return self.Param.get('model.data.prenorm',{})
@@ -411,20 +420,31 @@ class TrainParam:
     def train_trainer_transfer(self) -> bool: 
         return self.Param['train.trainer.transfer']
     @property
-    def train_criterion_loss(self) -> str: 
-        return self.Param['train.criterion.loss']
+    def train_criterion_loss(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self.Param['train.criterion.loss'] or {}
+        assert len(kwargs) > 0 , f'{kwargs} should be not empty'
+        for k,v in kwargs.items():
+            if v is None:
+                kwargs[k] = {}
+            if 'lamb' not in v:
+                kwargs[k]['lamb'] = 1.
+        return {k:v for k,v in kwargs.items() if v['lamb'] != 0}
     @property
-    def train_criterion_score(self) -> str: 
-        return self.Param['train.criterion.score']
+    def train_criterion_score(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self.Param['train.criterion.score'] or {}
+        assert len(kwargs) > 0 , f'{kwargs} should be not empty'
+        return kwargs
     @property
-    def train_criterion_penalty(self) -> dict[Any,Any]: 
+    def train_criterion_penalty(self) -> dict[str,dict[str,Any]]: 
         return self.Param['train.criterion.penalty']
     @property
-    def train_multilosses_type(self) -> str: 
-        return self.Param['train.multilosses.type']
-    @property
-    def train_multilosses_param(self) -> dict: 
-        return self.Param[f'train.multilosses.param.{self.train_multilosses_type}']
+    def train_criterion_multilosses(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self.Param['train.criterion.multilosses'] or {}
+        if kwargs:
+            assert 'name' in kwargs , f'{kwargs} has no name'
+            assert 'params' in kwargs , f'{kwargs} has no params'
+            assert kwargs['name'] in ['ewa','hybrid','dwa','ruw','gls','rws'] , f'{kwargs['name']} must be one of ewa, hybrid, dwa, ruw, gls, rws'
+        return kwargs
     @property
     def train_trainer_optimizer(self) -> dict[str,Any]: 
         return self.Param['train.trainer.optimizer']
@@ -464,7 +484,7 @@ class TrainParam:
 class ModelParam:
     def __init__(self , base_path : ModelPath | Path | str | None , module : str , 
                  booster_head : Any = False , short_test : bool | None = None , 
-                 schedule_name : str | None = None,
+                 schedule_name : str | None = None, override : dict[str,Any] | None = None,
                  **kwargs):
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
@@ -472,7 +492,7 @@ class ModelParam:
         self.booster_head = booster_head if self.module_type == 'nn' else None    
         self.short_test = short_test
         self.schedule_name = schedule_name
-        self.override = kwargs
+        self.override = (override or {}) | kwargs
         self.load_param().check_validity()
 
     def __repr__(self): 
@@ -618,7 +638,8 @@ class ModelParam:
 class TrainConfig(TrainParam):
     def __init__(
         self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
-        stage = -1 , resume = -1 , selection = -1 , makedir = True , start : int | None = None , end : int | None = None , **kwargs
+        stage = -1 , resume = -1 , selection = -1 , makedir = True , start : int | None = None , end : int | None = None , 
+        test_mode = False , **kwargs
     ):
         
         self.start  = int(start) if start is not None else None
@@ -626,11 +647,12 @@ class TrainConfig(TrainParam):
         self.Train  = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model  = self.Train.generate_model_param()
 
-        self.process_parser(stage , resume , selection)
-        assert self.Train.model_base_path , self.Train.model_name
-        if makedir: 
-            self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
-            self.initialize_fitting()
+        if not test_mode:
+            self.process_parser(stage , resume , selection)
+            assert self.Train.model_base_path , self.Train.model_name
+            if makedir: 
+                self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
+                self.initialize_fitting()
         self.device = Device(try_cuda = self.try_cuda)
 
     @classmethod
@@ -708,7 +730,7 @@ class TrainConfig(TrainParam):
         return end_date
     @property
     def model_labels(self) -> list[str]: 
-        return self.Train.model_labels[:self.Model.max_num_output]
+        return self.Train.model_labels
     
     def update(self, update = None , **kwargs):
         update = update or {}
@@ -737,13 +759,16 @@ class TrainConfig(TrainParam):
             self.Model.update_data_param(x_data , self)
     
     def weight_scheme(self , stage : str , no_weight = False) -> str | None: 
-        stg = stage if stage == 'fit' else 'test'
-        return None if no_weight else self.Train.Param[f'train.criterion.weight.{stg}']
+        if stage == 'fit':
+            stg = 'fit'
+        else:
+            # includes test / predict / extract
+            stg = 'test'
+        return None if no_weight else self.Train.Param[f'train.criterion.weight'].get(stg , 'equal')
     
     def init_utils(self):
-        self.metrics = Metrics(self.module_type , self.nn_category ,
-                               self.train_criterion_loss , self.train_criterion_score , self.train_criterion_penalty ,
-                               self.train_multilosses_type , self.train_multilosses_param)
+        self.metrics = Metrics(self.module_type , self.nn_category , self.model_base_path ,
+                               self.train_criterion_loss , self.train_criterion_score , self.train_criterion_multilosses)
         self.checkpoint = Checkpoint(self.mem_storage)
         self.deposition = Deposition(self.model_base_path)
         return self

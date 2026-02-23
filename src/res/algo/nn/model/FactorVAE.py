@@ -241,12 +241,12 @@ class FactorPredictor(nn.Module):
         return self.factor_net(f)
     
 if __name__ == '__main__':
-    from src.res.model.util import BatchData
+    from src.res.model.util import BatchInput
 
-    batch_data = BatchData.random(batch_size=40)
-    x = batch_data.x
+    batch_input = BatchInput.random(batch_size=40)
+    x = batch_input.x
     assert isinstance(x , Tensor) , f'{type(x)} is not a Tensor'
-    f = batch_data.y
+    f = batch_input.y
 
     extractor = FeatureExtractor()
     h : Tensor = extractor(x)

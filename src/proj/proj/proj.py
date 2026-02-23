@@ -4,7 +4,7 @@ import threading
 from typing import Any
 
 from src.proj.env.machine import MACHINE
-from src.proj.abc import stderr
+from src.proj.abc import stderr , Silence
 
 from .state import ProjStates
 from . import conf as Conf
@@ -88,10 +88,12 @@ class _UniqueFileList:
             self.file_list.remove(Path(file))
 
     def ban(self , *patterns : str):
-        self.ban_patterns.extend(patterns)
+        with self.lock:
+            self.ban_patterns.extend(patterns)
 
     def unban(self , *patterns : str):
-        self.ban_patterns = [pattern for pattern in self.ban_patterns if pattern not in patterns]
+        with self.lock:
+            self.ban_patterns = [pattern for pattern in self.ban_patterns if pattern not in patterns]
 
     def exclude(self , *patterns : str):
         with self.lock:
@@ -136,6 +138,8 @@ class _Verbosity:
 
         def __exit__(self , exc_type , exc_value , exc_traceback):
             Proj.vb.set_vb(self.vb_prev)
+
+    Silence = Silence
 
     def set_vb(self , value : int | None = None):
         if value is None:

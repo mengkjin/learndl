@@ -41,6 +41,9 @@ labels:
 
 # input specification ----------------------------------------------------------------
 input_type: data # [data , hidden , factor , combo] , specify below
+input_filter.secid: null # random.200 , random.1000 , ...
+input_filter.date: null # 20220101-20240930 (yyyyMMdd-yyyyMMdd)
+
 data.prenorm:   # should the day be prenormalized? recommendation : not to change (also apply to hidden and factor)
   day: {'divlast' : True  , 'histnorm' : True}
 

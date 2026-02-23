@@ -21,9 +21,11 @@ class NdData:
     def __len__(self): return self.shape[0]
 
     @property
-    def shape(self): return self.values.shape
+    def shape(self): 
+        return self.values.shape
     @property
-    def ndim(self): return self.values.ndim
+    def ndim(self): 
+        return self.values.ndim
 
     def finite_ratio(self):
         if isinstance(self.values , np.ndarray):

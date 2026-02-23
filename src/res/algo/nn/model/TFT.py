@@ -376,7 +376,7 @@ class TemporalFusionTransformer(nn.Module):
 
 if __name__ == '__main__' :
     from src.res.model.data_module import get_realistic_batch_data
-    batch_data = get_realistic_batch_data('day+style+indus')
+    batch_input = get_realistic_batch_data('day+style+indus')
 
     rau = TemporalFusionTransformer(indus_embed=True)
-    rau(batch_data.x).shape
+    rau(batch_input.x).shape

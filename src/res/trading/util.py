@@ -161,7 +161,7 @@ class TradingPort:
                     port = Portfolio.from_dataframe(df)
                 else:
                     port = Portfolio(self.name)
-        assert port.is_empty or max(port.port_date) < date , f'last port date {max(port.port_date)} should be less than date {date}'
+        assert port.empty or max(port.port_date) < date , f'last port date {max(port.port_date)} should be less than date {date}'
         return port
     
     def build(self , date : int , reset = False , export = True , indent : int = 1 , vb_level : int = 2):

@@ -9,9 +9,10 @@ from typing import Any , Literal
 from src.proj import PATH , Logger , CALENDAR , Proj , MACHINE
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.math import tensor_standardize_and_weight , match_values
-from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader , HiddenPath
+from src.res.factor.util import Benchmark
+from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , TrainConfig , MemFileStorage , StoredFileLoader , HiddenPath
 
-from .loader import BatchDataLoader
+from .loader import BatchInputLoader
 
 __all__ = ['DataModule']
 
@@ -80,8 +81,12 @@ class DataModule(BaseDataModule):
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision, 
                                      factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date)
+        
+        self.filter_datas()
+        Logger.stdout('DataModule.datas.shape:' , self.datas.shape)
+        
         self.config.update_data_param(self.datas.x)
-        self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
+        self.labels_n = int(self.datas.y.shape[-1])
 
         self.set_critical_dates()
         self.parse_prenorm_method()
@@ -93,6 +98,44 @@ class DataModule(BaseDataModule):
             self.config.stage_queue.remove('fit')
             self.config.stage_queue.remove('test')
         return self
+
+    def filter_datas(self):
+        self.filter_datas_date()
+        self.filter_datas_secid()
+
+    def filter_datas_date(self) -> None | tuple[int | None , int | None]:
+        value = self.config.model_input_filter_date
+        if value is None:
+            return None
+        
+        values = value.replace('~' , '-').split('-')
+        if len(values) == 2:
+            start, end = values
+            start, end = int(start) if start else None, int(end) if end else None
+        else:
+            raise ValueError(f'model.input_filter.date {value} is not valid , should be yyyyMMdd-yyyyMMdd')
+
+        Logger.alert1(f'filtering date for DataModule.datas: {value}')
+        self.datas.filter_dates(start , end , inplace = True)
+
+    def filter_datas_secid(self) -> None | np.ndarray:
+        value = self.config.model_input_filter_secid
+        if value is None:
+            return None
+        elif value.startswith('random.'):
+            num = int(value.split('.')[1])
+            secid = np.random.choice(self.datas.secid , num , replace = False)
+        elif value.startswith('first.'):
+            num = int(value.split('.')[1])
+            secid = self.datas.secid[:num]
+        elif value in ['csi300' , 'csi500' , 'csi1000']:
+            last_date = self.datas.date.max()
+            secid = Benchmark(value).get(last_date,True).secid
+        else:
+            raise ValueError(f'model.input_filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
+
+        Logger.alert1(f'filtering secid for DataModule.datas: {value}')
+        self.datas.filter_secid(secid , inplace = True)
 
     def set_critical_dates(self):
         '''set critical dates for model date list and test full dates'''
@@ -361,18 +404,18 @@ class DataModule(BaseDataModule):
             y.nan_to_num_(0)[~valid] = torch.nan
         return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.loader_param.stage , no_weight))
 
-    def train_dataloader(self)   -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['train'] , self , desc = 'Train')
-    def val_dataloader(self)     -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['valid'] , self , desc = 'Valid')
-    def test_dataloader(self)    -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['test'] , self , desc = 'Test')
-    def predict_dataloader(self) -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
-    def extract_dataloader(self) -> BatchDataLoader: 
-        return BatchDataLoader(self.loader_dict['extract'] , self , desc = 'Extract')
+    def train_dataloader(self)   -> BatchInputLoader: 
+        return BatchInputLoader(self.loader_dict['train'] , self , desc = 'Train')
+    def val_dataloader(self)     -> BatchInputLoader: 
+        return BatchInputLoader(self.loader_dict['valid'] , self , desc = 'Valid')
+    def test_dataloader(self)    -> BatchInputLoader: 
+        return BatchInputLoader(self.loader_dict['test'] , self , desc = 'Test')
+    def predict_dataloader(self) -> BatchInputLoader: 
+        return BatchInputLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
+    def extract_dataloader(self) -> BatchInputLoader: 
+        return BatchInputLoader(self.loader_dict['extract'] , self , desc = 'Extract')
     
-    def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
+    def transfer_batch_to_device(self , batch : BatchInput , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':
             batch = batch.to(self.device if device is None else device)
         return batch
@@ -385,7 +428,7 @@ class DataModule(BaseDataModule):
             self.loader_dict[self.stage] = StoredFileLoader(self.storage , [] , 'static')
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
-        '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''   
+        '''update loader_dict , save batch_input to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''   
         if valid is None: 
             valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx
@@ -405,7 +448,7 @@ class DataModule(BaseDataModule):
                 b_w = self.batch_data_y(w , index0 , yindex1)
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
-                self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
+                self.storage.save(BatchInput(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
             self.loader_dict[set_key] = StoredFileLoader(self.storage , batch_files , shuf_opt)
 
     def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
@@ -490,7 +533,7 @@ class DataModule(BaseDataModule):
         return sample_index    
 
     @classmethod
-    def get_date_batch_data(cls , config : TrainConfig , date : int , model_num : int = 0) -> BatchData:
+    def get_date_batch_data(cls , config : TrainConfig , date : int , model_num : int = 0) -> BatchInput:
         if config not in cls._config_instance_for_batch_data:
             cls._config_instance_for_batch_data[config] = cls(config , 'both').load_data()
         module = cls._config_instance_for_batch_data[config]

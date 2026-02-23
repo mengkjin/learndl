@@ -2,11 +2,10 @@ from torch import nn
 
 from . import layer as Layer
 from . import model as Model
-from .util import get_multiloss_params
 
 __all__ = [
     'AVAILABLE_NNS' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 
-    'get_multiloss_params' , 'get_multiloss_params' , 'Layer' , 'Model']
+    'Layer' , 'Model']
 
 AVAILABLE_NNS = {
     'simple_lstm'       : Model.Recurrent.simple_lstm,

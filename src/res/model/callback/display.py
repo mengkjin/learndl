@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any , ClassVar
 
 from src.proj import PATH , MACHINE , Logger , Duration , Proj
-from src.res.model.data_module import BatchDataLoader
+from src.res.model.data_module import BatchInputLoader
 from src.res.model.util import BaseCallBack
 
 class CallbackTimer(BaseCallBack):
@@ -53,7 +53,7 @@ class StatusDisplay(BaseCallBack):
         self.record_model_stage : int = 0
 
     @property
-    def dataloader(self) -> BatchDataLoader | Any : return self.trainer.dataloader
+    def dataloader(self) -> BatchInputLoader | Any : return self.trainer.dataloader
     @property
     def initial_models(self) -> bool: return self.record_model_stage <= self.config.model_num
     @property
@@ -154,8 +154,10 @@ class StatusDisplay(BaseCallBack):
         if self.trainer.status.epoch < 0: 
             return
         self.record_texts['status'] = 'loss {: .5f}, train{: .5f}, valid{: .5f}, best{: .4f}, lr{:.1e}'.format(
-            self.metrics.latest['train.loss'], self.metrics.latest['train.score'] ,
-            self.metrics.latest['valid.score'] , self.metrics.best_metric , 
+            self.metrics.attempt_metrics.latest('train' , 'loss') , 
+            self.metrics.attempt_metrics.latest('train' , 'score') ,
+            self.metrics.attempt_metrics.latest('valid' , 'score') , 
+            self.metrics.best_epoch_metric , 
             self.optimizer.last_lr)
         if self.status.epoch % self.show_info_step == 0: 
             self.display('{attempt} {epoch} : {status}'.format(**self.record_texts))
@@ -167,31 +169,31 @@ class StatusDisplay(BaseCallBack):
             self.display(self.event_sdout(self.status.epoch_event.pop()))
     
     def on_fit_model_end(self):
-        train_score = self.metrics.latest.get('train.score' , 0)
-        valid_score = self.metrics.latest.get('valid.score' , 0)
+        train_score = self.metrics.attempt_metrics.latest('train' , 'score')
+        valid_score = self.metrics.attempt_metrics.latest('valid' , 'score')
         best_score = self.status.best_attempt_metric if self.status.best_attempt_metric else valid_score
         self.record_texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self.record_texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.tc('model') / 60 , self.tc('model') / (self.record_epoch_model + 1))
-        Logger.remark('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts) , prefix = True)
+        Logger.remark('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
     
     def on_before_test_end(self): 
         Logger.note(f'In Stage [{self.status.stage}], Finish iterating test batches! Cost {Duration(self.tc('test'))}' , vb_level = 3)
 
     def on_train_batch_end(self):  
         if self.dataloader_info: 
-            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
+            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.batch_loss:.5f}')
             # self.device.status()
     def on_train_batch_start(self):
         if self.dataloader_info: 
-            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
+            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.batch_loss:.5f}')
 
     def on_validation_batch_end(self):   
         if self.dataloader_info: 
-            self.dataloader.display(f'Valid Ep#{self.status.epoch:3d} score : {self.metrics.output.score:.5f}')
+            self.dataloader.display(f'Valid Ep#{self.status.epoch:3d} score : {self.metrics.batch_score:.5f}')
 
     def on_test_batch_end(self):         
         if self.dataloader_info: 
             self.dataloader.display('Test {} {} score : {:.5f}'.format(
-                self.status.model_submodel , self.trainer.batch_dates[self.batch_idx] , self.metrics.output.score))
+                self.status.model_submodel , self.trainer.batch_dates[self.batch_idx] , self.metrics.batch_score))
 

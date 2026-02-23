@@ -2,7 +2,7 @@ import torch
 
 from src.proj import Logger
 from src.res.model.data_module import DataModule , get_realistic_batch_data
-from src.res.model.util import TrainConfig
+from src.res.model.util import TrainConfig , BatchData
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelTestor:
@@ -24,20 +24,20 @@ class ModelTestor:
         self.data = DataModule(self.config , 'predict').load_data()
         self.data.setup('predict' , self.config.model_param[0] , self.data.model_date_list[0])   
         
-        self.batch_data = self.data.predict_dataloader()[0]
+        self.batch_input = self.data.predict_dataloader()[0]
         self.model = get_predictor_module(self.config).init_model(testor_mode = True)
-        self.metrics = self.config.metrics.new_model(self.config.model_param[0])
+        self.metrics = self.config.metrics.new_all(self.model , self.config.model_param[0])
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(model={self.model}) , check [.model][.batch_data][.metrics]'
+        return f'{self.__class__.__name__}(model={self.model}) , check [.model][.batch_input][.metrics]'
 
     def try_forward(self) :
         '''as name says, try to forward'''
-        if isinstance(self.batch_data.x , torch.Tensor):
-            Logger.stdout(f'x shape is {self.batch_data.x.shape}')
+        if isinstance(self.batch_input.x , torch.Tensor):
+            Logger.stdout(f'x shape is {self.batch_input.x.shape}')
         else:
-            Logger.stdout(f'multiple x of {len(self.batch_data.x)}')
-        self.output = self.model(self.batch_data.x)
+            Logger.stdout(f'multiple x of {len(self.batch_input.x)}')
+        self.output = self.model(self.batch_input.x)
         Logger.stdout(f'y shape is {self.output.pred.shape}')
         Logger.stdout(f'Test Forward Success')
         return self
@@ -46,14 +46,15 @@ class ModelTestor:
         '''as name says, try to calculate metrics'''
         if not hasattr(self , 'outputs'): 
             self.try_forward()
-        metrics = self.metrics.calculate('train' , self.batch_data.y , self.output.pred , self.batch_data.w)
-        Logger.stdout('metric output : ' , metrics.output)
+        batch_data = BatchData(self.batch_input , self.output)
+        metrics = self.metrics.calculate('train' , batch_key = 'test' , batch_data = batch_data)
+        Logger.stdout(f'metric output : {metrics.batch_score}')
         Logger.stdout(f'Test Metrics Success')
         return self
     
     def get_realistic_batch_data(self):
         '''
-        get a sample of realistic batch_data , 'day' , 'day+style' , '15m+style' ...
+        get a sample of realistic batch_input , 'day' , 'day+style' , '15m+style' ...
         day : stock_num x seq_len x 6
         30m : stock_num x seq_len x 8 x 6
         style : stock_num x 1 x 10
