@@ -8,7 +8,7 @@ from barra_model.risk_ret_est.api import get_riskmodel_lastest_days
 # 设置参数
 config_path = os.path.join(os.path.dirname(__file__), 'fmp_config_csi800.yaml')
 with open(config_path, "rb") as file:
-    configs = yaml.load(file.read(), Loader=yaml.SafeLoader)
+    configs = yaml.safe_load(file.read())
 
 # 设置日期和因子
 root_path = "D:/QuantData"

@@ -4,7 +4,7 @@ import numpy as np
 
 from typing import Iterator
 
-from src.res.algo.boost import BoosterInput
+from src.res.algo.boost import BoostInput
 from src.res.model.util import BatchInput , BatchOutput
 
 def tensor_refiller(values : torch.Tensor | None , target_i0 , target_i1 , target_shape : tuple):
@@ -31,7 +31,7 @@ def batch_data_to_boost_input(batch_input : BatchInput ,
                               nn_to_calculate_hidden : nn.Module | None = None):
     if nn_to_calculate_hidden is not None:
         hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_input.x)).other['hidden']
-        assert hidden is not None , f'hidden must not be none when using BoosterModel'
+        assert hidden is not None , f'hidden must not be none when using BoostModel'
         xx = hidden.detach().cpu()
     else:
         xx = batch_data_flatten_x(batch_input)
@@ -48,14 +48,14 @@ def batch_data_to_boost_input(batch_input : BatchInput ,
     secid = secid[secid_i] if secid is not None else None
     date  = date[date_i]   if date  is not None else None
 
-    return BoosterInput.from_tensor(xx_values , yy_values , ww_values , secid , date)
+    return BoostInput.from_tensor(xx_values , yy_values , ww_values , secid , date)
 
 def batch_x(batch_input : BatchInput , nn_to_calculate_hidden : nn.Module | None = None):
     if nn_to_calculate_hidden is not None:
         nn_to_calculate_hidden.eval()
         with torch.no_grad():
             hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_input.x)).other['hidden']
-            assert hidden is not None , f'hidden must not be none when using BoosterModel'
+            assert hidden is not None , f'hidden must not be none when using BoostModel'
         return hidden.detach()
     else:
         return batch_input.x

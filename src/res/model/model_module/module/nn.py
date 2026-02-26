@@ -31,7 +31,7 @@ class NNPredictor(BasePredictorModel):
         if hasattr(self , 'submodels'):
             [submodel.reset() for submodel in self.submodels.values()]
         else:
-            self.submodels = {sub:choose_swa_method(sub)(self.checkpoint ,*args , **kwargs) for sub in self.config.model_submodels}
+            self.submodels = {sub:choose_swa_method(sub)(self.checkpoint ,*args , **kwargs) for sub in self.config.submodels}
         return self
 
     def new_model(self , lr_multiplier = 1. , *args , **kwargs):

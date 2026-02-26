@@ -8,14 +8,14 @@ from src.res.model.util import BasePredictorModel , BatchInput , BatchOutput , O
 from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
-class NNBooster(BasePredictorModel):
+class NNBoost(BasePredictorModel):
     '''a group of ensemble models , of same net structure, still a nn model'''    
     AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
 
     @property
-    def booster_param(self): 
-        assert self.config.model_booster_head , f'{self.config.model_booster_head} is not a valid booster head'
-        return self.config.booster_head_param
+    def boost_param(self): 
+        assert self.config.boost_head , f'{self.config.boost_head} is not a valid boost head'
+        return self.config.boost_head_param
     
     def init_model(self , 
                    model_nn_module : str | None = None , 
@@ -28,7 +28,7 @@ class NNBooster(BasePredictorModel):
             self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         nn_module    = model_nn_module    if model_nn_module    else self.config.model_module
         nn_param     = model_nn_param     if model_nn_param     else self.model_param 
-        boost_module = model_boost_module if model_boost_module else self.config.model_booster_head
+        boost_module = model_boost_module if model_boost_module else self.config.boost_head
         boost_param  = model_boost_param  if model_boost_param  else self.model_param
 
         device = self.config.device      if self.config else None
@@ -37,7 +37,7 @@ class NNBooster(BasePredictorModel):
 
         self.net = AlgoModule.get_nn(nn_module , nn_param , device)
         self.reset_submodels(*args , **kwargs)
-        self.booster = AlgoModule.get_booster(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
+        self.boost = AlgoModule.get_boost(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
 
         self.model_dict.reset()
         self.complete_model_param = nn_param | boost_param
@@ -47,7 +47,7 @@ class NNBooster(BasePredictorModel):
         if hasattr(self , 'submodels'):
             [submodel.reset() for submodel in self.submodels.values()]
         else:
-            self.submodels = {sub:choose_swa_method(sub)(self.checkpoint ,*args , **kwargs) for sub in self.config.model_submodels}
+            self.submodels = {sub:choose_swa_method(sub)(self.checkpoint ,*args , **kwargs) for sub in self.config.submodels}
         return self
     
     def new_model(self, lr_multiplier = 1. , *args , **kwargs):
@@ -70,7 +70,7 @@ class NNBooster(BasePredictorModel):
         assert self.model_submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
         self.init_model(*args , **kwargs)
         self.net.load_state_dict(model_file['state_dict'])
-        self.booster.load_dict(model_file['booster_head'])
+        self.boost.load_dict(model_file['boost_head'])
         return self
 
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
@@ -88,7 +88,7 @@ class NNBooster(BasePredictorModel):
         if len(batch_input) == 0: 
             return None
         hidden = BatchOutput(self.forward_net(batch_input , *args , **kwargs)).other['hidden']
-        pred = self.booster(hidden , *args , **kwargs)
+        pred = self.boost(hidden , *args , **kwargs)
         return pred
 
     def train_boost_input(self):
@@ -121,9 +121,9 @@ class NNBooster(BasePredictorModel):
             self.optimizer.scheduler_step(self.status.epoch)
         self.collect_net()
 
-        # fit booster
+        # fit boost
         self.status.on_fit_model_start()
-        self.booster.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
+        self.boost.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
 
         for _ in self.trainer.iter_train_dataloader():
             self.batch_forward()
@@ -155,7 +155,7 @@ class NNBooster(BasePredictorModel):
         return self.model_dict
 
     def collect(self , submodel = 'best' , *args):
-        self.model_dict.booster_head = self.booster.to_dict()
+        self.model_dict.boost_head = self.boost.to_dict()
         return self.model_dict
     
     # additional actions at hook

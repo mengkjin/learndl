@@ -41,8 +41,8 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
 def log_config() -> dict[str, Any]:
     """Initialize the logger"""
-    log_config = MACHINE.configs('proj' , 'logger_settings')
-    new_path = PATH.log_main.joinpath(log_config['file']['param']['filename'])
+    log_config = MACHINE.configs('setting' , 'logger')
+    new_path = PATH.logs.joinpath('main' , log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
     new_path.parent.mkdir(exist_ok=True)
 

@@ -11,9 +11,9 @@ from . import conf as Conf
 
 __all__ = ['Proj']
 
-_project_settings = MACHINE.configs('proj' , 'proj_settings')
+_project_settings = MACHINE.configs('setting' , 'verbosity')
 
-class _Log_File:
+class _LogWriterFile:
     def __init__(self):
         self.value = None
 
@@ -176,7 +176,7 @@ class _Verbosity:
 
 class _ProjMeta(type):
     """meta class of ProjConfig"""
-    log_file = _Log_File()
+    log_writer = _LogWriterFile()
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')
@@ -194,7 +194,7 @@ class Proj(metaclass=_ProjMeta):
     @classmethod
     def info(cls) -> dict[str, Any]:
         """return the machine info list"""
-        return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_file}
+        return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
 
     @classmethod
     def print_info(cls , script_level : bool = True , identifier = 'project_initialized'):

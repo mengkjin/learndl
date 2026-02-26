@@ -19,7 +19,7 @@ factor_name = "analyst_l"  # 因子名称
 # 设置参数
 config_path = os.path.abspath("tf_config.yaml")
 with open(config_path, "rb") as file:
-    configs = yaml.load(file.read(), Loader=yaml.SafeLoader)
+    configs = yaml.safe_load(file.read())
 
 # 读取因子数据
 date_list = resample_trd_calendar_by_dates(scd, ecd, freq_type, smp_type="end")

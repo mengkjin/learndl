@@ -1,11 +1,10 @@
-import json
 import numpy as np
 import pandas as pd
 
 from datetime import datetime
 from typing import Any , ClassVar
 
-from src.proj import PATH , MACHINE , Logger , Duration , Proj
+from src.proj import Logger , LogFile , Duration , Proj
 from src.res.model.data_module import BatchInputLoader
 from src.res.model.util import BaseCallBack
 
@@ -38,7 +37,6 @@ class CallbackTimer(BaseCallBack):
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''
     CB_ORDER : int = 100
-    RESULT_PATH = PATH.rslt_train.joinpath('model_results.json')
     SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
     def __init__(self , trainer , **kwargs) -> None:
@@ -53,6 +51,9 @@ class StatusDisplay(BaseCallBack):
         self.record_model_stage : int = 0
 
     @property
+    def log_file(self):
+        return LogFile.initiate('model' , 'summary' , 'trainer_status')
+    @property
     def dataloader(self) -> BatchInputLoader | Any : return self.trainer.dataloader
     @property
     def initial_models(self) -> bool: return self.record_model_stage <= self.config.model_num
@@ -61,7 +62,7 @@ class StatusDisplay(BaseCallBack):
     @property
     def speedup2x(self) -> bool:
         try:
-            return self.config.callbacks['ResetOptimizer']['speedup2x']
+            return self.config.callback_kwargs['ResetOptimizer']['speedup2x']
         except KeyError:
             return False
     @property
@@ -89,39 +90,61 @@ class StatusDisplay(BaseCallBack):
         self.record_times[key] = datetime.now()
     def tc(self , key : str):
         return (datetime.now() - self.record_times[key]).total_seconds()
-    def toc(self , key : str , avg = False): 
+    def toc(self , key : str): 
         tc = self.tc(key)
-        if avg and self.record_model_stage * self.record_epoch_stage:
-            self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                key.title() , tc / 3600 , tc / 60 / self.record_model_stage , tc / self.record_epoch_stage)
-            Logger.highlight(self.record_texts[key])
+        if self.status.stage == 'fit' and self.record_model_stage * self.record_epoch_stage:
+            per_model = tc / 60 / self.record_model_stage
+            per_epoch = tc / self.record_epoch_stage
+            self.record_texts[key] = f'Cost {tc / 3600:.1f} Hours, {per_model:.1f} Min/model, {per_epoch:.1f} Sec/Epoch'
+            Logger.highlight(f'Finish Process [Fit], {self.record_texts[key]}')
         else:
-            self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.title() , tc)
+            self.record_texts[key] = f'Cost {tc:.1f} Secs'
+    
+    @classmethod
+    def format_messages(cls , messages : dict[str, str | dict] , indent : int = 0) -> list[str]:
+        key_len = max(len(key) for key in messages.keys())
+        msgs : list[str] = []
+        for key , msg in messages.items():
+            if isinstance(msg , dict):
+                msgs.append('  ' * indent + f'{key:{key_len}s} : ')
+                msgs.extend(cls.format_messages(msg , indent + 1))
+            else:
+                msgs.append('  ' * indent + f'{key:{key_len}s} : {msg}')
+        return msgs
 
     # callbacks
     def on_summarize_model(self):
         """export test summary to json"""
-        if self.status.test_summary.empty or not MACHINE.cuda_server: 
+        if self.status.test_summary.empty: 
             return
-        test_scores = {
-            '{}.{}'.format(*col):'|'.join([f'{k}({self.status.test_summary[col].round(v).loc[k]})' for k,v in self.SUMMARY_NDIGITS.items() 
-                                           if k in self.status.test_summary[col].index]) for col in self.status.test_summary.columns}
-    
-        test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{self.record_init_time.strftime("%Y%m%d%H%M%S")}'
-        result = {
-            '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
-            '1_start' : self.record_init_time.strftime("%Y-%m-%d %H:%M:%S") ,
-            '2_basic' : 'short' if self.config.short_test else 'full' , 
-            '3_datas' : str(self.config.model_data_types) ,
-            '4_label' : ','.join(self.config.model_labels),
-            '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
-            '6_fit'   : self.record_texts.get('fit'),
-            '7_test'  : self.record_texts.get('test'),
-            '8_result': test_scores,
+        
+        # metrics = {
+        #     '{}.{}'.format(*col):'|'.join([f'{k}({self.status.test_summary[col].round(v).loc[k]})' 
+        #     for k,v in self.SUMMARY_NDIGITS.items() if k in self.status.test_summary[col].index]) for col in self.status.test_summary.columns}
+        test_name = f'{self.config.model_name}'
+
+        duration : dict[str,str] = {
+            stage : self.record_texts.get(stage , "N/A") for stage in self.config.stage_queue
         }
-        assert self.RESULT_PATH.suffix == '.json', 'RESULT_PATH must be a json file'
-        with open(self.RESULT_PATH, 'a') as f:
-            json.dump({test_name:result}, f, indent=4)
+        metrics : dict[str,str] = {}
+        for col in self.status.test_summary.columns:
+            series = self.status.test_summary[col]
+            key = '{}.{}'.format(*col)
+            value = '|'.join([f'{k}({series.round(v).loc[k]})' for k,v in self.SUMMARY_NDIGITS.items() if k in series.index])
+            metrics[key] = value
+
+        messages = {
+            f'model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
+            f'start' : f'{self.record_init_time.strftime("%Y-%m-%d %H:%M:%S")}',
+            f'stages' : f'{self.config.stage_queue}',
+            f'inputs' : f'{getattr(self.data , "input_keys" , self.config.input_keys_all)}',
+            f'labels' : f'{self.config.labels}',
+            f'range' : f'{self.config.beg_date} - {self.config.end_date}',
+            f'duration' : duration,
+            f'metrics' : metrics,
+        }
+        msgs = self.format_messages(messages , indent = 0)
+        self.log_file.write(test_name , *msgs)
 
     def on_before_data_start(self):    
         self.tic('data')
@@ -130,7 +153,7 @@ class StatusDisplay(BaseCallBack):
     def on_before_fit_start(self):     
         self.tic('fit')
     def on_after_fit_end(self):       
-        self.toc('fit' , avg=True)
+        self.toc('fit')
     def on_before_test_start(self):
         self.tic('test')
     def on_after_test_end(self):

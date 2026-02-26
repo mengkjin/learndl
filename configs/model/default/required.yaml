@@ -1,0 +1,45 @@
+# Global required default config of TrainParam / TrainConfig , 
+# if not exists, will raise error
+# do not modify this file directly (unless change code of TrainParam / TrainConfig)
+
+env.random_seed: null
+env.short_test: true
+env.mem_storage: true
+env.allow_tf32: true
+env.detect_anomaly: false
+env.precision: float
+
+model.module: db@scores_v0
+model.labels:
+  - std_lag1_10
+  - rtn_lag1_10
+model.submodels: ['best' , 'swalast' , 'swabest']
+model.beg_date: 20170103
+model.end_date: 99991231
+
+input.type: data
+input.data.types: day
+input.hidden.types:
+  - gru_day_V0.0.best
+  - gru_day_V0.1.best
+input.factor.types:
+  fundament: [quality]
+input.combo.types: [data , factor]
+
+train.max_epoch: 200
+train.batch_size: 10000
+train.skip_horizon: 20
+train.fitting_step: 5
+train.callbacks:
+  - StatusDisplay
+  - BatchDisplay
+  - BasicTestResult
+  - DetailedAlphaAnalysis
+  - EarlyStoppage
+  - EarlyExitRetrain
+  - NanLossRetrain
+  - ValidationConverge
+  # - TrainConverge
+  # - FitConverge
+  - CallbackTimer
+  # - CudaEmptyCache

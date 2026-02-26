@@ -9,11 +9,11 @@ from typing import Any
 
 from src.math import match_values
 from src.proj import Logger
-from ..util import BasicBoosterModel , BoosterInput
+from ..util import BasicBoostModel , BoostInput
 
 PLOT_PATH : Path | None = None
 
-class Lgbm(BasicBoosterModel):
+class Lgbm(BasicBoostModel):
     DEFAULT_TRAIN_PARAM = {
         'objective': 'mse', # 'mae' , 'quantile' ,'softmax'
         'metric' : None , # ndcg
@@ -42,11 +42,11 @@ class Lgbm(BasicBoosterModel):
         super().assert_param()
         return self
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
-        self.booster_fit_inputs(train , valid , silent)
+    def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
+        self.boost_fit_inputs(train , valid , silent)
 
-        train_set = lightgbm.Dataset(**self.fit_train_ds.booster_inputs('lgbm'))
-        valid_set = lightgbm.Dataset(**self.fit_valid_ds.booster_inputs('lgbm') , reference = train_set)
+        train_set = lightgbm.Dataset(**self.fit_train_ds.boost_inputs('lgbm'))
+        valid_set = lightgbm.Dataset(**self.fit_valid_ds.boost_inputs('lgbm') , reference = train_set)
         
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         num_class       = self.fit_train_param.pop('n_bins' , None)
@@ -69,8 +69,8 @@ class Lgbm(BasicBoosterModel):
         )
         return self
         
-    def predict(self , x : BoosterInput | str = 'test'):
-        data = self.booster_input(x)
+    def predict(self , x : BoostInput | str = 'test'):
+        data = self.boost_input(x)
         X = data.X().cpu().numpy()
         return data.output(self.model.predict(X))
     
@@ -156,7 +156,7 @@ class LgbmPlot:
             if self.plot_path:
                 plt.savefig(self.plot_path.joinpath(f'explainer_tree_{num_trees}.png'),dpi=1200)
 
-    def shap(self , train : BoosterInput | Any = None):
+    def shap(self , train : BoostInput | Any = None):
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
@@ -189,7 +189,7 @@ class LgbmPlot:
             shap.dependence_plot(feature,shap_values,X_df,interaction_index=None,title=f'SHAP of {feature}',show=False)
             plt.savefig(self.plot_path.joinpath('explainer_shap' , f'explainer_shap_dot_{feature}.png'),dpi=100,bbox_inches='tight')
     
-    def sdt(self , train : BoosterInput | Any = None):
+    def sdt(self , train : BoostInput | Any = None):
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
@@ -205,7 +205,7 @@ class LgbmPlot:
         ax = lightgbm.plot_tree(SDT, tree_index=0, ax=ax)
         plt.savefig(self.plot_path.joinpath('explainer_sdt.png'),dpi=1200)
 
-    def pdp(self , train : BoosterInput | Any = None):
+    def pdp(self , train : BoostInput | Any = None):
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:

@@ -3,7 +3,7 @@ import sys , socket , platform , os , torch
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal , Any
+from typing import Any
 
 __all__ = ['MACHINE']
 
@@ -171,7 +171,7 @@ class MACHINE:
         return cls.PATH().get_share_folder_path()
         
     @classmethod
-    def configs(cls , conf_type : Literal['proj' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'reserved' , 'schedule'] , name : str , raise_if_not_exist = True , **kwargs) -> dict:
+    def configs(cls , *args , raise_if_not_exist = True , **kwargs) -> dict:
         """
         Get the configs of the machine
         possible conf_type: proj , factor , boost , nn , train , trade , schedule
@@ -179,19 +179,19 @@ class MACHINE:
         additional kwargs: e.g. encoding
         """
         PATH = cls.PATH()
+        path = PATH.conf.joinpath(*args)
+        if path.is_dir():
+            raise TypeError(f'Config {"/".join(args)} is a directory')
         for suffix in ('.json' , '.yaml'):
-            if (path := PATH.conf.joinpath(conf_type , f'{name}{suffix}')).exists():
+            if (path := PATH.conf.joinpath(*args).with_suffix(suffix)).exists():
                 break
         else:
             if raise_if_not_exist:
-                raise FileNotFoundError(f'Config file {conf_type}/{name} does not exist')
+                raise FileNotFoundError(f'Config file {"/".join(args)} does not exist')
             else:
                 return {}
         
         additional_kwargs = {}
-        #match name:
-        #    case 'tushare_indus':
-        #        additional_kwargs.update({'encoding' : 'gbk'})
         kwargs = kwargs | additional_kwargs
 
         if path.suffix == '.yaml':

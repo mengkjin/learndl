@@ -123,19 +123,19 @@ class BatchInput:
         if data_type == 'random':
             return cls.random()
         else:
-            from src.res.model.util import TrainConfig
+            from src.res.model.util import ModelConfig
             from src.res.model.data_module.module import DataModule
 
             override = {
                 'model.module':'gru',
-                'model.input_type':'data',
+                'input.type':'data',
                 'short_test':True,
-                'model.data.types':data_type ,
+                'input.data.types':data_type ,
                 'model.labels': ['std_lag1_10' , 'std_lag1_20'] if label_num == 2 else ['std_lag1_10'],
                 'num_output':[label_num],
             }
             with Proj.vb.Silence():
-                model_config = TrainConfig(None, override=override, test_mode=True)
+                model_config = ModelConfig(None, override=override, test_mode=True)
                 data = DataModule(model_config , 'predict').load_data()
                 data.setup('predict' , model_date = data.datas.y.date[-50])
                 batch_input = data.predict_dataloader()[0]

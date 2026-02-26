@@ -49,22 +49,22 @@ class PATH:
 
     # logs folder and subfolders
     logs        = main.joinpath('logs')
-    log_main    = logs.joinpath('main')
-    log_catcher = logs.joinpath('catcher')
-    log_profile = logs.joinpath('profiler')
-
-    # models folder and subfolders
-    model       = main.joinpath('models')
-    
-    # configs folder and subfolders
-    conf        = main.joinpath('configs')
+    log_model   = logs.joinpath('model')
 
     # results folder and subfolders
     result      = main.joinpath('results')
-    null_model  = result.joinpath('null_models')
-    rslt_train  = result.joinpath('train')
-    rslt_test   = result.joinpath('test')
+    rslt_factor = result.joinpath('factor')
     rslt_trade  = result.joinpath('trade')
+
+    # models folder and subfolders
+    model       = main.joinpath('models')
+    model_nn    = model.joinpath('nn')
+    model_boost = model.joinpath('boost')
+    model_factor= model.joinpath('factor')
+    model_st    = model.joinpath('st')
+    
+    # configs folder and subfolders
+    conf        = main.joinpath('configs')
 
     # resouces folder (for update)
     resource   = main.joinpath('resources')
@@ -107,7 +107,7 @@ class PATH:
             sys.stderr.write(f'\u001b[31m\u001b[1m{yaml_file} does not exist!\u001b[0m\n')
             return {}
         with open(yaml_file ,'r' , **kwargs) as f:
-            d = yaml.load(f , Loader = yaml.FullLoader)
+            d = yaml.safe_load(f)
         return d
 
     @staticmethod

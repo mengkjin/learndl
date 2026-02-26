@@ -5,9 +5,9 @@ import pandas as pd
 from typing import Any
 
 from src.proj import Logger
-from src.res.algo.boost.util import BasicBoosterModel , BoosterInput , load_xingye_data
+from src.res.algo.boost.util import BasicBoostModel , BoostInput , load_xingye_data
 
-class AdaBoost(BasicBoosterModel):
+class AdaBoost(BasicBoostModel):
     DEFAULT_TRAIN_PARAM = {
         'n_learner' : 30, 
         'n_bins' : 20 , 
@@ -28,14 +28,14 @@ class AdaBoost(BasicBoosterModel):
         super().assert_param()
         assert self.weight_param.get('cs_type') in ['ones' , None] , self.weight_param.get('cs_type')
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
+    def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
         if train is None: 
             train = self.data['train']
         if valid is None: 
             valid = self.data['valid']
 
         device = torch.device('cuda:0' if torch.cuda.is_available() and self.cuda else 'cpu')
-        train_data = BoosterInput.concat([train , valid])
+        train_data = BoostInput.concat([train , valid])
         dset = train_data.Dataset().to(device)
 
         dset.x = self.input_transform(dset.x)
@@ -47,8 +47,8 @@ class AdaBoost(BasicBoosterModel):
         self.model.fit(dset.x[idx] , dset.y[idx] , dset.w[idx] , silent = silent , feature = train_data.feature)
         return self
     
-    def predict(self , x : BoosterInput | str = 'test'):
-        data = self.booster_input(x)
+    def predict(self , x : BoostInput | str = 'test'):
+        data = self.boost_input(x)
         X = self.input_transform(data.X())
         return data.output(self.model.predict(X))
     
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     for idx in range(max(windows_len , start_idx) , len(MDTs)):
         ada = AdaBoost()
         input_df = AdaBoost.df_input(factor_data , idx , windows_len)
-        ada.fit(BoosterInput.from_dataframe(input_df['train']) , silent = True)
+        ada.fit(BoostInput.from_dataframe(input_df['train']) , silent = True)
         ic_dfs.append(ada.calc_ic(input_df['test']))
     df = pd.concat([d for d in ic_dfs if not d.empty])
     Logger.stdout(df)

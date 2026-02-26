@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Any , ClassVar , Literal
 
 from src.proj import MACHINE , Logger , Silence , CALENDAR
-from src.res.model.util import TrainConfig , PredictionModel
+from src.res.model.util import ModelConfig , PredictionModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import get_predictor_module
 
@@ -18,7 +18,7 @@ class ModelPredictor:
         self.reg_model = reg_model
         self.use_data : Literal['fit' , 'predict' , 'both'] = use_data
 
-        self.model_name = self.reg_model.name
+        self.model_name = self.reg_model.model_name
         self.model_submodel = self.reg_model.submodel
 
         if self.reg_model.num == 'all': 
@@ -28,7 +28,7 @@ class ModelPredictor:
         else:
             self.model_nums = list(self.reg_model.num)
 
-        self.config = TrainConfig.load_model(self.model_name)
+        self.config = ModelConfig.load_model(self.model_name)
         self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
 

@@ -10,8 +10,7 @@ from src.proj import PATH , Logger , CALENDAR , Proj , MACHINE
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.math import tensor_standardize_and_weight , match_values
 from src.res.factor.util import Benchmark
-from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , TrainConfig , MemFileStorage , StoredFileLoader , HiddenPath
-
+from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , MemFileStorage , StoredFileLoader , HiddenPath
 from .loader import BatchInputLoader
 
 __all__ = ['DataModule']
@@ -41,8 +40,9 @@ class DataModule(BaseDataModule):
     """
     DataModule for model fitting / testing / predicting
     """
-    _config_instance_for_batch_data : dict[TrainConfig,'DataModule'] = {}
-    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , info : bool = False):
+    _config_instance_for_batch_data : dict[ModelConfig,'DataModule'] = {}
+    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , 
+                 info : bool = False , min_key_len : int = -1 , **kwargs):
         '''
         1. load Package of BlockDatas of x , y , norms and index
         2. Setup model_date dataloaders
@@ -50,12 +50,12 @@ class DataModule(BaseDataModule):
         use_data: 'fit' , 'predict' , 'both' 
             if 'predict' only load recent data
         '''
-        self.config   = TrainConfig.default(stage=0) if config is None else config
+        self.config   = ModelConfig.default(stage=0) if config is None else config
         self.use_data = use_data
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
         if info:
-            Logger.stdout_pairs({'Use Data' : use_data} , title = 'Module Data Initiated:' , vb_level=2)
+            Logger.stdout_pairs({'Use Data' : use_data} , title = 'Module Data Initiated:' , vb_level=2 , min_key_len = min_key_len)
 
     def __repr__(self): 
         keys = self.input_keys
@@ -76,7 +76,7 @@ class DataModule(BaseDataModule):
        
     def load_data(self):
         self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , 
-                                     self.config.model_labels , 
+                                     self.config.labels , 
                                      self.config.input_factor_names , 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision, 
@@ -104,7 +104,7 @@ class DataModule(BaseDataModule):
         self.filter_datas_secid()
 
     def filter_datas_date(self) -> None | tuple[int | None , int | None]:
-        value = self.config.model_input_filter_date
+        value = self.config.input_filter_date
         if value is None:
             return None
         
@@ -113,13 +113,13 @@ class DataModule(BaseDataModule):
             start, end = values
             start, end = int(start) if start else None, int(end) if end else None
         else:
-            raise ValueError(f'model.input_filter.date {value} is not valid , should be yyyyMMdd-yyyyMMdd')
+            raise ValueError(f'input.filter.date {value} is not valid , should be yyyyMMdd-yyyyMMdd')
 
         Logger.alert1(f'filtering date for DataModule.datas: {value}')
         self.datas.filter_dates(start , end , inplace = True)
 
     def filter_datas_secid(self) -> None | np.ndarray:
-        value = self.config.model_input_filter_secid
+        value = self.config.input_filter_secid
         if value is None:
             return None
         elif value.startswith('random.'):
@@ -132,7 +132,7 @@ class DataModule(BaseDataModule):
             last_date = self.datas.date.max()
             secid = Benchmark(value).get(last_date,True).secid
         else:
-            raise ValueError(f'model.input_filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
+            raise ValueError(f'input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
 
         Logger.alert1(f'filtering secid for DataModule.datas: {value}')
         self.datas.filter_secid(secid , inplace = True)
@@ -153,7 +153,7 @@ class DataModule(BaseDataModule):
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
 
-        if self.config.module_type in ['factor' , 'db']:
+        if self.config.is_null_model:
             # previos month end (use calendar date)
             self.test_full_dates = dates
             self.model_date_list = CALENDAR.td_array(CALENDAR.cd_array(np.unique(dates // 100) * 100 + 1 , -1))
@@ -162,7 +162,7 @@ class DataModule(BaseDataModule):
             if self.use_data == 'predict':
                 self.model_date_list = dates[:1]
             else:
-                self.model_date_list = dates[::self.config.model_interval]
+                self.model_date_list = dates[::self.config.interval]
 
     @property
     def beg_date(self):
@@ -186,12 +186,9 @@ class DataModule(BaseDataModule):
             model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160
         ) -> bool:
         stage = 'predict' if self.use_data == 'predict' else stage
-        if self.input_type == 'db':
-            slens = {self.config.model_module: 1}
-        else:
-            slens = self.config.seq_lens() | param.get('seqlens',{})
-            slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
-            slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
+        slens = self.config.seq_lens | param.get('seqlens',{})
+        slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
+        slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
             
         loader_param = self.LoaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
         if self.loader_param == loader_param: 
@@ -200,9 +197,8 @@ class DataModule(BaseDataModule):
         return True
 
     def setup_input_prepare(self):
-        '''additional input prepare for hidden / db input'''
+        '''additional input prepare for hidden input'''
         self.setup_input_prepare_hidden()
-        self.setup_input_prepare_db()
 
     def setup_input_prepare_hidden(self):
         '''additional input prepare for hidden input , load hidden data if needed'''
@@ -227,20 +223,6 @@ class DataModule(BaseDataModule):
             (self.next_model_date(self.model_date) , hidden_max_date)
         self.config.update_data_param(self.datas.x)
 
-    def setup_input_prepare_db(self):
-        '''additional input prepare for hidden input , load hidden data if needed'''
-        if self.input_type != 'db': 
-            return
-        assert self.stage in ['test' , 'predict'] , self.stage
-        test_dates = self.test_full_dates
-        next_model_date = self.next_model_date(self.model_date)
-        test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
-            
-        db_mapping = self.config.db_mapping
-        assert db_mapping.name == self.config.model_module , (db_mapping.name , self.config.model_module)
-        self.datas.x[db_mapping.name] = db_mapping.load_block(test_dates[0] , test_dates[-1]).align_secid_date(self.datas.secid , self.datas.date)
-        self.config.update_data_param(self.datas.x)
-
     def setup_loader_prepare(self):
         seq_lens = self.seq_lens
         x_keys = self.input_keys
@@ -253,8 +235,8 @@ class DataModule(BaseDataModule):
 
         if self.stage == 'fit':
             model_date_col = (self.datas.date < self.model_date).sum()
-            self.d0 = max(0 , model_date_col - self.config.train_skip_horizon - self.config.model_train_window - d_extend)
-            self.d1 = max(0 , model_date_col - self.config.train_skip_horizon)
+            self.d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - d_extend)
+            self.d1 = max(0 , model_date_col - self.config.skip_horizon)
         elif self.stage in ['predict' , 'test']:
             next_model_date = self.next_model_date(self.model_date)
 
@@ -292,32 +274,32 @@ class DataModule(BaseDataModule):
             assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
 
     @property
-    def input_type(self) -> Literal['db' , 'data' , 'hidden' , 'factor' , 'combo']: 
-        return self.config.model_input_type
+    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+        return self.config.input_type
     
     @property
     def input_keys(self) -> list[str]:
         keys = self.input_keys_data + self.input_keys_factor + self.input_keys_hidden
         if self.config.module_type == 'factor':
             keys.append('factor')
-        assert len(keys) > 0 or self.config.model_input_type in ['db'] , self.config.model_input_type
+        assert len(keys) > 0 , self.config.input_type
         return keys
 
     @property
     def input_keys_data(self) -> list[str]:
-        return [ModuleData.abbr(key) for key in self.config.model_data_types]
+        return [ModuleData.abbr(key) for key in self.config.input_data_types]
 
     @property
     def input_keys_factor(self) -> list[str]:
-        return [ModuleData.abbr(key) for key in self.config.model_factor_types]
+        return [ModuleData.abbr(key) for key in self.config.input_factor_types]
 
     @property
     def input_keys_hidden(self) -> list[str]:
-        return [ModuleData.abbr(key) for key in self.config.model_hidden_types]
+        return [ModuleData.abbr(key) for key in self.config.input_hidden_types]
 
     @property
     def seq_steps(self) -> dict[str,int]:
-        return self.config.seq_steps()
+        return self.config.seq_steps
 
     @property
     def y_secid(self) -> np.ndarray:
@@ -428,16 +410,16 @@ class DataModule(BaseDataModule):
             self.loader_dict[self.stage] = StoredFileLoader(self.storage , [] , 'static')
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
-        '''update loader_dict , save batch_input to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''   
+        '''update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them'''   
         if valid is None: 
             valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx
-        sample_index = self.split_sample(valid , index0 , index1 , self.config.train_sample_method , 
-                                         self.config.train_train_ratio , self.config.train_batch_size)
+        sample_index = self.split_sample(valid , index0 , index1 , self.config.sample_method , 
+                                         self.config.train_ratio , self.config.batch_size)
         self.storage.del_group(self.stage)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract'] , set_key
-            shuf_opt = self.config.train_shuffle_option if set_key == 'train' else 'static'
+            shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_files = [PATH.batch.joinpath(f'{set_key}.{bnum}.pt') for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
                 assert torch.isin(b_i[:,1] , index1).all() , f'all b_i[:,1] must be in index1'
@@ -470,7 +452,7 @@ class DataModule(BaseDataModule):
         self.prenorm_divlast  : list[str] = []
         self.prenorm_histnorm : list[str] = []
         for mdt in self.input_keys: 
-            method : dict = self.config.model_data_prenorm.get(mdt , {})
+            method : dict = self.config.input_data_prenorm.get(mdt , {})
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True) and (mdt in DataBlockNorm.HISTNORM)
             if (divlast or histnorm): 
@@ -533,7 +515,7 @@ class DataModule(BaseDataModule):
         return sample_index    
 
     @classmethod
-    def get_date_batch_data(cls , config : TrainConfig , date : int , model_num : int = 0) -> BatchInput:
+    def get_date_batch_data(cls , config : ModelConfig , date : int , model_num : int = 0) -> BatchInput:
         if config not in cls._config_instance_for_batch_data:
             cls._config_instance_for_batch_data[config] = cls(config , 'both').load_data()
         module = cls._config_instance_for_batch_data[config]

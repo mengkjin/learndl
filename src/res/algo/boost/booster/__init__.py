@@ -1,2 +1,2 @@
-from .general import  GeneralBooster , AVAILABLE_BOOSTERS
-from .optuna import OptunaBooster
+from .general import  GeneralBoostModel , AVAILABLE_BOOSTS
+from .optuna import OptunaBoostModel

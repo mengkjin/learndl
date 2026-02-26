@@ -7,5 +7,5 @@ pred_len:       [1]
 encoder_layers: [2]
 
 model.submodels: [best]
-model.input_type: data
-model.data.types: day+style+indus
+input.type: data
+input.data.types: day+style+indus

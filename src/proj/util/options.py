@@ -1,31 +1,31 @@
 import json , sys
 
 from datetime import datetime
-from src.proj.env import MACHINE , PATH
+from src.proj.env import PATH
 
 class OptionsDefinition:
     """Specified Options for the project , how they are defined/calculated"""
     @classmethod
     def available_models(cls) -> list[str]:
-        """Get the available nn/booster models in the models directory"""
-        return [p.name for p in PATH.model.iterdir() if not p.name.endswith('_ShortTest') and not p.name.startswith('.')]
+        """Get the available nn/boost models in the models directory"""
+        models : list[str] = []
+        for root in [PATH.model_nn , PATH.model_boost , PATH.model_st]:
+            for model in root.iterdir():
+                if model.is_dir() and not model.name.startswith('.'):
+                    models.append(f'{root.name}/{model.name}')
+        return models
 
     @classmethod
     def available_modules(cls) -> list[str]:
-        """Get the available nn/booster modules in the src/res/algo directory"""
+        """Get the available nn/boost modules in the src/res/algo directory"""
         sys.stderr.write(f'Redefine available modules at {datetime.now()}\n')
         from src.res.algo import AlgoModule
-        return [f'{module_type.replace("booster" , "boost")}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
+        return [f'{module_type}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
 
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules in the config/schedule directory"""
         return [p.stem for p in PATH.conf.joinpath('schedule').glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
-
-    @classmethod
-    def available_db_mappings(cls) -> list[str]:
-        """Get the available db mappings in the config/proj/model_settings.yaml file"""
-        return list(MACHINE.configs('proj' , 'model_settings')['db_mapping'].keys())
 
     @classmethod
     def available_tradeports(cls) -> list[str]:
@@ -83,23 +83,18 @@ class Options:
     
     @classmethod
     def available_models(cls) -> list[str]:
-        """Get the available nn/booster models from the cache"""
+        """Get the available nn/boost models from the cache"""
         return cls.cache.get('available_models')
 
     @classmethod
     def available_modules(cls) -> list[str]:
-        """Get the available nn/booster modules from the cache"""
+        """Get the available nn/boost modules from the cache"""
         return cls.cache.get('available_modules')
 
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules from the cache"""
         return cls.cache.get('available_schedules')
-
-    @classmethod
-    def available_db_mappings(cls) -> list[str]:
-        """Get the available db mappings from the cache"""
-        return cls.cache.get('available_db_mappings')
 
     @classmethod
     def available_tradeports(cls) -> list[str]:

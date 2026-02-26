@@ -255,35 +255,35 @@ class LogWriter(OutputCatcher):
     def __init__(self, log_path : str | Path | None = None):
         self.log_path = Path(log_path) if log_path is not None else None
         if log_path is None: 
-            self.log_file = None
+            self.log_writer = None
         else:
             log_path = PATH.main.joinpath(log_path)
             log_path.parent.mkdir(exist_ok=True,parents=True)
-            self.log_file = open(log_path, "w")
-        self.catchers = {'stdout': self.log_file, 'stderr': self.log_file}
+            self.log_writer = open(log_path, "w")
+        self.catchers = {'stdout': self.log_writer, 'stderr': self.log_writer}
 
     def __enter__(self):
         super().__enter__()
-        Proj.log_file = self.log_file
+        Proj.log_writer = self.log_writer
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        Proj.log_file = None
+        Proj.log_writer = None
         super().__exit__(exc_type, exc_val, exc_tb)
 
     def write_stdout(self, text : str | Any):
         """Write to the output catcher"""
-        if self.log_file is None:
+        if self.log_writer is None:
             return
-        self.log_file.write(text)
-        self.log_file.flush()
+        self.log_writer.write(text)
+        self.log_writer.flush()
 
     def write_stderr(self, text : str | Any):
         """Write to the output catcher"""
-        if self.log_file is None:
+        if self.log_writer is None:
             return
-        self.log_file.write(text)
-        self.log_file.flush()
+        self.log_writer.write(text)
+        self.log_writer.flush()
 
     def get_contents(self):
         if self.log_path is None: 
@@ -472,7 +472,7 @@ class HtmlCatcher(OutputCatcher):
             Logger.stdout('This will be caught')
         contents = catcher.contents
     """
-    export_dir = PATH.log_catcher.joinpath('html')
+    export_dir = PATH.logs.joinpath('catcher' , 'html')
     export_suffix : str = '.html'
 
     PrimaryInstance : 'HtmlCatcher | None' = None
@@ -1028,7 +1028,7 @@ class MarkdownCatcher(OutputCatcher):
             Logger.stdout('This will be caught')
         contents = catcher.contents
     """
-    export_dir = PATH.log_catcher.joinpath('markdown')
+    export_dir = PATH.logs.joinpath('catcher' , 'markdown')
     export_suffix : str = '.md'
 
     def __init__(self, title: str | None = None,

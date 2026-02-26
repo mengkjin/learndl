@@ -18,7 +18,7 @@ bm_index = "publish:000906.SH"  # 基准指数
 # 设置参数
 config_path = os.path.join(os.path.dirname(__file__), "attribution_config.yaml")
 with open(config_path, "rb") as file:
-    test_configs = yaml.load(file.read(), Loader=yaml.SafeLoader)
+    test_configs = yaml.safe_load(file.read())
 test_configs["ENV_CONFIG"] = {"stock_universe": "universe", "risk_model_nm": "cne6"}
 test_configs["BACKTEST_CONFIG"]["bm_index"] = bm_index
 

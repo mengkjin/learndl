@@ -1,0 +1,38 @@
+# main model configs ----------------------------------------------------------------
+name          : null  # any name or null
+module        : db@scores_v0  
+# nn : can be nn / nn@{gru} ... / {gru} ...
+# boost : can be boost / boost@{lgbm} ... / {lgbm} ...
+# factor : can be factor / factor@{factor_name} ... / {factor_name}
+# db : can be db / db@{mapping_name} ... / {mapping_name}
+
+labels: 
+  # rtn : raw return | std : standardized return | res : risk model residual
+  # if module is nn , use multiloss combination of the labels , otherwise only use the first label
+  - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+  - rtn_lag1_10 
+
+submodels     : [best , swalast , swabest] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
+beg_date      : 20170103 # model start date
+end_date      : 99991231 # model end date
+
+# module specification ----------------------------------------------------------------
+module.nn                  : gru     # if module is Literal['nn'] , use this to specify the nn module
+module.nn.boost_head       : False   # for nn module, if True, the last layer of the nn is a boost
+module.nn.boost_head.boost : lgbm    # for nn module with boost head, use this to specify the boost module
+
+module.boost               : xgboost # if module is Literal['boost'] , use this to specify the boost module. also use as boost head if module is Literal['nn']
+module.boost.optuna        : False   # for boost module, if True, use optuna to optimize the boost parameters
+module.boost.optuna.trials : 10      # for boost module with optuna, use this to specify the number of trials for optuna
+
+module.factor              : null    # if module is Literal['factor'] , use this to specify the factor module
+
+# model update interval in days , nn is prefered to be 120 , others is prefered to be 20 , but is up to you
+interval         : null 
+interval.nn      : 120
+interval.boost   : 20
+
+# data look back window in days , nn is prefered to be 2400 , others is prefered to be 240 , but is up to you
+window       : null    
+window.nn    : 2400
+window.boost : 240

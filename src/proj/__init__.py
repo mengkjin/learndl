@@ -4,7 +4,7 @@ from .env import MACHINE , PATH
 
 from .proj import Proj
 
-from .log import Logger
+from .log import Logger , LogFile
 
 from . import db as DB
 

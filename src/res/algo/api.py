@@ -4,24 +4,24 @@ from typing import Any , Literal
 
 from src.proj import PATH
 from .nn.api import get_nn_module , get_nn_category , get_nn_datatype , AVAILABLE_NNS
-from .boost.api import AVAILABLE_BOOSTERS , OptunaBooster , GeneralBooster
+from .boost.api import AVAILABLE_BOOSTS , OptunaBoostModel , GeneralBoostModel
 
-__all__ = ['AlgoModule' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 'OptunaBooster' , 'GeneralBooster']
+__all__ = ['AlgoModule' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 'OptunaBoostModel' , 'GeneralBoostModel']
 
 class AlgoModule:
-    _availables = {'booster' : AVAILABLE_BOOSTERS , 'nn' : AVAILABLE_NNS}
+    _availables = {'boost' : AVAILABLE_BOOSTS , 'nn' : AVAILABLE_NNS}
     
     @classmethod
-    def available_modules(cls , module_type : Literal['nn' , 'booster' , 'all'] = 'all'):
+    def available_modules(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
         if module_type == 'all':
             return {k:v for mod_type, mods in cls._availables.items() for k,v in mods.items()}
         else:
             return cls._availables[module_type]
         
     @classmethod
-    def available_modules_str(cls , module_type : Literal['nn' , 'booster' , 'all'] = 'all'):
+    def available_modules_str(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
         if module_type == 'all':
-            return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('booster')])
+            return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('boost')])
         else:
             return '\n'.join([f'{module_type}/{module}' for module in cls._availables[module_type].keys()])
         
@@ -33,19 +33,22 @@ class AlgoModule:
             f.write(cls.available_modules_str())
         
     @classmethod
-    def is_valid(cls , model_module : str , module_type : Literal['nn' , 'booster' , 'all'] = 'all'): 
+    def is_valid(cls , model_module : str , module_type : Literal['nn' , 'boost' , 'all'] = 'all'): 
         if module_type == 'all': 
-            return cls.is_valid(model_module , 'nn') or cls.is_valid(model_module , 'booster')
+            return cls.is_valid(model_module , 'nn') or cls.is_valid(model_module , 'boost')
         else: 
             return model_module in cls._availables[module_type]
 
     @classmethod
-    def module_type(cls , module_name : str):
-        if module_name in ['booster' , 'hidden_aggregator'] or module_name in cls._availables['booster']: 
-            return 'booster'
-        if module_name in cls._availables['nn']: 
+    def module_type(cls , module_name : str , raise_error : bool = True):
+        if module_name == 'boost' or module_name in cls._availables['boost'] or module_name.startswith('boost@'): 
+            return 'boost'
+        if module_name == 'nn' or module_name in cls._availables['nn'] or module_name.startswith('nn@'): 
             return 'nn'
-        raise ValueError(f'{module_name} is not a valid module')
+        if raise_error:
+            raise ValueError(f'{module_name} is not a valid module')
+        else:
+            return ''
     
     @classmethod
     def get_nn(cls , model_module : str , model_param : dict | None = None , device : Any = None , state_dict : dict[str,torch.Tensor] | None = None , **kwargs):
@@ -67,17 +70,17 @@ class AlgoModule:
         return get_nn_datatype(module_name)
 
     @classmethod
-    def get_booster(
+    def get_boost(
         cls , model_module : str , model_param : dict | None = None , 
         cuda = None , seed = None , model_dict : dict | None = None , 
         given_name : str | None = None , optuna : bool = False , **kwargs
     ):
         model_param = model_param or {}
-        booster = (OptunaBooster if optuna else GeneralBooster)(
+        boost = (OptunaBoostModel if optuna else GeneralBoostModel)(
             model_module , model_param , cuda = bool(cuda) , seed = seed , given_name = given_name , **kwargs)
 
         if model_dict is not None: 
-            booster.load_dict(model_dict , cuda = bool(cuda) , seed = seed)
-        return booster
+            boost.load_dict(model_dict , cuda = bool(cuda) , seed = seed)
+        return boost
 
 AlgoModule.export_available_modules()

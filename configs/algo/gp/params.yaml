@@ -1,4 +1,5 @@
-# most frequently changing variables
+# Genetic Programming parameters
+# most frequently  changing variables
 gp_fac_list: [cp, turn, vol, amt, op, hp, lp, vp, bp, ep, ocfp, dp, adv20, adv60]       # gp intial factor list, in lower case
 gp_raw_list: [CP, TURN, VOL, AMT, OP, HP, LP, VP, BP, EP, OCFP, DP, ADV20, ADV60 , RTN] # gp intial raw data list, in upper case
 slice_date : # 修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日

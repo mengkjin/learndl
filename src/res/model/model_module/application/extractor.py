@@ -6,7 +6,7 @@ from datetime import datetime
 from itertools import product
 
 from src.proj import Silence , Logger , CALENDAR
-from src.res.model.util import TrainConfig , HiddenPath , HiddenExtractionModel
+from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
 
@@ -16,7 +16,7 @@ class ModelHiddenExtractor:
         self.hidden_model = model
         self.backward_days = backward_days
         self.forward_days  = forward_days
-        self.config = TrainConfig.load_model(self.model_path , override={'env.short_test':False , 'train.dataloader.sample_method':'sequential'})
+        self.config = ModelConfig.load_model(self.model_path , override={'env.short_test':False , 'train.dataloader.sample_method':'sequential'})
         self.model  = get_predictor_module(self.config)
         assert isinstance(self.model , NNPredictor) , self.model
         # self.load_model_data() # must load data before loading model, to get input_dim parameter

@@ -9,7 +9,7 @@ from src.proj import Logger
 from src.res.algo.nn.optimizer import sam
 
 from .metrics import BatchMetrics
-from .config import TrainConfig
+from .config import ModelConfig
 
 NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False
@@ -21,7 +21,7 @@ class Optimizer:
     def __init__(
             self , 
             net : nn.Module , 
-            config : TrainConfig , 
+            config : ModelConfig , 
             transfer : bool = False , 
             lr_multiplier : float = 1. , 
             add_opt_param : dict | None = None , 
@@ -32,10 +32,10 @@ class Optimizer:
         self.config = config
         self.trainer = trainer
 
-        self.opt_param : dict[str,Any] = deepcopy(self.config.train_trainer_optimizer)
-        self.shd_param : dict[str,Any] = deepcopy(self.config.train_trainer_scheduler)
-        self.lr_param  : dict[str,Any] = deepcopy(self.config.train_trainer_learn_rate)
-        self.clip_value = self.config.train_trainer_gradient_clip_value
+        self.opt_param : dict[str,Any] = deepcopy(self.config.trainer_optimizer)
+        self.shd_param : dict[str,Any] = deepcopy(self.config.trainer_scheduler)
+        self.lr_param  : dict[str,Any] = deepcopy(self.config.trainer_learn_rate)
+        self.clip_value = self.config.trainer_gradient_clip_value
       
         if add_opt_param: 
             self.opt_param.update(add_opt_param)

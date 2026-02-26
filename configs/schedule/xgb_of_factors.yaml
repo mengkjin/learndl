@@ -1,22 +1,21 @@
-train:
+model:
   model:
     # main model configs ----------------------------------------------------------------
     name          : xgb_of_factors # any name or null
-    module        : xgboost  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
-    submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
+    module        : xgboost  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+    submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
 
-
-    train_window  : 480
+    window  : 480
     # labels specification ------------------------------------------------------------
     # rtn : raw return | std : standardized return | res : risk model residual
     # if module is nn , use multiloss combination of the labels
-    # if module is booster , only use the first label
+    # if module is boost , only use the first label
     labels: 
       - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
       - rtn_lag1_10 
 
-    # input specification ----------------------------------------------------------------
-    input_type: factor # [data , hidden , factor] , specify below
+  input:  # input specification ----------------------------------------------------------------
+    type: factor # [data , hidden , factor] , specify below
 
     factor.types: # list of factor names , use if input_type is factor
       fundament:  [quality , growth , value , earning]
@@ -25,7 +24,7 @@ train:
       money_flow: [holding , trading]
       high_frequency: [hf_momentum , hf_volatility , hf_correlation , hf_liquidity]
 
-boost:
-  xgboost:
+algo:
+  boost.xgboost:
     seqlens:        [{day: 1}]
     max_depth:      [6 , 8 , 10]

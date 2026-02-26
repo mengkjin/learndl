@@ -2,28 +2,22 @@ import os , random , shutil , torch
 import numpy as np
 
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , Type
 
-from src.proj import PATH , MACHINE , Logger , DB , Proj
+from src.proj import PATH , MACHINE , Logger , Proj
 from src.proj.util import Device 
 from src.proj.func import update_dict
 from src.res.algo import AlgoModule
+from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
-from .model_path import ModelPath , DBMappingModel
+from .abc import model_module_type , is_null_module_type
+from .model_path import ModelPath
 from .metrics import Metrics
 from .storage import Checkpoint , Deposition
 
-TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
-TYPE_MODULE_TYPES = Literal['nn' , 'booster' , 'db' , 'factor']
-
-def conf_dir(base_path : ModelPath | Path | str | None , *args):
-    return ModelPath(base_path).conf(*args)
-
-def conf_path(base_path : ModelPath | Path | str | None , *args):
-    return ModelPath(base_path).conf(*args).with_suffix('.yaml')
-
-def schedule_path(base_path : ModelPath | Path | str | None , name : str):
-    base_path = ModelPath(base_path)
+def schedule_path(base_path : ModelPath | None , name : str | None) -> Path | None:
+    if not name:
+        return None
     if base_path:
         path = base_path.conf('schedule').joinpath(f'{name}.yaml')
     else:
@@ -34,18 +28,29 @@ def schedule_path(base_path : ModelPath | Path | str | None , name : str):
         path = schedule_path_0 if schedule_path_0.exists() else schedule_path_1
     return path
 
-def conf_copy(source : Path | None , target : Path | None , overwrite = False):
-    if source is None or target is None:
+def schedule_config(base_path : ModelPath | None , name : str | None):
+    # schedule configs are used to override the train config
+    if base_path:
+        schedules = list(base_path.conf('schedule').glob('*.yaml'))
+        assert len(schedules) <= 1 , f'multiple schedules found: {schedules}'
+        name = schedules[0].stem if schedules else None
+
+    path = schedule_path(base_path , name)
+    p = PATH.read_yaml(path) if path and path.exists() else {}
+
+    model_conf : dict[str,Any] = p.get('model' , {})
+    model_conf = {f'{cfg}.{k}':v for cfg , cfg_params in model_conf.items() for k,v in cfg_params.items() if cfg in BaseConfig.CONFIG_LIST}
+    algo_conf : dict[str,Any] = p.get('algo' , {})
+
+    schedule_conf = {'model': model_conf, 'algo': algo_conf}
+    return schedule_conf
+
+def copy_file(source : Path | None , target : Path | None , overwrite = False):
+    if source is None or not source.exists() or target is None or target == source or (target.exists() and not overwrite):
         return
-    if source.is_dir():
-        if not overwrite: 
-            assert not target.exists() or len([v for v in target.iterdir()]) == 0 , target
-        shutil.copytree(source , target , dirs_exist_ok = True)
-    else:
-        if not overwrite: 
-            assert not target.exists() , target
-        target.parent.mkdir(parents=True,exist_ok=True)
-        shutil.copyfile(source , target)
+    assert source.is_file() , f'{source} is not a file'
+    target.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copyfile(source , target)
 
 def striped_list(factors : list[str] | dict | str):
     if isinstance(factors , str): 
@@ -55,95 +60,67 @@ def striped_list(factors : list[str] | dict | str):
             factors = list(factors.values())
         return [ff for f in factors for ff in striped_list(f)]
 
-def conf_mod_type(module : str) -> TYPE_MODULE_TYPES:
-    if module.startswith('db@'):
-        return 'db'
-    elif module.startswith('factor@'):
-        return 'factor'
-    else:
-        return AlgoModule.module_type(module)
+class BaseConfig:
+    CONFIG_LIST = ['env' , 'model' , 'input' , 'train' , 'callbacks' , 'conditional']
+    REQUIRED_CONFIG_PARAM : dict[str,Any] = MACHINE.configs('model' , 'default' , 'required')
+    OPTIONAL_CONFIG_PARAM : dict[str,Any] = MACHINE.configs('model' , 'default' , 'optional')
 
-def schedule_config(base_path : ModelPath | Path | None , name : str | None):
-    # schedule configs are used to override the train config
-    base_path = ModelPath(base_path)
-    if base_path:
-        schedules = list(base_path.conf('schedule').glob('*.yaml'))
-        assert len(schedules) <= 1 , f'multiple schedules found: {schedules}'
-        name = schedules[0].stem if schedules else None
-    p : dict[str,Any] = {}
-    if name: 
-        p.update(PATH.read_yaml(schedule_path(base_path , name)))
-    return p
-
-class TrainParam:
-    def __init__(self , base_path : ModelPath | Path | str | None , override = None , schedule_name : str | None = None , **kwargs):
+    def __init__(
+        self , base_path : ModelPath | Path | str | None , * , 
+        module : str | None = None , schedule_name : str | None = None , 
+        override = None , **kwargs
+    ):
         self.base_path = ModelPath(base_path)
-        self.model_name = self.base_path.name
-        self.override = (override or {}) | kwargs
+        self.force_module = module
         self.schedule_name = schedule_name
-        self.load_param().check_validity()
+        self.override = (override or {}) | kwargs
+        self.load_params()
+        self.override_params()
+        self.check_validity()
 
     def __bool__(self): return True
-    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
+    def __repr__(self): return f'{self.__class__.__name__}(base_path={self.base_path})'
+    def __getitem__(self , key : str) -> Any:
+        if key in self.REQUIRED_CONFIG_PARAM:
+            return self.Param[key]
+        else:
+            return self.Param.get(key , self.OPTIONAL_CONFIG_PARAM[key])
 
-    def reset_base_path(self , base_path : Path | ModelPath | str | None):
-        self.base_path = ModelPath(base_path)
-        self.model_name = self.base_path.name
-        return self
+    def __setitem__(self , key : str , value : Any):
+        self.Param[key] = value
 
-    @property
-    def model_root_path(self) -> Path:
-        return PATH.null_model if self.module_type in ['db' , 'factor'] else PATH.model
-
-    @property
-    def model_base_path(self):
-        # assert self.base_path , f'{self.base_path} is None'
-        return self.base_path
-
-    @property
-    def Param(self) -> dict[str,Any]: return self.train_param
-
-    def load_param(self):
+    def load_params(self):
         self.train_param : dict[str,Any] = {}
-        for cfg in TRAIN_CONFIG_LIST:
-            path = conf_path(self.base_path, 'train', cfg)
-            if not path.exists():
-                path = conf_path(None, 'train', cfg)
-            p : dict[str,Any] = PATH.read_yaml(path)
+        for cfg , source , target in zip(self.CONFIG_LIST , self.source_conf_files() , self.target_conf_files()):
+            p : dict[str,Any] = PATH.read_yaml(target) if target.exists() else PATH.read_yaml(source)
             self.train_param.update({f'{cfg}.{k}':v for k,v in p.items()})
-
-        self.update_schedule_param()
-        self.special_adjustment()
-        self.make_model_name()
-
-        if self.base_path and self.base_path.root_path == PATH.null_model:
-            self.model_module = self.base_path.name
-        
         return self
     
-    def update_schedule_param(self):
-        schedule_conf : dict[str,Any] = schedule_config(self.base_path , self.schedule_name).get('train' , {})
-        for cfg in TRAIN_CONFIG_LIST:
-            self.train_param.update({f'{cfg}.{k}':v for k,v in schedule_conf.get(cfg , {}).items()})
-        return self
-    
-    @property
-    def should_be_short_test(self):
-        return not self.base_path and not MACHINE.cuda_server
-
-    def special_adjustment(self):
-        if 'short_test' in self.override: 
-            self.override['env.short_test'] = self.override.pop('short_test')
-        if 'module'     in self.override: 
-            self.override['model.module']   = self.override.pop('module')
-        if '_ShortTest' in self.model_name: 
-            self.override['env.short_test'] = True
+    def override_params(self):
+        self.schedule_conf = schedule_config(self.base_path , self.schedule_name)
+        model_module_candidate = {
+            'base_path': self.base_path.full_module_name,
+            'force_module': str(self.force_module).lower().replace(' ' , '').replace('/' , '@') if self.force_module else None,
+            'schedule_name': self.schedule_conf['model'].pop('model.module' , None),
+        }
+        assert sum(bool(v) for v in model_module_candidate.values()) <= 1 , \
+            f'only one of base_path , force_module , schedule_name can be provided, but got {model_module_candidate}'
+        model_modules = [v for v in model_module_candidate.values() if v]
+        if model_modules:
+            self['model.module'] = model_modules[0]
         
-        if self.should_be_short_test and ('env.short_test' not in self.override): 
+        # deal with short_test given short_test model path / override / should be short_test
+        if self.base_path and self.base_path.is_short_test: 
             self.override['env.short_test'] = True
+        else: 
+            if (short_test := self.override.pop('short_test' , None)) is not None: 
+                self.override['env.short_test'] = short_test
+            if self.should_be_short_test and ('env.short_test' not in self.override): 
+                self.override['env.short_test'] = True
 
+        self.train_param.update(self.schedule_conf['model'])
         self.Param.update({k:v for k,v in self.override.items() if k in self.Param})
-
+        
         if self.short_test:
             new_dict = {k:v for k,v in self.Param.get('conditional.short_test' , {}).items() if k not in self.override}
             update_dict(self.Param , new_dict)
@@ -151,62 +128,78 @@ class TrainParam:
         if self.model_module == 'transformer':
             new_dict = {k:v for k,v in self.Param.get('conditional.transformer' , {}).items() if k not in self.override}
             update_dict(self.Param , new_dict)
+
         return self
-    
-    def make_model_name(self):
-        if self.model_name: 
-            return self
-        if self.Param['model.name']: 
-            model_name = str(self.Param['model.name'])
-        elif self.module_type in ['db' , 'factor']:
-            model_name = self.model_module
-        else: 
-            mod_str = self.model_module 
-            head_str = 'booster' if self.model_booster_head else None
-            if self.model_input_type == 'data':
-                data_str = '+'.join(self.model_data_types)
-            else:
-                data_str = self.model_input_type
-            model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
-        if self.short_test: 
-            model_name += '_ShortTest'
-        self.model_name = model_name
-        return self
-    
+
     def check_validity(self):
+        if not self.base_path:
+            full_name = self.generate_model_full_name()
+            self.base_path.with_full_name(full_name)
+        assert self.base_path , f'base_path is still not set after generating model full name {full_name}'
+        assert self.base_path.module_type == self.module_type , f'module_type {self.module_type} is not the same as base_path.module_type {self.base_path.module_type}'
+        assert self.base_path.model_module == self.model_module , f'model_module {self.model_module} is not the same as base_path.model_module {self.base_path.model_module}'
+
         if self.should_be_short_test and not self.short_test:
             Logger.alert1('Should be at server or short_test, but short_test is False now!')
 
         nn_category = AlgoModule.nn_category(self.model_module)
         if nn_category == 'tra': 
-            assert self.train_sample_method != 'total_shuffle' , self.train_sample_method
+            assert self.sample_method != 'total_shuffle' , self.sample_method
         if nn_category == 'vae': 
-            assert self.train_sample_method == 'sequential'    , self.train_sample_method
+            assert self.sample_method == 'sequential'    , self.sample_method
 
         nn_datatype = AlgoModule.nn_datatype(self.model_module)
         if nn_datatype:  
-            self.Param['model.data.types'] = nn_datatype
+            self['input.data.types'] = nn_datatype
 
-        if self.module_type != 'nn' or self.model_booster_head: 
-            self.Param['model.submodels'] = ['best']
+        if self.module_type != 'nn' or self.boost_head: 
+            self['model.submodels'] = ['best']
 
         if self.module_type == 'factor':
-            self.Param['model.input_type'] = 'factor'
-            self.Param['model.factor.types'] = []
-            self.Param['model.sequence.lens']['factor'] = 1
+            self['input.type'] = 'factor'
+            self['input.factor.types'] = []
+            self['input.sequence.lens'] = self['input.sequence.lens'] | {'factor': 1}
 
-        if 'best' not in self.model_submodels: 
-            self.model_submodels.insert(0 , 'best')
+        if 'best' not in self.submodels: 
+            self.submodels.insert(0 , 'best')
 
-        if self.model_input_type != 'data' or self.module_type != 'nn':
-            assert self.train_sample_method == 'sequential' , self.train_sample_method
+        if self.input_type != 'data' or self.module_type != 'nn':
+            assert self.sample_method == 'sequential' , self.sample_method
 
+        missing_required_keys = np.setdiff1d([*self.REQUIRED_CONFIG_PARAM.keys()] , [*self.Param.keys()]).tolist()
+        if missing_required_keys:
+            Logger.error(f'{missing_required_keys} are required but not in config files')
+            raise ValueError(f'{missing_required_keys} are required but not in config files')
+
+        redundant_keys = np.setdiff1d([*self.Param.keys()] , [*self.REQUIRED_CONFIG_PARAM.keys() , *self.OPTIONAL_CONFIG_PARAM.keys()]).tolist()
+        if redundant_keys:
+            Logger.alert1(f'{redundant_keys} in config files are not in default config params')
+        
         return self
+
+    def generate_model_full_name(self):
+        mod_str = self.model_module.removeprefix(f'{self.module_type}@')
+        if is_null_module_type(self.module_type):
+            full_name = self.full_module_name
+        else:
+            if self['model.name']: 
+                model_name = str(self['model.name'])
+            else: 
+                mod_str = self.model_module 
+                head_str = 'boost' if self.boost_head else None
+                if self.input_type == 'data':
+                    data_str = '_'.join(self.input_data_types)
+                else:
+                    data_str = self.input_type
+                model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
+            full_name = f'{self.full_module_name}@{model_name}'
+        if self.short_test: 
+            full_name = f'st@{full_name}'
+        return full_name
     
     def generate_model_param(self , update_inplace = True):
-        module = self.model_booster_type if self.module_type == 'booster' else self.model_module
-        assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.short_test , self.schedule_name ,
+        model_param = ModelParam(self.base_path , module = self.model_module , boost_head = self.boost_head , 
+                                 short_test = self.short_test , schedule_name = self.schedule_name ,
                                  override = {k:v for k,v in self.override.items() if k not in self.Param.keys()}).expand()
         if update_inplace: 
             self.update_model_param(model_param)
@@ -216,28 +209,73 @@ class TrainParam:
         param = {k:v for k,v in model_param.Param.items() if k in self.Param}
         self.Param.update(param)
         return self
-    
-    def copy_to(self , where : Path | ModelPath | str , overwrite = False):
-        if self.base_path:
-            assert self.model_name == ModelPath(where).name , f'{self.model_name} != {ModelPath(where).name}'
-        
-        conf_copy(conf_dir(None , 'train') , conf_dir(where , 'train') , overwrite)
-        if self.schedule_name:
-            conf_copy(
-                schedule_path(None , self.schedule_name) , 
-                schedule_path(where , self.schedule_name) , overwrite)
 
-    @classmethod
-    def guess_module(cls , base_path : Path | ModelPath | None) -> str:
-        return str(PATH.read_yaml(conf_path(base_path , 'train', 'model'))['module']).lower()
+    def source_conf_files(self) -> list[Path]:
+        return [PATH.conf.joinpath('model', f'{cfg}.yaml') for cfg in self.CONFIG_LIST]
+
+    def target_conf_files(self) -> list[Path]:
+        return [self.base_path.conf_file('model', cfg) for cfg in self.CONFIG_LIST]
     
-    @staticmethod
-    def get_module_type(module : str) -> TYPE_MODULE_TYPES:
-        return conf_mod_type(module)
+    def copy_files(self , overwrite = False):
+        for source , target in zip(self.source_conf_files() , self.target_conf_files()):
+            copy_file(source , target , overwrite)
+
+        copy_file(schedule_path(None , self.schedule_name) , 
+                  schedule_path(self.base_path , self.schedule_name) , overwrite)
+
+    @property
+    def base_path(self):
+        return self._base
+
+    @base_path.setter
+    def base_path(self , value : ModelPath):
+        self._base = value
+
+    @property
+    def full_module_name(self):
+        """get module_type@model_module out of model configs"""
+        if not hasattr(self , '_full_module_name') or self._full_module_name is None:
+            mod_str = str(self['model.module']).lower().replace(' ' , '').replace('/' , '@')
+            module_type = model_module_type(mod_str)
+            if mod_str.startswith(f'{module_type}@'):
+                model_module = mod_str.removeprefix(f'{module_type}@')
+            elif mod_str == module_type:
+                model_module = self[f'model.module.{module_type}']
+                assert model_module , f'model.module.{module_type} is empty!'
+            else:
+                model_module = mod_str
+            assert model_module , f'model_module is empty after parsing for {mod_str}'
+            assert '@' not in model_module , f'model_module {model_module} contains @'
+            self._full_module_name = f'{module_type}@{model_module}'
+        return self._full_module_name
+
+    @property
+    def module_type(self): 
+        return self.full_module_name.split('@')[0]
+
+    @property
+    def model_module(self): 
+        return self.full_module_name.split('@')[1]
+
+    @model_module.setter
+    def model_module(self , value : str):
+        self['model.module'] = value.lower()
+        self._full_module_name = None
     
     @property
-    def module_type(self) -> TYPE_MODULE_TYPES: 
-        return conf_mod_type(self.model_module)
+    def model_name(self) -> str:
+        return self.base_path.model_name
+
+    @property
+    def model_clean_name(self) -> str:
+        return self.base_path.model_clean_name    
+
+    @property
+    def Param(self) -> dict[str,Any]: return self.train_param
+
+    @property
+    def should_be_short_test(self):
+        return not self.base_path and not MACHINE.cuda_server
 
     @property
     def nn_category(self) -> str | None: 
@@ -245,183 +283,161 @@ class TrainParam:
 
     @property
     def resumable(self) -> bool: 
-        assert self.model_name , f'{self} has model_name None'
-        model_path = ModelPath(self.model_name)
-        return all([model_path.conf(cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
+        if not self.base_path:
+            return False
+        return all([self.base_path.conf(cfg).exists() for cfg in self.CONFIG_LIST])
 
     @property
     def short_test(self) -> bool: 
-        return bool(self.Param['env.short_test'])
+        return bool(self['env.short_test'])
     @short_test.setter
     def short_test(self , value : bool):
-        self.Param['env.short_test'] = value
+        self['env.short_test'] = value
 
     @property
     def random_seed(self) -> int | Any: 
-        return self.Param['env.random_seed']
+        return self['env.random_seed']
     @property
     def mem_storage(self) -> bool: 
-        return bool(self.Param['env.mem_storage'])
+        return bool(self['env.mem_storage'])
     @property
     def precision(self) -> Any:
-        prec = self.Param['env.precision']
+        prec = self['env.precision']
         return getattr(torch , prec) if isinstance(prec, str) else prec
     @property
     def beg_date(self) -> int: 
-        return int(self.Param['model.beg_date'])
+        return int(self['model.beg_date'])
     @property
     def end_date(self) -> int: 
-        return int(self.Param['model.end_date'])
+        return int(self['model.end_date'])
     @property
-    def model_submodels(self) -> list[str]: 
-        return self.Param['model.submodels']
+    def labels(self) -> list[str]: 
+        return self['model.labels']
     @property
-    def model_module(self): 
-        return str(self.Param['model.module']).lower().removeprefix('model@')
-    @model_module.setter
-    def model_module(self , value : str):
-        self.Param['model.module'] = value.lower()
+    def submodels(self) -> list[str]: 
+        return self['model.submodels']
     @property
-    def model_input_type(self) -> Literal['db' , 'data' , 'hidden' , 'factor' , 'combo']: 
-        if self.module_type == 'db':
-            return 'db'
-        assert self.Param['model.input_type'] in ['data' , 'hidden' , 'factor' , 'combo'] , self.Param['model.input_type']
-        return self.Param['model.input_type']
+    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+        assert self['input.type'] in ['data' , 'hidden' , 'factor' , 'combo'] , self['input.type']
+        return self['input.type']
     @property
-    def model_input_filter_secid(self) -> str | None: 
-        return self.Param.get('model.input_filter.secid' , None)
+    def input_filter_secid(self) -> str | None: 
+        return self['input.filter.secid']
     @property
-    def model_input_filter_date(self) -> str | None: 
-        return self.Param.get('model.input_filter.date' , None)
+    def input_filter_date(self) -> str | None: 
+        return self['input.filter.date']
     @property
-    def model_labels(self) -> list[str]: 
-        return self.Param['model.labels']
-    @property
-    def model_data_types(self) -> list[str]: 
-        if self.module_type == 'db':
-            data_types = []
-        elif self.model_input_type == 'data' or (self.model_input_type == 'combo' and 'data' in self.Param['model.combo.types']):
-            data_types = self.Param['model.data.types']
+    def input_data_types(self) -> list[str]: 
+        if self.input_type == 'data' or (self.input_type == 'combo' and 'data' in self['input.combo.types']):
+            data_types = self['input.data.types']
         else:
             data_types = []
         return str(data_types).split('+') if isinstance(data_types , str) else list(data_types)
-    @model_data_types.setter
-    def model_data_types(self , value : list[str]):
-        self.Param['model.data.types'] = value
+    @input_data_types.setter
+    def input_data_types(self , value : list[str]):
+        self['input.data.types'] = value
     @property
-    def model_data_prenorm(self) -> dict[str,Any]: 
-        return self.Param.get('model.data.prenorm',{})
+    def input_data_prenorm(self) -> dict[str,Any]: 
+        return self['input.data.prenorm']
     @property
-    def model_hidden_types(self) -> list[str]: 
-        if self.module_type == 'db':
-            hidden_types = []
-        elif self.model_input_type == 'hidden' or (self.model_input_type == 'combo' and 'hidden' in self.Param['model.combo.types']):
-            hidden_types = self.Param['model.hidden.types']
+    def input_hidden_types(self) -> list[str]: 
+        if self.input_type == 'hidden' or (self.input_type == 'combo' and 'hidden' in self['input.combo.types']):
+            hidden_types = self['input.hidden.types']
         else:
             hidden_types = []
         return str(hidden_types).split('+') if isinstance(hidden_types , str) else list(hidden_types)
     @property
-    def model_factor_types(self) -> list[str]: 
-        if self.module_type == 'db':
-            factors = []
-        elif self.model_input_type == 'factor' or (self.model_input_type == 'combo' and 'factor' in self.Param['model.combo.types']):
-            factors = self.Param['model.factor.types']
+    def input_factor_types(self) -> list[str]: 
+        if self.input_type == 'factor' or (self.input_type == 'combo' and 'factor' in self['input.combo.types']):
+            factors = self['input.factor.types']
         else:
             factors = []
         return str(factors).split('+') if isinstance(factors , str) else striped_list(factors)
     @property
-    def model_combo_types(self) -> dict[str,list[str]]: 
-        input_combos = self.Param.get('model.combo.types' , [])
-        if self.model_input_type == 'combo' and not input_combos:
-            raise ValueError('model.combo.types is empty when input_type is combo')
-        combos = {k:v for k , v in self.model_all_input_keys.items() if k in input_combos}
+    def input_factor_names(self) -> list[str]: 
+        return [self.model_module] if self.module_type == 'factor' else []
+    @property
+    def input_combo_types(self) -> dict[str,list[str]]: 
+        input_combos = self['input.combo.types']
+        if self.input_type == 'combo' and not input_combos:
+            raise ValueError('input.combo.types is empty when input_type is combo')
+        combos = {k:v for k , v in self.input_keys_all.items() if k in input_combos}
         return combos
     @property
-    def model_all_input_keys(self) -> dict[str,list[str]]: 
+    def input_keys_all(self) -> dict[str,list[str]]: 
         return {
-            'data' : self.model_data_types,
-            'factor' : self.model_factor_types,
-            'hidden' : self.model_hidden_types,
-            'db' : [self.model_module] if self.model_input_type == 'db' else [],
+            'data' : self.input_data_types,
+            'factor' : self.input_factor_types,
+            'hidden' : self.input_hidden_types,
         }
     @property
-    def model_train_window(self) -> int: 
-        if (train_window := int(self.Param.get('model.train_window', 0))) > 0:
-            return train_window
+    def window(self) -> int: 
+        tw = self['model.window']
+        tw = max(int(tw) if tw is not None else 0 , 0)
+        return tw if tw > 0 else int(self[f'model.window.{self.module_type}'])
+    @property
+    def interval(self) -> int: 
+        itv = self['model.interval']
+        itv = max(int(itv) if itv is not None else 0 , 0)
+        if itv > 0:
+            return itv
         else:
-            return int(self.Param.get(f'model.train_window.{self.module_type}' , 240))
+            return int(self[f'model.interval.{self.module_type}'])
     @property
-    def model_interval(self) -> int: 
-        if (interval := int(self.Param.get('model.interval', 0))) > 0:
-            return interval
-        elif self.module_type == 'db':
-            return int(self.Param.get(f'model.interval.{self.module_type}', 2400))
+    def boost_head(self): 
+        use_boost_head = bool(self['model.module.nn.boost_head'])
+        if use_boost_head:
+            return self['model.module.nn.boost_head.boost']
         else:
-            return int(self.Param.get(f'model.interval.{self.module_type}', 120))
+            return ''
     @property
-    def model_booster_head(self) -> Any: 
-        return self.Param['model.booster_head']
+    def boost_optuna(self) -> bool: 
+        return bool(self['model.module.boost.optuna'])
     @property
-    def model_booster_type(self) -> str:
-        if self.model_module in ['booster' , 'hidden_aggregator']:
-            assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'booster') , self.Param['model.booster_type']
-            return self.Param['model.booster_type']
-        elif AlgoModule.is_valid(self.model_module, 'booster'):
-            return self.model_module
-        else:
-            return 'not_a_booster'
+    def boost_optuna_trials(self) -> int: 
+        return int(self['model.module.boost.optuna.trials'])
     @property
-    def model_booster_optuna(self) -> bool: 
-        return bool(self.Param.get('model.booster_optuna'))
-    @property
-    def model_booster_optuna_n_trials(self) -> int: 
-        return int(self.Param.get('model.booster_optuna_n_trials',10))
-    @property
-    def model_sequence_lens(self) -> dict[str,int]: 
-        return dict(self.Param.get('model.sequence.lens',{}))
-    @property
-    def model_sequence_steps(self) -> dict[str,int]: 
-        return dict(self.Param.get('model.sequence.steps',{}))
     def seq_lens(self) -> dict[str,int]: 
-        slens = self.model_sequence_lens
-        lens = {key:slens.get(key , slens.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
+        slens = dict(self['input.sequence.lens'])
+        lens = {key:slens.get(key , slens.get(itp,1)) for itp,keys in self.input_keys_all.items() for key in keys}
         if self.module_type == 'factor':
             lens['factor'] = 1
         return lens
+    @property
     def seq_steps(self) -> dict[str,int]: 
-        ssteps = self.model_sequence_steps
-        steps = {key:ssteps.get(key , ssteps.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
+        ssteps = dict(self['input.sequence.steps'])
+        steps = {key:ssteps.get(key , ssteps.get(itp,1)) for itp,keys in self.input_keys_all.items() for key in keys}
         if self.module_type == 'factor':
             steps['factor'] = 1
         return steps
     @property
-    def train_data_step(self) -> int: 
-        return int(self.Param['train.data_step'])
+    def fitting_step(self) -> int: 
+        return int(self['train.fitting_step'])
     @property
-    def train_train_ratio(self) -> float: 
+    def train_ratio(self) -> float: 
         # valid ratio is 1 - train_ratio
-        return float(self.Param['train.dataloader.train_ratio'])
+        return float(self['train.dataloader.train_ratio'])
     @property
-    def train_sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
-        return self.Param['train.dataloader.sample_method']
+    def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
+        return self['train.dataloader.sample_method']
     @property
-    def train_shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
-        return self.Param['train.dataloader.shuffle_option']
+    def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
+        return self['train.dataloader.shuffle_option']
     @property
-    def train_batch_size(self) -> int: 
-        return int(self.Param['train.batch_size'])
+    def batch_size(self) -> int: 
+        return int(self['train.batch_size'])
     @property
-    def train_max_epoch(self) -> int: 
-        return int(self.Param['train.max_epoch'])
+    def max_epoch(self) -> int: 
+        return int(self['train.max_epoch'])
     @property
-    def train_skip_horizon(self) -> int: 
-        return int(self.Param['train.skip_horizon'])
+    def skip_horizon(self) -> int: 
+        return int(self['train.skip_horizon'])
     @property
-    def train_trainer_transfer(self) -> bool: 
-        return self.Param['train.trainer.transfer']
+    def transfer_training(self) -> bool: 
+        return self['train.trainer.transfer']
     @property
-    def train_criterion_loss(self) -> dict[str,dict[str,Any]]: 
-        kwargs = self.Param['train.criterion.loss'] or {}
+    def criterion_loss(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self['train.criterion.loss'] or {}
         assert len(kwargs) > 0 , f'{kwargs} should be not empty'
         for k,v in kwargs.items():
             if v is None:
@@ -430,128 +446,100 @@ class TrainParam:
                 kwargs[k]['lamb'] = 1.
         return {k:v for k,v in kwargs.items() if v['lamb'] != 0}
     @property
-    def train_criterion_score(self) -> dict[str,dict[str,Any]]: 
-        kwargs = self.Param['train.criterion.score'] or {}
+    def criterion_score(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self['train.criterion.score'] or {}
         assert len(kwargs) > 0 , f'{kwargs} should be not empty'
         return kwargs
     @property
-    def train_criterion_penalty(self) -> dict[str,dict[str,Any]]: 
-        return self.Param['train.criterion.penalty']
-    @property
-    def train_criterion_multilosses(self) -> dict[str,dict[str,Any]]: 
-        kwargs = self.Param['train.criterion.multilosses'] or {}
+    def criterion_multilosses(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self['train.criterion.multilosses'] or {}
         if kwargs:
             assert 'name' in kwargs , f'{kwargs} has no name'
             assert 'params' in kwargs , f'{kwargs} has no params'
             assert kwargs['name'] in ['ewa','hybrid','dwa','ruw','gls','rws'] , f'{kwargs['name']} must be one of ewa, hybrid, dwa, ruw, gls, rws'
+            kwargs = {'name':kwargs['name'], 'params':kwargs['params'][kwargs['name']]}
         return kwargs
     @property
-    def train_trainer_optimizer(self) -> dict[str,Any]: 
-        return self.Param['train.trainer.optimizer']
+    def trainer_optimizer(self) -> dict[str,Any]: 
+        return self['train.trainer.optimizer']
     @property
-    def train_trainer_scheduler(self) -> dict[str,Any]: 
-        return self.Param['train.trainer.scheduler']
+    def trainer_scheduler(self) -> dict[str,Any]: 
+        return self['train.trainer.scheduler']
     @property
-    def train_trainer_learn_rate(self) -> dict[str,Any]: 
-        return self.Param['train.trainer.learn_rate']
+    def trainer_learn_rate(self) -> dict[str,Any]: 
+        return self['train.trainer.learn_rate']
     @property
-    def train_trainer_gradient_clip_value(self) -> Any: 
-        return self.Param['train.trainer.gradient.clip_value']
+    def trainer_gradient_clip_value(self) -> float | None: 
+        return self['train.trainer.gradient.clip_value']
     @property
-    def input_factor_names(self) -> list[str]: 
-        if self.module_type == 'factor':
-            return [self.model_module.removeprefix('factor@')]
-        else:
-            return []
-    @property
-    def factor_factor_calculator(self): 
+    def factor_calculator(self) -> Type[FactorCalculator]: 
         assert self.module_type == 'factor' , f'{self.module_type} is not a factor module'
-        from src.res.factor.calculator import StockFactorHierarchy
         return StockFactorHierarchy.get_factor(self.input_factor_names[0])
-
     @property
-    def callbacks(self) -> dict[str,dict]: 
+    def callbackes(self) -> list[str]: 
+        return self['train.callbacks']
+    @property
+    def callback_kwargs(self) -> dict[str,dict]: 
         return {k.replace('callbacks.',''):v for k,v in self.Param.items() if k.startswith('callbacks.')}
-
     @property
     def try_cuda(self) -> bool: 
         return self.module_type == 'nn'
-
     @property
     def gc_collect_each_model(self) -> bool: 
         return self.module_type == 'nn'
 
 class ModelParam:
-    def __init__(self , base_path : ModelPath | Path | str | None , module : str , 
-                 booster_head : Any = False , short_test : bool | None = None , 
-                 schedule_name : str | None = None, override : dict[str,Any] | None = None,
+    def __init__(self , base_path : ModelPath | Path | str | None , * , 
+                 override : dict[str,Any] | None = None , module : str | None = None , 
+                 boost_head : bool | str = False , short_test : bool | None = None , 
+                 schedule_conf : dict[str,dict[str,Any]] | None = None, 
                  **kwargs):
         self.base_path = ModelPath(base_path)
-        self.model_name = self.base_path.name
-        self.module = module.lower()
-        self.booster_head = booster_head if self.module_type == 'nn' else None    
+        self.model_module = module
+        self.boost_head = boost_head  
         self.short_test = short_test
-        self.schedule_name = schedule_name
+        self.schedule_conf = schedule_conf or {'model': {}, 'algo': {}}
         self.override = (override or {}) | kwargs
-        self.load_param().check_validity()
+        self.load_params()
+        self.override_params()
+        self.check_validity()
 
     def __repr__(self): 
         return f'{self.__class__.__name__}(model_name={self.model_name})'
 
-    @property
-    def model_base_path(self):
-        assert self.base_path is not None , f'{self} has base_path None'
-        return self.base_path
-
-    def reset_base_path(self , base_path : Path | ModelPath | str | None):
-        self.base_path = ModelPath(base_path)
-        self.model_name = self.base_path.name
-        return self
-
-    @property
-    def Param(self) -> dict[str,Any]: 
-        return self.model_param
-
-    @property
-    def module_type(self) -> TYPE_MODULE_TYPES: 
-        return conf_mod_type(self.module)
-
-    @property
-    def mod_type_dir(self) -> str:
-        return 'boost' if self.module_type == 'booster' else self.module_type
-
-    def conf_file(self , base : Path | ModelPath | str | None | Literal['self'] = 'self') -> Path | None:
-        if base == 'self': 
-            base = self.base_path
-        if self.module_type in ['db' , 'factor']:
+    def target_conf_file(self) -> Path | None:
+        if not self.base_path or self.base_path.is_null_model:
             return None
         else:
-            return conf_path(base , self.mod_type_dir , self.module)
+            return self.base_path.conf_file('param' , self.model_module)
 
-    def load_param(self):
+    def source_conf_file(self) -> Path:
+        path = PATH.conf.joinpath('algo' , self.module_type , f'{self.model_module}.yaml')
+        if path.exists():
+            return path
+        else:
+            return path.with_stem(f'default')
+
+    def load_params(self):
         self.model_param : dict[str,Any] = {}
-        if (conf_file := self.conf_file()) is not None: 
-            if not conf_file.exists() and self.module_type == 'nn':
-                Logger.warning(f'{conf_file} does not exist, trying default.yaml.')
-                conf_file = conf_file.with_stem(f'default')
+        conf_file = self.target_conf_file()
+        if conf_file is None: 
+            return self
+        if not conf_file.exists():
+            conf_file = self.source_conf_file()
+        if not conf_file.exists():
+            Logger.error(f'{conf_file} does not exist, and default.yaml does not exist either.')
+        else:
             self.model_param.update(PATH.read_yaml(conf_file))
-        self.update_schedule_param()
-        self.special_adjustment()
         return self
     
-    def update_schedule_param(self):
-        schedule_conf : dict[str,Any] = schedule_config(self.base_path , self.schedule_name).get(self.mod_type_dir , {})
-        self.model_param.update(schedule_conf.get(self.module , {}))
-        return self
-    
-    def special_adjustment(self):
+    def override_params(self):
+        self.model_param.update(self.schedule_conf['algo'].get(f'{self.module_type}.{self.model_module}' , {}))
         self.model_param.update(self.override)
         return self
 
     def check_validity(self):
-        assert self.module_type == 'nn' or not self.booster_head , f'{self.module} is not a valid module'
-
-        if self.module_type in ['db' , 'factor']:
+        if is_null_module_type(self.module_type):
             self.n_model = 1
         else:
             lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
@@ -560,48 +548,49 @@ class ModelParam:
                 self.n_model = min(1 , self.n_model)
             assert self.n_model <= 5 , self.n_model
         
-        if self.module == 'tra':
+        if self.model_module == 'tra':
             assert 'hist_loss_seq_len' in self.Param , f'{self.Param} has no hist_loss_seq_len'
             assert 'hist_loss_horizon' in self.Param , f'{self.Param} has no hist_loss_horizon'
 
-        if self.booster_head:
-            assert AlgoModule.is_valid(self.booster_head , 'booster') , self.booster_head
-            self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , **self.override)
+        if self.boost_head:
+            self.boost_head_param = ModelParam(self.base_path , module = self.boost_head , boost_head = False , schedule_conf = self.schedule_conf , **self.override)
         return self
     
-    def get(self , key : str , default = None) -> Any:
-        return self.Param.get(key , default)
-    
-    def copy_to(self , where : Path | ModelPath | str , overwrite = False):
-        if self.base_path:
-            assert self.model_name == ModelPath(where).name , \
-                f'{self.model_name} != {ModelPath(where).name}'
+    def copy_files(self , overwrite = False):
+        if not self.base_path:
+            return self
 
-        if self.module_type != 'factor':
-            conf_copy(self.conf_file(None) , self.conf_file() , overwrite)
-            if self.booster_head: 
-                conf_copy(
-                    conf_path(None , 'booster' , self.booster_head) , 
-                    conf_path(where , 'booster' , self.booster_head) , overwrite)
+        if not self.base_path.is_null_model:
+            copy_file(self.source_conf_file() , self.target_conf_file() , overwrite)
+                
+        if self.boost_head: 
+            copy_file(
+                PATH.conf.joinpath('algo' , 'boost' , f'{self.boost_head}.yaml') , 
+                self.base_path.conf_file('param' , self.boost_head) , overwrite)
         return self
 
     def expand(self):
         self.params : list[dict[str,Any]] = []
-        if self.module_type == 'db':
-            self.params.append(self.model_param.copy())
-            return self
 
         for mm in range(self.n_model):
             par = {k:v[mm % len(v)] if isinstance(v , (list, tuple)) else v for k,v in self.Param.items()}
             self.params.append(par)
 
-        if self.booster_head: 
-            self.booster_head_param.expand()
+        if self.boost_head: 
+            self.boost_head_param.expand()
         return self
+
+    def update_param_dict(self , param : dict[str,Any] , key : str , value : Any , delist = True , overwrite = False):
+        if key in param.keys() and not overwrite: 
+            return
+        if delist and isinstance(value , (list , tuple)) and len(value) == 1: 
+            value = value[0]
+        if value is not None: 
+            param[key] = value
        
-    def update_data_param(self , x_data : dict, config : 'TrainConfig'):
+    def update_data_param(self , x_data : dict, config : 'ModelConfig'):
         '''when x_data is known , use it to fill some params(seq_len , input_dim , inday_dim , etc.) of nn module'''
-        if self.module_type == 'db' or not x_data:
+        if not x_data:
             return self
         
         keys = list(x_data.keys())
@@ -611,61 +600,99 @@ class ModelParam:
             self.update_param_dict(param , 'input_dim' , input_dim)
             self.update_param_dict(param , 'inday_dim' , inday_dim)
             if len(keys) == 1:
-                value : int = (config.seq_lens() | param.get('seqlens',{})).get(keys[0] , 1)
+                value : int = (config.seq_lens | param.get('seqlens',{})).get(keys[0] , 1)
                 self.update_param_dict(param , 'seq_len' , value)
         return self
-    
-    @staticmethod
-    def update_param_dict(param : dict[str,Any] , key : str , value : Any , delist = True , overwrite = False):
-        if key in param.keys() and not overwrite: 
-            return
-        if delist and isinstance(value , (list , tuple)) and len(value) == 1: 
-            value = value[0]
-        if value is not None: 
-            param[key] = value
+
+    @property
+    def base_path(self):
+        return self._base
+
+    @base_path.setter
+    def base_path(self , value : ModelPath):
+        self._base = value
+
+    @property
+    def model_name(self) -> str:
+        return self.base_path.model_name
+
+    @property
+    def Param(self) -> dict[str,Any]: 
+        return self.model_param
+
+    @property
+    def module_type(self): 
+        return model_module_type(self.model_module)
+
+    @property
+    def model_module(self): 
+        if not hasattr(self , '_model_module'):
+            self._model_module = None
+        return self._model_module if self._model_module else self.base_path.model_module
+
+    @model_module.setter
+    def model_module(self , value : str | None):
+        self._model_module = value
+
+    @property
+    def boost_head(self) -> str:
+        if not hasattr(self , '_boost_head'):
+            self._boost_head = ''
+        return self._boost_head
+
+    @boost_head.setter
+    def boost_head(self , value : bool | str | None):
+        if not value or self.module_type != 'nn':
+            self._boost_head = ''
+        else:
+            self._boost_head = value = 'lgbm' if value is True else value
+            assert AlgoModule.is_valid(self._boost_head , 'boost') , f'{self._boost_head} is not a valid boost module'
     
     @property
     def max_num_output(self) -> int: 
         return max(self.Param.get('num_output' , [1]))
 
-    @property
-    def db_mapping(self) -> DBMappingModel:
-        assert self.module_type == 'db' , f'{self.module_type} is not a db module , cannot use db_mapping'
-        if not hasattr(self , '_db_mapping'):
-            self._db_mapping = DBMappingModel(self.module.removeprefix('db@'))
-        return self._db_mapping
-
-class TrainConfig(TrainParam):
+class ModelConfig(BaseConfig):
     def __init__(
-        self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
-        stage = -1 , resume = -1 , selection = -1 , makedir = True , start : int | None = None , end : int | None = None , 
+        self , base_path : ModelPath | Path | str | None , * , 
+        module : str | None = None , schedule_name : str | None = None ,
+        override = None , stage = -1 , resume = -1 , selection = -1 , makedir = True , 
+        start : int | None = None , end : int | None = None , 
         test_mode = False , **kwargs
     ):
         
         self.start  = int(start) if start is not None else None
         self.end    = int(end) if end is not None else None
-        self.Train  = TrainParam(base_path , override, schedule_name , **kwargs)
-        self.Model  = self.Train.generate_model_param()
+        self.BaseConfig = BaseConfig(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
+        self.ModelParam = self.BaseConfig.generate_model_param()
+
+        assert self.base_path , self.base_path
 
         if not test_mode:
             self.process_parser(stage , resume , selection)
-            assert self.Train.model_base_path , self.Train.model_name
-            if makedir: 
-                self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
-                self.initialize_fitting()
+            self.initialize_fitting()
+
         self.device = Device(try_cuda = self.try_cuda)
+        assert self.BaseConfig.base_path is self.base_path , f'{self.BaseConfig.base_path} != {self.base_path}'
+        assert self.ModelParam.base_path is self.ModelParam.base_path , f'{self.ModelParam.base_path} != {self.ModelParam.base_path}'
+
+    def __repr__(self): return f'{self.__class__.__name__}(base_path={self.base_path})'
 
     @classmethod
-    def default(cls , module = None , override = None , stage = 0, resume = 0 , selection = 0 , makedir = False):
+    def initiate(cls , base_path : ModelPath | Path | str | None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
+        config = cls(base_path , **kwargs)
+        config.print_out(vb_level = vb_level , min_key_len = min_key_len)
+        return config
+
+    @classmethod
+    def default(cls , * , module = None , override = None , stage = 0, resume = 0 , selection = 0 , makedir = False):
         if module:
             override = override or {}
             override['model.module'] = module
-        return cls(None, override , stage = stage,resume=resume , selection=selection,makedir=makedir)
-        
-    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
+        return cls(None, override = override , stage = stage , resume=resume , selection=selection,makedir=makedir)
     
     @classmethod
-    def load_model(cls , model_name : str | ModelPath | Path , override = None , stage = 2):
+    def load_model(cls , model_name : ModelPath | Path | str , * , override = None , stage = 2):
         ''' 
         load a existing model's config 
         stage is mostly irrelevant here, because mostly we are loading a model's config to pred
@@ -675,62 +702,81 @@ class TrainConfig(TrainParam):
         return cls(model_path , override = override, stage = stage)
 
     def initialize_fitting(self):
+        self.base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
         if 'fit' in self.stage_queue and not self.is_resuming:
-            if self.model_base_path.base.exists(): 
-                if not self.short_test and self.Train.resumable:
-                    raise Exception(f'{self.model_name} resumable, re-train has to delete folder manually')
-                shutil.rmtree(self.model_base_path.base)
-            self.Train.copy_to(self.model_base_path , overwrite = self.short_test)
-            self.Model.copy_to(self.model_base_path , overwrite = self.short_test)
-    
+            if self.base_path.base.exists(): 
+                if not self.short_test and not self.base_path.is_null_model and self.BaseConfig.resumable:
+                    raise Exception(f'{self.model_name} resumable , re-train has to delete folder manually')
+                self.base_path.clear_model_path()
+                Logger.alert1(f'{self.base_path} is cleared')
+        self.BaseConfig.copy_files(overwrite = self.short_test)
+        self.ModelParam.copy_files(overwrite = self.short_test)
+
+    @property
+    def base_path(self) -> ModelPath:
+        return self.BaseConfig.base_path
+    @property
+    def is_null_model(self) -> bool:
+        return self.base_path.is_null_model
+    @property
+    def full_module_name(self):
+        return self.BaseConfig.full_module_name
     @property
     def Param(self) -> dict[str,Any]: 
-        return self.Train.Param
-    @property
-    def model_base_path(self) -> ModelPath: 
-        return self.Train.model_base_path
+        return self.BaseConfig.Param
     @property
     def model_name(self) -> str | Any: 
-        return self.Train.model_name
+        return self.BaseConfig.model_name
     @property
     def model_param(self) -> list[dict[str,Any]]: 
-        return self.Model.params
+        return self.ModelParam.params
     @property
     def model_num(self) -> int: 
-        return self.Model.n_model
+        return self.ModelParam.n_model
+    @property
+    def short_test(self) -> bool:
+        return self.base_path.is_short_test
     @property
     def model_num_list(self) -> list[int]: 
-        return list(range(self.Model.n_model))
+        return list(range(self.ModelParam.n_model))
     @property
-    def booster_head_param(self) -> dict[str,Any]: 
-        assert len(self.Model.booster_head_param.params) == 1 , self.Model.booster_head_param.params
-        return self.Model.booster_head_param.params[0]
-    @property
-    def db_mapping(self) -> DBMappingModel:
-        return self.Model.db_mapping
+    def boost_head_param(self) -> dict[str,Any]: 
+        assert len(self.ModelParam.boost_head_param.params) == 1 , self.ModelParam.boost_head_param.params
+        return self.ModelParam.boost_head_param.params[0]
+
     @property
     def beg_date(self) -> int: 
-        beg_date = self.Train.beg_date
-        if self.module_type == 'db':
-            beg_date = max(beg_date , DB.min_date(self.db_mapping.src , self.db_mapping.key))
-        elif self.module_type == 'factor':
-            beg_date = max(beg_date , self.factor_factor_calculator.get_min_date())
+        beg_date = self.BaseConfig.beg_date
+        if self.module_type == 'factor':
+            beg_date = max(beg_date , self.factor_calculator.get_min_date())
         if self.start is not None:
             beg_date = max(beg_date , self.start)
         return beg_date
     @property
     def end_date(self) -> int: 
-        end_date = self.Train.end_date
-        if self.module_type == 'db':
-            end_date = min(end_date , DB.max_date(self.db_mapping.src , self.db_mapping.key))
-        elif self.module_type == 'factor':
-            end_date = min(end_date , self.factor_factor_calculator.get_max_date())
+        end_date = self.BaseConfig.end_date
+        if self.module_type == 'factor':
+            end_date = min(end_date , self.factor_calculator.get_max_date())
         if self.end is not None:
             end_date = min(end_date , self.end)
         return end_date
+
     @property
-    def model_labels(self) -> list[str]: 
-        return self.Train.model_labels
+    def stage_queue(self) -> list[Literal['data' , 'fit' , 'test']]:
+        """stage queue for training"""
+        return getattr(self , '_stage_queue' , [])
+
+    @stage_queue.setter
+    def stage_queue(self , value : list[Literal['data' , 'fit' , 'test']]):
+        self._stage_queue = value
+
+    @property
+    def is_resuming(self) -> bool:
+        return getattr(self , '_is_resuming' , False)
+
+    @is_resuming.setter
+    def is_resuming(self , value : bool):
+        self._is_resuming = value
     
     def update(self, update = None , **kwargs):
         update = update or {}
@@ -740,14 +786,11 @@ class TrainConfig(TrainParam):
             setattr(self , k , v)
         return self
     
-    def get(self , key , default = None) -> Any:
-        return self.Param[key] if key in self.Train.Param else getattr(self , key , default)
-    
     def set_config_environment(self , manual_seed = None) -> None:
         self.set_random_seed(manual_seed if manual_seed else self.random_seed)
         torch.set_default_dtype(self.precision)
-        torch.backends.cuda.matmul.__setattr__('allow_tf32' ,self.Param['env.allow_tf32']) #= self.allow_tf32
-        torch.autograd.anomaly_mode.set_detect_anomaly(self.Param['env.detect_anomaly'])
+        torch.backends.cuda.matmul.__setattr__('allow_tf32' ,self['env.allow_tf32']) #= self.allow_tf32
+        torch.autograd.anomaly_mode.set_detect_anomaly(self['env.detect_anomaly'])
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     def update_data_param(self , x_data : dict) -> None:
@@ -756,7 +799,7 @@ class TrainConfig(TrainParam):
         do it in whenever x_data is changed
         '''
         if self.module_type == 'nn' and x_data: 
-            self.Model.update_data_param(x_data , self)
+            self.ModelParam.update_data_param(x_data , self)
     
     def weight_scheme(self , stage : str , no_weight = False) -> str | None: 
         if stage == 'fit':
@@ -764,13 +807,13 @@ class TrainConfig(TrainParam):
         else:
             # includes test / predict / extract
             stg = 'test'
-        return None if no_weight else self.Train.Param[f'train.criterion.weight'].get(stg , 'equal')
+        return None if no_weight else self.BaseConfig.Param[f'train.criterion.weight'].get(stg , 'equal')
     
     def init_utils(self):
-        self.metrics = Metrics(self.module_type , self.nn_category , self.model_base_path ,
-                               self.train_criterion_loss , self.train_criterion_score , self.train_criterion_multilosses)
+        self.metrics = Metrics(self.module_type , self.nn_category , self.base_path ,
+                               self.criterion_loss , self.criterion_score , self.criterion_multilosses)
         self.checkpoint = Checkpoint(self.mem_storage)
-        self.deposition = Deposition(self.model_base_path)
+        self.deposition = Deposition(self.base_path)
         return self
 
     @staticmethod
@@ -786,139 +829,23 @@ class TrainConfig(TrainParam):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
-    def parser_stage(self , value = -1 , vb_level : int = 1):
-        """
-        parser stage queue
-        value:
-            -1: choose
-            0: fit + test
-            1: fit only
-            2: test only
-        """
-        stage_queue : list[Literal['data' , 'fit' , 'test']] = ['data' , 'fit' , 'test']
-        if self.module_type in ['db' , 'factor']:
-            stage_queue = ['data' , 'test']
-        else:
-            if value < 0:
-                Logger.note(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
-                value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
-            if value > 0:
-                stage_queue = ['data' , stage_queue[value]]
-            elif value < 0:
-                raise Exception(f'Error input : {value}')
-        Logger.note('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , 
-                      color = 'lightblue' , vb_level = vb_level)
-        self._stage_queue = stage_queue
-
-    def parser_resume(self , value = -1 , vb_level : int = 1):
-        """
-        parser resume flag
-        value:
-            -1: choose
-            0: no
-            1: yes
-        """
-        # validate
-        if self.model_base_path:
-            if value == -1 or value == 1:
-                value = 1
-            elif 'fit' in self.stage_queue:
-                raise ValueError(f'resume must be -1 or 1 when base_path is not None and fit is in stage_queue , got {value}')
-
-        model_name = self.model_name
-        assert model_name is not None , f'{self} has model_name None'
-        candidate_name = sorted([m.name for m in self.model_root_path.iterdir() if m.name.split('.')[0] == model_name]) 
-        if value < 0:
-            if not candidate_name:
-                value = 0
-            else:
-                Logger.note(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
-                user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
-                value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-        self.is_resuming = value > 0 
-        Logger.note(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!' , vb_level = vb_level)
-
-    def parser_select(self , value = -1 , vb_level : int = 1):
-        '''
-        parse model_name selection if model_name dirs exists
-        value:
-            if no model_name dir exists:
-                skip this section
-            elif fit is in stage_queue:
-                -1: choose (if model_name dirs exists, ask to choose one)
-                0: raw model_name dir if is_resuming , create a new model_name dir otherwise
-                1,2,3,...: choose one by number, start from 1 (if not is_resuming , raise error)
-            elif test only:
-                -1: choose (if more than 1 model_name dirs exists, ask to choose one)
-                0: try to use the raw model_name dir
-                1,2,3,...: choose one by number, start from 1
-        '''
-        # validate
-        if self.model_base_path:
-            if value == -1 or value == 0:
-                value = 0
-            else:
-                raise ValueError(f'selection must be -1 or 0 when base_path is not None , got {value}')
-
-        model_name = self.model_name
-        assert model_name is not None , f'{self} has model_name None'
-        candidate_name = sorted([m.name for m in self.model_root_path.iterdir() 
-                                 if m.name == model_name or m.name.startswith(f'{model_name}.')])
-        if self.short_test or self.module_type in ['db' , 'factor'] or not candidate_name:
-            ...
-        elif 'fit' in self.stage_queue:
-            if value < 0 or (value == 0 and self.is_resuming and model_name not in candidate_name):
-                Logger.note(f'--Model dirs of {model_name} exists, input number to choose!')
-                if self.is_resuming:
-                    Logger.note(f'    0: use the raw model_name [{model_name}] to resume training!')
-                else:
-                    Logger.note(f'    0: create a new model_name dir!')
-                for i , mn in enumerate(candidate_name):
-                    Logger.note(f'    {i+1}: [{mn}]')
-                value = int(input(f'which one to use? '))
-            if value < 0:
-                raise Exception(f'value {value} is out of range , must be 0 ~ {len(candidate_name)}')
-            elif value == 0: 
-                if self.is_resuming:
-                    if model_name not in candidate_name:
-                        Logger.error(f'The raw model_name [{model_name}] does not exist! You have to start a new training or manually delete the existing model_name dir!')
-                        raise Exception(f'the raw model_name [{model_name}] does not exist!')
-                    Logger.note(f'Input 0 to use the raw model_name [{model_name}] to resume training!' , vb_level = Proj.vb.max)
-                else:
-                    if model_name in candidate_name:
-                        model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-                    Logger.note(f'Input 0 to create a new model_name dir! New model_name is {model_name}' , vb_level = Proj.vb.max)
-            else:
-                model_name = candidate_name[value-1]
-                if not self.is_resuming:
-                    Logger.error(f'You are not resuming, cannot choose model_name {model_name}! You have to start a new training or manually delete the existing model_name dir!')
-                    raise Exception(f'you are not resuming, cannot choose model_name {model_name}')
-        elif 'test' in self.stage_queue:
-            if len(candidate_name) == 1 and candidate_name[0] == model_name:
-                value = 0 # use the raw model_name dir
-            elif value < 0 or (value == 0 and model_name not in candidate_name):
-                Logger.note(f'--Model dirs of {model_name} exists, input number to choose!')
-                Logger.note(f'    0: try to use raw model_name [{model_name}]!')
-                for i , mn in enumerate(candidate_name):
-                    Logger.note(f'    {i+1}: [{mn}]')
-                value = int(input(f'which one to use? '))
-            if value < 0:
-                raise Exception(f'value {value} is out of range , must be 0 ~ {len(candidate_name)}')
-            elif value == 0: 
-                if model_name not in candidate_name:
-                    Logger.error(f'The raw model_name [{model_name}] does not exist! You have to fit one or select a different model_name!')
-                    raise Exception(f'the raw model_name [{model_name}] does not exist!')
-            else:
-                model_name = candidate_name[value-1]
-        else:
-            raise Exception(f'Invalid stage queue: {self.stage_queue}')
-
-        Logger.note(f'--Model_name is set to {model_name}!' , vb_level = vb_level)  
-        self.Train.reset_base_path(model_name)
-        self.Model.reset_base_path(model_name)
-
     def process_parser(self , stage = -1 , resume = -1 , selection = -1 , vb_level : int = 1):
-        if self.model_base_path:
+        '''
+        stage:     
+            [-1] , if nn / boost then choose stage, else just data + test
+            [ 0] , data + fit + test
+            [ 1] , data + fit
+            [ 2] , data + test
+        resume:    
+            [-1] , if not st and model_path(s) exists then choose
+            [ 0] , no
+            [ 1] , yes
+        selection: 
+            [-1] , choose if optional
+            [ 0] , raw model name unless fitting and not resuming
+            [1,2,3,...] , choose by model_index if is_resuming
+        '''
+        if self.base_path:
             vb_level = 99
         
         self.parser_stage(stage , vb_level)
@@ -926,67 +853,172 @@ class TrainConfig(TrainParam):
         self.parser_select(selection , vb_level) 
         return self
 
-    def print_out(self , color : str | None = None , vb_level : int = 2):
-        info_strs : list[tuple[int , str , str]] = [] # indent , key , value
-        info_strs.append((0 , 'Model Name' , self.model_name))
-        if self.module_type in ['db' , 'factor']:
-            info_strs.append((0 , 'Model Labels' , f'{self.model_labels}'))
-            info_strs.append((0 , 'Model Period' , f'{self.beg_date} ~ {self.end_date}'))
-            info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
-        else:
-            info_strs.append((0 , 'Model Module' , f'{self.model_module}'))
-            if self.module_type == 'booster':
-                if self.model_module != self.model_booster_type:
-                    info_strs.append((0 , 'Booster Type' , f'{self.model_booster_type}'))
-                if self.model_booster_optuna:
-                    info_strs.append((0 , 'Booster Params' , f'Optuna for {self.model_booster_optuna_n_trials} trials'))
+    def parser_stage(self , value = -1 , vb_level : int = 1):
+        """
+        parser stage queue
+        value:
+            -1: choose if optional
+            0: fit + test
+            1: fit only
+            2: test only
+        """
+        assert value in [-1 , 0 , 1 , 2] , f'stage must be -1, 0, 1, or 2, got {value}'
+        stage_queue : list[Literal['data' , 'fit' , 'test']] = ['data' , 'fit' , 'test']
+
+        if value == -1:
+            if not self.base_path.is_null_model:
+                value = 2
+            else:
+                Logger.note(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
+                value = int(input(f'[0, fit & test] , [1, fit only] , [2, test only]'))
+            
+        match value:
+            case 0:
+                stage_queue = ['data' , 'fit' , 'test']
+            case 1:
+                stage_queue = ['data' , 'fit']
+            case 2:
+                stage_queue = ['data' , 'test']
+            case _:
+                raise ValueError(f'Invalid stage option: {value}')
+
+        if self.base_path.is_null_model and 'fit' in stage_queue:
+            stage_queue.remove('fit')
+
+        self.stage_queue = stage_queue
+        Logger.note('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))) , 
+                    color = 'lightblue' , vb_level = vb_level)
+
+    def parser_resume(self , value = -1 , vb_level : int = 1):
+        """
+        parser resume flag
+        value:
+            -1: choose if optional
+            0: no
+            1: yes
+        """
+        assert value in [-1 , 0 , 1] , f'resume must be -1, 0, or 1, got {value}'
+        if value == -1: 
+            if self.short_test:
+                value = 0
+            else:
+                candidates = self.base_path.find_resumable_candidates()
+                if candidates:
+                    Logger.note(f'Multiple model path of {self.model_clean_name} exists, input [0] to deny resuming , [1] to confirm resuming!')
+                    value = int(input(f'[0, not resuming] , [1, resuming]'))
                 else:
-                    info_strs.append((0 , 'Booster Params' , ''))
-                    for k , v in self.Model.Param.items():
+                    value = 0
+                    
+        match value:
+            case 0:
+                is_resuming = False
+            case 1:
+                is_resuming = True
+            case _:
+                raise ValueError(f'Invalid resume option: {value}')
+
+        self.is_resuming = is_resuming
+        Logger.note(f'Confirm Resume Training!' if is_resuming else 'Start Training New!' , vb_level = vb_level)
+
+    def parser_select(self , value = -1 , vb_level : int = 1):
+        '''
+        parse model_name selection if model_name dirs exists
+        value:
+
+        -1: choose if optional
+            if short_test or null_model or no candidates:
+                don't change the base_path
+            elif fit is in stage_queue:
+                -1: choose (if model_name dirs exists, ask to choose one)
+                0: raw model_name dir if is_resuming , create a new model_name dir otherwise
+                1,2,3,...: choose one by model_index, start from 1 (if not is_resuming , raise error)
+            elif test only:
+                -1: choose (if more than 1 model_name dirs exists, ask to choose one)
+                0: try to use the raw model_name dir
+                1,2,3,...: choose one by model_index
+        0: don't change the base_path
+        '''
+        assert value in [-1 , 0] , f'initial selection must be -1 or 0, got {value}'
+        if value == -1:
+            candidates = self.base_path.find_resumable_candidates()
+            candidates_indices = sorted([mp.model_name_index for mp in candidates])
+            if self.short_test or self.base_path.is_null_model or not candidates:
+                value = 0
+            elif 'fit' in self.stage_queue and not self.is_resuming:
+                if self.base_path.model_name_index not in candidates_indices:
+                    value = 0
+                else:
+                    value = int(np.setdiff1d(np.arange(1 , max(candidates_indices) + 1) , candidates_indices).min())
+                    Logger.note(f'ModelPath(s) of {self.model_clean_name} exists, will create a new ModelPath with index {value} to Train New!' , vb_level = vb_level)
+            else:
+                if len(candidates_indices) == 1:
+                    value = candidates_indices[0]
+                else:
+                    Logger.note(f'Multiple ModelPath of {self.model_clean_name} exists, input number to choose!' , vb_level = vb_level)
+                    Logger.note(f'Options include: {candidates_indices}' , vb_level = vb_level)
+                    value = int(input(f'Which Model to Resume?'))
+                    assert value in candidates_indices , f'value {value} is not in candidates_indices {candidates_indices}'
+
+        match value:
+            case 0:
+                ... # don't change the base_path
+            case _:
+                assert value > 0 , f'value {value} must be greater than 0'
+                self.base_path.with_new_index(value)
+
+        if not self.short_test and not self.is_resuming and not self.base_path.is_null_model and 'fit' in self.stage_queue and self.resumable:
+            Logger.error(f'{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!')
+            raise Exception(f'{self.base_path} resumable but choose not to resume!')
+                        
+    def print_out(self , color : str | None = None , vb_level : int = 2 , min_key_len : int = -1):
+        info_strs : list[tuple[int , str , str]] = [] # indent , key , value
+        
+        info_strs.append((0 , 'Module' , f'{self.full_module_name}'))
+        info_strs.append((0 , 'Model Name' , self.model_name))
+        if self.base_path.is_null_model:
+            info_strs.append((0 , 'Labels' , f'{self.labels}'))
+            info_strs.append((0 , 'Period' , f'{self.beg_date} ~ {self.end_date}'))
+        else:
+            if self.module_type == 'boost':
+                if self.boost_optuna:
+                    info_strs.append((0 , 'Boost Params' , f'Optuna for {self.boost_optuna_trials} trials'))
+                else:
+                    info_strs.append((0 , 'Boost Params' , ''))
+                    for k , v in self.ModelParam.Param.items():
                         info_strs.append((2 , k , f'{v}'))
             else:
-                if self.model_booster_head:
-                    info_strs.append((0 , 'Use Booster Head' , f'{self.model_booster_head}'))
+                if self.boost_head:
+                    info_strs.append((0 , 'Use Boost Head' , f'{self.boost_head}'))
                 info_strs.append((0 , 'Model Params' , ''))
-                for k , v in self.Model.Param.items():
+                for k , v in self.ModelParam.Param.items():
                     info_strs.append((1 , k , f'{v}'))
-            info_strs.append((0 , 'Model Num' , f'{self.Model.n_model}'))
-            info_strs.append((0 , 'Model Inputs' , f'{self.model_input_type}'))
-            if self.model_input_type == 'data':
-                info_strs.append((1 , 'Data Types' , f'{self.model_data_types}'))
-            elif self.model_input_type == 'hidden':
-                info_strs.append((1 , 'Hidden Models' , f'{self.model_hidden_types}'))
-            elif self.model_input_type == 'factor':
-                info_strs.append((1 , 'Factor Types' , f'{self.model_factor_types}'))
+            info_strs.append((0 , 'Model Num' , f'{self.ModelParam.n_model}'))
+            info_strs.append((0 , 'Inputs' , f'{self.input_type}'))
+            if self.input_type == 'data':
+                info_strs.append((1 , 'Data Types' , f'{self.input_data_types}'))
+            elif self.input_type == 'hidden':
+                info_strs.append((1 , 'Hidden Models' , f'{self.input_hidden_types}'))
+            elif self.input_type == 'factor':
+                info_strs.append((1 , 'Factor Types' , f'{self.input_factor_types}'))
                 if self.input_factor_names:
                     info_strs.append((1 , 'Factor Names' , f'{self.input_factor_names}'))
-            elif self.model_input_type == 'combo':
-                info_strs.append((1 , 'Combo Types' , f'{self.model_combo_types}'))
-            info_strs.append((0 , 'Model Labels' , f'{self.model_labels}'))
-            info_strs.append((0 , 'Model Period' , f'{self.beg_date} ~ {self.end_date}'))
-            info_strs.append((0 , 'Interval' , f'{self.model_interval} days'))
-            info_strs.append((0 , 'Train Window' , f'{self.model_train_window} days'))
-            info_strs.append((0 , 'Sampling' , f'{self.train_sample_method}'))
-            info_strs.append((0 , 'Shuffling' , f'{self.train_shuffle_option}'))
+            elif self.input_type == 'combo':
+                info_strs.append((1 , 'Combo Types' , f'{self.input_combo_types}'))
+            info_strs.append((0 , 'Labels' , f'{self.labels}'))
+            info_strs.append((0 , 'Period' , f'{self.beg_date} ~ {self.end_date}'))
+            info_strs.append((0 , 'Interval' , f'{self.interval} days'))
+            info_strs.append((0 , 'Window' , f'{self.window} days'))
+            info_strs.append((0 , 'Sampling' , f'{self.sample_method}'))
+            info_strs.append((0 , 'Shuffling' , f'{self.shuffle_option}'))
             info_strs.append((0 , 'Random Seed' , f'{self.random_seed}'))
-            info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
-            info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
+        info_strs.append((0 , 'Short Test' , f'{self.short_test}'))
+        info_strs.append((0 , 'Stage Queue' , f'{self.stage_queue}'))
+        info_strs.append((0 , 'Resuming' , f'{self.is_resuming}'))
         if self.is_resuming:
             info_strs.append((1 , 'Resume Test' , f'{Proj.Conf.Model.TRAIN.resume_test}'))
             info_strs.append((1 , 'Resume Perf' , f'{Proj.Conf.Model.TRAIN.resume_test_factor_perf}'))
             info_strs.append((1 , 'Resume FMP' , f'{Proj.Conf.Model.TRAIN.resume_test_fmp}'))
             info_strs.append((1 , 'Resume Account' , f'{Proj.Conf.Model.TRAIN.resume_test_fmp_account}'))
 
-        Logger.stdout_pairs(info_strs , title = 'Train Config Initiated:' , color = color , vb_level = vb_level)
+        Logger.stdout_pairs(info_strs , title = 'Train Config Initiated:' , color = color , vb_level = vb_level , min_key_len = min_key_len)
         return self
-
-    @property
-    def stage_queue(self) -> list[Literal['data' , 'fit' , 'test']]:
-        """
-        stage queue for training
-        if module_type is db, fit stage is not included
-        """
-        if not hasattr(self , '_stage_queue'):
-            return []
-        else:
-            return self._stage_queue

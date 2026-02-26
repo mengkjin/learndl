@@ -1,3 +1,3 @@
-from .util import BoosterInput , BoosterOutput
-from .booster import  GeneralBooster , OptunaBooster
+from .util import BoostInput , BoostOutput
+from .booster import  GeneralBoostModel , OptunaBoostModel
 from . import api

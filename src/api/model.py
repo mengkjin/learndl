@@ -1,3 +1,4 @@
+from src.res.model.util.model_path import ModelPath
 import src.res.model.model_module.application as app
 from src.proj import PATH , MACHINE , Logger , Proj
 from src.data import DataPreProcessor
@@ -70,13 +71,13 @@ class ModelAPI:
         return cls.Testor(module , data_types).try_forward()
     
     @classmethod
-    def initialize_trainer(cls , stage = 0 , resume = 0 , selection = 1):
+    def initialize_trainer(cls , stage = 0 , resume = 0 , selection = 0):
         '''
-        state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
+        stage:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose] , [0,no]       , [1,yes]
         selection: [-1,choose] , [0,raw model name if resuming, create a new model name dir otherwise]  , [1,2,3,...: choose by number, start from 1]
         '''
-        return cls.Trainer.initialize(stage , resume , selection)
+        return cls.Trainer.initialize(stage = stage , resume = resume , selection = selection)
     
     @classmethod
     def prepare_predict_data(cls): 
@@ -100,7 +101,7 @@ class ModelAPI:
         '''
         with Proj.vb.WithVB(Proj.vb.max if short_test else None):
             trainer = cls.Trainer.train(module , short_test , start = start , end = end , 
-                                    stage = 0 , resume = 0 , selection = 1 , **kwargs)
+                                        stage = 0 , resume = 0 , selection = 0 , **kwargs)
         return trainer
 
     @classmethod
@@ -120,14 +121,6 @@ class ModelAPI:
             str : use the model name , must be in ModelAPI.Trainer.available_models(short_test = False)
         '''
         return cls.Trainer.test(model_name , resume = int(resume) , start = start , end = end , **kwargs)
-
-    @classmethod
-    def test_db_mapping(cls , mapping_name : str | None = None , 
-                        start : int | None = None , end : int | None = None , **kwargs):
-        '''
-        test a existing db mapping
-        '''
-        return cls.Trainer.test_db_mapping(mapping_name , start = start , end = end , **kwargs)
 
     @classmethod
     def test_factor(cls , factor_name : str | None = None , resume : int = 0 ,
@@ -150,5 +143,6 @@ class ModelAPI:
         '''
         Clear short test models in model folder
         '''
-        bases = cls.Trainer.available_models(short_test = True)
-        PATH.deltrees(PATH.model , bases)
+        for path in PATH.model_st.iterdir():
+            model_path = ModelPath(path)
+            model_path.clear_model_path()

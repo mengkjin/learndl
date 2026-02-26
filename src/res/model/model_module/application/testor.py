@@ -2,7 +2,7 @@ import torch
 
 from src.proj import Logger
 from src.res.model.data_module import DataModule , get_realistic_batch_data
-from src.res.model.util import TrainConfig , BatchData
+from src.res.model.util import ModelConfig , BatchData
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelTestor:
@@ -16,11 +16,11 @@ class ModelTestor:
     def __init__(self , module = 'tra_lstm' , data_types = 'day') -> None:
         override_cfg = {
             'env.short_test' : True ,
-            'model.input_type' : 'data' ,
-            'model.data.types' : data_types , 
-            'model.booster_head' : False
+            'input.type' : 'data' ,
+            'input.data.types' : data_types , 
+            'model.module.nn.boost_head' : False
         }
-        self.config = TrainConfig.default(module = module , override = override_cfg)
+        self.config = ModelConfig.default(module = module , override = override_cfg)
         self.data = DataModule(self.config , 'predict').load_data()
         self.data.setup('predict' , self.config.model_param[0] , self.data.model_date_list[0])   
         

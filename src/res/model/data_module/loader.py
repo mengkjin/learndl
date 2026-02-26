@@ -50,13 +50,13 @@ class BatchInputLoader:
 
     def filter_dates(self , exclude_dates = None , include_dates = None):
         if exclude_dates is not None or include_dates is not None:
-            assert self.data_module.config.train_sample_method == 'sequential' , self.data_module.config.train_sample_method
+            assert self.data_module.config.sample_method == 'sequential' , self.data_module.config.sample_method
         self.exclude_dates = exclude_dates
         self.include_dates = include_dates
         return self
 
     def of_date(self , date : int):
-        assert self.data_module.config.train_sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.train_sample_method , self.data_module.stage)
+        assert self.data_module.config.sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.sample_method , self.data_module.stage)
         for batch_input in self:
             if self.data_module.batch_date(batch_input)[0] == date:
                 return batch_input

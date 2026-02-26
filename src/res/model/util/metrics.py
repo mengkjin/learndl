@@ -562,8 +562,9 @@ class ModelMetrics(AggregatedMetrics):
             summaries = [df.set_index(['attempt' , 'epoch' , 'batch']).groupby(['attempt' , 'epoch']).apply(summarize , name = name , include_groups = False) for name , df in dfs.items()] 
             summary = pd.concat(summaries , axis = 1).drop(columns = ['train_scores_batches' , 'valid_scores_batches']).\
                 rename(columns = {'train_scores':'train_score' , 'valid_scores':'valid_score' , 'train_losses':'train_loss' , 
-                'valid_losses':'valid_loss' ,'train_losses_batches':'train_batches' , 'valid_losses_batches':'valid_batches'}).\
-                loc[:,['train_batches' , 'train_loss' , 'train_score' , 'valid_batches' , 'valid_loss' , 'valid_score']].reset_index(drop = False)
+                'valid_losses':'valid_loss' ,'train_losses_batches':'train_batches' , 'valid_losses_batches':'valid_batches'})
+            columns = summary.columns.intersection(['train_batches' , 'train_loss' , 'train_score' , 'valid_batches' , 'valid_loss' , 'valid_score'])
+            summary = summary.loc[:,columns].reset_index(drop = False)
             for attempt in summary['attempt'].unique():
                 dfs[f'attempt_{attempt}'] = summary.query('attempt == @attempt').drop(columns = ['attempt'])
             path = self.model_base_path.snapshot('fitting_metrics' , self.model_name)

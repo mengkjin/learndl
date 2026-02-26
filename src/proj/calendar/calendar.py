@@ -16,7 +16,7 @@ class _Calendars:
 
     def load_calendars(self):
         calendar = DB.load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
-        reserved = pd.DataFrame(MACHINE.configs('reserved' , 'calendar' , raise_if_not_exist = False))
+        reserved = pd.DataFrame(MACHINE.configs('util' , 'calendar' , 'calendar'))
         if not reserved.empty:
             calendar = pd.concat([calendar , reserved.loc[:,['calendar' , 'trade']]]).drop_duplicates(subset='calendar', keep='first').sort_values('calendar')
 

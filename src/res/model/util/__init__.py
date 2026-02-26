@@ -1,7 +1,7 @@
 from .classes import *
 from .model_path import *
 
-from .config import TrainConfig
+from .config import ModelConfig
 
 from .batch import BatchInput , BatchOutput
 

@@ -1,0 +1,26 @@
+name: sample_optuna_lgbm_of_gru_hidden # any name or null
+module: lgbm # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+submodels: [best , swalast , swabest]
+
+module.boost.optuna        : True    # for boost module, if True, use optuna to optimize the boost parameters
+module.boost.optuna.trials : 10      # for boost module with optuna, use this to specify the number of trials for optuna
+
+labels: 
+  - std_lag1_10 # rtn_lag1_10 # std_lag1_10
+  - rtn_lag1_10 # rtn_lag1_20 # std_lag1_20
+
+input.type: hidden # data / hidden
+
+input.data.types: day # 'day+30m' , 30m , day
+input.data.prenorm:
+  day: {'divlast' : True  , 'histnorm' : True}
+
+input.hidden.types:
+  - gru_day.0.best
+  - gru_day.1.best
+
+beg_date:   20170103 # 20220613 # 20170103
+end_date:   99991231
+interval:   20 # 120
+window:    2400
+

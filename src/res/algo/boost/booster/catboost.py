@@ -3,11 +3,11 @@ import json , tempfile , catboost
 from pathlib import Path
 from typing import Any
 
-from ..util import BasicBoosterModel , BoosterInput
+from ..util import BasicBoostModel , BoostInput
 
 PLOT_PATH : Path | None = None
 
-class CatBoost(BasicBoosterModel):
+class CatBoost(BasicBoostModel):
     DEFAULT_TRAIN_PARAM = {
         'objective': 'RMSE' , # 'MAE' NDCG , RMSE
         'num_boost_round' : 100 , 
@@ -26,11 +26,11 @@ class CatBoost(BasicBoosterModel):
         'allow_writing_files' : False ,
     }
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
-        self.booster_fit_inputs(train , valid , silent)
+    def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
+        self.boost_fit_inputs(train , valid , silent)
 
-        train_set = catboost.Pool(**self.fit_train_ds.booster_inputs('catboost'))
-        valid_set = catboost.Pool(**self.fit_valid_ds.booster_inputs('catboost'))
+        train_set = catboost.Pool(**self.fit_train_ds.boost_inputs('catboost'))
+        valid_set = catboost.Pool(**self.fit_valid_ds.boost_inputs('catboost'))
 
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         early_stopping  = self.fit_train_param.pop('early_stopping')
@@ -57,22 +57,22 @@ class CatBoost(BasicBoosterModel):
 
         return self
         
-    def predict(self , x : BoosterInput | str = 'test'):
-        data = self.booster_input(x)
+    def predict(self , x : BoostInput | str = 'test'):
+        data = self.boost_input(x)
         return data.output(self.model.predict(data.X().cpu().numpy()))
     
     def to_dict(self):
         model_dict = super().to_dict()
-        model_dict['model'] = self.booster_to_dict(self.model)
+        model_dict['model'] = self.boost_to_dict(self.model)
         return model_dict
     
     def load_dict(self , model_dict : dict , cuda = False , seed = None):
         super().load_dict(model_dict , cuda , seed)
-        self.model = self.booster_from_dict(model_dict['model'])
+        self.model = self.boost_from_dict(model_dict['model'])
         return self
 
     @staticmethod
-    def booster_to_dict(model : catboost.CatBoost):
+    def boost_to_dict(model : catboost.CatBoost):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json') 
             model.save_model(model_path , format='json')
@@ -81,7 +81,7 @@ class CatBoost(BasicBoosterModel):
         return model_dict
     
     @staticmethod
-    def booster_from_dict(model_dict : dict):
+    def boost_from_dict(model_dict : dict):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json')
             with open(model_path, 'w') as file: 

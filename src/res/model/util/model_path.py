@@ -2,36 +2,147 @@ import torch
 import numpy as np
 import pandas as pd
 
-import re
+import shutil
 from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import MACHINE , PATH , Logger , Proj
+from src.proj import PATH , Logger , LogFile , Proj , DB 
 from src.proj.calendar import CALENDAR
 from src.proj.func import torch_load
-import src.proj.db as DB
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'DBMappingModel' , 'PredictionModel' , 'HiddenExtractionModel']
+from .abc import MODEL_SETTINGS , parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
+
+__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'PredictionModel' , 'HiddenExtractionModel']
 
 class ModelPath:
-    """
+    f"""
     model path
     access stored model in learndl/models
     example:
         model_path = ModelPath('gru_day_V0')
+
+    should supply a subdirectory under models/ , or a string that contains at least 'module_name@model_name' , or a ModelPath object
+    full_name: [st@]module_type@module_name@model_name[@index]
+        st: optional, short test mode
+        module_type: nn, boost, db, factor
+        module_name: module name under the module type
+        model_name: model name , custom, can contain data types and hidden types
+        index: optional, model index
+    
     """
-    def __init__(self , model_name : Path | str | None | Any) -> None:
-        if isinstance(model_name , ModelPath):
-            name = model_name.name
-        elif isinstance(model_name , Path):
-            assert model_name.absolute().parent in [PATH.model , PATH.null_model] , model_name
-            name = model_name.name
-        elif model_name is None:
-            name = ''
+
+    def __new__(cls , model_input : 'ModelPath |Path | str | None' , *args , **kwargs) -> 'ModelPath':
+        if isinstance(model_input , ModelPath):
+            return model_input
         else:
-            name = model_name.removeprefix('model@')
-        self.name = name
+            return super().__new__(cls)
+
+    def __init__(self , model_input : Path | str | None | Any) -> None:
+        if not isinstance(model_input , self.__class__):
+            self.parse_input(model_input)
+
+    def __bool__(self):         
+        return bool(self.full_name)
+    def __repr__(self) -> str:  
+        return f'{self.__class__.__name__}(full_name={self.full_name})'
+    def __eq__(self , other : 'ModelPath'):
+        return self.full_name == other.full_name
+
+    def parse_input(self , model_input : Path | str | None):
+        parsed_model_input = parse_model_input(model_input)
+        self.full_name : str = parsed_model_input.pop('full_name')
+        self.full_name_kwargs : dict[str,Any] = parsed_model_input
+        assert self.full_name_kwargs['st'] in ['st' , ''] , f'st {self.full_name_kwargs['st']} is not valid'
+        if isinstance(model_input , Path):
+            assert model_input == self.base , f'model_input {model_input} is not the same as base {self.base} , should adjust mannually'
+
+    @property
+    def is_short_test(self) -> bool:
+        return self.full_name_kwargs['st'] == 'st'
+    @property
+    def is_null_model(self) -> bool:
+        return bool(self) and is_null_module_type(self.module_type)
+    @property
+    def module_type(self) -> TYPE_MODULE_TYPES:
+        return self.full_name_kwargs['module_type']
+    @property
+    def model_module(self) -> str:
+        return self.full_name_kwargs['module_name']
+    @property
+    def full_module_name(self) -> str:
+        return f'{self.module_type}@{self.model_module}' if self else ''
+    @property
+    def model_clean_name(self) -> str:
+        return self.full_name_kwargs['model_clean_name']
+    @property
+    def model_name(self) -> str:
+        return f'{self.model_clean_name}@{self.model_name_index}' if self.model_name_index > 1 else self.model_clean_name
+    @property
+    def model_name_index(self) -> int:
+        index_str = self.full_name_kwargs['model_name_index']
+        if index_str:
+            index = int(index_str)
+            assert index >= 2 , f'model_name_index {index} must be greater than or equal to 2'
+        else:
+            index = 1
+        return index
+    @property
+    def base(self) -> Path:
+        if self.full_name == '':
+            return Path('')
+        if self.is_short_test:
+            return PATH.model_st / self.full_name.removeprefix('st@')
+        else:
+            match self.module_type:
+                case 'nn':
+                    return PATH.model_nn / f'{self.model_module}@{self.model_name}'
+                case 'boost':
+                    return PATH.model_boost / f'{self.model_module}@{self.model_name}'
+                case 'factor':
+                    return PATH.model_factor / self.model_module
+                case _:
+                    raise ValueError(f'Invalid module type [{self.module_type}]')
+
+    @property
+    def root_path(self) -> Path:
+        return self.base.parent
+
+    @property
+    def log_file(self) -> LogFile:
+        return LogFile.initiate('model' , 'operation' , f'{self.full_name}')
+
+    @property
+    def is_resumable(self) -> bool:
+        return any(p.is_file() for p in self.archive().rglob('*'))
+
+    @property
+    def model_nums(self) -> np.ndarray:
+        """model numbers"""
+        return self.sub_dirs(self.archive() , as_int = True)
+    @property
+    def model_dates(self):
+        """model dates"""
+        return self.sub_dirs(self.archive(self.model_nums[-1]) , as_int = True)
+    @property
+    def model_submodels(self):
+        """model submodels"""
+        return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
+    
+
+    def with_new_index(self , index : int):
+        assert index > 0 , f'index {index} must be greater than 0'
+        new_full_name_kwargs = self.full_name_kwargs | {'model_name_index' : index}
+        self.parse_input(combine_full_name(**new_full_name_kwargs))
+        return self
+
+    def with_full_name(self , full_name : str):
+        self.parse_input(full_name)
+        return self
+
+    def replace_by(self , other : 'ModelPath'):
+        self.parse_input(other.full_name)
+        return self
 
     @staticmethod
     def sub_dirs(path : Path , as_int = False) -> np.ndarray:
@@ -40,10 +151,7 @@ class ModelPath:
         if as_int: 
             arr = np.array([v for v in arr if v.isdigit()]).astype(int)
         return np.sort(arr)
-    def __bool__(self):         
-        return bool(self.name)
-    def __repr__(self) -> str:  
-        return f'{self.__class__.__name__}(model_name={self.name})'
+
     def __call__(self , *args): 
         return self.base.joinpath(*[str(arg) for arg in args])
     def archive(self , *args) -> Path:
@@ -55,6 +163,9 @@ class ModelPath:
             return self('configs' , *args)
         else:
             return PATH.conf.joinpath(*args)
+    def conf_file(self , *args) -> Path:
+        """model config file"""
+        return self.conf(*args).with_suffix('.yaml')
     def rslt(self , *args) -> Path:     
         """model results path"""
         return self('results' , *args)
@@ -82,29 +193,45 @@ class ModelPath:
         self.conf().mkdir(exist_ok=exist_ok)
         self.rslt().mkdir(exist_ok=True)
         self.snapshot().mkdir(exist_ok=True)
-        self.log().mkdir(exist_ok=True)
-        
-    @property
-    def root_path(self) -> Path:
-        """root of model path based on name"""
-        return PATH.null_model if self.name.startswith(('db@' , 'factor@')) else PATH.model
-    @property
-    def base(self) -> Path:
-        """model base path"""
-        assert self.name , f'{self.__class__.__name__} model name is not set'
-        return self.root_path.joinpath(self.name)
-    @property
-    def model_nums(self) -> np.ndarray:
-        """model numbers"""
-        return self.sub_dirs(self.archive() , as_int = True)
-    @property
-    def model_dates(self):
-        """model dates"""
-        return self.sub_dirs(self.archive(self.model_nums[-1]) , as_int = True)
-    @property
-    def model_submodels(self):
-        """model submodels"""
-        return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
+    def clear_model_path(self):
+        """clear model directory , but archive directory will protected , log directory will be remained"""
+        if self.is_resumable and not self.is_short_test:
+            Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
+            return
+        else:
+            [shutil.rmtree(folder) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
+    
+    def remove_model_path(self):
+        """delete model directory and log file , will ask for confirmation if not a short test model"""
+        if not self.is_short_test:
+            confirm = input(f'{self} is not a short test model, are you sure you want to delete it? (y/n)')
+            if confirm != 'y':
+                return
+        if self.base.exists():
+            shutil.rmtree(self.base , ignore_errors=True)
+        self.log_file.unlink(confirm=False)
+
+    def confirm(self , model_module : str | None = None):
+        """confirm model path"""
+        if model_module:
+            if self.model_module != model_module:
+                raise ValueError(f'model_module of {self} is {self.model_module}, does not match given model_module {model_module}')
+        if self.is_null_model:
+            assert self.model_module == self.model_name , f'{self} is a null model, {self.model_module} and {self.model_name} do not match'
+
+    def find_resumable_candidates(self , sort = True) -> list['ModelPath']:
+        if self.is_null_model and self.model_module == self.model_name:
+            return []
+        else:
+            candidates = []
+            for path in self.root_path.iterdir():
+                model_path = self if path == self.base else ModelPath(path)
+                if model_path.model_clean_name == self.model_clean_name:
+                    candidates.append(model_path)
+            if sort:
+                candidates.sort(key = lambda x: x.model_name_index)
+            return candidates
+
     def iter_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231):
         if not self.archive().exists():
             return
@@ -129,51 +256,46 @@ class ModelPath:
                         
     def load_config(self):
         """load model config"""
-        from src.res.model.util.config import TrainConfig
-        return TrainConfig(self.base , stage = 0)
+        from src.res.model.util.config import ModelConfig
+        return ModelConfig(self.base , stage = 0)
     def next_model_date(self):
         """next model date to train"""
         from src.proj.calendar import CALENDAR
         config = self.load_config()
-        return CALENDAR.td(self.model_dates[-1] , config.model_interval).as_int()
+        return CALENDAR.td(self.model_dates[-1] , config.interval).as_int()
     def collect_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
         """collect model archive paths"""
         return [p for _,_,_,p in self.iter_model_archives(start_model_date , end_model_date)]
 
-    def log_operation(self , category : str | None = None):
-        if category is None:
+    def log_operation(self , operation : str | None = None):
+        if operation is None or not self:
             return
-        else:
-            path = self.log('operation_logs.log')
-            path.parent.mkdir(exist_ok=True)
-            with open(path, 'a') as f:
-                f.write(f'{category} >> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+        self.log_file.write(operation)
 
-    def check_last_operation(self , category : str | None = None , interval_hours : int = 24) -> tuple[datetime | None , timedelta , bool]:
+    def check_last_operation(self , operation : str | None = None , interval_hours : int = 24) -> tuple[datetime | None , timedelta , bool]:
         """check if the last operation is within the interval
         Args:
             category (str | None): the category of the operation
             interval_hours (int): the interval in hours
         Returns:
             tuple[last_time , time_elapsed , skip]: the last operation time, the time elapsed, and whether to skip the operation
-            - last_time: the time of the last operation , if no operation logs are found, return None
+            - last_time: the time of the last operation , if no operation logs are found, return 2000-01-01
             - time_elapsed: the time elapsed since the last operation
             - skip: if the last operation is inside the interval and should be skipped
         """
-        last_time = None
-        if category:
-            path = self.log(f'operation_logs.log')
-            logs = path.read_text().split('\n') if path.exists() else []
-            logs = [log for log in logs if log.startswith(category)]
-            if logs:
-                try:
-                    time_str = re.findall(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', logs[-1])[0]
-                    last_time = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-                except (IndexError, ValueError) as e:
-                    Logger.error(f'Error {e} parsing time string: {logs[-1]}')
-        time_elapsed = datetime.now() - last_time if last_time else timedelta(0)
-        skip = time_elapsed.total_seconds() / 3600  < interval_hours if last_time else False
+        last_time = datetime(2000,1,1)
+        entries = self.log_file.read() if operation else []
+        for entry in entries:
+            if entry.title == operation:
+                last_time = entry.timestamp
+                break
+
+        time_elapsed = datetime.now() - last_time
+        skip = time_elapsed.total_seconds() / 3600  < interval_hours
         return last_time , time_elapsed , skip
+
+    def guess_module(self) -> str:
+        return str(PATH.read_yaml(self.conf_file('train', 'model'))['module']).lower().replace(' ' , '').replace('/', '@')
 
 class HiddenPath:
     """hidden factor path for nn models , used for extracting hidden states"""
@@ -263,23 +385,23 @@ class HiddenPath:
         return possible_model_dates[possible_model_dates <= model_date].max()
 
 class ModelDict:
-    """model dictionary for nn/booster models"""
-    __slots__ = ['state_dict' , 'booster_head' , 'booster_dict']
+    """model dictionary for nn/boost models"""
+    __slots__ = ['state_dict' , 'boost_head' , 'boost_dict']
     def __init__(self ,
                  state_dict  : dict[str,torch.Tensor] | None = None , 
-                 booster_head : dict[str,Any] | None = None ,
-                 booster_dict : dict[str,Any] | None = None) -> None:
+                 boost_head : dict[str,Any] | None = None ,
+                 boost_dict : dict[str,Any] | None = None) -> None:
         self.state_dict = state_dict
-        self.booster_head = booster_head
-        self.booster_dict = booster_dict
+        self.boost_head = boost_head
+        self.boost_dict = boost_dict
 
-    def __repr__(self): return f'{self.__class__.__name__}(state_dict={self.state_dict},booster_head={self.booster_head},booster_dict={self.booster_dict})'
+    def __repr__(self): return f'{self.__class__.__name__}(state_dict={self.state_dict},boost_head={self.boost_head},boost_dict={self.boost_dict})'
 
     def reset(self) -> None:
         """reset model dictionary"""
         self.state_dict = None
-        self.booster_head = None
-        self.booster_dict = None
+        self.boost_head = None
+        self.boost_dict = None
 
     def save(self , path : str | Path , stack = False) -> None:
         """uniformly save model dictionary"""
@@ -294,13 +416,13 @@ class ModelDict:
     def is_valid(self) -> bool:
         """check if model dictionary is valid"""
         if self.state_dict is not None:
-            assert self.booster_dict is None 
+            assert self.boost_dict is None 
         else:
-            assert self.booster_head is None
+            assert self.boost_head is None
         return True
 
 class ModelFile:
-    """model file for nn/booster models"""
+    """model file for nn/boost models"""
     def __init__(self , model_path : Path) -> None:
         self.model_path = model_path
     def __getitem__(self , key): return self.load(key)
@@ -317,28 +439,6 @@ class ModelFile:
         """load model dictionary"""
         return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
 
-class DBMappingModel:
-    """model db mapping definition"""
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['db_mapping']
-
-    def __init__(self ,  name : str) -> None:
-        if name in self.MODEL_DICT:
-            self.name = name
-            reg_dict = self.MODEL_DICT[name]
-            self.src = reg_dict['src']
-            self.key = reg_dict['key']
-            self.col = reg_dict['col']
-        else:
-            raise ValueError(f'{name} is not a valid db mapping model')
-
-    
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(name={self.name},src={self.src},key={self.key},col={self.col})'
-
-    def load_block(self , start_dt : int , end_dt : int , indent = 1 , vb_level : int = Proj.vb.max):
-        from src.data.loader import BlockLoader
-        return BlockLoader(db_src = self.src , db_key = self.key , feature = self.col).load(start_dt , end_dt , indent = indent , vb_level = vb_level)
-    
 class PredictionModel(ModelPath):
     '''
     for a prediction model to predict recent/history data
@@ -346,7 +446,10 @@ class PredictionModel(ModelPath):
     '''
     START_DT = 20170101
     FMP_STEP = 5
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['prediction']
+    MODEL_DICT : dict[str,dict[str,Any]] = MODEL_SETTINGS['prediction']
+
+    def __new__(cls , *args , **kwargs) -> 'PredictionModel | Any':
+        return super().__new__(cls , *args , **kwargs)
 
     def __init__(self, pred_name : str , name: str | Any = None , 
                  submodel : Literal['best' , 'swalast' , 'swabest'] | Any = None ,
@@ -364,12 +467,12 @@ class PredictionModel(ModelPath):
         super().__init__(name)
         self.submodel = submodel
         self.num = num
-        self.model_path = ModelPath(self.name)
+        self.model_path = ModelPath(self.full_name)
         self.start_dt = start_dt
         assert start_dt > 20070101 , f'start_dt must be a valid date , got {start_dt}'
 
     def __repr__(self) -> str:  
-        return f'{self.__class__.__name__}(pred_name={self.pred_name},name={self.name},submodel={self.submodel},num={str(self.num)})'
+        return f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},submodel={self.submodel},num={str(self.num)})'
     
     @classmethod
     def SelectModels(cls , pred_names : list[str] | str | None = None) -> list['PredictionModel']:
@@ -381,7 +484,7 @@ class PredictionModel(ModelPath):
         return [cls(key) for key in pred_names]
 
     @classmethod
-    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
+    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path | Any]:
         paths : list[Path] = []
         for model in cls.SelectModels(pred_names):
             paths.extend(model.model_path.collect_model_archives(start_model_date , end_model_date))
@@ -437,9 +540,10 @@ class PredictionModel(ModelPath):
         """load model pred"""
         df = DB.load('pred' , self.pred_name , date , indent = indent , vb_level = vb_level , **kwargs)
         if not df.empty and self.pred_name not in df.columns:
-            assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
-            df = df.rename(columns={self.name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = Proj.vb.max , reason = f'column rename from {self.name} to {self.pred_name}')
+            assert self.model_clean_name in df.columns or self.model_name in df.columns , \
+                f'{self.pred_name} / {self.model_clean_name} / {self.model_name} not in df.columns : {df.columns}'
+            df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = Proj.vb.max , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
         return df
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:
@@ -464,7 +568,10 @@ class HiddenExtractionModel(ModelPath):
     for a hidden extraction model to extract hidden states
     model dict stored in configs/proj/model_settings.yaml file under hidden_extraction section
     '''
-    MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('proj' , 'model_settings')['hidden_extraction']
+    MODEL_DICT : dict[str,dict[str,Any]] = MODEL_SETTINGS['hidden_extraction']
+    def __new__(cls , *args , **kwargs) -> 'HiddenExtractionModel | Any':
+        return super().__new__(cls , *args , **kwargs)
+
     def __init__(self , hidden_name : str , name: str | Any = None ,    
                  submodels : list | np.ndarray | Literal['best' , 'swalast' , 'swabest'] | None = None ,
                  nums : list | np.ndarray | int | None = None , assertion = True):
@@ -480,10 +587,10 @@ class HiddenExtractionModel(ModelPath):
         super().__init__(name)
         self.submodels = submodels
         self.nums = nums
-        self.model_path = ModelPath(self.name)
+        self.model_path = ModelPath(self.full_name)
 
     def __repr__(self) -> str:  
-        return f'{self.__class__.__name__}(hidden_name={self.hidden_name},name={self.name},submodels={self.submodels},nums={str(self.nums)})'
+        return f'{self.__class__.__name__}(hidden_name={self.hidden_name},full_name={self.full_name},submodels={self.submodels},nums={str(self.nums)})'
 
     @classmethod
     def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list['HiddenExtractionModel']:   

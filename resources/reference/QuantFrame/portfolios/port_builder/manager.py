@@ -4,7 +4,7 @@ import os
 
 def get_configs(config_file):
     with open(config_file) as file:
-        configs = yaml.load(file.read(), Loader=yaml.SafeLoader)
+        configs = yaml.safe_load(file.read())
     return configs
 
 

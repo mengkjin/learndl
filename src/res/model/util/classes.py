@@ -17,7 +17,7 @@ from src.data import ModuleData
 
 from .batch import BatchInput , BatchOutput , BatchData
 from .buffer import BaseBuffer
-from .config import TrainConfig
+from .config import ModelConfig
 from .model_path import ModelDict
 from .storage import MemFileStorage
 
@@ -272,9 +272,8 @@ class TrainerStatus(ModelStreamLine):
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
     @abstractmethod
-    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , * , 
-                 info : bool = False):
-        self.config   : TrainConfig
+    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
+        self.config   : ModelConfig
         self.use_data : Literal['fit','predict','both'] 
         self.storage  : MemFileStorage
         self.buffer   : BaseBuffer
@@ -303,8 +302,10 @@ class BaseDataModule(ABC):
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchInput]: '''return predict dataloaders'''
     @classmethod
-    def initiate(cls , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , info = True , **kwargs):
-        return cls(config , use_data = use_data , *args , info = info , **kwargs)
+    def initiate(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level = 2 , min_key_len = -1 , **kwargs):
+        data = cls(config , use_data = use_data , *args , **kwargs)
+        Logger.stdout_pairs({'Use Data' : data.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+        return data
     def on_before_batch_transfer(self , batch , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch , device = None , dataloader_idx = None): return batch
     def on_after_batch_transfer(self , batch , dataloader_idx = None): return batch
@@ -365,7 +366,7 @@ class BaseDataModule(ABC):
 
     @property
     def data_step(self) -> int:
-        return self.config.train_data_step if self.stage in ['fit'] else 1
+        return self.config.fitting_step if self.stage in ['fit'] else 1
 
     @dataclass
     class LoaderParam:
@@ -402,10 +403,12 @@ class BaseTrainer(ModelStreamLine):
         return cls._instance
     
     @final
-    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , 
+    def __init__(self , base_path = None , * , 
+                 module : str | None = None , schedule_name = None , 
+                 override : dict | None = None , 
                  use_data : Literal['fit','predict','both'] = 'fit' , **kwargs):
         with Logger.Paragraph('Stage [Setup]' , 2):
-            self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
+            self.init_config(base_path = base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
             self.init_data(use_data = use_data , **kwargs)
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
@@ -414,30 +417,27 @@ class BaseTrainer(ModelStreamLine):
     def __bool__(self): return True
 
     def __repr__(self): 
-        return f'{self.__class__.__name__}(path={self.config.model_base_path.base})'
+        return f'{self.__class__.__name__}(path={self.config.base_path.base})'
         
-    @final
-    def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
+    @abstractmethod
+    def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs).print_out()
-
+        self.config : ModelConfig
     @abstractmethod
     def init_model(self , **kwargs): 
         '''initialized data_module'''
         self.model : BasePredictorModel
-
     @abstractmethod
     def init_callbacks(self , **kwargs): 
         '''initialized data_module'''
         self.callback : BaseCallBack
-
     @abstractmethod
     def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
         '''initialized data_module'''
         self.data : BaseDataModule
 
     def init_utils(self , **kwargs):
-        self.status = TrainerStatus(self.config.train_max_epoch)
+        self.status = TrainerStatus(self.config.max_epoch)
         self.record = PredRecorder(self)
 
     @property
@@ -477,11 +477,11 @@ class BaseTrainer(ModelStreamLine):
     @property
     def prev_model_date(self): return self.data.prev_model_date(self.model_date)
     @property
-    def model_param(self): return self.config.Model.params[self.model_num]
+    def model_param(self): return self.config.ModelParam.params[self.model_num]
     @property
-    def model_submodels(self): return self.config.model_submodels
+    def model_submodels(self): return self.config.submodels
     @property
-    def if_transfer(self): return self.config.train_trainer_transfer     
+    def if_transfer(self): return self.config.transfer_training     
     @property
     def html_catcher_export_path(self): 
         if 'fit' in self.stage_queue and 'test' in self.stage_queue:
@@ -492,7 +492,7 @@ class BaseTrainer(ModelStreamLine):
             status = 'fitting'
         else:
             status = 'unknown'
-        return self.config.model_base_path.log(f'{self.config.model_name}_{status}.html')
+        return self.config.base_path.rslt(f'{self.config.model_name}_{status}.html')
     
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -695,17 +695,15 @@ class BaseTrainer(ModelStreamLine):
     @staticmethod
     def assert_equity(a , b): assert a == b , (a , b)
     @staticmethod
-    def available_modules(module_type : Literal['nn' , 'booster' , 'all'] = 'all'):
+    def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
         return AlgoModule.available_modules(module_type)
     @staticmethod
-    def available_models(short_test : bool | Literal['both'] = 'both'):
-        bases = [model.name for model in PATH.model.iterdir() if model.is_dir() and not model.name.startswith('.')]
-        if short_test == 'both':
-            return bases
-        elif short_test:
-            return [model for model in bases if model.endswith('ShortTest')]
-        else:
-            return [model for model in bases if not model.endswith('ShortTest')]
+    def available_models(include_short_test : bool = False):
+        root_paths = [PATH.model_nn , PATH.model_boost]
+        if include_short_test:
+            root_paths.append(PATH.model_st)
+        bases = [f'{root.name}@{model.name}' for root in root_paths for model in root.iterdir() if model.is_dir() and not model.name.startswith('.')]
+        return bases
 
 class ModelStreamLineWithTrainer(ModelStreamLine):
     def bound_with_trainer(self , trainer): 
@@ -857,7 +855,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
     @property
     def snap_folder(self) -> Path: 
         """folder to save model predictions"""
-        return self.config.model_base_path.snapshot('pred_recorder')
+        return self.config.base_path.snapshot('pred_recorder')
     @property
     def folder_preds(self) -> Path:
         """folder to save model predictions"""
@@ -905,7 +903,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
 
     def archive_model_records(self):
         records : list[tuple[int,int]] = []
-        for model_num , model_date , _ , _ in self.config.model_base_path.iter_model_archives():
+        for model_num , model_date , _ , _ in self.config.base_path.iter_model_archives():
             records.append((model_num , model_date))
         df = pd.DataFrame(records , columns = ['model_num' , 'model_date']) if records else pd.DataFrame(columns = ['model_num' , 'model_date']).astype(int)
         df = df.drop_duplicates().sort_values(by=['model_num' , 'model_date'])
@@ -1163,13 +1161,12 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return f'{self.__class__.__name__}(model_full_name={self.model_full_name})'
 
     @classmethod
-    def initiate(cls , config : TrainConfig , trainer : BaseTrainer | None = None , * , info = True , **kwargs):
+    def initiate(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
         from src.res.model.model_module.module import get_predictor_module
         binder = config if trainer is None else trainer
         model = get_predictor_module(config , **kwargs).bound_with(binder)
         infos = {'Module Type' : model.__class__.__name__}
-        if info:
-            Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level=2)
+        Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
         return model
     
     def multiloss_params(self): 
@@ -1177,16 +1174,16 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
 
     def reset(self):
         self.trainer : BaseTrainer | Any = None
-        self._config : TrainConfig | Any = None
+        self._config : ModelConfig | Any = None
         return self
 
-    def bound_with(self , binder : TrainConfig | BaseTrainer):
-        if isinstance(binder , TrainConfig):
+    def bound_with(self , binder : ModelConfig | BaseTrainer):
+        if isinstance(binder , ModelConfig):
             return self.bound_with_config(binder)
         else:
             return self.bound_with_trainer(binder)
 
-    def bound_with_config(self , config : TrainConfig):
+    def bound_with_config(self , config : ModelConfig):
         assert self.trainer is None , 'Cannot bound with config if bound with trainer first'
         self._config = config
         return self.init_utils()

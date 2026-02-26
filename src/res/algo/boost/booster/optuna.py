@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any , Literal
 
 from src.proj import PATH , MACHINE
-from .general import GeneralBooster
+from .general import GeneralBoostModel
 
 class OptunaSilent:
     def __enter__(self):
@@ -14,12 +14,12 @@ class OptunaSilent:
     def __exit__(self , *args , **kwargs):
         optuna.logging.set_verbosity(self.old_level)
 
-class OptunaBooster(GeneralBooster):
+class OptunaBoostModel(GeneralBoostModel):
     DEFAULT_SILENT_CREATION = True
     DEFAULT_SILENT_STUDY = True
     DEFAULT_N_TRIALS = 50 if MACHINE.platform_server else 20
     DEFAULT_SAVE_STUDIES = True
-    DEFAULT_STORAGE = f'sqlite:///{PATH.optuna.relative_to(PATH.main)}/booster_{datetime.now().strftime("%Y%m") }.sqlite3'
+    DEFAULT_STORAGE = f'sqlite:///{PATH.optuna.relative_to(PATH.main)}/boost_{datetime.now().strftime("%Y%m") }.sqlite3'
 
     @property
     def best_params(self):
@@ -31,7 +31,7 @@ class OptunaBooster(GeneralBooster):
         return self
 
     def trial_suggest_params(self, trial : optuna.Trial):
-        if self.booster_type == 'lgbm':
+        if self.boost_type == 'lgbm':
             params = {
                 'objective':        trial.suggest_categorical('objective', ['mse', 'mae']),  # 'mse', 'mae', 'softmax'
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
@@ -43,7 +43,7 @@ class OptunaBooster(GeneralBooster):
                 'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 1.0, step=0.1),
                 'bagging_fraction': trial.suggest_float('bagging_fraction', 0.5, 1.0, step=0.1),
             }
-        elif self.booster_type == 'xgboost':
+        elif self.boost_type == 'xgboost':
             params = {
                 'objective':        trial.suggest_categorical('objective', ['reg:squarederror', 'reg:absoluteerror']), # 'reg:squarederror', 'reg:absoluteerror' , multi:softmax
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
@@ -53,7 +53,7 @@ class OptunaBooster(GeneralBooster):
                 'reg_alpha':        trial.suggest_float('reg_alpha', 1e-7, 100, log=True),
                 'reg_lambda':       trial.suggest_float('reg_lambda', 1e-6, 100, log=True),
             }
-        elif self.booster_type == 'catboost':
+        elif self.boost_type == 'catboost':
             params = {
                 'objective':                trial.suggest_categorical('objective', ['RMSE', 'MAE']),
                 'learning_rate':            trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
@@ -64,29 +64,29 @@ class OptunaBooster(GeneralBooster):
                 'od_type':                  trial.suggest_categorical('od_type', ['IncToDec', 'Iter']),
                 'min_data_in_leaf':         trial.suggest_int('min_data_in_leaf', 1, 100),
             }
-        elif self.booster_type == 'ada':
+        elif self.boost_type == 'ada':
             params = {
                 'n_learner' :       trial.suggest_int('n_learner', 10 , 50 , step = 5), 
                 'n_bins' :          trial.suggest_int('n_bins', 10, 30, step = 5) , 
                 'max_nan_ratio' :   trial.suggest_float('max_nan_ratio', 0.5, 0.9, step = 0.1) ,
             }
         else: 
-            raise ValueError(f'Invalid booster type: {self.booster_type}')
+            raise ValueError(f'Invalid boost type: {self.boost_type}')
         return params
     
     def fit(self , train = None , valid = None , use_feature = None , silent = False):
         self.import_data(train = train , valid = valid)
-        self.booster.import_data(train=self.data['train'] , valid = self.data['valid'])
-        self.booster.update_feature(use_feature)
+        self.boost.import_data(train=self.data['train'] , valid = self.data['valid'])
+        self.boost.update_feature(use_feature)
 
         self.study_create(silent = silent or self.DEFAULT_SILENT_CREATION)
         self.study_optimize(self.n_trials , silent = silent or self.DEFAULT_SILENT_STUDY)
         
-        self.update_param(self.study.best_trial.params).booster.fit(silent=True)
+        self.update_param(self.study.best_trial.params).boost.fit(silent=True)
         return self
     
     def study_create(self , direction='maximize' , silent = False):
-        name_str = self.given_name if self.given_name else self.booster.__class__.__name__
+        name_str = self.given_name if self.given_name else self.boost.__class__.__name__
         time_str = datetime.now().strftime('%Y%m%d-%H%M%S') 
         rand_str =''.join(random.choices(string.ascii_letters + string.digits, k=10))
     
@@ -97,16 +97,16 @@ class OptunaBooster(GeneralBooster):
     
     def study_objective(self , trial : optuna.Trial):
         params = self.trial_suggest_params(trial)
-        booster = self.update_param(params).booster
-        return booster.fit(silent=True).predict('valid').rankic().mean().item()
+        boost = self.update_param(params).boost
+        return boost.fit(silent=True).predict('valid').rankic().mean().item()
 
     def study_optimize(self , n_trials : int = DEFAULT_N_TRIALS , silent = False):
-        if self.booster_type in ['lgbm' , 'xgboost' , 'catboost']:
+        if self.boost_type in ['lgbm' , 'xgboost' , 'catboost']:
             max_trials = 100
-        elif self.booster_type == 'ada':
+        elif self.boost_type == 'ada':
             max_trials = 20
         else: 
-            raise ValueError(f'Invalid booster type: {self.booster_type}')
+            raise ValueError(f'Invalid boost type: {self.boost_type}')
         n_trials = min(max_trials , n_trials)
 
         with OptunaSilent() if silent else nullcontext():

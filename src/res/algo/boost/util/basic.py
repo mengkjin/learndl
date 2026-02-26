@@ -12,11 +12,11 @@ from typing import Any
 from src.proj import PATH , Logger , DB
 from src.math import ic_2d , rankic_2d
 
-from .io import BoosterInput , BoosterOutput
+from .io import BoostInput , BoostOutput
 
-__all__ = ['BasicBoosterModel' , 'load_xingye_data']
+__all__ = ['BasicBoostModel' , 'load_xingye_data']
 
-class BasicBoosterModel(ABC):
+class BasicBoostModel(ABC):
     DEFAULT_TRAIN_PARAM = {}
     DEFAULT_WEIGHT_PARAM = {}
     DEFAULT_CATEGORICAL_N_BINS = 3
@@ -33,7 +33,7 @@ class BasicBoosterModel(ABC):
         self.cuda = cuda
         self.seed = seed
         self.update_param(train_param , weight_param , **kwargs)
-        self.data : dict[str,BoosterInput] = {}
+        self.data : dict[str,BoostInput] = {}
 
     def update_param(self , train_param , weight_param , **kwargs):
         self.train_param.update(train_param) 
@@ -51,11 +51,11 @@ class BasicBoosterModel(ABC):
     
     def import_data(self , train : Any = None , valid : Any = None , test : Any = None):
         if train is not None: 
-            self.data['train'] = self.to_booster_input(train , self.weight_param)
+            self.data['train'] = self.to_boost_input(train , self.weight_param)
         if valid is not None: 
-            self.data['valid'] = self.to_booster_input(valid , self.weight_param)
+            self.data['valid'] = self.to_boost_input(valid , self.weight_param)
         if test  is not None: 
-            self.data['test']  = self.to_booster_input(test , self.weight_param)
+            self.data['test']  = self.to_boost_input(test , self.weight_param)
         return self
 
     def update_feature(self , use_feature = None):
@@ -64,31 +64,31 @@ class BasicBoosterModel(ABC):
         return self
 
     @abstractmethod
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False , **kwargs):
-        self.booster_fit_inputs(train , valid , silent)
+    def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False , **kwargs):
+        self.boost_fit_inputs(train , valid , silent)
         return self
     
     @property
-    def booster_objective_multi(self):
+    def boost_objective_multi(self):
         obj = self.train_param.get('objective' , None)
         return obj is not None and 'softmax' in obj
     
     @property
-    def booster_objective_rank(self):
+    def boost_objective_rank(self):
         obj = self.train_param.get('objective' , None)
         return obj is not None and 'rank' in obj
 
-    def booster_input(self , x : BoosterInput | str | Any = 'test'):
+    def boost_input(self , x : BoostInput | str | Any = 'test'):
         return self.data[x] if isinstance(x , str) else x
 
-    def booster_fit_inputs(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False , **kwargs):
+    def boost_fit_inputs(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False , **kwargs):
         self.silent = silent
 
         train_param = {k:v for k,v in deepcopy(self.train_param).items() if k in self.DEFAULT_TRAIN_PARAM}
 
         # categorical_label
         n_bins = train_param.pop('n_bins', None)
-        if self.booster_objective_multi:
+        if self.boost_objective_multi:
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
                 if not self.silent: 
@@ -108,7 +108,7 @@ class BasicBoosterModel(ABC):
         return self
     
     @abstractmethod
-    def predict(self , x : BoosterInput | str | Any = 'test') -> BoosterOutput:
+    def predict(self , x : BoostInput | str | Any = 'test') -> BoostOutput:
         ...
 
     @abstractmethod
@@ -135,7 +135,7 @@ class BasicBoosterModel(ABC):
     def from_dict(cls , model_dict : dict[str,Any] , cuda = False):
         return cls().load_dict(model_dict , cuda)
     
-    def test_result(self , test : BoosterInput | Any = None , plot_path : Path | None = None):
+    def test_result(self , test : BoostInput | Any = None , plot_path : Path | None = None):
         df = self.calc_ic(test)
         plt.figure()
         
@@ -145,7 +145,7 @@ class BasicBoosterModel(ABC):
             plt.savefig(plot_path.joinpath('test_prediction.png'),dpi=1200)
         return df
     
-    def calc_ic(self , test : BoosterInput | Any = None):
+    def calc_ic(self , test : BoostInput | Any = None):
         if test is None: 
             test = self.data['test']
         label = test.y
@@ -157,16 +157,16 @@ class BasicBoosterModel(ABC):
         return pd.DataFrame({'ic' : ic , 'rankic' : ric} , index = index)
 
     @staticmethod
-    def to_booster_input(data : Any , weight_param : dict , **kwargs) -> BoosterInput | Any:
+    def to_boost_input(data : Any , weight_param : dict , **kwargs) -> BoostInput | Any:
         if data is None: 
             ...
         elif isinstance(data , pd.DataFrame):
-            data = BoosterInput.from_dataframe(data , weight_param = weight_param , **kwargs)
+            data = BoostInput.from_dataframe(data , weight_param = weight_param , **kwargs)
         elif isinstance(data , np.ndarray):
-            data = BoosterInput.from_numpy(data[...,:-1] , data[...,-1:] , weight_param = weight_param , **kwargs)
+            data = BoostInput.from_numpy(data[...,:-1] , data[...,-1:] , weight_param = weight_param , **kwargs)
         elif isinstance(data , torch.Tensor):
-            data = BoosterInput.from_tensor(data[...,:-1] , data[...,-1:] , weight_param = weight_param , **kwargs)
-        elif isinstance(data , BoosterInput):
+            data = BoostInput.from_tensor(data[...,:-1] , data[...,-1:] , weight_param = weight_param , **kwargs)
+        elif isinstance(data , BoostInput):
             ...
         else:
             raise Exception(data)

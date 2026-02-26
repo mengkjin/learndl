@@ -8,38 +8,35 @@ from . import display, fit, test , nnspecific
 SEARCH_MODS = [fit , display , test]
 
 class CallBackManager(BaseCallBack):
-    def __init__(self , trainer , * ,info : bool = False):
+    def __init__(self , trainer , *args , **kwargs):
         super().__init__(trainer)   
         self.callbacks = self.get_callbacks(trainer)
-        if info:
-            infos = [cb.get_info() for cb in self.callbacks]
-            infos_dict = {name:f'({param}); {doc}' if doc else f'({param})' for name , param , doc in infos}
-            Logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level=2)
-
+        
     def at_enter(self , hook , vb_level : int = Proj.vb.max):
         [cb.at_enter(hook , vb_level) for cb in self.callbacks]
     def at_exit(self, hook , vb_level : int = Proj.vb.max):
         [cb.at_exit(hook , vb_level) for cb in self.callbacks]
 
     @classmethod
-    def initiate(cls , trainer : BaseTrainer , * , info = True):
-        return cls(trainer , info = info)
+    def initiate(cls , trainer : BaseTrainer , * , vb_level = 2 , min_key_len = -1):
+        cbm = cls(trainer)
+        infos = [cb.get_info() for cb in cbm.callbacks]
+        infos_dict = {name:f'({param}); {doc}' if doc else f'({param})' for name , param , doc in infos}
+        Logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level=vb_level , min_key_len = min_key_len)
+        return cbm
 
     @classmethod
     def get_callbacks(cls , trainer : BaseTrainer) -> list[BaseCallBack]:
-        available_cbs = cls.get_available_cb_names()
-        if trainer.model.AVAILABLE_CALLBACKS:
-            available_cbs = [cb for cb in trainer.model.AVAILABLE_CALLBACKS if cb in available_cbs]
-        compulsory_cbs = trainer.model.COMPULSARY_CALLBACKS
-        optional_cbs = [cb for cb in trainer.config.callbacks.keys() if cb not in compulsory_cbs and cb in available_cbs]
-        use_cbs = compulsory_cbs + optional_cbs
+        available_cbs = [cb for cb in cls.get_available_cb_names() if not trainer.model.AVAILABLE_CALLBACKS or cb in trainer.model.AVAILABLE_CALLBACKS]
+        compulsory_cbs = trainer.model.COMPULSARY_CALLBACKS + [cb for cb in trainer.config.callbackes if cb not in trainer.model.COMPULSARY_CALLBACKS]
+        use_cbs = [cb for cb in compulsory_cbs if cb in available_cbs]
 
         callback_classes = [cls.get_callback_class(cb) for cb in use_cbs]
         if specific_cb := cls.get_module_specific_callback(trainer.config.model_module):
             callback_classes.append(specific_cb)
 
         callback_classes = sorted(callback_classes, key=lambda x: x.CB_ORDER)
-        callbacks = [cb_type(trainer , **trainer.config.callbacks.get(cb_type.__name__ , {})) for cb_type in callback_classes]
+        callbacks = [cb_type(trainer , **trainer.config.callback_kwargs.get(cb_type.__name__ , {})) for cb_type in callback_classes]
         callbacks = [cb for cb in callbacks if cb]
         return callbacks
 

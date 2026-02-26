@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 
 from src.proj import Logger
-from . import gp_math_func as MF
+from . import math_func as MF
 
 @dataclass
 class FactorValue:

@@ -22,11 +22,11 @@ class BasicTestResult(BaseCallBack):
     @property
     def test_full_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
     @property
-    def snap_folder(self): return self.config.model_base_path.snapshot('basic_test')
+    def snap_folder(self): return self.config.base_path.snapshot('basic_test')
     @property
     def path_test_df(self): return self.snap_folder.joinpath('test_by_date.feather')
     @property
-    def path_result(self): return self.config.model_base_path.rslt('basic_test.xlsx')
+    def path_result(self): return self.config.base_path.rslt('basic_test.xlsx')
     
     def save_test_df(self , vb_level : int = 3):
         df = self.get_test_df()
@@ -61,7 +61,7 @@ class BasicTestResult(BaseCallBack):
             return
 
         with Logger.Paragraph('Test Summary' , 3): 
-            if df_date['model_date'].nunique() == 1 or self.config.module_type in ['factor' , 'db']:
+            if df_date['model_date'].nunique() == 1 or self.config.base_path.is_null_model:
                 # only one model_date, calculate by year
                 df_date['model_date'] = (df_date['date'].astype(int) // 10000).apply(lambda x:f'Y{x}')
             else:
@@ -85,7 +85,7 @@ class BasicTestResult(BaseCallBack):
             cat_subm = ['best' , 'swalast' , 'swabest']
 
             base_name = self.config.model_module
-            if self.config.module_type == 'booster' and self.config.model_booster_optuna: 
+            if self.config.module_type == 'boost' and self.config.boost_optuna: 
                 base_name += '.optuna'
             df['model_num'] = df['model_num'].map(lambda x: f'{base_name}.{x}')
             df['submodel']  = pd.Categorical(df['submodel'] , categories = cat_subm, ordered=True) 
@@ -97,7 +97,7 @@ class BasicTestResult(BaseCallBack):
             df_display = self.status.test_summary
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
-            score_criterion = list(self.config.train_criterion_score.keys())[0]
+            score_criterion = list(self.config.criterion_score.keys())[0]
             Logger.display(df_display , caption = f'Table: Test Summary ({score_criterion}) for Models:')
             
             # export excel
@@ -143,11 +143,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
         return not self.turn_off and bool(self.tasks)
         
     @property
-    def snap_folder(self): return self.config.model_base_path.snapshot('detailed_alpha')
+    def snap_folder(self): return self.config.base_path.snapshot('detailed_alpha')
     @property
-    def path_result_data(self): return self.config.model_base_path.rslt('detailed_alpha_data.xlsx')
+    def path_result_data(self): return self.config.base_path.rslt('detailed_alpha_data.xlsx')
     @property
-    def path_result_plot(self): return self.config.model_base_path.rslt('detailed_alpha_plot.pdf')
+    def path_result_plot(self): return self.config.base_path.rslt('detailed_alpha_plot.pdf')
     @property
     def table_vb_levels(self) -> dict[str,int]: return {k:v for k,v in self.TABLE_VB_LEVELS.items() if k in self.test_results}
     @property

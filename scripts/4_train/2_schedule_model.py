@@ -29,7 +29,7 @@
 #       desc : end date
 # file_editor:
 #   name : "Schedule Config File Editor"
-#   path: "{PATH.conf_schedule}/{schedule_name}.yaml | {PATH.shared_schedule}/{schedule_name}.yaml"
+#   path: "{PATH.conf}/schedule/{schedule_name}.yaml | {PATH.shared_schedule}/{schedule_name}.yaml"
 #   height : 300 # optional
 
 from src.api import ModelAPI

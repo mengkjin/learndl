@@ -12,6 +12,7 @@ from src.proj.proj import Proj
 from src.proj.abc import Duration , stdout , stderr , FormatStr
 
 from .display import Display
+from .logfile import LogFile
 
 LOG_LEVEL_TYPE = Literal['remark' , 'highlight' , 'debug' , 'info' , 'warning' , 'error' , 'critical']
 LOG_LEVELS : list[LOG_LEVEL_TYPE] = ['remark' , 'highlight' , 'info' , 'debug' , 'warning' , 'error' , 'critical']
@@ -25,6 +26,8 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
     'critical' : {'color' : 'lightpurple' , 'level_prefix' : {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'lightpurple'} , 'bold' : True},
 }
 
+LOG_FILE = LogFile.initiate('main' , 'project' , rotate = True)
+
 def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
     """
     custom stdout message
@@ -36,7 +39,8 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
     if Proj.vb.ignore(vb_level):
         return
     with Proj.vb.WithVbLevel(vb_level):
-        stdout(*args , indent = indent , color = color , **kwargs)
+        fstr = stdout(*args , indent = indent , color = color , **kwargs)
+    return fstr
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
     """
@@ -49,7 +53,9 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
     if Proj.vb.ignore(vb_level):
         return
     with Proj.vb.WithVbLevel(vb_level):
-        stderr(*args , indent = indent , color = color , **kwargs)
+        fstr = stderr(*args , indent = indent , color = color , **kwargs)
+    LOG_FILE.write(fstr.unformatted())
+    return fstr
 
 def new_print_exc(e : Exception , color : str = 'lightred' , bold : bool = True) -> str:
     """Print the exception"""
@@ -69,7 +75,7 @@ def new_print_traceback_stack(color : str = 'lightyellow' , bold : bool = True) 
 
 class Logger:
     """
-    custom colored log , config at PATH.conf / 'proj' / 'logger_settings.yaml'
+    custom colored log , config at PATH.conf / 'setting' / 'logger.yaml'
     method include:
         stdout level:
             - stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
@@ -104,8 +110,8 @@ class Logger:
     @classmethod
     def log_only(cls , *args , **kwargs):
         """dump to log writer with no display"""
-        if Proj.log_file:
-            Proj.log_file.write(' '.join([str(s) for s in args]) + '\n')
+        if Proj.log_writer:
+            Proj.log_writer.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
     def stdout(cls , *args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
@@ -147,7 +153,7 @@ class Logger:
     def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
                      title : str | None = None , 
                      title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
-                     indent = 0 , vb_level : int = 1 , italic = True , **kwargs):
+                     indent = 0 , vb_level : int = 1 , italic = True , min_key_len : int = -1 , **kwargs):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
         kwargs:
@@ -170,9 +176,10 @@ class Logger:
         pairs = [(pair[0] + add_indent , *pair[1:]) if len(pair) == 3 else (indent + add_indent , *pair) for pair in pair_list]
         pairs = [(indent , f'{FormatStr.indent_str(indent)}{key}' , value) for indent , key , value in pairs]
         
-        max_key_length = max([len(indented_key) for _ , indented_key , _ in pairs])
+        max_key_len = max([len(indented_key) for _ , indented_key , _ in pairs])
+        max_key_len = max(max_key_len , min_key_len)
         min_indent = min([indent for indent , _ , _ in pairs])
-        pairs = [FormatStr(f'{indented_key:{max_key_length + 2*(indent - min_indent)}s} : {value}' , color = color_selector(color , indent) , 
+        pairs = [FormatStr(f'{indented_key:{max_key_len + 2*(indent - min_indent)}s} : {value}' , color = color_selector(color , indent) , 
                           italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
@@ -292,7 +299,7 @@ class Logger:
         cls._conclusions[level].append(msg)
 
     @classmethod
-    def draw_conclusions(cls) -> str:
+    def draw_conclusions(cls , simplify_errors : bool = True) -> str:
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
         num_conclusions = sum([len(cls._conclusions[level]) for level in LOG_LEVELS])
@@ -304,9 +311,13 @@ class Logger:
                 if not cls._conclusions[level]:
                     continue
                 new_stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = palette['color'] , vb_level = 0)
-                for conclusion in cls._conclusions[level]:
-                    new_stdout(conclusion , indent = 1 , vb_level = 0)
-                    conclusion_strs.append(f'{level.upper()}: {conclusion}')
+                if simplify_errors and level == 'error':
+                    new_stdout('Please refer to the error messages for details.' , indent = 1 , vb_level = 0)
+                    conclusion_strs.append(f'{level.upper()}: Please refer to the error messages for details.')
+                else:
+                    for conclusion in cls._conclusions[level]:
+                        new_stdout(conclusion , indent = 1 , vb_level = 0)
+                        conclusion_strs.append(f'{level.upper()}: {conclusion}')
                 cls._conclusions[level].clear()
         return '\n'.join(conclusion_strs)
 
@@ -513,7 +524,7 @@ class Logger:
             column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'percall' , 'where' , 'memory' , 'full_name', 'caller']
             df = df.loc[:,column_order]
             if self.title is not None: 
-                path = PATH.log_profile.joinpath(f'{self.title.replace(" ","_")}.csv')
+                path = PATH.logs.joinpath('profiler' , f'{self.title.replace(" ","_")}.csv')
                 df.to_csv(path)
                 Logger.footnote(f'Profile result saved to {path}')
             if isinstance(highlight , str): 

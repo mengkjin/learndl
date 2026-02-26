@@ -2,7 +2,7 @@ from src.proj.env import MACHINE
 
 __all__ = ['TradingPortConfig' , 'TradingPort']
 
-_trading_port_settings = MACHINE.configs('proj' , 'trading_port_settings')
+_trading_port_settings = MACHINE.configs('setting' , 'trading_port')
 
 class TradingPortConfig:
     @property

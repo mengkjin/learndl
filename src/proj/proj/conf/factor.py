@@ -120,11 +120,11 @@ class PortfolioOptimizationConfig:
     @property
     def default(self) -> dict[str , Any]:
         """default portfolio optimization config"""
-        return MACHINE.configs('factor' , 'default_opt_config')
+        return MACHINE.configs('util' , 'factor' , 'default_opt_config')
     @property
     def custom(self) -> dict[str , Any]:
         """custom portfolio optimization config"""
-        return MACHINE.configs('factor' , 'custom_opt_config')
+        return MACHINE.configs('util' , 'factor' , 'custom_opt_config')
 
 class _StockFactorDefinitionMetaType:
     def __get__(self,instance,owner) -> list[str]:

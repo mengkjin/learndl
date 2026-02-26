@@ -598,6 +598,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
                 yield calculator()
 
     @classmethod
+    def all_factors(cls) -> list[str]:
+        """return all factors"""
+        cls.import_definitions()
+        return list(cls.registry.keys())
+
+    @classmethod
     def match_attrs(cls , **kwargs) -> bool:
         """check if the factor matches the given attributes"""
         kwargs = {k : v for k , v in kwargs.items() if v is not None}
@@ -654,7 +660,10 @@ class StockFactorCalculator(FactorCalculator):
         return df
 
 class AffiliateFactorCalculator(FactorCalculator):
-    """base class of affiliate factor calculator (no need to calculate at all)"""
+    """
+    base class of affiliate factor calculator (e.g. sellside factor / style factor that is directly loaded from database)
+    no need to update as set target_dates an empty array
+    """
     load_db_src : str = '' # 'models' / 'sellside'
     load_db_key : str = '' # 'tushare_cne5_exp' / 'dongfang.scores_v0' / 'huatai.master_combined' ...
     load_db_col : str = ''

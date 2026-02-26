@@ -150,7 +150,7 @@ class BaseFactorAnalyticTest(ABC):
         if self._test_path is not None:
             return self._test_path
         else:
-            rslt_dir = PATH.rslt_test.joinpath(self.TEST_TYPE)
+            rslt_dir = PATH.rslt_factor.joinpath(self.TEST_TYPE)
             rslt_dir.mkdir(parents=True , exist_ok=True)
             return rslt_dir.joinpath(self.test_name)
 

@@ -10,10 +10,10 @@ from typing import Any , Literal
 
 from src.math import match_values , index_union , index_stack , rankic_2d , ic_2d
 
-__all__ = ['BoosterOutput' , 'BoosterInput' , 'BoosterWeightMethod']
+__all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
 
 @dataclass
-class BoosterOutput:
+class BoostOutput:
     pred    : torch.Tensor
     secid   : np.ndarray
     date    : np.ndarray
@@ -39,7 +39,7 @@ class BoosterOutput:
         return ic_2d(self.to_2d() , self.label , 0)
 
 @dataclass
-class BoosterInput:
+class BoostInput:
     '''
     x: 3d tensor, (n_sample, n_date, n_feature)
     y: 2d tensor, (n_sample, n_date)    
@@ -70,7 +70,7 @@ class BoosterInput:
     
     def __post_init__(self):
         self.update_feature()
-        self.weight_method = BoosterWeightMethod(**self.weight_param)
+        self.weight_method = BoostWeightMethod(**self.weight_param)
         self.use_feature = self.feature
         self._raw_y = self.y
         self.to_categorical(n_bins=self.n_bins)
@@ -168,24 +168,24 @@ class BoosterInput:
              if isinstance(getattr(self , attr) , torch.Tensor)]
             return self
         
-        def booster_inputs(self , booster_type : Literal['lgbm' , 'xgboost' , 'catboost'] , group = False):
+        def boost_inputs(self , boost_type : Literal['lgbm' , 'xgboost' , 'catboost'] , group = False):
             self.as_numpy()
-            booster_inputs = {'data' : self.x , 'label' : self.y}
-            if booster_type == 'lgbm':
-                # if group: booster_inputs['group'] = self.group_arr()
-                booster_inputs['weight'] = self.w
-            elif booster_type == 'xgboost':
+            boost_inputs = {'data' : self.x , 'label' : self.y}
+            if boost_type == 'lgbm':
+                # if group: boost_inputs['group'] = self.group_arr()
+                boost_inputs['weight'] = self.w
+            elif boost_type == 'xgboost':
                 if False and group: 
                     g = self.group_arr()
-                    booster_inputs['group'] = g
-                    booster_inputs['weight'] = np.array([self.w[e-length:e].sum() for e , length in zip(g.cumsum() , g)])
-                booster_inputs['weight'] = self.w
-            elif booster_type == 'catboost':    
-                # if group: booster_inputs['group_id'] = self.group_id()
-                booster_inputs['weight'] = self.w
+                    boost_inputs['group'] = g
+                    boost_inputs['weight'] = np.array([self.w[e-length:e].sum() for e , length in zip(g.cumsum() , g)])
+                boost_inputs['weight'] = self.w
+            elif boost_type == 'catboost':    
+                # if group: boost_inputs['group_id'] = self.group_id()
+                boost_inputs['weight'] = self.w
             else:
-                raise ValueError(f'Booster type {booster_type} not supported')
-            return booster_inputs
+                raise ValueError(f'Boost type {boost_type} not supported')
+            return boost_inputs
         
         def group_arr(self):
             assert (np.diff(self.date) >= 0).all() , 'date must be sorted'
@@ -206,10 +206,10 @@ class BoosterInput:
             weight = torch.arange(new_pred.shape[1]).to(new_pred) - (new_pred.shape[1] - 1) / 2
             new_pred = new_pred @ weight
         elif new_pred.ndim > 2:
-            raise ValueError(f'BoosterOutput cannot deal with pred with ndim {new_pred.ndim}')
+            raise ValueError(f'BoostOutput cannot deal with pred with ndim {new_pred.ndim}')
 
         finite = self.finite if self.y is not None else torch.full_like(new_pred , fill_value=True)
-        return BoosterOutput(new_pred , self.secid , self.date , finite , self._raw_y)
+        return BoostOutput(new_pred , self.secid , self.date , finite , self._raw_y)
 
     def pred_to_dataframe(self , pred : np.ndarray | torch.Tensor):
         new_pred = pred.numpy() if isinstance(pred , torch.Tensor) else pred 
@@ -275,7 +275,7 @@ class BoosterInput:
         assert x.ndim in [2,3] , x.ndim
         assert y is None or y.ndim in [x.ndim - 1, x.ndim] , (y.ndim , x.ndim)
         if y is not None and y.ndim == x.ndim:
-            assert y.shape[-1] == 1 , f'Booster Data cannot deal with multilabels, but got {y.shape}'
+            assert y.shape[-1] == 1 , f'Boost Data cannot deal with multilabels, but got {y.shape}'
             y = y[...,0]
         if y is not None and y.ndim == 1: 
             y = y[:,None]
@@ -291,7 +291,7 @@ class BoosterInput:
         return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod
-    def concat(cls , datas : 'list[BoosterInput | None]'):
+    def concat(cls , datas : 'list[BoostInput | None]'):
         blocks = [data for data in datas if data is not None and data.complete]
         
         secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
@@ -312,7 +312,7 @@ class BoosterInput:
         
     
 @dataclass(slots=True)
-class BoosterWeightMethod:
+class BoostWeightMethod:
     ts_type : Literal['lin' , 'exp'] | None = None
     cs_type : Literal['top' , 'positive' , 'ones'] | None = None
     bm_type : Literal['in'] | None = None

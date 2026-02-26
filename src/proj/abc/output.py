@@ -68,13 +68,25 @@ class FormatStr(str):
     def __init__(self , *args , sep = ' ' , indent : int = 0 , **kwargs):
         self.msg = self.indent_str(indent) + sep.join([str(arg) for arg in args])
         self.kwargs = kwargs
-        self._level_prefix = ''
 
     def __str__(self):
         return self.formatted()
 
     def __repr__(self):
         return f'{self.__class__.__name__}({repr(self.formatted())})'
+
+    def __bool__(self):
+        return bool(self.msg)
+
+    @property
+    def level_prefix(self) -> 'FormatStr | None':
+        if not hasattr(self , '_level_prefix') or self._level_prefix is None:
+            return None
+        return self._level_prefix
+
+    @level_prefix.setter
+    def level_prefix(self , value : 'FormatStr | None'):
+        self._level_prefix = value
 
     @classmethod
     def indent_str(cls , indent : int = 0) -> str:
@@ -86,23 +98,25 @@ class FormatStr(str):
         bg_color = kwargs.get('bg_color' , None)
         bold = kwargs.get('bold' , False)
         italic = kwargs.get('italic' , False)
-        return _ansi_styler(self.msg , color = color , bg_color = bg_color , bold = bold , italic = italic)
+        new_msg = _ansi_styler(self.msg , color = color , bg_color = bg_color , bold = bold , italic = italic)
+        if self.level_prefix:
+            new_msg = f'{self.level_prefix.formatted()}: {new_msg}'
+        return new_msg
+
+    def unformatted(self) -> str:
+        new_msg = self.msg
+        if self.level_prefix:
+            new_msg = f'{self.level_prefix.unformatted()}: {new_msg}'
+        return new_msg
 
     def with_level_prefix(self , level: str | None = None , color : str | None = None , bg_color : str | None = None , bold : bool = True):
-        if not level:
-            return self
-        self._level_prefix = self.level_prefix(level , color = color , bg_color = bg_color , bold = bold)
+        if level:
+            msg = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|{level:10s}|'
+            self.level_prefix = FormatStr(msg , color = color , bg_color = bg_color , bold = bold)
         return self
-
-    @classmethod
-    def level_prefix(cls , level: str , color : str | None = None , bg_color : str | None = None , bold : bool = True) -> str:
-        msg = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|{level:10s}|'
-        return _ansi_styler(msg , color = color , bg_color = bg_color , bold = bold)
         
     def write(self , stdout = False , stderr = False , file = None , end : str = '\n' , flush = False , **kwargs):
         msg = self.formatted(**kwargs) + end
-        if self._level_prefix:
-            msg = f'{self._level_prefix}: {msg}'
         if file:
             with open(file , 'a') as f:
                 f.write(msg)
@@ -116,22 +130,25 @@ class FormatStr(str):
             if flush:
                 io.flush()
 
+empty_fstr = FormatStr()
+
 def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False):
     """custom stdout message , vb_level can be set to control display (minimum Proj.verbosity level)"""
     if Silence.silent:
-        return
+        return empty_fstr
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     fstr.write(stdout = True , file = file , end = end , flush = flush)
+    return fstr
 
 def stderr(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, vb_level : int = 0):
     """custom stderr message , vb_level can be set to control display (minimum Proj.verbosity level)"""
     if Silence.silent:
-        return
+        return empty_fstr
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     if level_prefix:
         fstr.with_level_prefix(**level_prefix)
     fstr.write(stderr = True , file = file , end = end , flush = flush)
-
+    return fstr
     

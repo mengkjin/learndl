@@ -1,4 +1,4 @@
-from .util import BoosterInput , BoosterOutput
-from .booster import GeneralBooster , OptunaBooster , AVAILABLE_BOOSTERS
+from .util import BoostInput , BoostOutput
+from .booster import GeneralBoostModel , OptunaBoostModel , AVAILABLE_BOOSTS
 
-__all__ = ['AVAILABLE_BOOSTERS' , 'GeneralBooster' , 'OptunaBooster' , 'BoosterInput' , 'BoosterOutput']
+__all__ = ['AVAILABLE_BOOSTS' , 'GeneralBoostModel' , 'OptunaBoostModel' , 'BoostInput' , 'BoostOutput']

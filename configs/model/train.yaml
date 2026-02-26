@@ -1,7 +1,20 @@
 max_epoch:  200
 batch_size: 10000
 skip_horizon:  20 # must be larger than span of labels 
-data_step:  5
+fitting_step:  5
+callbacks:
+  - StatusDisplay
+  # - BatchDisplay
+  - BasicTestResult
+  - DetailedAlphaAnalysis
+  - EarlyStoppage
+  - EarlyExitRetrain
+  - NanLossRetrain
+  - ValidationConverge
+  # - TrainConverge
+  # - FitConverge
+  # - CallbackTimer
+  # - CudaEmptyCache
 
 dataloader.sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
 dataloader.shuffle_option:  epoch # static , init , epoch
@@ -39,10 +52,10 @@ criterion.weight:
 # only one multilosses criterion is allowed
 criterion.multilosses:
   name: hybrid # ewa, hybrid, dwa, ruw, gls, rws
-  params:  {'phi' : null , 'tau' : 2}
-  # hybrid: {'phi' : null , 'tau' : 2}
-  # dwa: {'tau' : 2}
-  # ruw: {'phi' : null}
-  # ewa: {}
-  # gls: {}
-  # rws: {}
+  params:  
+    hybrid: {'phi' : null , 'tau' : 2}
+    dwa: {'tau' : 2}
+    ruw: {'phi' : null}
+    ewa: {}
+    gls: {}
+    rws: {}

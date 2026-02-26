@@ -202,7 +202,13 @@ class TaskDatabase:
             if kwargs['status'] != new_status:
                 raise ValueError(f"Task {task_id} status update failed , expected {kwargs['status']} but got {new_status}")
             else:
-                Logger.stdout_pairs(kwargs , title = f"Task {task_id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
+                new_kwargs = {'status' : new_status} | {k: v for k, v in kwargs.items() if k != 'status'}
+                for k, v in new_kwargs.items():
+                    if k.endswith('_time'):
+                        assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
+                        new_kwargs[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
+
+                Logger.stdout_pairs(new_kwargs , title = f"Task {task_id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
         """Check task status"""
@@ -749,8 +755,14 @@ class TaskItem:
         assert new_task is not None , f'Task {self.id} not found'
         changed_items = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k) and v is not None}
         if changed_items:
-            Logger.stdout_pairs(changed_items , title = f"Task {self.id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
             self.update(changed_items)
+            if 'status' in changed_items:
+                changed_items = {'status' : changed_items['status']} | {k: v for k, v in changed_items.items() if k != 'status'}
+            for k, v in changed_items.items():
+                if k.endswith('_time'):
+                    assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
+                    changed_items[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
+            Logger.stdout_pairs(changed_items , title = f"Task {self.id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
         return self
     
     def update(self, updates : dict[str, Any] | None = None , write_to_db : bool = False):

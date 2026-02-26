@@ -1,0 +1,79 @@
+# Global optional default config of TrainParam / TrainConfig ,
+# if not exists, do not show any information and will use the default value
+# do not modify this file directly (unless change code of TrainParam / TrainConfig)
+train.dataloader.sample_method: sequential
+train.dataloader.shuffle_option: epoch
+train.dataloader.train_ratio: 0.8
+train.trainer.transfer: false
+train.trainer.optimizer: {'name' : 'Adam' , 'param' : {}}
+train.trainer.scheduler: {'name' : 'cycle' , 'param' : {'base_lr' : 1.0e-07 , 'step_size_up' : 4}}
+train.trainer.learn_rate: {'base' : 0.005 , 'transfer_multiplier' : {'encoder' : 0.1 , 'decoder' : 1.0}}
+train.trainer.gradient.clip_value: null
+train.criterion.loss:
+  ccc: {}
+  hidden_corr: {'lamb' : 0.0}
+  hidden_corr_deprecated: {'lamb' : 0.001}
+train.criterion.score:
+  spearman: {which_output: [0] , which_label: [0]}
+train.criterion.weight: {'fit' : 'equal' , 'test' : 'equal'}
+train.criterion.multilosses:
+  name: hybrid
+  params:
+    hybrid: {'phi' : null , 'tau' : 2}
+    dwa: {'tau' : 2}
+    ruw: {'phi' : null}
+    ewa: {}
+    gls: {}
+    rws: {}
+
+model.name: null
+model.module.nn: gru
+model.module.nn.boost_head: false
+model.module.nn.boost_head.boost: lgbm
+model.module.boost: xgboost
+model.module.boost.optuna: false
+model.module.boost.optuna.trials: 10
+model.module.factor: null
+model.interval: null
+model.interval.nn: 120
+model.interval.boost: 20
+model.interval.factor: 20
+model.window: null
+model.window.nn: 2400
+model.window.boost: 240
+
+input.sequence.lens: {day: 30, style: 30, indus: 30 , factor: 1, hidden: 1} 
+input.sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1}
+input.filter.secid: null
+input.filter.date: null
+input.data.prenorm:
+  day: {'divlast' : True  , 'histnorm' : True}
+
+callbacks.ResetOptimizer: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
+callbacks.CallbackTimer: {}
+callbacks.EarlyStoppage: {'patience' : 20}
+callbacks.ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-05}
+callbacks.EarlyExitRetrain: {'earliest' : 10 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+callbacks.NanLossRetrain: {'max_attempt' : 4}
+callbacks.BatchDisplay: {}
+callbacks.StatusDisplay: {}
+callbacks.TrainConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
+callbacks.FitConverge: {'patience' : 5 , 'eps' : 1.0e-5}
+callbacks.CudaEmptyCache: {'batch_interval' : 20}
+callbacks.DetailedAlphaAnalysis: {'use_num' : 'avg'}
+
+conditional.short_test:
+  model.beg_date: 20240701
+  model.end_date: 20240930
+  model.window: 240
+  train.max_epoch: 3
+  input.filter.secid: random.200
+  input.filter.date: 20220101-20240930
+  callbacks.DetailedAlphaAnalysis:
+    tasks: ['factor' , 't50']
+conditional.transformer:
+  callbacks.ResetOptimizer:
+    num_reset: 1
+    trigger: 60
+    recover_level: 1.0
+    speedup2x: true

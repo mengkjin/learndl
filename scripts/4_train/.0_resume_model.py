@@ -10,11 +10,10 @@
 #   model_name : 
 #       type : Options.available_models()
 #       desc : choose a model
-#       prefix : "model/"
 #       required : True
 # file_previewer:
 #   name : "Model Output File Previewer"
-#   path: "models/{model_name}/detailed_analysis/training_output.html"
+#   path: "models/{model_name}/results/training_output.html"
 #   height : 600 # optional
 
 from src.api import ModelAPI
