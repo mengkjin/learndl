@@ -172,9 +172,6 @@ class ModelPath:
     def snapshot(self , *args) -> Path:
         """model snapshot path"""
         return self('snapshot' , *args)
-    def log(self , *args) -> Path:
-        """model log path"""
-        return self('log' , *args)
     def full_path(self , model_num , model_date , submodel) -> Path:
         """full model path of a given model date / num / submodel"""
         return self('archive', model_num , model_date , submodel)
@@ -187,12 +184,16 @@ class ModelPath:
         return path.exists() and len([s for s in path.iterdir()]) > 0
     def mkdir(self , model_nums = None , exist_ok=False):
         """create model directory"""
-        self.archive().mkdir(parents=True,exist_ok=exist_ok)
+        if not self.base.exists():
+            self.base.mkdir(parents=True,exist_ok=exist_ok)
+            self.log_operation('create_model_path')
+        self.archive().mkdir(exist_ok=exist_ok)
         if model_nums is not None: 
             [self.archive(mm).mkdir(exist_ok=exist_ok) for mm in model_nums]
         self.conf().mkdir(exist_ok=exist_ok)
         self.rslt().mkdir(exist_ok=True)
         self.snapshot().mkdir(exist_ok=True)
+
     def clear_model_path(self):
         """clear model directory , but archive directory will protected , log directory will be remained"""
         if self.is_resumable and not self.is_short_test:
@@ -200,16 +201,11 @@ class ModelPath:
             return
         else:
             [shutil.rmtree(folder) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
+            self.log_operation('clear_model_path')
     
     def remove_model_path(self):
         """delete model directory and log file , will ask for confirmation if not a short test model"""
-        if not self.is_short_test:
-            confirm = input(f'{self} is not a short test model, are you sure you want to delete it? (y/n)')
-            if confirm != 'y':
-                return
-        if self.base.exists():
-            shutil.rmtree(self.base , ignore_errors=True)
-        self.log_file.unlink(confirm=False)
+        raise NotImplementedError('remove_model_path is not implemented')
 
     def confirm(self , model_module : str | None = None):
         """confirm model path"""

@@ -8,13 +8,13 @@ from src.proj import Logger
 from src.res.deap.func import math_func as MF , factor_func as FF
 from .memory import MemoryManager
 
-class EliteGroup:
+class gpEliteGroup:
     def __init__(self , start_i_elite = 0 , device = None , block_len = 50) -> None:
         self.start_i_elite = start_i_elite
         self.i_elite   = start_i_elite
         self.device    = device
         self.block_len = block_len
-        self.container : list[EliteBlock] = []
+        self.container : list[gpEliteBlock] = []
         self.position  : list[tuple[int,int]] = []
 
     def assign_logs(self , hof_log : pd.DataFrame , elite_log : pd.DataFrame):
@@ -51,7 +51,7 @@ class EliteGroup:
         else:
             if len(self.container): 
                 self.container[-1].cat2cpu()
-            self.container.append(EliteBlock(self.block_len).append(factor , **kwargs))
+            self.container.append(gpEliteBlock(self.block_len).append(factor , **kwargs))
         self.position.append((len(self.container)-1,self.container[-1].len()-1))
         if isinstance(starter,str): 
             Logger.stdout(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
@@ -111,7 +111,7 @@ class EliteGroup:
         corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat).cpu()
         return corr_mat
     
-class EliteBlock:
+class gpEliteBlock:
     def __init__(self , max_len = 50):
         self.max_len = max_len
         self.names : list[str] = []

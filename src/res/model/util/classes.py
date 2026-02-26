@@ -345,6 +345,29 @@ class BaseDataModule(ABC):
         return self.loader_param.stage
 
     @property
+    def input_keys(self) -> list[str]:
+        return [key for value in self.config.input_keys_all.values() for key in value]
+
+    @property
+    def input_keys_all(self) -> dict[str,list[str]]:
+        input_keys = {key : [*value] for key , value in self.config.input_keys_all.items()}
+        if self.config.module_type == 'factor':
+            input_keys['factor'] = ['factor']
+        input_keys = {key : value for key , value in input_keys.items() if value}
+        assert len(input_keys) > 0 , (self.config.input_keys_all , self.config.module_type)
+        return input_keys
+
+    @property
+    def input_keys_subkeys(self) -> dict[str,str]:
+        try:
+            subkeys = {f'{key}.{subkey}' : str(list(self.datas.x[subkey].feature)) for key , value in self.input_keys_all.items() for subkey in value if subkey in self.datas.x}
+        except Exception as e:
+            Logger.alert2(f'Error getting input keys subkeys: {e}')
+            Logger.alert2(f'Input keys: {self.input_keys}')
+            return {f'{key}.{subkey}' : subkey for key , value in self.input_keys_all.items() for subkey in value}
+        return subkeys
+
+    @property
     def model_date(self) -> int:
         return self.loader_param.model_date
 

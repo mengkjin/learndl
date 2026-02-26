@@ -371,6 +371,13 @@ class BaseConfig:
             'hidden' : self.input_hidden_types,
         }
     @property
+    def input_keys_subkeys(self) -> dict[str,dict[str,str]]: 
+        return {
+            'data' : {tp:'.' for tp in self.input_data_types},
+            'factor' : {tp:'.' for tp in self.input_factor_types},
+            'hidden' : {tp:'.' for tp in self.input_hidden_types},
+        }
+    @property
     def window(self) -> int: 
         tw = self['model.window']
         tw = max(int(tw) if tw is not None else 0 , 0)

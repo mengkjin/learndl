@@ -58,7 +58,7 @@ class DataModule(BaseDataModule):
             Logger.stdout_pairs({'Use Data' : use_data} , title = 'Module Data Initiated:' , vb_level=2 , min_key_len = min_key_len)
 
     def __repr__(self): 
-        keys = self.input_keys
+        keys =  self.input_keys
         if len(keys) >= 5: 
             keys_str = f'[{keys[0]},...,{keys[-1]}({len(keys)})]'
         else:
@@ -189,7 +189,8 @@ class DataModule(BaseDataModule):
         slens = self.config.seq_lens | param.get('seqlens',{})
         slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
         slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
-            
+        
+        assert slens , (self.config.seq_lens | param.get('seqlens',{}) , self.input_keys)
         loader_param = self.LoaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
         if self.loader_param == loader_param: 
             return False
@@ -276,14 +277,6 @@ class DataModule(BaseDataModule):
     @property
     def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
         return self.config.input_type
-    
-    @property
-    def input_keys(self) -> list[str]:
-        keys = self.input_keys_data + self.input_keys_factor + self.input_keys_hidden
-        if self.config.module_type == 'factor':
-            keys.append('factor')
-        assert len(keys) > 0 , self.config.input_type
-        return keys
 
     @property
     def input_keys_data(self) -> list[str]:

@@ -1,83 +1,68 @@
 import torch
 from typing import Callable , Sequence
-from deap import base , gp
-from .syntax import BaseIndividual , BaseSyntax , SyntaxRecord , SyntaxControl
+from deap import base , creator , gp
+from .syntax import BaseIndividual , SyntaxRecord
 
 class BaseToolbox(base.Toolbox):
-    evaluate_syx : Callable[..., BaseSyntax]
-    evaluate_pop : Callable[..., list[BaseSyntax]]
+    evaluate_individual : Callable[..., BaseIndividual]
+    evaluate_population : Callable[..., list[BaseIndividual]]
     create_individual : Callable[... , BaseIndividual]
     create_population : Callable[... , list[BaseIndividual]]
 
-    def __init__(self , ind_pset : gp.PrimitiveSetTyped , syx_pset : gp.PrimitiveSetTyped) -> None:
-        super().__init__()
-        self.ind_pset = ind_pset
-        self.syx_pset = syx_pset
-
     def str2ind(self , x : str , fit_value = None) -> BaseIndividual:
-        return SyntaxControl.str2ind(x , ind_pset = self.ind_pset , fit_value = fit_value)
-
-    def str2syx(self , x : str , ind_str : str , fit_value = None) -> BaseSyntax:
-        return SyntaxControl.str2syx(x , ind_str = ind_str , syx_pset = self.syx_pset , fit_value = fit_value)
-
-    def ind2syx(self , ind : BaseIndividual) -> BaseSyntax:
-        return SyntaxControl.ind2syx(ind , syx_pset = self.syx_pset)
+        return self.to_ind(x , fit_value = fit_value)
 
     def ind2str(self , ind : BaseIndividual) -> str:
-        return SyntaxControl.ind2str(ind)
+        return ind.syntax
 
-    def syx2str(self , syx : BaseSyntax) -> str:
-        return SyntaxControl.syx2str(syx)
-
-    def syx2ind(self , syx : BaseSyntax) -> BaseIndividual:
-        return SyntaxControl.syx2ind(syx , ind_pset = self.ind_pset)
-
-    def to_ind(self , input : BaseIndividual | BaseSyntax | str | SyntaxRecord) -> BaseIndividual:
-        if isinstance(input , SyntaxRecord):
-            return input.to_ind(self)
-        elif isinstance(input , str):
-            return self.str2ind(input)
-        elif isinstance(input , BaseSyntax):
-            return self.syx2ind(input)
-        return input
-
-    def to_syx(self , input : BaseIndividual | BaseSyntax | str | SyntaxRecord) -> BaseSyntax:
-        if isinstance(input , SyntaxRecord):
-            return input.to_syx(self)
-        elif isinstance(input , str):
-            return self.str2syx(input , input)
-        elif isinstance(input , BaseIndividual):
-            return self.ind2syx(input)
-        return input
-
-    def to_record(self , ind : BaseIndividual | BaseSyntax | str | SyntaxRecord) -> SyntaxRecord:
-        if isinstance(ind , SyntaxRecord):
-            return ind
+    def to_ind(self , syntax : BaseIndividual | str | SyntaxRecord , **kwargs) -> BaseIndividual:
+        if isinstance(syntax , str):
+            return getattr(creator , 'Individual' , BaseIndividual).from_syntax(syntax , **kwargs)
+        elif isinstance(syntax , BaseIndividual):
+            return syntax
+        elif isinstance(syntax , SyntaxRecord):
+            return syntax.to_ind(**kwargs)
         else:
-            return SyntaxRecord.create(ind)
+            raise ValueError(f'Invalid input type: {type(syntax)}')
 
-    def prune_ind(self , ind : BaseIndividual | BaseSyntax | str | SyntaxRecord) -> BaseIndividual:
-        return SyntaxControl.prune_ind(self.to_ind(ind))
+    def to_record(self , ind : BaseIndividual | str | SyntaxRecord) -> SyntaxRecord:
+        return SyntaxRecord.create(ind)
 
-    def to_indpop(self , population : Sequence[BaseIndividual | BaseSyntax | str | SyntaxRecord]) -> list[BaseIndividual]:
+    def prune_ind(self , ind : BaseIndividual | str | SyntaxRecord) -> BaseIndividual:
+        return self.to_ind(ind).prune()
+
+    def to_indpop(self , population : Sequence[BaseIndividual | str | SyntaxRecord]) -> list[BaseIndividual]:
         return [self.to_ind(ind) for ind in population]
 
-    def prune_pop(self , population : Sequence[BaseIndividual | BaseSyntax | str | SyntaxRecord]) -> list[BaseIndividual]:
+    def prune_pop(self , population : Sequence[BaseIndividual | str | SyntaxRecord]) -> list[BaseIndividual]:
         return [self.prune_ind(ind) for ind in population]
 
     def deduplicate(self , population : Sequence[BaseIndividual] , forbidden : list | None = []) -> list[BaseIndividual]:
-        return SyntaxControl.deduplicate(population , forbidden = forbidden)
+        # return the unique population excuding specific ones (forbidden)
+        ori = [ind.pure_syntax for ind in population]
+        fbd = [str(ind) for ind in forbidden] if forbidden else []
+        allowed = [ind not in fbd for ind in ori]
+        return [ind for ind , allowed in zip(population , allowed) if allowed]
 
-    def indpop2syxpop(self , population : Sequence[BaseIndividual]) -> list[BaseSyntax]:
+
+    def purify_pop(self , population : Sequence[BaseIndividual]) -> list[BaseIndividual]:
         # remove Identity primatives of population
-        return [self.ind2syx(ind) for ind in population]
+        return [ind.purify() for ind in population]
         
-    def syxpop2indpop(self , population : Sequence[BaseSyntax]) -> list[BaseIndividual]:
+    def revive_pop(self , population : Sequence[BaseIndividual]) -> list[BaseIndividual]:
         # remove Identity primatives of population
-        return [self.syx2ind(ind) for ind in population]
+        return [ind.revive() for ind in population]
 
     @property
-    def compiler(self) -> Callable[[BaseIndividual | BaseSyntax | str | SyntaxRecord], torch.Tensor]:
+    def compiler(self) -> Callable[[BaseIndividual | str | SyntaxRecord], torch.Tensor]:
         if not hasattr(self , '_compiler'):
-            self._compiler = SyntaxControl.Compiler(self.syx_pset)
+            def compiler(syntax : BaseIndividual | str | SyntaxRecord) -> torch.Tensor:
+                if isinstance(syntax , str):
+                    ind = getattr(creator , 'Individual' , BaseIndividual).from_syntax(syntax)
+                elif isinstance(syntax , SyntaxRecord):
+                    ind = syntax.to_ind()
+                else:
+                    ind = syntax
+                return gp.compile(ind , ind.pset)
+            self._compiler = compiler
         return self._compiler

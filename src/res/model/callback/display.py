@@ -52,7 +52,8 @@ class StatusDisplay(BaseCallBack):
 
     @property
     def log_file(self):
-        return LogFile.initiate('model' , 'summary' , 'trainer_status')
+        log_name = 'st_results' if self.config.base_path.is_short_test else 'results'
+        return LogFile.initiate('model' , 'summary' , log_name)
     @property
     def dataloader(self) -> BatchInputLoader | Any : return self.trainer.dataloader
     @property
@@ -121,7 +122,7 @@ class StatusDisplay(BaseCallBack):
         # metrics = {
         #     '{}.{}'.format(*col):'|'.join([f'{k}({self.status.test_summary[col].round(v).loc[k]})' 
         #     for k,v in self.SUMMARY_NDIGITS.items() if k in self.status.test_summary[col].index]) for col in self.status.test_summary.columns}
-        test_name = f'{self.config.model_name}'
+        test_name = f'{self.config.base_path.full_name}'
 
         duration : dict[str,str] = {
             stage : self.record_texts.get(stage , "N/A") for stage in self.config.stage_queue
@@ -134,10 +135,11 @@ class StatusDisplay(BaseCallBack):
             metrics[key] = value
 
         messages = {
-            f'model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
+            f'model' : f'{self.config.model_name} x {len(self.config.model_num_list)})',
+            f'submodel' : f'{self.config.submodels}',
             f'start' : f'{self.record_init_time.strftime("%Y-%m-%d %H:%M:%S")}',
             f'stages' : f'{self.config.stage_queue}',
-            f'inputs' : f'{getattr(self.data , "input_keys" , self.config.input_keys_all)}',
+            f'inputs' : self.data.input_keys_subkeys,
             f'labels' : f'{self.config.labels}',
             f'range' : f'{self.config.beg_date} - {self.config.end_date}',
             f'duration' : duration,

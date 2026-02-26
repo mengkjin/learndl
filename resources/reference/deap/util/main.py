@@ -215,8 +215,8 @@ class gpMain:
         toolbox.register('create_individual', tools.initIterate, getattr(creator , 'Individual'), getattr(toolbox , 'generate_expr'))
         # toolbox.register('fitness_value', fitness.fitness_value)
         toolbox.register('create_population', tools.initRepeat, list, getattr(toolbox , 'create_individual')) 
-        toolbox.register('evaluate_syx', self.evaluate_syx , compiler = toolbox.compiler , fitness = self.fitness , i_iter = self.i_iter , param = self.param , **kwargs) 
-        toolbox.register('evaluate_pop', self.evaluate_pop , toolbox = toolbox) 
+        toolbox.register('evaluate_individual', self.evaluate_individual , compiler = toolbox.compiler , fitness = self.fitness , i_iter = self.i_iter , param = self.param , **kwargs) 
+        toolbox.register('evaluate_population', self.evaluate_population , toolbox = toolbox) 
         toolbox.register('select_nsga2', tools.selNSGA2) 
         toolbox.register('select_best', tools.selBest) 
         toolbox.register('select_Tour', tools.selTournament, tournsize=3) # 锦标赛：随机选择3个，取最大, resulting around 49% of pop
@@ -274,7 +274,7 @@ class gpMain:
 
         return FF.FactorValue(name=str(individual) , process=process_stream , value=factor_value)
 
-    def evaluate_syx(self , individual : BaseSyntax , pool_skuname : str , * , const_annual = 24 , min_coverage = 0.5 , **kwargs):
+    def evaluate_individual(self , individual : BaseSyntax , pool_skuname : str , * , const_annual = 24 , min_coverage = 0.5 , **kwargs):
         """
         从因子表达式起步,生成因子并计算适应度
         input:
@@ -317,7 +317,7 @@ class gpMain:
         # self.memory.check('rankic')
         return individual
 
-    def evaluate_pop(self , population : list[BaseSyntax] , * , i_iter = -1 , i_gen = 0, desc = 'Evolve Generation' , **kwargs) -> list[BaseSyntax]:
+    def evaluate_population(self , population : list[BaseSyntax] , * , i_iter = -1 , i_gen = 0, desc = 'Evolve Generation' , **kwargs) -> list[BaseSyntax]:
         """
         计算整个种群的适应度
         input:
@@ -333,7 +333,7 @@ class gpMain:
         if self.param.worker_num > 1:
             with Pool(processes=self.param.worker_num) as pool:
                 _ = list(tqdm(
-                    pool.starmap(self.toolbox.evaluate_syx, iterator), total=len(iterator) , 
+                    pool.starmap(self.toolbox.evaluate_individual, iterator), total=len(iterator) , 
                     desc=f'Parallel evalute population ({self.param.worker_num})'))
         else:
             def desc0(x):
@@ -347,7 +347,7 @@ class gpMain:
             iterator = tqdm(iterator, total = len(changed_pop))
             ir = [0.,0.]
             for syx , sku in iterator:
-                syx = self.toolbox.evaluate_syx(syx, sku)
+                syx = self.toolbox.evaluate_individual(syx, sku)
                 iterator.set_description(desc0(ir := maxir(ir,syx)))
 
             #iterator = tqdm(toolbox.map(toolbox.evaluate, changed_pop, pool_skunames), total=len(changed_pop))
@@ -411,7 +411,7 @@ class gpMain:
                 Logger.stdout(f'**A Population({len(population)}) has been Initialized')
 
             # Evaluate the new population
-            population = self.toolbox.evaluate_pop(population , i_gen = i_gen , **kwargs)
+            population = self.toolbox.evaluate_population(population , i_gen = i_gen , **kwargs)
 
             # check survivors
             survivors  = [ind for ind in population if ind.if_valid]

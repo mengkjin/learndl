@@ -10,7 +10,7 @@ from typing import Any , Sequence
 from src.proj import Logger
 from src.proj.func import torch_load
 from src.res.deap.env import gpDefaults
-from .syntax import BaseIndividual
+from .syntax import SyntaxControl
 from .toolbox import BaseToolbox
 
 class gpLogger:
@@ -59,7 +59,7 @@ class gpLogger:
             if i_gen >= 0:
                 # only update pop and hof when i_gen >= 0
                 pop = [self.toolbox.to_ind(ind) for ind in log['population']] 
-                hof_syx = [self.toolbox.to_ind(ind) for ind in log['halloffame']]
+                hof_syx = [self.toolbox.to_syx(ind) for ind in log['halloffame']]
                 hof_syx = self.toolbox.evaluate_population(hof_syx, i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame') # re-evaluate hof
                 hof.update(hof_syx)
         elif i_gen >= 0:
@@ -91,7 +91,7 @@ class gpLogger:
             start_time_sku = datetime.now()
             output_path = self.dir_sku.joinpath(f'z_{pool_skuname}.txt')
             with open(output_path, 'w', encoding='utf-8') as file1:
-                Logger.stdout(BaseIndividual.trim_syntax(individual),'\n start_time',str(start_time_sku),file=file1)
+                Logger.stdout(SyntaxControl.trim_syntax(individual),'\n start_time',str(start_time_sku),file=file1)
 
     def record_basename(self , i_iter = 0 , i_gen = 0):
         iter_str = 'iteration' if i_iter < 0 else f'iter{i_iter}'

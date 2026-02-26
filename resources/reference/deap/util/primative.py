@@ -146,27 +146,27 @@ class Primative:
         output:
             pset:         primitive set for syntax
         """
-        pset_raw = cls.IndividualPrimSet(n_args , argnames)
-        pset_pur = cls.SyntaxPrimSet(n_args , argnames)
+        ind_pset = cls.IndividualPrimSet(n_args , argnames)
+        syx_pset = cls.SyntaxPrimSet(n_args , argnames)
         # ------------ set int and float terminals ------------
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'int{i}{additional_name_suffix}' for i in range(6)]]
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'float{i}{additional_name_suffix}' for i in range(6)]]
-        [pset_raw.addTerminal(v, int1) for v in int_range.get(1,[])]
-        [pset_raw.addTerminal(v, int2) for v in int_range.get(2,[])]
-        [pset_raw.addTerminal(v, int3) for v in int_range.get(3,[])]
-        [pset_raw.addTerminal(v, float1) for v in float_range]
-        #pset_raw.addEphemeralConstant(f'int1{str_iter}', lambda: np.random.randint(1,10+1), int1) # random int must > 0
-        #pset_raw.addEphemeralConstant(f'int2{str_iter}', lambda: np.random.randint(2,10+1), int2) # random int must > 1
-        #pset_raw.addEphemeralConstant(f'float1{str_iter}', lambda: round(np.random.random()*2+1,2), float1) # random int must > 1
+        [ind_pset.addTerminal(v, int1) for v in int_range.get(1,[])]
+        [ind_pset.addTerminal(v, int2) for v in int_range.get(2,[])]
+        [ind_pset.addTerminal(v, int3) for v in int_range.get(3,[])]
+        [ind_pset.addTerminal(v, float1) for v in float_range]
+        #ind_pset.addEphemeralConstant(f'int1{str_iter}', lambda: np.random.randint(1,10+1), int1) # random int must > 0
+        #ind_pset.addEphemeralConstant(f'int2{str_iter}', lambda: np.random.randint(2,10+1), int2) # random int must > 1
+        #ind_pset.addEphemeralConstant(f'float1{str_iter}', lambda: round(np.random.random()*2+1,2), float1) # random int must > 1
         
         # add primatives (including their subprims)
         for prim in cls.all_primatives(): 
             baseprim , subprims = prim.sub_primatives()
-            pset_pur.addPrimitive(*baseprim.primative_args())
+            syx_pset.addPrimitive(*baseprim.primative_args())
             for subprim in subprims: 
-                pset_raw.addPrimitive(*subprim.primative_args())
+                ind_pset.addPrimitive(*subprim.primative_args())
             
-        return pset_raw , pset_pur
+        return ind_pset , syx_pset
     @classmethod
     def IndividualPrimSet(cls , n_args : tuple[int,int] , argnames : list[str]) -> gp.PrimitiveSetTyped:
         """create individual primitive set for individual
