@@ -116,6 +116,16 @@ class LogFile:
         return [self.host_file] + self.rotation_files
 
     @property
+    def rotation_files(self) -> list[Path]:
+        if not hasattr(self , '_rotation_files'):
+            self._rotation_files = []
+        return self._rotation_files
+
+    @rotation_files.setter
+    def rotation_files(self , value : list[Path]):
+        self._rotation_files = value
+
+    @property
     def date_suffix(self) -> str:
         return f'.{datetime.now().strftime('%Y-%m-%d')}'
 

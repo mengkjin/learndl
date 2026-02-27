@@ -166,8 +166,7 @@ class MicroCap_400(CustomIndex):
     def rebalance_portfolio(self , date : int) -> pd.DataFrame:
         prev_date = CALENDAR.td(date , -1)
         prev_val = DATAVENDOR.TRADE.get_val(prev_date)
-        prev_val['free_cap'] = prev_val['free_share'] * prev_val['close']
-        df = prev_val.loc[:,['secid','free_cap']].reset_index(drop=True)
+        df = pd.DataFrame({'secid' : prev_val['secid'] , 'free_cap' : prev_val['free_share'] * prev_val['close']})
         pool = DATAVENDOR.INFO.get_desc(prev_date , exchange = ['SZSE', 'SSE'] , set_index=False)['secid']
         st_stocks = DATAVENDOR.INFO.get_st(prev_date)['secid']
         df = df[df['secid'].isin(pool) & ~df['secid'].isin(st_stocks)].sort_values('free_cap' , ascending=True).\
