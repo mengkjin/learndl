@@ -248,7 +248,10 @@ class ControlGitClearPullButton(ControlPanelButton):
     title = f"Git Pull"
 
     def button(self , script_key : str | None = None):
-        st.button(self.icon, key=f"{self.key}-enabled" , help = "Clear Local Changes and Pull Latest Code" , disabled = False, on_click = self.clear_git_pull)
+        if MACHINE.platform_coding:
+            st.button(self.icon, key=f"{self.key}-disabled" , help = f"Git Pull is not available on coding platform {MACHINE.name}" , disabled = True)
+        else:
+            st.button(self.icon, key=f"{self.key}-enabled" , help = "Clear Local Changes and Pull Latest Code" , disabled = False, on_click = self.clear_git_pull)
         
     def clear_git_pull(self):
         if MACHINE.platform_coding:

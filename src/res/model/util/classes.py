@@ -346,7 +346,10 @@ class BaseDataModule(ABC):
 
     @property
     def input_keys(self) -> list[str]:
-        return [key for value in self.config.input_keys_all.values() for key in value]
+        input_keys = [key for value in self.config.input_keys_all.values() for key in value]
+        if self.config.module_type == 'factor':
+            input_keys.append('factor')
+        return input_keys
 
     @property
     def input_keys_all(self) -> dict[str,list[str]]:
