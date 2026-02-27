@@ -699,14 +699,15 @@ class ModelConfig(BaseConfig):
         return cls(None, override = override , stage = stage , resume=resume , selection=selection,makedir=makedir)
     
     @classmethod
-    def load_model(cls , model_name : ModelPath | Path | str , * , override = None , stage = 2):
+    def load_model(cls , model_name : ModelPath | Path | str , * , override = None , short_test : bool | None = None , 
+                   stage = 2 , resume = 1 , selection = 0):
         ''' 
         load a existing model's config 
         stage is mostly irrelevant here, because mostly we are loading a model's config to pred
         '''
         model_path = ModelPath(model_name)
         assert model_path.base.exists() , f'{model_path.base} does not exist'
-        return cls(model_path , override = override, stage = stage)
+        return cls(model_path , override = override, short_test = short_test, stage = stage, resume = resume, selection = selection)
 
     def initialize_fitting(self):
         self.base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
