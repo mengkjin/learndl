@@ -134,7 +134,7 @@ class BatchInput:
                 'model.labels': ['std_lag1_10' , 'std_lag1_20'] if label_num == 2 else ['std_lag1_10'],
                 'num_output':[label_num],
             }
-            with Proj.vb.Silence():
+            with Proj.Silence:
                 model_config = ModelConfig(None, override=override, test_mode=True)
                 data = DataModule(model_config , 'predict').load_data()
                 data.setup('predict' , model_date = data.datas.y.date[-50])

@@ -551,7 +551,7 @@ def style():
                         &:hover {background-color: #00BCD4 !important;}
                     }
                 }
-                .stElementContainer[class*="control-refresh-task-queue"] {
+                .stElementContainer[class*="control-refresh-interactive"] {
                     button {
                         background-color: lightgreen !important;
                         color: white !important;

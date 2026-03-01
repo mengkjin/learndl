@@ -1,0 +1,65 @@
+---
+description: Project rules and conventions (add your content here)
+alwaysApply: true
+---
+
+# Project Rules
+
+## 1. Project Overview
+This project focuses on quantitative research and trading strategy development for the stock market. It covers data acquisition, factor mining, strategy backtesting, risk analysis, and simulation trading.
+
+## 2. Guiding Principles for AI Assistance
+- **Language Preference**: Respond Chinese if possible. If searched contents are referenced, do not translate if they are in Chinese or English.
+- **Respect existing codebase**: Before generating or modifying any code, examine the project’s current structure and configuration.  
+  - Check `pyproject.toml` to understand the established tech stack (e.g., Python version, core libraries, frameworks).  
+  - Review the folder layout (see typical structure below) and adhere to it.  
+  - All functionality should support windows / mac / ubuntu platforms. 
+- **Plan first**: For any non‑trivial task, produce a clear step‑by‑step plan before writing code.  
+- **Risk assessment**: In the plan, explicitly list potential risks—e.g., breaking existing functionality, data inconsistencies, performance bottlenecks, or introducing future bias.  
+- **Ask for confirmation**: After presenting the plan and risks, ask the user whether to proceed.  
+- **Learn from existing code**: Use the style, patterns, and conventions already present in the project as a guide for new contributions.
+
+## 3. Typical Project Structure (for reference)
+The project likely follows a structure similar to this (confirm by browsing):
+```
+├── configs/              # configs
+├── src/                  # source code
+├── scipts/               # python scripts of purposes
+├── runs/                 # .bat / .sh files
+├── resources/            # shared resources 
+├── data/                 # raw and processed data (not committed)
+├── models/               # exported model datas (not committed)
+├── results/              # exported results (not committed)
+├── logs/                 # project and task logs (not committed)
+├── .local_resources/     # private resources (not committed)
+├── .local_settings/      # private settings (not committed)
+├── .gitignore
+└── pyproject.toml        # project metadata & dependencies
+```
+
+## 4. General Coding Expectations
+- **Style**: Follow the existing code style (e.g., naming conventions, formatting).  
+- **Type hints**: Add type annotations to functions where missing.  
+- **Documentation**: Include docstrings for modules, classes, and functions (Google or NumPy style, as used in the project).  
+- **Error handling**: Use explicit exception handling and logging.  
+- **Testing**: Where appropriate, suggest or add unit tests (pytest) for new functionality.
+
+## 5. Data & Factor Handling
+- Use the project’s existing data pipelines (`src.data.DATAVENDAR`) to fetch or load data.  
+- When computing factors, follow the patterns in `src.res.factors` (e.g., base classes, vectorized operations).  
+- Respect any data cleaning conventions (e.g., forward‑filling, winsorization, neutralisation) already implemented.
+
+## 6. Backtesting & Strategy
+- Ensure transaction costs (commission, slippage, stamp duty) and market rules (price limits, suspensions) are modelled as in existing strategies.  
+- Avoid look‑ahead bias; use only data available at the time of decision.
+
+## 7. Documentation & Communication
+- Update README or relevant docs if the change affects usage.  
+- When proposing changes, explain the rationale and expected impact.
+
+## 8. AI Execution Workflow (Mandatory)
+1. **Read & understand** the current project state (code, configs, existing patterns).  
+2. **Create a plan** outlining the steps needed to accomplish the requested task.  
+3. **Identify risks** (e.g., performance, correctness, compatibility) and note them.  
+4. **Present the plan and risks** to the user and ask for confirmation.  
+5. **Only after approval** proceed to generate or modify code, always adhering to the project’s established conventions.

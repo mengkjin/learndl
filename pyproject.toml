@@ -50,6 +50,7 @@ dependencies = [
     "xarray>=2025.8.0",
     "xgboost>=3.0.4",
     "tsfresh>=0.21.1",
+    "fastparquet>=2025.12.0",
 ]
 
 [tool.setuptools.dynamic]

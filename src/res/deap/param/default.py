@@ -1,13 +1,14 @@
 import platform , os
 import torch
 from src.proj import PATH
+from src.proj.util import Device
 
 class gpDefaults:
     plat = platform.system().lower() # Windows or Linux
-    device = torch.device(0 if torch.cuda.is_available() else 'cpu') # cuda or cpu
+    device = Device.use_device() # cuda / mps cpu
     test_code = True or not torch.cuda.is_available() # 是否只是测试代码有无bug,默认False
-    dir_data = PATH.database.joinpath('trade_ts') # input路径1,原始因子所在路径
-    dir_pack = PATH.interim.joinpath('gp_data') # input路径2,加载原始因子后保存pt文件加速存储
+    dir_data = PATH.interim.joinpath('gp_data' , 'features' , 'parquet') # input路径1,原始因子所在路径
+    dir_pack = PATH.interim.joinpath('gp_data' , 'package') # input路径2,加载原始因子后保存pt文件加速存储
     dir_pop = PATH.result.joinpath('gp') # output路径,即保存因子库、因子值、因子表达式的路径
     path_param = PATH.conf.joinpath('algo' , 'gp' , 'params.yaml') # 保存测试参数的地址 
     encoding = 'utf-8' # 带中文的encoding

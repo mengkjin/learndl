@@ -26,14 +26,14 @@ class gpGenerator:
                  min_coverage :float = 0.1 , 
                  **kwargs) -> None:
         self.gp_main  = GeneticProgramming(job_id = job_id , train = False , **kwargs)
-        self.gp_main.update_toolbox()
+        self.gp_main.preparation()
         self.process_key = process_key
-        self.elitelog   = self.gp_main.gp_logger.load_state('elitelog' , i_iter = -1).set_index('i_elite')
-        self.df_axis    = self.gp_main.gp_logger.load_state('df_axis' , -1)
+        self.elitelog   = self.gp_main.logger.load_state('elitelog' , i_iter = -1).set_index('i_elite')
+        self.df_axis    = self.gp_main.logger.load_state('df_axis' , -1)
 
         self.Ensembler = FF.MultiFactor(
-            universe      = self.gp_main.tensors['universe'] , 
-            insample      = self.gp_main.tensors['insample'] ,
+            universe      = self.gp_main.input.universe , 
+            insample      = self.gp_main.input.insample ,
             weight_scheme = weight_scheme ,
             window_type   = window_type ,
             weight_decay  = weight_decay ,
@@ -51,7 +51,7 @@ class gpGenerator:
             return syntax
         if process_key is None: 
             process_key = self.process_key
-        factor = self.gp_main.to_value(syntax)
+        factor = self.gp_main.evaluator.to_value(syntax)
         if as_df and not factor.isnull():
             factor.value = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
         if print_info: 
@@ -62,8 +62,8 @@ class gpGenerator:
         '''
         Load all elite factors
         '''
-        elite_log  = self.gp_main.gp_logger.load_state('elitelog' , i_iter = -1) 
-        hof_log    = self.gp_main.gp_logger.load_state('hoflog'   , i_iter = -1)
+        elite_log  = self.gp_main.logger.load_state('elitelog' , i_iter = -1) 
+        hof_log    = self.gp_main.logger.load_state('hoflog'   , i_iter = -1)
         hof_elites = EliteGroup(start_i_elite=0 , device=self.gp_main.device , block_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
         for elite in elite_log.syntax: 
             hof_elites.append(self(elite , process_key = process_key , print_info = show_progress))
@@ -92,7 +92,7 @@ class gpGenerator:
                     factor_list[i] = self(fac)
             factor = torch.stack(factor_list , dim = -1)
         if labels is None: 
-            labels = self.gp_main.tensors['labels_raw']
+            labels = self.gp_main.input.labels_raw
         metrics = self.Ensembler.calculate_icir(factor , labels , **kwargs) # ic,ir
         multi = self.Ensembler.multi_factor(factor , **metrics , **kwargs)
         return multi # multi对象拥有multi,weight,inputs三个自变量
@@ -118,7 +118,7 @@ class gpGenerator:
             elites = elites.compile_elite_tensor()
         assert isinstance(elites , torch.Tensor) , type(elites)
         multi = self.multi_factor(
-            elites , labels = self.gp_main.tensors['labels_raw'] , 
+            elites , labels = self.gp_main.input.labels_raw , 
             weight_scheme = weight_scheme , window_type = window_type ,weight_decay = weight_decay ,
             ir_window = ir_window , roll_window = roll_window , halflife = halflife , min_coverage = min_coverage , **kwargs)
         return multi

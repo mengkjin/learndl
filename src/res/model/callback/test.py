@@ -118,12 +118,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
     CB_KEY_PARAMS = ['tasks']
     TABLE_VB_LEVELS = {'factor@frontface':Proj.vb.max}
     FIGURE_VB_LEVELS = {
-        'factor@ic_curve@best.market':1 , 
+        'factor@ic_curve@best.market': 2 , 
         'factor@group_return@best':Proj.vb.max ,
-        't50@drawdown@best.univ':1 ,
-        'screen@drawdown@best.univ':1 ,
-        'revscreen@drawdown@best.univ':1 ,
-        'reinforce@drawdown@best.univ':1 ,
+        't50@drawdown@best.univ':2 ,
+        'screen@drawdown@best.univ':2 ,
+        'reinforce@drawdown@best.univ':2 ,
+        'revscreen@drawdown@best.univ':Proj.vb.inf , # never display
     }
 
     def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'reinforce'] , **kwargs) -> None:

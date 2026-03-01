@@ -83,7 +83,7 @@ class DataModule(BaseDataModule):
                                      factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date)
         
         self.filter_datas()
-        Logger.stdout('DataModule.datas.shape:' , self.datas.shape)
+        Logger.stdout(f'{self.__class__.__name__} : data shape is ' , self.datas.shape)
         
         self.config.update_data_param(self.datas.x)
         self.labels_n = int(self.datas.y.shape[-1])

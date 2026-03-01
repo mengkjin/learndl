@@ -1159,7 +1159,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         self.purge_obsolete_model_preds()
         avg_pred_records = self.avg_pred_records()
         if not avg_pred_records.empty:
-            Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 1)
+            Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 2)
       
 
 class BasePredictorModel(ModelStreamLineWithTrainer):

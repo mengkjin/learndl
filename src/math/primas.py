@@ -29,7 +29,7 @@ def same(x , y):
     else:
         return x.equal(y)
     
-def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
+def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
     ------------------------ process factor value ------------------------
     处理因子值 , 'inf_trim_winsor_norm_neutral_nan'
@@ -48,7 +48,7 @@ def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
     if 'trim' in stream or 'winsor' in stream:
-        med       = value.nanmedian(dim , keepdim=True).values
+        med       = value.nanquantile(0.5, dim=dim,keepdim = True , interpolation='lower')
         bandwidth = (value.nanquantile(0.75 , dim , keepdim=True) - value.nanquantile(0.25 , dim , keepdim=True)) / 2
         lbound , ubound = med - trim_ratio * bandwidth , med + trim_ratio * bandwidth
     for _str in stream.split('_'):
@@ -67,6 +67,16 @@ def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7
         elif _str == 'nan': 
             value = value.nan_to_num_()
     return value
+
+def kthvalue_by_topk(x: torch.Tensor, k: int, dim=-1, keepdim=True , largest=False):
+    """
+    Get the k-th smallest value by topk
+    """
+    # Get the k smallest elements
+    vals, _ = torch.topk(x, k, dim=dim, largest=largest, sorted=True)
+    # The k-th smallest is the last one in this sorted list
+    res = vals.select(dim, -1)
+    return res.unsqueeze(dim) if keepdim else res
 
 class PrimaTools:
     @classmethod
@@ -609,10 +619,10 @@ def sign(x):
 
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
-def ts_delay(x, d):
+def ts_delay(x, d, * , no_alert = False):
     if d > x.shape[0]: 
         return None
-    if d < 0: 
+    if d < 0 and not no_alert: 
         alert_message('Beware! future information used!' , color = 'lightred')
     z = x.roll(d, dims=0)
     if d >= 0:
@@ -623,10 +633,10 @@ def ts_delay(x, d):
 
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
-def ts_delta(x, d):
+def ts_delta(x, d, * , no_alert = False):
     if d > x.shape[0]: 
         return None
-    if d < 0: 
+    if d < 0 and not no_alert: 
         alert_message('Beware! future information used!' , color = 'lightred')
     z = x - ts_delay(x, d)
     return z
@@ -754,11 +764,11 @@ def rlbxy(x, y, d, n, btm, sel_posneg=False):
     x , y = x.unfold(0,d,1) , y.unfold(0,d,1)
     groups = [None , None]
     if btm in ['btm' , 'diff']:
-        groups[0] = (x <= x.kthvalue(n, dim=-1, keepdim=True)[0])
+        groups[0] = (x <= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False))
         if sel_posneg: 
             groups[0] *= (x < 0)
     if btm in ['top' , 'diff']:
-        groups[1] = (x >= x.kthvalue(d-n+1, dim=-1, keepdim=True)[0])
+        groups[1] = (x >= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True))
         if sel_posneg: 
             groups[1] *= (x > 0)
         
@@ -790,11 +800,11 @@ def rlbx(x, d, n, btm, sel_posneg=False):
     x = x.unfold(0,d,1)
     groups = [None , None]
     if btm in ['btm' , 'diff']:
-        groups[0] = (x <= x.kthvalue(n, dim=-1, keepdim=True)[0])
+        groups[0] = (x <= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False))
         if sel_posneg: 
             groups[0] *= (x < 0)
     if btm in ['top' , 'diff']:
-        groups[1] = (x >= x.kthvalue(d-n+1, dim=-1, keepdim=True)[0])
+        groups[1] = (x >= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True))
         if sel_posneg: 
             groups[1] *= (x > 0)
         

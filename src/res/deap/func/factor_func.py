@@ -30,7 +30,7 @@ class FactorValue:
         else:
             return pd.DataFrame(data = self.value.cpu().numpy() , index = index , columns = columns)
 
-def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
+def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
     ------------------------ process factor value ------------------------
     处理因子值 , 'inf_trim_winsor_norm_neutral_nan'
@@ -48,7 +48,7 @@ def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
     if 'trim' in stream or 'winsor' in stream:
-        med       = value.nanmedian(dim , keepdim=True).values
+        med       = value.nanquantile(0.5, dim=dim,keepdim = True , interpolation='lower')
         bandwidth = (value.nanquantile(0.75 , dim , keepdim=True) - value.nanquantile(0.25 , dim , keepdim=True)) / 2
         lbound , ubound = med - trim_ratio * bandwidth , med + trim_ratio * bandwidth
     for _str in stream.split('_'):

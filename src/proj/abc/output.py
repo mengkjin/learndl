@@ -133,22 +133,21 @@ class FormatStr(str):
 empty_fstr = FormatStr()
 
 def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
-           sep = ' ' , end = '\n' , file = None , flush = False):
+           sep = ' ' , end = '\n' , file = None , flush = False , write = True):
     """custom stdout message , vb_level can be set to control display (minimum Proj.verbosity level)"""
-    if Silence.silent:
+    if Silence.silent or not write:
         return empty_fstr
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     fstr.write(stdout = True , file = file , end = end , flush = flush)
     return fstr
 
 def stderr(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
-           sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, vb_level : int = 0):
+           sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, write = True):
     """custom stderr message , vb_level can be set to control display (minimum Proj.verbosity level)"""
-    if Silence.silent:
-        return empty_fstr
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     if level_prefix:
         fstr.with_level_prefix(**level_prefix)
-    fstr.write(stderr = True , file = file , end = end , flush = flush)
+    if not Silence.silent and write:
+        fstr.write(stderr = True , file = file , end = end , flush = flush)
     return fstr
     

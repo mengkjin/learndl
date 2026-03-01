@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from itertools import product
 
-from src.proj import Silence , Logger , CALENDAR
+from src.proj import Logger , CALENDAR , Proj
 from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
@@ -56,7 +56,7 @@ class ModelHiddenExtractor:
         
     def load_model_data(self , indent : int = 1 , vb_level : int = 2):
         if not getattr(self , 'data_loaded' , False):
-            with Silence():
+            with Proj.Silence:
                 self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
             Logger.stdout(f'Load Model Data for Hidden Model {self.hidden_name} successfully!' , indent = indent , vb_level = vb_level)

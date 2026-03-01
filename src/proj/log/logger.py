@@ -27,6 +27,7 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
 }
 
 LOG_FILE = LogFile.initiate('main' , 'project' , rotate = True)
+VB = Proj.vb
 
 def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
     """
@@ -36,10 +37,8 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
-    if Proj.vb.ignore(vb_level):
-        return
-    with Proj.vb.WithVbLevel(vb_level):
-        fstr = stdout(*args , indent = indent , color = color , **kwargs)
+    with VB.WithVbLevel(vb_level):
+        fstr = stdout(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     return fstr
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
@@ -50,10 +49,8 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
-    if Proj.vb.ignore(vb_level):
-        return
-    with Proj.vb.WithVbLevel(vb_level):
-        fstr = stderr(*args , indent = indent , color = color , **kwargs)
+    with VB.WithVbLevel(vb_level):
+        fstr = stderr(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     LOG_FILE.write(fstr.unformatted())
     return fstr
 
@@ -339,7 +336,7 @@ class Logger:
     @classmethod
     def test_logger(cls):
         import tqdm , pandas as pd , matplotlib.pyplot as plt
-        with Proj.vb.WithVB(Proj.vb.max):
+        with VB.WithVB(VB.max):
             with cls.Paragraph('ParagraphI' , 1):
                 cls.stdout('This is a stdout message')
                 cls.stderr('This is a stderr message')
@@ -414,7 +411,7 @@ class Logger:
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
-        def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 1 , enter_vb_level : int = Proj.vb.max): 
+        def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 1 , enter_vb_level : int = VB.max): 
             self.key = '/'.join(args)
             self.silent = silent
             self.indent = indent

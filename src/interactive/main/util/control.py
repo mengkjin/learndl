@@ -49,6 +49,12 @@ class SessionControl:
     _instance : 'ClassVar[SessionControl | None]' = None
     
     def __post_init__(self):
+        self.rerun()
+
+    def __str__(self):
+        return f"SessionControl()"
+
+    def rerun(self):
         self.__class__._instance = self
         self.task_db = get_cached_task_db()
         self.task_queue = TaskQueue(task_db = self.task_db)
@@ -57,9 +63,6 @@ class SessionControl:
         if 'session_control' not in st.session_state:
             st.session_state.session_control = self
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
-
-    def __str__(self):
-        return f"SessionControl()"
 
     @universal_action
     def switch_page(self , page_name : str):

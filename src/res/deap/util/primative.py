@@ -2,11 +2,43 @@ from dataclasses import dataclass
 from typing import Callable , Sequence
 import itertools
 import torch
+from deap import gp
 import numpy as np
 from src.res.deap.func import math_func as MF
-from .types import Fac, Raw, int1, int2, int3, float1
+class Fac(torch.Tensor): 
+    pass
+class Raw(torch.Tensor): 
+    pass
+class int1(int): 
+    @classmethod
+    def range(cls) -> list['int1']:
+        return [cls(i) for i in [1,2]]
 
-from deap import gp
+    def __repr__(self):
+        return f'{self.__class__.__name__}#{super().__repr__()}#'
+
+class int2(int): 
+    @classmethod
+    def range(cls) -> list['int2']:
+        return [cls(i) for i in [2,10]]
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}#{super().__repr__()}#'
+class int3(int): 
+    @classmethod
+    def range(cls) -> list['int3']:
+        return [cls(i) for i in [10,15,20,30,40]]
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}#{super().__repr__()}#'
+class float1(float): 
+    @classmethod
+    def range(cls) -> list['float1']:
+        flts = (np.arange(0,101)*0.02).round(2)
+        return [cls(i) for i in flts]
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}#{super().__repr__()}#'
 
 @dataclass
 class Primative:
@@ -133,9 +165,7 @@ class Primative:
         prims += cls.primatives_identity()
         return prims
     @classmethod
-    def GetPrimSets(cls , n_args : tuple[int,int] , argnames : list[str] , additional_name_suffix : str = '' , 
-                    int_range : dict[int,Sequence[int]] = {1:(1,2),2:(2,10),3:(10,15,20,30,40)} ,
-                    float_range : Sequence[float] = (np.arange(0,101)*0.02).round(2).tolist()) -> tuple[gp.PrimitiveSetTyped,gp.PrimitiveSetTyped]:
+    def GetPrimSets(cls , n_args : tuple[int,int] , argnames : list[str] , additional_name_suffix : str = '') -> tuple[gp.PrimitiveSetTyped,gp.PrimitiveSetTyped]:
         """create individual and syntax primitive set for individual and syntax
         input:
             n_args:       tuple of number of arguments for factor and raw , e.g. (17 , 16)
@@ -148,24 +178,25 @@ class Primative:
         """
         pset_raw = cls.IndividualPrimSet(n_args , argnames)
         pset_pur = cls.SyntaxPrimSet(n_args , argnames)
+        
         # ------------ set int and float terminals ------------
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'int{i}{additional_name_suffix}' for i in range(6)]]
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'float{i}{additional_name_suffix}' for i in range(6)]]
-        [pset_raw.addTerminal(v, int1) for v in int_range.get(1,[])]
-        [pset_raw.addTerminal(v, int2) for v in int_range.get(2,[])]
-        [pset_raw.addTerminal(v, int3) for v in int_range.get(3,[])]
-        [pset_raw.addTerminal(v, float1) for v in float_range]
+        [pset_raw.addTerminal(v, int1) for v in int1.range()]
+        [pset_raw.addTerminal(v, int2) for v in int2.range()]
+        [pset_raw.addTerminal(v, int3) for v in int3.range()]
+        [pset_raw.addTerminal(v, float1) for v in float1.range()]
         #pset_raw.addEphemeralConstant(f'int1{str_iter}', lambda: np.random.randint(1,10+1), int1) # random int must > 0
         #pset_raw.addEphemeralConstant(f'int2{str_iter}', lambda: np.random.randint(2,10+1), int2) # random int must > 1
         #pset_raw.addEphemeralConstant(f'float1{str_iter}', lambda: round(np.random.random()*2+1,2), float1) # random int must > 1
         
         # add primatives (including their subprims)
+        
         for prim in cls.all_primatives(): 
             baseprim , subprims = prim.sub_primatives()
-            pset_pur.addPrimitive(*baseprim.primative_args())
+            pset_pur.addPrimitive(*baseprim.primative_args()) 
             for subprim in subprims: 
                 pset_raw.addPrimitive(*subprim.primative_args())
-            
         return pset_raw , pset_pur
     @classmethod
     def IndividualPrimSet(cls , n_args : tuple[int,int] , argnames : list[str]) -> gp.PrimitiveSetTyped:
@@ -183,7 +214,7 @@ class Primative:
         output:
             pset:         primitive set for individual
         """
-        ind_pset =gp.PrimitiveSetTyped('main', [Fac] * n_args[0] + [Raw] * n_args[1], Fac)
+        ind_pset = gp.PrimitiveSetTyped('main', [Fac] * n_args[0] + [Raw] * n_args[1], Fac)
         for i , v in enumerate(argnames): 
             ind_pset.renameArguments(**{f'ARG{i}':v})
         return ind_pset

@@ -1,7 +1,8 @@
-import json , sys
+import json
 
 from datetime import datetime
 from src.proj.env import PATH
+from src.proj.log import Logger
 
 class OptionsDefinition:
     """Specified Options for the project , how they are defined/calculated"""
@@ -18,8 +19,8 @@ class OptionsDefinition:
     @classmethod
     def available_modules(cls) -> list[str]:
         """Get the available nn/boost modules in the src/res/algo directory"""
-        sys.stderr.write(f'Redefine available modules at {datetime.now()}\n')
         from src.res.algo import AlgoModule
+        Logger.info(f'Redefine available modules at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
         return [f'{module_type}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
 
     @classmethod
@@ -35,8 +36,8 @@ class OptionsDefinition:
     @classmethod
     def available_factors(cls) -> list[str]:
         """Get the available factors in the of pooling and sellside categories"""
-        sys.stderr.write(f'Redefine available factors at {datetime.now()}\n')
         from src.res.factor.calculator import FactorCalculator
+        Logger.info(f'Redefine available factors at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
         return [p.factor_name for p in FactorCalculator.iter(meta_type = 'pooling' , updatable = True)] + \
             [p.factor_name for p in FactorCalculator.iter(category1 = 'sellside' , updatable = True)]
 

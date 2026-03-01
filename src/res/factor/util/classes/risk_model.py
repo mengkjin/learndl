@@ -5,7 +5,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal
 
-from src.proj import Silence , DB , Proj
+from src.proj import DB , Proj
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 
 from .general_model import GeneralModel
@@ -176,7 +176,7 @@ class RiskModel(GeneralModel):
         assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'
         return model
     def load_day_model(self , date : int):
-        with Silence():
+        with Proj.Silence:
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
             S = self.S_loader.load(date , date)

@@ -46,21 +46,21 @@ def eval_basic_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Serie
     total_return = _period_ret(ret['ret'])
     annualized_return = (1 + total_return) ** (365 / total_days) - 1
     datas = [
-        ('StartDate' , str(start_date)),
-        ('EndDate' , str(end_date)),
+        ('Start' , str(start_date)),
+        ('End' , str(end_date)),
         ('Total' , f'{total_return * 100:.2f}%'),
-        ('Annualized' , f'{annualized_return * 100:.2f}%'),
+        ('Annual' , f'{annualized_return * 100:.2f}%'),
     ]
-    return pd.DataFrame(datas , columns = ['feature' , 'ret']).set_index('feature')['ret']
+    return pd.DataFrame(datas , columns = ['period' , 'ret']).set_index('period')['ret']
 
 def eval_year_ret(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
-    df = ret.assign(feature = ret['date'] // 10000).groupby('feature')['ret'].apply(_period_ret).reset_index(drop = False)
-    df['feature'] = 'Y' + df['feature'].astype(str)
+    df = ret.assign(period = ret['date'] // 10000).groupby('period')['ret'].apply(_period_ret).reset_index(drop = False)
+    df['period'] = 'Y' + df['period'].astype(str)
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
-    return df.set_index('feature')['ret']
+    return df.set_index('period')['ret']
 
 def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1 , periods : list[str] = ['w' , 'm' , 'q' , 'y']) -> pd.Series:
     ret = _get_ret_df(*input)
@@ -72,15 +72,15 @@ def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : 
             end_date = -1
         end_date = ret['date'].nlargest(-end_date).min()
 
-    period_names = {'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Quarter' , 'y' : 'Last Year'}
+    period_names = {'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Qtr' , 'y' : 'Last Year'}
     datas = []
     for period in periods:
         start_dt , end_dt = CALENDAR.cd_start_end(end_date , 1 , period) # noqa
         datas.append((period_names[period] , _period_ret(ret.query('date <= @end_dt and date >= @start_dt')['ret'])))
     
-    df = pd.DataFrame(datas , columns = ['feature' , 'ret'])
+    df = pd.DataFrame(datas , columns = ['period' , 'ret'])
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
-    return df.set_index('feature')['ret']
+    return df.set_index('period')['ret']
 
 def eval_period_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1) -> pd.Series:
     basic_stats = eval_basic_stats(*input)

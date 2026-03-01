@@ -1,6 +1,6 @@
 import re , yaml
 from pathlib import Path
-from typing import Literal , Any
+from typing import Literal , Any , ClassVar
 from dataclasses import dataclass , asdict , field
 
 from src.proj import PATH , Logger , MACHINE  # noqa
@@ -12,6 +12,8 @@ class PathItem:
     path: Path
     level: int
 
+    ignore_patterns : ClassVar[tuple[str, ...]] = (r'^db.py$' , r'^util$' , r'^\.(.*)$' , r'^_(.*)$')
+    
     @property
     def name(self):
         return self.path.name
@@ -34,8 +36,6 @@ class PathItem:
     
     @classmethod
     def iter_folder(cls, folder_path: Path | str = PATH.scpt, level: int = 0 , 
-                    ignore_starters = ('.', '_') ,
-                    ignore_files = ('db.py' , 'util') ,
                     min_level: int = 0 , max_level: int = 2):
         '''get all valid items from folder recursively'''
         items : list['PathItem'] = []
@@ -45,13 +45,13 @@ class PathItem:
         assert folder_path.is_dir() , f'{folder_path} is not a folder'
             
         for item in folder_path.iterdir():
-            if item.name.startswith(ignore_starters) or item.name in ignore_files:
+            if any(re.match(pattern, item.name) for pattern in cls.ignore_patterns):
                  continue
             if item.is_dir() and not list(item.iterdir()): 
                 continue
             items.append(cls(item , level))
             if item.is_dir(): 
-                items.extend(cls.iter_folder(item , level + 1 , ignore_starters , ignore_files, min_level , max_level))
+                items.extend(cls.iter_folder(item , level + 1 , min_level , max_level))
         
         items.sort(key=lambda x: (x.path))
         return items
@@ -73,6 +73,12 @@ class PathItem:
         parts = Path(script_key).parts
         return PathItem(base_dir.joinpath(*parts) , len(parts) - 1)
 
+    @classmethod
+    def from_path(cls , path : Path):
+        if not path.is_relative_to(PATH.scpt):
+            raise ValueError(f'{path} is not a relative path to {PATH.scpt} , connot convert to PathItem')
+        return cls.from_key(str(path.relative_to(PATH.scpt)))
+
 @dataclass
 class ScriptHeader:
     coding: str = 'utf-8'
@@ -88,6 +94,10 @@ class ScriptHeader:
     file_previewer: dict[str, Any] = field(default_factory=dict)
     disabled: bool = False
 
+    header_pattern : ClassVar[str] = r'^#(.*)'
+    exit_patterns : ClassVar[tuple[str, ...]] = (r'^# exit.*', r'^$')
+    ignore_patterns : ClassVar[tuple[str, ...]] = (r'^#!.*', r'^# coding:.*')
+
     def __post_init__(self):
         if self.mode not in ['shell', 'os']:
             raise ValueError(f'Invalid mode: {self.mode}')
@@ -96,20 +106,20 @@ class ScriptHeader:
         return ScriptParamInput.from_dict(self.parameters)
 
     @classmethod
-    def read_from_file(cls , path : Path , include_starter='#', exit_starter='', ignore_starters=('#!', '# coding:')):
+    def read_from_file(cls , path : Path):
         yaml_lines: list[str] = []
         try:
             with open(path, 'r', encoding='utf-8') as file:
                 for line in file:
                     stripped_line = line.strip()
-                    if stripped_line.startswith(ignore_starters): 
+                    if any(re.match(pattern, stripped_line) for pattern in cls.ignore_patterns): 
                         continue
-                    elif stripped_line.startswith(include_starter):
-                        yaml_lines.append(stripped_line)
-                    elif stripped_line.startswith(exit_starter):
+                    elif any(re.match(pattern, stripped_line) for pattern in cls.exit_patterns):
                         break
-
-            yaml_str = '\n'.join(line.removeprefix(include_starter) for line in yaml_lines)
+                    elif match := re.match(cls.header_pattern, stripped_line):
+                        yaml_lines.append(match.group(1))
+                    
+            yaml_str = '\n'.join(line for line in yaml_lines)
             kwargs = yaml.safe_load(yaml_str) or {}
             kwargs['description'] = kwargs.get('description') or path.name
         except FileNotFoundError:

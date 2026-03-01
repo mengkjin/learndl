@@ -30,6 +30,17 @@ def same(x , y):
     else:
         return x.equal(y)
 
+
+def kthvalue_by_topk(x: torch.Tensor, k: int, dim=-1, keepdim=True , largest=False):
+    """
+    Get the k-th smallest value by topk
+    """
+    # Get the k smallest elements
+    vals, _ = torch.topk(x, k, dim=dim, largest=largest, sorted=True)
+    # The k-th smallest is the last one in this sorted list
+    res = vals.select(dim, -1)
+    return res.unsqueeze(dim) if keepdim else res
+    
 class PrimaTools:
     @classmethod
     def decor(cls , n_arg = 1, roller = False , **decor_kwargs):
@@ -570,10 +581,10 @@ def sign(x):
 
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
-def ts_delay(x, d):
+def ts_delay(x, d, * , no_alert = False):
     if d > x.shape[0]: 
         return None
-    if d < 0: 
+    if d < 0 and not no_alert: 
         Logger.alert2('Beware! future information used!')
     z = x.roll(d, dims=0)
     if d >= 0:
@@ -584,10 +595,10 @@ def ts_delay(x, d):
 
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
-def ts_delta(x, d):
+def ts_delta(x, d , * , no_alert = False):
     if d > x.shape[0]: 
         return None
-    if d < 0: 
+    if d < 0 and not no_alert: 
         Logger.alert2('Beware! future information used!')
     z = x - ts_delay(x, d)
     return z
@@ -715,11 +726,11 @@ def rlbxy(x, y, d, n, btm, sel_posneg=False):
     x , y = x.unfold(0,d,1) , y.unfold(0,d,1)
     groups = [None , None]
     if btm in ['btm' , 'diff']:
-        groups[0] = (x <= x.kthvalue(n, dim=-1, keepdim=True)[0])
+        groups[0] = (x <= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False))
         if sel_posneg: 
             groups[0] *= (x < 0)
     if btm in ['top' , 'diff']:
-        groups[1] = (x >= x.kthvalue(d-n+1, dim=-1, keepdim=True)[0])
+        groups[1] = (x >= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True))
         if sel_posneg: 
             groups[1] *= (x > 0)
         
@@ -751,11 +762,11 @@ def rlbx(x, d, n, btm, sel_posneg=False):
     x = x.unfold(0,d,1)
     groups = [None , None]
     if btm in ['btm' , 'diff']:
-        groups[0] = (x <= x.kthvalue(n, dim=-1, keepdim=True)[0])
+        groups[0] = (x <= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False))
         if sel_posneg: 
             groups[0] *= (x < 0)
     if btm in ['top' , 'diff']:
-        groups[1] = (x >= x.kthvalue(d-n+1, dim=-1, keepdim=True)[0])
+        groups[1] = (x >= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True))
         if sel_posneg: 
             groups[1] *= (x > 0)
         

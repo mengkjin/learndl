@@ -6,20 +6,15 @@
 # content: Resume Testing all prediction models and sellside/pooling factors
 # email: True
 # mode: shell
-# parameters:
-#   force_resume : 
-#       type : bool
-#       desc : force resume testing even if it has been done in the last 24 hours
-#       required : True
-#       default : True
 
-from src.api import ModelAPI
+from src.api import ModelAPI , SummaryAPI
 from src.proj import CALENDAR
 from src.proj.util import ScriptTool
 
 @ScriptTool('resume_testing' , CALENDAR.update_to() , forfeit_if_done = True)
-def main(force_resume : bool = True , **kwargs):
-    ModelAPI.resume_testing(force_resume = force_resume)
+def main(**kwargs):
+    ModelAPI.resume_testing(force_resume = True)
+    SummaryAPI.update()
 
 if __name__ == '__main__':
     main()

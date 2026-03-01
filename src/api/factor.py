@@ -1,6 +1,6 @@
 from typing import Any , Literal
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.proj.util import Options
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
@@ -162,5 +162,6 @@ class FactorAPI:
     def resume_testing_factors(cls):
         from src.api import ModelAPI
         for factor in Options.available_factors():
-            with Logger.Paragraph(f'Resume Testing Factor {factor}' , 1):
+            title = f'Resume Testing Factor {factor}'
+            with Logger.Paragraph(title , 1) if Proj.vb.vb > 1 else Logger.Timer(title):
                 ModelAPI.test_factor(factor , resume = 1)

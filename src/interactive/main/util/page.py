@@ -4,7 +4,8 @@ from typing import Literal
 import re , subprocess
 from abc import abstractmethod , ABC
 
-from src.proj import Proj , MACHINE
+from src.proj import Proj , MACHINE 
+from src.proj.util import Options
 from src.interactive.backend import PathItem
 from src.interactive.backend import ScriptRunner
 
@@ -66,11 +67,11 @@ def get_intro_page(page_name : str):
 
 def script_pages():
     pages = {}
-    items = SC.path_items
+    items = [item for item in SC.path_items if item.is_file and item.level > 0]
     for item in items:
-        if not item.is_dir and item.level > 0:
+        if not runs_page_path(item.script_key).exists():
             make_script_detail_file(item)
-            pages[item.script_key] = get_script_page(item.script_key)
+        pages[item.script_key] = get_script_page(item.script_key)
     return pages
 
 def get_script_page(script_key: str):
@@ -107,12 +108,17 @@ def runs_page_url(script_key : str):
 
 def runs_page_path(script_key : str):
     """get runs page path"""
-    return PAGE_DIR.joinpath(Path(runs_page_url(script_key)).parts[-1])
+    return PAGE_DIR.parent.joinpath(runs_page_url(script_key))
 
-def make_script_detail_file(item : PathItem):
+def all_runs_page_paths():
+    return [path for path in PAGE_DIR.iterdir() if path.is_file and path.name.startswith('_')]
+
+def make_script_detail_file(item : PathItem | Path):
     """make script detail file"""
     if item.is_dir: 
         return
+    if isinstance(item, Path):
+        item = PathItem.from_path(item)
     with open(runs_page_path(item.script_key), 'w') as f:
         f.write(f"""
 from util import show_script_detail
@@ -123,6 +129,10 @@ def main():
 if __name__ == '__main__':
     main()
 """)
+
+def remake_all_script_detail_files():
+    [path.unlink() for path in all_runs_page_paths()]
+    [make_script_detail_file(path) for path in PathItem.iter_folder()]
 
 class ControlPanelButton(ABC):
     """control panel button"""
@@ -233,14 +243,22 @@ class CurrentScriptLatestTaskButton(ControlPanelButton):
                 #show_report_main(SC.get_script_runner(item.script_key))
                 st.rerun()
 
-class ControlRefreshTaskQueueButton(ControlPanelButton):
-    key = f"control-refresh-task-queue"
+class ControlRefreshInteractiveButton(ControlPanelButton):
+    key = f"control-refresh-interactive"
     icon = f":material/refresh:"
-    title = f"Refresh Tasks"
+    title = f"Refresh All"
 
     def button(self , script_key : str | None = None):
-        st.button(self.icon, key=f"{self.key}-enabled" , help = "Refresh Task Queue" , 
-                        on_click = SC.click_queue_refresh , disabled = False)
+        st.button(self.icon, key=f"{self.key}-enabled" , help = "Refresh Task Queue / Options / Scripts" , 
+                  on_click = self.refresh_all , disabled = False)
+    
+    def refresh_all(self):
+        with st.spinner("Refreshing..."):
+            with Proj.Silence:
+                Options.update()
+                remake_all_script_detail_files()
+        SC.rerun()
+        st.rerun()
 
 class ControlGitClearPullButton(ControlPanelButton):
     key = f"control-git-clear-pull"
@@ -278,8 +296,6 @@ class ControlGitClearPullButton(ControlPanelButton):
                             Logger.error(f"Error removing folder: {folder}:")
                             Logger.error(f"Subfiles: {subfiles}")
             Logger.success("Git Pull Finished")
-
-
 class ControlPanel:
     """control panel"""
     control_panel_key = "page-control-panel"
@@ -287,7 +303,7 @@ class ControlPanel:
         'script-runner-run' : ScriptRunnerRunButton(),
         'global-script-latest-task' : GlobalScriptLatestTaskButton(),
         'current-script-latest-task' : CurrentScriptLatestTaskButton(),
-        'control-refresh-task-queue' : ControlRefreshTaskQueueButton(),
+        'control-refresh-interactive' : ControlRefreshInteractiveButton(),
         'control-git-clear-pull' : ControlGitClearPullButton(),
     }
     

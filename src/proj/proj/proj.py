@@ -138,9 +138,7 @@ class _Verbosity:
 
         def __exit__(self , exc_type , exc_value , exc_traceback):
             Proj.vb.set_vb(self.vb_prev)
-
-    Silence = Silence
-
+            
     def set_vb(self , value : int | None = None):
         if value is None:
             return
@@ -182,6 +180,7 @@ class _ProjMeta(type):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')
 
 class Proj(metaclass=_ProjMeta):
+    Silence = Silence()
     States = ProjStates
     Conf = Conf
     vb = _Verbosity()

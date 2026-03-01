@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import Silence , Logger , CALENDAR , Proj , DB 
+from src.proj import Logger , CALENDAR , Proj , DB 
 from src.proj.func import singleton
 from src.data.util import DataBlock , INFO
 
@@ -64,7 +64,7 @@ class DataVendor:
         self.FINA.truncate()
 
     def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with Silence():
+        with Proj.Silence:
             self.all_stocks = self.INFO.get_desc(set_index=False , listed = listed , exchange = exchange)
             self.st_stocks = self.INFO.get_st()
 
@@ -181,17 +181,17 @@ class DataVendor:
             setattr(self , f'_block_daily_ret' , blk)
 
     def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , extend = 0) -> DataBlock:
-        with Silence(True):
+        with Proj.Silence:
             self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend)
         return getattr(self , f'_block_daily_quotes' , DataBlock())
 
     def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , extend = 0) -> DataBlock:
-        with Silence(True):
+        with Proj.Silence:
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend)
         return getattr(self , f'_block_risk_exp' , DataBlock())
 
     def get_returns_block(self , start_dt : int , end_dt : int):
-        with Silence(True):
+        with Proj.Silence:
             self.update_return_block(start_dt , end_dt)
         return getattr(self , f'_block_daily_ret' , DataBlock())
     

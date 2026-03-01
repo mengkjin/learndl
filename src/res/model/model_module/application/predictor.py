@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , ClassVar , Literal
 
-from src.proj import MACHINE , Logger , Silence , CALENDAR
+from src.proj import MACHINE , Logger , Proj , CALENDAR
 from src.res.model.util import ModelConfig , PredictionModel
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import get_predictor_module
@@ -48,7 +48,7 @@ class ModelPredictor:
         assert update != overwrite , 'update and overwrite must be different here'
         
         dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
-        with Silence():
+        with Proj.Silence:
             self.predict_dates(dates)
         self.save_preds()
         self.deploy()

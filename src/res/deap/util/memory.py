@@ -5,18 +5,42 @@ import numpy as np
 
 class MemoryManager():
     unit = 1024**3
+    _instance = None
 
-    def __init__(self , device = 0) -> None:
-        self.cuda_avail = torch.cuda.is_available()
-        if self.cuda_avail:
-            self.device = torch.device(device)
-            self.unit = type(self).unit
-            if self.cuda_avail: 
+    def __new__(cls , *args , **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self , device = None , *args , **kwargs) -> None:
+        self.initialize(*args , **kwargs)
+
+    @property
+    def initiated(self) -> bool:
+        return hasattr(self , 'cuda_avail')
+
+    def initialize(self , device : torch.device | None = None) -> None:
+        if self.initiated:
+            return
+        if device is not None:
+            self.device = device
+        else:
+            if torch.cuda.is_available():
+                self.device = torch.device('cuda' if device is None else device)
+                self.unit = type(self).unit
                 self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
-            self.record = {}
+            elif torch.backends.mps.is_available():
+                self.device = torch.device('mps')
+                self.unit = type(self).unit
+                self.gmem_total = torch.mps.current_allocated_memory() / self.unit
+            else:
+                self.device = torch.device('cpu')
+                self.unit = type(self).unit
+                self.gmem_total = 0.
+        self.record = {}
 
     def check(self , key = None, showoff = False , critical_ratio = 0.5 , starter = '**'):
-        if not self.cuda_avail: 
+        if self.device.type != 'cuda': 
             return 0.
 
         gmem_free = torch.cuda.mem_get_info(self.device)[0] / self.unit
@@ -53,10 +77,10 @@ class MemoryManager():
             return cls.tensor_memory(obj , cuda_only = cuda_only)
         elif isinstance(obj , (list,tuple)):
             return sum([cls.object_memory(o , cuda_only = cuda_only) for o in obj])
-        elif isinstance(obj , object):
-            return cls.object_memory(obj.__dict__ , cuda_only = cuda_only)
         elif isinstance(obj , dict):
             return sum([cls.object_memory(o , cuda_only = cuda_only) for o in obj.values()])
+        elif isinstance(obj , object) and hasattr(obj , '__dict__'):
+            return cls.object_memory(obj.__dict__ , cuda_only = cuda_only)
         else:
             return 0.
     
@@ -68,7 +92,7 @@ class MemoryManager():
         return total_memory / cls.unit
     
     def print_memeory_record(self):
-        if self.cuda_avail:
+        if self.device.type == 'cuda':
             Logger.stdout(f' Avg Freed Cuda Memory: ')
             for key , value in self.record.items():
                 Logger.stdout(f'{key} : {len(value)} counts, on average freed {np.mean(value):.2f}G' , indent = 1)

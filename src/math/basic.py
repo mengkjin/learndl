@@ -36,7 +36,7 @@ def tensor_nanstd(x : torch.Tensor , dim=None, keepdim=False , correction=1):
 
 def tensor_nanmedian(x : torch.Tensor , dim=None, keepdim=False):
     if x.is_floating_point():
-        return x.nanmedian() if dim is None else x.nanmedian(dim = dim , keepdim = keepdim).values
+        return x.nanquantile(0.5, dim=dim,keepdim = keepdim , interpolation='lower')
     else:
         return tensor_nanmedian(x.to(torch.float) , dim , keepdim).to(x.dtype)
         

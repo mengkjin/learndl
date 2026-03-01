@@ -2,13 +2,15 @@ from deap import gp , creator
 import numpy as np
 import re
 from dataclasses import dataclass
-
+from typing import Any
+from src.proj import Logger
 from .fitness import FitnessObjectMin
 
 class BaseIndividual(gp.PrimitiveTree):
     """
     primitive tree that is directly generated from populating process , name can be redundant
-    can use purify method to convert to a purified individual (can be used to convert a syntax or compare with others)
+    can use purify method to convert to a purified individual (can be compiled)
+    can use revert method to convert from a purified individual to raw (can be varAnd)
     """
     fitness : FitnessObjectMin
     pset_raw : gp.PrimitiveSetTyped
@@ -19,7 +21,9 @@ class BaseIndividual(gp.PrimitiveTree):
 
     def __init__(self , *args , **kwargs):
         super().__init__(*args , **kwargs)
-        self.raw_syntax = str(self)
+
+    def __repr__(self):
+        return f'BaseIndividual(syntax={self.syntax}, raw_syntax={self.raw_syntax}, purified={self.purified})'
 
     @property
     def purified(self) -> bool:
@@ -35,23 +39,28 @@ class BaseIndividual(gp.PrimitiveTree):
                 new_prims.append(prim)
         self.__init__(new_prims)
         return self
+
+    def update_syntax(self , syntax : str):
+        self.__init__(syntax)
+        return self
     
     def purify(self):
         if self.purified:
             return self
-        pure_syntax = self.pure_syntax
-        if pure_syntax != self.raw_syntax:
-            new_ind = self.from_string(self.pure_syntax , pset=self.pset_pur)
-            self.__init__(new_ind)
+        raw_syntax = self.syntax
+        new_ind = self.from_string(self.pure_syntax , pset=self.pset_pur)
+        self.__init__(new_ind)
         self._purified = True
-        return self
-
-    def revive(self):
-        self._purified = False
+        self.raw_syntax = raw_syntax
         return self
 
     def revert(self):
-        self.__init__(self.raw_syntax)
+        if not self.purified:
+            return self
+        new_ind = self.from_string(self.raw_syntax , pset=self.pset_raw)
+        self.__init__(new_ind)
+        self._purified = False
+        self.raw_syntax = None
         return self
 
     @property
@@ -64,10 +73,12 @@ class BaseIndividual(gp.PrimitiveTree):
 
     @property
     def raw_syntax(self) -> str:
-        return getattr(self , '_raw_syntax' , self.syntax)
+        if not hasattr(self , '_raw_syntax') or self._raw_syntax is None:
+            return self.syntax
+        return self._raw_syntax
 
     @raw_syntax.setter
-    def raw_syntax(self , value : str):
+    def raw_syntax(self , value : str | None):
         self._raw_syntax = value
 
     @property
@@ -79,8 +90,19 @@ class BaseIndividual(gp.PrimitiveTree):
         self.fitness.values = value
 
     @classmethod
-    def trim_syntax(cls , syntax : str) -> str:
-        return re.sub(r'__[0-9]+__','',re.sub(r'_I_[0-9]+_','',syntax.replace(' ','')))
+    def trim_syntax(cls , syntax : Any) -> str:
+        """trim syntax by replacing patterns"""
+        # replace custom int1, int2, int3, float1 to int, int, int, float
+        syntax = str(syntax)
+        for prim in ['int1', 'int2', 'int3', 'float1']:
+            syntax = re.sub(fr'{prim}#([+-]?\d*\.?\d+)#', r'\1', syntax)
+
+        # remove primative suffix
+        syntax = re.sub(r'__[0-9]+__','' , syntax)
+
+        # remove identity primatives
+        syntax = re.sub(r'_I_[0-9]+_','',syntax)
+        return syntax
 
     @property
     def pure_syntax(self) -> str:
@@ -92,16 +114,20 @@ class BaseIndividual(gp.PrimitiveTree):
 
     @classmethod
     def from_syntax(cls , syntax : str , raw_syntax : str | None = None , fit_value : tuple | None = None) -> 'BaseIndividual':
-        syntax = cls.trim_syntax(syntax)
+        if raw_syntax:
+            syntax = raw_syntax
         try:
-            ind = getattr(creator , 'Individual' , BaseIndividual).from_string(syntax , pset=cls.pset_pur)
+            ind = cls.get_class().from_string(syntax , pset=cls.pset_raw).prune()
         except Exception:
-            ind = getattr(creator , 'Individual' , BaseIndividual).from_string(syntax , pset=cls.pset_raw)
-        if raw_syntax is not None:
-            ind.raw_syntax = raw_syntax
+            ind = cls.get_class().from_string(cls.trim_syntax(syntax) , pset=cls.pset_pur)
+            ind.raw_syntax = syntax
         if fit_value is not None:
             ind.fit_value = fit_value
         return ind
+
+    @classmethod
+    def get_class(cls) -> type['BaseIndividual']:
+        return getattr(creator , 'Individual' , BaseIndividual)
 
     @property
     def if_valid(self) -> bool:
@@ -123,7 +149,7 @@ class BaseIndividual(gp.PrimitiveTree):
 @dataclass
 class SyntaxRecord:
     syntax : str
-    raw_syntax : str
+    raw_syntax : str | None = None
     fit_value : tuple | None = None
 
     def __str__(self):
@@ -133,7 +159,7 @@ class SyntaxRecord:
         return f'SyntaxRecord(syntax={self.syntax}, raw_syntax={self.raw_syntax}, fit_value={self.fit_value})'
 
     def to_ind(self):
-        return getattr(creator , 'Individual' , BaseIndividual).from_syntax(self.syntax , raw_syntax = self.raw_syntax , fit_value = self.fit_value)
+        return BaseIndividual.get_class().from_syntax(self.syntax , raw_syntax = self.raw_syntax , fit_value = self.fit_value)
 
     @classmethod
     def create(cls , input : 'BaseIndividual | str | SyntaxRecord') -> 'SyntaxRecord':
@@ -142,6 +168,8 @@ class SyntaxRecord:
         elif isinstance(input , BaseIndividual):
             return input.to_record()
         elif isinstance(input , str):
+            Logger.warning(f'str to SyntaxRecord is not supported, because it is not unique from a purifed individul to raw (can be varAnd)')
+            raise TypeError(f'str to SyntaxRecord is not supported, because it is not unique from a purifed individul to raw (can be varAnd)')
             return cls(input , input)
         else:
             raise ValueError(f'Invalid input type: {type(input)}')
