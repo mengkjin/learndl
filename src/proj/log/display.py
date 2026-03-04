@@ -18,14 +18,14 @@ class Display:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , obj = None , vb_level : int | Literal['max','min','inf'] = 1):
+    def __init__(self , obj = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """
         display the object if it is not None in the constructor
         example:
             Display(obj) # will create (or use the existing instance) a new instance of the display and also display the object
         """
         if obj is not None:
-            self(obj , vb_level = vb_level)
+            self(obj , vb_level = vb_level , **kwargs)
 
     def __call__(self , obj , **kwargs):
         """
@@ -58,7 +58,7 @@ class Display:
         cls._callbacks_after.clear()
 
     @classmethod
-    def display(cls , obj , vb_level : int | Literal['max','min','inf'] = 1):
+    def display(cls , obj , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """
         display the object
         """
@@ -69,9 +69,9 @@ class Display:
                 callback(obj)
                 
             if isinstance(obj , Figure):
-                cls.figure(obj)
+                cls.figure(obj , **kwargs)
             elif isinstance(obj , pd.DataFrame):
-                cls.data_frame(obj)
+                cls.data_frame(obj , **kwargs)
             else:
                 raw_display(obj)
 
@@ -79,7 +79,7 @@ class Display:
                 callback(obj)
 
     @staticmethod
-    def data_frame(df : pd.DataFrame):
+    def data_frame(df : pd.DataFrame , **kwargs):
         """
         display a pandas dataframe
         """
@@ -88,11 +88,12 @@ class Display:
             'display.max_columns', None,
             'display.width', 1000,
             'display.precision', 3,
-            'display.colheader_justify', 'center'):
+            'display.colheader_justify', 'center' ,
+            *[i for k,v in kwargs.items() for i in [k,v]]):
             raw_display(df)
 
     @staticmethod
-    def figure(fig : Figure):
+    def figure(fig : Figure , **kwargs):
         """
         display a matplotlib figure
         """

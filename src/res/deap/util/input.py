@@ -3,16 +3,184 @@ import numpy as np
 import pandas as pd
 import torch
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , Callable
 
-from src.proj import Logger
+from src.proj import Logger , Proj , CALENDAR
 from src.proj.func import torch_load
 from src.math import tensor as T
+from src.data import DATAVENDOR
+from src.data.util import DataBlock
+from src.data.loader import BlockLoader
 from src.res.deap.param import gpDefaults , gpParameters
 from src.res.deap.func import factor_func as FF
 from .logger import gpLogger
 from .status import gpStatus
+
+# db_src , db_key , feature , scale
+
+@dataclass
+class InputElement:
+    name: str
+    db_src: str
+    db_key: str
+    feature: str
+    scale: float = 1.
+    inverse: bool = False
+    fill_nan: Any = None
+
+    def load_tuple(self) -> tuple[str, str]:
+        return (self.db_src, self.db_key)
+
+    @property
+    def is_raw(self) -> bool:
+        return self.name.islower()
+
+    @property
+    def is_fac(self) -> bool:
+        return self.name.isupper()
+
+    def fac_input(self):
+        return InputElement(self.name.upper() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
+
+    def raw_input(self):
+        return InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
+
+    def get_datablock(self , start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
+        return BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start_dt , end_dt , vb_level = Proj.vb.inf).as_tensor()
+
+    def adjust_datablock(self , block : DataBlock , cp_block : DataBlock | None = None) -> DataBlock:
+        feature_list = [f for f in block.feature]
+        if self.feature not in feature_list:
+            return block
+        i = feature_list.index(self.feature)
+        block.feature[i] = self.name
+        values : torch.Tensor = block.values[...,i]
+        if self.inverse:
+            values = 1. / values
+        if self.is_fac:
+            values = T.zscore(values , dim = 0)
+        elif self.scale != 1.:
+            values = values * self.scale
+        if self.fill_nan is not None and cp_block is not None:
+            cp_notnan = ~cp_block.values[...,0].isnan()
+            values = values.nan_to_num(self.fill_nan).where(cp_notnan , torch.nan)
+        block.values[...,i] = values
+        return block
+
+INPUT_MAPPING = {
+    'cp': InputElement('cp' , 'trade_ts' , 'day' , 'close'), 
+    'turn': InputElement('turn' , 'trade_ts' , 'day' , 'turn_fl'), 
+    'vol': InputElement('vol' , 'trade_ts' , 'day' , 'volume' , 1e-6), 
+    'amt': InputElement('amt' , 'trade_ts' , 'day' , 'amount' , 1e-6), 
+    'op': InputElement('op' , 'trade_ts' , 'day' , 'open'), 
+    'hp': InputElement('hp' , 'trade_ts' , 'day' , 'high'), 
+    'lp': InputElement('lp' , 'trade_ts' , 'day' , 'low'), 
+    'vp': InputElement('vp' , 'trade_ts' , 'day' , 'vwap'), 
+    'bp': InputElement('bp' , 'trade_ts' , 'day_val' , 'pb' , inverse = True), 
+    'ep': InputElement('ep' , 'trade_ts' , 'day_val' , 'pe' , inverse = True), 
+    'dp': InputElement('dp' , 'trade_ts' , 'day_val' , 'dv_ratio'), 
+    'rtn': InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01),
+}
+INPUT_MAPPING.update({k.upper():v.fac_input() for k,v in INPUT_MAPPING.items()})
+
+def load_inputs(inputs : list[str] , start_dt : int = 20100101 , end_dt : int = 20241231 , cp_block : DataBlock | None = None) -> DataBlock:
+    '''
+    读取输入因子并转化成DataBlock,额外返回secid和date的ndarray
+    input:
+        filename:    filename gp data
+        start_dt:    start date
+        end_dt:      end date
+        input_freq:  1 , 5 , ...
+    output:
+        block:       DataBlock        
+    '''
+
+    input_elements = [INPUT_MAPPING[input] for input in inputs]
+    load_tuples = list(set([element.load_tuple() for element in input_elements]))
+    assert load_tuples , f'load_tuples is empty'
+    
+    if cp_block is None:
+        cp_block = get_cp_block(start_dt , end_dt)
+    blocks : list[DataBlock] = []
+    
+    for tup in load_tuples:
+        sub_elements = [element for element in input_elements if element.load_tuple() == tup]
+        load_features = list(set([element.feature for element in sub_elements]))
+        block = get_features_block(tup[0] , tup[1] , load_features , start_dt , end_dt)
+        raw_features = {element.feature : element for element in sub_elements if element.is_raw}
+        if raw_features:
+            raw_block = block.align_feature(list(raw_features.keys()) , inplace = False)
+            [element.adjust_datablock(raw_block , cp_block) for element in raw_features.values()]
+            blocks.append(raw_block)
+        
+        fac_features = {element.feature : element for element in sub_elements if element.is_fac}
+        if fac_features:
+            fac_block = block.align_feature(list(fac_features.keys()) , inplace = False)
+            [element.adjust_datablock(fac_block , cp_block) for element in fac_features.values()]
+            blocks.append(fac_block)
+        assert blocks , f'blocks is empty'
+        block = DataBlock.merge(blocks , inplace = True).align_feature(inputs , inplace = True)
+    return block
+
+def get_cp_block(start_dt : int = 20100101 , end_dt : int = 20241231 , extend : int = 0) -> DataBlock:
+    '''
+    获取收盘价
+    input:
+        start_dt:    start date
+        end_dt:      end date
+        device:      device
+    output:
+        cp_block:          close price tensor
+    '''
+    element = InputElement('cp' , 'trade_ts' , 'day' , 'close')
+    secid = DATAVENDOR.secid(end_dt)
+    end_dt = CALENDAR.td(end_dt , extend).td
+    dates = CALENDAR.td_within(start_dt , end_dt)
+    block = element.get_datablock(start_dt , end_dt).align_secid_date(secid , dates , inplace = True)
+    return block
+
+def get_features_block(src : str , key : str , features : list[str] , start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
+    '''
+    获取特征
+    input:
+        features:    features
+        start_dt:    start date
+        end_dt:      end date
+    output:
+        block:       DataBlock        
+    '''
+    secid = DATAVENDOR.secid(end_dt)
+    dates = CALENDAR.td_within(start_dt , CALENDAR.td(end_dt , 20).td)
+    block = BlockLoader(src , key , feature = features).\
+        load(start_dt , end_dt , vb_level = Proj.vb.inf).\
+        align_secid_date(secid , dates , inplace = True).as_tensor()
+    return block
+
+def init_labels_raw(neutral_factor : torch.Tensor | None = None , neutral_group : torch.Tensor | None = None , nday = 10 , delay = 1 , 
+                    start_dt : int = 20100101 , end_dt : int = 20241231) -> torch.Tensor:
+    '''
+    生成原始预测标签,中性化后的10日收益
+    input:
+        CP:             calculated close price
+        neutral_factor: size , for instance
+        neutral_group:  indus , for instance
+    output:
+        labels_raw:     
+    '''
+    element = InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01)
+    secid = DATAVENDOR.secid(end_dt)
+    dates = CALENDAR.td_within(start_dt , end_dt)
+    new_end_dt = CALENDAR.td(end_dt , 20).td
+    block = element.get_datablock(start_dt , new_end_dt)
+    block.values = T.ts_delay(T.ts_product(block.values + 1 , nday) , -nday-delay , no_alert = True)
+    block = block.align_secid_date(secid , dates , inplace = True)
+    neutral_x = T.neutralize_xdata_2d(neutral_factor, neutral_group)
+    labels_raw = T.neutralize_2d(block.values[...,0,0], neutral_x)  # 市值行业中性化
+    
+    assert labels_raw is not None , 'labels_raw is None'
+    return labels_raw
 
 def gp_labels_raw(CP = None , neutral_factor = None , neutral_group = None , nday = 10 , delay = 1 , 
                   slice_date = None, df_columns = None , device = None) -> torch.Tensor:

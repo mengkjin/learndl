@@ -138,7 +138,8 @@ class gpTimer:
         [times.append((cat , k , v.time_cost , v.avg_time_cost , v.count)) for cat , timers in self.timers.items() for k,v in timers.items() if v]
         
         df = pd.DataFrame(times, columns=['category' , 'name', 'total_time', 'avg_time', 'count'])
-        Logger.display(df , caption = 'Timer Table:')
+        display_kwargs = {'display.float_format': '{:.4f}'.format}
+        Logger.display(df , caption = 'Timer Table:' , vb_level = 1 , **display_kwargs)
         return df
 
     def decorate_primas(self):

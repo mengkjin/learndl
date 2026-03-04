@@ -21,10 +21,10 @@ class PrimTool:
     @classmethod
     def prim_legit(cls,n_arg=1,**decor_kwargs):
         assert n_arg in [1,2] , n_arg
-        return cls.prim_legit_1(**decor_kwargs) if n_arg == 1 else cls.prim_legit_2(**decor_kwargs) 
+        return cls.prim_legit_x(**decor_kwargs) if n_arg == 1 else cls.prim_legit_xy(**decor_kwargs) 
     
     @classmethod
-    def prim_legit_1(cls,**decor_kwargs):
+    def prim_legit_x(cls,**decor_kwargs):
         def decorator(func):
             def wrapper(x , *args, **kwargs):
                 legit = cls.input_checker(x , **decor_kwargs)
@@ -37,7 +37,7 @@ class PrimTool:
         return decorator
     
     @classmethod
-    def prim_legit_2(cls,**decor_kwargs):
+    def prim_legit_xy(cls,**decor_kwargs):
         def decorator(func):
             def wrapper(x , y ,*args, **kwargs):
                 legit = cls.input_checker(x , y , **decor_kwargs)

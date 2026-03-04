@@ -91,7 +91,7 @@ class DataPreProcessor:
             with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 3):   
                 data_block = data_block.mask_values(mask = processor.mask)
             with Logger.Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 3):
-                data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
+                data_block.save_keys(key , predict , processor.save_start_dt , processor.save_end_dt)
             with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             

@@ -7,6 +7,8 @@ slice_date : # 修改数据切片区间,前两个为样本内的起止点,后两
   - '2021-12-31'
   - '2022-01-04'
   - '2099-12-31'
+insample_dates: [20100104, 20211231]
+outsample_dates: [20220104, 20991231]
 fitness_wgt: 
   rankic_in_res:  1.
   rankir_in_res:  1.
@@ -41,6 +43,8 @@ factor_neut_type: 0       # [outer loop] how to neutralize factor values when i_
 test_params:
   gp_fac_list: [cp, turn]
   gp_raw_list: [CP, TURN]
+  insample_dates: [20220104, 20221231]
+  outsample_dates: [20230104, 20231229]
   slice_date : 
     - '2022-01-04'
     - '2022-12-30'

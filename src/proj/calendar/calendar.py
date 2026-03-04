@@ -289,6 +289,8 @@ class CALENDAR:
         else:
             start_dt , end_dt , source_dates = args
             target_dates = cls.td_within(start_dt , end_dt) if td else cls.cd_within(start_dt , end_dt)
+        if source_dates is None:
+            source_dates = np.array([], dtype=int)
         return np.setdiff1d(target_dates , source_dates)
     
     @classmethod

@@ -109,6 +109,12 @@ class gpParameters:
         """并行任务数量,建议设为1,即不并行,使用单显卡单进程运行"""
         return self.params.get('worker_num' , gpDefaults.worker_num)  # multiprocessing pool number
     @property
+    def insample_dates(self) -> tuple[int, int]:
+        return tuple(self.params.get('insample_dates' , [20100104, 20211231]))
+    @property
+    def outsample_dates(self) -> tuple[int, int]:
+        return tuple(self.params.get('outsample_dates' , [20220104, 20991231])) 
+    @property
     def slice_date(self) -> list[datetime]:
         """修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日"""
         return [pd.to_datetime(x) for x in self.params.get('slice_date' , [])]

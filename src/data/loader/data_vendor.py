@@ -8,7 +8,6 @@ from src.proj import Logger , CALENDAR , Proj , DB
 from src.proj.func import singleton
 from src.data.util import DataBlock , INFO
 
-from .loader import BlockLoader
 from .financial_data import BS , IS , CF , INDI , FINA , FinData
 from .analyst import ANALYST
 from .min_kline import MKLINE    
@@ -69,6 +68,7 @@ class DataVendor:
             self.st_stocks = self.INFO.get_st()
 
     def secid(self , date : int | None = None) -> np.ndarray: 
+        """get secid of all stocks or at a specific date"""
         if date is None: 
             return np.unique(self.all_stocks['secid'].to_numpy(int))
         if date not in self.day_secids:
@@ -153,18 +153,8 @@ class DataVendor:
 
         block0 : DataBlock = getattr(self , f'_block_{data_key}' , DataBlock())
         loaded_start , loaded_end = block0.min_date , block0.max_date
+        block0 = block0.extend_to(db_src , db_key , target_start , target_end , inplace = True)
         
-        if loaded_start <= target_start and loaded_end >= target_end:
-            return
-        target_start , target_end = min(target_start , loaded_start), max(target_end , loaded_end)
-        dates = self.td_within(target_start , target_end)
-
-        if len(early_dates := dates[dates < block0.min_date]) > 0:
-            block = BlockLoader(db_src , db_key).load(early_dates.min() , early_dates.max() , vb_level = Proj.vb.max).adjust_price()
-            block0 = block0.merge_others(block , inplace = True)
-        if len(late_dates := dates[dates > block0.max_date]) > 0:
-            block = BlockLoader(db_src , db_key).load(late_dates.min() , late_dates.max() , vb_level = Proj.vb.max).adjust_price()
-            block0 = block0.merge_others(block , inplace = True)
         Logger.success(f'DATAVENDOR.{data_key} expand from {CALENDAR.dates_str([loaded_start,loaded_end])} to {CALENDAR.dates_str([target_start,target_end])}')
         setattr(self , f'_block_{data_key}' , block0)
 

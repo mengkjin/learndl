@@ -65,12 +65,7 @@ class TsRoller:
     
     @staticmethod
     def fold(z : Tensor , d : int , * , dim : int = 1 , nan = nan , **kwargs):
-        if dim == 1:
-            pad = (d-1,0)
-        elif dim == 0:
-            pad = (0,0,d-1,0)
-        else:
-            raise ValueError(f'Invalid dimension: {dim}')
+        pad = tuple([0] * (z.ndim - dim - 1) * 2 + [d-1,0])
         return F.pad(z , pad , value = nan).nan_to_num(nan)
 
     @classmethod

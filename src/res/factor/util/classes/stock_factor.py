@@ -410,9 +410,11 @@ class StockFactor:
                  benchmark : Benchmark | str | None = None , 
                  cache_factor_stats : CacheFactorStats | None = None ,
                  pseudo_date : np.ndarray | None = None ,
-                 factor_names : list[str] | None = None):
+                 factor_names : list[str] | str | None = None):
         if factor is None:
             assert factor_names , 'factor_names must be provided if factor input is None'
+            if isinstance(factor_names , str):
+                factor_names = [factor_names]
             factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
 
         self.normalized = False

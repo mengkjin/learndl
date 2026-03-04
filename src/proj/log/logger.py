@@ -385,13 +385,13 @@ class Logger:
                 cls.conclude(f'test exception: {e}' , level = 'error')
 
     @classmethod
-    def display(cls , obj , caption : str | None = None , vb_level : int | Literal['max','min','inf'] = 1):
+    def display(cls , obj , caption : str | None = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """
         display the object
         """
         if caption is not None:
             cls.caption(caption , vb_level = vb_level)
-        Display(obj , vb_level = vb_level)
+        Display(obj , vb_level = vb_level , **kwargs)
 
     @classmethod
     def set_display_callbacks(cls , callbacks_before : list[Callable] | None = None, callbacks_after : list[Callable] | None = None):

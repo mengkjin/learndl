@@ -34,14 +34,14 @@ class gpGenerator:
             self.df_axis    = self.gp_main.logger.load_state('df_axis' , -1)
 
         self.Ensembler = FF.MultiFactor(
-            universe      = self.gp_main.input.universe , 
-            insample      = self.gp_main.input.insample ,
             weight_scheme = weight_scheme ,
             window_type   = window_type ,
             weight_decay  = weight_decay ,
             ir_window     = ir_window ,
             roll_window   = roll_window ,
             halflife      = halflife ,
+            universe      = self.gp_main.input.universe , 
+            insample      = self.gp_main.input.insample ,
             min_coverage  = min_coverage ,
             **kwargs)
 

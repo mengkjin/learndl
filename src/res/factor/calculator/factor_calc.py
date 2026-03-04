@@ -391,7 +391,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
                multi_thread = True , ignore_error = True , indent : int = 0 , vb_level : int = Proj.vb.max) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
-            return StockFactor()
+            return StockFactor(factor_names = [cls.factor_name])
         calc = cls()
         func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb.parse_vb(vb_level) + 2}) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
@@ -760,7 +760,7 @@ class AffiliateFactorCalculator(FactorCalculator):
                **kwargs) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
-            return StockFactor()
+            return StockFactor(factor_names = [cls.factor_name])
     
         factor = StockFactor(cls.Loads(dates))
         if normalize: 

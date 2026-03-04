@@ -290,7 +290,7 @@ class MarketEventMomentumFactorWeight:
 
     def weighted_factor(self , dates : np.ndarray , name : str = 'weighted_factor') -> StockFactor:
         if len(dates) == 0:
-            return StockFactor()
+            return StockFactor(factor_names = [name])
         self.eval_factor_weights(min(dates) , max(dates))
         factor_weights = self.factor_weight_full.loc[dates]
         factor_dfs = [sfactor.frame(factor_weights) for sfactor in self.factors.values()]

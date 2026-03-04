@@ -686,8 +686,8 @@ def dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_
     """get dates from any database data"""
     return _db_dates(db_src , db_key , start_dt , end_dt , year , use_alt)
 
-def block_path(name : str) -> Path:
+def block_path(type : Literal['raw' , 'fit' , 'predict'] , name : str) -> Path:
     return PATH.block.joinpath(f'{name}.{SAVE_OPT_BLK}')
 
-def norm_path(name : str) -> Path:
+def norm_path(type: Literal['fit'] , name : str) -> Path:
     return PATH.norm.joinpath(f'{name}.{SAVE_OPT_NORM}')

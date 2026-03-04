@@ -282,7 +282,7 @@ class GeneticProgramming:
 
             self.status.update_forbidden([k for k , v in self.logger.historybook.items() if not v.if_valid])
             for i_iter in self.status.iter_iteration():
-                with self.timer.timer('stage' , 'Iteration' , title = f'Iter {i_iter} Start From Gen {self.start_gen}' , timer_level = 3):
+                with self.timer.timer('stage' , 'Iteration' , title = f'Iter {i_iter} Gen {self.start_gen}~{self.status.n_gen}' , timer_level = 3):
                     self.iteration()
 
             self.logger.dump_historybook()

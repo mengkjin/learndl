@@ -55,9 +55,9 @@ class Stock4DData:
     
     def __repr__(self):
         if self.initiated:
-            return '\n'.join(['initiated ' + str(self.__class__) , f'values shape {self.shape}'])
+            return f'{self.__class__.__name__}(values={self.shape},secid=...,date=...,feature={self.feature})'
         else:
-            return 'uninitiate ' + str(self.__class__) 
+            return f'{self.__class__.__name__}()'
     @property
     def initiated(self): 
         return self.values is not None
@@ -119,7 +119,9 @@ class Stock4DData:
     def merge_others(self , others : list | Any , inplace = False):
         if not isinstance(others , list): 
             others = [others]
-        return self.merge([self , *others] , inplace = inplace).align_feature(self.feature , inplace = True)
+        self = self.merge([self , *others] , inplace = inplace)
+        self = self.align_feature(self.feature , inplace = True)
+        return self
     
     def as_tensor(self , asTensor = True):
         if asTensor and isinstance(self.values , np.ndarray): 
@@ -140,10 +142,19 @@ class Stock4DData:
         blk = blk.align_feature(feature , inplace = True)
         return blk
 
+    def subset(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
+        values  = self.loc(secid , date , feature , inday , fillna)
+        secid = self.secid if secid is None else secid
+        date = self.date if date is None else date
+        feature = self.feature if feature is None else feature
+        return self.__class__(values , secid , date , feature)
+
     def align_secid(self , secid , inplace = False):
         secid = None if secid is None else to_numpy(secid)
-        if secid is None or len(secid) == 0: 
+        if secid is None or len(secid) == 0 or np.array_equal(secid , self.secid): 
             return self if inplace else self.copy()
+        elif np.isin(secid , self.secid).all():
+            return self.update(values = self.loc(secid = secid) , secid = secid)
         asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
         values = np.full((len(secid) , *self.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
@@ -156,8 +167,10 @@ class Stock4DData:
 
     def align_date(self , date , inplace = False):
         date = None if date is None else to_numpy(date)
-        if date is None or len(date) == 0: 
+        if date is None or len(date) == 0 or np.array_equal(date , self.date): 
             return self if inplace else self.copy()
+        elif np.isin(date , self.date).all():
+            return self.update(values = self.loc(date = date) , date = date)
         asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
         values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
@@ -169,14 +182,17 @@ class Stock4DData:
             return self.__class__(values = values , secid = self.secid , date = date , feature = self.feature).as_type(dtype)
     
     def align_secid_date(self , secid = None , date = None , inplace = False):
+        # to speed up than .align_secid(secid = secid).align_date(date = date)
         secid = None if secid is None else to_numpy(secid)
         date = None if date is None else to_numpy(date)
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
             return self if inplace else self.copy()
-        elif secid is None or len(secid) == 0:
+        elif secid is None or len(secid) == 0 or np.array_equal(secid , self.secid):
             return self.align_date(date = date, inplace = inplace)
-        elif date is None or len(date) == 0:
+        elif date is None or len(date) == 0 or np.array_equal(date , self.date):
             return self.align_secid(secid = secid, inplace = inplace)
+        elif np.isin(secid , self.secid).all() or np.isin(date , self.date).all():
+            return self.align_date(date = date, inplace = inplace).align_secid(secid = secid, inplace = True)
         else:
             asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
             values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
@@ -193,8 +209,10 @@ class Stock4DData:
     
     def align_feature(self , feature , inplace = False):
         feature = None if feature is None else to_numpy(feature) 
-        if feature is None or len(feature) == 0: 
+        if feature is None or len(feature) == 0 or np.array_equal(feature , self.feature): 
             return self if inplace else self.copy()
+        if np.isin(feature , self.feature).all():
+            return self.update(values = self.loc(feature = feature) , feature = feature)
         asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
         values = np.full((*self.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
@@ -224,16 +242,16 @@ class Stock4DData:
     def loc(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
         values : np.ndarray | torch.Tensor | Any = self.values
 
-        if feature is not None: 
+        if feature is not None and not np.array_equal(feature , self.feature): 
             index  = match_values(feature , self.feature)
             values = values[:,:,:,index]
-        if inday is not None: 
+        if inday is not None and not np.array_equal(inday , range(values.shape[2])): 
             index  = match_values(inday , range(values.shape[2]))
             values = values[:,:,index]
-        if date is not None: 
+        if date is not None and not np.array_equal(date , self.date): 
             index  = match_values(date , self.date)
             values = values[:,index]
-        if secid is not None: 
+        if secid is not None and not np.array_equal(secid , self.secid): 
             index  = match_values(secid , self.secid)
             values = values[index,:]
         if fillna is not None: 
@@ -244,7 +262,6 @@ class Stock4DData:
             else:
                 raise TypeError(f'Unsupported type: {type(values)} for {self.__class__.__name__} values')
         return values
-
 
     @classmethod
     def concat_feature(cls , block_list):
