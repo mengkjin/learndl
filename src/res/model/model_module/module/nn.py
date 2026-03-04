@@ -2,7 +2,7 @@ import torch
 from torch import set_grad_enabled
 from typing import Any
 
-from src.proj import Logger , Proj
+from src.proj import Logger
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchInput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
@@ -63,7 +63,7 @@ class NNPredictor(BasePredictorModel):
         return self.net(x , *args , **kwargs)
 
     def fit(self):
-        Logger.note(f'model {self.model_str} fit start' , vb_level = Proj.vb.max)
+        Logger.note(f'model {self.model_str} fit start' , vb_level = 'max')
 
         for _ in self.trainer.iter_fit_epoches():
             for _ in self.trainer.iter_train_dataloader():
@@ -75,18 +75,18 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.note(f'model {self.model_str} fit done' , vb_level = Proj.vb.max)
+        Logger.note(f'model {self.model_str} fit done' , vb_level = 'max')
 
     def test(self):
         '''test the model inside'''
-        Logger.note(f'model {self.model_str} test start' , vb_level = Proj.vb.max)
+        Logger.note(f'model {self.model_str} test start' , vb_level = 'max')
 
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
 
-        Logger.note(f'model {self.model_str} test done' , vb_level = Proj.vb.max)
+        Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)

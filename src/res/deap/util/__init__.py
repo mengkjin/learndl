@@ -8,5 +8,6 @@ from .logger import gpLogger
 from .elite import EliteGroup , EliteBlock
 from .gp import GeneticProgramming
 from .input import gpInput
+from .generator import gpGenerator
 
 from . import types

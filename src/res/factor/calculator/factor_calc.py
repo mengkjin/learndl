@@ -301,7 +301,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
     @abstractmethod
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = 1) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max) -> bool:
         """store factor data after calculate"""
         raise NotImplementedError(f'{self.factor_name} calc_and_deploy is not implemented')
 
@@ -312,7 +312,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
 
     def load_factor(self , date : int | None = None , closest = False) -> pd.DataFrame:
         """load full factor value of a given date"""
-        df = DB.load(self.db_src , self.db_key , date , closest = closest , vb_level = 99)
+        df = DB.load(self.db_src , self.db_key , date , closest = closest , vb_level = 'inf')
         return df
 
     def eval_factor(self , date : int , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
@@ -330,7 +330,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             df = self._df
         return df
 
-    def eval_factor_series(self ,  date : int , indent : int = 3 , vb_level : int = 99) -> pd.Series:
+    def eval_factor_series(self ,  date : int , indent : int = 3 , vb_level : int = Proj.vb.inf) -> pd.Series:
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
         df = self.eval_factor(date , indent = indent , vb_level = vb_level)
         if 'secid' in df.columns:
@@ -368,7 +368,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return cls().eval_factor(date)
 
     @classmethod
-    def EvalSeries(cls , date : int , indent : int = 3 , vb_level : int = 99) -> pd.Series:
+    def EvalSeries(cls , date : int , indent : int = 3 , vb_level : int = Proj.vb.inf) -> pd.Series:
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
         return cls().eval_factor_series(date , indent = indent , vb_level = vb_level)
 
@@ -393,7 +393,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor()
         calc = cls()
-        func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : vb_level + 2}) for date in dates}
+        func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb.parse_vb(vb_level) + 2}) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs)
         if normalize: 
@@ -518,11 +518,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0:
             return
         
-        old_df = DB.load(f'factor_stats_{stats_type}' , cls.db_key , vb_level = 99)
+        old_df = DB.load(f'factor_stats_{stats_type}' , cls.db_key , vb_level = 'inf')
         new_df = getattr(cls.Factor(dates) , f'{stats_type}_stats')()
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
-        DB.save(df , f'factor_stats_{stats_type}' , cls.db_key , vb_level = 99)
+        DB.save(df , f'factor_stats_{stats_type}' , cls.db_key , vb_level = 'inf')
         Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} at {CALENDAR.dates_str(dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
@@ -538,12 +538,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def daily_stats(cls) -> pd.DataFrame:
         """return stats DataFrame of a given stats type"""
-        return DB.load('factor_stats_daily' , cls.db_key , vb_level = 99)
+        return DB.load('factor_stats_daily' , cls.db_key , vb_level = 'inf')
 
     @classmethod
     def weekly_stats(cls) -> pd.DataFrame:
         """return stats DataFrame of a given stats type"""
-        return DB.load('factor_stats_weekly' , cls.db_key , vb_level = 99)
+        return DB.load('factor_stats_weekly' , cls.db_key , vb_level = 'inf')
 
     @classmethod
     def stats_stored_dates(cls) -> dict[str , np.ndarray]:
@@ -551,7 +551,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         stats_types = ['daily' , 'weekly']
         dates : dict[str , np.ndarray] = {}
         for stats_type in stats_types:
-            df = DB.load(f'factor_stats_{stats_type}' , cls.db_key , vb_level = 99)
+            df = DB.load(f'factor_stats_{stats_type}' , cls.db_key , vb_level = 'inf')
             if df.empty:
                 dates[stats_type] = np.array([] , dtype = int)
             else:
@@ -688,7 +688,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def load_from_db(cls , src : str , key : str , date : int , col : str | None = None , closest = False) -> pd.DataFrame:
-        df = DB.load(src , key , date , closest = closest , vb_level = 99)
+        df = DB.load(src , key , date , closest = closest , vb_level = 'inf')
         if df.empty:
             return pd.DataFrame(columns = ['secid' , cls.factor_name])
         if not col:
@@ -702,7 +702,8 @@ class AffiliateFactorCalculator(FactorCalculator):
         return df
 
     @classmethod
-    def loads_from_db(cls , src : str , key : str , dates : np.ndarray | list[int] , col : str | None = None , indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
+    def loads_from_db(cls , src : str , key : str , dates : np.ndarray | list[int] , col : str | None = None , 
+                      indent : int = 1 , vb_level : int = Proj.vb.max) -> pd.DataFrame:
         if len(dates) == 0:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         df = DB.loads(src , key , dates , indent = indent , vb_level = vb_level)
@@ -828,7 +829,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 class MarketFactorCalculator(FactorCalculator):
     """base class of market factor calculator"""
     @classmethod
-    def recalculate(cls , date : int | None = None , vb_level : int = 1) -> bool:
+    def recalculate(cls , date : int | None = None , vb_level : int = Proj.vb.max) -> bool:
         """recalculate factor data of a given date"""
         calc_date = CALENDAR.updated() if date is None else int(date)
         instance = cls()
@@ -841,7 +842,7 @@ class MarketFactorCalculator(FactorCalculator):
         if not DB.path(self.db_src , self.db_key).exists():
             return self.recalculate(date , vb_level = vb_level)
         
-        old_df = DB.load(self.db_src , self.db_key , vb_level = 99)
+        old_df = DB.load(self.db_src , self.db_key , vb_level = 'inf')
         if not overwrite and not old_df.empty and any(old_df['date'] == date):
             return False
         df = self(date)
@@ -885,7 +886,7 @@ class MarketFactorCalculator(FactorCalculator):
               indent : int = 1 , vb_level : int = Proj.vb.max
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
-        df = DB.load(cls.db_src , cls.db_key , vb_level = 99)
+        df = DB.load(cls.db_src , cls.db_key , vb_level = 'inf')
         if df.empty:
             Logger.stdout(f'{cls.factor_name} is empty' , indent = indent , vb_level = vb_level)
             return pd.DataFrame()
@@ -907,7 +908,7 @@ class MarketFactorCalculator(FactorCalculator):
     @classmethod
     def stored_dates(cls , start : int | None = None , end : int | None = None , step : int = 1) -> np.ndarray:
         """return stored dates of factor data"""
-        df = DB.load(cls.db_src , cls.db_key , vb_level = 99)
+        df = DB.load(cls.db_src , cls.db_key , vb_level = 'inf')
         dates = df['date'].to_numpy(int) if not df.empty else np.array([])
         dates = _slice_dates(dates , start , end)
         return dates[::step]
@@ -1084,7 +1085,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
     @classmethod
     def load_pooling_weight(cls) -> pd.DataFrame:
         """load pooling weight of a given date"""
-        df = DB.load('pooling_weight' , cls.db_key , vb_level = 99)
+        df = DB.load('pooling_weight' , cls.db_key , vb_level = 'inf')
         return df
 
     @classmethod

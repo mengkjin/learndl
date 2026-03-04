@@ -1,7 +1,7 @@
 import io
 from pathlib import Path
 import threading
-from typing import Any
+from typing import Any , Literal
 
 from src.proj.env.machine import MACHINE
 from src.proj.abc import stderr , Silence
@@ -58,7 +58,7 @@ class _UniqueFileList:
             if file in self.file_list:
                 return
             if any(pattern in str(file) for pattern in self.ban_patterns):
-                self.alter1(f'Fail to append {file} to {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
+                self.alter1(f'Fail to append {file} to {self.name} due to banned patterns!' , vb_level = 'max')
                 return
             self.file_list.append(file)
 
@@ -69,7 +69,7 @@ class _UniqueFileList:
                 if file in self.file_list: 
                     continue
                 if any(pattern in str(file) for pattern in self.ban_patterns):
-                    self.alter1(f'Fail to append {file} to {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
+                    self.alter1(f'Fail to append {file} to {self.name} due to banned patterns!' , vb_level = 'max')
                     continue
                 self.file_list.append(file)
     
@@ -77,7 +77,7 @@ class _UniqueFileList:
         with self.lock:
             file = Path(file)
             if any(pattern in str(file) for pattern in self.ban_patterns):
-                self.alter1(f'Fail to insert {file} to {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
+                self.alter1(f'Fail to insert {file} to {self.name} due to banned patterns!' , vb_level = 'max')
                 return
             if file in self.file_list:
                 self.file_list.remove(file)
@@ -100,7 +100,7 @@ class _UniqueFileList:
             for file in self.file_list[:]:
                 if any(pattern in str(file) for pattern in patterns):
                     self.file_list.remove(file)
-                    self.alter1(f'Removed file {file} from {self.name} due to banned patterns!' , vb_level = Proj.vb.max)
+                    self.alter1(f'Removed file {file} from {self.name} due to banned patterns!' , vb_level = 'max')
 
 class _Verbosity:
     max : int = _project_settings.get('vb_max' , 10)
@@ -115,9 +115,23 @@ class _Verbosity:
     def __repr__(self):
         return f'{self.vb}'
 
+    @classmethod
+    def parse_vb(cls , vb : int | None | Literal['max','min','inf']) -> int:
+        match vb:
+            case 'max':
+                return cls.max
+            case 'min':
+                return cls.min
+            case 'inf':
+                return cls.inf
+            case None:
+                return Proj.vb.vb
+            case _:
+                return vb
+
     class WithVbLevel:
-        def __init__(self , vb_level : int | None):
-            self.vb_level = vb_level
+        def __init__(self , vb_level : int | None | Literal['max','min','inf']):
+            self.vb_level = _Verbosity.parse_vb(vb_level)
 
         def __enter__(self):
             Proj.vb.vb_level = self.vb_level
@@ -127,8 +141,8 @@ class _Verbosity:
             Proj.vb.vb_level = None
 
     class WithVB:
-        def __init__(self , vb : int | None = None):
-            self.vb = vb
+        def __init__(self , vb : int | None | Literal['max','min','inf']):
+            self.vb = _Verbosity.parse_vb(vb)
             self.vb_prev : int | None = None
 
         def __enter__(self):
@@ -150,8 +164,12 @@ class _Verbosity:
             stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
         self.vb = value
 
-    def ignore(self , vb_level : int = 1):
-        return vb_level >= self.inf or self.vb < min(vb_level , self.max)
+    def ignore(self , vb_level : int | Literal['max','min','inf'] = 1):
+        level = _Verbosity.parse_vb(vb_level)
+        if level is None:
+            return False
+        else:
+            return level >= self.inf or self.vb < min(level , self.max)
 
     @property
     def is_max_level(self):

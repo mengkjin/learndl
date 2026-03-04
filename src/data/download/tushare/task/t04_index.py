@@ -152,7 +152,7 @@ class ZXIndexDaily(DayFetcher):
         return np.unique(np.array(updated_dates , dtype = int))
     
     def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : int = 5):
-        df_old = DB.load('index_daily_ts' , index , vb_level = 99)
+        df_old = DB.load('index_daily_ts' , index , vb_level = 'inf')
         if not df_old.empty:
             df = pd.concat([df_old.astype({'trade_date':int}) , df]).drop_duplicates('trade_date' , keep = 'last')
         df = df.sort_values('trade_date').reset_index(drop = True)

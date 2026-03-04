@@ -5,17 +5,26 @@ from typing import Any
 from tqdm import tqdm
 
 from src.proj import Logger
-from src.res.deap.func import math_func as MF , factor_func as FF
+from src.math import tensor as T
+from src.res.deap.func import factor_func as FF
 from .memory import MemoryManager
 
 class EliteGroup:
-    def __init__(self , start_i_elite = 0 , device = None , block_len = 50) -> None:
+    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50) -> None:
         self.start_i_elite = start_i_elite
-        self.i_elite   = start_i_elite
+        self.elite_count   = 0
         self.device    = device
-        self.block_len = block_len
-        self.container : list[EliteBlock] = []
-        self.position  : list[tuple[int,int]] = []
+        self.block_max_len = block_max_len
+        self.blocks : list[EliteBlock] = []
+        self.elite_names : list[str] = []
+        self.elite_positions : list[tuple[int,int]] = []
+
+    def __repr__(self):
+        return f'EliteGroup(num_elites={self.total_len()})'
+
+    @property
+    def i_elite(self):
+        return self.elite_count + self.start_i_elite
 
     def assign_logs(self , hof_log : pd.DataFrame , elite_log : pd.DataFrame):
         self.hof_log = hof_log
@@ -37,7 +46,7 @@ class EliteGroup:
             corr_values = corr_values.to(factor.value)
         exit_state  = False
         idx = 0
-        for block in self.container:
+        for block in self.blocks:
             corrs , exit_state = block.max_corr(factor , abs_corr_cap , dim , dim_valids , syntax = syntax)
             corr_values[idx:idx+block.len()] = corrs[:block.len()]
             idx += block.len()
@@ -45,48 +54,54 @@ class EliteGroup:
                 break
         return corr_values , exit_state
 
-    def append(self , factor : FF.FactorValue , starter = None , **kwargs):
-        if len(self.container) and not self.container[-1].full:
-            self.container[-1].append(factor , **kwargs)
+    def append(self , factor : FF.FactorValue , **kwargs):
+        assert factor.name not in self.elite_names , f'Elite {factor.name} already exists'
+        if len(self.blocks) and not self.blocks[-1].full:
+            self.blocks[-1].append(factor , **kwargs)
         else:
-            if len(self.container): 
-                self.container[-1].cat2cpu()
-            self.container.append(EliteBlock(self.block_len).append(factor , **kwargs))
-        self.position.append((len(self.container)-1,self.container[-1].len()-1))
-        if isinstance(starter,str): 
-            Logger.stdout(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
-        self.i_elite += 1
+            if len(self.blocks): 
+                self.blocks[-1].cat2cpu()
+            self.blocks.append(EliteBlock(self.block_max_len).append(factor , **kwargs))
+        self.elite_names.append(factor.name)
+        self.elite_positions.append((len(self.blocks)-1,self.blocks[-1].len()-1))
+        self.elite_count += 1
         return self
     
     def cat_all(self):
-        for block in self.container:
+        for block in self.blocks:
             block.cat2cpu()
         return self
     
     def compile_elite_tensor(self , device = None):
-        if self.container:
+        if self.blocks:
             self.cat_all()
             if device is None: 
                 device = self.device
             torch.cuda.empty_cache()
             try:
-                new_tensor = torch.cat([block.data_to_device(device) for block in self.container] , dim = -1)
+                new_tensor = torch.concat([block.data_to_device(device) for block in self.blocks] , dim = -1)
             except torch.cuda.OutOfMemoryError:
                 Logger.warning('OutofMemory when compiling elite tensor, try use cpu to concat')
-                new_tensor = torch.cat([block.data_to_device('cpu') for block in self.container] , dim = -1)
+                new_tensor = torch.concat([block.data_to_device('cpu') for block in self.blocks] , dim = -1)
                 new_tensor = new_tensor.to(device)
         else:
             new_tensor = None
         return new_tensor
     
     def total_len(self):
-        return sum([blk.len() for blk in self.container])
+        return sum([blk.len() for blk in self.blocks])
+
+    def all_names(self):
+        return [name for blk in self.blocks for name in blk.names]
     
     def total_mem(self):
-        return sum([MemoryManager.object_memory(blk) for blk in self.container])
+        return sum([MemoryManager.object_memory(blk) for blk in self.blocks])
 
-    def select(self , i):
-        return self.container[self.position[i][0]].select(self.position[i][1])
+    def select(self , elite : int | str):
+        if isinstance(elite , str):
+            elite = self.elite_names.index(elite)
+        i , j = self.elite_positions[elite]
+        return self.blocks[i].select(j)
 
     def corrmat_of_all(self):
         '''
@@ -95,17 +110,17 @@ class EliteGroup:
         '''
         total = self.total_len()
         corr_mat = torch.eye(total).to(self.device)
-        iterator = [(i,*self.position[i],j,*self.position[j]) for i in range(total) for j in range(i+1,total)]
+        iterator = [(i,*self.elite_positions[i],j,*self.elite_positions[j]) for i in range(total) for j in range(i+1,total)]
         iter_df = pd.DataFrame(iterator , columns = pd.Index(['ii','ib','ik','jj','jb','jk']))
         iter_df = iter_df.sort_values(['ib' , 'jb' , 'ik' , 'jk'])
         Logger.stdout(f'Total Correlation Counts : {len(iter_df)}')
         for grp , sub_df in iter_df.groupby(['ib' , 'jb']):
             ib , jb = int(grp[0]) , int(grp[1]) # type: ignore
-            Blk_i = self.container[ib].data_to_device(self.device)
-            Blk_j = self.container[jb].data_to_device(self.device)
+            Blk_i = self.blocks[ib].data_to_device(self.device)
+            Blk_j = self.blocks[jb].data_to_device(self.device)
             for _ , (ii,ik,jj,jk) in tqdm(sub_df.loc[:,['ii','ik','jj','jk']].iterrows(),
                                         desc=f'Block_{ib}/Block_{jb}',total=len(sub_df)):
-                corr = MF.corrwith(Blk_i[...,ik] , Blk_j[...,jk] , dim=-1)
+                corr = T.corrwith(Blk_i[...,ik] , Blk_j[...,jk] , dim=-1)
                 corr_mat[ii, jj] = corr.nanmean() if isinstance(corr , torch.Tensor) else torch.nan
 
         corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat).cpu()
@@ -118,6 +133,9 @@ class EliteBlock:
         self.infos : dict[str,Any] = {}
         self.data  : list[torch.Tensor] | torch.Tensor | None = []
 
+    def __repr__(self):
+        return f'EliteBlock(num_elites={self.len()})'
+
     @property
     def full(self):
         return len(self.names) >= self.max_len
@@ -128,14 +146,16 @@ class EliteBlock:
     def cat2cpu(self):
         if isinstance(self.data , list): 
             try:
-                data = MF.concat_factors(*self.data)
+                data = T.concat_factors_2d(*self.data)
                 if isinstance(data , torch.Tensor): 
                     self.data = data.cpu()
             except MemoryError:
                 Logger.warning('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                 gc.collect()
-                self.data = MF.concat_factors(*self.data , device=torch.device('cpu')) # to cpu first
+                self.data = T.concat_factors_2d(*self.data , device=torch.device('cpu')) # to cpu first
         assert self.data is not None , f'{self} has data None'
+        assert isinstance(self.data , torch.Tensor) , type(self.data)
+        assert self.data.dim() == 3 , f'{self} data dim must be 3, but got {self.data.dim()}'
         return self
 
     def append(self , factor , **kwargs):
@@ -163,7 +183,7 @@ class EliteBlock:
         value = factor[i][:,j]
         for k in range(self.len()):
             blk = block[i][:,j][...,k] if isinstance(block , torch.Tensor) else block[k][i][:,j]
-            corr = MF.corrwith(value, blk , dim=dim).nanmean() 
+            corr = T.corrwith(value, blk , dim=dim).nanmean() 
             corr_values[k] = corr
             if exit_state := corr.abs() > abs_corr_cap: 
                 break 

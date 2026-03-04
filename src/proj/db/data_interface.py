@@ -174,7 +174,7 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
     """save dataframe to path"""
     if df is None or df.empty: 
         return False
@@ -191,7 +191,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True ,
         Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
     """save multiple dataframes to path (must be a directory or a tar file)"""
     if not dfs or all(df.empty for df in dfs.values()):
         return False
@@ -213,7 +213,7 @@ def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite 
     Logger.stdout(f'{prefix} {status["overwritten"]} Overwritten , {status["created"]} Created: {path}' , indent = indent , vb_level = vb_level , italic = True)
     return True
 
-def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : int = 1):
+def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
     """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
     path = Path(path)
     if df is None or df.empty: 
@@ -350,7 +350,7 @@ def load_dfs_seperately(
         dfs = {d:df.assign(**{key_column:d}) for d,df in dfs.items()}
     return dfs
 
-def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -380,7 +380,7 @@ def load_dfs_from_tar(path : str | Path , * , raise_if_not_exist = False) -> dic
         dfs[key] = _load_df_mapper(df)
     return dfs
 
-def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int = 1):
+def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -399,19 +399,21 @@ def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrit
         Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def unpack_files_from_tar(path : Path | str , target : Path | str , overwrite = False , indent = 1 , vb_level : int = 1) -> None:
+def unpack_files_from_tar(path : Path | str , target : Path | str , * , 
+                          overwrite = False , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1) -> None:
     """unpack files from tar file"""
     path = Path(path)
     target = Path(target)
     assert path.suffix == '.tar' , f'{path} is not a tar file'
+    sub_vb_level = Proj.vb.parse_vb(vb_level) + 1
     with tarfile.open(path, 'r') as tar:  
         for member in tar.getmembers():
             target_path = target.joinpath(member.name)
             if not overwrite and target_path.exists():
-                Logger.alert1(f"{target_path} already exists, skip unpacking" , indent = indent + 1 , vb_level = vb_level + 1)
+                Logger.alert1(f"{target_path} already exists, skip unpacking" , indent = indent + 1 , vb_level = sub_vb_level)
             else:
                 tar.extract(member, target)
-                Logger.success(f"Unpacked {member.name} to {target}" , indent = indent + 1 , vb_level = vb_level + 1 , italic = True)
+                Logger.success(f"Unpacked {member.name} to {target}" , indent = indent + 1 , vb_level = sub_vb_level , italic = True)
     Logger.stdout(f"Unpacked {path} to {target}" , indent = indent , vb_level = vb_level , italic = True)
 
 def _reset_index(df : pd.DataFrame | Any , reset = True):
@@ -436,7 +438,7 @@ def _load_df_mapper(df : pd.DataFrame):
     return df
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
-               df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int = Proj.vb.max):
+               df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int | Literal['max','min','inf'] = 'max'):
     """process dataframe"""
     if date_colname and date is not None: 
         df[date_colname] = date
@@ -474,7 +476,7 @@ def src_path(db_src : str) -> Path:
     """get database source path"""
     return _db_parent(db_src)
 
-def _db_path(db_src , db_key , date = None , use_alt = False , closest = False , indent = 1 , vb_level : int = Proj.vb.max) -> Path:
+def _db_path(db_src , db_key , date = None , use_alt = False , closest = False , indent = 1 , vb_level : int | Literal['max','min','inf'] = 'max') -> Path:
     """
     Get path of database
     Parameters
@@ -574,7 +576,8 @@ def max_date(db_src , db_key , *, use_alt = False):
     return int(mdate)
 
 # @_db_src_deprecated(1)
-def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , *, overwrite = True , indent = 1 , vb_level : int = 1 , reason : str = ''):
+def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , *, 
+         overwrite = True , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1 , reason : str = ''):
     '''
     Save data to database
     Parameters  
@@ -596,7 +599,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
 # @_db_src_deprecated(0)
 def load(db_src , db_key , date = None , *, 
          date_colname = None , use_alt = False , closest = False , 
-         raise_if_not_exist = False , indent = 1 , vb_level : int = 1 , **kwargs) -> pd.DataFrame: 
+         raise_if_not_exist = False , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
     Parameters
@@ -629,7 +632,7 @@ def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
           date_colname = 'date' , use_alt = False , 
           parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
           fill_datavendor = False ,
-          indent = 1 , vb_level : int = 1 , **kwargs):
+          indent = 1 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
     """load multiple dates from database"""
     if db_src in DB_BY_NAME + EXPORT_BY_NAME:
         df = load(db_src , db_key , dates = dates , start_dt = start_dt , end_dt = end_dt , 

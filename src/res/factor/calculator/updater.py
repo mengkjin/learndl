@@ -246,7 +246,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , **kwargs) -> None:
         """preview update jobs for all factors between start and end date"""
-        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = 99)
+        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = Proj.vb.inf)
         [job.preview() for job in cls.jobs]
 
     @classmethod

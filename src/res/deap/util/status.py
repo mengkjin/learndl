@@ -1,10 +1,12 @@
 class gpStatus:
-    def __init__(self , n_iter : int , n_gen : int , start_iter : int = 0 , start_gen : int = 0 , **kwargs) -> None:
+    def __init__(self , n_iter : int , n_gen : int , start_iter : int = 0 , start_gen : int = 0 , train : bool = True , **kwargs) -> None:
         self.n_iter      = n_iter
         self.n_gen       = n_gen
 
         self.start_iter  = start_iter
         self.start_gen   = start_gen
+
+        self.train       = train
 
         self.forbidden  : list[str] = []
 
@@ -34,4 +36,6 @@ class gpStatus:
     def iter_start_gen(self) -> int:
         return self.start_gen if self._i_iter == self.start_iter else 0
 
-    
+    def update_forbidden(self , forbidden : list) -> list[str]:
+        self.forbidden = list(set(self.forbidden + [str(fbd) for fbd in forbidden]))
+        return self.forbidden

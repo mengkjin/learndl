@@ -317,7 +317,7 @@ class FactorStats:
     def save(self , path : Path) -> int:
         path.mkdir(parents=True , exist_ok=True)
         for name , stat in self.stats.items():
-            DB.save_df(stat , path.joinpath(f'{name}.feather') , vb_level = 99)
+            DB.save_df(stat , path.joinpath(f'{name}.feather') , vb_level = 'inf')
         return len(self.stats)
 
     @classmethod
@@ -338,14 +338,14 @@ class CacheFactorStats:
         if path is None or not path.exists():
             return
         stats_num = sum([factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        Logger.success(f'Load {stats_num} Factor Stats from {path}' , indent = 0 , vb_level = Proj.vb.max)
+        Logger.success(f'Load {stats_num} Factor Stats from {path}' , indent = 0 , vb_level = 'max')
         return self
 
     def save(self , path : Path | None):
         if path is None:
             return
         stats_num = sum([factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = Proj.vb.max)
+        Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = 'max')
 
     def common_dates(self , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf']) -> np.ndarray:
         dates = [self.factor_stats[subset].date for subset in subsets]
@@ -683,8 +683,8 @@ class StockFactor:
     @pseudo_date.setter
     def pseudo_date(self , date : np.ndarray | None):
         if date is not None:
-            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = Proj.vb.max)
-            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = Proj.vb.max)
+            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = 'max')
+            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 'max')
         self._pseudo_date = date
 
     def set_pseudo_date(self , date : np.ndarray | None = None):

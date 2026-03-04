@@ -15,7 +15,7 @@ class TradeDataAccess(DateDataAccess):
     DB_KEYS = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
     
     def data_loader(self , date , data_type) -> pd.DataFrame:
-        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'inf')
         return df
     
     def latest_date(self , data_type : str , date : int | None = None) -> int:
@@ -37,7 +37,7 @@ class TradeDataAccess(DateDataAccess):
             return 
         elif isinstance(dates , int):
             dates = [dates]
-        df = DB.loads(self.DB_SRC , self.DB_KEYS[data_type] , dates , vb_level = 99)
+        df = DB.loads(self.DB_SRC , self.DB_KEYS[data_type] , dates , vb_level = 'inf')
         self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 
     def get_val(self , date , field = None) -> pd.DataFrame:

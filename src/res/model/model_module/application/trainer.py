@@ -12,14 +12,14 @@ class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
     def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config   = ModelConfig.initiate(base_path , module = module , schedule_name = schedule_name , override = override , min_key_len = 30 , **kwargs)
+        self.config   = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , min_key_len = 30 , **kwargs)
     def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
-        self.data     = DataModule.initiate(self.config , use_data = use_data , min_key_len = 30)
+        self.data     = DataModule.initialize(self.config , use_data = use_data , min_key_len = 30)
     def init_model(self , **kwargs):
-        self.model    = BasePredictorModel.initiate(self.config , self , min_key_len = 30 , **kwargs)
+        self.model    = BasePredictorModel.initialize(self.config , self , min_key_len = 30 , **kwargs)
     def init_callbacks(self , **kwargs) -> None: 
-        self.callback = CallBackManager.initiate(self , min_key_len = 30)
+        self.callback = CallBackManager.initialize(self , min_key_len = 30)
 
     @classmethod
     def initialize(cls , base_path = None , * ,
@@ -68,9 +68,9 @@ class ModelTrainer(BaseTrainer):
                     Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
                     return trainer
                 elif last_time:
-                    Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = Proj.vb.max)
+                    Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
                 else:
-                    Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = Proj.vb.max)
+                    Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
          
             trainer.go()
             base_path.log_operation(log_operation)

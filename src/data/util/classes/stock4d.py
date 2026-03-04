@@ -45,7 +45,7 @@ class Stock4DData:
         self.feature = None
 
     def asserted(self):
-        if self.initiate:
+        if self.initiated:
             assert isinstance(self.values , (np.ndarray , torch.Tensor)) , self.values
             assert self.ndim == 4 , self.shape
             assert self.shape[0] == len(self.secid) , (self.shape[0] , len(self.secid))
@@ -54,12 +54,12 @@ class Stock4DData:
         return self
     
     def __repr__(self):
-        if self.initiate:
+        if self.initiated:
             return '\n'.join(['initiated ' + str(self.__class__) , f'values shape {self.shape}'])
         else:
             return 'uninitiate ' + str(self.__class__) 
     @property
-    def initiate(self): 
+    def initiated(self): 
         return self.values is not None
     @property
     def shape(self): 
@@ -248,7 +248,7 @@ class Stock4DData:
 
     @classmethod
     def concat_feature(cls , block_list):
-        blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiate] 
+        blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiated] 
         for i , blk in enumerate(blocks): 
             if i == 0:
                 new_blk = blk.copy()

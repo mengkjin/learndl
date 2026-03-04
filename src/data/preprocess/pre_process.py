@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any , Iterator
 
 from src.proj import Logger , Duration , Proj , CALENDAR
-from src.math.primas import neutralize_2d , process_factor
+from src.math.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -141,8 +141,8 @@ class pp_y(TypePreProcessor):
         x = torch.Tensor(indus_size).permute(1,0,2,3).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
             if lb_name[:3] == 'rtn':
-                y_raw = torch.Tensor(data_block.values[...,i_feat]).permute(1,0,2).squeeze(2)
-                y_std = torch.Tensor(neutralize_2d(y_raw , x)).permute(1,0).unsqueeze(2).numpy()
+                y_raw = torch.Tensor(data_block.values[...,i_feat]).squeeze(2)
+                y_std = torch.Tensor(neutralize_2d(y_raw , x , dim = 0)).unsqueeze(2).numpy()
                 data_block.add_feature('std'+lb_name[3:],y_std)
 
         y_ts = torch.Tensor(data_block.values)[:,:,0]

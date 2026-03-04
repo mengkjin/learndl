@@ -421,7 +421,7 @@ class PortfolioAccountant:
 
             if not self.resumed_account.empty:
                 Logger.success(f'Load Account from {self.resume_path} at {CALENDAR.dates_str(self.resumed_account.model_date)}' , 
-                            indent = indent + 1 , vb_level = Proj.vb.max)
+                               indent = indent + 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
         self.go(cache = cache , indent = indent , vb_level = vb_level)

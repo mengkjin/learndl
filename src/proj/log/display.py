@@ -1,7 +1,7 @@
 import pandas as pd
 from matplotlib.figure import Figure
 from IPython.display import display as raw_display
-from typing import Callable
+from typing import Callable , Literal
 
 from src.proj.proj import Proj
 
@@ -18,7 +18,7 @@ class Display:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , obj = None , vb_level : int = 1):
+    def __init__(self , obj = None , vb_level : int | Literal['max','min','inf'] = 1):
         """
         display the object if it is not None in the constructor
         example:
@@ -58,7 +58,7 @@ class Display:
         cls._callbacks_after.clear()
 
     @classmethod
-    def display(cls , obj , vb_level : int = 1):
+    def display(cls , obj , vb_level : int | Literal['max','min','inf'] = 1):
         """
         display the object
         """

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar , Literal
 
-from src.proj import PATH , Logger , CALENDAR , DB
+from src.proj import PATH , Logger , CALENDAR , DB , Proj
 from src.proj.func import torch_load , properties
 from src.math import index_union , index_intersect , forward_fillna
 
@@ -522,7 +522,7 @@ class ModuleData:
         end_dt = min(end_dt or self.date[-1] , self.date[-1])
         with Logger.Timer(f'Load {factor_title} ({start_dt} - {end_dt})' , vb_level = vb_level):
             from src.data.loader import FactorLoader
-            self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 99).align_secid_date(self.secid , self.date , inplace = True)
+            self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = Proj.vb.inf).align_secid_date(self.secid , self.date , inplace = True)
         return self
 
     @staticmethod

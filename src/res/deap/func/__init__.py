@@ -1,1 +1,1 @@
-from . import math_func , factor_func
+from . import primas , factor_func

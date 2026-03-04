@@ -190,6 +190,6 @@ class LogFile:
         return self.read_entry(max_entries = max_entries , from_latest = from_latest)
 
     @classmethod
-    def initiate(cls , *args : str , rotate : bool = False , rotation_size_mb : int = 10):
+    def initialize(cls , *args : str , rotate : bool = False , rotation_size_mb : int = 10):
         log_file = PATH.logs.joinpath(*args).with_suffix('.log')
         return cls(log_file , rotate = rotate , rotation_size_mb = rotation_size_mb)

@@ -10,8 +10,11 @@ class Silence:
     silent = _SilenceSilent()
     def __init__(self , enable = True):
         self.enable = enable
-    def __call__(self , *args , **kwargs):
-        return self
+    def __call__(self , silent : bool | None = None , *args , **kwargs):
+        if silent is not None:
+            return self.__class__(silent)
+        else:
+            return self
     def __repr__(self):
         return f'{self.__class__.__name__}({self.silent})'
     def __bool__(self): 

@@ -30,7 +30,7 @@ class BasicTestResult(BaseCallBack):
     
     def save_test_df(self , vb_level : int = 3):
         df = self.get_test_df()
-        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 99)
+        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 'inf')
         Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
 
     def get_test_df(self) -> pd.DataFrame:
@@ -108,7 +108,7 @@ class BasicTestResult(BaseCallBack):
                 df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
                 df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
                 rslt[f'{model_num}'] = df
-            [DB.save_df(df , self.snap_folder.joinpath(f'{key}.feather') , overwrite = True , vb_level = 99) for key,df in rslt.items()]
+            [DB.save_df(df , self.snap_folder.joinpath(f'{key}.feather') , overwrite = True , vb_level = 'inf') for key,df in rslt.items()]
             dfs_to_excel(rslt , self.path_result, print_prefix = 'Test Summary')
 
 

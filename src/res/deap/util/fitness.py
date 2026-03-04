@@ -8,13 +8,13 @@ class gpFitness:
         return cls._instance
 
     def __init__(self , fitness_weights : dict | None = None ,  **kwargs) -> None:
-        self.initialize(fitness_weights , **kwargs)
+        self.initiate(fitness_weights , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'title')
 
-    def initialize(self , fitness_weights : dict | None = None , **kwargs) -> None:
+    def initiate(self , fitness_weights : dict | None = None , **kwargs) -> None:
         if self.initiated:
             return
 

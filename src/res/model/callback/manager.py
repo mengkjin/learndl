@@ -18,7 +18,7 @@ class CallBackManager(BaseCallBack):
         [cb.at_exit(hook , vb_level) for cb in self.callbacks]
 
     @classmethod
-    def initiate(cls , trainer : BaseTrainer , * , vb_level = 2 , min_key_len = -1):
+    def initialize(cls , trainer : BaseTrainer , * , vb_level = 2 , min_key_len = -1):
         cbm = cls(trainer)
         infos = [cb.get_info() for cb in cbm.callbacks]
         infos_dict = {name:f'({param}); {doc}' if doc else f'({param})' for name , param , doc in infos}

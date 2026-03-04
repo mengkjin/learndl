@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import PATH , Logger , DB
-from src.math import ic_2d , rankic_2d
+from src.math.metric import ic_2d , rankic_2d
 
 from .io import BoostInput , BoostOutput
 

@@ -17,7 +17,6 @@ fitness_wgt:
   rankic_out_raw: 0.
   rankir_out_raw: 0.
 
-show_progress:    False   # if show some text
 pop_num:          300     # [parameter] population number , recommended to be 3000
 hof_num:          50      # [parameter] halloffame number , recommended to be 500
 elite_num:        10      # [parameter] elite number (max) , recommended to be 100
@@ -47,9 +46,9 @@ test_params:
     - '2022-12-30'
     - '2023-01-04'
     - '2023-12-29'
-  show_progress: True 
-  pop_num: 2
-  hof_num: 1
+  pop_num: 6
+  hof_num: 3
+  elite_num: 2
   n_gen: 2 
   n_iter: 2 
   max_depth: 2 

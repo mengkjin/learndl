@@ -1,4 +1,4 @@
 from . import (
-    linalg , primas , transform 
+    linalg , tensor , transform , metric
 )
 from .basic import * 

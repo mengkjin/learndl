@@ -302,7 +302,7 @@ class BaseDataModule(ABC):
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchInput]: '''return predict dataloaders'''
     @classmethod
-    def initiate(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level = 2 , min_key_len = -1 , **kwargs):
+    def initialize(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level = 2 , min_key_len = -1 , **kwargs):
         data = cls(config , use_data = use_data , *args , **kwargs)
         Logger.stdout_pairs({'Use Data' : data.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
         return data
@@ -912,7 +912,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
             
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
+        DB.save_df(df , path , overwrite = True , vb_level = 'max')
 
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
@@ -925,7 +925,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = Proj.vb.max)
+        DB.save_df(df , path , overwrite = True , vb_level = 'max')
 
     def archive_model_records(self):
         records : list[tuple[int,int]] = []
@@ -1187,7 +1187,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return f'{self.__class__.__name__}(model_full_name={self.model_full_name})'
 
     @classmethod
-    def initiate(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
+    def initialize(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
         from src.res.model.model_module.module import get_predictor_module
         binder = config if trainer is None else trainer
         model = get_predictor_module(config , **kwargs).bound_with(binder)

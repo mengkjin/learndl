@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Logger , CALENDAR , Proj
+from src.proj import Duration , Logger , CALENDAR
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount
 from .optimizer import OptimizedPortfolioCreator
@@ -140,7 +140,7 @@ class PortfolioBuilder:
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
             Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
-                        indent = self.indent , vb_level = Proj.vb.max)
+                           indent = self.indent , vb_level = 'max')
         return self
 
     def save_portfolio(self , append = False):

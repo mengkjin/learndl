@@ -53,7 +53,7 @@ class StatusDisplay(BaseCallBack):
     @property
     def log_file(self):
         log_name = 'st_results' if self.config.base_path.is_short_test else 'results'
-        return LogFile.initiate('model' , 'summary' , log_name)
+        return LogFile.initialize('model' , 'summary' , log_name)
     @property
     def dataloader(self) -> BatchInputLoader | Any : return self.trainer.dataloader
     @property

@@ -23,13 +23,13 @@ class gpParameters:
         return cls._instance
 
     def __init__(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , **kwargs):
-        self.initialize(job_id , train , continuation , test_code , **kwargs)
+        self.initiate(job_id , train , continuation , test_code , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'job_id')
 
-    def initialize(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , **kwargs):
+    def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , **kwargs):
         if self.initiated:
             return
         self.job_id = job_id
@@ -61,13 +61,13 @@ class gpParameters:
         else:
             assert self.job_id >= 0 , self.job_id
             job_dir = gpDefaults.dir_pop.joinpath(str(self.job_id))
-        Logger.stdout(f'**Job Directory is : "{job_dir}"')
+        Logger.success(f'Job Directory is : "{job_dir}"')
         if self.train:
             if job_dir.exists() and not self.continuation: 
                 if not self.test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
                     raise Exception(f'Deletion Denied!')
                 shutil.rmtree(job_dir)
-                Logger.stdout(f'Start New Training in "{job_dir}"' , indent = 1)
+                Logger.alert1(f'Start New Training in "{job_dir}"' , indent = 1)
             elif not job_dir.exists() and self.continuation:
                 raise Exception(f'No existing "{job_dir}" for Continuation!')
             else:
@@ -76,7 +76,7 @@ class gpParameters:
 
     def load_params(self):
         if self.train:
-            Logger.stdout('**Device name:', gpDefaults.device)
+            Logger.stdout(f'Using Device {gpDefaults.device}')
         param_path = self.job_dir.joinpath('params.yaml') 
         if self.job_id is None or not param_path.exists():
             param_path = gpDefaults.path_param
@@ -99,7 +99,7 @@ class gpParameters:
         """作为GP输入时,原始指标的数量"""
         return self.params.get('gp_raw_list' , [])
     @property
-    def gp_argnames(self) -> list[str]:
+    def argnames(self) -> list[str]:
         return self.gp_fac_list + self.gp_raw_list
     @property
     def n_args(self) -> tuple[int , int]:
@@ -113,20 +113,16 @@ class gpParameters:
         """修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日"""
         return [pd.to_datetime(x) for x in self.params.get('slice_date' , [])]
     @property
-    def show_progress(self) -> bool:
-        """训练过程是否输出细节信息"""
-        return self.params.get('show_progress' , True)
-    @property
     def pop_num(self) -> int:
-        """种群数量,初始化时生成多少个备选公式"""
+        """每次generation的种群数量,初始化时生成多少个备选公式"""
         return self.params.get('pop_num' , 3000)
     @property
     def hof_num(self) -> int:
-        """精英数量,一般精英数量设为种群数量的1/6左右即可"""
+        """名人数量,每次generation结束后,从种群中选出名人放入名人堂"""
         return self.params.get('hof_num' , 500)
     @property
     def elite_num(self) -> int:
-        """精英数量,一般精英数量设为种群数量的1/6左右即可"""
+        """每个iteration的精英数量,一般精英数量设为种群数量的1/6左右即可"""
         return self.params.get('elite_num' , 100)
     @property
     def n_iter(self) -> int:

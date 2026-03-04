@@ -686,7 +686,7 @@ class ModelConfig(BaseConfig):
     def __repr__(self): return f'{self.__class__.__name__}(base_path={self.base_path})'
 
     @classmethod
-    def initiate(cls , base_path : ModelPath | Path | str | None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
+    def initialize(cls , base_path : ModelPath | Path | str | None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
         config = cls(base_path , **kwargs)
         config.print_out(vb_level = vb_level , min_key_len = min_key_len)
         return config
@@ -854,7 +854,7 @@ class ModelConfig(BaseConfig):
             [1,2,3,...] , choose by model_index if is_resuming
         '''
         if self.base_path:
-            vb_level = 99
+            vb_level = Proj.vb.inf
         
         self.parser_stage(stage , vb_level)
         self.parser_resume(resume , vb_level)

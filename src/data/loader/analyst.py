@@ -15,7 +15,7 @@ class AnalystDataAccess(DateDataAccess):
     DB_KEYS = {'report' : 'report'}
 
     def data_loader(self , date , data_type):
-        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'inf')
         return df
 
     def get_report(self , date , field = None):

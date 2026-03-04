@@ -1,5 +1,4 @@
 import torch
-from datetime import datetime
 from src.proj import Logger
 import numpy as np
 
@@ -13,13 +12,13 @@ class MemoryManager():
         return cls._instance
 
     def __init__(self , device = None , *args , **kwargs) -> None:
-        self.initialize(*args , **kwargs)
+        self.initiate(*args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'cuda_avail')
 
-    def initialize(self , device : torch.device | None = None) -> None:
+    def initiate(self , device : torch.device | None = None) -> None:
         if self.initiated:
             return
         if device is not None:
@@ -39,7 +38,7 @@ class MemoryManager():
                 self.gmem_total = 0.
         self.record = {}
 
-    def check(self , key = None, showoff = False , critical_ratio = 0.5 , starter = '**'):
+    def check(self , key = None, showoff = False , critical_ratio = 0.5):
         if self.device.type != 'cuda': 
             return 0.
 
@@ -60,7 +59,7 @@ class MemoryManager():
                 self.record[key] = []
             self.record[key].append(gmem_freed)
         if showoff: 
-            Logger.stdout(f'{starter}{datetime.now()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+            Logger.info(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
         
         return gmem_free
     
@@ -93,10 +92,9 @@ class MemoryManager():
     
     def print_memeory_record(self):
         if self.device.type == 'cuda':
-            Logger.stdout(f' Avg Freed Cuda Memory: ')
-            for key , value in self.record.items():
-                Logger.stdout(f'{key} : {len(value)} counts, on average freed {np.mean(value):.2f}G' , indent = 1)
-    
+            info_dict = {k:f'{len(value)} counts, on average freed {np.mean(value):.2f}G' for k,value in self.record.items()}
+            Logger.stdout_pairs(info_dict , title = 'Avg Freed Cuda Memory:')
+                
     @classmethod
     def clear_and_check(cls , silent = True):
         gmem_free = torch.cuda.mem_get_info()[0] / cls.unit
@@ -106,16 +104,4 @@ class MemoryManager():
             gmem_free += gmem_freed
             gmem_allo  = torch.cuda.memory_allocated() / cls.unit
             gmem_rsrv  = torch.cuda.memory_reserved() / cls.unit
-            Logger.stdout(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
-
-    @staticmethod
-    def except_MemoryError(func , out = None , print_str = ''):
-        def wrapper(*args , **kwargs):
-            try:
-                value = func(*args , **kwargs)
-            except torch.cuda.OutOfMemoryError:
-                Logger.warning(f'OutOfMemoryError on {print_str}')
-                torch.cuda.empty_cache()
-                value = out
-            return value
-        return wrapper
+            Logger.success(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 

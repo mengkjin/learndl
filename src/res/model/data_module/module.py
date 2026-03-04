@@ -6,9 +6,10 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , CALENDAR , Proj , MACHINE
+from src.proj import PATH , Logger , CALENDAR , MACHINE
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
-from src.math import tensor_standardize_and_weight , match_values
+from src.math import match_values
+from src.math import tensor as T
 from src.res.factor.util import Benchmark
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , MemFileStorage , StoredFileLoader , HiddenPath
 from .loader import BatchInputLoader
@@ -377,7 +378,19 @@ class DataModule(BaseDataModule):
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if valid is not None: 
             y.nan_to_num_(0)[~valid] = torch.nan
-        return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.loader_param.stage , no_weight))
+        weight_scheme = self.config.weight_scheme(self.loader_param.stage , no_weight)
+        assert weight_scheme in ['equal' , 'top' , None] , weight_scheme
+        weight = None
+        if y.isnan().all().item(): 
+            return y , weight
+        y = T.standardize(y , dim=0)
+        if weight_scheme == 'top':
+            w = torch.ones_like(y)
+            try: 
+                w[y > T.nanmedian(y , dim=0 , keepdim=True)] = 2
+            except Exception:    
+                w[y > T.nanmedian(y)] = 2
+        return y, w
 
     def train_dataloader(self)   -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['train'] , self , desc = 'Train')
@@ -449,7 +462,7 @@ class DataModule(BaseDataModule):
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True) and (mdt in DataBlockNorm.HISTNORM)
             if (divlast or histnorm): 
-                Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = Proj.vb.max)
+                Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = 'max')
             if divlast: 
                 self.prenorm_divlast.append(mdt)
             if histnorm: 

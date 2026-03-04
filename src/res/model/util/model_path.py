@@ -7,7 +7,7 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , LogFile , Proj , DB 
+from src.proj import PATH , Logger , LogFile , DB , Proj
 from src.proj.calendar import CALENDAR
 from src.proj.func import torch_load
 
@@ -110,7 +110,7 @@ class ModelPath:
 
     @property
     def log_file(self) -> LogFile:
-        return LogFile.initiate('model' , 'operation' , f'{self.full_name}')
+        return LogFile.initialize('model' , 'operation' , f'{self.full_name}')
 
     @property
     def is_resumable(self) -> bool:
@@ -528,11 +528,11 @@ class PredictionModel(ModelPath):
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = 2 , reason : str = '') -> None:
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max , reason : str = '') -> None:
         """save model pred"""
         DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
 
-    def load_pred(self , date : int , indent = 1 , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
+    def load_pred(self , date : int , indent = 1 , vb_level : int = Proj.vb.max , **kwargs) -> pd.DataFrame:
         """load model pred"""
         df = DB.load('pred' , self.pred_name , date , indent = indent , vb_level = vb_level , **kwargs)
         if not df.empty and self.pred_name not in df.columns:

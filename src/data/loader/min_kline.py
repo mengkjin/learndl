@@ -22,7 +22,7 @@ class MinKLineAccess(DateDataAccess):
         return INFO.get_secid(date)
     
     def data_loader(self , date , data_type):
-        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99 , use_alt = True)
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'inf' , use_alt = True)
         if not df.empty: 
             df = df.query('secid in @self.get_secid(@date)')
         return df

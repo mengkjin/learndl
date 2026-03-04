@@ -323,7 +323,7 @@ class CompositeAlpha:
             alpha_name = exprs[1]
             alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
             if alpha_type == 'sellside':
-                df = DB.load(alpha_type , alpha_name , date , closest = True , vb_level = 99)
+                df = DB.load(alpha_type , alpha_name , date , closest = True , vb_level = 'inf')
             elif alpha_type == 'factor':
                 df = StockFactorHierarchy.get_factor(alpha_name).Load(date , closest = True)
             else:

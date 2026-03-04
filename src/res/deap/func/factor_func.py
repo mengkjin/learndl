@@ -1,34 +1,40 @@
 from dataclasses import dataclass , field
-
+from typing import Any
 import torch
 import pandas as pd
 
 from src.proj import Logger
-from . import math_func as MF
+from src.math import tensor as T
+
+def factor_repr(obj : Any):
+    attr_repr = []
+    for k , v in obj.__dict__.items():
+        attr_repr.append(f'{k}=Tensor({tuple(v.shape)},{v.device})' if isinstance(v , torch.Tensor) else f'{k}={v}')
+    return f'{obj.__class__.__name__}({", ".join(attr_repr)})'
 
 @dataclass
 class FactorValue:
+    value   : torch.Tensor | None
     name    : str
     process : str
-    value   : torch.Tensor | pd.DataFrame | None
-    infos   : dict = field(default_factory=dict)
+    infos   : dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self):
-        attr_repr = []
-        for k , v in self.__dict__.items():
-            attr_repr.append(f'{k}=torch.Tensor(shape{tuple(v.shape)},{v.device})' if isinstance(v , torch.Tensor) else f'{k}={v}')
-        return f'{self.__class__.__name__}({", ".join(attr_repr)})'
+        return factor_repr(self)
     
     def isnull(self):
         return self.value is None
     
     def to_dataframe(self , index = None , columns = None):
         if self.value is None: 
-            return None
-        elif isinstance(self.value , pd.DataFrame):
-            return self.value
+            return pd.DataFrame()
         else:
-            return pd.DataFrame(data = self.value.cpu().numpy() , index = index , columns = columns)
+            return pd.DataFrame(data = self.value.cpu().numpy().T , index = index , columns = columns)
+
+    @property
+    def tensor_value(self) -> torch.Tensor:
+        assert self.value is not None , 'value is None'
+        return self.value if isinstance(self.value , torch.Tensor) else torch.tensor(self.value.values)
 
 def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
@@ -43,7 +49,7 @@ def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , di
     output:
         value:         processed factor value
     '''
-    if value is None or MF.allna(value , inf_as_na = True): 
+    if value is None or T.allna(value , inf_as_na = True): 
         return None
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
@@ -82,7 +88,8 @@ def decay_weight(method , max_len , exp_halflife = -1):
         raise KeyError(method)
     return w
 
-def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
+def factor_corr_mean(x : torch.Tensor | None , mean_dim = 1, dim = -1 , weight = None):
+    """return correlation matrix of all factors, dim is the dimension of factors , mean_dim is the dimension of corr to be meaned (like date)"""
     if x is None:
         return x
     assert x.shape[dim] > 0 , (x.shape , dim)
@@ -108,7 +115,8 @@ def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
     # x[ij,ij] = 1
     return x
 
-def factor_coef_total(x , dim = -1):
+def factor_corr_total(x : torch.Tensor | None , dim = -1):
+    """return correlation matrix of all factors, dim is the dimension of factors"""
     if x is None: 
         return x
     assert x.shape[dim] > 0 , (x.shape , dim)
@@ -120,7 +128,8 @@ def factor_coef_total(x , dim = -1):
     x[ij,ij] = 1
     return x
 
-def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
+def factor_corr_with_y(x : torch.Tensor | None , y : torch.Tensor , * , corr_dim : int = 0, dim : int = -1):
+    """return correlation matrix of factors with y, dim is the dimension of factors , corr_dim is the dimension to correlate with (like secid)"""
     if x is None: 
         return x
     assert corr_dim >= 0 , f'corr_dim must be non-negative : {corr_dim}'
@@ -135,13 +144,13 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
     new_dim = dim if dim < corr_dim else dim - 1
     try:
         # raise torch.cuda.OutOfMemoryError
-        tscorr = MF.corrwith(x , y , dim = corr_dim)
+        tscorr = T.corrwith(x , y , dim = corr_dim)
     except torch.cuda.OutOfMemoryError:
         torch.cuda.empty_cache()
         tscorr = []
         for i in range(x.shape[dim]):
             # Logger.stdout(x.select(dim , i).shape , y.select(dim , 0).shape)
-            tscorr.append(MF.corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
+            tscorr.append(T.corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
         tscorr = torch.stack(tscorr , dim = new_dim)
     x = tscorr.transpose(-1 , new_dim)
     x = torch.corrcoef(x[~x.isnan().any(-1)].T)
@@ -149,13 +158,13 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
     x[ij,ij] = 1
     return x
 
-def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inplace = True):
+def svd_factors(mat : torch.Tensor | None , raw_factor : torch.Tensor | None , top_n = -1 , top_ratio = 0. , dim = -1 , inplace = True):
     if mat is None or raw_factor is None: 
-        return raw_factor
+        return raw_factor , None
     assert mat.dim() == 2 , mat.shape
     assert mat.shape[0] == mat.shape[1] , mat.shape
     assert mat.shape[0] == raw_factor.shape[dim] , (mat.shape , raw_factor.shape , dim)
-    svd = torch.linalg.svd(mat)
+    svd : torch.return_types.svd = torch.linalg.svd(mat)
     right  = 'jkl'
     left   = 'i' + right[dim] 
     target = right.replace(right[dim] , '') + 'i' 
@@ -172,7 +181,7 @@ def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inpl
     vector[~finite_ij] = torch.nan
     return vector , svd
 
-def top_svd_factors(mat , raw_factor , top_n = 1 , top_ratio = 0. , dim = -1 , inplace = True):
+def top_svd_factors(mat : torch.Tensor | None , raw_factor : torch.Tensor | None , top_n = 1 , top_ratio = 0. , dim = -1 , inplace = True):
     '''
     mat1 = factor_coef_mean(raw_factor , dim = -1 , weight = None)
     mat2 = factor_coef_total(raw_factor, dim = -1)
@@ -181,8 +190,10 @@ def top_svd_factors(mat , raw_factor , top_n = 1 , top_ratio = 0. , dim = -1 , i
     if mat is None or raw_factor is None: 
         return raw_factor
     vector , svd = svd_factors(mat , raw_factor , dim = dim , inplace = inplace)
+    if vector is None or svd is None:
+        return raw_factor
     where  = svd.S.cumsum(0) / svd.S.sum() <= top_ratio
-    where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum() + 1)
+    where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum().int().item() + 1)
     Logger.stdout(svd.S.cumsum(0) / svd.S.sum())
     return vector[...,where]
 
@@ -191,12 +202,10 @@ class MultiFactorValue:
     value  : torch.Tensor
     weight : torch.Tensor
     inputs : torch.Tensor
+    names  : list[str] | None
 
     def __repr__(self) -> str:
-        attr_repr = []
-        for k , v in self.__dict__.items():
-            attr_repr.append(f'{k}=torch.Tensor(shape{tuple(v.shape)},{v.device})' if isinstance(v , torch.Tensor) else f'{k}={v}')
-        return f'{self.__class__.__name__}({", ".join(attr_repr)})'
+        return factor_repr(self)
     
 class MultiFactor:
     def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 
@@ -233,16 +242,16 @@ class MultiFactor:
         return wrapper
     
     @staticmethod
-    def dynamic_decorator(func , relative_weight_cap = 5. , method = 0):
+    def dynamic_decorator(func , relative_weight_cap = 5. , method = 1):
         def wrapper(data , roll_window = 10):
             if method == 1:
                 data = torch.nn.functional.pad(data,[0,0,roll_window-1,0],value=torch.nan).unfold(0,roll_window,1).permute(2,0,1)
-                w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).permute(1,0,2)
+                w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan)
             else:
                 w = data * 0.
                 for i in range(len(w)):
                     w[i] = func(data[i-roll_window:i]).nan_to_num(torch.nan,torch.nan,torch.nan)
-                w = w.unsqueeze(1)
+                w = w.unsqueeze(0)
             w /= w.abs().sum(-1,keepdim=True)
             w[w > (relative_weight_cap / w.shape[-1])] = relative_weight_cap / w.shape[-1]
             w /= w.abs().sum(-1,keepdim=True)
@@ -256,8 +265,8 @@ class MultiFactor:
         except torch.cuda.OutOfMemoryError:
             Logger.warning(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
-        multi = MF.zscore(multi , -1)
-        return MultiFactorValue(value = multi , weight = weight , inputs = factor)
+        multi = T.zscore(multi , dim = -1)
+        return MultiFactorValue(value = multi , weight = weight , inputs = factor , names = kwargs.get('names',None))
     
     def factor_weight(self , window_type = None , **kwargs):
         window_type = window_type if window_type is not None else self.window_type
@@ -294,7 +303,8 @@ class MultiFactor:
             return self.static_factor_weight(weight_scheme , time_slice = self.insample, **kwargs)
         else:
             func = self.dynamic_decorator(self.weight_icir)
-            return func(kwargs[weight_scheme] , roll_window = roll_window)
+            data = kwargs[weight_scheme]
+            return func(data , roll_window = roll_window)
 
     def weight_ew(self , data):
         return data.nanmean(0).sign()
@@ -312,7 +322,7 @@ class MultiFactor:
         assert singles.shape == weight.shapes , (singles.shape , weight.shape)
         weight = singles.isfinite() * weight
         wsum = torch.nansum(singles * weight , dim = -1) 
-        return MF.zscore_inplace(wsum,-1)
+        return T.zscore_inplace(wsum,dim = -1)
     
     def calculate_icir(self , factors , labels , ir_window = None , universe = None , min_coverage = None , **kwargs):
         ir_window    = ir_window    if ir_window    is not None else self.ir_window
@@ -323,7 +333,7 @@ class MultiFactor:
         # rankic = torch.full((len(factors) , factors.shape[-1]) , fill_value=torch.nan).to(labels)
         rankic = []
         for i_factor in range(factors.shape[-1]):
-            rankic.append(MF.rankic_2d(factors[...,i_factor] , labels , dim = 1 , universe = universe , min_coverage = min_coverage))
-        rankic = torch.stack(rankic , dim = -1)
-        rankir = MF.ma(rankic , ir_window) / MF.ts_stddev(rankic , ir_window)
+            rankic.append(T.rankic_2d(factors[...,i_factor] , labels , dim = 0 , universe = universe , min_coverage = min_coverage))
+        rankic = torch.stack(rankic , dim = -1) # (date , factor)
+        rankir = (T.ts_mean(rankic.T , ir_window) / T.ts_stddev(rankic.T , ir_window)).T # (date , factor)
         return {'ic' : rankic , 'ir' : rankir}

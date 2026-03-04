@@ -26,10 +26,11 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
     'critical' : {'color' : 'lightpurple' , 'level_prefix' : {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'lightpurple'} , 'bold' : True},
 }
 
-LOG_FILE = LogFile.initiate('main' , 'project' , rotate = True)
+LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 VB = Proj.vb
+SHOW_VB_LEVEL = True
 
-def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
+def new_stdout(*args , indent = 0 , color = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
     """
     custom stdout message
     kwargs:
@@ -38,10 +39,11 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
         sep , end , file , flush: same as stdout
     """
     with VB.WithVbLevel(vb_level):
+        args = [f'{vb_level}' , *args] if SHOW_VB_LEVEL else args
         fstr = stdout(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     return fstr
 
-def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
+def new_stderr(*args , indent = 0 , color = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
     """
     custom stdout message
     kwargs:
@@ -50,6 +52,7 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : int = 1 , **kwargs
         sep , end , file , flush: same as stdout
     """
     with VB.WithVbLevel(vb_level):
+        args = [f'{vb_level}' , *args] if SHOW_VB_LEVEL else args
         fstr = stderr(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     LOG_FILE.write(fstr.unformatted())
     return fstr
@@ -111,7 +114,7 @@ class Logger:
             Proj.log_writer.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def stdout(cls , *args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
+    def stdout(cls , *args , indent = 0 , color = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """
         custom stdout message
         kwargs:
@@ -124,7 +127,7 @@ class Logger:
     @classmethod
     def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , 
                     title : str | None = None , title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
-                    color = 'auto' , indent = 0 , vb_level : int = 1 , bold = True , italic = True , **kwargs):
+                    color = 'auto' , indent = 0 , vb_level : int | Literal['max','min','inf'] = 1 , bold = True , italic = True , **kwargs):
         """
         custom stdout message of multiple messages, each message is a tuple of (indent , message) or a string
         kwargs:
@@ -150,7 +153,7 @@ class Logger:
     def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
                      title : str | None = None , 
                      title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
-                     indent = 0 , vb_level : int = 1 , italic = True , min_key_len : int = -1 , **kwargs):
+                     indent = 0 , vb_level : int | Literal['max','min','inf'] = 1 , italic = True , min_key_len : int = -1 , **kwargs):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
         kwargs:
@@ -181,7 +184,7 @@ class Logger:
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
     @classmethod
-    def stderr(cls , *args , indent = 0 , color = None , vb_level : int = 1 , **kwargs):
+    def stderr(cls , *args , indent = 0 , color = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """
         custom stdout message
         kwargs:
@@ -197,7 +200,7 @@ class Logger:
         new_stdout(*args , color = 'white' , bg_color = 'gray' , bold = True , **kwargs)
 
     @classmethod
-    def footnote(cls , *args , vb_level : int = 3 , **kwargs):
+    def footnote(cls , *args , vb_level : int | Literal['max','min','inf'] = 3 , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
         new_stdout(f'**{args[0]}' , *args[1:] , color = 'gray' , bold = True , italic = True , vb_level = vb_level , **kwargs)
         
@@ -212,7 +215,7 @@ class Logger:
         new_stdout('Skipping:' , *args , color = 'gray' , **kwargs)
 
     @classmethod
-    def alert1(cls , *args , color = 'lightyellow' , vb_level : int = 0 , **kwargs):
+    def alert1(cls , *args , color = 'lightyellow' , vb_level : int | Literal['max','min','inf'] = 0 , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
@@ -220,7 +223,7 @@ class Logger:
         new_stdout('Caution :' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def alert2(cls , *args , color = 'lightred' , vb_level : int = 0 , **kwargs):
+    def alert2(cls , *args , color = 'lightred' , vb_level : int | Literal['max','min','inf'] = 0 , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
@@ -228,7 +231,7 @@ class Logger:
         new_stdout('RedAlert:' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def alert3(cls , *args , color = 'purple' , vb_level : int = 0 , **kwargs):
+    def alert3(cls , *args , color = 'purple' , vb_level : int | Literal['max','min','inf'] = 0 , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
@@ -236,50 +239,50 @@ class Logger:
         new_stdout('Emergent:' , *args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def note(cls , *args , color = 'lightblue' , vb_level : int = 1 , **kwargs):
+    def note(cls , *args , color = 'lightblue' , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """
         custom lightblue stdout message for remark
         """
         new_stdout(*args , color = color , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def remark(cls , *args , indent : int = 0 , vb_level : int = 2 , **kwargs):
+    def remark(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 2 , **kwargs):
         """custom lightblue stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['remark'] | kwargs))
 
     @classmethod
-    def debug(cls , *args , indent : int = 0 , vb_level : int = 2 , **kwargs):
+    def debug(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 2 , **kwargs):
         """Debug level stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['debug'] | kwargs))
 
     @classmethod
-    def info(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def info(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """Info level stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['info'] | kwargs))
 
     @classmethod
-    def highlight(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def highlight(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """custom lightcyan colored Highlight level message"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['highlight'] | kwargs))
 
     @classmethod
-    def warning(cls , *args , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def warning(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
         """Warning level stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['warning'] | kwargs))
 
     @classmethod
-    def error(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
+    def error(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 0 , **kwargs):
         """Error level stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['error'] | kwargs))
 
     @classmethod
-    def critical(cls , *args , indent : int = 0 , vb_level : int = 0 , **kwargs):
+    def critical(cls , *args , indent : int = 0 , vb_level : int | Literal['max','min','inf'] = 0 , **kwargs):
         """Critical level stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['critical'] | kwargs))
 
     @classmethod
     def divider(cls , width : int = 140 , char : Literal['-' , '=' , '*'] = '-' , msg : str | None = None , 
-                color : str | None = None , bold : bool = True , vb_level : int = 0):
+                color : str | None = None , bold : bool = True , vb_level : int | Literal['max','min','inf'] = 0):
         """Divider mesge , use stdout"""
         if msg is None:
             msg = char * width
@@ -342,7 +345,7 @@ class Logger:
                 cls.stderr('This is a stderr message')
                 cls.success('conclusion success message' , vb_level = 5)
                 cls.note('remark message' , vb_level = 12)
-                cls.footnote('footnote message' , vb_level = 99)
+                cls.footnote('footnote message' , vb_level = 'inf')
                 cls.alert1('alert1 message')
                 cls.alert2('alert2 message')
                 cls.alert3('alert3 message')
@@ -382,7 +385,7 @@ class Logger:
                 cls.conclude(f'test exception: {e}' , level = 'error')
 
     @classmethod
-    def display(cls , obj , caption : str | None = None , vb_level : int = 1):
+    def display(cls , obj , caption : str | None = None , vb_level : int | Literal['max','min','inf'] = 1):
         """
         display the object
         """
@@ -411,11 +414,11 @@ class Logger:
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
-        def __init__(self , *args , silent = False , indent = 0 , vb_level : int = 1 , enter_vb_level : int = VB.max): 
+        def __init__(self , *args , silent = False , indent = 0 , vb_level : int | Literal['max','min','inf'] = 1 , enter_vb_level : int = VB.max): 
             self.key = '/'.join(args)
             self.silent = silent
             self.indent = indent
-            self.vb_level = vb_level
+            self.vb_level : int | Literal['max','min','inf'] = vb_level
             self.enter_vb_level = enter_vb_level
     
         def __enter__(self):
@@ -443,23 +446,24 @@ class Logger:
                 Logger.info('This is the enclosed process...')
         """
         VB_LEVEL = 1
-        def __init__(self , title : str , level : Literal[1,2,3,4] , char : Literal['-' , '=' , '*'] = '*', vb_level : int = 0):
+        def __init__(self , title : str , level : Literal[1,2,3,4] , char : Literal['-' , '=' , '*'] = '*', vb_level : int | Literal['max','min','inf'] = 0):
             self.title = title.title()
             self.level = level
             self.char : Literal['-' , '=' , '*'] = char
+            vb_level = Proj.vb.parse_vb(vb_level)
             match level:
                 case 1:
                     self.color = 'lightyellow'
-                    self.vb_level = max(vb_level , 1)
+                    self.vb_level = max(Proj.vb.parse_vb(vb_level) , 1)
                 case 2:
                     self.color = 'lightgreen'
-                    self.vb_level = max(vb_level , 2)
+                    self.vb_level = max(Proj.vb.parse_vb(vb_level) , 2)
                 case 3:
                     self.color = 'lightcyan'
-                    self.vb_level = max(vb_level , 2)
+                    self.vb_level = max(Proj.vb.parse_vb(vb_level) , 2)
                 case 4:
                     self.color = 'gray'
-                    self.vb_level = max(vb_level , 2)
+                    self.vb_level = max(Proj.vb.parse_vb(vb_level) , 2)
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')

@@ -4,7 +4,7 @@ import itertools
 import torch
 from deap import gp
 import numpy as np
-from src.res.deap.func import math_func as MF
+from src.res.deap.func import primas
 class Fac(torch.Tensor): 
     pass
 class Raw(torch.Tensor): 
@@ -100,60 +100,60 @@ class Primative:
     def primatives_1d(cls) -> list['Primative']:
         # (primative , in_types , out_type , name)
         return [
-            cls(MF.log,        [(Fac,Raw)], Fac) ,
-            cls(MF.sqrt,       [(Fac,Raw)], Fac) ,
-            cls(MF.square ,    [Fac], Fac) ,
-            cls(MF.rank_pct,   [Fac], Fac , 'rank') ,
-            cls(MF.sigmoid,    [Fac], Fac) ,
-            cls(MF.signedpower,[(Fac,Raw) , float1], Fac , 'power') ,
-            cls(MF.sign,       [(Fac,Raw)], Fac) ,
+            cls(primas.log,        [(Fac,Raw)], Fac) ,
+            cls(primas.sqrt,       [(Fac,Raw)], Fac) ,
+            cls(primas.square ,    [Fac], Fac) ,
+            cls(primas.rank_pct,   [Fac], Fac , 'rank') ,
+            cls(primas.sigmoid,    [Fac], Fac) ,
+            cls(primas.signedpower,[(Fac,Raw) , float1], Fac , 'power') ,
+            cls(primas.sign,       [(Fac,Raw)], Fac) ,
         ]
     @classmethod
     def primatives_2d(cls) -> list['Primative']:
         # (primative , in_types , out_type , name)
         return [
-            cls(MF.add,        [Fac, Fac], Fac) ,
-            cls(MF.sub,        [Fac, Fac], Fac) ,
-            cls(MF.mul,        [Fac, Fac], Fac) ,
-            cls(MF.div,        [Fac, Fac], Fac) ,
-            cls(MF.rank_add,   [Fac, Fac], Fac) ,
-            cls(MF.rank_sub,   [Fac, Fac], Fac) ,
-            cls(MF.rank_div,   [Fac, Fac], Fac) ,
-            cls(MF.rank_mul,   [Fac, Fac], Fac) ,
-            cls(MF.ts_stddev,  [Fac, int2], Fac) ,
-            cls(MF.ts_product, [Fac, int2], Fac) ,
-            cls(MF.ts_delay,   [Fac, (int1,int2)], Fac) ,
-            cls(MF.ts_delta,   [Fac, (int1,int2)], Fac) ,
-            cls(MF.ts_lin_decay, [Fac, int2], Fac , 'ts_dw') ,
-            cls(MF.ma,         [(Fac,Raw), (int2,int3)], Fac) ,
-            cls(MF.pctchg,     [Raw, (int1,int2,int3)], Fac) ,
-            cls(MF.ts_min,     [(Fac,Raw), int2], Fac) ,
-            cls(MF.ts_max,     [(Fac,Raw), int2], Fac) ,
-            cls(MF.ts_zscore,  [(Fac,Raw) , int3], Fac) ,
-            cls(MF.ts_argmin,  [(Fac,Raw), int2], Fac) ,
-            cls(MF.ts_argmax,  [(Fac,Raw), int2], Fac) ,
-            cls(MF.ts_rank,    [(Fac,Raw), int2], Fac) ,
+            cls(primas.add,        [Fac, Fac], Fac) ,
+            cls(primas.sub,        [Fac, Fac], Fac) ,
+            cls(primas.mul,        [Fac, Fac], Fac) ,
+            cls(primas.div,        [Fac, Fac], Fac) ,
+            cls(primas.rank_add,   [Fac, Fac], Fac) ,
+            cls(primas.rank_sub,   [Fac, Fac], Fac) ,
+            cls(primas.rank_div,   [Fac, Fac], Fac) ,
+            cls(primas.rank_mul,   [Fac, Fac], Fac) ,
+            cls(primas.ts_stddev,  [Fac, int2], Fac) ,
+            cls(primas.ts_product, [Fac, int2], Fac) ,
+            cls(primas.ts_delay,   [Fac, (int1,int2)], Fac) ,
+            cls(primas.ts_delta,   [Fac, (int1,int2)], Fac) ,
+            cls(primas.ts_lin_decay, [Fac, int2], Fac , 'ts_dw') ,
+            cls(primas.ma,         [(Fac,Raw), (int2,int3)], Fac) ,
+            cls(primas.pctchg,     [Raw, (int1,int2,int3)], Fac) ,
+            cls(primas.ts_min,     [(Fac,Raw), int2], Fac) ,
+            cls(primas.ts_max,     [(Fac,Raw), int2], Fac) ,
+            cls(primas.ts_zscore,  [(Fac,Raw) , int3], Fac) ,
+            cls(primas.ts_argmin,  [(Fac,Raw), int2], Fac) ,
+            cls(primas.ts_argmax,  [(Fac,Raw), int2], Fac) ,
+            cls(primas.ts_rank,    [(Fac,Raw), int2], Fac) ,
         ]
     @classmethod
     def primatives_3d(cls) -> list['Primative']:
         # (primative , in_types , out_type , name)
         return [
-            cls(MF.ts_rankcorr,        [(Fac,Raw), (Fac,Raw), int2], Fac) ,
-            cls(MF.ts_decay_pos_dif,   [(Fac,Raw), (Fac,Raw), int3], Fac , 'ts_dwdif') ,
-            cls(MF.ts_cov,             [Fac, Fac, int2], Fac) ,
-            cls(MF.ts_corr,            [(Fac,Raw), (Fac,Raw), int2], Fac) ,
-            cls(MF.ts_beta,            [(Fac,Raw), (Fac,Raw), int2], Fac) ,
-            cls(MF.ts_btm_avg,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
-            cls(MF.ts_top_avg,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
-            cls(MF.ts_rng_dif,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
+            cls(primas.ts_rankcorr,        [(Fac,Raw), (Fac,Raw), int2], Fac) ,
+            cls(primas.ts_decay_pos_dif,   [(Fac,Raw), (Fac,Raw), int3], Fac , 'ts_dwdif') ,
+            cls(primas.ts_cov,             [Fac, Fac, int2], Fac) ,
+            cls(primas.ts_corr,            [(Fac,Raw), (Fac,Raw), int2], Fac) ,
+            cls(primas.ts_beta,            [(Fac,Raw), (Fac,Raw), int2], Fac) ,
+            cls(primas.ts_btm_x,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
+            cls(primas.ts_top_x,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
+            cls(primas.ts_dif_x,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
         ]
     @classmethod
     def primatives_4d(cls) -> list['Primative']:
         # (primative , in_types , out_type , name)
         return [
-            cls(MF.ts_xbtm_yavg, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
-            cls(MF.ts_xtop_yavg, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
-            cls(MF.ts_xrng_ydif, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
+            cls(primas.ts_btm_y_on_x, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
+            cls(primas.ts_top_y_on_x, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
+            cls(primas.ts_dif_y_on_x, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
             #Primative(MF.ts_xbtm_yavg, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xbtm_long') ,
             #Primative(MF.ts_xtop_yavg, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xtop_long') ,
             #Primative(MF.ts_xrng_ydif, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xdif_long') ,

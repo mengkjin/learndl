@@ -196,7 +196,7 @@ class MetricFunction:
             results : dict[str,Tensor] = {}
             for criterion , component in self.components.items():
                 if not self.DISPLAY_LOG.get(criterion , False):
-                    Logger.success(f'{self.__class__.__name__} {criterion} calculated!' , vb_level = Proj.vb.max)
+                    Logger.success(f'{self.__class__.__name__} {criterion} calculated!' , vb_level = 'max')
                     self.DISPLAY_LOG[criterion] = True
                 loss = component(which_output = which_output , which_label = which_label , **inputs)
                 if isinstance(loss , dict):
@@ -569,7 +569,7 @@ class ModelMetrics(AggregatedMetrics):
                 dfs[f'attempt_{attempt}'] = summary.query('attempt == @attempt').drop(columns = ['attempt'])
             path = self.model_base_path.snapshot('fitting_metrics' , self.model_name)
             path.parent.mkdir(parents = True , exist_ok = True)
-            dfs_to_excel(dfs , path , print_prefix = 'Model Fitting Metrics' , vb_level = Proj.vb.max)
+            dfs_to_excel(dfs , path , print_prefix = 'Model Fitting Metrics' , vb_level = 'max')
 
     @property
     def model_name(self) -> str:

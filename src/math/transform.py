@@ -1,19 +1,13 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-import warnings , sys
+import warnings
 
 from typing import Any , Literal
 from scipy.stats import norm, rankdata
 from scipy.linalg import lstsq
 
-def alert_message(message : str , color : str = 'lightyellow'):
-    if color == 'lightyellow':
-        sys.stderr.write(f'\u001b[93m\u001b[1m{message}\u001b[0m')
-    elif color == 'lightred':
-        sys.stderr.write(f'\u001b[91m\u001b[1m{message}\u001b[0m')
-    else:
-        sys.stderr.write(message)
+from .basic import alert_message , DIV_TOL
 
 warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
@@ -21,6 +15,25 @@ def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
     rtn = x_.copy()
     rtn[np.isnan(x_)] = c_
     return rtn
+
+def multi_bin_label(x : np.ndarray , n = 10):
+    y , w = np.zeros_like(x) , np.zeros_like(x)
+    for i in range(n):
+        low , high = np.quantile(x, i/n) , np.quantile(x, (i+1)/n)
+        if i == n-1:
+            y[(x >= low)] = 2 * i - n + 1
+        elif i == 0:
+            y[(x < high)] = 2 * i - n + 1
+        else:
+            y[(x >= low) & (x < high)] = 2 * i - n + 1
+    w[:] = np.abs(y)
+    return y, w
+
+def bin_label(x : np.ndarray):
+    y , w = np.zeros_like(x) , np.zeros_like(x)
+    y[x >= np.nanmedian(x)] = 1
+    w[:] = y + 1
+    return y, w
 
 def norm_to_1(x_: np.ndarray , value : float = 1.):
     if len(x_) and value:
@@ -77,7 +90,7 @@ def norm_inv(x_: np.ndarray):
 
 def zscore(x_: np.ndarray):
     d = np.nanstd(x_)
-    u = np.nanmean(x_) + 1e-6
+    u = np.nanmean(x_) + DIV_TOL
     return (x_ - u) / d
 
 def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.05):
@@ -179,12 +192,12 @@ def winsor(v , v1 , v2):
 def weighted_mean(v , weight = None):
     if weight is not None:
         weight = np.nan_to_num(weight)
-        return np.nansum(v * weight , axis = None) / (np.nansum(weight , axis = None) + 1e-6)
+        return np.nansum(v * weight , axis = None) / (np.nansum(weight , axis = None) + DIV_TOL)
     else:
         return np.nanmean(v , axis = None)
 
 def whiten(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
-    stdev = np.nanstd(v) if isinstance(v , np.ndarray) else np.nanstd(v.to_numpy(float).flatten()) + 1e-6
+    stdev = np.nanstd(v) if isinstance(v , np.ndarray) else np.nanstd(v.to_numpy(float).flatten()) + DIV_TOL
     mean = weighted_mean(v , weight)
     return (v - mean) / stdev
 
