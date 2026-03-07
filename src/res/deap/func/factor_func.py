@@ -2,6 +2,7 @@ from dataclasses import dataclass , field
 from typing import Any
 import torch
 import pandas as pd
+import numpy as np
 
 from src.proj import Logger
 from src.math import tensor as T
@@ -9,7 +10,14 @@ from src.math import tensor as T
 def factor_repr(obj : Any):
     attr_repr = []
     for k , v in obj.__dict__.items():
-        attr_repr.append(f'{k}=Tensor({tuple(v.shape)},{v.device})' if isinstance(v , torch.Tensor) else f'{k}={v}')
+        if k == 'secid':
+            attr_repr.append(f'{k}=array({len(v)})')
+        elif k == 'date':
+            attr_repr.append(f'{k}={min(v)}~{max(v)}')
+        elif isinstance(v , torch.Tensor):
+            attr_repr.append(f'{k}=Tensor({tuple(v.shape)},{v.device})')
+        else:
+            attr_repr.append(f'{k}={v}')
     return f'{obj.__class__.__name__}({", ".join(attr_repr)})'
 
 @dataclass
@@ -18,23 +26,39 @@ class FactorValue:
     name    : str
     process : str
     infos   : dict[str, Any] = field(default_factory=dict)
+    secid   : np.ndarray | None = None
+    date    : np.ndarray | None = None
 
     def __repr__(self):
         return factor_repr(self)
     
     def isnull(self):
         return self.value is None
+
+    def df_index(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+        if self.value is None:
+            return pd.MultiIndex(names = ['secid' , 'date'])
+        if secid is None:
+            secid = self.secid
+        if secid is None:
+            secid = np.arange(self.value.shape[0])
+
+        if date is None:
+            date = self.date
+        if date is None:
+            date = np.arange(self.value.shape[1])
+        return pd.MultiIndex.from_product([secid.tolist() , date.tolist()] , names = ['secid' , 'date'])
     
-    def to_dataframe(self , index = None , columns = None):
+    def to_dataframe(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
         if self.value is None: 
             return pd.DataFrame()
         else:
-            return pd.DataFrame(data = self.value.cpu().numpy().T , index = index , columns = columns)
+            return pd.DataFrame(self.value.flatten().cpu().numpy() , index = self.df_index(secid , date) , columns = ['value']).dropna(how = 'all')
 
     @property
     def tensor_value(self) -> torch.Tensor:
         assert self.value is not None , 'value is None'
-        return self.value if isinstance(self.value , torch.Tensor) else torch.tensor(self.value.values)
+        return self.value if isinstance(self.value , torch.Tensor) else torch.Tensor(self.value.values)
 
 def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
@@ -202,10 +226,43 @@ class MultiFactorValue:
     value  : torch.Tensor
     weight : torch.Tensor
     inputs : torch.Tensor
-    names  : list[str] | None
+    names  : list[str] | None = None
+    secid  : np.ndarray | None = None
+    date   : np.ndarray | None = None
+
+    def __post_init__(self):
+        if self.names is not None:
+            assert len(self.names) == self.inputs.shape[-1] , (len(self.names) , self.inputs.shape)
+        if self.secid is not None:
+            assert len(self.secid) == self.value.shape[0] , (len(self.secid) , self.value.shape)
+        if self.date is not None:
+            assert len(self.date) == self.value.shape[1] , (len(self.date) , self.value.shape)
 
     def __repr__(self) -> str:
         return factor_repr(self)
+
+    def df_index(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+        if secid is None:
+            secid = self.secid
+        if secid is None:
+            secid = np.arange(self.value.shape[0])
+
+        if date is None:
+            date = self.date
+        if date is None:
+            date = np.arange(self.value.shape[1])
+        return pd.MultiIndex.from_product([secid.tolist() , date.tolist()] , names = ['secid' , 'date'])
+
+    def to_dataframe(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+        return pd.DataFrame(self.value.flatten().cpu().numpy() , index = self.df_index(secid , date) , columns = ['value']).dropna(how = 'all')
+
+    def inputs_dataframe(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+        if self.names is None:
+            names = [f'factor_{i}' for i in range(self.inputs.shape[-1])]
+        else:
+            names = self.names
+        
+        return pd.DataFrame(self.inputs.flatten(0,-2).cpu().numpy(),index = self.df_index(secid , date) , columns = names).dropna(how = 'all')
     
 class MultiFactor:
     def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 
@@ -236,7 +293,7 @@ class MultiFactor:
                 data = data[time_slice]
             w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).reshape(1,1,-1)
             w /= w.abs().sum(-1,keepdim=True)
-            w[w > (relative_weight_cap / w.shape[-1])] = relative_weight_cap / w.shape[-1]
+            w = w.clip(max=relative_weight_cap / w.shape[-1])
             w /= w.abs().sum(-1,keepdim=True)
             return w
         return wrapper
@@ -253,12 +310,12 @@ class MultiFactor:
                     w[i] = func(data[i-roll_window:i]).nan_to_num(torch.nan,torch.nan,torch.nan)
                 w = w.unsqueeze(0)
             w /= w.abs().sum(-1,keepdim=True)
-            w[w > (relative_weight_cap / w.shape[-1])] = relative_weight_cap / w.shape[-1]
+            w = w.clip(max=relative_weight_cap / w.shape[-1])
             w /= w.abs().sum(-1,keepdim=True)
             return w
         return wrapper
     
-    def multi_factor(self , factor , window_type = None , **kwargs):
+    def multi_factor(self , factor , window_type = None , names = None , secid = None , date = None , **kwargs):
         weight = self.factor_weight(window_type , **kwargs)
         try:
             multi = (factor * weight).nanmean(-1)
@@ -266,7 +323,7 @@ class MultiFactor:
             Logger.warning(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
         multi = T.zscore(multi , dim = -1)
-        return MultiFactorValue(value = multi , weight = weight , inputs = factor , names = kwargs.get('names',None))
+        return MultiFactorValue(value = multi , weight = weight , inputs = factor , names = names , secid = secid , date = date)
     
     def factor_weight(self , window_type = None , **kwargs):
         window_type = window_type if window_type is not None else self.window_type

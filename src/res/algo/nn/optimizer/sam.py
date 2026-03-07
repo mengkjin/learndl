@@ -669,7 +669,7 @@ class GAM(optim.Optimizer):
                 else:
                     norm += torch.sum(g**2)
 
-        return torch.sqrt(norm) if isinstance(norm, torch.Tensor) else torch.tensor(norm).sqrt()
+        return torch.sqrt(norm) if isinstance(norm, torch.Tensor) else torch.Tensor(norm).sqrt()
 
     @torch.no_grad()
     def _sync_grad(self):

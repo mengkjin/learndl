@@ -111,8 +111,7 @@ class StrongLearner:
         return pred.cpu().numpy()
     
     def predictions(self, x : np.ndarray | torch.Tensor):
-        if not isinstance(x , torch.Tensor): 
-            x = torch.tensor(x)
+        x = torch.Tensor(x)
         x = x.nan_to_num(-1).to(torch.int32)
         preds = torch.stack([learner.predict(x).nan_to_num(0) for learner in self.weak_learners] , dim = -1)
         return preds

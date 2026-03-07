@@ -9,16 +9,17 @@ from src.res.deap.func import primas
 from .memory import MemoryManager
 
 class AccTimer:
-    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, memory_check = False):
+    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, vb_level : int = 2 , memory_check = False):
         self.key = key
         self.title = title.title()
         self.time_costs : list[float] = []
+        self.vb_level = vb_level
         if not title:
             self.paragraph = None
         elif timer_level != 5:
             self.paragraph = Logger.Paragraph(title , timer_level)
         else:
-            self.paragraph = Logger.Timer(title , enter_vb_level = 1 , vb_level = 1)
+            self.paragraph = Logger.Timer(title , enter_vb_level = vb_level , vb_level = vb_level)
         self.memory_check = memory_check and torch.cuda.is_available()
 
     def __repr__(self) -> str:
@@ -33,20 +34,21 @@ class AccTimer:
         return self
     def __exit__(self, exc_type, exc_value, exc_traceback):
         time_cost = (datetime.now() - self._init_time).total_seconds()
-        if exc_type is not None:
-            Logger.error(f'Error in Timer {self.title or self.key}' , exc_type , exc_value)
-            Logger.print_exc(exc_value)
-        elif self.memory_check:
+        if self.memory_check:
             torch.cuda.empty_cache()
             mem_end  = torch.cuda.mem_get_info()[0] / MemoryManager.unit
             Logger.success(f'Free CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G')
 
+        self.time_costs.append(time_cost)
         if self.paragraph is not None:
             self.paragraph.__exit__(exc_type, exc_value, exc_traceback)
-        self.time_costs.append(time_cost)
-        return self
+
     def __bool__(self):
         return bool(self.time_costs)
+    def update(self , title : str | None = None):
+        if title is not None:
+            self.title = title
+        return self
     @property
     def time_cost(self) -> float:
         return sum(self.time_costs)
@@ -65,35 +67,6 @@ class AccTimer:
         wrapper.__name__ = func.__name__
         return wrapper
 
-class SilentTimer(AccTimer):
-    def __init__(self , key = ''):
-        self.key = key
-        self.time_costs : list[float] = []
-    def __enter__(self):
-        self._init_time = datetime.now()
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        if exc_type is not None:
-            Logger.error(f'Error in SilentTimer {self.key}' , exc_type , exc_value)
-            Logger.print_exc(exc_value)
-        else:
-            self.time_costs.append((datetime.now() - self._init_time).total_seconds())
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(key={self.key},count={self.count})'
-    def __bool__(self):
-        return bool(self.time_costs)
-    @property
-    def time_cost(self) -> float:
-        return sum(self.time_costs)
-    @property
-    def avg_time_cost(self) -> float:
-        count = len(self.time_costs)
-        total_time = sum(self.time_costs)
-        return total_time / count if count > 0 else 0.
-    @property
-    def count(self) -> int:
-        return len(self.time_costs)
-
-
 class gpTimer:
     '''
     ------------------------ gp timers ------------------------
@@ -109,31 +82,35 @@ class gpTimer:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , record = False) -> None:
-        self.initiate(record)
+    def __init__(self , record = False , vb_level : int = 2) -> None:
+        self.initiate(record , vb_level)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'recording')
 
-    def initiate(self , record = False) -> None:
+    def initiate(self , record = False , vb_level : int = 2) -> None:
         if self.initiated:
             return
         self.recording = record
+        self.vb_level = vb_level
         self.timers : dict[str, dict[str, AccTimer]] = {}
 
     def __repr__(self):
         return f'{self.__class__.__name__}(timers={self.timers})'
     def __bool__(self): 
         return self.recording
-    def timer(self , category : str , key : str , title : str = '' , memory_check = False , timer_level : Literal[1,2,3,4,5] = 3) -> AccTimer:
+    def timer(self , category : str , key : str , title : str = '' , memory_check = False , 
+              timer_level : Literal[1,2,3,4,5] = 3) -> AccTimer:
         if category not in self.timers.keys():
             self.timers[category] = {}
         if key not in self.timers[category].keys():
-            self.timers[category][key] = AccTimer(key, title = title, memory_check = memory_check, timer_level = timer_level)
-        return self.timers[category][key]
+            self.timers[category][key] = AccTimer(key, title = title, memory_check = memory_check, timer_level = timer_level, vb_level = self.vb_level)
+        return self.timers[category][key].update(title)
  
     def time_table(self):
+        if not self:
+            return pd.DataFrame()
         times : list[tuple[str , str , float , float , int]] = []
         [times.append((cat , k , v.time_cost , v.avg_time_cost , v.count)) for cat , timers in self.timers.items() for k,v in timers.items() if v]
         

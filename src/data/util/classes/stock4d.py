@@ -5,37 +5,23 @@ import xarray as xr
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any , Literal
 
 from src.proj import Logger
 from src.proj.func import properties
-from src.math import match_values , index_union , index_stack , to_numpy
+from src.math import match_slice , index_merge , intersect_meshgrid , intersect_pos_slice
 
 from .nd import NdData
 
 @dataclass
-class Stock4DData:
-    values  : Any = None 
-    secid   : Any = None 
-    date    : Any = None 
-    feature : Any = None
+class Stock4D:
+    """four-dimensional data, (secid, date, inday, feature)"""
+    values  : torch.Tensor | Any = None 
+    secid   : np.ndarray | Any = None 
+    date    : np.ndarray | Any = None 
+    feature : np.ndarray | Any = None
 
     def __post_init__(self) -> None:
-        if isinstance(self.secid , (int , float , str)):
-            self.secid = np.array([self.secid])
-        if isinstance(self.date , (int , float , str)):
-            self.date = np.array([self.date])
-        if isinstance(self.feature , (int , float , str)):
-            self.feature = np.array([self.feature])
-        if self.values is not None: 
-            if isinstance(self.feature , str): 
-                self.feature = np.array([self.feature])
-            elif isinstance(self.feature , list):
-                self.feature = np.array(self.feature)
-            if isinstance(self.values , (int , float)):
-                self.values = np.full((len(self.secid),len(self.date),1,len(self.feature)),self.values)
-            if self.ndim == 3: 
-                self.values = self.values[:,:,None]
         self.asserted()
 
     def uninitiate(self):
@@ -44,9 +30,48 @@ class Stock4DData:
         self.date    = None
         self.feature = None
 
+    @classmethod
+    def as_array(cls , values : np.ndarray | torch.Tensor | list | tuple | str | int | float | Any) -> np.ndarray:
+        if isinstance(values , np.ndarray):
+            return values
+        elif isinstance(values , torch.Tensor):
+            return values.cpu().numpy()
+        elif isinstance(values , (list , tuple)):
+            return np.asarray(values)
+        elif isinstance(values , (int , float , str)):
+            return np.asarray([values])
+        else:
+            raise ValueError(f'Unsupported type: {type(values)} for {cls.__name__} values')
+
+    def update(self , **kwargs):
+        if 'values' in kwargs:
+            self.values = kwargs['values']
+        if 'secid' in kwargs:
+            self.secid = kwargs['secid']
+        if 'date' in kwargs:
+            self.date = kwargs['date']
+        if 'feature' in kwargs:
+            self.feature = kwargs['feature']
+        return self.asserted()
+
     def asserted(self):
+        if self.secid is not None:
+            self.secid = self.as_array(self.secid)
+        if self.date is not None:
+            self.date = self.as_array(self.date)
+        if self.feature is not None:
+            self.feature = self.as_array(self.feature)
+
+        if self.values is not None: 
+            if isinstance(self.values , (int , float)):
+                self.values = torch.full((len(self.secid),len(self.date),1,len(self.feature)),self.values)
+            if not isinstance(self.values , torch.Tensor):
+                self.values = torch.Tensor(self.values)
+            if self.ndim == 3: 
+                self.values = self.values.unsqueeze(2)
+
         if self.initiated:
-            assert isinstance(self.values , (np.ndarray , torch.Tensor)) , self.values
+            assert isinstance(self.values , torch.Tensor) , self.values
             assert self.ndim == 4 , self.shape
             assert self.shape[0] == len(self.secid) , (self.shape[0] , len(self.secid))
             assert self.shape[1] == len(self.date) , (self.shape[1] , len(self.date))
@@ -79,23 +104,19 @@ class Stock4DData:
     @property
     def min_date(self): 
         return properties.min_date(self.date)
-
-    def update(self , **kwargs):
-        if 'values' in kwargs:
-            self.values = kwargs['values']
-        if 'secid' in kwargs:
-            self.secid = to_numpy(kwargs['secid'])
-        if 'date' in kwargs:
-            self.date = to_numpy(kwargs['date'])
-        if 'feature' in kwargs:
-            self.feature = to_numpy(kwargs['feature'])
-        return self.asserted()
+    @property
+    def inday(self) -> np.ndarray: 
+        return np.arange(self.shape[2])
     
     def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]
     
     @classmethod
-    def merge(cls , block_list , inplace = False):
+    def merge(cls , block_list , * , inplace = False , 
+              secid_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'union' , 
+              date_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'union' , 
+              inday_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'check' , 
+              feature_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'stack'):
         """merge multiple blocks into one block , if inplace is True, merge into the first block"""
         blocks = [blk for blk in block_list if isinstance(blk , cls) and not blk.empty]
         if len(blocks) == 0: 
@@ -103,17 +124,18 @@ class Stock4DData:
         elif len(blocks) == 1: 
             return blocks[0] if inplace else blocks[0].copy()
             
-        secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
-        date    , p0d , p1d = index_union([blk.date    for blk in blocks])
-        feature , p0f , p1f = index_stack([blk.feature for blk in blocks])
-        len_inday = blocks[0].shape[2]
-        assert np.all([blk.shape[2] == len_inday for blk in blocks]) , 'blocks with different inday cannot be merged'
-        p0i = p1i = np.arange(len_inday)
+        secid   = index_merge([blk.secid   for blk in blocks] , method = secid_method)
+        date    = index_merge([blk.date    for blk in blocks] , method = date_method)
+        inday   = index_merge([blk.inday   for blk in blocks] , method = inday_method)
+        feature = index_merge([blk.feature for blk in blocks] , method = feature_method)
 
-        new_blk = blocks[0].align(secid , date , feature , inplace = inplace)
-        for i , blk in enumerate(blocks[1:] , start = 1): 
-            new_blk.values[np.ix_(p0s[i],p0d[i],p0i,p0f[i])] = blk.values[np.ix_(p1s[i],p1d[i],p1i,p1f[i])]
+        values = torch.full((len(secid),len(date),len(inday),len(feature)) , torch.nan)
+        
+        for i , blk in enumerate(blocks): 
+            tar_grid , src_grid = intersect_meshgrid([secid , date , inday , feature] , [blk.secid , blk.date , blk.inday , blk.feature] , )
+            values[*tar_grid] = blk.values[*src_grid]
 
+        new_blk = cls(values , secid , date , feature)
         return new_blk
 
     def merge_others(self , others : list | Any , inplace = False):
@@ -123,16 +145,8 @@ class Stock4DData:
         self = self.align_feature(self.feature , inplace = True)
         return self
     
-    def as_tensor(self , asTensor = True):
-        if asTensor and isinstance(self.values , np.ndarray): 
-            self.values = torch.from_numpy(self.values)
-        return self
-    
-    def as_type(self , dtype = None):
-        if dtype and isinstance(self.values , np.ndarray): 
-            self.values = self.values.astype(dtype)
-        if dtype and isinstance(self.values , torch.Tensor): 
-            self.values = self.values.to(dtype)
+    def to(self , *args , **kwargs):
+        self.values = self.values.to(*args , **kwargs)
         return self
     
     def copy(self): return deepcopy(self)
@@ -150,83 +164,69 @@ class Stock4DData:
         return self.__class__(values , secid , date , feature)
 
     def align_secid(self , secid , inplace = False):
-        secid = None if secid is None else to_numpy(secid)
+        secid = None if secid is None else self.as_array(secid)
+        if not inplace:
+            self = self.copy()
         if secid is None or len(secid) == 0 or np.array_equal(secid , self.secid): 
-            return self if inplace else self.copy()
+            return self
         elif np.isin(secid , self.secid).all():
             return self.update(values = self.loc(secid = secid) , secid = secid)
-        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
-        values = np.full((len(secid) , *self.shape[1:]) , np.nan)
-        _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
-        values[p0s] = self.values[p1s]
-        values = torch.tensor(values).to(self.values) if asTensor else values
-        if inplace:
-            return self.update(values = values , secid = secid).as_type(dtype)
-        else:
-            return self.__class__(values = values , secid = secid , date = self.date , feature = self.feature).as_type(dtype)
-
+        values = torch.full((len(secid) , *self.shape[1:]) , np.nan).to(self.values)
+        tar_pos , src_pos = intersect_pos_slice(secid , self.secid)
+        values[tar_pos] = self.values[src_pos]
+        return self.update(values = values , secid = secid)
+       
     def align_date(self , date , inplace = False):
-        date = None if date is None else to_numpy(date)
+        date = None if date is None else self.as_array(date)
+        if not inplace:
+            self = self.copy()
         if date is None or len(date) == 0 or np.array_equal(date , self.date): 
-            return self if inplace else self.copy()
+            return self
         elif np.isin(date , self.date).all():
             return self.update(values = self.loc(date = date) , date = date)
-        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
-        values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
-        _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
-        values[:,p0d] = self.values[:,p1d]
-        values  = torch.tensor(values).to(self.values) if asTensor else values
-        if inplace:
-            return self.update(values = values , date = date).as_type(dtype)
-        else:
-            return self.__class__(values = values , secid = self.secid , date = date , feature = self.feature).as_type(dtype)
+        values = torch.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan).to(self.values)
+        tar_pos , src_pos = intersect_pos_slice(date , self.date)
+        values[:,tar_pos] = self.values[:,src_pos]
+        return self.update(values = values , date = date)
     
     def align_secid_date(self , secid = None , date = None , inplace = False):
         # to speed up than .align_secid(secid = secid).align_date(date = date)
-        secid = None if secid is None else to_numpy(secid)
-        date = None if date is None else to_numpy(date)
+        secid = None if secid is None else self.as_array(secid)
+        date = None if date is None else self.as_array(date)
+        if not inplace:
+            self = self.copy()
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
-            return self if inplace else self.copy()
+            return self
         elif secid is None or len(secid) == 0 or np.array_equal(secid , self.secid):
-            return self.align_date(date = date, inplace = inplace)
+            return self.align_date(date = date, inplace = True)
         elif date is None or len(date) == 0 or np.array_equal(date , self.date):
-            return self.align_secid(secid = secid, inplace = inplace)
+            return self.align_secid(secid = secid, inplace = True)
         elif np.isin(secid , self.secid).all() or np.isin(date , self.date).all():
-            return self.align_date(date = date, inplace = inplace).align_secid(secid = secid, inplace = True)
+            return self.align_date(date = date, inplace = True).align_secid(secid = secid, inplace = True)
         else:
-            asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
-            values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
-            _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
-            _ , p0d , p1d = np.intersect1d(date  , self.date  , return_indices=True)
-            values[np.ix_(p0s,p0d)] = self.values[np.ix_(p1s,p1d)] 
-
-            values = torch.tensor(values).to(self.values) if asTensor else values
-
-            if inplace:
-                return self.update(values = values , secid = secid , date = date).as_type(dtype)
-            else:
-                return self.__class__(values = values , secid = secid , date = date , feature = self.feature).as_type(dtype)
+            values = torch.full((len(secid),len(date),*self.shape[2:]) , np.nan).to(self.values)
+            tar_grid , src_grid = intersect_meshgrid([secid , date] , [self.secid , self.date])
+            values[*tar_grid] = self.values[*src_grid] 
+            
+            return self.update(values = values , secid = secid , date = date)
     
     def align_feature(self , feature , inplace = False):
-        feature = None if feature is None else to_numpy(feature) 
+        feature = None if feature is None else self.as_array(feature) 
+        if not inplace:
+            self = self.copy()
         if feature is None or len(feature) == 0 or np.array_equal(feature , self.feature): 
-            return self if inplace else self.copy()
+            return self
         if np.isin(feature , self.feature).all():
             return self.update(values = self.loc(feature = feature) , feature = feature)
-        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.dtype
-        values = np.full((*self.shape[:-1],len(feature)) , np.nan)
-        _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
-        values[...,p0f] = self.values[...,p1f]
-        values  = torch.tensor(values).to(self.values) if asTensor else values
-        if inplace:
-            return self.update(values = values , feature = feature).as_type(dtype)
-        else:
-            return self.__class__(values = values , secid = self.secid , date = self.date , feature = feature).as_type(dtype)
-    
+        values = torch.full((*self.shape[:-1],len(feature)) , np.nan).to(self.values)
+        tar_pos , src_pos = intersect_pos_slice(feature , self.feature)
+        values[...,tar_pos] = self.values[...,src_pos]
+        return self.update(values = values , feature = feature)
+        
     def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
         assert new_value.shape == self.shape[:-1] , (new_value.shape , self.shape[:-1])
         new_value = new_value.reshape(*new_value.shape , 1)
-        self.values  = np.concatenate([self.values,new_value],axis=-1)
+        self.values  = torch.concatenate([self.values,torch.Tensor(new_value)],dim=-1)
         self.feature = np.concatenate([self.feature,[new_feature]],axis=0)
         return self
     
@@ -240,27 +240,24 @@ class Stock4DData:
         return self
     
     def loc(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
-        values : np.ndarray | torch.Tensor | Any = self.values
+        values = self.values
+        if values is None:
+            return values
 
-        if feature is not None and not np.array_equal(feature , self.feature): 
-            index  = match_values(feature , self.feature)
-            values = values[:,:,:,index]
-        if inday is not None and not np.array_equal(inday , range(values.shape[2])): 
-            index  = match_values(inday , range(values.shape[2]))
-            values = values[:,:,index]
-        if date is not None and not np.array_equal(date , self.date): 
-            index  = match_values(date , self.date)
-            values = values[:,index]
-        if secid is not None and not np.array_equal(secid , self.secid): 
-            index  = match_values(secid , self.secid)
-            values = values[index,:]
+        if feature is not None: 
+            values = values[...,match_slice(feature , self.feature)]
+
+        if inday is not None: 
+            values = values[:,:,match_slice(inday , self.inday)]
+
+        if date is not None: 
+            values = values[:,match_slice(date , self.date)]
+
+        if secid is not None: 
+            values = values[match_slice(secid , self.secid)]
+
         if fillna is not None: 
-            if isinstance(values , torch.Tensor): 
-                values = values.nan_to_num(fillna)
-            elif isinstance(values , np.ndarray): 
-                values = np.nan_to_num(values,fillna)
-            else:
-                raise TypeError(f'Unsupported type: {type(values)} for {self.__class__.__name__} values')
+            values = values.nan_to_num(fillna)
         return values
 
     @classmethod
@@ -273,7 +270,7 @@ class Stock4DData:
                 assert np.array_equal(new_blk.secid , blk.secid) , (new_blk.secid , blk.secid)
                 assert np.array_equal(new_blk.date , blk.date) , (new_blk.date , blk.date)
                 new_blk.feature = np.concatenate([new_blk.feature , blk.feature])
-                new_blk.values  = np.concatenate([new_blk.values  , blk.values ] , axis=-1)
+                new_blk.values  = torch.concatenate([new_blk.values  , blk.values] , dim=-1)
         return new_blk
     
     @classmethod
@@ -288,22 +285,29 @@ class Stock4DData:
             Logger.display(df[df.index.duplicated()] , caption = 'Duplicate index in DataFrame')
             raise e
         try:
-            value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
+            block = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
         except Exception as e:
             import src
             setattr(src , 'xarr' , xarr)
             Logger.stdout(xarr)
             raise e
-        return value
+        return block
 
-        # return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
-    
-    def to_dataframe(self , drop_inday = True):
-        df_dict = {}
-        df_dict['secid'] = np.repeat(self.secid , self.shape[1] * self.shape[2])
-        df_dict['date']  = np.repeat(np.tile(self.date , self.shape[0]) , self.shape[2])
-        if not drop_inday or self.shape[2] > 1:
-            df_dict['inday']  = np.tile(np.arange(self.shape[2]) , self.shape[0] * self.shape[1])
-        
-        df = pd.DataFrame(df_dict  | {feat:self.loc(feature=feat).flatten() for feat in self.feature}).set_index(['secid' , 'date'])
+    def to_dataframe(self , drop_inday = True , start_dt : int | None = None , end_dt : int | None = None):
+        if start_dt is not None or end_dt is not None:
+            date_slice = np.repeat(True,len(self.date))
+            if start_dt is not None: 
+                date_slice[self.date < start_dt] = False
+            if end_dt   is not None: 
+                date_slice[self.date > end_dt]   = False
+            values = self.values[...,date_slice]
+            date = self.date[date_slice]
+        else:
+            values = self.values
+            date = self.date
+        if drop_inday and values.shape[2] == 1:
+            df_index = pd.MultiIndex.from_product([self.secid.tolist() , date.tolist()] , names = ['secid' , 'date'])
+        else:
+            df_index = pd.MultiIndex.from_product([self.secid.tolist() , date.tolist() , self.inday.tolist()] , names = ['secid' , 'date' , 'inday'])
+        df = pd.DataFrame(values.flatten(end_dim=-2).cpu().numpy() , index = df_index , columns = self.feature)
         return df

@@ -1,3 +1,4 @@
+from .syntax import SyntaxRecord
 class gpStatus:
     def __init__(self , n_iter : int , n_gen : int , start_iter : int = 0 , start_gen : int = 0 , train : bool = True , **kwargs) -> None:
         self.n_iter      = n_iter
@@ -9,6 +10,7 @@ class gpStatus:
         self.train       = train
 
         self.forbidden  : list[str] = []
+        self.historybook : dict[str, SyntaxRecord] = {}
 
     def iter_iteration(self):
         for self._i_iter in range(self.start_iter, self.n_iter):
@@ -39,3 +41,7 @@ class gpStatus:
     def update_forbidden(self , forbidden : list) -> list[str]:
         self.forbidden = list(set(self.forbidden + [str(fbd) for fbd in forbidden]))
         return self.forbidden
+
+    def update_historybook(self , historybook : dict[str, SyntaxRecord]):
+        self.historybook.update(historybook)
+        return self.historybook

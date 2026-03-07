@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from src.math import match_values , index_union , index_stack 
+from src.math import match_values , index_merge , match_slice , intersect_meshgrid
 from src.math.metric import rankic_2d , ic_2d
 
 __all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
@@ -141,7 +141,7 @@ class BoostInput:
         return self.obj_flatten(self.date[None,:].repeat(len(self.secid),axis=0) , dropna=dropna)
 
     def X(self) -> torch.Tensor: 
-        return self.obj_flatten(self.x[...,self.feat_idx] , dropna=True)
+        return self.obj_flatten(self.x[...,match_slice(self.use_feature , self.feature)] , dropna=True)
     
     def Y(self): 
         return self.obj_flatten(self.y , dropna=True)
@@ -253,10 +253,10 @@ class BoostInput:
 
         xarr = xr.Dataset.from_dataframe(data.iloc[:,:-1])
         xindex = [arr.values for arr in xarr.indexes.values()] + [list(xarr.data_vars)]
-        x = torch.tensor(np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1))
+        x = torch.Tensor(np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1))
 
         yarr = xr.Dataset.from_dataframe(data.iloc[:,-1:])
-        y = torch.tensor(np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)[...,0])
+        y = torch.Tensor(np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)[...,0])
         
         secid , date , feature = xindex[0] , xindex[1] , xindex[-1]
         return cls(x , y , None , secid , date , feature , weight_param)
@@ -265,8 +265,8 @@ class BoostInput:
     def from_numpy(cls , x : np.ndarray , y : np.ndarray | Any = None,  w : np.ndarray | Any = None ,
                    secid : Any = None , date : Any = None , feature : Any = None , 
                    weight_param : dict[str,Any] = {}):
-        return cls.from_tensor(torch.tensor(x) , None if y is None else torch.tensor(y) ,
-                               None if w is None else torch.tensor(w) ,
+        return cls.from_tensor(torch.Tensor(x) , None if y is None else torch.Tensor(y) ,
+                               None if w is None else torch.Tensor(w) ,
                                secid , date , feature , weight_param)
     
     @classmethod
@@ -295,21 +295,24 @@ class BoostInput:
     def concat(cls , datas : 'list[BoostInput | None]'):
         blocks = [data for data in datas if data is not None and data.complete]
         
-        secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
-        date    , p0d , p1d = index_union([blk.date    for blk in blocks])
-        feature , p0f , p1f = index_stack([blk.feature for blk in blocks])
+        secid   = index_merge([blk.secid   for blk in blocks] , method = 'union')
+        date    = index_merge([blk.date    for blk in blocks] , method = 'union')
+        feature = index_merge([blk.feature for blk in blocks] , method = 'stack')
         
-        x = np.full((len(secid) , len(date) , len(feature)) , fill_value=np.nan)
-        y = np.full((len(secid) , len(date)) , fill_value=np.nan)
-        w = None if all(blk.w is None for blk in blocks) else np.ones_like(y)
+        x = torch.full((len(secid) , len(date) , len(feature)) , fill_value=torch.nan)
+        y = torch.full((len(secid) , len(date)) , fill_value=torch.nan)
+        w = None if all(blk.w is None for blk in blocks) else torch.ones_like(y)
         for i , blk in enumerate(blocks): 
-            x[np.ix_(p0s[i],p0d[i],p0f[i])] = blk.x[np.ix_(p1s[i],p1d[i],p1f[i])]
-            y[np.ix_(p0s[i],p0d[i])]        = blk.y[np.ix_(p1s[i],p1d[i])]
-            if blk.w is not None and w is not None:
-                w[np.ix_(p0s[i],p0d[i])]    = blk.w[np.ix_(p1s[i],p1d[i])]
+            tar_grid , src_grid = intersect_meshgrid([secid , date , feature] , [blk.secid , blk.date , blk.feature])
+            x[*tar_grid] = blk.x[*src_grid]
 
-        new_blk = cls(torch.tensor(x) , torch.tensor(y) , None if w is None else torch.tensor(w) , secid , date , feature)
-        return new_blk
+            tar_grid , src_grid = intersect_meshgrid([secid , date] , [blk.secid , blk.date])
+            y[*tar_grid] = blk.y[*src_grid]
+            if blk.w is not None and w is not None:
+                w[*tar_grid] = blk.w[*src_grid]
+
+        new_binput = cls(x , y , w , secid , date , feature)
+        return new_binput
         
     
 @dataclass(slots=True)

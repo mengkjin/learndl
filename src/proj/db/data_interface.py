@@ -20,8 +20,7 @@ __all__ = [
     'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
     'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs' ,  'load_dfs_seperately' , 
     'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 
-    'pack_files_to_tar' , 'unpack_files_from_tar' ,
-    'block_path' , 'norm_path' ,
+    'pack_files_to_tar' , 'unpack_files_from_tar'
 ]
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
@@ -685,9 +684,3 @@ def path(db_src , db_key , date = None , use_alt = False) -> Path:
 def dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
     """get dates from any database data"""
     return _db_dates(db_src , db_key , start_dt , end_dt , year , use_alt)
-
-def block_path(type : Literal['raw' , 'fit' , 'predict'] , name : str) -> Path:
-    return PATH.block.joinpath(f'{name}.{SAVE_OPT_BLK}')
-
-def norm_path(type: Literal['fit'] , name : str) -> Path:
-    return PATH.norm.joinpath(f'{name}.{SAVE_OPT_NORM}')

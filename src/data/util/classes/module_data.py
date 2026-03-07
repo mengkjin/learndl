@@ -114,8 +114,8 @@ class ModuleData:
             data = cls.datacache_load(last_date , data_type_list , y_labels , vb_level = vb_level)
 
         if data is None:
-            blocks = DataBlock.load_keys(['y' , *data_type_list], predict , dtype = dtype , vb_level = vb_level)
-            norms  = DataBlock.load_keys_norms(['y' , *data_type_list], predict , dtype = dtype)
+            blocks = DataBlock.load_preprocessed(['y' , *data_type_list], predict , dtype = dtype , vb_level = vb_level)
+            norms  = DataBlock.load_preprocessed_norms(['y' , *data_type_list], predict , dtype = dtype)
 
             y : DataBlock = blocks['y']
             x : dict[str,DataBlock] = {cls.abbr(key):val for key,val in blocks.items() if key != 'y'}
@@ -219,7 +219,7 @@ class ModuleData:
             return
         path = cls.datacache_path(date , data_type_list)
         path.parent.mkdir(exist_ok=True)
-        torch.save(data , path , pickle_protocol = 4)
+        torch.save(data , path , pickle_protocol = 5)
 
     @classmethod
     def datacache_purge_old(cls , data_type_list : list[str]):

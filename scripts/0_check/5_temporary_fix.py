@@ -7,14 +7,12 @@
 # email: True
 # mode: shell
 
-from src.data.update.custom.daily_risk import DailyRiskUpdater
-from src.data.update.custom.market_daily_risk import MarketDailyRiskUpdater
 from src.proj.util import ScriptTool 
+from src.data import DataBlock
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    DailyRiskUpdater.update_all('recalc')
-    MarketDailyRiskUpdater.update_all('recalc')
+    DataBlock.change_all_dumps()
         
 if __name__ == '__main__':
     main()

@@ -222,7 +222,7 @@ class LgbmPlot:
                 x = x.values
             ifeat = match_values(feature , train.feature)
             # when calculating PDP，factor range is -5:0.2:5
-            x_range = np.arange(np.floor(min(x[:,ifeat])), np.ceil(max(x[:,ifeat])), 0.2)
+            x_range = np.arange(np.floor(min(np.take(x,ifeat,axis=1))), np.ceil(max(np.take(x,ifeat,axis=1))), 0.2)
             
             # initialization and calculation
             pdp = np.zeros_like(x_range)

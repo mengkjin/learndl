@@ -1,6 +1,6 @@
 import torch
 from typing import Literal , Callable
-from src.math import same , allna , exact
+from src.math import allna , exact
 from src.math import tensor as T
 
 class PrimTool:
@@ -50,14 +50,12 @@ class PrimTool:
         return decorator
     
     @staticmethod
-    def input_checker(*args,check_null=True,check_allna=False,check_exact=True,check_same=False,**decor_kwargs):
+    def input_checker(*args,check_null=True,check_allna=False,check_exact=True,**decor_kwargs):
         if check_null and any(arg is None for arg in args):
             return False
         if check_allna and any(allna(arg) for arg in args):
             return False
         if check_exact and len(args) == 2 and exact(args[0],args[1]):
-            return False
-        if check_same and len(args) == 2 and same(args[0],args[1]):
             return False
         return True
 

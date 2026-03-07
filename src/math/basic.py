@@ -1,6 +1,6 @@
 import torch , sys
 import numpy as np
-from typing import Any
+from typing import Any , Literal
 
 DIV_TOL = 1e-6
 
@@ -11,14 +11,6 @@ def alert_message(message : str , color : str = 'lightyellow'):
         sys.stderr.write(f'\u001b[91m\u001b[1m{message}\u001b[0m')
     else:
         sys.stderr.write(message)
-
-def same(x , y):
-    if type(x) is not type(y):
-        return False
-    elif isinstance(x , torch.Tensor):
-        return x.equal(y)
-    else:
-        return (x == y).all()
 
 def allna(x : torch.Tensor | np.ndarray | None , inf_as_na = True):
     if x is None:
@@ -56,7 +48,7 @@ def to_numpy(values):
     return values
 
 def match_values(values , src_arr , ambiguous = 0):
-    """match values to src_arr , return the index of values in src_arr"""
+    """match values to src_arr , return the index of values in src_arr , no match return len(src_arr)"""
     values = to_numpy(values)
     src_arr = to_numpy(src_arr)
     sorter = np.argsort(src_arr)
@@ -66,6 +58,35 @@ def match_values(values , src_arr , ambiguous = 0):
     else:
         index[values <= max(src_arr)] = sorter[np.searchsorted(src_arr, values[values <= max(src_arr)], sorter=sorter)]
     return index
+
+def convert_to_slice(index : np.ndarray | list) -> slice | np.ndarray:
+    if len(index) == 0:
+        return slice(0,0,1)
+    elif len(index) == 1:
+        return slice(index[0],index[0]+1,1)
+    else:
+        start = min(index)
+        end = max(index) + 1
+        step = index[1] - index[0]
+        if np.array_equal(index , np.arange(start,end,step)):
+            return slice(start,end,step)
+        else:
+            return to_numpy(index)
+
+def match_slice(values , src_arr , ambiguous = 0) -> slice | np.ndarray:
+    if len(values) == 0:
+        return slice(0,0,1)
+    elif np.array_equal(values , src_arr):
+        return slice(None,None,1)
+    else:
+        return convert_to_slice(match_values(values , src_arr , ambiguous))
+
+def array_to_tensor_slice(array : np.ndarray | list) -> slice | torch.Tensor:
+    array_slice = convert_to_slice(array)
+    if isinstance(array_slice , slice):
+        return array_slice
+    else:
+        return torch.from_numpy(array_slice)
     
 def forward_fillna(arr , axis = 0):
     shape = arr.shape
@@ -102,40 +123,36 @@ def backward_fillna(arr, axis = 0):
     out = np.transpose(out.reshape(new_shape) , new_axes)
     return out
 
-def index_intersect(idxs , min_value = None , max_value = None):
-    new_idx : np.ndarray | Any = None
+def trim_index(index : np.ndarray | Any , min_value = None , max_value = None) -> np.ndarray:
+    if min_value is not None:
+        index = index[index >= min_value]
+    if max_value is not None:
+        index = index[index <= max_value]
+    return index
+
+def index_intersect(idxs , min_value = None , max_value = None) -> np.ndarray:
+    """intersect multiple index arrays , return the intersect index , the position in the target array , the position in the original index"""
+    new_idx : np.ndarray | torch.Tensor | Any = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.intersect1d(new_idx , idx)
-    if min_value is not None: 
-        new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: 
-        new_idx = new_idx[new_idx <= max_value]
     new_idx = np.sort(new_idx)
-    inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
-    pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
-    return new_idx , pos_new , pos_old
+    return trim_index(new_idx , min_value , max_value)
 
-def index_union(idxs , min_value = None , max_value = None) -> tuple[np.ndarray , tuple[np.ndarray , ...] , tuple[np.ndarray , ...]]:
+def index_union(idxs , min_value = None , max_value = None) -> np.ndarray:
+    """union multiple index arrays , return the union index , the position in the target array , the position in the original index"""
     new_idx : np.ndarray | Any = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.union1d(new_idx , idx)
-    if min_value is not None: 
-        new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: 
-        new_idx = new_idx[new_idx <= max_value]
-    inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
-    pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
-    return new_idx , pos_new , pos_old
+    return trim_index(new_idx , min_value , max_value)
 
-def index_stack(idxs , min_value = None , max_value = None) -> tuple[np.ndarray , tuple[np.ndarray , ...] , tuple[np.ndarray , ...]]:
+def index_stack(idxs , min_value = None , max_value = None) -> np.ndarray:
+    """stack multiple index arrays , return the stack index , the position in the target array , the position in the original index"""
     new_idx : np.ndarray | Any = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
@@ -146,11 +163,50 @@ def index_stack(idxs , min_value = None , max_value = None) -> tuple[np.ndarray 
             new_idx = np.concatenate([new_idx , idx])
         else:
             raise ValueError(f'idx {idx} is not a subset of new_idx {new_idx} , index_stack inputs must be identical or completely distinct index')
-    if min_value is not None: 
-        new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: 
-        new_idx = new_idx[new_idx <= max_value]
-    inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
-    pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
-    return new_idx , pos_new , pos_old
+    return trim_index(new_idx , min_value , max_value)
+
+def index_check(idxs , min_value = None , max_value = None) -> np.ndarray:
+    """stack multiple index arrays , return the stack index , the position in the target array , the position in the original index"""
+    new_idx : np.ndarray | Any = None
+    for i , idx in enumerate(idxs):
+        if i == 0:
+            new_idx = idx
+        elif np.array_equal(idx , new_idx):
+            pass
+        else:
+            raise ValueError(f'idx at {i} is {idx}, does not equal to idx at 0 {new_idx} , index_check inputs must be identical')
+    return trim_index(new_idx , min_value , max_value)
+
+def index_merge(idxs , * , method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'intersect' , 
+               min_value = None , max_value = None) -> np.ndarray:
+    assert len(idxs) > 0 , 'index_check inputs must be a non-empty list'
+    if method == 'intersect':
+        return index_intersect(idxs , min_value , max_value)
+    elif method == 'union':
+        return index_union(idxs , min_value , max_value)
+    elif method == 'stack':
+        return index_stack(idxs , min_value , max_value)
+    elif method == 'check':
+        return index_check(idxs , min_value , max_value)
+    else:
+        raise ValueError(f'Invalid method: {method}')
+
+def intersect_pos_tensor(target_index : np.ndarray | Any , source_index : np.ndarray | Any) -> tuple[torch.Tensor , torch.Tensor]:
+    _ , target_pos , source_pos = np.intersect1d(target_index , source_index , return_indices=True)
+    return torch.from_numpy(target_pos), torch.from_numpy(source_pos)
+
+def intersect_pos_slice(target_index : np.ndarray | Any , source_index : np.ndarray | Any) -> tuple[slice | np.ndarray , slice | np.ndarray]:
+    _ , target_pos , source_pos = np.intersect1d(target_index , source_index , return_indices=True)
+    return convert_to_slice(target_pos), convert_to_slice(source_pos)
+
+def intersect_meshgrid(target_indices : list[torch.Tensor | np.ndarray | Any] , source_indices : list[torch.Tensor | np.ndarray | Any]) -> tuple[tuple[torch.Tensor , ...] , tuple[torch.Tensor , ...]]:
+    assert len(target_indices) == len(source_indices) , f'target_indices and source_indices must have the same length , but got {len(target_indices)} and {len(source_indices)}'
+    target_pos = []
+    source_pos = []
+    for target_index , source_index in zip(target_indices, source_indices):
+        tarpos , srcpos = intersect_pos_tensor(target_index , source_index)
+        target_pos.append(tarpos)
+        source_pos.append(srcpos)
+    return torch.meshgrid(*target_pos, indexing='ij'), torch.meshgrid(*source_pos, indexing='ij')
+
+

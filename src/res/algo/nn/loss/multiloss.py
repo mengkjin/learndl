@@ -84,17 +84,17 @@ class MultiHeadLosses:
             ls = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
             _,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            loss = torch.stack([torch.stack([torch.tensor([s1[i,j],s2[i,j]]).prod().sqrt() for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
+            loss = torch.stack([torch.stack([torch.Tensor([s1[i,j],s2[i,j]]).prod().sqrt() for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, loss, cmap='viridis') #type:ignore
             ax.set_xlabel('loss-1')
             ax.set_ylabel('loss-2')
             ax.set_zlabel('gls_loss') #type:ignore
             ax.set_title(f'GLS Loss vs sub-Loss ({num_head}-D)')
         elif multi_type == 'rws':
-            ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
+            ls = torch.Tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
             _,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            loss = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_head),-1)).sum() for j in range(s1.shape[1])]) 
+            loss = torch.stack([torch.stack([(torch.Tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_head),-1)).sum() for j in range(s1.shape[1])]) 
                              for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, loss, cmap='viridis') #type:ignore
             ax.set_xlabel('loss-1')

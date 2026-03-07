@@ -429,7 +429,7 @@ class DataModule(BaseDataModule):
             batch_files = [PATH.batch.joinpath(f'{set_key}.{bnum}.pt') for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
                 assert torch.isin(b_i[:,1] , index1).all() , f'all b_i[:,1] must be in index1'
-                index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
+                index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , torch.Tensor(match_values(b_i[:,1] , index1))
 
                 b_x = self.batch_data_x(x , index0 , xindex1)
                 b_y = self.batch_data_y(y , index0 , yindex1)
@@ -503,7 +503,7 @@ class DataModule(BaseDataModule):
         if self.stage == 'fit':
             sep = int(l1 * train_ratio)
             if sample_method == 'total_shuffle':
-                pool = torch.tensor(permutation(np.arange(valid.sum().item())))
+                pool = torch.Tensor(permutation(np.arange(valid.sum().item())))
                 sep = int(len(pool) * train_ratio)
                 sample_index['train'] = shuffle_sampling(pos[valid][pool[:sep]])
                 sample_index['valid'] = shuffle_sampling(pos[valid][pool[sep:]])

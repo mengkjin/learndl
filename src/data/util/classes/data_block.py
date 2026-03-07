@@ -1,4 +1,4 @@
-import torch
+import torch , shutil
 import numpy as np
 import pandas as pd
 
@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any , ClassVar , Literal
 
 from src.proj import PATH , Logger , CALENDAR , DB , Proj
+from src.proj.db.memory_map import ArrayMemoryMap
 from src.proj.func import torch_load
-from src.math import index_union , index_intersect , forward_fillna
+from src.math import index_merge , forward_fillna
 
-from . import Stock4DData
+from . import Stock4D
 from ..stock_info import INFO
 
 __all__ = ['DataBlock' , 'DataBlockNorm']
@@ -29,18 +30,22 @@ def data_type_abbr(key : str):
 def data_type_alias(key : str):
     return [key , f'trade_{key}' , key.replace('trade_','')]
 
-def save_dict(data : dict , file_path : Path):
-    if file_path is None: 
-        return NotImplemented
+def save_dict(data : dict , file_path : str | Path):
+    file_path = Path(file_path)
+    assert not file_path.exists() or file_path.is_file() , file_path
     Path(file_path).parent.mkdir(exist_ok=True)
     if file_path.suffix in ['.npz' , '.npy' , '.np']:
         np.savez_compressed(file_path , **data)
     elif file_path.suffix in ['.pt' , '.pth']:
-        torch.save(data , file_path , pickle_protocol = 4)
+        torch.save(data , file_path , pickle_protocol = 5)
     else:
         raise Exception(file_path)
 
-def load_dict(file_path : Path , keys = None) -> dict[str,Any]:
+def load_dict(file_path : str | Path , keys = None) -> dict[str,Any]:
+    file_path = Path(file_path)
+    assert file_path.exists() and file_path.is_file() , file_path
+    if not file_path.exists():
+        return {}
     if file_path.suffix in ['.npz' , '.npy' , '.np']:
         file = np.load(file_path)
     elif file_path.suffix in ['.pt' , '.pth']:
@@ -51,10 +56,11 @@ def load_dict(file_path : Path , keys = None) -> dict[str,Any]:
     data = {k:file[k] for k in keys}
     return data
 
-class DataBlock(Stock4DData):
+class DataBlock(Stock4D):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']
-    FREQUENT_DBS = ['trade_ts.day' , 'trade_ts.val']
+    FREQUENT_DBS = ['trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp']
     FREQUENT_MIN_DATES = 500
+    PREFERRED_DUMP_SUFFIXES : list[Literal['.mmap' , '.pt' , '.feather']] = ['.mmap' , '.pt' , '.feather']
 
     @staticmethod
     def data_type_abbr(key : str): 
@@ -66,62 +72,22 @@ class DataBlock(Stock4DData):
 
     @classmethod
     def last_modified_date(cls , key , predict):
-        return PATH.file_modified_date(cls.key_path(key , predict))
+        return PATH.file_modified_date(cls.path_preprocessed(key , predict))
     
     @classmethod
     def last_modified_time(cls , key , predict):
-        return PATH.file_modified_time(cls.key_path(key , predict))
-
-    @staticmethod
-    def key_path(key : str , predict=False, alias_search = True):
-        type = 'predict' if predict else 'fit'
-        if key.lower() in ['y' , 'labels']: 
-            return DB.block_path(type , 'Y')
-        else:
-            alias_list = data_type_alias(key) if alias_search else []
-            for new_key in alias_list:
-                path = DB.block_path(type , f'X_{new_key}')
-                if path.exists(): 
-                    return path
-            return DB.block_path(type , f'X_{key}')
-        
-    @staticmethod
-    def norm_path(key : str , predict = False, alias_search = True):
-        return DataBlockNorm.norm_path(key , predict , alias_search)
-
-    @classmethod
-    def raw_path(cls , src : str , key : str):
-        return DB.block_path('raw' , f'{src}.{key}')
+        return PATH.file_modified_time(cls.path_preprocessed(key , predict))
 
     @classmethod
     def last_data_date(cls , key : str = 'y' , predict = False):
         try:
-            path = cls.key_path(key , predict)
+            path = cls.path_preprocessed(key , predict)
             if not path.exists():
                 return None
             return max(load_dict(path)['date'])
         except ModuleNotFoundError as e:
             Logger.error(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
             return None
-
-    def save_keys(self , key : str , predict=False , start_dt = None , end_dt = None):
-        path = self.key_path(key , predict) 
-        path.parent.mkdir(exist_ok=True)
-        date_slice = np.repeat(True,len(self.date))
-        if start_dt is not None: 
-            date_slice[self.date < start_dt] = False
-        if end_dt   is not None: 
-            date_slice[self.date > end_dt]   = False
-        data = {'values'  : self.values[:,date_slice] , 
-                'date'    : self.date[date_slice].astype(int) ,
-                'secid'   : self.secid.astype(int) , 
-                'feature' : self.feature}
-        save_dict(data , path)
-
-    def save_raw(self , src : str , key : str):
-        path = self.raw_path(src , key)
-        path.parent.mkdir(exist_ok=True)
-        save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)
 
     def ffill(self , if_fill : bool = True):
         if if_fill:
@@ -144,96 +110,6 @@ class DataBlock(Stock4DData):
             return name.startswith(excl) == 0
         else:
             return bool(fillna)
-
-    @classmethod
-    def load_keys(cls , keys : list[str] | str , predict = False , alias_search = True , 
-                  fillna : Literal['guess'] | bool | None = 'guess' , intersect_secid = True ,
-                  start_dt = None , end_dt = None , dtype : str | Any = torch.float , vb_level = 2 , **kwargs):
-        if isinstance(keys , str):
-            keys = [keys]
-        paths = [cls.key_path(key , predict , alias_search) for key in keys]
-        fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
-        
-        block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
-        with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
-            blocks : dict[str,'DataBlock'] = {}
-            for key , path in zip(keys , paths):
-                block = cls(**load_dict(path))
-                if predict and key == 'y' and not block.empty:
-                    block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
-                blocks[key] = block
-
-        if len(blocks) <= 1:
-            return blocks
-
-        with Logger.Timer(f'Align {block_title} (predict={predict})' , vb_level = vb_level):
-            # sligtly faster than .align(secid = secid , date = date)
-            if intersect_secid:  
-                newsecid = index_intersect([blk.secid for blk in blocks.values()])[0]
-            else:
-                newsecid = None
-            
-            max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
-            newdate : np.ndarray | Any = index_union([blk.date for blk in blocks.values()] , start_dt , end_dt)[0]
-            newdate = newdate[newdate >= max_min_date]
-            
-            for key , blk in blocks.items():
-                blk.align_secid_date(newsecid , newdate , inplace = True).ffill(fillnas[key]).as_tensor().as_type(dtype)
-
-        return blocks
-
-    @classmethod
-    def load_keys_norms(cls , keys : list[str] | str , predict = False , alias_search = True , dtype = None):
-        if isinstance(keys , str):
-            keys = [keys]
-        return DataBlockNorm.load_keys(keys, predict , alias_search = alias_search , dtype = dtype)
-
-    @classmethod
-    def load_from_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
-                dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
-
-        if dates is None:
-            dates = CALENDAR.td_within(start_dt , end_dt)
-
-        if len(dates) == 0:
-            return cls()
-
-        df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
-
-        if len(df) == 0: 
-            return cls()
-            
-        if len(df.index.names) > 1 or df.index.name: 
-            df = df.reset_index()
-        use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
-        assert 2 <= len(use_index) <= 3 , use_index
-        if feature is not None:  
-            df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
-        return cls.from_dataframe(df.set_index(use_index))
-
-    @classmethod
-    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
-                dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
-        if dates is None:
-            dates = CALENDAR.td_within(start_dt , end_dt)
-
-        if f'{db_src}.{db_key}' in cls.FREQUENT_DBS:
-            block = cls()
-            raw_path = cls.raw_path(db_src , db_key)
-            if len(dates) >= cls.FREQUENT_MIN_DATES and raw_path.exists():
-                try:
-                    block = cls(**load_dict(raw_path))
-                except Exception as e:
-                    Logger.error(f'load_db({db_src} , {db_key}) error: {e}')
-                    raw_path.unlink()
-            saved_dates = block.date
-            block = block.extend_to(db_src , db_key , start_dt , end_dt , feature = feature , use_alt = use_alt , vb_level = vb_level)
-            if not np.array_equal(saved_dates , block.date) or not raw_path.exists():
-                block.save_raw(db_src , db_key)
-            block = block.align(feature = feature , inplace = True)
-        else:
-            block = cls.load_from_db(db_src , db_key , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
-        return block
     
     @property
     def price_adjusted(self): 
@@ -345,6 +221,210 @@ class DataBlock(Stock4DData):
         self = self.merge_others(block , inplace = inplace)
         return self
 
+    @classmethod
+    def path_preprocessed(cls , key : str , predict=False, * , alias_search = True , 
+                          dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True) -> Path:
+        preprocessed_type = 'predict' if predict else 'fit'
+        if key.lower() in ['y' , 'labels']: 
+            path = PATH.block.joinpath(preprocessed_type , f'Y{dump_suffix}')
+        else:
+            alias_list = data_type_alias(key) if alias_search else []
+            for new_key in alias_list:
+                new_path = PATH.block.joinpath(preprocessed_type , f'X_{new_key}{dump_suffix}')
+                if new_path.exists(): 
+                    path = new_path
+            path = PATH.block.joinpath(preprocessed_type , f'X_{key}{dump_suffix}')
+        if find_if_not_exists:
+            return cls.find_existing_dump_path(path)
+        return path
+        
+    @staticmethod
+    def path_norm(key : str , predict = False, alias_search = True):
+        return DataBlockNorm.norm_path(key , predict , alias_search)
+
+    @classmethod
+    def path_raw(cls , src : str , key : str , * , dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True):
+        raw_path = PATH.block.joinpath('raw' , f'{src}.{key}{dump_suffix}')
+        if find_if_not_exists:
+            return cls.find_existing_dump_path(raw_path)
+        return raw_path
+
+    @classmethod
+    def find_existing_dump_path(cls , raw_path : Path) -> Path:
+        if raw_path.exists():
+            return raw_path
+        for suffix in cls.PREFERRED_DUMP_SUFFIXES:
+            new_path = raw_path.with_suffix(suffix)
+            if new_path.exists():
+                return new_path
+        return raw_path
+
+    @classmethod
+    def load_preprocessed(
+        cls , keys : list[str] | str , predict = False , alias_search = True , 
+        fillna : Literal['guess'] | bool | None = 'guess' , intersect_secid = True ,
+        start_dt = None , end_dt = None , dtype : str | Any = torch.float , vb_level = 2 , **kwargs
+    ) -> dict[str,'DataBlock']:
+        if isinstance(keys , str):
+            keys = [keys]
+        paths = [cls.path_preprocessed(key , predict , alias_search = alias_search) for key in keys]
+        fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
+        
+        block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
+        with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
+            blocks : dict[str,'DataBlock'] = {}
+            for key , path in zip(keys , paths):
+                block = cls.load_dump(path)
+                if predict and key == 'y' and not block.empty:
+                    block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
+                blocks[key] = block
+
+        if len(blocks) <= 1:
+            return blocks
+
+        with Logger.Timer(f'Align {block_title} (predict={predict})' , vb_level = vb_level):
+            # sligtly faster than .align(secid = secid , date = date)
+            if intersect_secid:  
+                newsecid = index_merge([blk.secid for blk in blocks.values()] , method = 'intersect')
+                
+            else:
+                newsecid = None
+            
+            newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start_dt , max_value = end_dt)
+            max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
+            newdate = newdate[newdate >= max_min_date]
+            
+            for key , blk in blocks.items():
+                blk.align_secid_date(newsecid , newdate , inplace = True).ffill(fillnas[key]).to(dtype)
+
+        return blocks
+
+    @classmethod
+    def load_preprocessed_norms(cls , keys : list[str] | str , predict = False , alias_search = True , dtype = None) -> dict[str,'DataBlockNorm']:
+        if isinstance(keys , str):
+            keys = [keys]
+        return DataBlockNorm.load_keys(keys, predict , alias_search = alias_search , dtype = dtype)
+
+    @classmethod
+    def load_from_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
+                dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
+
+        if dates is None:
+            dates = CALENDAR.td_within(start_dt , end_dt)
+
+        df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
+
+        if len(df) == 0: 
+            return cls()
+            
+        if len(df.index.names) > 1 or df.index.name: 
+            df = df.reset_index()
+        use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
+        assert 2 <= len(use_index) <= 3 , use_index
+        if feature is not None:  
+            df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
+        return cls.from_dataframe(df.set_index(use_index))
+
+    @classmethod
+    def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
+                 dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
+        if dates is None:
+            dates = CALENDAR.td_within(start_dt , end_dt)
+
+        if (raw_path := cls.path_raw(db_src , db_key)).exists() and f'{db_src}.{db_key}' in cls.FREQUENT_DBS and len(dates) >= cls.FREQUENT_MIN_DATES:
+            block = cls.load_dump(raw_path)
+            saved_dates = block.date
+            block = block.extend_to(db_src , db_key , start_dt , end_dt , feature = feature , use_alt = use_alt , vb_level = vb_level)
+            if len(np.setdiff1d(block.date , saved_dates)) > 0 or not raw_path.exists():
+                block.save_raw(db_src , db_key)
+            block = block.align(feature = feature , inplace = True)
+        else:
+            block = cls.load_from_db(db_src , db_key , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
+        return block
+
+    def save_dump(self , path : Path , * , start_dt : int | None = None , end_dt : int | None = None):
+        if path.suffix == '.feather':
+            assert not path.exists() or path.is_file() , path
+            df = self.to_dataframe(start_dt = start_dt , end_dt = end_dt)
+            df.to_feather(path) 
+        else:
+            if start_dt is not None or end_dt is not None:
+                date_slice = np.repeat(True,len(self.date))
+                if start_dt is not None: 
+                    date_slice[self.date < start_dt] = False
+                if end_dt   is not None: 
+                    date_slice[self.date > end_dt]   = False
+                values = self.values[...,date_slice]
+                date = self.date[date_slice]
+            else:
+                values = self.values
+                date = self.date
+            if path.suffix == '.mmap':
+                assert not path.exists() or path.is_dir() , path
+                path.mkdir(parents=True, exist_ok=True)
+                ArrayMemoryMap.save(values , path.joinpath('values'))
+                save_dict({'date' : date , 'secid' : self.secid , 'feature' : self.feature} , path.joinpath('index.pt'))
+            elif path.suffix == '.pt':
+                assert not path.exists() or path.is_file() , path
+                save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)
+            else:
+                raise ValueError(f'Unsupported suffix: {path.suffix}')
+
+    @classmethod
+    def load_dump(cls , path : Path | str) -> 'DataBlock':
+        path = Path(path)
+        if path.exists() and path.suffix in ['.mmap' , '.pt' , '.feather']:
+            if path.suffix == '.mmap':
+                assert path.is_dir() , path
+                values = ArrayMemoryMap.load_tensor(path.joinpath('values'))
+                index = load_dict(path.joinpath('index.pt'))
+                return cls(values , index['secid'] , index['date'] , index['feature'])
+            elif path.suffix == '.pt':
+                return cls(**load_dict(path))
+            else:
+                return cls.from_dataframe(pd.read_feather(path))
+        else:
+            for suffix in cls.PREFERRED_DUMP_SUFFIXES:
+                path = path.with_suffix(suffix)
+                if path.exists():
+                    return cls.load_dump(path)
+            return cls()
+    
+    def save_preprocessed(self , key : str , predict=False , start_dt = None , end_dt = None):
+        path = self.path_preprocessed(key , predict) 
+        path.parent.mkdir(exist_ok=True)
+        self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
+
+    def save_raw(self , src : str , key : str):
+        path = self.path_raw(src , key , dump_suffix = self.PREFERRED_DUMP_SUFFIXES[0])
+        path.parent.mkdir(exist_ok=True)
+        save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)
+
+    @classmethod
+    def change_all_dumps(cls):
+        for category_path in PATH.block.iterdir():
+            category = category_path.name
+            if category not in ['raw' , 'fit' , 'predict']:
+                continue
+            for path in category_path.iterdir():
+                if path.suffix == cls.PREFERRED_DUMP_SUFFIXES[0]:
+                    Logger.success(f'{category}.{path.name} is already the preferred dump method : {path.suffix}')
+                    continue
+                if path.suffix not in cls.PREFERRED_DUMP_SUFFIXES:
+                    continue
+                with Logger.Timer(f'Change {category}.{path.name} dump method'):
+                    new_path = path.with_suffix(cls.PREFERRED_DUMP_SUFFIXES[0])
+                    if new_path.exists():
+                        Logger.success(f'{category}.{path.name} already exists: {new_path}')
+                        if path.is_file():
+                            path.unlink()
+                        else:
+                            shutil.rmtree(path)
+                        continue
+                    block = cls.load_dump(path)
+                    block.save_dump(new_path)
+                    Logger.success(f'{category}.{path.name} changed to {new_path}')
+
 @dataclass(slots=True)
 class DataBlockNorm:
     avg : torch.Tensor
@@ -381,7 +461,7 @@ class DataBlockNorm:
         len_step = len(date[date_slice]) // step_day
         len_bars = maxday * inday
 
-        x = torch.tensor(block.values[:,date_slice])
+        x = torch.Tensor(block.values[:,date_slice])
         pad_array = (0,0,0,0,maxday,0,0,0)
         x = torch.nn.functional.pad(x , pad_array , value = torch.nan)
         
@@ -430,10 +510,10 @@ class DataBlockNorm:
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
         if key.lower() == 'y':
-            return DB.norm_path('fit' , 'Y')
+            return PATH.norm.joinpath('fit' , 'Y.pt')
         alias_list = data_type_alias(key) if alias_search else []
         for new_key in alias_list:
-            path = DB.norm_path('fit' , f'X_{new_key}')
+            path = PATH.norm.joinpath('fit' , f'X_{new_key}.pt')
             if path.exists():
                 return path
-        return DB.norm_path('fit' , f'X_{key}')
+        return PATH.norm.joinpath('fit' , f'X_{key}.pt')

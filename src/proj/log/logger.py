@@ -28,7 +28,7 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
 
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 VB = Proj.vb
-SHOW_VB_LEVEL = True
+SHOW_VB_LEVEL = False
 
 def new_stdout(*args , indent = 0 , color = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
     """
@@ -414,12 +414,13 @@ class Logger:
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
-        def __init__(self , *args , silent = False , indent = 0 , vb_level : int | Literal['max','min','inf'] = 1 , enter_vb_level : int = VB.max): 
+        def __init__(self , *args , silent = False , indent = 0 , 
+                     vb_level : int | Literal['max','min','inf'] = 1 , enter_vb_level : int | Literal['max','min','inf'] = 'max'): 
             self.key = '/'.join(args)
             self.silent = silent
             self.indent = indent
-            self.vb_level : int | Literal['max','min','inf'] = vb_level
-            self.enter_vb_level = enter_vb_level
+            self.vb_level = Proj.vb.parse_vb(vb_level)
+            self.enter_vb_level = Proj.vb.parse_vb(enter_vb_level)
     
         def __enter__(self):
             self._init_time = datetime.now()
@@ -432,11 +433,11 @@ class Logger:
         @property
         def enter_str(self):
             """Get the enter string"""
-            return f'{self.key} start ... '
+            return f'{self.__class__.__name__}({self.key}) start ... '
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.key} finished! Cost {Duration(since = self._init_time)}'
+            return f'{self.__class__.__name__}({self.key}) finished! Cost {Duration(since = self._init_time)}'
 
     class Paragraph:
         """
@@ -477,7 +478,8 @@ class Logger:
         """Profiler class for profiling the code, show the profile result in the best way"""
         def __init__(self, title : str | None = None , builtins = False , display = True , n_head = 20 , 
                      columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where'] , 
-                     sort_on = 'cumtime' , highlight = None ,
+                     sort_on = 'cumtime' , highlight = None , vb_level : int | Literal['max','min','inf'] = 1 ,
+                     enter_vb_level : int | Literal['max','min','inf'] = 1 , indent : int = 0,
                      **kwargs) -> None:
             self.profiling = title is not None
             self.title = title
@@ -488,10 +490,23 @@ class Logger:
             self.columns = columns
             self.sort_on = sort_on
             self.highlight = highlight
+            self.indent = indent
+            self.enter_vb_level = Proj.vb.parse_vb(enter_vb_level)
+            self.vb_level = Proj.vb.parse_vb(vb_level)
+
+        @property
+        def enter_str(self):
+            """Get the enter string"""
+            return f'{self.__class__.__name__}({self.title}) start ... '
+        @property
+        def exit_str(self):
+            """Get the exit string"""
+            return f'{self.__class__.__name__}({self.title}) finished! Cost {Duration(since = self.start_time)}'
 
         def __enter__(self):
             if self.profiling: 
                 self.start_time = datetime.now()
+                new_stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
                 return super().__enter__()
             else:
                 return self
@@ -502,7 +517,7 @@ class Logger:
                 new_print_exc(value)
             elif self.profiling:
                 if self.display:
-                    new_stdout(f'Profiler cost time: {Duration(datetime.now() - self.start_time)}')
+                    new_stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
                     df = self.get_df(sort_on = self.sort_on , highlight = self.highlight)
                     Display(df.loc[:,self.columns].head(self.n_head))
                 return super().__exit__(type , value , trace)

@@ -11,16 +11,17 @@ class MemoryManager():
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , device = None , *args , **kwargs) -> None:
-        self.initiate(*args , **kwargs)
+    def __init__(self , device = None , vb_level : int = 2 , *args , **kwargs) -> None:
+        self.initiate(device , vb_level , *args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'cuda_avail')
 
-    def initiate(self , device : torch.device | None = None) -> None:
+    def initiate(self , device : torch.device | None = None , vb_level : int = 2) -> None:
         if self.initiated:
             return
+        self.vb_level = vb_level
         if device is not None:
             self.device = device
         else:
@@ -46,7 +47,7 @@ class MemoryManager():
         torch.cuda.empty_cache()
         if gmem_free > critical_ratio * self.gmem_total and not showoff: 
             # if showoff: 
-            #     Logger.stdout(f'**Cuda Memory: Free {gmem_free:.1f}G') 
+            #     Logger.stdout(f'**Cuda Memory: Free {gmem_free:.1f}G' , vb_level = self.vb_level) 
             return gmem_free
         
         gmem_freed = torch.cuda.mem_get_info(self.device)[0] / self.unit - gmem_free
@@ -59,7 +60,7 @@ class MemoryManager():
                 self.record[key] = []
             self.record[key].append(gmem_freed)
         if showoff: 
-            Logger.info(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+            Logger.info(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!' , vb_level = self.vb_level) 
         
         return gmem_free
     
@@ -95,13 +96,12 @@ class MemoryManager():
             info_dict = {k:f'{len(value)} counts, on average freed {np.mean(value):.2f}G' for k,value in self.record.items()}
             Logger.stdout_pairs(info_dict , title = 'Avg Freed Cuda Memory:')
                 
-    @classmethod
-    def clear_and_check(cls , silent = True):
-        gmem_free = torch.cuda.mem_get_info()[0] / cls.unit
+    def clear_and_check(self , silent = True):
+        gmem_free = torch.cuda.mem_get_info()[0] / self.unit
         torch.cuda.empty_cache()
         if not silent: 
-            gmem_freed = torch.cuda.mem_get_info()[0] / cls.unit - gmem_free
+            gmem_freed = torch.cuda.mem_get_info()[0] / self.unit - gmem_free
             gmem_free += gmem_freed
-            gmem_allo  = torch.cuda.memory_allocated() / cls.unit
-            gmem_rsrv  = torch.cuda.memory_reserved() / cls.unit
-            Logger.success(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+            gmem_allo  = torch.cuda.memory_allocated() / self.unit
+            gmem_rsrv  = torch.cuda.memory_reserved() / self.unit
+            Logger.success(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!' , vb_level = self.vb_level) 

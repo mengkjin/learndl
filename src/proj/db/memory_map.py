@@ -1,60 +1,126 @@
-import pandas as pd
+import json
+import os
 import numpy as np
-import shutil
+import torch
+
 from pathlib import Path
+from typing import Literal
+from dataclasses import dataclass
 
-def get_shape(obj) -> tuple[int, ...]:
-    if hasattr(obj , 'shape'):
-        return obj.shape
-    return (len(obj),)
+@dataclass
+class ArrayMeta:
+    array_type: Literal['Tensor' , 'ndarray']
+    dtype: str
+    shape: tuple
 
+    @classmethod
+    def from_json(cls, json_path: str | Path) -> 'ArrayMeta':
+        with open(json_path, 'r') as f:
+            meta = json.load(f)
+        return cls(array_type=meta['array_type'], dtype=meta['dtype'], shape=meta['shape'])
 
-def save_min_to_mmap(
-        df : pd.DataFrame , path : str | Path , 
-        overwrite = False ,
-        key_names : tuple[str , str] = ('secid' , 'minute') ,
-        key_dtypes = ('int32' , 'int32')):
-    path = Path(path) if isinstance(path , str) else path
-    if path.suffix in ['.feather' , '.csv' , '.parquet']: 
-        path = path.with_suffix('')
-    if not overwrite and path.exists():
-        raise FileExistsError(f'file already exists: {path}')
-    else:
-        if path.exists():
-            shutil.rmtree(path)
-        else:
-            path.mkdir(parents=True , exist_ok=True)
-    if df.columns.nlevels == 1:
-        df = df.pivot_table(index = key_names[0] , columns = key_names[1])
-    key1 = df.index.values
-    assert isinstance(df.columns , pd.MultiIndex) , f'columns must be a MultiIndex: {df}'
-    key2 = df.columns.levels[1]
-    features = df.columns.levels[0]
-    
-    mmap = np.memmap(path.joinpath(f'{key_names[0]}.mmap') , dtype=key_dtypes[0], mode='w+', shape=get_shape(key1))
-    mmap[:] = key1
+    def to_json(self, json_path: str | Path):
+        with open(json_path, 'w') as f:
+            json.dump(self.__dict__, f, indent=2)
 
-    mmap = np.memmap(path.joinpath(f'{key_names[1]}.mmap') , dtype=key_dtypes[1], mode='w+', shape=get_shape(key2))
-    mmap[:] = key2
+class ArrayMemoryMap:
+    def __init__(self, path: str | Path):
+        path = Path(path)
+        assert not path.exists() or path.is_dir() , path
+        self.path = path
+        self.data_path = path.joinpath('data.bin')
+        self.meta_path = path.joinpath('meta.json')
+        self._full_mmap = None
 
-    for feat in features:
-        data = df[feat].values
-        mmap = np.memmap(path.joinpath(f'{feat}.mmap'), dtype='float32', mode='w+', shape=data.shape)
-        mmap[:] = data
+    @classmethod
+    def save(cls, array: np.ndarray | torch.Tensor , path: str | Path):
+        """save arrays to memory map file (.bin) and metadata (.json)"""
+        mmap = cls(path)
+        mmap.path.mkdir(parents=True, exist_ok=True)
+        array_type='Tensor' if torch.is_tensor(array) else 'ndarray'
+        if torch.is_tensor(array):
+            array = array.cpu().numpy()
+        if not array.flags.c_contiguous:
+            array = np.ascontiguousarray(array)
+        dtype=str(array.dtype)
+        shape=tuple(array.shape)
 
-def load_min_from_mmap(path : str | Path , features : list | None = None , 
-                       key_names : tuple[str , str] = ('secid' , 'minute') ,
-                       key_dtypes = ('int32' , 'int32')):
-    path = Path(path) if isinstance(path , str) else path
-    key1 = np.memmap(path.joinpath(f'{key_names[0]}.mmap'), dtype=key_dtypes[0], mode='r')
-    key2 = np.memmap(path.joinpath(f'{key_names[1]}.mmap'), dtype=key_dtypes[1], mode='r')
-    
-    # 读取特征数据
-    if features is None:
-        features = [f.name.removesuffix('.mmap') for f in path.iterdir() 
-                    if f.name.endswith('.mmap') and f.name.removesuffix('.mmap') not in key_names]
-    
-    shape = (len(key1) , len(key2))
-    data = {feat:np.memmap(path.joinpath(f'{feat}.mmap'), dtype='float32', mode='r').reshape(*shape) for feat in features}
-    df = pd.concat([pd.DataFrame(data[feature] , index = key1 , columns = key2) for feature in features], axis=1 , keys = features)
-    return df
+        with open(mmap.data_path, 'wb') as f:
+            f.write(array.tobytes())
+
+        metas = ArrayMeta(array_type,dtype,shape)
+        metas.to_json(mmap.meta_path)
+
+        return mmap
+
+    def view(self , writable: bool = False) -> torch.Tensor | np.ndarray:
+        """
+        load array from memory map file (.bin) and metadata (.json)
+        if copy is True, return a copy of the array
+        if copy is False, return a view of the array
+        """
+        mode = 'r+' if writable else 'r'
+        file_size = os.path.getsize(self.data_path)
+        self._full_mmap = np.memmap(self.data_path, dtype='uint8', mode=mode, shape=(file_size,))
+        metas = ArrayMeta.from_json(self.meta_path)
+        result = np.ndarray(metas.shape, dtype=metas.dtype, buffer=self._full_mmap[:], order='C')
+        if metas.array_type == 'Tensor':
+            result = torch.from_numpy(result)
+
+        return result
+
+    @classmethod
+    def load(cls, path: str | Path) -> torch.Tensor | np.ndarray:
+        """
+        load array from memory map file (.bin) and metadata (.json)
+        """
+        mmap = cls(path)
+        metas = ArrayMeta.from_json(mmap.meta_path)
+        
+        dtype = np.dtype(metas.dtype)
+        with open(mmap.data_path, 'rb') as f:
+            f.seek(0)
+            result = np.fromfile(f, dtype=dtype , count=np.prod(metas.shape)).reshape(metas.shape)
+        if metas.array_type == 'Tensor':
+            result = torch.from_numpy(result)
+        return result
+
+    @classmethod
+    def load_tensor(cls, path: str | Path) -> torch.Tensor:
+        """
+        load tensor from memory map file (.bin) and metadata (.json)
+        """
+        data = cls.load(path)
+        assert isinstance(data, torch.Tensor) , data
+        return data
+
+    @classmethod
+    def load_ndarray(cls, path: str | Path) -> np.ndarray:
+        """
+        load ndarray from memory map file (.bin) and metadata (.json)
+        """
+        data = cls.load(path)
+        assert isinstance(data, np.ndarray) , data
+        return data
+
+    def close(self):
+        if self._full_mmap is not None:
+            del self._full_mmap
+            self._full_mmap = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._full_mmap is not None:
+            self._full_mmap.flush()
+            self.close()
+        
+    def __del__(self):
+        self.close()
+
+    def __repr__(self):
+        return f"MemoryMap(path={self.data_path}, meta={self.meta_path})"
+
+    def __str__(self):
+        return self.__repr__()

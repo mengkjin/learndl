@@ -34,7 +34,7 @@ class BlockLoader:
         with Logger.Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level , enter_vb_level=vb_level+1):
             for db_key in self.iter_keys():
                 with Logger.Timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , indent = indent +1 , vb_level = vb_level + 1):
-                    blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , feature = self.feature , use_alt = self.use_alt , vb_level = vb_level + 2)
+                    blk = DataBlock.load_raw(self.db_src , db_key , start_dt , end_dt , feature = self.feature , use_alt = self.use_alt , vb_level = vb_level + 2)
                     sub_blocks.append(blk)
         with Logger.Timer(f'{self.db_src} blocks merging ({len(sub_blocks)})' , silent = len(sub_blocks) <= 1 , indent = indent , vb_level = vb_level): 
             block = DataBlock.merge(sub_blocks , inplace = True)

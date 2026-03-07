@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from typing import Literal
 
-from .basic import alert_message , DIV_TOL , same , allna
+from .basic import alert_message , DIV_TOL , allna
     
 def process_factor(value : Tensor | None , * , stream = 'inf_winsor_norm' , dim = 0 , trim_ratio = 7. , **kwargs):
     '''
@@ -102,18 +102,12 @@ class TsRoller:
             return wrapper
         return decorator
 
-def nancount(x : torch.Tensor , * ,  dim=None, keepdim=False):  
-    return x.isfinite().sum(dim = dim , keepdim = keepdim)
-
 def nanmean(x : torch.Tensor , * , dim=None, keepdim=False):  
-    try:
-        return x.nanmean(dim = dim , keepdim = keepdim)
-    except Exception:
-        return x.nansum(dim = dim , keepdim = keepdim) / nancount(x , dim = dim , keepdim = keepdim)
-
+    return x.nanmean(dim = dim , keepdim = keepdim)
+    
 def nanstd(x : torch.Tensor , * , dim=None, keepdim=False , correction=1):
     x = x - torch.nanmean(x , dim, keepdim=True)  # [TS, C]
-    x_stddev = (torch.nansum(x ** 2 , dim , keepdim=keepdim) / (torch.sum(~x.isnan() ,dim = dim , keepdim=keepdim) - correction)).sqrt()
+    x_stddev = (torch.nansum(x.square(), dim , keepdim=keepdim) / (torch.sum(~x.isnan() ,dim = dim , keepdim=keepdim) - correction)).sqrt()
     return x_stddev
 
 def nanmedian(x : torch.Tensor , dim=None, keepdim=False):
@@ -196,7 +190,7 @@ def neutralize_xdata_2d(x : Tensor | None , groups : None | list | tuple | Tenso
         return None
     n_sample = x.shape[0] if x is not None else groups[0].shape[0]
     if x is None:
-        x = torch.tensor([]).reshape(n_sample,0,0).to(groups[0].device)
+        x = torch.Tensor([]).reshape(n_sample,0,0).to(groups[0].device)
     if x.ndim == 2:
         x = x.unsqueeze(-1)
     for g in groups: 
@@ -266,19 +260,18 @@ def neutralize_2d(y : Tensor | None , x : Tensor | None , * ,
     assert dim in [0,1] , dim
     assert y.ndim == 2 , y.dim()
     assert x.ndim in [2,3] , x.dim()
+    
     if x.ndim == 2:
         x = x.unsqueeze(-1)
     old_device = y.device
-    valid_date_secid  = x[...,0].isfinite() # [date , secid , factor]
-    for k in range(1, x.shape[-1]): 
-        valid_date_secid += x[...,k].isfinite()
-    valid_date_secid *= y.isfinite() 
+
+    valid_date_secid = torch.isfinite(x.sum(dim=-1)) & torch.isfinite(y) 
+
     x = x.nan_to_num(0,0,0)
     if inplace:
         y.nan_to_num_(nan , nan , nan).unsqueeze_(-1)
     else:
         y = y.nan_to_num(nan , nan , nan).unsqueeze(-1)
-    
     if dim == 0: 
         # put date dimension to the first dimension
         x , y , valid_date_secid = x.permute(1,0,2) , y.permute(1,0,2) , valid_date_secid.permute(1,0)
@@ -330,10 +323,7 @@ def neutralize_1d(y : Tensor | None , x : Tensor | None , insample : Tensor | No
     if x.dim() == 1: 
         x = x.reshape(-1,1)
     old_device = y.device
-    valid_x  = x[:,0].isfinite()
-    for k in range(1, x.shape[-1]): 
-        valid_x += x[:,k].isfinite()
-    valid_x *= y.isfinite() 
+    valid_x = torch.isfinite(x.sum(dim=-1)) & torch.isfinite(y)
     if valid_x.sum() < min_coverage: 
         return y
 
@@ -361,8 +351,6 @@ def neutralize_1d(y : Tensor | None , x : Tensor | None , insample : Tensor | No
     return ys
 
 def corrwith(x : Tensor , y : Tensor , * , dim : int | None = 1):
-    if same(x , y): 
-        return torch.where(x.nansum(dim) > 2 , 1 , nan)
     x = x + y * 0
     y = y + x * 0
     x_xmean = x - torch.nanmean(x, dim, keepdim=True)  
@@ -382,31 +370,25 @@ def covariance(x : Tensor , y : Tensor , * , dim : int | None = 1):
     return cov
 
 def beta(x : Tensor , y : Tensor , * , dim : int | None = 1):
-    if same(x , y): 
-        return torch.where(torch.nansum(x , dim=dim) > 2 , 1 , nan)
     return covariance(x,y,dim=dim) / covariance(x,x,dim=dim)
 
 def beta_pos(x : Tensor , y : Tensor , * , dim : int | None = 1):
-    if same(x , y): 
-        return torch.where(x.nansum(dim) > 2 , 1 , nan)
     y = torch.where(x < 0 , nan , y)
     x = torch.where(x < 0 , nan , x)
     return covariance(x,y,dim=dim) / covariance(x,x,dim=dim)
 
 def beta_neg(x : Tensor , y : Tensor , * , dim : int | None = 1):
-    if same(x , y): 
-        return torch.where(x.nansum(dim) > 2 , 1 , nan)
     y = torch.where(x > 0 , nan , y)
     x = torch.where(x > 0 , nan , x)
     return covariance(x,y,dim=dim) / covariance(x,x,dim=dim)
 
 def stddev(x : Tensor , * , dim : int | None = 1):
     x_xmean  = x - torch.nanmean(x , dim, keepdim=True)
-    return torch.nansum(x_xmean ** 2, dim).sqrt()
+    return torch.nansum(x_xmean.square(), dim).sqrt()
 
 def zscore(x : Tensor , * , dim : int | None = 0 , index : int | None = None):
     x_xmean  = x - torch.nanmean(x , dim, keepdim=True)  # [TS, C]
-    x_stddev = torch.nansum(x_xmean ** 2, dim , keepdim=index is None).sqrt()
+    x_stddev = torch.nansum(x_xmean.square(), dim , keepdim=index is None).sqrt()
     if index is not None: 
         x_xmean = x_xmean.select(dim,index)
     z = x_xmean / (x_stddev + 1e-4 * x_stddev.nanmean())
@@ -606,7 +588,7 @@ def ts_lin_decay(x : Tensor , d : int , * , dim : Literal[1] = 1):
 def ts_decay_pos_dif(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     """rolling decay of positive difference of x and y of d days"""
     value = x - y
-    value[value < 0] = 0
+    value = value.clip(min=0)
     return ts_lin_decay(value, d , dim=dim)
 
 @TsRoller.decor(2,nan=0)

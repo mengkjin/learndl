@@ -1,8 +1,9 @@
-from deap import gp , creator , tools , base
-from deap.algorithms import varAnd
 import numpy as np
+import pandas as pd
 import re
 from dataclasses import dataclass
+from deap import gp , creator , tools , base
+from deap.algorithms import varAnd
 from typing import Any , Literal , Sequence , Callable
 from .fitness import FitnessObjectMin
 
@@ -232,9 +233,9 @@ class Population(Sequence):
     def invalid_pop(self , forbidden_lambda : Callable | None = None) -> 'Population':
         return self.from_list([ind for ind in self.pop if not ind.if_valid or (False if forbidden_lambda is None else forbidden_lambda(ind.fit_value))])
 
-    def deduplicate(self , forbidden : list[Any] | None = []) -> 'Population':
+    def deduplicate(self , forbidden : Sequence[Any] | None = []) -> 'Population':
         ori = [ind.pure_syntax for ind in self.pop]
-        fbd = [str(ind) for ind in forbidden] if forbidden else []
+        fbd = [str(ind) for ind in forbidden] if forbidden is not None else []
         allowed = [ind not in fbd for ind in ori]
         self.pop = [ind for ind , allowed in zip(self.pop , allowed) if allowed]
         return self
@@ -289,3 +290,17 @@ class Population(Sequence):
 
     def slice(self , start : int , end : int) -> 'Population':
         return self.from_list(self.pop[start:end])
+
+    def log_df(self , metrics_keys : list[str] | None = None) -> pd.DataFrame:
+        df = pd.DataFrame(
+            [[ind.syntax,ind.if_valid] for ind in self] , 
+            columns = pd.Index(['syntax','valid']))
+        metric_lens = np.array([len(ind.metrics) for ind in self if ind.metrics is not None])
+        assert metric_lens.size == 0 or all(metric_lens == metric_lens[0]) , metric_lens
+        n_metric = metric_lens[0] if metric_lens.size > 0 else 0
+        if n_metric > 0:
+            metrics_keys = metrics_keys if metrics_keys is not None else [f'metric_{i}' for i in range(n_metric)]
+            metrics = pd.DataFrame([ind.metrics if ind.metrics is not None else np.full(n_metric , np.nan) for ind in self] , columns = metrics_keys)
+            df = pd.concat([df , metrics] , axis = 1)
+        return df
+        

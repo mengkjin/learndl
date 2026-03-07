@@ -101,7 +101,7 @@ class Benchmark(Portfolio):
     def universe(self , secid : np.ndarray , date : np.ndarray):
         assert self , 'No need of calculating universe for none benchmark'
         self.get_dates(date)
-        weight = self.weight_block().align_secid_date(secid , date).fillna(0).as_tensor()
+        weight = self.weight_block().align_secid_date(secid , date).fillna(0)
         weight.update(values = weight.values > 0 , feature = ['universe'])
         return weight
     

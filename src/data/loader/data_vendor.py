@@ -164,7 +164,7 @@ class DataVendor:
         if daily_ret.date is None or not np.isin(td_within , daily_ret.date).all():
             pre_start_dt = CALENDAR.cd(start_dt , -20)
             extend_td_within = self.td_within(pre_start_dt , end_dt)
-            blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).as_tensor().ffill()
+            blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).ffill()
             rtn = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan)
             blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
             blk = blk.align_date(blk.date_within(start_dt , end_dt) , inplace = True)
@@ -254,7 +254,7 @@ class DataVendor:
         date_min = self.td(date.min() , -10)
         date_max = self.td(int(date.max()) , nday + lag + 10)
         full_date = self.td_within(date_min , date_max)
-        blk = self.get_returns_block(date_min , date_max).align(secid , full_date , ret_type).as_tensor()
+        blk = self.get_returns_block(date_min , date_max).align(secid , full_date , ret_type)
         values = torch.nn.functional.pad(blk.values[:,lag:] , (0,0,0,0,0,lag) , value = torch.nan).unfold(1 , nday , 1).exp().prod(dim = -1) - 1
         blk.update(values = values , date = full_date[:values.shape[1]] , feature = ['ret']).align_date(date , inplace = True)
         return blk

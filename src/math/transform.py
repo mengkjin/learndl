@@ -97,9 +97,7 @@ def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.0
     assert src_.ndim == 1 , src_.shape
     assert 0 < l_prc_ and l_prc_ < u_prc_ and u_prc_ < 100 , (l_prc_ , u_prc_)
     ulb = np.nanpercentile(src_, [u_prc_, l_prc_])
-    des = src_.copy()
-    des[des > ulb[0]] = ulb[0]
-    des[des < ulb[1]] = ulb[1]
+    des = src_.clip(min=ulb[1], max=ulb[0])
     return des
 
 def winsorize_by_dist(src_: np.ndarray, m_: float = 3.5, winsor_rng : float = 0. ,dist_type_: int=0):
@@ -113,7 +111,7 @@ def winsorize_by_dist(src_: np.ndarray, m_: float = 3.5, winsor_rng : float = 0.
         assert np.all(np.logical_or(np.isnan(src_), src_ > 0)), "winsorize_by_dist>>src_ must be positive when dist type as 1(log_normal)"
         des = np.log(src_)
     else:
-        des = src_.copy()
+        des = src_
     avg = np.nanmean(des)
     std = np.nanstd(des)
     ub = avg + m_ * std
@@ -136,15 +134,14 @@ def winsorize_by_bnded_dist(src_: np.ndarray, bnd_: float = 0.1, m_: float = 3.5
         assert np.all(np.logical_or(np.isnan(src_), src_ > 0)), "winsorize_by_dist>>src_ must be positive when dist type as 1(log_normal)"
         des = np.log(src_)
     else:
-        des = src_.copy()
+        des = src_
     lu = np.nanpercentile(des, [bnd_, 100 - bnd_])
     bnded_flg = np.logical_and(des >= lu[0], des <= lu[1])
     avg = np.nanmean(des[bnded_flg])
     std = np.nanstd(des[bnded_flg])
     ub = avg + m_ * std
     lb = avg - m_ * std
-    des[des > ub] = ub
-    des[des < lb] = lb
+    des = des.clip(min=lb, max=ub)
     if dist_type_ == 1:
         des = np.exp(des)
     return des
@@ -183,10 +180,7 @@ def trim(v , v1 , v2):
 
 def winsor(v , v1 , v2):
     v = v + 0.
-    if v1 is not None: 
-        v[v < v1] = np.float32(v1)
-    if v2 is not None: 
-        v[v > v2] = np.float32(v2)
+    v = v.clip(min=v1, max=v2)
     return v
 
 def weighted_mean(v , weight = None):

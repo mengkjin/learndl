@@ -29,7 +29,8 @@ class gpParameters:
     def initiated(self) -> bool:
         return hasattr(self , 'job_id')
 
-    def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , **kwargs):
+    def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , 
+                 vb_level : int = 2 ,**kwargs):
         if self.initiated:
             return
         self.job_id = job_id
@@ -37,6 +38,7 @@ class gpParameters:
         self.continuation = continuation
         self.test_code = test_code
         self.kwargs = kwargs
+        self.vb_level = vb_level
         self.make_job_dir()
         self.load_params()
 
@@ -57,26 +59,26 @@ class gpParameters:
         # directory setting and making
         if self.job_id is None: 
             self.test_code = True
-            job_dir = gpDefaults.dir_pop.joinpath('bendi')
+            job_dir = gpDefaults.dir_result.joinpath('bendi')
         else:
             assert self.job_id >= 0 , self.job_id
-            job_dir = gpDefaults.dir_pop.joinpath(str(self.job_id))
-        Logger.success(f'Job Directory is : "{job_dir}"')
+            job_dir = gpDefaults.dir_result.joinpath(str(self.job_id))
+        Logger.success(f'Job Directory is : "{job_dir}"' , vb_level = self.vb_level)
         if self.train:
             if job_dir.exists() and not self.continuation: 
                 if not self.test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
                     raise Exception(f'Deletion Denied!')
                 shutil.rmtree(job_dir)
-                Logger.alert1(f'Start New Training in "{job_dir}"' , indent = 1)
+                Logger.alert1(f'Start New Training in "{job_dir}"' , indent = 1 , vb_level = self.vb_level)
             elif not job_dir.exists() and self.continuation:
                 raise Exception(f'No existing "{job_dir}" for Continuation!')
             else:
-                Logger.stdout(f'Continue Training in "{job_dir}"' , indent = 1)
-        self.job_dir = job_dir
+                Logger.stdout(f'Continue Training in "{job_dir}"' , indent = 1 , vb_level = self.vb_level)
+        self.job_dir = job_dir  
 
     def load_params(self):
         if self.train:
-            Logger.stdout(f'Using Device {gpDefaults.device}')
+            Logger.stdout(f'Using Device {gpDefaults.device}' , vb_level = self.vb_level)
         param_path = self.job_dir.joinpath('params.yaml') 
         if self.job_id is None or not param_path.exists():
             param_path = gpDefaults.path_param

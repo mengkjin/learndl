@@ -20,6 +20,7 @@ TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week' ,
                  'momentum' , 'volatility' , 'correlation' , 'liquidity' , 
                  'holding' , 'trading']
 PREDICT_DATASET = TRAIN_DATASET
+LOAD_OVERLAP_DAYS = 30
 
 @dataclass(slots=True)
 class DataPreProcessor:
@@ -49,10 +50,6 @@ class DataPreProcessor:
             yield blk , select_processor(blk)
     
     @classmethod
-    def proceed(cls , predict = True):
-        return cls.main(predict = True , vb_level = Proj.vb.max if predict else 1)
-
-    @classmethod
     def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
@@ -80,9 +77,20 @@ class DataPreProcessor:
 
             tt1 = datetime.now()
             Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 3)
+            
+            if predict or not DataBlock.path_preprocessed(key , False).exists():
+                dump_block = DataBlock()
+                
+            else:
+                with Logger.Timer(f'[{key}] dumped loading' , indent = indent + 2 , vb_level = vb_level + 3):
+                    dump_block = DataBlock.load_preprocessed(key , False)[key]
 
             with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 3 , enter_vb_level = vb_level + 5):
-                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, indent = indent + 2 , vb_level = vb_level + 5)
+                load_start_dt = processor.load_start_dt
+                load_end_dt = processor.load_end_dt
+                if not dump_block.empty:
+                    load_start_dt = CALENDAR.td(dump_block.date[-1] , -LOAD_OVERLAP_DAYS)
+                block_dict = proc.load_blocks(load_start_dt, load_end_dt, indent = indent + 2 , vb_level = vb_level + 5)
             with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block = proc.process_blocks(block_dict)
             if data_block.empty:
@@ -90,8 +98,11 @@ class DataPreProcessor:
                 continue
             with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 3):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Logger.Timer(f'[{key}] blocks saving ' , indent = indent + 2 , vb_level = vb_level + 3):
-                data_block.save_keys(key , predict , processor.save_start_dt , processor.save_end_dt)
+            if not dump_block.empty:
+                with Logger.Timer(f'[{key}] blocks merging' , indent = indent + 2 , vb_level = vb_level + 3):
+                    data_block = dump_block.merge_others(data_block , inplace = True)
+            with Logger.Timer(f'[{key}] blocks dumping' , indent = indent + 2 , vb_level = vb_level + 3):
+                data_block.save_preprocessed(key , predict , processor.save_start_dt , processor.save_end_dt)
             with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             
@@ -141,17 +152,16 @@ class pp_y(TypePreProcessor):
         x = torch.Tensor(indus_size).permute(1,0,2,3).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
             if lb_name[:3] == 'rtn':
-                y_raw = torch.Tensor(data_block.values[...,i_feat]).squeeze(2)
-                y_std = torch.Tensor(neutralize_2d(y_raw , x , dim = 0)).unsqueeze(2).numpy()
+                y_raw = data_block.values[...,i_feat].squeeze(2)
+                y_std = neutralize_2d(y_raw , x , dim = 0).unsqueeze(2)
                 data_block.add_feature('std'+lb_name[3:],y_std)
 
-        y_ts = torch.Tensor(data_block.values)[:,:,0]
+        y_ts = data_block.values[:,:,0]
         for i_feat,lb_name in enumerate(data_block.feature):
             y_pro = process_factor(y_ts[...,i_feat], dim = 0)
-            if not isinstance(y_pro , torch.Tensor): 
+            if y_pro is None: 
                 continue
-            y_pro = y_pro.unsqueeze(-1).numpy()
-            data_block.values[...,i_feat] = y_pro
+            data_block.values[...,i_feat] = y_pro.unsqueeze(-1)
 
         return data_block
 class pp_day(TypePreProcessor):

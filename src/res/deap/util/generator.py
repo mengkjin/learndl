@@ -1,5 +1,6 @@
 import torch
 import pandas as pd
+import numpy as np
 from typing import Literal
 
 from src.proj import Logger , Proj
@@ -26,22 +27,21 @@ class gpGenerator:
                  min_coverage :float = 0.1 , 
                  **kwargs) -> None:
         with Proj.Silence:
-            self.gp_main  = GeneticProgramming(job_id = job_id , train = False , **kwargs)
-            self.gp_main.load_data()
-            self.gp_main.preparation()
+            self.gp  = GeneticProgramming(job_id = job_id , train = False , **kwargs).load_data().preparation()
             self.process_key = process_key
-            self.elitelog   = self.gp_main.logger.load_state('elitelog' , i_iter = -1).set_index('i_elite')
-            self.df_axis    = self.gp_main.logger.load_state('df_axis' , -1)
+            self.elitelog = self.load_log('elitelog').set_index('i_elite')
+            self.secid : np.ndarray = self.gp.logger.load_state('secid')
+            self.date  : np.ndarray = self.gp.logger.load_state('date')
 
-        self.Ensembler = FF.MultiFactor(
+        self.elite_multi_factor = FF.MultiFactor(
             weight_scheme = weight_scheme ,
             window_type   = window_type ,
             weight_decay  = weight_decay ,
             ir_window     = ir_window ,
             roll_window   = roll_window ,
             halflife      = halflife ,
-            universe      = self.gp_main.input.universe , 
-            insample      = self.gp_main.input.insample ,
+            universe      = self.gp.input.universe , 
+            insample      = self.gp.input.insample ,
             min_coverage  = min_coverage ,
             **kwargs)
 
@@ -51,18 +51,18 @@ class gpGenerator:
         '''
         if process_key is None: 
             process_key = self.process_key
-        factor = self.gp_main.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
+        factor = self.gp.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
         return factor
 
-    def to_df(self , syntax : str | FF.FactorValue , process_key : str | None = None , print_info = True) -> pd.DataFrame | None:
+    def to_dataframe(self , syntax : str | FF.FactorValue , process_key : str | None = None , print_info = True) -> pd.DataFrame | None:
         '''
         Convert FactorValue to DataFrame
         '''
         if process_key is None: 
             process_key = self.process_key
-        factor = self.gp_main.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
+        factor = self.gp.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
         if not factor.isnull():
-            value = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
+            value = factor.to_dataframe(secid = self.secid , date = self.date)
         else:
             value = None
         if print_info: 
@@ -71,19 +71,22 @@ class gpGenerator:
 
     @property
     def elites(self) -> list[str]:
-        return self.gp_main.logger.load_state('elitelog' , i_iter = -1).syntax.tolist()
+        return self.load_log('elitelog').syntax.tolist()
 
     @property
     def hof_elites(self) -> list[str]:
-        return self.gp_main.logger.load_state('hoflog' , i_iter = -1).syntax.tolist()
+        return self.load_log('hoflog').syntax.tolist()
+
+    def load_log(self , key : Literal['elitelog' , 'hoflog']) -> pd.DataFrame:
+        return self.gp.logger.load_state(key)
 
     def entire_elites(self , block_len = 50 , process_key = None):
         '''
         Load all elite factors
         '''
-        elite_log  = self.gp_main.logger.load_state('elitelog' , i_iter = -1) 
-        hof_log    = self.gp_main.logger.load_state('hoflog'   , i_iter = -1)
-        hof_elites = EliteGroup(start_i_elite=0 , device=self.gp_main.device , block_max_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
+        elite_log  = self.load_log('elitelog') 
+        hof_log    = self.load_log('hoflog')
+        hof_elites = EliteGroup(start_i_elite=0 , device=self.gp.device , block_max_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
         for elite in elite_log.syntax: 
             hof_elites.append(self(elite , process_key = process_key))
         hof_elites.cat_all()
@@ -111,9 +114,9 @@ class gpGenerator:
                     factor_list[i] = self(fac)
             factor = torch.stack(factor_list , dim = -1)
         if labels is None: 
-            labels = self.gp_main.input.labels_raw
-        metrics = self.Ensembler.calculate_icir(factor , labels , **kwargs) # ic,ir
-        multi = self.Ensembler.multi_factor(factor , **metrics , **kwargs)
+            labels = self.gp.input.labels_raw
+        metrics = self.elite_multi_factor.calculate_icir(factor , labels , **kwargs) # ic,ir
+        multi = self.elite_multi_factor.multi_factor(factor , **metrics , **kwargs)
         return multi # multi对象拥有multi,weight,inputs三个自变量
     
     def multi_elite_factor(
@@ -137,8 +140,8 @@ class gpGenerator:
             factors = elites.compile_elite_tensor()
         assert isinstance(factors , torch.Tensor) , type(factors)
         multi = self.multi_factor(
-            factors , labels = self.gp_main.input.labels_raw , 
+            factors , labels = self.gp.input.labels_raw , 
             weight_scheme = weight_scheme , window_type = window_type ,weight_decay = weight_decay ,
             ir_window = ir_window , roll_window = roll_window , halflife = halflife , min_coverage = min_coverage , 
-            names = elites.all_names() , **kwargs)
+            names = elites.all_names() , secid = self.secid , date = self.date , **kwargs)
         return multi
