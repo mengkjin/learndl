@@ -77,7 +77,8 @@ class DataBlock(Stock4D):
     def last_preprocess_date(cls , key , predict):
         path = cls.path_preprocess(key , predict)
         if path.suffix == '.mmap':
-            return max([PATH.file_modified_date(sub_path) for sub_path in path.iterdir() if sub_path.is_file()])
+            dates = [PATH.file_modified_date(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
+            return min(dates) if dates else None
         else:
             return PATH.file_modified_date(cls.path_preprocess(key , predict))
     
@@ -85,7 +86,8 @@ class DataBlock(Stock4D):
     def last_preprocess_time(cls , key , predict):
         path = cls.path_preprocess(key , predict)
         if path.suffix == '.mmap':
-            return max([PATH.file_modified_time(sub_path) for sub_path in path.iterdir() if sub_path.is_file()])
+            times = [PATH.file_modified_time(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
+            return min(times) if times else None
         else:
             return PATH.file_modified_time(path)
 

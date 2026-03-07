@@ -157,7 +157,9 @@ class CALENDAR:
             date_time = datetime.strptime(str(date) , '%Y%m%d')
         return int(date_time.replace(hour=h, minute=m, second=s).strftime('%Y%m%d%H%M%S'))
     @classmethod
-    def is_updated_today(cls , modified_time : int , hour = 20 , minute = 0):
+    def is_updated_today(cls , modified_time : int | None , hour = 20 , minute = 0):
+        if modified_time is None:
+            return False
         if modified_time < 1e8: 
             modified_time = modified_time * 1000000
         current_time = datetime.now()
