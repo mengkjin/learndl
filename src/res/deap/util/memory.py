@@ -24,18 +24,16 @@ class MemoryManager():
         self.vb_level = vb_level
         if device is not None:
             self.device = device
+            self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
         else:
             if torch.cuda.is_available():
                 self.device = torch.device('cuda' if device is None else device)
-                self.unit = type(self).unit
                 self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
             elif torch.backends.mps.is_available():
                 self.device = torch.device('mps')
-                self.unit = type(self).unit
                 self.gmem_total = torch.mps.current_allocated_memory() / self.unit
             else:
                 self.device = torch.device('cpu')
-                self.unit = type(self).unit
                 self.gmem_total = 0.
         self.record : dict[str, list] = {}
 
