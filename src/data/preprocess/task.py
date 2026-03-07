@@ -59,7 +59,7 @@ class PreProcessorTask:
 
         for key , proc in processor.processors():
             modified_time = DataBlock.last_preprocess_time(key , predict)
-            if force_update or CALENDAR.is_updated_today(modified_time):
+            if not force_update and CALENDAR.is_updated_today(modified_time):
                 time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
                 Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level + 1)
                 continue
