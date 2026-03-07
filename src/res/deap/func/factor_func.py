@@ -1,5 +1,5 @@
 from dataclasses import dataclass , field
-from typing import Any
+from typing import Any , Callable
 import torch
 import pandas as pd
 import numpy as np
@@ -287,8 +287,8 @@ class MultiFactor:
         return decay_weight(weight_decay , max_len , exp_halflife=halflife)
 
     @staticmethod
-    def static_decorator(func , relative_weight_cap = 5.):
-        def wrapper(data , time_slice = None):
+    def static_decorator(func : Callable[...,torch.Tensor] , relative_weight_cap = 5.):
+        def wrapper(data : torch.Tensor | None, time_slice = None):
             if time_slice is not None and data is not None: 
                 data = data[time_slice]
             w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).reshape(1,1,-1)
@@ -299,8 +299,8 @@ class MultiFactor:
         return wrapper
     
     @staticmethod
-    def dynamic_decorator(func , relative_weight_cap = 5. , method = 1):
-        def wrapper(data , roll_window = 10):
+    def dynamic_decorator(func : Callable[...,torch.Tensor] , relative_weight_cap = 5. , method = 1):
+        def wrapper(data : torch.Tensor , roll_window = 10):
             if method == 1:
                 data = torch.nn.functional.pad(data,[0,0,roll_window-1,0],value=torch.nan).unfold(0,roll_window,1).permute(2,0,1)
                 w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan)
@@ -315,7 +315,7 @@ class MultiFactor:
             return w
         return wrapper
     
-    def multi_factor(self , factor , window_type = None , names = None , secid = None , date = None , **kwargs):
+    def multi_factor(self , factor : torch.Tensor , window_type = None , names = None , secid = None , date = None , **kwargs):
         weight = self.factor_weight(window_type , **kwargs)
         try:
             multi = (factor * weight).nanmean(-1)
@@ -363,10 +363,10 @@ class MultiFactor:
             data = kwargs[weight_scheme]
             return func(data , roll_window = roll_window)
 
-    def weight_ew(self , data):
+    def weight_ew(self , data : torch.Tensor):
         return data.nanmean(0).sign()
 
-    def weight_icir(self, data):
+    def weight_icir(self, data : torch.Tensor):
         ts_w = self.ts_decay(len(data)).to(data).reshape(1,-1)
         fini = data.isfinite() * 1.
         data = data.nan_to_num(0,0,0)
@@ -374,14 +374,16 @@ class MultiFactor:
             return (ts_w @ data) / (ts_w @ fini)
         elif data.dim() == 3:
             return torch.einsum('ij,jkl->ikl' , ts_w , data) / torch.einsum('ij,jkl->ikl' , ts_w , fini)
+        else:
+            raise ValueError(f'data should be of ndim 2 or 3, but got {data.shape}')
 
-    def weighted_multi(self , singles , weight):
-        assert singles.shape == weight.shapes , (singles.shape , weight.shape)
+    def weighted_multi(self , singles : torch.Tensor , weight : torch.Tensor):
+        assert singles.shape == weight.shape , (singles.shape , weight.shape)
         weight = singles.isfinite() * weight
         wsum = torch.nansum(singles * weight , dim = -1) 
         return T.zscore_inplace(wsum,dim = -1)
     
-    def calculate_icir(self , factors , labels , ir_window = None , universe = None , min_coverage = None , **kwargs):
+    def calculate_icir(self , factors : torch.Tensor , labels : torch.Tensor , ir_window = None , universe = None , min_coverage = None , **kwargs):
         ir_window    = ir_window    if ir_window    is not None else self.ir_window
         universe     = universe     if universe     is not None else self.universe
         min_coverage = min_coverage if min_coverage is not None else self.min_coverage

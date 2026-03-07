@@ -180,7 +180,8 @@ def trim(v , v1 , v2):
 
 def winsor(v , v1 , v2):
     v = v + 0.
-    v = v.clip(v1, v2)
+    if v1 is not None or v2 is not None:
+        v = v.clip(v1, v2)
     return v
 
 def weighted_mean(v , weight = None):
