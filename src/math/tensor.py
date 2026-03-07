@@ -588,7 +588,7 @@ def ts_lin_decay(x : Tensor , d : int , * , dim : Literal[1] = 1):
 def ts_decay_pos_dif(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     """rolling decay of positive difference of x and y of d days"""
     value = x - y
-    value = value.clip(min=0)
+    value = value.clip(0)
     return ts_lin_decay(value, d , dim=dim)
 
 @TsRoller.decor(2,nan=0)

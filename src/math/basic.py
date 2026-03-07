@@ -74,6 +74,8 @@ def convert_to_slice(index : np.ndarray | list) -> slice | np.ndarray:
             return to_numpy(index)
 
 def match_slice(values , src_arr , ambiguous = 0) -> slice | np.ndarray:
+    values = to_numpy(values)
+    src_arr = to_numpy(src_arr)
     if len(values) == 0:
         return slice(0,0,1)
     elif np.array_equal(values , src_arr):

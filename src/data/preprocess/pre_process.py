@@ -149,9 +149,9 @@ class pp_y(TypePreProcessor):
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
         indus_size = model_exp.values[...,:]
-        x = torch.Tensor(indus_size).permute(1,0,2,3).squeeze(2)
+        x = torch.Tensor(indus_size).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
-            if lb_name[:3] == 'rtn':
+            if lb_name.startswith('rtn'):
                 y_raw = data_block.values[...,i_feat].squeeze(2)
                 y_std = neutralize_2d(y_raw , x , dim = 0)
                 assert y_std is not None , 'y_std is None'

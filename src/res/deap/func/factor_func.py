@@ -293,7 +293,7 @@ class MultiFactor:
                 data = data[time_slice]
             w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).reshape(1,1,-1)
             w /= w.abs().sum(-1,keepdim=True)
-            w = w.clip(max=relative_weight_cap / w.shape[-1])
+            w = w.clip(None , relative_weight_cap / w.shape[-1])
             w /= w.abs().sum(-1,keepdim=True)
             return w
         return wrapper
@@ -310,7 +310,7 @@ class MultiFactor:
                     w[i] = func(data[i-roll_window:i]).nan_to_num(torch.nan,torch.nan,torch.nan)
                 w = w.unsqueeze(0)
             w /= w.abs().sum(-1,keepdim=True)
-            w = w.clip(max=relative_weight_cap / w.shape[-1])
+            w = w.clip(None , relative_weight_cap / w.shape[-1])
             w /= w.abs().sum(-1,keepdim=True)
             return w
         return wrapper

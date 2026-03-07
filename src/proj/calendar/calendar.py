@@ -27,7 +27,7 @@ class _Calendars:
         calendar['cd_index'] = np.arange(len(calendar))
         calendar['td_index'] = calendar['trade'].cumsum() - 1
         calendar['td_forward_index'] = calendar['td_index'] + 1 - calendar['trade']
-        calendar['td_forward'] = trd.iloc[calendar['td_forward_index'].clip(upper = len(trd) - 1).to_numpy(int)]['calendar'].values
+        calendar['td_forward'] = trd.iloc[calendar['td_forward_index'].clip(None , len(trd) - 1).to_numpy(int)]['calendar'].values
         calendar = calendar.astype(int).set_index('calendar')
         cal_cal = calendar.reset_index().set_index('cd_index')
         cal_trd = calendar[calendar['trade'] == 1].reset_index().set_index('td_index')

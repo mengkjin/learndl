@@ -962,7 +962,7 @@ class StockFactor:
             benchmark_size = pd.Series(benchmark.sec_num(calc_dates) , index = calc_dates)
             coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
             for factor_name in coverage:
-                coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(lower=0 , upper=1)
+                coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(0 , 1)
             self.cache_factor_stats.coverage.append_stat(params , coverage , keys = ['date'])
         stat = self.cache_factor_stats.coverage.get_stat(params)
         return stat if all_dates else stat.query('date in @self.date')

@@ -97,7 +97,7 @@ def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.0
     assert src_.ndim == 1 , src_.shape
     assert 0 < l_prc_ and l_prc_ < u_prc_ and u_prc_ < 100 , (l_prc_ , u_prc_)
     ulb = np.nanpercentile(src_, [u_prc_, l_prc_])
-    des = src_.clip(min=ulb[1], max=ulb[0])
+    des = src_.clip(ulb[1], ulb[0])
     return des
 
 def winsorize_by_dist(src_: np.ndarray, m_: float = 3.5, winsor_rng : float = 0. ,dist_type_: int=0):
@@ -141,7 +141,7 @@ def winsorize_by_bnded_dist(src_: np.ndarray, bnd_: float = 0.1, m_: float = 3.5
     std = np.nanstd(des[bnded_flg])
     ub = avg + m_ * std
     lb = avg - m_ * std
-    des = des.clip(min=lb, max=ub)
+    des = des.clip(lb, ub)
     if dist_type_ == 1:
         des = np.exp(des)
     return des
@@ -180,7 +180,7 @@ def trim(v , v1 , v2):
 
 def winsor(v , v1 , v2):
     v = v + 0.
-    v = v.clip(min=v1, max=v2)
+    v = v.clip(v1, v2)
     return v
 
 def weighted_mean(v , weight = None):
