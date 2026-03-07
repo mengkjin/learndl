@@ -72,7 +72,7 @@ class PreProcessorTask:
             else:
                 with Logger.Timer(f'[{key}] dumped loading' , indent = indent + 2 , vb_level = vb_level + 3):
                     dump_block = DataBlock.load_preprocess(key , False)[key]
-                    dump_last_date = dump_block.date[-1] if not dump_block.empty else -1
+                    dump_last_date = CALENDAR.td(dump_block.date[-1] , -LOAD_OVERLAP_DAYS).td if not dump_block.empty else -1
 
             with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 3 , enter_vb_level = vb_level + 5):
                 load_start = max(processor.load_start , dump_last_date)
