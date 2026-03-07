@@ -27,8 +27,11 @@ def data_type_abbr(key : str):
     else:
         return key
 
-def data_type_alias(key : str):
-    return [key , f'trade_{key}' , key.replace('trade_','')]
+def data_type_alias(key : str) -> list[str]:
+    """return possible alternatives for a key , the key itself must be the last one , so when iteration ends will use the input key"""
+    alias = [f'trade_{key}' , key.replace('trade_','') , key]
+    assert alias[-1] == key , f'{alias[-1]} != {key}'
+    return alias
 
 def save_dict(data : dict , file_path : str | Path):
     file_path = Path(file_path)
@@ -237,25 +240,24 @@ class DataBlock(Stock4D):
         return self
 
     @classmethod
-    def path_preprocess(cls , key : str , predict=False, * , alias_search = True , 
-                          dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True) -> Path:
+    def path_preprocess(cls , key : str , predict=False, * , 
+                        dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True) -> Path:
         preprocess_type = 'predict' if predict else 'fit'
         if key.lower() in ['y' , 'labels']: 
             path = PATH.block.joinpath(preprocess_type , f'Y{dump_suffix}')
         else:
-            alias_list = data_type_alias(key) if alias_search else []
+            alias_list = data_type_alias(key)
             for new_key in alias_list:
-                new_path = PATH.block.joinpath(preprocess_type , f'X_{new_key}{dump_suffix}')
-                if new_path.exists(): 
-                    path = new_path
-            path = PATH.block.joinpath(preprocess_type , f'X_{key}{dump_suffix}')
+                path = PATH.block.joinpath(preprocess_type , f'X_{new_key}{dump_suffix}')
+                if path.exists(): 
+                    break
         if find_if_not_exists:
             return cls.find_existing_dump_path(path)
         return path
         
     @staticmethod
-    def path_norm(key : str , predict = False, alias_search = True):
-        return DataBlockNorm.norm_path(key , predict , alias_search)
+    def path_norm(key : str , predict = False):
+        return DataBlockNorm.norm_path(key , predict)
 
     @classmethod
     def path_raw(cls , src : str , key : str , * , dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True):
@@ -276,13 +278,13 @@ class DataBlock(Stock4D):
 
     @classmethod
     def load_preprocess(
-        cls , keys : list[str] | str , predict = False , alias_search = True , 
+        cls , keys : list[str] | str , predict = False , 
         fillna : Literal['guess'] | bool | None = 'guess' , intersect_secid = True ,
         start_dt = None , end_dt = None , dtype : str | Any = torch.float , vb_level = 2 , **kwargs
     ) -> dict[str,'DataBlock']:
         if isinstance(keys , str):
             keys = [keys]
-        paths = [cls.path_preprocess(key , predict , alias_search = alias_search) for key in keys]
+        paths = [cls.path_preprocess(key , predict) for key in keys]
         fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
         
         block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
@@ -315,10 +317,10 @@ class DataBlock(Stock4D):
         return blocks
 
     @classmethod
-    def load_preprocess_norms(cls , keys : list[str] | str , predict = False , alias_search = True , dtype = None) -> dict[str,'DataBlockNorm']:
+    def load_preprocess_norms(cls , keys : list[str] | str , predict = False , dtype = None) -> dict[str,'DataBlockNorm']:
         if isinstance(keys , str):
             keys = [keys]
-        return DataBlockNorm.load_keys(keys, predict , alias_search = alias_search , dtype = dtype)
+        return DataBlockNorm.load_keys(keys, predict , dtype = dtype)
 
     @classmethod
     def load_from_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
@@ -510,12 +512,12 @@ class DataBlockNorm:
         save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
 
     @classmethod
-    def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None) -> dict[str,'DataBlockNorm']:
+    def load_keys(cls , keys : str | list[str] , predict = False , dtype = None) -> dict[str,'DataBlockNorm']:
         if not isinstance(keys , list): 
             keys = [keys]
         norms = {}
         for key in keys:
-            path = cls.norm_path(key , predict , alias_search)
+            path = cls.norm_path(key , predict)
             if not path.exists(): 
                 continue
             data = load_dict(path)
@@ -523,12 +525,12 @@ class DataBlockNorm:
         return norms
     
     @classmethod
-    def norm_path(cls , key : str , predict = False, alias_search = True):
+    def norm_path(cls , key : str , predict = False):
         if key.lower() == 'y':
             return PATH.norm.joinpath('fit' , 'Y.pt')
-        alias_list = data_type_alias(key) if alias_search else []
+        alias_list = data_type_alias(key)
         for new_key in alias_list:
             path = PATH.norm.joinpath('fit' , f'X_{new_key}.pt')
             if path.exists():
-                return path
-        return PATH.norm.joinpath('fit' , f'X_{key}.pt')
+                break
+        return path
