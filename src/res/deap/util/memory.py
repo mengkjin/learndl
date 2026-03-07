@@ -37,7 +37,7 @@ class MemoryManager():
                 self.device = torch.device('cpu')
                 self.unit = type(self).unit
                 self.gmem_total = 0.
-        self.record = {}
+        self.record : dict[str, list] = {}
 
     def check(self , key = None, showoff = False , critical_ratio = 0.5):
         if self.device.type != 'cuda': 
@@ -85,14 +85,14 @@ class MemoryManager():
             return 0.
     
     @classmethod
-    def tensor_memory(cls , tensor , cuda_only = True):
+    def tensor_memory(cls , tensor : torch.Tensor , cuda_only = True):
         if cuda_only and not tensor.is_cuda: 
             return 0.
         total_memory = tensor.element_size() * tensor.numel()
         return total_memory / cls.unit
     
     def print_memeory_record(self):
-        if self.device.type == 'cuda':
+        if self.device.type == 'cuda' and self.record:
             info_dict = {k:f'{len(value)} counts, on average freed {np.mean(value):.2f}G' for k,value in self.record.items()}
             Logger.stdout_pairs(info_dict , title = 'Avg Freed Cuda Memory:')
                 

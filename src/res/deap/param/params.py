@@ -1,8 +1,6 @@
 from src.proj import PATH , Logger
 import torch
-import pandas as pd
 import shutil
-from datetime import datetime
 from typing import Literal
 from .default import gpDefaults
 
@@ -116,10 +114,6 @@ class gpParameters:
     @property
     def outsample_dates(self) -> tuple[int, int]:
         return tuple(self.params.get('outsample_dates' , [20220104, 20991231])) 
-    @property
-    def slice_date(self) -> list[datetime]:
-        """修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日"""
-        return [pd.to_datetime(x) for x in self.params.get('slice_date' , [])]
     @property
     def pop_num(self) -> int:
         """每次generation的种群数量,初始化时生成多少个备选公式"""
