@@ -380,9 +380,9 @@ class DataModule(BaseDataModule):
             y.nan_to_num_(0)[~valid] = torch.nan
         weight_scheme = self.config.weight_scheme(self.loader_param.stage , no_weight)
         assert weight_scheme in ['equal' , 'top' , None] , weight_scheme
-        weight = None
+        w = None
         if y.isnan().all().item(): 
-            return y , weight
+            return y , w
         y = T.standardize(y , dim=0)
         if weight_scheme == 'top':
             w = torch.ones_like(y)
