@@ -15,9 +15,9 @@ fitness_wgt:
   rankic_out_raw: 0.
   rankir_out_raw: 0.
 
-pop_num:          300     # [parameter] population number , recommended to be 3000
-hof_num:          50      # [parameter] halloffame number , recommended to be 500
-elite_num:        10      # [parameter] elite number (max) , recommended to be 100
+pop_num:          3000     # [parameter] population number , recommended to be 3000
+hof_num:          500      # [parameter] halloffame number , recommended to be 500
+elite_num:        100      # [parameter] elite number (max) , recommended to be 100
 
 n_iter :          2       # [outer loop] loop number
 n_gen:            3       # [inner loop] generation number

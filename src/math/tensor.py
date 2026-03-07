@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import Tensor , nan
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from typing import Literal
+from typing import Literal , Callable
 
 from .basic import alert_message , DIV_TOL , allna
     
@@ -48,16 +48,6 @@ def process_factor(value : Tensor | None , * , stream = 'inf_winsor_norm' , dim 
             value = value.nan_to_num_()
     return value
 
-def kthvalue_by_topk(x: Tensor, k: int, * , dim=-1, keepdim=True , largest=False):
-    """
-    Get the k-th smallest value by topk
-    """
-    # Get the k smallest elements
-    vals, _ = torch.topk(x, k, dim=dim, largest=largest, sorted=True)
-    # The k-th smallest is the last one in this sorted list
-    res = vals.select(dim, -1)
-    return res.unsqueeze(dim) if keepdim else res
-
 class TsRoller:
     @staticmethod
     def unfold(x : Tensor , d : int , * , dim :int | Literal[1] = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
@@ -67,6 +57,40 @@ class TsRoller:
     def fold(z : Tensor , d : int , * , dim : int = 1 , nan = nan , **kwargs):
         pad = tuple([0] * (z.ndim - dim - 1) * 2 + [d-1,0])
         return F.pad(z , pad , value = nan).nan_to_num(nan)
+
+    @staticmethod
+    def unfold_chunk_slice_x(chunk_size = 8e8):
+        def decorator(func : Callable[..., Tensor]):
+            def wrapper(x : Tensor , d : int , *args , **kwargs):
+                chunk_num = int(np.ceil(np.prod(x.shape) * d / chunk_size))
+                chunk_len = int(np.ceil((x.shape[1] + (chunk_num - 1) * d) / chunk_num))
+                sub_rets : list[Tensor] = []
+                for i in range(chunk_num):
+                    start = max(i * chunk_len - d , 0)
+                    end   = (i + 1) * chunk_len
+                    sub_rets.append(func(x[:,start:end] , d , *args , **kwargs)[:,d if i > 0 else 0:])
+                ret = torch.concat(sub_rets , dim = 1)
+                return ret
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
+
+    @staticmethod
+    def unfold_chunk_slice_xy(chunk_size = 4e8):
+        def decorator(func : Callable[..., Tensor]):
+            def wrapper(x : Tensor , y : Tensor , d : int , *args , **kwargs):
+                chunk_num = int(np.ceil(np.prod(x.shape) * d / chunk_size))
+                chunk_len = int(np.ceil((x.shape[1] + (chunk_num - 1) * d) / chunk_num))
+                sub_rets : list[Tensor] = []
+                for i in range(chunk_num):
+                    start = max(i * chunk_len - d , 0)
+                    end   = (i + 1) * chunk_len
+                    sub_rets.append(func(x[:,start:end] , y[:,start:end] , d , *args , **kwargs)[:,d if i > 0 else 0:])
+                ret = torch.concat(sub_rets , dim = 1)
+                return ret
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
 
     @classmethod
     def decor(cls , n_arg : Literal[1,2] = 1, **decor_kwargs):
@@ -101,6 +125,16 @@ class TsRoller:
             wrapper.__name__ = func.__name__
             return wrapper
         return decorator
+
+def kthvalue_by_topk(x: Tensor, k: int, * , dim=-1, keepdim=True , largest=False):
+    """
+    Get the k-th smallest value by topk
+    """
+    # Get the k smallest elements
+    vals, _ = torch.topk(x, k, dim=dim, largest=largest, sorted=True)
+    # The k-th smallest is the last one in this sorted list
+    res = vals.select(dim, -1)
+    return res.unsqueeze(dim) if keepdim else res
 
 def nanmean(x : torch.Tensor , * , dim=None, keepdim=False):  
     return x.nanmean(dim = dim , keepdim = keepdim)
@@ -621,9 +655,10 @@ def ts_rankcorr(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     """rolling rank correlation of x and y of d days"""
     return corrwith(rank_pct(x,dim=dim) , rank_pct(y,dim=dim) , dim=dim)
 
+@TsRoller.unfold_chunk_slice_x()
 def conditional_x(
-    x : Tensor , d : int , n : int , * ,
-    dim : Literal[1] = 1, method : Literal['btm' , 'top' , 'diff'] , use : Literal['mean' , 'thres'] = 'mean',
+    x : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
+    dim : Literal[1] = 1, use : Literal['mean' , 'thres'] = 'mean',
     force_directional_sign : bool = False
 ):
     """
@@ -635,16 +670,16 @@ def conditional_x(
     x = TsRoller.unfold(x , d , dim = dim)
     groups : list[Tensor | None] = [None , None]
     if method in ['btm' , 'diff']:
-        condition = (x <= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False))
+        condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False)
         if force_directional_sign: 
-            condition *= (x < 0)
-        value = torch.where(condition , x , nan).nan_to_num_(nan , nan , nan)
+            condition = condition.clip(max=0)
+        value = torch.where(x <= condition , x , nan).nan_to_num_(nan , nan , nan)
         groups[0] = value.nanmean(dim=-1) if use == 'mean' else value.nan_to_num(-torch.inf).max(dim=-1).values
     if method in ['top' , 'diff']:
-        condition = (x >= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True))
+        condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True)
         if force_directional_sign: 
-            condition *= (x > 0)
-        value = torch.where(condition , x , nan).nan_to_num_(nan , nan , nan)
+            condition = condition.clip(min=0)
+        value = torch.where(x >= condition , x , nan).nan_to_num_(nan , nan , nan)
         groups[1] = value.nanmean(dim=-1) if use == 'mean' else value.nan_to_num(-torch.inf).max(dim=-1).values
     
     z = [grp for grp in groups if grp is not None]
@@ -657,9 +692,10 @@ def conditional_x(
     z = TsRoller.fold(z , d , dim = dim , nan = nan)
     return z
 
+@TsRoller.unfold_chunk_slice_xy()
 def conditional_y_on_x(
-    x : Tensor , y : Tensor , d : int , n : int , * ,
-    dim : Literal[1] = 1, method : Literal['btm' , 'top' , 'diff'] , use : Literal['mean' , 'thres'] = 'mean',
+    x : Tensor , y : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
+    dim : Literal[1] = 1, use : Literal['mean' , 'thres'] = 'mean',
     force_directional_sign : bool = False
 ):
     """
@@ -672,17 +708,17 @@ def conditional_y_on_x(
     y = TsRoller.unfold(y , d , dim = dim)
     groups : list[Tensor | None] = [None , None]
     if method in ['btm' , 'diff']:
-        condition = (x <= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False))
+        condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False)
         if force_directional_sign: 
-            condition *= (x < 0)
-        value = torch.where(condition , y , nan).nan_to_num_(nan , nan , nan)
+            condition = condition.clip(max=0)
+        value = torch.where(x <= condition , y , nan).nan_to_num_(nan , nan , nan)
         groups[0] = value.nanmean(dim=-1) if use == 'mean' else value.nan_to_num(-torch.inf).max(dim=-1).values
-
+        
     if method in ['top' , 'diff']:
-        condition = (x >= kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True))
+        condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=True)
         if force_directional_sign: 
-            condition *= (x > 0)
-        value = torch.where(condition , y , nan).nan_to_num_(nan , nan , nan)
+            condition = condition.clip(min=0)
+        value = torch.where(x >= condition , y , nan).nan_to_num_(nan , nan , nan)
         groups[1] = value.nanmean(dim=-1) if use == 'mean' else value.nan_to_num(-torch.inf).max(dim=-1).values
         
     z = [grp for grp in groups if grp is not None]
