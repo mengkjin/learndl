@@ -68,6 +68,9 @@ class GeneticProgramming:
     @property
     def forbidden(self):
         return self.status.forbidden
+    @property
+    def ir_floor(self):
+        return self.param.ir_floor * (self.param.ir_floor_decay ** self.i_iter)
 
     def load_data(self):
         with self.timer.timer('stage' , 'Data' , title= 'Load Data' , timer_level = 5):
@@ -194,101 +197,94 @@ class GeneticProgramming:
 
     def selection(self , **kwargs):
         """筛选精英群体中的因子表达式,以高ir、低相关为标准筛选精英中的精英"""
-        elite_log  = self.logger.load_state('elitelog' , i_iter = self.i_iter - 1) # 记录精英列表
-        hof_log    = self.logger.load_state('hoflog'   , i_iter = self.i_iter - 1) # 记录名人堂状态列表
-        hof_elites = EliteGroup(start_i_elite = len(elite_log) , device=self.device).assign_logs(hof_log = hof_log , elite_log = elite_log)
-        hof_inds   = Population.from_list(self.halloffame)
+        elite_group = EliteGroup.new_from_logs(
+            elite_log = self.logger.load_state('elitelog' , i_iter = self.i_iter - 1) , 
+            hof_log = self.logger.load_state('hoflog'   , i_iter = self.i_iter - 1) , device=self.device)
+        halloffame = Population.from_list(self.halloffame)
 
-        ir_floor = self.param.ir_floor * (self.param.ir_floor_decay ** self.i_iter)
-        new_log    = hof_inds.log_df(list(self.param.fitness_wgt.keys())).\
-            assign(i_iter = self.i_iter , i_elite = -1 , elite = False , max_corr = 0.).\
-            loc[:,['i_iter','i_elite','syntax','valid','elite','max_corr',*self.param.fitness_wgt.keys()]]
-        new_log['elite'] = (new_log.valid & # valid factor value
-            (new_log.rankir_in_res.abs() > ir_floor) & # higher rankir_res than threshold
-            (new_log.rankir_in_raw.abs() > ir_floor) & # higher rankir_res than threshold
-            (new_log.rankir_out_res != 0.))
-        # infos   = pd.DataFrame(
-        #     [[self.i_iter,-1,ind.syntax,ind.if_valid,False,0.] for ind in hof_inds] , 
-        #     columns = pd.Index(['i_iter','i_elite','syntax','valid','elite','max_corr']))
-        # metrics = pd.DataFrame([ind.metrics for ind in hof_inds] , columns = list(self.param.fitness_wgt.keys()))
-        # new_log = pd.concat([infos , metrics] , axis = 1)
-        if not new_log.valid.all():
-            Logger.alert1(f'HallofFame({len(self.halloffame)}) contains invalid factors, please check the code' , indent = 1)
-            Logger.display(new_log[~new_log.valid])
+        hoflog = halloffame.log_df(list(self.param.fitness_wgt.keys())).\
+            assign(i_iter = self.i_iter , i_elite = -1 , elite = False , elite_state = 0 , max_corr = 0.).\
+            loc[:,['i_iter','i_elite','syntax','valid','elite','elite_state','max_corr',*self.param.fitness_wgt.keys()]]
         
-        Logger.stdout(f'HallofFame({len(self.halloffame)}) Contains {new_log.elite.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}' , indent = 1)
-        if new_log.elite.sum() <= 0.1 * len(self.halloffame):
+        if not hoflog.valid.all():
+            Logger.alert1(f'HallofFame({len(halloffame)}) contains invalid factors, please check the code' , indent = 1)
+            Logger.display(hoflog[~hoflog.valid])
+        
+        elite_candidate_num = (hoflog.valid & (hoflog.rankir_in_res.abs() >= self.ir_floor) & (hoflog.rankir_in_raw.abs() >= self.ir_floor)).sum()
+        Logger.stdout(f'HallofFame({len(halloffame)}) Contains {elite_candidate_num} Promising Candidates with RankIR >= {self.ir_floor:.2f}' , indent = 1)
+        if elite_candidate_num <= 0.1 * len(halloffame):
             # Failure of finding promising offspring , check if code has bug
             Logger.alert1(f'Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ' , indent = 1)
-            Logger.alert1(f'Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})' , indent = 1)
+            Logger.alert1(f'Valid Hof({hoflog.valid.sum()}), insample max ir({hoflog.rankir_in_res.abs().max():.4f})' , indent = 1)
 
-        for i , hof in enumerate(self.halloffame):
-            # 若超过了本次循环的精英上限数,则后面的都不算,等到下一个循环再来(避免内存溢出)
-            hof_state = True
-            hof_msg = ''
-            if hof_elites.elite_count >= self.param.elite_num: 
-                hof_state = False
-                hof_msg = f'Hof{i:_>3d} Fail Test : EliteGroup is Full'
+        # hof states :
+        # 0 : pass all tests
+        # 1 : fail test : Factor Value is Null (silent)
+        # 2 : fail test : IR too low (silent)
+        # 3 : fail test : Corr with Existing Factors Too High
+        # 4 : fail test : EliteGroup is Full
+        for i , hof in enumerate(halloffame):
+            elite_state = 0
+            if not hoflog.valid[i]:
+                elite_state = 1
+            elif abs(hoflog.rankir_in_res[i]) < self.ir_floor or abs(hoflog.rankir_in_raw[i]) < self.ir_floor:
+                elite_state = 2
+            
+            if elite_state != 0:
+                # 没有通过基础的Null值或IR检验,则不进行后续的检验
+                continue
+
+            if elite_state == 0: 
+                # 若超过了本次循环的精英上限数,则后面的都不算,等到下一个循环再来(避免内存溢出)
+                if elite_group.elite_count >= self.param.elite_num:
+                    elite_state = 4
+                msg = f'Hof{i:_>3d} Fail Test : EliteGroup is Full'
                 
-            if hof_state: 
+            if elite_state == 0:
                 # 根据迭代出的因子表达式,计算因子值, 错误则进入下一循环
                 # recalculate factor value here in case loaded hof cannot be evaluated correctly (should not happend)
                 factor_value = self.evaluator.to_value(hof,neutral_type=0 if self.i_iter == 0 else self.param.factor_neut_type,**kwargs)
                 self.memory.check('factor')
-                hof_state = not factor_value.isnull() and new_log.rankir_out_res[i] != 0.
-                if not hof_state:
-                    hof_msg = f'Hof{i:_>3d} Fail Test : Factor Value is Null'
+                if factor_value.isnull() or hoflog.rankir_out_res[i] == 0.:
+                    elite_state = 1
+                msg = f'Hof{i:_>3d} Fail Test : Factor Value is Null'
 
-            if hof_state: 
-                # IR检验, 低于预设值则进入下一循环
-                ir_raw = new_log.rankir_in_raw[i]
-                ir_res = new_log.rankir_in_res[i]
-                hof_state = abs(ir_raw) >= ir_floor and abs(ir_res) >= ir_floor
-                if not hof_state:
-                    hof_msg = f'Hof{i:_>3d} Fail Test : IR too low (IRraw {ir_raw:+.2f} , IRres {ir_res:+.2f}) < {ir_floor:.2f})'
-
-            if hof_state: 
+            if elite_state == 0: 
                 # 与已有的因子库"样本内"做相关性检验,如果相关性大于预设值corr_cap则进入下一循环
-                corr_values , exit_state = hof_elites.max_corr_with_me(
-                    factor_value, self.param.corr_cap, dim_valids=(None,self.input.insample), syntax = new_log.syntax[i])
-                new_log.loc[i,'max_corr'] = round(corr_values[corr_values.abs().argmax()].item() , 4)
+                corr_values , exit_state = elite_group.max_corr_with_me(
+                    factor_value, self.param.corr_cap, dim_valids=(None,self.input.insample), syntax = hoflog.syntax[i])
+                hoflog.loc[i,'max_corr'] = round(corr_values[corr_values.abs().argmax()].item() , 4)
                 self.memory.check('corr')
-                hof_state = not exit_state
-                if not hof_state:
-                    hof_msg = f'Hof{i:_>3d} Fail Test : Corr with Existing Factors Too High ({new_log.max_corr[i]:+.2f})'
+                if exit_state:
+                    elite_state = 3
+                msg = f'Hof{i:_>3d} Fail Test : Corr with Existing Factors Too High ({hoflog.max_corr[i]:+.2f})'
 
-            if hof_state:
+            hoflog.loc[i,'elite_state'] = elite_state
+            if elite_state == 0:
                 # 通过检验,加入因子库
-                new_log.loc[i,'elite'] = hof_state
-                new_log.loc[i,'i_elite'] = hof_elites.i_elite
-                infos = {'IRraw': new_log.rankir_in_raw[i],'IRres': new_log.rankir_in_res[i],'Corr': new_log.max_corr[i]}
-                hof_elites.append(factor_value , **infos)
-                hof_msg = f'Hof{i:_>3d} Pass Test [{str(hof)}] (Elite{hof_elites.i_elite:_>3d},{"|".join([f"{k}{v:+.2f}" for k,v in infos.items()])})'
+                hoflog.loc[i,'elite'] = True
+                hoflog.loc[i,'i_elite'] = elite_group.i_elite
+                infos = {'IRraw': hoflog.rankir_in_raw[i],'IRres': hoflog.rankir_in_res[i],'Corr': hoflog.max_corr[i]}
+                elite_group.append(factor_value , **infos)
+                msg = f'Hof{i:_>3d} Pass Test [{str(hof)}] (Elite{elite_group.i_elite:_>3d},{"|".join([f"{k}{v:+.2f}" for k,v in infos.items()])})'
                 self.memory.check(showoff = self.param.test_code and Proj.vb.is_max_level)
-            if hof_state:
-                Logger.success(f'{str(hof)} : {hof_msg}' , indent = 2 , vb_level = 2)
+                Logger.success(f'{str(hof)} : {msg}' , indent = 2 , vb_level = 2)
             else:
-                Logger.alert1(f'{str(hof)} : {hof_msg}' , indent = 2 , vb_level = 2)
+                Logger.alert1(f'{str(hof)} : {msg}' , indent = 2 , vb_level = 2)
 
-        self.update_forbidden(hof_elites.all_names())
+        self.update_forbidden(elite_group.all_names())
         self.logger.dump_generation([], [], self.forbidden , overall = True)
 
         # 记录本次运行的名人堂与精英状态
-        hof_elites.update_logs(new_log)
-        self.logger.save_states({'elitelog' : hof_elites.elite_log.round(6) , 'hoflog' : hof_elites.hof_log.round(6)})
-        
-        elites = hof_elites.compile_elite_tensor(device=self.device)
-        
+        elite_group.update_logs(hoflog)
+        elites = elite_group.compile_elite_tensor(device=self.device)
+        self.logger.save_states({'elitelog' : elite_group.elitelog , 'hoflog' : elite_group.hoflog})
+        self.logger.save_state('elt', elites , self.i_iter)
         if elites is not None:
             Logger.stdout(f'An EliteGroup of {elites.shape[-1]} has been Selected from HallofFame' , indent = 1)
         else:
             Logger.alert1(f'EliteGroup is Empty, this iteration is futile' , indent = 1)
-        self.logger.save_state('elt', elites , self.i_iter)
-        
-        if self.device.type == 'cuda': 
-            Logger.stdout(f'Cuda Memories of "input"     take {MemoryManager.object_memory(self.input.inputs):.4f}G' , indent = 2)
-            Logger.stdout(f'Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G' , indent = 2)
-            Logger.stdout(f'Cuda Memories of "tensors"   take {MemoryManager.object_memory(self.input.tensors):.4f}G' , indent = 2)
+        self.memory.show_memories({'input' : self.input.inputs , 'elites' : elites , 'tensors' : self.input.tensors})
 
     def iteration(self , **kwargs):
         """一次[大循环]的主程序,初始化种群、变异、筛选、更新残差labels"""

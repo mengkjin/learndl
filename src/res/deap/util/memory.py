@@ -1,6 +1,7 @@
 import torch
 from src.proj import Logger
 import numpy as np
+from typing import Any
 
 class MemoryManager():
     unit = 1024**3
@@ -64,6 +65,12 @@ class MemoryManager():
             Logger.info(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!' , vb_level = self.vb_level) 
         
         return gmem_free
+
+    def show_memories(self , object_dict : dict[str,Any]):
+        if not self.device.type == 'cuda': 
+            return
+        for key, value in object_dict.items():
+            Logger.stdout(f'Cuda Memories of "{key}"     take {MemoryManager.object_memory(value):.4f}G' , indent = self.vb_level)
     
     def collect(self):
         torch.cuda.empty_cache() # collect graphic memory 

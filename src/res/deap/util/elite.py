@@ -26,17 +26,23 @@ class EliteGroup:
     def i_elite(self):
         return self.elite_count + self.start_i_elite
 
-    def assign_logs(self , hof_log : pd.DataFrame , elite_log : pd.DataFrame):
-        self.hof_log = hof_log
-        self.elite_log = elite_log
+    @classmethod
+    def new_from_logs(cls , elite_log : pd.DataFrame , hof_log : pd.DataFrame | None = None , * , device = None):
+        elite_group = cls(start_i_elite = len(elite_log) , device = device)
+        elite_group.assign_logs(elite_log , hof_log)
+        return elite_group
+
+    def assign_logs(self , elite_log : pd.DataFrame , hof_log : pd.DataFrame | None = None):
+        self.elitelog = elite_log
+        self.hoflog = hof_log
         return self
 
     def update_logs(self , new_log : pd.DataFrame):
-        if len(self.elite_log):
-            self.elite_log = pd.concat([self.elite_log , new_log[new_log['elite']]] , axis=0) 
+        if self.elitelog is not None and not self.elitelog.empty:
+            self.elitelog = pd.concat([self.elitelog , new_log[new_log['elite']]] , axis=0) 
         else:
-            self.elite_log = new_log[new_log.elite]
-        self.hof_log = pd.concat([self.hof_log , new_log] , axis=0) if len(self.hof_log) else new_log
+            self.elitelog = new_log[new_log.elite]
+        self.hoflog = pd.concat([self.hoflog , new_log] , axis=0) if self.hoflog is not None and not self.hoflog.empty else new_log
         return self
 
     def max_corr_with_me(self , factor : FF.FactorValue , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None) , syntax = None):
