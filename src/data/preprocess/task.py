@@ -38,7 +38,8 @@ class PreProcessorTask:
             yield blk , getattr(PrePro , f'PrePro_{blk.lower()}')()
     
     @classmethod
-    def main(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
+    def main(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : int = 1 , 
+             force_update : bool = False):
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -58,7 +59,7 @@ class PreProcessorTask:
 
         for key , proc in processor.processors():
             modified_time = DataBlock.last_preprocess_time(key , predict)
-            if CALENDAR.is_updated_today(modified_time):
+            if force_update or CALENDAR.is_updated_today(modified_time):
                 time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
                 Logger.skipping(f'[{key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level + 1)
                 continue
