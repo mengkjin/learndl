@@ -305,7 +305,7 @@ class Stock4D:
                 date_slice[self.date < start_dt] = False
             if end_dt   is not None: 
                 date_slice[self.date > end_dt]   = False
-            values = self.values[...,date_slice]
+            values = self.values[:,date_slice]
             date = self.date[date_slice]
         else:
             values = self.values
