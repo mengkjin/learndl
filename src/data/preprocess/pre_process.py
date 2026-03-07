@@ -153,7 +153,9 @@ class pp_y(TypePreProcessor):
         for i_feat,lb_name in enumerate(data_block.feature):
             if lb_name[:3] == 'rtn':
                 y_raw = data_block.values[...,i_feat].squeeze(2)
-                y_std = neutralize_2d(y_raw , x , dim = 0).unsqueeze(2)
+                y_std = neutralize_2d(y_raw , x , dim = 0)
+                assert y_std is not None , 'y_std is None'
+                y_std = y_std.unsqueeze(2)
                 data_block.add_feature('std'+lb_name[3:],y_std)
 
         y_ts = data_block.values[:,:,0]

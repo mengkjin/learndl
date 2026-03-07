@@ -126,7 +126,7 @@ class ModelPredictor:
                 dates = np.setdiff1d(self.reg_model.pred_dates , deployed_dates)
             self._current_deploy_dates = []
             for date in dates:
-                df = self.reg_model.load_pred(date , vb_level = 'inf')
+                df = self.reg_model.load_pred(date , vb_level = Proj.vb.inf)
                 df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
                 self._current_deploy_dates.append(date)
         except OSError as e:
