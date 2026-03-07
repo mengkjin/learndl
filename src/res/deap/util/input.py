@@ -210,11 +210,11 @@ def init_labels_raw(start_dt : int = 20100101 , end_dt : int = 20241231 , * , ne
 
 class gpInput:
     """遗传规划输入,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
-    def __init__(self , param : gpParameters | None = None , status : gpStatus | None = None , logger : gpLogger | None = None , 
-                 vb_level : int = 2 , **kwargs):
-        self.param     = param if param is not None else gpParameters(test_code = True , vb_level = vb_level)
-        self.status    = status if status is not None else gpStatus(0 , 0)
-        self.logger    = logger if logger is not None else gpLogger(vb_level = vb_level)
+    def __init__(self , param : gpParameters , status : gpStatus , logger : gpLogger , 
+                 vb_level : int = 2):
+        self.param     = param
+        self.status    = status
+        self.logger    = logger
         self.inputs :    list[torch.Tensor] = []
         self.tensors :   dict[str , torch.Tensor] = {}
         self.records :   dict[str , Any] = {}

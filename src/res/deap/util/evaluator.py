@@ -55,12 +55,12 @@ neutralizer = except_MemoryError(raw_neutralize)
 
 class gpEvaluator:
     def __init__(self , param : gpParameters , input : gpInput , status : gpStatus ,  
-                timer : gpTimer | None = None , logger : gpLogger | None = None , **kwargs):
+                timer : gpTimer , logger : gpLogger , **kwargs):
         self.param = param
         self.input = input
         self.status = status
-        self.timer = timer if timer is not None else gpTimer()
-        self.logger = logger if logger is not None else gpLogger()
+        self.timer = timer
+        self.logger = logger
         self.fitness = gpFitness(param.fitness_wgt)
 
     def to_value(self , individual : BaseIndividual | str | SyntaxRecord , * , neutral_type : Literal[0,1,2] = 0 , process_key='inf_winsor_norm',

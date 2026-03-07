@@ -14,23 +14,12 @@ class gpParameters:
         continuation:   if True, will continue on start_iter / start_gen
         test_code:      if only to test code validity
     '''
-    _instance = None
-    def __new__(cls , *args , **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
     def __init__(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , **kwargs):
         self.initiate(job_id , train , continuation , test_code , **kwargs)
 
-    @property
-    def initiated(self) -> bool:
-        return hasattr(self , 'job_id')
-
     def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , 
                  vb_level : int = 2 ,**kwargs):
-        if self.initiated:
-            return
         self.job_id = job_id
         self.train = train
         self.continuation = continuation
@@ -80,6 +69,8 @@ class gpParameters:
         param_path = self.job_dir.joinpath('params.yaml') 
         if self.job_id is None or not param_path.exists():
             param_path = gpDefaults.path_param
+        else:
+            param_path = self.job_dir.joinpath('params.yaml') 
 
         self.params = PATH.read_yaml(param_path , encoding = gpDefaults.encoding)
         if self.test_code: 
