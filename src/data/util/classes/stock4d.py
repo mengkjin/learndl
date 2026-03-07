@@ -108,8 +108,13 @@ class Stock4D:
     def inday(self) -> np.ndarray: 
         return np.arange(self.shape[2])
     
-    def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
-        return self.date[(self.date >= start) & (self.date <= end)][::interval]
+    def date_within(self , start : int | None = None , end : int | None = None , interval = 1) -> np.ndarray:
+        date = self.date
+        if start is not None:
+            date = date[date >= start]
+        if end is not None:
+            date = date[date <= end]
+        return date[::interval]
     
     @classmethod
     def merge(cls , block_list , * , inplace = False , 

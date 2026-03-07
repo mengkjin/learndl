@@ -114,8 +114,8 @@ class ModuleData:
             data = cls.datacache_load(last_date , data_type_list , y_labels , vb_level = vb_level)
 
         if data is None:
-            blocks = DataBlock.load_preprocessed(['y' , *data_type_list], predict , dtype = dtype , vb_level = vb_level)
-            norms  = DataBlock.load_preprocessed_norms(['y' , *data_type_list], predict , dtype = dtype)
+            blocks = DataBlock.load_preprocess(['y' , *data_type_list], predict , dtype = dtype , vb_level = vb_level)
+            norms  = DataBlock.load_preprocess_norms(['y' , *data_type_list], predict , dtype = dtype)
 
             y : DataBlock = blocks['y']
             x : dict[str,DataBlock] = {cls.abbr(key):val for key,val in blocks.items() if key != 'y'}

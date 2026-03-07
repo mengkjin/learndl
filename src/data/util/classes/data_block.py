@@ -71,20 +71,35 @@ class DataBlock(Stock4D):
         return data_type_alias(key)
 
     @classmethod
-    def last_modified_date(cls , key , predict):
-        return PATH.file_modified_date(cls.path_preprocessed(key , predict))
+    def last_preprocess_date(cls , key , predict):
+        path = cls.path_preprocess(key , predict)
+        if path.suffix == '.mmap':
+            return max([PATH.file_modified_date(sub_path) for sub_path in path.iterdir() if sub_path.is_file()])
+        else:
+            return PATH.file_modified_date(cls.path_preprocess(key , predict))
     
     @classmethod
-    def last_modified_time(cls , key , predict):
-        return PATH.file_modified_time(cls.path_preprocessed(key , predict))
+    def last_preprocess_time(cls , key , predict):
+        path = cls.path_preprocess(key , predict)
+        if path.suffix == '.mmap':
+            return max([PATH.file_modified_time(sub_path) for sub_path in path.iterdir() if sub_path.is_file()])
+        else:
+            return PATH.file_modified_time(path)
 
     @classmethod
     def last_data_date(cls , key : str = 'y' , predict = False):
         try:
-            path = cls.path_preprocessed(key , predict)
+            path = cls.path_preprocess(key , predict)
             if not path.exists():
                 return None
-            return max(load_dict(path)['date'])
+            if path.suffix == '.mmap':
+                return max(load_dict(path.joinpath('index.pt'))['date'])
+            elif path.suffix == '.pt':
+                return max(load_dict(path)['date'])
+            elif path.suffix == '.feather':
+                return max(pd.read_feather(path)['date'])
+            else:
+                raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
             Logger.error(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
             return None
@@ -180,7 +195,7 @@ class DataBlock(Stock4D):
     def mask_values(self , mask : dict , **kwargs):
         if not mask: 
             return self
-        mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
+        mask_pos = torch.full_like(self.values , fill_value=False , dtype=torch.bool)
         if mask_list_dt := mask.get('list_dt'):
             desc = INFO.get_desc(set_index=False)
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
@@ -200,11 +215,11 @@ class DataBlock(Stock4D):
             delist_dt = np.array(desc.loc[secid , 'delist_dt'])
             delist_dt[delist_dt < 0] = 21991231
 
-            tmp = np.stack([(date <= lst) + (date >= dls) for lst,dls in zip(list_dt , delist_dt)] , axis = 0)
+            tmp = torch.from_numpy(np.stack([(date <= lst) + (date >= dls) for lst,dls in zip(list_dt , delist_dt)] , axis = 0))
             mask_pos[tmp] = True
 
         assert (~mask_pos).sum() > 0 , 'all values are masked'
-        self.values[mask_pos] = np.nan
+        self.values[mask_pos] = torch.nan
         return self
     
     def hist_norm(self , key : str , predict = False ,
@@ -222,18 +237,18 @@ class DataBlock(Stock4D):
         return self
 
     @classmethod
-    def path_preprocessed(cls , key : str , predict=False, * , alias_search = True , 
+    def path_preprocess(cls , key : str , predict=False, * , alias_search = True , 
                           dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True) -> Path:
-        preprocessed_type = 'predict' if predict else 'fit'
+        preprocess_type = 'predict' if predict else 'fit'
         if key.lower() in ['y' , 'labels']: 
-            path = PATH.block.joinpath(preprocessed_type , f'Y{dump_suffix}')
+            path = PATH.block.joinpath(preprocess_type , f'Y{dump_suffix}')
         else:
             alias_list = data_type_alias(key) if alias_search else []
             for new_key in alias_list:
-                new_path = PATH.block.joinpath(preprocessed_type , f'X_{new_key}{dump_suffix}')
+                new_path = PATH.block.joinpath(preprocess_type , f'X_{new_key}{dump_suffix}')
                 if new_path.exists(): 
                     path = new_path
-            path = PATH.block.joinpath(preprocessed_type , f'X_{key}{dump_suffix}')
+            path = PATH.block.joinpath(preprocess_type , f'X_{key}{dump_suffix}')
         if find_if_not_exists:
             return cls.find_existing_dump_path(path)
         return path
@@ -260,14 +275,14 @@ class DataBlock(Stock4D):
         return raw_path
 
     @classmethod
-    def load_preprocessed(
+    def load_preprocess(
         cls , keys : list[str] | str , predict = False , alias_search = True , 
         fillna : Literal['guess'] | bool | None = 'guess' , intersect_secid = True ,
         start_dt = None , end_dt = None , dtype : str | Any = torch.float , vb_level = 2 , **kwargs
     ) -> dict[str,'DataBlock']:
         if isinstance(keys , str):
             keys = [keys]
-        paths = [cls.path_preprocessed(key , predict , alias_search = alias_search) for key in keys]
+        paths = [cls.path_preprocess(key , predict , alias_search = alias_search) for key in keys]
         fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
         
         block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
@@ -300,7 +315,7 @@ class DataBlock(Stock4D):
         return blocks
 
     @classmethod
-    def load_preprocessed_norms(cls , keys : list[str] | str , predict = False , alias_search = True , dtype = None) -> dict[str,'DataBlockNorm']:
+    def load_preprocess_norms(cls , keys : list[str] | str , predict = False , alias_search = True , dtype = None) -> dict[str,'DataBlockNorm']:
         if isinstance(keys , str):
             keys = [keys]
         return DataBlockNorm.load_keys(keys, predict , alias_search = alias_search , dtype = dtype)
@@ -390,8 +405,8 @@ class DataBlock(Stock4D):
                     return cls.load_dump(path)
             return cls()
     
-    def save_preprocessed(self , key : str , predict=False , start_dt = None , end_dt = None):
-        path = self.path_preprocessed(key , predict) 
+    def save_preprocess(self , key : str , predict=False , start_dt = None , end_dt = None):
+        path = self.path_preprocess(key , predict) 
         path.parent.mkdir(exist_ok=True)
         self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
 

@@ -1,7 +1,7 @@
 from src.res.model.util.model_path import ModelPath
 import src.res.model.model_module.application as app
 from src.proj import PATH , MACHINE , Logger , Proj
-from src.data import DataPreProcessor
+from src.data import PreProcessorTask
 
 from .util import wrap_update
 
@@ -84,14 +84,14 @@ class ModelAPI:
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        DataPreProcessor.main(predict=True)
+        PreProcessorTask.main(predict=True)
 
     @staticmethod
     def reconstruct_train_data(): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        DataPreProcessor.main(predict=False , confirm=1)
+        PreProcessorTask.main(predict=False , confirm=1)
 
     @classmethod
     def train_model(cls , module : str | None = None , short_test : bool | None = None , 

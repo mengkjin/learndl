@@ -1,1 +1,1 @@
-from .pre_process import DataPreProcessor
+from .task import PreProcessorTask

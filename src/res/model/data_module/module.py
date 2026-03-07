@@ -7,7 +7,7 @@ from torch.utils.data import BatchSampler
 from typing import Any , Literal
 
 from src.proj import PATH , Logger , CALENDAR , MACHINE
-from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
+from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
 from src.math import match_values
 from src.math import tensor as T
 from src.res.factor.util import Benchmark
@@ -72,8 +72,8 @@ class DataModule(BaseDataModule):
 
     @staticmethod
     def prepare_data(data_types : list[str] | None = None):
-        DataPreProcessor.main(predict = False , data_types = data_types)
-        DataPreProcessor.main(predict = True , data_types = data_types)
+        PreProcessorTask.main(predict = False , data_types = data_types)
+        PreProcessorTask.main(predict = True , data_types = data_types)
        
     def load_data(self):
         self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , 

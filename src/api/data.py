@@ -1,5 +1,5 @@
 from src.proj import Logger , CALENDAR
-from src.data import CoreDataUpdater , SellsideDataUpdater , CustomDataUpdater , DataPreProcessor
+from src.data import CoreDataUpdater , SellsideDataUpdater , CustomDataUpdater , PreProcessorTask
 # from src.data import JSDataUpdater
 from src.res.factor.api import RiskModelUpdater
 
@@ -43,14 +43,14 @@ class DataAPI:
         """
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         """
-        wrap_update(DataPreProcessor.main , 'prepare predict data' , predict = True)
+        wrap_update(PreProcessorTask.main , 'prepare predict data' , predict = True)
 
     @classmethod
     def reconstruct_train_data(cls , confirm = 0): 
         """
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         """
-        wrap_update(DataPreProcessor.main , 'reconstruct historical data' , predict = False , confirm = confirm)
+        wrap_update(PreProcessorTask.main , 'reconstruct historical data' , predict = False , confirm = confirm)
     
     @classmethod
     def is_updated(cls):
