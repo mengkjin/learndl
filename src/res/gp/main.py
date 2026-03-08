@@ -1,5 +1,5 @@
 from src.proj import Logger
-from src.res.deap.util import GeneticProgramming
+from src.res.gp.util import GeneticProgramming
 
 def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , timer = True , **kwargs):
     """

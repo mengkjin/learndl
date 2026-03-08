@@ -4,7 +4,7 @@ import itertools
 import torch
 from deap import gp
 import numpy as np
-from src.res.deap.func import primas
+from src.res.gp.func import primas
 class Fac(torch.Tensor): 
     pass
 class Raw(torch.Tensor): 

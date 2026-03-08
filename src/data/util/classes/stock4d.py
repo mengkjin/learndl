@@ -9,7 +9,7 @@ from typing import Any , Literal
 
 from src.proj import Logger
 from src.proj.func import properties
-from src.math import match_slice , index_merge , intersect_meshgrid , intersect_pos_slice
+from src.func import match_slice , index_merge , intersect_meshgrid , intersect_pos_slice
 
 from .nd import NdData
 

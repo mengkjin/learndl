@@ -8,8 +8,8 @@ from typing import Any , Literal
 
 from src.proj import PATH , Logger , CALENDAR , MACHINE
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
-from src.math import match_values
-from src.math import tensor as T
+from src.func import match_values
+from src.func import tensor as T
 from src.res.factor.util import Benchmark
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , MemFileStorage , StoredFileLoader , HiddenPath
 from .loader import BatchInputLoader

@@ -1,7 +1,7 @@
 import torch
 from typing import Callable
 
-from src.math.metric import mse , pearson , ccc , spearman
+from src.func.metric import mse , pearson , ccc , spearman
 
 def align_shape(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None):
     if label.shape[-1] != pred.shape[-1]:

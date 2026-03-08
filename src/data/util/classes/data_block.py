@@ -9,7 +9,7 @@ from typing import Any , ClassVar , Literal
 from src.proj import PATH , Logger , CALENDAR , DB , Proj
 from src.proj.db.memory_map import ArrayMemoryMap
 from src.proj.func import torch_load
-from src.math import index_merge , forward_fillna
+from src.func import index_merge , forward_fillna
 
 from . import Stock4D
 from ..stock_info import INFO

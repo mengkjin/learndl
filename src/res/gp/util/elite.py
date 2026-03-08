@@ -5,8 +5,8 @@ from typing import Any
 from tqdm import tqdm
 
 from src.proj import Logger
-from src.math import tensor as T
-from src.res.deap.func import factor_func as FF
+from src.func import tensor as T
+from src.res.gp.func import factor_func as FF
 from .memory import MemoryManager
 
 class EliteGroup:

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.math.metric import mse , pearson , ccc , spearman
+from src.func.metric import mse , pearson , ccc , spearman
 
 from .abc import align_shape
 

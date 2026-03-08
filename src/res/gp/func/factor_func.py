@@ -5,12 +5,14 @@ import pandas as pd
 import numpy as np
 
 from src.proj import Logger
-from src.math import tensor as T
+from src.func import tensor as T
 
 def factor_repr(obj : Any):
     attr_repr = []
     for k , v in obj.__dict__.items():
-        if k == 'secid':
+        if v is None:
+            attr_repr.append(f'{k}={v}')
+        elif k == 'secid':
             attr_repr.append(f'{k}=array({len(v)})')
         elif k == 'date':
             attr_repr.append(f'{k}={min(v)}~{max(v)}')

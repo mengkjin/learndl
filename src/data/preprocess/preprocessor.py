@@ -4,7 +4,7 @@ import numpy as np
 from abc import ABC , abstractmethod
 
 from src.proj import Proj
-from src.math.tensor import neutralize_2d , process_factor
+from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 

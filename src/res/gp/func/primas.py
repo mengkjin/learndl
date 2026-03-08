@@ -1,7 +1,7 @@
 import torch
 from typing import Literal , Callable
-from src.math import allna , exact
-from src.math import tensor as T
+from src.func import allna , exact
+from src.func import tensor as T
 
 class PrimTool:
     registry : dict[str, Callable] = {}

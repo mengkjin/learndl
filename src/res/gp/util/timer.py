@@ -5,7 +5,7 @@ from typing import Literal, Callable
 import pandas as pd
 
 from src.proj import Logger
-from src.res.deap.func import primas
+from src.res.gp.func import primas
 from .memory import MemoryManager
 
 class AccTimer:

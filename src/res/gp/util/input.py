@@ -8,12 +8,12 @@ from typing import Any
 
 from src.proj import Logger , Proj , CALENDAR
 from src.proj.func import torch_load
-from src.math import tensor as T
+from src.func import tensor as T
 from src.data import DATAVENDOR
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
-from src.res.deap.param import gpDefaults , gpParameters
-from src.res.deap.func import factor_func as FF
+from src.res.gp.param import gpDefaults , gpParameters
+from src.res.gp.func import factor_func as FF
 from .logger import gpLogger
 from .status import gpStatus
 
@@ -47,7 +47,8 @@ class InputElement:
         return InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
 
     def get_datablock(self , start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
-        return BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start_dt , end_dt , vb_level = Proj.vb.inf)
+        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start_dt , end_dt , vb_level = Proj.vb.inf)
+        return self.adjust_datablock(block)
 
     def adjust_datablock(self , block : DataBlock , cp_block : DataBlock | None = None) -> DataBlock:
         feature_list = [f for f in block.feature]
@@ -166,7 +167,7 @@ def get_return_block(start_dt : int = 20100101 , end_dt : int = 20241231 , nday 
     dates = CALENDAR.td_within(start_dt , end_dt)
     new_end_dt = CALENDAR.td(end_dt , 20).td
     block = element.get_datablock(start_dt , new_end_dt)
-    block.values = T.ts_delay(T.ts_product(block.values + 1 , nday) , -nday-delay , no_alert = True)
+    block.values = T.ts_delay(T.ts_product(block.values + 1 , nday) - 1 , -nday-delay , no_alert = True)
     block = block.align_secid_date(secid , dates , inplace = True)
     return block
 
@@ -222,6 +223,13 @@ class gpInput:
 
     def __repr__(self):
         return f'{self.__class__.__name__}(inputs={len(self.inputs)}, tensors={len(self.tensors)}, records={len(self.records)})'
+
+    @property
+    def start_dt(self) -> int:
+        return self.param.insample_dates[0]
+    @property
+    def end_dt(self) -> int:
+        return self.param.outsample_dates[1]
 
     @property
     def i_iter(self) -> int:
@@ -337,15 +345,13 @@ class gpInput:
         Logger.stdout(f'Load from DB' , indent = 1 , vb_level = self.vb_level)
         nrowchar = 0
 
-        start_dt = self.param.insample_dates[0]
-        end_dt = self.param.outsample_dates[1]
-        cp_block = get_cp_block(start_dt , end_dt)
+        cp_block = get_cp_block(self.start_dt , self.end_dt)
 
-        self.tensors['neutral_exp'] = init_neutral_exp(start_dt , end_dt).to(self.device)
+        self.tensors['neutral_exp'] = init_neutral_exp(self.start_dt , self.end_dt).to(self.device)
         self.tensors['universe']   = ~cp_block.values.squeeze().isnan().to(self.device)
-        self.tensors['labels_raw'] = init_labels_raw(start_dt , end_dt  , neutral_exp = self.neutral_exp).to(self.device)
+        self.tensors['labels_raw'] = init_labels_raw(self.start_dt , self.end_dt  , neutral_exp = self.neutral_exp).to(self.device)
         
-        input_block = load_inputs(self.argnames , start_dt , end_dt , cp_block)
+        input_block = load_inputs(self.argnames , self.start_dt , self.end_dt , cp_block)
         self.records['date'] = input_block.date
         self.records['secid'] = input_block.secid
 

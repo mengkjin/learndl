@@ -51,10 +51,12 @@ def process_factor(value : Tensor | None , * , stream = 'inf_winsor_norm' , dim 
 class TsRoller:
     @staticmethod
     def unfold(x : Tensor , d : int , * , dim :int | Literal[1] = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
-        return x.nan_to_num(nan,pinf,ninf).unfold(dim,d,1)
+        unfold = x.unfold(dim,d,1)
+        valid = unfold.sum(dim = -1 , keepdim = True).isfinite()
+        return unfold.nan_to_num(nan,pinf,ninf).where(valid , torch.nan)
     
     @staticmethod
-    def fold(z : Tensor , d : int , * , dim : int = 1 , nan = nan , **kwargs):
+    def fold(z : Tensor , d : int , * , dim : int = 1 , **kwargs):
         pad = tuple([0] * (z.ndim - dim - 1) * 2 + [d-1,0])
         return F.pad(z , pad , value = nan).nan_to_num(nan)
 
@@ -102,25 +104,25 @@ class TsRoller:
             raise ValueError(f'Invalid number of arguments: {n_arg}')
 
     @classmethod
-    def decorator_x(cls , **decor_kwargs):
+    def decorator_x(cls , nan = nan , pinf = torch.inf , ninf = -torch.inf, **decor_kwargs):
         def decorator(func):
             def wrapper(x : Tensor , d : int , *args , dim : int = 1 , **kwargs):
-                x = cls.unfold(x , d , dim = dim , **decor_kwargs)
+                x = cls.unfold(x , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 z = func(x , 1 , *args , dim = -1 , **kwargs)
-                z = cls.fold(z , d , dim = dim , **decor_kwargs)
+                z = cls.fold(z , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 return z
             wrapper.__name__ = func.__name__
             return wrapper
         return decorator
 
     @classmethod
-    def decorator_xy(cls , **decor_kwargs):
+    def decorator_xy(cls , nan = nan , pinf = torch.inf , ninf = -torch.inf, **decor_kwargs):
         def decorator(func):
             def wrapper(x : Tensor , y : Tensor , d : int , *args , dim : int = 1 , **kwargs):
-                x = cls.unfold(x , d , dim = dim , **decor_kwargs)
-                y = cls.unfold(y , d , dim = dim , **decor_kwargs)
+                x = cls.unfold(x , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
+                y = cls.unfold(y , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 z = func(x , y , 1 , *args , dim = -1 , **kwargs)
-                z = cls.fold(z , d , dim = dim , **decor_kwargs)
+                z = cls.fold(z , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 return z
             wrapper.__name__ = func.__name__
             return wrapper
@@ -182,11 +184,11 @@ def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : Te
         valid *= universe.nan_to_num(0).to(torch.bool)
     x = torch.where(valid , x , nan)
 
-    coverage = (~x.isnan()).sum(dim=dim)
+    coverage = (~x.isnan()).sum(dim=dim) / valid.sum(dim=dim)
     x = rank_pct(x , dim = dim)
     y = rank_pct(y , dim = dim)
     ic = corrwith(x , y , dim=dim)
-    return ic if ic is None else torch.where(coverage < min_coverage * valid.sum(dim=dim) , nan , ic)
+    return torch.where(coverage < min_coverage, nan , ic)
 
 def dummy(x : Tensor , * , ex_last = True):
     # will take a huge amount of memory, the suggestion is to use torch.cuda.empty_cache() after neutralization
@@ -530,6 +532,18 @@ def sign(x : Tensor):
     """sign(x)"""
     return x.sign()
 
+def scale(x : Tensor , c = 1 , * , dim = 0):
+    """scale x by c along dim"""
+    return c * x / x.abs().nansum(dim=dim, keepdim=True)
+
+def signedpower(x : Tensor , a : float):
+    """signed power of x by a"""
+    return x.sign() * x.abs().pow(a)
+
+def pctchg(x : Tensor , d : int , * , dim : Literal[1] = 1):
+    """percentage change of d days"""
+    return (x - ts_delay(x,d , dim = dim)) / abs(ts_delay(x,d , dim = dim))
+
 def ts_delay(x : Tensor , d : int , * , dim : Literal[1] = 1, no_alert = False):
     """delay x by d"""
     if d > x.shape[dim]: 
@@ -551,18 +565,6 @@ def ts_delta(x : Tensor , d : int , * , dim : Literal[1] = 1, no_alert = False):
         alert_message('Beware! future information used!' , color = 'lightred')
     z = x - ts_delay(x, d, dim=dim)
     return z
-
-def scale(x : Tensor , c = 1 , * , dim = 0):
-    """scale x by c along dim"""
-    return c * x / x.abs().nansum(dim=dim, keepdim=True)
-
-def signedpower(x : Tensor , a : float):
-    """signed power of x by a"""
-    return x.sign() * x.abs().pow(a)
-
-def pctchg(x : Tensor , d : int , * , dim : Literal[1] = 1):
-    """percentage change of d days"""
-    return (x - ts_delay(x,d , dim = dim)) / abs(ts_delay(x,d , dim = dim))
 
 @TsRoller.decor(1)
 def ts_zscore(x : Tensor , d : int , * , dim : Literal[1] = 1):

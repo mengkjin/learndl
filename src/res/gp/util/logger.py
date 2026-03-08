@@ -10,7 +10,7 @@ from typing import Sequence , Literal , Any
 from src.proj import PATH
 from src.proj import Logger
 from src.proj.func import torch_load
-from src.res.deap.param import gpDefaults
+from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus
 

@@ -6,9 +6,9 @@ from torch.multiprocessing import Pool
 from tqdm import tqdm
 
 from src.proj import Logger
-from src.math import tensor as T
-from src.res.deap.func import factor_func as FF
-from src.res.deap.param import gpParameters
+from src.func import tensor as T
+from src.res.gp.func import factor_func as FF
+from src.res.gp.param import gpParameters
 from .syntax import BaseIndividual , SyntaxRecord , Population
 from .input import gpInput
 from .status import gpStatus
@@ -102,23 +102,25 @@ class gpEvaluator:
             fitness:        fitness
         """
         with self.timer.timer('process' , 'Assess'):
+            metrics = np.zeros(8)
             if not factor.isnull(): 
-                metrics = torch.zeros(8).to(factor.value)
-                for i , labels in enumerate([self.input.labels_res , self.input.labels_raw]):
-                    rankic_full = T.rankic_2d(factor.tensor_value , labels , universe = self.input.universe , min_coverage = min_coverage)
-                    for j , sample in enumerate([self.input.insample , self.input.outsample]):
-                        if rankic_full is None: 
-                            continue
-                        rankic = rankic_full[sample]
-                        if rankic.isnan().sum() < 0.5 * len(rankic): # if too many nan rank_ic (due to low coverage)
-                            rankic_avg  = rankic.nanmean()
-                            rankic_std  = (rankic - rankic_avg).square().nanmean().sqrt() 
-                            metrics[4*i + 2*j + 0] = rankic_avg.item() * const_annual
-                            metrics[4*i + 2*j + 1] = (rankic_avg / (rankic_std + 1e-6) * np.sqrt(const_annual)).item()
-                metrics  = metrics.cpu().numpy()
+                rankic_res = T.rankic_2d(factor.tensor_value , self.input.labels_res , universe = self.input.universe , min_coverage = min_coverage)
+                rankic_raw = T.rankic_2d(factor.tensor_value , self.input.labels_raw , universe = self.input.universe , min_coverage = min_coverage)
+                for j , sample in enumerate([self.input.insample , self.input.outsample]):
+                    sample_ic_res = rankic_res[sample]
+                    sample_ic_raw = rankic_raw[sample]
+                    if sample_ic_res.isnan().sum() < 0.75 * len(sample_ic_res): # if too many nan rank_ic (due to low coverage)
+                        avg , std = T.nanmean(sample_ic_res).item() , T.nanstd(sample_ic_res).item()
+                        metrics[2*j + 0] = avg * const_annual
+                        metrics[2*j + 1] = (avg / (std + 1e-6) * np.sqrt(const_annual))
+
+                    if sample_ic_raw.isnan().sum() < 0.75 * len(sample_ic_raw): # if too many nan rank_ic (due to low coverage)
+                        avg , std = T.nanmean(sample_ic_raw).item() , T.nanstd(sample_ic_raw).item()
+                        metrics[4 + 2*j + 0] = avg * const_annual
+                        metrics[4 + 2*j + 1] = (avg / (std + 1e-6) * np.sqrt(const_annual))
+
                 fit_value = self.fitness.fitness_value(metrics , as_abs=True) 
             else:
-                metrics  = np.zeros(8)
                 fit_value = None
         return metrics, fit_value
         

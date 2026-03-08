@@ -2,7 +2,7 @@ from typing import Callable
 from deap import base , creator , tools , gp
 import operator
 
-from src.res.deap.param import gpParameters
+from src.res.gp.param import gpParameters
 from .status import gpStatus
 from .syntax import BaseIndividual
 from .primative import Primative

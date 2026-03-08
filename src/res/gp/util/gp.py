@@ -4,7 +4,7 @@ from deap import tools
 from typing import Sequence , Callable
 
 from src.proj import Logger , Proj
-from src.res.deap.param import gpParameters
+from src.res.gp.param import gpParameters
 from .syntax import Population
 from .toolbox import BaseToolbox
 from .logger import gpLogger

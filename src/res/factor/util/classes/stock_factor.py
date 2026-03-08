@@ -9,7 +9,7 @@ from typing import Any , Literal
 
 from src.proj import Proj , DB , Logger
 from src.proj.func import properties
-from src.math import transform as T
+from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
 from .alpha_model import AlphaModel

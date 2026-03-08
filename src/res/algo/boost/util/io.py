@@ -8,8 +8,8 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from src.math import match_values , index_merge , match_slice , intersect_meshgrid
-from src.math.metric import rankic_2d , ic_2d
+from src.func import match_values , index_merge , match_slice , intersect_meshgrid
+from src.func.metric import rankic_2d , ic_2d
 
 __all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
 

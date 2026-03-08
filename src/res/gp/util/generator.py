@@ -5,8 +5,8 @@ from typing import Literal
 
 from src.proj import Logger , Proj
 
-from src.res.deap.func import factor_func as FF
-from src.res.deap.util import EliteGroup , GeneticProgramming
+from src.res.gp.func import factor_func as FF
+from src.res.gp.util import EliteGroup , GeneticProgramming
 
 class gpGenerator:
     '''
@@ -92,6 +92,10 @@ class gpGenerator:
         hof_elites.cat_all()
         Logger.success(f'Load {hof_elites.total_len()} Elites')
         return hof_elites
+
+    def load_elites(self):
+        self.elite_group = self.entire_elites()
+        return self
 
     def load_elite(self , i_elite : int , factor = False):
         '''

@@ -7,7 +7,7 @@ from src.proj.func import singleton
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
-from src.math.transform import time_weight , apply_ols
+from src.func.transform import time_weight , apply_ols
 
 @dataclass
 class FF3_Model:
