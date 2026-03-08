@@ -80,7 +80,7 @@ class Stock4D:
     
     def __repr__(self):
         if self.initiated:
-            return f'{self.__class__.__name__}(values={self.shape},secid=...,date=...,feature={self.feature})'
+            return f'{self.__class__.__name__}(values={self.shape},secid={str(self.secid)},date={str(self.date)},feature={self.feature})'
         else:
             return f'{self.__class__.__name__}()'
     @property

@@ -80,7 +80,7 @@ class PreProcessorTask:
                 block_dict = proc.load_blocks(load_start, processor.load_end, indent = indent + 2 , vb_level = vb_level + 5)
 
             with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 3):
-                data_block = proc.process_blocks(block_dict)
+                data_block = proc.process_blocks(block_dict).set_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
 
             if data_block.empty:
                 Logger.alert1(f'[{key}] blocks process is empty! Skip saving...' , indent = indent + 2 , vb_level = vb_level + 3)

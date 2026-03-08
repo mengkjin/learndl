@@ -154,6 +154,9 @@ class DataVendor:
         block0 : DataBlock = getattr(self , f'_block_{data_key}' , DataBlock())
         loaded_start , loaded_end = block0.min_date , block0.max_date
         block0 = block0.extend_to(db_src , db_key , target_start , target_end , inplace = True)
+
+        if data_key == 'daily_quotes':
+            block0 = block0.adjust_price()
         
         Logger.success(f'DATAVENDOR.{data_key} expand from {CALENDAR.dates_str([loaded_start,loaded_end])} to {CALENDAR.dates_str([target_start,target_end])}')
         setattr(self , f'_block_{data_key}' , block0)

@@ -1,4 +1,4 @@
-import torch , shutil
+import torch
 import numpy as np
 import pandas as pd
 
@@ -65,6 +65,38 @@ class DataBlock(Stock4D):
     FREQUENT_MIN_DATES = 500
     PREFERRED_DUMP_SUFFIXES : list[Literal['.mmap' , '.pt' , '.feather']] = ['.mmap' , '.pt' , '.feather']
 
+    @property
+    def price_adjusted(self): 
+        if not hasattr(self , '_price_adjusted'):
+            self._price_adjusted = False
+        return self._price_adjusted
+
+    @price_adjusted.setter
+    def price_adjusted(self , value : bool):
+        self._price_adjusted = value
+
+    @property
+    def volume_adjusted(self): 
+        if not hasattr(self , '_volume_adjusted'):
+            self._volume_adjusted = False
+        return self._volume_adjusted
+
+    @volume_adjusted.setter
+    def volume_adjusted(self , value : bool):
+        self._volume_adjusted = value
+
+    def set_flags(self , **kwargs):
+        if not hasattr(self , '_flags'):
+            self._flags = {}
+        self._flags.update(kwargs)
+        return self
+
+    @property
+    def flags(self):
+        if not hasattr(self , '_flags'):
+            self._flags = {}
+        return self._flags
+
     @staticmethod
     def data_type_abbr(key : str): 
         return data_type_abbr(key)
@@ -130,14 +162,6 @@ class DataBlock(Stock4D):
             return name.startswith(excl) == 0
         else:
             return bool(fillna)
-    
-    @property
-    def price_adjusted(self): 
-        return getattr(self , '_price_adjusted' , False)
-
-    @property
-    def volume_adjusted(self): 
-        return getattr(self , '_volume_adjusted' , False)
 
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 , 
                      price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
@@ -173,7 +197,7 @@ class DataBlock(Stock4D):
             else:
                 ...
         
-        self._price_adjusted = True
+        self.price_adjusted = True
         return self
     
     def adjust_volume(self , multiply = None , divide = None , 
@@ -194,7 +218,7 @@ class DataBlock(Stock4D):
         if divide   is not None: 
             v_vol /= divide
         self.values[...,i_vol] = v_vol
-        self._volume_adjusted = True
+        self.volume_adjusted = True
         return self
     
     def mask_values(self , mask : dict , **kwargs):
@@ -232,12 +256,17 @@ class DataBlock(Stock4D):
                   step_day = 5 , **kwargs):
         return DataBlockNorm.calculate(self , key , predict , start_dt , end_dt , step_day , **kwargs)
 
-    def extend_to(self , src : str , key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
+    def extend_to(self , db_src : str , db_key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
                   dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level = Proj.vb.max):
+        if not all([self.flags['category'] == 'raw' , self.flags['db_src'] == db_src , self.flags['db_key'] == db_key]):
+            raise ValueError(f'Invalid flags: {self.flags} , try set then first before extending!')
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
-        block = self.load_from_db(src , key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
-        block = block.adjust_price()
+        block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
+        if self.price_adjusted:
+            block = block.adjust_price()
+        if self.volume_adjusted:
+            block = block.adjust_volume()
         self = self.merge_others(block , inplace = inplace)
         return self
 
@@ -296,7 +325,7 @@ class DataBlock(Stock4D):
                 block = cls.load_dump(path)
                 if predict and key == 'y' and not block.empty:
                     block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
-                blocks[key] = block
+                blocks[key] = block.set_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
 
         if len(blocks) <= 1:
             return blocks
@@ -342,7 +371,7 @@ class DataBlock(Stock4D):
         assert 2 <= len(use_index) <= 3 , use_index
         if feature is not None:  
             df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
-        return cls.from_dataframe(df.set_index(use_index))
+        return cls.from_dataframe(df.set_index(use_index)).set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
 
     @classmethod
     def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
@@ -350,11 +379,21 @@ class DataBlock(Stock4D):
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
 
-        if (raw_path := cls.path_raw(db_src , db_key)).exists() and f'{db_src}.{db_key}' in cls.FREQUENT_DBS and len(dates) >= cls.FREQUENT_MIN_DATES:
-            block = cls.load_dump(raw_path)
-            saved_dates = block.date
-            block = block.extend_to(db_src , db_key , start_dt , end_dt , feature = feature , use_alt = use_alt , vb_level = vb_level)
-            if len(np.setdiff1d(block.date , saved_dates)) > 0 or not raw_path.exists():
+        if f'{db_src}.{db_key}' in cls.FREQUENT_DBS:
+            if (raw_path := cls.path_raw(db_src , db_key)).exists() and len(dates) >= cls.FREQUENT_MIN_DATES:
+                block = cls.load_dump(raw_path)
+                saved_dates = block.date
+                loaded = True
+            else:
+                block = cls()
+                saved_dates = np.array([])
+                loaded = False
+            block = block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
+            update_dates = CALENDAR.diffs(dates , saved_dates)
+            if len(update_dates) > 0:
+                new_block = cls.load_from_db(db_src , db_key , dates = update_dates , use_alt = use_alt , vb_level = vb_level) # no feature selection here
+                block = block.merge_others(new_block , inplace = True)
+            if (len(update_dates) > 0 and loaded) or not raw_path.exists():
                 block.save_raw(db_src , db_key)
             block = block.align(feature = feature , inplace = True)
         else:
@@ -410,39 +449,32 @@ class DataBlock(Stock4D):
             return cls()
     
     def save_preprocess(self , key : str , predict=False , start_dt = None , end_dt = None):
-        path = self.path_preprocess(key , predict) 
+        if not all([self.flags['category'] == 'preprocess' , self.flags['predict'] == predict , self.flags['preprocess_key'] == key]):
+            raise ValueError(f'Invalid flags: {self.flags} , try set then first before saving!')
+        path = self.path_preprocess(key , predict)
         path.parent.mkdir(exist_ok=True)
         self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
 
-    def save_raw(self , src : str , key : str):
-        path = self.path_raw(src , key , dump_suffix = self.PREFERRED_DUMP_SUFFIXES[0])
+    def save_raw(self , db_src : str , db_key : str , start_dt = None , end_dt = None):
+        if not all([self.flags['category'] == 'raw' , self.flags['db_src'] == db_src , self.flags['db_key'] == db_key]):
+            raise ValueError(f'Invalid flags: {self.flags} , try set then first before saving!')
+        assert not self.price_adjusted and not self.volume_adjusted , f'price and volume must not be adjusted before saving!'
+        path = self.path_raw(db_src , db_key , dump_suffix = self.PREFERRED_DUMP_SUFFIXES[0])
         path.parent.mkdir(exist_ok=True)
-        save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)
+        self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
 
     @classmethod
-    def change_all_dumps(cls):
-        for category_path in PATH.block.iterdir():
-            category = category_path.name
-            if category not in ['raw' , 'fit' , 'predict']:
-                continue
-            for path in category_path.iterdir():
-                if path.suffix == cls.PREFERRED_DUMP_SUFFIXES[0]:
-                    Logger.success(f'{category}.{path.name} is already the preferred dump method : {path.suffix}')
-                    continue
-                if path.suffix not in cls.PREFERRED_DUMP_SUFFIXES:
-                    continue
-                with Logger.Timer(f'Change {category}.{path.name} dump method'):
-                    new_path = path.with_suffix(cls.PREFERRED_DUMP_SUFFIXES[0])
-                    if new_path.exists():
-                        Logger.success(f'{category}.{path.name} already exists: {new_path}')
-                        if path.is_file():
-                            path.unlink()
-                        else:
-                            shutil.rmtree(path)
-                        continue
-                    block = cls.load_dump(path)
-                    block.save_dump(new_path)
-                    Logger.success(f'{category}.{path.name} changed to {new_path}')
+    def fix_dumps(cls):
+        category_path = PATH.block.joinpath('raw')
+        category = 'raw'
+    
+        for path in category_path.iterdir():
+            with Logger.Timer(f'Change {category}.{path.name} dump method'):
+                new_path = path.with_suffix(cls.PREFERRED_DUMP_SUFFIXES[0])
+                db_src , db_key = path.name.split('.')[:2]
+                block = cls.load_from_db(db_src , db_key , 20070101 , 20241231)
+                block.save_dump(new_path)
+                Logger.success(f'{category}.{path.name} changed to {new_path}')
 
 @dataclass(slots=True)
 class DataBlockNorm:

@@ -12,7 +12,7 @@ from src.data import DataBlock
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    DataBlock.change_all_dumps()
+    DataBlock.fix_dumps()
         
 if __name__ == '__main__':
     main()
