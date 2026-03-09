@@ -89,12 +89,17 @@ class DataBlock(Stock4D):
         if not hasattr(self , '_flags'):
             self._flags = {}
         self._flags.update(kwargs)
+        if self._flags.get('category') == 'raw':
+            self._flags['raw_features'] = self.feature.copy()
         return self
 
     def check_flags(self , **kwargs):
         for key , value in kwargs.items():
             if self.flags[key] != value:
                 raise ValueError(f'Invalid flags: {self.flags} , compare to {kwargs} try set then first before checking!')
+        if self.flags.get('category') == 'raw':
+            if not np.array_equal(self.flags.get('raw_features' , np.array([])) , self.feature):
+                raise ValueError(f'Invalid raw features: {self.flags.get("raw_features" , np.array([]))} , compare to {self.feature} try set then first before checking!')
         return self
 
     @property
@@ -264,7 +269,6 @@ class DataBlock(Stock4D):
 
     def extend_to(self , db_src : str , db_key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
                   dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level = Proj.vb.max):
-        self.check_flags(category = 'raw' , db_src = db_src , db_key = db_key)
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
         block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
