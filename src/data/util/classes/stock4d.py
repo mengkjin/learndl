@@ -139,9 +139,11 @@ class Stock4D:
         for i , blk in enumerate(blocks): 
             tar_grid , src_grid = intersect_meshgrid([secid , date , inday , feature] , [blk.secid , blk.date , blk.inday , blk.feature] , )
             values[*tar_grid] = blk.values[*src_grid]
-
-        new_blk = cls(values , secid , date , feature)
-        return new_blk
+        if inplace:
+            blocks[0].update(values = values , secid = secid , date = date , feature = feature)
+            return blocks[0]
+        else:
+            return cls(values , secid , date , feature)
 
     def merge_others(self , others : list | Any , inplace = False):
         if not isinstance(others , list): 

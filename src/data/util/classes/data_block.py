@@ -363,15 +363,16 @@ class DataBlock(Stock4D):
         df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
 
         if len(df) == 0: 
-            return cls()
-            
-        if len(df.index.names) > 1 or df.index.name: 
-            df = df.reset_index()
-        use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
-        assert 2 <= len(use_index) <= 3 , use_index
-        if feature is not None:  
-            df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
-        return cls.from_dataframe(df.set_index(use_index)).set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
+            block = cls()
+        else:
+            if len(df.index.names) > 1 or df.index.name: 
+                df = df.reset_index()
+            use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
+            assert 2 <= len(use_index) <= 3 , use_index
+            if feature is not None:  
+                df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
+            block = cls.from_dataframe(df.set_index(use_index))
+        return block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
 
     @classmethod
     def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
