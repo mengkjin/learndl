@@ -89,17 +89,17 @@ class DataBlock(Stock4D):
         if not hasattr(self , '_flags'):
             self._flags = {}
         self._flags.update(kwargs)
-        if self._flags.get('category') == 'raw':
-            self._flags['raw_features'] = self.feature.copy()
+        #if self._flags.get('category') == 'raw':
+        #    self._flags['raw_features'] = self.feature.copy()
         return self
 
     def check_flags(self , **kwargs):
         for key , value in kwargs.items():
             if self.flags[key] != value:
                 raise ValueError(f'Invalid flags: {self.flags} , compare to {kwargs} try set then first before checking!')
-        if self.flags.get('category') == 'raw':
-            if not np.array_equal(self.flags.get('raw_features' , np.array([])) , self.feature):
-                raise ValueError(f'Invalid raw features: {self.flags.get("raw_features" , np.array([]))} , compare to {self.feature} try set then first before checking!')
+        #if self.flags.get('category') == 'raw':
+        #    if not np.array_equal(self.flags.get('raw_features' , np.array([])) , self.feature):
+        #        raise ValueError(f'Invalid raw features: {self.flags.get("raw_features" , np.array([]))} , compare to {self.feature} try set then first before checking!')
         return self
 
     @property
