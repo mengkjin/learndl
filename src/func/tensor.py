@@ -179,6 +179,7 @@ def rank_pct(x : Tensor , * , dim : int | None = 0) -> Tensor:
     return x_rank
 
 def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : Tensor | None = None , min_coverage = 0.5):
+    assert x.ndim == y.ndim == 2 , (x.shape , y.shape)
     valid = ~y.isnan()
     if universe is not None: 
         valid *= universe.nan_to_num(0).to(torch.bool)

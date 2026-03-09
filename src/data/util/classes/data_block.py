@@ -94,7 +94,7 @@ class DataBlock(Stock4D):
     def check_flags(self , **kwargs):
         for key , value in kwargs.items():
             if self.flags[key] != value:
-                raise ValueError(f'Invalid flags: {self.flags} , try set then first before checking!')
+                raise ValueError(f'Invalid flags: {self.flags} , compare to {kwargs} try set then first before checking!')
         return self
 
     @property
