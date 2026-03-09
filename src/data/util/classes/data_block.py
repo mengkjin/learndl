@@ -91,6 +91,12 @@ class DataBlock(Stock4D):
         self._flags.update(kwargs)
         return self
 
+    def check_flags(self , **kwargs):
+        for key , value in kwargs.items():
+            if self.flags[key] != value:
+                raise ValueError(f'Invalid flags: {self.flags} , try set then first before checking!')
+        return self
+
     @property
     def flags(self):
         if not hasattr(self , '_flags'):
@@ -258,8 +264,7 @@ class DataBlock(Stock4D):
 
     def extend_to(self , db_src : str , db_key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
                   dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level = Proj.vb.max):
-        if not all([self.flags['category'] == 'raw' , self.flags['db_src'] == db_src , self.flags['db_key'] == db_key]):
-            raise ValueError(f'Invalid flags: {self.flags} , try set then first before extending!')
+        self.check_flags(category = 'raw' , db_src = db_src , db_key = db_key)
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
         block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
@@ -450,15 +455,13 @@ class DataBlock(Stock4D):
             return cls()
     
     def save_preprocess(self , key : str , predict=False , start_dt = None , end_dt = None):
-        if not all([self.flags['category'] == 'preprocess' , self.flags['predict'] == predict , self.flags['preprocess_key'] == key]):
-            raise ValueError(f'Invalid flags: {self.flags} , try set then first before saving!')
+        self.check_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
         path = self.path_preprocess(key , predict)
         path.parent.mkdir(exist_ok=True)
         self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
 
     def save_raw(self , db_src : str , db_key : str , start_dt = None , end_dt = None):
-        if not all([self.flags['category'] == 'raw' , self.flags['db_src'] == db_src , self.flags['db_key'] == db_key]):
-            raise ValueError(f'Invalid flags: {self.flags} , try set then first before saving!')
+        self.check_flags(category = 'raw' , db_src = db_src , db_key = db_key)
         assert not self.price_adjusted and not self.volume_adjusted , f'price and volume must not be adjusted before saving!'
         path = self.path_raw(db_src , db_key , dump_suffix = self.PREFERRED_DUMP_SUFFIXES[0])
         path.parent.mkdir(exist_ok=True)
