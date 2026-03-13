@@ -26,11 +26,12 @@ def calc_frontface(acc : pd.DataFrame):
     return df
 
 def calc_perf_curve(acc : pd.DataFrame):
-    df = _filter_account(acc).loc[:,['end','pf','bm','excess']]
+    pf_columns = ['pf'] + [f'pf_{price_type}' for price_type in ['close' , 'open' , 'vwap'] if f'pf_{price_type}' in acc.columns]
+    bm_column = 'bm'
+    df = _filter_account(acc).loc[:,['end','excess'] + pf_columns + [bm_column]]
     index_names = [str(name) for name in df.index.names]
     df = df.sort_values([*index_names , 'end']).rename(columns={'end':'trade_date'})
-
-    df[['bm','pf']] = eval_cum_ret(df[['bm','pf']] , 'exp' , groupby=index_names)
+    df[[bm_column] + pf_columns] = eval_cum_ret(df[[bm_column] + pf_columns] , 'exp' , groupby=index_names)
     df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=index_names)
     df = df.set_index('trade_date' , append=True)
     return df

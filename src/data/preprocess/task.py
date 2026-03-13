@@ -28,8 +28,6 @@ class PreProcessorTask:
         self.mask = mask or {'list_dt': 91}
         self.load_start = CALENDAR.td(CALENDAR.updated() , -366).td if predict else 20070101
         self.load_end   = None
-        self.save_start = None if predict else 20070101
-        self.save_end   = None
         self.hist_start = None
         self.hist_end   = None if predict else 20161231
 
@@ -67,35 +65,29 @@ class PreProcessorTask:
             tt1 = datetime.now()
             Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 3)
             
-            if not DataBlock.path_preprocess(key , False).exists():
-                dump_block = DataBlock()
-                dump_last_date = -1
-            else:
-                with Logger.Timer(f'[{key}] dumped loading' , indent = indent + 2 , vb_level = vb_level + 3):
-                    dump_block = DataBlock.load_preprocess(key , False)[key]
-                    dump_last_date = CALENDAR.td(dump_block.date[-1] , -LOAD_OVERLAP_DAYS).td if not dump_block.empty else -1
+            with Logger.Timer(f'[{key}] dumped loading' , indent = indent + 2 , vb_level = vb_level + 3):
+                dump_block = DataBlock.load_preprocess(key , predict)[key]
+                dump_last_date = CALENDAR.td(dump_block.date[-1] , -LOAD_OVERLAP_DAYS).td if not dump_block.empty else -1
 
             with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 3 , enter_vb_level = vb_level + 5):
                 load_start = max(processor.load_start , dump_last_date)
                 block_dict = proc.load_blocks(load_start, processor.load_end, indent = indent + 2 , vb_level = vb_level + 5)
 
             with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 3):
-                data_block = proc.process_blocks(block_dict)
-            if data_block.empty:
+                new_block = proc.process_blocks(block_dict).set_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
+            if new_block.empty:
                 Logger.alert1(f'[{key}] blocks process is empty! Skip saving...' , indent = indent + 2 , vb_level = vb_level + 3)
                 continue
 
             with Logger.Timer(f'[{key}] blocks masking' , indent = indent + 2 , vb_level = vb_level + 3):   
-                data_block = data_block.mask_values(mask = processor.mask)
+                new_block = new_block.mask_values(mask = processor.mask)
 
-            if not dump_block.empty:
-                with Logger.Timer(f'[{key}] blocks merging' , indent = indent + 2 , vb_level = vb_level + 3):
-                    data_block = dump_block.merge_others(data_block , inplace = True)
+            with Logger.Timer(f'[{key}] blocks merging' , indent = indent + 2 , vb_level = vb_level + 3):
+                data_block = dump_block.merge_others(new_block , inplace = True)
 
             with Logger.Timer(f'[{key}] blocks dumping' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block = data_block.align_date(data_block.date_within(processor.load_start , processor.load_end) , inplace = True)
-                data_block = data_block.set_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
-                data_block.save_preprocess(key , predict , processor.save_start , processor.save_end)
+                data_block.save_dump()
 
             with Logger.Timer(f'[{key}] blocks norming' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block.hist_norm(key , predict , processor.hist_start , processor.hist_end)

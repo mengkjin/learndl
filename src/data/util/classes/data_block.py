@@ -85,29 +85,6 @@ class DataBlock(Stock4D):
     def volume_adjusted(self , value : bool):
         self._volume_adjusted = value
 
-    def set_flags(self , **kwargs):
-        if not hasattr(self , '_flags'):
-            self._flags = {}
-        self._flags.update(kwargs)
-        #if self._flags.get('category') == 'raw':
-        #    self._flags['raw_features'] = self.feature.copy()
-        return self
-
-    def check_flags(self , **kwargs):
-        for key , value in kwargs.items():
-            if self.flags[key] != value:
-                raise ValueError(f'Invalid flags: {self.flags} , compare to {kwargs} try set then first before checking!')
-        #if self.flags.get('category') == 'raw':
-        #    if not np.array_equal(self.flags.get('raw_features' , np.array([])) , self.feature):
-        #        raise ValueError(f'Invalid raw features: {self.flags.get("raw_features" , np.array([]))} , compare to {self.feature} try set then first before checking!')
-        return self
-
-    @property
-    def flags(self):
-        if not hasattr(self , '_flags'):
-            self._flags = {}
-        return self._flags
-
     @staticmethod
     def data_type_abbr(key : str): 
         return data_type_abbr(key)
@@ -173,6 +150,11 @@ class DataBlock(Stock4D):
             return name.startswith(excl) == 0
         else:
             return bool(fillna)
+
+    def on_change_feature(self):
+        if self.flags.get('category') == 'raw':
+            self.clear_flags()
+        return self
 
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 , 
                      price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
@@ -324,17 +306,16 @@ class DataBlock(Stock4D):
     ) -> dict[str,'DataBlock']:
         if isinstance(keys , str):
             keys = [keys]
-        paths = [cls.path_preprocess(key , predict) for key in keys]
-        fillnas = {key:cls.guess_fillna(path.stem.lower() , fillna) for key , path in zip(keys , paths)}
+        fillnas = {key:cls.guess_fillna(cls.path_preprocess(key , predict).stem.lower() , fillna) for key in keys}
         
         block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
         with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
             blocks : dict[str,'DataBlock'] = {}
-            for key , path in zip(keys , paths):
-                block = cls.load_dump(path)
+            for key in keys:
+                block = cls.load_dump(category = 'preprocess' , predict = predict , preprocess_key = key)
                 if predict and key == 'y' and not block.empty:
                     block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
-                blocks[key] = block.set_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
+                blocks[key] = block
 
         if len(blocks) <= 1:
             return blocks
@@ -364,7 +345,7 @@ class DataBlock(Stock4D):
 
     @classmethod
     def load_from_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
-                dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
+                     dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
 
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
@@ -381,7 +362,9 @@ class DataBlock(Stock4D):
             if feature is not None:  
                 df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
             block = cls.from_dataframe(df.set_index(use_index))
-        return block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
+        if feature is None:
+            block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
+        return block
 
     @classmethod
     def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
@@ -390,86 +373,78 @@ class DataBlock(Stock4D):
             dates = CALENDAR.td_within(start_dt , end_dt)
 
         if f'{db_src}.{db_key}' in cls.FREQUENT_DBS:
-            if (raw_path := cls.path_raw(db_src , db_key)).exists() and len(dates) >= cls.FREQUENT_MIN_DATES:
-                block = cls.load_dump(raw_path)
-                saved_dates = block.date
+            if len(dates) >= cls.FREQUENT_MIN_DATES:
+                block = cls.load_dump(category = 'raw' , db_src = db_src , db_key = db_key)
                 loaded = True
             else:
                 block = cls()
-                saved_dates = np.array([])
                 loaded = False
-            block = block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
+            saved_dates = block.date if block.date is not None else np.array([])
             update_dates = CALENDAR.diffs(dates , saved_dates)
             if len(update_dates) > 0:
                 new_block = cls.load_from_db(db_src , db_key , dates = update_dates , use_alt = use_alt , vb_level = vb_level) # no feature selection here
                 block = block.merge_others(new_block , inplace = True)
-            if (len(update_dates) > 0 and loaded) or not raw_path.exists():
-                block.save_raw(db_src , db_key)
+            if (len(update_dates) > 0 and loaded) or not cls.path_raw(db_src , db_key).exists():
+                block.save_dump()
             block = block.align(feature = feature , inplace = True)
         else:
             block = cls.load_from_db(db_src , db_key , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
         return block
 
-    def save_dump(self , path : Path , * , start_dt : int | None = None , end_dt : int | None = None):
-        if path.suffix == '.feather':
-            assert not path.exists() or path.is_file() , path
-            df = self.to_dataframe(start_dt = start_dt , end_dt = end_dt)
-            df.to_feather(path) 
-        else:
-            if start_dt is not None or end_dt is not None:
-                date_slice = np.repeat(True,len(self.date))
-                if start_dt is not None: 
-                    date_slice[self.date < start_dt] = False
-                if end_dt   is not None: 
-                    date_slice[self.date > end_dt]   = False
-                values = self.values[:,date_slice]
-                date = self.date[date_slice]
-            else:
-                values = self.values
-                date = self.date
-            if path.suffix == '.mmap':
-                assert not path.exists() or path.is_dir() , path
-                path.mkdir(parents=True, exist_ok=True)
-                ArrayMemoryMap.save(values , path.joinpath('values'))
-                save_dict({'date' : date , 'secid' : self.secid , 'feature' : self.feature} , path.joinpath('index.pt'))
-            elif path.suffix == '.pt':
-                assert not path.exists() or path.is_file() , path
-                save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)
-            else:
-                raise ValueError(f'Unsupported suffix: {path.suffix}')
-
     @classmethod
-    def load_dump(cls , path : Path | str) -> 'DataBlock':
-        path = Path(path)
-        if path.exists() and path.suffix in ['.mmap' , '.pt' , '.feather']:
+    def load_dump(cls , **kwargs) -> 'DataBlock':
+        flags = kwargs
+        if flags.get('category') == 'preprocess':
+            path = cls.path_preprocess(flags['preprocess_key'] , flags['predict'])
+        else:
+            path = cls.path_raw(flags['db_src'] , flags['db_key'])
+        
+        if not path.exists():
+            for suffix in cls.PREFERRED_DUMP_SUFFIXES:
+                path = path.with_suffix(suffix)
+                if path.exists():
+                    break
+
+        if path.exists():
             if path.suffix == '.mmap':
                 assert path.is_dir() , path
                 values = ArrayMemoryMap.load_tensor(path.joinpath('values'))
                 index = load_dict(path.joinpath('index.pt'))
-                return cls(values , index['secid'] , index['date'] , index['feature'])
+                block = cls(values , index['secid'] , index['date'] , index['feature'])
             elif path.suffix == '.pt':
-                return cls(**load_dict(path))
+                block = cls(**load_dict(path))
+            elif path.suffix == '.feather':
+                block = cls.from_dataframe(pd.read_feather(path))
             else:
-                return cls.from_dataframe(pd.read_feather(path))
+                raise ValueError(f'Unsupported suffix: {path.suffix}')
         else:
-            for suffix in cls.PREFERRED_DUMP_SUFFIXES:
-                path = path.with_suffix(suffix)
-                if path.exists():
-                    return cls.load_dump(path)
-            return cls()
-    
-    def save_preprocess(self , key : str , predict=False , start_dt = None , end_dt = None):
-        self.check_flags(category = 'preprocess' , predict = predict , preprocess_key = key)
-        path = self.path_preprocess(key , predict)
-        path.parent.mkdir(exist_ok=True)
-        self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
+            block = cls()
+        return block.set_flags(**flags)
 
-    def save_raw(self , db_src : str , db_key : str , start_dt = None , end_dt = None):
-        self.check_flags(category = 'raw' , db_src = db_src , db_key = db_key)
-        assert not self.price_adjusted and not self.volume_adjusted , f'price and volume must not be adjusted before saving!'
-        path = self.path_raw(db_src , db_key , dump_suffix = self.PREFERRED_DUMP_SUFFIXES[0])
+    def save_dump(self):
+        flags = self.flags
+        assert flags and flags.get('category') in ['preprocess' , 'raw'] , flags
+        if flags.get('category') == 'raw':
+            assert not self.price_adjusted and not self.volume_adjusted , f'price and volume must not be adjusted before saving!'
+        if flags.get('category') == 'preprocess':
+            path = self.path_preprocess(flags['preprocess_key'] , flags['predict'])
+        else:
+            path = self.path_raw(flags['db_src'] , flags['db_key'])
         path.parent.mkdir(exist_ok=True)
-        self.save_dump(path , start_dt = start_dt , end_dt = end_dt)
+        if path.suffix == '.feather':
+            assert not path.exists() or path.is_file() , path
+            df = self.to_dataframe()
+            df.to_feather(path) 
+        elif path.suffix == '.mmap':
+            assert not path.exists() or path.is_dir() , path
+            path.mkdir(parents=True, exist_ok=True)
+            ArrayMemoryMap.save(self.values , path.joinpath('values'))
+            save_dict({'date' : self.date , 'secid' : self.secid , 'feature' : self.feature} , path.joinpath('index.pt'))
+        elif path.suffix == '.pt':
+            assert not path.exists() or path.is_file() , path
+            save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)
+        else:
+            raise ValueError(f'Unsupported suffix: {path.suffix}')
 
     @classmethod
     def fix_dumps(cls):
@@ -481,7 +456,7 @@ class DataBlock(Stock4D):
                 new_path = path.with_suffix(cls.PREFERRED_DUMP_SUFFIXES[0])
                 db_src , db_key = path.name.split('.')[:2]
                 block = cls.load_from_db(db_src , db_key , 20070101 , 20241231)
-                block.save_dump(new_path)
+                block.save_dump()
                 Logger.success(f'{category}.{path.name} changed to {new_path}')
 
 @dataclass(slots=True)

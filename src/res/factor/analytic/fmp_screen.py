@@ -82,7 +82,7 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
 
     def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : int = 1):
         alpha_models = factor.alpha_models()
-        benchmarks = [factor.universe(load = True).to_portfolio().rename('univ')]
+        benchmarks = [factor.universe(load = True).get('all').rename('univ')]
         self.update_kwargs()
         self.portfolio_group = PortfolioGroupBuilder(
             'screen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 

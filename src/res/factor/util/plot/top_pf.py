@@ -49,7 +49,13 @@ class Plotter:
                 df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
-            ax = Plot.sns_lineplot(df , x='trade_date' , y='pf' , hue='topN')
+            
+            ax = fig.add_subplot(111)
+            ax.plot(df['trade_date'], df['pf'], label='actual trade')  
+            for price_type in ['close' , 'open' , 'vwap']:
+                if f'pf_{price_type}' in df.columns:
+                    ax.plot(df['trade_date'] , df[f'pf_{price_type}'] , label=f'as if {price_type}')
+            ax.legend(loc='upper left')  
 
             Plot.set_xaxis(ax , df['trade_date'].unique() , title = 'Trade Date')
             Plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b')

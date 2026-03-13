@@ -70,12 +70,15 @@ class TopStocksPortfolioCreator(PortCreator):
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
 
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
-        pool.loc[:, 'selected'] = pool['weight'].fillna(0) > 0
-        pool.loc[:, 'buffered'] = (
-            (pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
-             (pool['rankpct'] >= self.conf.no_zone))
+        pool.loc[:, 'selected'] = pool['weight'].astype(float).fillna(0) > 0
+        pool.loc[:, 'kept'] = (pool['selected'].cumsum() <= self.conf.stay_num) * (pool['rankpct'] >= self.conf.no_zone)
+        pool.loc[:, 'buffered'] = pool['selected'] * ~pool['kept'] * (pool['rankpct'] >= self.conf.buffer_zone)
 
-        stay = pool.query('selected & buffered')
+        buffered = pool.query('buffered')
+        if not buffered.empty:
+            Logger.stdout(f'at model date {self.model_date}, {len(buffered)} stocks are buffered : {buffered.secid.tolist()}')
+
+        stay = pool.query('selected & (buffered | kept)')
         stay_secid = stay['secid'].to_numpy() # noqa
 
         stay_ind_count : pd.Series | Any = stay.groupby('indus')['secid'].count()

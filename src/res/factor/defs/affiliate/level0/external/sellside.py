@@ -12,6 +12,30 @@ class df_scores_v0(SellsideFactor):
     def calc_factor(self , date : int):
         return self.load_factor(date)
 
+class df_scores_v2(SellsideFactor):
+    init_date = 20180101
+    description = '东方金工,scores_v2'
+    load_db_key = 'dongfang.scores_v2'
+    load_db_col = 'pred'
+    alternative_dbs = [
+        {'src' : 'sellside' , 'key' : 'huayuan.scores_v2' , 'col' : 'scores_v2'}
+    ]
+
+    def calc_factor(self , date : int):
+        return self.load_factor(date)
+
+class df_scores_v3(SellsideFactor):
+    init_date = 20180101
+    description = '东方金工,scores_v3'
+    load_db_key = 'dongfang.scores_v3'
+    load_db_col = 'pred'
+    alternative_dbs = [
+        {'src' : 'sellside' , 'key' : 'huayuan.scores_v3' , 'col' : 'scores_v3'}
+    ]
+
+    def calc_factor(self , date : int):
+        return self.load_factor(date)
+
 class ht_master_combined(SellsideFactor):
     init_date = 20180101
     description = '华泰金工,master_combined'

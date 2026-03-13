@@ -1,14 +1,31 @@
 focused_ports:
   - use_daily
 
-portfolio_dict:
+# accepted fields:
+#   alpha: str or comma separated strings
+#   components (if it is a composite alpha): list of str or comma separated strings
+#   weights: null / equal is equal weights , or list of floats
+#   universe: str , default is 'top-1000'
+#   category: Literal['top' , 'screen' , 'reinforce'] , default is 'top'
+#   top_num: int , default is 50
+#   freq: int or 'd' / 'w' / 'm' , default is 1
+#   test_start (for backtest): int , default is 20190101
+#   test_end (for backtest): int , default is -1
+#   benchmark: str , default is 'csi500'
+#   exclusion: str , default is 'st_bse_lowprice_loser'
+#   sorting_alpha: tuple[str , str , str | None] , default is ('pred' , 'gru_day_V1' , None)
+#   screen_ratio: float , default is 0.5
+#   buffer_zone: float , default is 0.8
+#   no_zone: float , default is 0.5
+#   indus_control: float , default is 0.1
+
+trading_ports:
   test0:
     alpha: gru_day_V1
     universe: csi800+csi1000+csi2000
 
   test1:
     alpha: factor@df_scores_v0
-    universe: top-1000
 
   use_daily:
     alpha: big_combine
@@ -16,111 +33,44 @@ portfolio_dict:
       - sellside@huatai.master_combined@master_combined
       - factor@df_scores_v0
       - gru_day_V1
-    weights:
-      - 1.0
-      - 1.0
-      - 1.0
-    universe: top-1000
-    top_num: 50
-    freq: 1
-
-  use_daily.backtest:
-    alpha: big_combine
-    components:
-      - factor@ht_master_combined
-      - factor@df_scores_v0
-      - gru_day_V1
-    weights:
-      - 1.0
-      - 1.0
-      - 1.0
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-
-  use_daily.backtest2:
-    alpha: big_combine
-    components:
-      - factor@ht_master_combined
-      - factor@df_scores_v0
-      - gru_day_V1
-    weights:
-      - 1.0
-      - 1.0
-      - 1.0
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-    buffer_zone: 0.9
-
-  use_daily.backtest3:
-    alpha: big_combine
-    components:
-      - factor@ht_master_combined
-      - factor@df_scores_v0
-      - gru_day_V1
-    weights:
-      - 1.0
-      - 1.0
-      - 1.0
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-    buffer_zone: 0.95
+    weights: [1.0 , 1.0 , 1.0]
 
   master_daily:
     alpha: factor@ht_master_combined
-    universe: top-1000
-    top_num: 50
-    freq: 1
 
   gru_daily:
     alpha: gru_day_V1
-    universe: top-1000
-    top_num: 50
-    freq: 1
+
+backtest_ports:
+  use_daily.backtest:
+    alpha: big_combine
+    components:
+      - sellside@huatai.master_combined@master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
+
+  use_daily.backtest1:
+    alpha: 
+      - factor@ht_master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
+
+  use_daily.backtest2:
+    alpha:
+      - factor@ht_master_combined
+      - factor@df_scores_v0
+      - gru_day_V1
+    buffer_zone: 0.9
+
+  ht_master_combined.backtest:
+    alpha: factor@ht_master_combined
+
+  df_scores_v0.backtest:
+    alpha: factor@df_scores_v0
+
+  gru_day_V1.backtest:
+    alpha: gru_day_V1
 
   event_factor_momentum.backtest:
     alpha: factor@event_factor_momentum
     category: screen
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-
-  event_factor_momentum.backtest1:
-    alpha: factor@event_factor_momentum
-    category: screen
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-    screen_ratio: 0.4
-
-  event_factor_momentum.backtest2:
-    alpha: factor@event_factor_momentum
-    category: screen
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-    screen_ratio: 0.3
-
-  event_factor_momentum.backtest3:
-    alpha: factor@event_factor_momentum
-    category: screen
-    universe: top-1000
-    top_num: 50
-    freq: 1
-    backtest: True
-    test_start: 20190101
-    screen_ratio: 0.2

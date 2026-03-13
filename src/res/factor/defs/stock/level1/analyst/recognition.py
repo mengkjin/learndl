@@ -17,5 +17,5 @@ class analyst_recognition(CoverageFactor):
         report_3m = cov_report_3m.EvalSeries(date)
         report_12m = cov_report_12m.EvalSeries(date)
         covs = [inst_3m , inst_12m , report_3m , report_12m]
-        v = pd.concat([whiten(winsorize(cov)) for cov in covs] , axis = 1).mean(axis = 1)
+        v : pd.DataFrame = pd.concat([whiten(winsorize(cov)) for cov in covs] , axis = 1).mean(axis = 1)
         return whiten(winsorize(v))

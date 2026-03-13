@@ -36,7 +36,7 @@ DB_BY_DATE  : list[str] = ['models' , 'sellside' , 'exposure' ,
                            ]
 
 EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly' , 'pooling_weight']
-EXPORT_BY_DATE : list[str] = ['stock_factor' , 'model_prediction']
+EXPORT_BY_DATE : list[str] = ['stock_factor' , 'model_prediction' , 'universe']
 for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
     assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
 

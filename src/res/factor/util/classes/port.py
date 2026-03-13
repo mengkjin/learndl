@@ -152,7 +152,8 @@ class Port:
         return cls(port , date , name).rescale()
 
     @classmethod
-    def none_port(cls , date : int , name = 'none'): return cls(None , date , name)
+    def none_port(cls , date : int , name = 'none' , value = 1.): 
+        return cls(None , date , name , value)
     
     @property
     def df_with_date(self):

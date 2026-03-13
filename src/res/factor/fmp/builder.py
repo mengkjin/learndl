@@ -77,6 +77,7 @@ class PortfolioBuilder:
         self.kwargs       = kwargs
         self.lag          = lag
         self.build_on     = build_on 
+
         self.resume_path  = resume_path
         self.indent       = indent
         self.vb_level     = vb_level

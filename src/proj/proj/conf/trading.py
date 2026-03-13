@@ -10,8 +10,12 @@ class TradingPortConfig:
         """focused ports"""
         return _trading_port_settings['focused_ports']
     @property
-    def portfolio_dict(self) -> dict[str , dict]:
-        """portfolio dictionary"""
-        return _trading_port_settings['portfolio_dict']
+    def tracking_ports(self) -> dict[str , dict]:
+        """trading ports"""
+        return _trading_port_settings['trading_ports']
+    @property
+    def backtest_ports(self) -> dict[str , dict]:
+        """backtest ports"""
+        return _trading_port_settings['backtest_ports']
 
 TradingPort = TradingPortConfig()

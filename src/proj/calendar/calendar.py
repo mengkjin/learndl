@@ -173,8 +173,11 @@ class CALENDAR:
     def update_to(cls):
         return cls.today(-1 if datetime.now().time() <= time(19, 59, 0) else 0)
     @staticmethod
-    def updated():
-        return DB.max_date('trade_ts' , 'day')
+    def updated(date : int | None = None):
+        updated_date = DB.max_date('trade_ts' , 'day')
+        if date is not None:
+            updated_date = min(updated_date , date)
+        return updated_date
     @staticmethod
     def _date_convert_to_index(date):
         if isinstance(date , TradeDate): 

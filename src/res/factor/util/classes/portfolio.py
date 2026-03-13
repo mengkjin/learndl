@@ -113,8 +113,6 @@ class Portfolio:
         """append a port to the portfolio"""
         assert ignore_name or port.name in ['none' , 'empty'] or self.name == port.name , (self.name , port.name)
         assert override or (port.date not in self.ports) , f'port {port.name} {port.date} already exists , portfolio dates: {self.port_date}'
-        if port.is_emtpy(): 
-            return
         self.ports[port.date] = port
         self.weight_block_completed = False
         self._last_port = port
@@ -143,6 +141,10 @@ class Portfolio:
             return Port.none_port(date , self.name)
         else:
             return port.evolve_to_date(date)
+    def item(self):
+        """return the only port of the portfolio"""
+        assert len(self.ports) == 1 , f'expect 1 port , but got {len(self.ports)}'
+        return list(self.ports.values())[0]
     @classmethod
     def get_object_name(cls , obj : str | Any | None) -> str:
         """class method to get the name of the object (str , Portfolio , None)"""
@@ -164,8 +166,12 @@ class Portfolio:
         if df.empty: 
             return cls(name)
         df = df.reset_index()
+        if 'name' not in df.columns:
+            assert name is not None , 'name is required when name column is not in dataframe'
+            df['name'] = name.lower()
         if 'weight' not in df.columns:
-            df['weight'] = 1 / len(df)
+            df['weight'] = 1.0
+            df['weight'] = df['weight'] / df.groupby(['name' , 'date'])['weight'].transform('sum')
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
         if 'value' not in df.columns: 

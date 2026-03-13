@@ -112,7 +112,7 @@ class ScreeningPortfolioCreator(PortCreator):
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
-        pool.loc[:, 'selected'] = pool['weight'].fillna(0) > 0
+        pool.loc[:, 'selected'] = pool['weight'].astype(float).fillna(0) > 0
         pool.loc[:, 'buffered'] = (
             (pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
              (pool['rankpct'] >= self.conf.no_zone))

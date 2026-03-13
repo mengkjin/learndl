@@ -6,13 +6,12 @@ from .util import wrap_update
 class TradingAPI:
     @classmethod
     def available_ports(cls , backtest : bool | None = None) -> list[str]:
-        tradeports = Proj.Conf.TradingPort.portfolio_dict
         if backtest is None:
-            return list(tradeports.keys())
+            return list(Proj.Conf.TradingPort.tracking_ports.keys()) + list(Proj.Conf.TradingPort.backtest_ports.keys())
         elif backtest:
-            return [key for key, value in tradeports.items() if value.get('backtest' , False)]
+            return list(Proj.Conf.TradingPort.backtest_ports.keys())
         else:
-            return [key for key, value in tradeports.items() if not value.get('backtest' , False)]
+            return list(Proj.Conf.TradingPort.tracking_ports.keys())
 
     @classmethod
     def update(cls, reset_ports : list[str] | None = None): 

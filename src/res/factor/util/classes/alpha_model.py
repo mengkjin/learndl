@@ -110,11 +110,12 @@ class Amodel:
             return cls.from_dataframe(date , data , secid , filter_date=True)
         
     @classmethod
-    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray | None = None , name : str = 'combined_alpha' , normalize = True):
-        weights = weights or []
-        assert len(alphas) == len(weights) or len(weights) == 0 , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
-        if len(weights) == 0:
+    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray | Literal['equal'] | None = None , name : str = 'combined_alpha' , normalize = True):
+        if len(alphas) == 1:
+            return alphas[0]
+        if weights == 'equal' or weights is None:
             weights = np.ones(len(alphas)) / len(alphas)
+        assert len(alphas) == len(weights) , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas])) if alphas else np.array([])
         alpha = np.sum(np.array([alpha.align(secid).alpha for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
         if normalize: 
@@ -182,3 +183,79 @@ class AlphaModel(GeneralModel):
             tar_date = dates[min(i+lag_period,len(dates)-1)]
             new.models[date] = new.models[tar_date].assign(date = date , name = new.name)
         return new
+
+@dataclass
+class CompositeAlpha:
+    name        : str | list[str]
+    components  : list[str] | None = None
+    weights     : list[float] | Literal['equal'] | None = None
+
+    def __post_init__(self):
+        assert self.name , 'name must be non-empty'
+        if isinstance(self.name , list) or ',' in self.name:
+            assert not self.components , f'components are not allowed when alpha name suggest a composite alpha , {self.name} {self.components}'
+            self.components = self.name if isinstance(self.name , list) else self.name.split(',')
+            self.name = 'combined_alpha'
+        else:
+            self.components = [self.name]
+        
+        if isinstance(self.weights , list):
+            assert len(self.components) == len(self.weights) , f'components {self.components} and weights {self.weights} must have the same length'
+    
+    @property
+    def composite_name(self) -> str:
+        if isinstance(self.name , list) or ',' in self.name:
+            return 'combined_alpha'
+        else:
+            return self.name
+
+    @property
+    def composite_components(self) -> list[str]:
+        if isinstance(self.components , list):
+            return self.components
+        else:
+            return [self.composite_name]
+
+    def get_alphas(self , date : int) -> list[Amodel]:
+        return [self.get_single_alpha(alpha , date).item() for alpha in self.composite_components]
+
+    def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
+        if not isinstance(date , (list , np.ndarray)):
+            date = [date]
+        models : list[Amodel] = []
+        for d in date:
+            amodel = Amodel.combine(self.get_alphas(d) , self.weights)
+            models.append(amodel)
+        return AlphaModel(self.composite_name , models)
+
+    @staticmethod
+    def get_single_alpha(alpha_name : str , date : int) -> AlphaModel:
+        from src.res.factor.util.classes.stock_factor import StockFactor
+        from src.res.factor.calculator import StockFactorHierarchy
+        from src.res.model.util import PredictionModel
+        from src.proj import DB
+        
+        if alpha_name in PredictionModel.MODEL_DICT:
+            reg_model = PredictionModel.SelectModels(alpha_name)[0]
+            dates = reg_model.pred_dates
+            df = reg_model.load_pred(dates[dates <= date].max()).assign(date = date)
+        elif '@' in alpha_name:
+            exprs = alpha_name.split('@')
+            alpha_type = exprs[0]
+            alpha_name = exprs[1]
+            alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
+            if alpha_type == 'sellside':
+                df = DB.load(alpha_type , alpha_name , date , closest = True , vb_level = 'inf')
+            elif alpha_type == 'factor':
+                df = StockFactorHierarchy.get_factor(alpha_name).Load(date , closest = True)
+            elif alpha_type == 'pred':
+                df = DB.load('pred' , alpha_name , date , closest = True , vb_level = 'inf')
+            else:
+                raise Exception(f'{alpha_type} is not a valid alpha type')
+            df = pd.DataFrame(columns=['secid' , 'date' , alpha_column]) if df.empty else df.assign(date = date).loc[:,['secid' , 'date' , alpha_column]]
+        else:
+            raise Exception(f'{alpha_name} is not a valid alpha')
+
+        factor = StockFactor(df)
+        assert len(factor.factor_names) == 1 , f'expect 1 factor name , got {factor.factor_names}'
+        return factor.normalize().alpha_model()

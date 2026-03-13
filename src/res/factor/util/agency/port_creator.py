@@ -36,6 +36,8 @@ class PortCreator(ABC):
         self.output()
         t3 = datetime.now()
 
+        # Logger.stdout(f'At model_date {model_date} , portfolio has {len(self.create_result.port)} stocks , init_value {self.init_port.value} , final_value {self.create_result.port.value} ')
+
         self.create_result.timecost.update({
             'parse' : (t1 - t0).total_seconds() ,
             'solve' : (t2 - t1).total_seconds() , 

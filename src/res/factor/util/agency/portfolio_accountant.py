@@ -83,7 +83,7 @@ class AccountConfig:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
 class PortfolioAccount:
-    columns_basic = ['model_date' , 'start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight']
+    columns_basic = ['model_date' , 'start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight' , 'pf_close' , 'pf_open' , 'pf_vwap']
     columns_all = columns_basic + ['analytic' , 'attribution']
 
     def __new__(cls , input = None , *args , **kwargs):
@@ -133,6 +133,9 @@ class PortfolioAccount:
                 'turn' : 0. ,
                 'excess' : pf ,
                 'overnight' : 0. ,
+                'pf_close' : 0. ,
+                'pf_open' : 0. ,
+                'pf_vwap' : 0. ,
                 'analytic' : None ,
                 'attribution' : None
             })
@@ -175,6 +178,9 @@ class PortfolioAccount:
             'turn' : 0. ,
             'excess' : 0. ,
             'overnight' : 0. ,
+            'pf_close' : 0. ,
+            'pf_open' : 0. ,
+            'pf_vwap' : 0. ,
             'analytic' : None ,
             'attribution' : None
         })
@@ -464,7 +470,7 @@ class PortfolioAccountant:
 
         df = pd.DataFrame({
             'model_date':model_dates , 'start':period_st , 'end':period_ed ,
-            'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. , 'overnight': 0. ,
+            'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. , 'overnight': 0. , 'pf_close' : 0. , 'pf_open' : 0. , 'pf_vwap' : 0. ,
             'analytic':None , 'attribution':None}).set_index('model_date')
 
         port_old = Port.none_port(model_dates[0])
@@ -476,8 +482,13 @@ class PortfolioAccountant:
 
             rets = self.get_rets(port_old , port_new , bench , ed)
             turn = port_new.turnover(port_old)
-            df.loc[mdate , ['pf' , 'bm' , 'overnight' , 'turn']] = \
-                np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , Proj.Conf.Factor.ROUNDING.ret)
+
+            df.loc[mdate , 'pf'] = np.round(rets[f'pf_{self.config.price_type}'] , Proj.Conf.Factor.ROUNDING.ret)
+            df.loc[mdate , 'bm'] = np.round(rets['bm'] , Proj.Conf.Factor.ROUNDING.ret)
+            df.loc[mdate , 'overnight'] = np.round(rets[f'overnight_{self.config.price_type}'] , Proj.Conf.Factor.ROUNDING.ret)
+            df.loc[mdate , 'turn'] = np.round(turn , Proj.Conf.Factor.ROUNDING.ret)
+            for price_type in ['close' , 'open' , 'vwap']:
+                df.loc[mdate , f'pf_{price_type}'] = np.round(rets[f'pf_{price_type}'] , Proj.Conf.Factor.ROUNDING.ret)
             
             if self.config.analytic: 
                 df.loc[mdate , 'analytic']    = RISK_MODEL.get(mdate).analyze(port_new , bench , port_old) #type:ignore
@@ -501,24 +512,24 @@ class PortfolioAccountant:
         assert self.config is not None , 'config is not set'
         
         rets : dict[str,float] = {}
-        fut_ret = port_new.fut_ret(end)
+        pf_close = port_new.fut_ret(end)
         bm_ret = bench.fut_ret(end)
-        overnight_ret = 0.
-        if port_new is port_old or self.config.price_type == 'close':
-            ...
-        elif self.config.price_type == 'open':
-            overnight_ret = (port_old.close2open() + 1) - 1
-            shadow_overnight = (port_new.close2open() + 1) - 1
-            fut_ret = (fut_ret + 1) * (overnight_ret + 1) / (shadow_overnight + 1) - 1      
-        elif self.config.price_type == 'vwap':
-            overnight_ret = (port_old.close2vwap() + 1) - 1
-            shadow_overnight = (port_new.close2vwap() + 1) - 1
-            fut_ret = (fut_ret + 1) * (overnight_ret + 1) / (shadow_overnight + 1) - 1
-        else:
-            raise ValueError(f'Unknown price type: {self.config.price_type}')
-        rets['pf'] = fut_ret
+        
+        overnight_open = (port_old.close2open() + 1) - 1
+        shadow_overnight_open = (port_new.close2open() + 1) - 1
+        pf_open = (pf_close + 1) * (overnight_open + 1) / (shadow_overnight_open + 1) - 1      
+       
+        overnight_vwap = (port_old.close2vwap() + 1) - 1
+        shadow_overnight_vwap = (port_new.close2vwap() + 1) - 1
+        pf_vwap = (pf_close + 1) * (overnight_vwap + 1) / (shadow_overnight_vwap + 1) - 1
+        
+        rets['pf_close'] = pf_close
+        rets['pf_open'] = pf_open
+        rets['pf_vwap'] = pf_vwap
         rets['bm'] = bm_ret
-        rets['overnight'] = overnight_ret
+        rets['overnight_close'] = 0
+        rets['overnight_open'] = overnight_open
+        rets['overnight_vwap'] = overnight_vwap
         return rets
 
 class PortfolioAccountManager:

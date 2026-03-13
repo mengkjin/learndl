@@ -51,7 +51,11 @@ class Stock4D:
         if 'date' in kwargs:
             self.date = kwargs['date']
         if 'feature' in kwargs:
-            self.feature = kwargs['feature']
+            if kwargs['feature'] is None or len(kwargs['feature']) == 0 or np.array_equal(self.feature , kwargs['feature']):
+                pass
+            else:
+                self.on_change_feature()
+                self.feature = kwargs['feature']
         return self.asserted()
 
     def asserted(self):
@@ -107,6 +111,35 @@ class Stock4D:
     @property
     def inday(self) -> np.ndarray: 
         return np.arange(self.shape[2])
+
+    def set_flags(self , **kwargs):
+        if not self.initiated:
+            # will not set flags if the block is not initiated
+            return self
+        if not hasattr(self , '_flags'):
+            self._flags = {}
+        self._flags.update(kwargs)
+        return self
+
+    def check_flags(self , **kwargs):
+        for key , value in kwargs.items():
+            if self.flags[key] != value:
+                raise ValueError(f'Invalid flags: {self.flags} , compare to {kwargs} try set then first before checking!')
+        return self
+
+    @property
+    def flags(self):
+        if not hasattr(self , '_flags'):
+            self._flags = {}
+        return self._flags
+
+    def clear_flags(self):
+        if hasattr(self , '_flags'):
+            self._flags.clear()
+        return self
+
+    def on_change_feature(self):
+        ...
     
     def date_within(self , start : int | None = None , end : int | None = None , interval = 1) -> np.ndarray:
         date = self.date
@@ -139,11 +172,10 @@ class Stock4D:
         for i , blk in enumerate(blocks): 
             tar_grid , src_grid = intersect_meshgrid([secid , date , inday , feature] , [blk.secid , blk.date , blk.inday , blk.feature] , )
             values[*tar_grid] = blk.values[*src_grid]
-        if inplace:
-            blocks[0].update(values = values , secid = secid , date = date , feature = feature)
-            return blocks[0]
-        else:
-            return cls(values , secid , date , feature)
+
+        block = blocks[0] if inplace else blocks[0].copy() 
+        block.update(values = values , secid = secid , date = date , feature = feature)
+        return block
 
     def merge_others(self , others : list | Any , inplace = False):
         if not isinstance(others , list): 
@@ -228,13 +260,16 @@ class Stock4D:
         values = torch.full((*self.shape[:-1],len(feature)) , np.nan).to(self.values)
         tar_pos , src_pos = intersect_pos_slice(feature , self.feature)
         values[...,tar_pos] = self.values[...,src_pos]
-        return self.update(values = values , feature = feature)
+        self = self.update(values = values , feature = feature)
+        self.on_change_feature()
+        return self
         
     def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
         assert new_value.shape == self.shape[:-1] , (new_value.shape , self.shape[:-1])
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = torch.concatenate([self.values,torch.Tensor(new_value)],dim=-1)
         self.feature = np.concatenate([self.feature,[new_feature]],axis=0)
+        self.on_change_feature()
         return self
     
     def rename_feature(self , rename_dict : dict):
@@ -244,6 +279,7 @@ class Stock4D:
         for k,v in rename_dict.items(): 
             feature[feature == k] = v
         self.feature = feature.astype(str)
+        self.on_change_feature()
         return self
     
     def loc(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
@@ -278,6 +314,7 @@ class Stock4D:
                 assert np.array_equal(new_blk.date , blk.date) , (new_blk.date , blk.date)
                 new_blk.feature = np.concatenate([new_blk.feature , blk.feature])
                 new_blk.values  = torch.concatenate([new_blk.values  , blk.values] , dim=-1)
+        new_blk.on_change_feature()
         return new_blk
     
     @classmethod

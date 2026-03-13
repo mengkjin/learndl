@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from src.proj import PATH , Logger , Proj , CALENDAR
-from src.res.trading.util import TradingPort
+from .trading_port import TrackingPort
 
 class TradingPortfolioTracker:
     @classmethod
@@ -13,15 +13,15 @@ class TradingPortfolioTracker:
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         
-        assert not reset_ports or all([port in Proj.Conf.TradingPort.portfolio_dict for port in reset_ports]) , \
+        assert not reset_ports or all([port in TrackingPort.candidate_ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
             
-        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports , indent = indent + 1 , vb_level = vb_level + 2) 
-                         for k,v in Proj.Conf.TradingPort.portfolio_dict.items()}
-        updated_ports = {k:v for k,v in updated_ports.items() if not v.new_ports[date].empty}
+        updated_ports = {name:TrackingPort.load(name).build(date , name in reset_ports , indent = indent + 1 , vb_level = vb_level + 2) 
+                         for name in TrackingPort.candidate_ports}
+        updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
 
-        new_ports = {k:v.new_ports[date] for k,v in updated_ports.items()}
-        last_ports = {k:v.get_last_port(date).to_dataframe() for k,v in updated_ports.items()}
+        new_ports = {name:tp.new_ports[date] for name,tp in updated_ports.items()}
+        last_ports = {name:tp.get_last_port(date).to_dataframe() for name,tp in updated_ports.items()}
             
         if len(updated_ports) == 0: 
             Logger.alert1(f'No trading portfolios updated on {date}' , indent = indent + 1)
@@ -55,6 +55,6 @@ class TradingPortfolioTracker:
 
     @classmethod
     def analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs): 
-        tp = TradingPort.load(port_name)
+        tp = TrackingPort.load(port_name)
         tp.analyze(start = start , end = end , **kwargs)
         return tp

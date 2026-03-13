@@ -813,7 +813,7 @@ class StockFactor:
         get the universe for the factor
         """
         univ = Universe(name)
-        univ.to_portfolio(self.date if load else None)
+        univ.get(self.date if load else None)
         return univ
 
     def within_benchmarks(self , load = True):
