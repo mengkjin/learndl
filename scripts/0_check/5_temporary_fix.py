@@ -26,6 +26,12 @@ def main(**kwargs):
             assert 'gru_day_V1' in df.columns , f'gru_day_V1 not in df.columns: {df.columns}'
             DB.save(df , 'pred' , 'gru_day_V1' , date)
 
+        df = DB.load('pred' , 'gruRTN_day_V0' , date)
+        if not df.empty and 'gruRTN_day_V0' not in df.columns  :
+            df = df.rename(columns={'gruRTN_day': 'gruRTN_day_V0'})
+            assert 'gruRTN_day_V0' in df.columns , f'gruRTN_day_V0 not in df.columns: {df.columns}'
+            DB.save(df , 'pred' , 'gruRTN_day_V0' , date)
+
     from src.data.update.custom.week_rank_loser import WeekRankLoserUpdater
     WeekRankLoserUpdater.update_all('recalc')
 
