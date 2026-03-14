@@ -280,10 +280,8 @@ class CompositeAlphaComponent:
             column = db_column if db_column is not None else db_key
             df = DB.loads(db_src , db_key , date , vb_level = 'inf')
             if min(date) < min(df['date']):
-                print(f'{db_src} {db_key} {min(date)} not in {df["date"].unique()}')
                 df = pd.concat([DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'inf').assign(date = min(date)) , df])
             assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
-            print(df)
             df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
             return df
         return wrapper
