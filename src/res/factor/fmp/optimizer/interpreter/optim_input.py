@@ -78,7 +78,7 @@ class OptimizedPortfolioInput:
         self.wb     = create_input_benchmark(self)
         self.w0     = create_input_initial(self)
 
-        alpha       = self.alpha_model.align(self.secid).alpha
+        alpha       = self.alpha_model.alpha_of(self.secid)
         bnd_con     = create_input_bnd_con(self)
         lin_con     = create_input_lin_con(self)
         turn_con    = create_input_turn_con(self)

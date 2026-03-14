@@ -91,7 +91,6 @@ class OutputDeflector:
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.close()
-        del self.catcher_write , self.catcher_flush , self.original_write , self.original_flush , self.original , self.is_catching
         return self
             
     def write(self, text : str | Any) -> None:

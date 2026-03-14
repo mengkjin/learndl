@@ -31,14 +31,22 @@ class Amodel:
         return f'{self.__class__.__name__}(name={self.name},date={self.date},length={len(self)})'
     def __bool__(self):
         return True
+    @property
+    def empty(self) -> bool:
+        return len(self) == 0
     def get_model(self , *args , **kwargs): 
         return self
     def copy(self): 
         return deepcopy(self)
     def align(self , secid : np.ndarray | Any = None , inplace = False , nan = 0.):
+        new_alpha = self if inplace else self.copy()
         if secid is None: 
             return self
-        new_alpha = self if inplace else self.copy()
+        if self.empty:
+            self.secid = secid
+            self.alpha = np.full(len(secid) , nan , dtype=float)
+            return self
+       
         value = np.full(len(secid) , nan , dtype=float)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
         value[p0s] = new_alpha.alpha[p1s]
@@ -56,8 +64,10 @@ class Amodel:
         new = self if inplace else self.copy()
         new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))
         return new
-    def alpha_of(self , secid : np.ndarray | Any = None , nan = 0. , rank = False):
-        value = self.alpha if not rank else pd.Series(self.alpha).rank(pct=True).values
+    def alpha_of(self , secid : np.ndarray | Any = None , nan = 0. , rank = False) -> np.ndarray:
+        if self.empty:
+            return self.alpha if secid is None else np.full(len(secid) , nan , dtype=float)
+        value = self.alpha if not rank else pd.Series(self.alpha).rank(pct=True).to_numpy()
         if secid is None: 
             return value
         new_value = np.full(len(secid) , nan , dtype=float)
@@ -111,20 +121,30 @@ class Amodel:
             return cls.from_dataframe(date , data , secid , filter_date=True)
         
     @classmethod
-    def combine(cls , alphas : list['Amodel | None'] , weights : list[float] | np.ndarray | Literal['equal'] | None = None , name : str = 'combined_alpha' , normalize = True):
-        if weights == 'equal' or weights is None:
-            weights = np.ones(len(alphas)) / len(alphas)
-        assert any(alpha is not None for alpha in alphas) , 'all alphas must be non-None'
+    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray | None = None , 
+                date : int | None = None , name : str = 'combined_alpha' , normalize = True):
+        assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
+        if weights is None:
+            weights = np.ones(len(alphas))
+        elif isinstance(weights , list):
+            weights = np.array(weights)
         assert len(alphas) == len(weights) , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
-        valid_alphas = [alpha for alpha in alphas if alpha is not None]
-        if len(valid_alphas) == 1:
-            return valid_alphas[0]
-        date = [alpha.date for alpha in alphas if alpha is not None][0]
-        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas if alpha is not None])) if alphas else np.array([])
-        alpha = np.sum(np.array([alpha.align(secid).alpha if alpha is not None else np.zeros(len(secid)) for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
+        if len(alphas) == 1:
+            return alphas[0]
+
+        if date is None:
+            date = alphas[0].date
+
+        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
+        all_alphas = np.stack([alpha.alpha_of(secid) for alpha in alphas] , axis = 0)
+        alpha = np.sum(all_alphas * weights[:,None] , axis = 0) / weights.sum()
         if normalize: 
             alpha = zscore(alpha)
         return cls(date , alpha , secid , name)
+
+    @classmethod
+    def empty_model(cls , date : int , name : str = 'empty_alpha') -> 'Amodel':
+        return cls(date , np.array([]) , np.array([]) , name)
 
 class AlphaModel(GeneralModel):
     '''Alpha model instance, contains alpha for multiple days'''
@@ -165,7 +185,7 @@ class AlphaModel(GeneralModel):
             for am in model.values():
                 self.append(am , override=override)
 
-    def get(self , date : int , latest = True , lag : int = 0) -> Amodel | Any:
+    def get(self , date : int , latest = True , lag : int = 0) -> Amodel:
         if lag:
             assert lag > 0 , lag
             avail_dates = np.sort(self.available_dates())
@@ -173,7 +193,8 @@ class AlphaModel(GeneralModel):
             if len(avail_dates): 
                 date = avail_dates[-min(lag , len(avail_dates))]
         model = super().get(date , latest)
-        assert model is None or isinstance(model , Amodel)
+        if model is None:
+            model = Amodel.empty_model(date , name = self.name)
         return model
     
     def lag_all_models(self , lag_period : int = 0 , inplace = False , rename = True):
@@ -188,37 +209,32 @@ class AlphaModel(GeneralModel):
             new.models[date] = new.models[tar_date].assign(date = date , name = new.name)
         return new
 
-@dataclass
 class CompositeAlpha:
-    name        : str | list[str]
-    components  : list[str] | None = None
-    weights     : list[float] | Literal['equal'] | None = None
-
-    def __post_init__(self):
-        assert self.name , 'name must be non-empty'
-        if isinstance(self.name , list) or ',' in self.name:
-            assert not self.components , f'components are not allowed when alpha name suggest a composite alpha , {self.name} {self.components}'
-            self.components = self.name if isinstance(self.name , list) else self.name.split(',')
-            self.name = 'combined_alpha'
-        else:
-            self.components = [self.name]
+    def __init__(self , name : str | list[str] , components : list[str] | None = None , weights : list[float] | Literal['equal'] | None = None):
+        assert name , f'name must be non-empty: {name}'
         
-        if isinstance(self.weights , list):
-            assert len(self.components) == len(self.weights) , f'components {self.components} and weights {self.weights} must have the same length'
-
-    @property
-    def composite_name(self) -> str:
-        if isinstance(self.name , list) or ',' in self.name:
-            return 'combined_alpha'
+        if isinstance(name , list) or ',' in name:
+            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {name} {components}'
+            self.name = 'combined_alpha'
+            self.components = name if isinstance(name , list) else name.split(',')
         else:
-            return self.name
+            self.name = name
+            self.components = components if components else [name]
+        
+        if isinstance(weights , list):
+            assert len(self.components) == len(weights) , f'components {self.components} and weights {weights} must have the same length'
+            self.weights = np.array(weights).astype(float)
+        elif weights is None or isinstance(weights , str) and weights == 'equal':
+            self.weights = np.ones(len(self.components))
+        else:
+            raise ValueError(f'weights must be a list of floats or "equal": {weights}')
 
     @property
     def composite_components(self) -> list['CompositeAlphaComponent']:
-        if isinstance(self.components , list):
-            return [CompositeAlphaComponent(component) for component in self.components]
-        else:
-            return [CompositeAlphaComponent(self.composite_name)]
+        return [CompositeAlphaComponent(component) for component in self.components]
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
 
     def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
         from src.res.factor.util.classes import StockFactor
@@ -228,9 +244,9 @@ class CompositeAlpha:
         comp_alpha_models = [StockFactor(comp.loads(date)).normalize(inplace=True).alpha_model() for comp in self.composite_components]
         models : list[Amodel] = []
         for d in date:
-            amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in comp_alpha_models] , self.weights)
+            amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in comp_alpha_models] , self.weights , date = d)
             models.append(amodel)
-        return AlphaModel(self.composite_name , models)
+        return AlphaModel(self.name , models)
 
 class CompositeAlphaComponent:
     def __init__(self , name : str):
@@ -250,6 +266,9 @@ class CompositeAlphaComponent:
                 raise Exception(f'{alpha_type} is not a valid alpha type')
         else:
             raise Exception(f'{name} is not a valid alpha')
+
+    def __repr__(self) -> str:
+        return self.name
 
     @classmethod
     def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:
