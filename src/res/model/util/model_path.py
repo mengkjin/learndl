@@ -530,6 +530,7 @@ class PredictionModel(ModelPath):
     
     def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max , reason : str = '') -> None:
         """save model pred"""
+        df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
         DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
 
     def load_pred(self , date : int , closest = False , indent = 1 , vb_level : int = Proj.vb.max , **kwargs) -> pd.DataFrame:
