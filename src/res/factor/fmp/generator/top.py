@@ -71,6 +71,10 @@ class TopStocksPortfolioCreator(PortCreator):
 
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
         pool.loc[:, 'selected'] = pool['weight'].astype(float).fillna(0) > 0
+        print(pool['selected'].sum())
+        print(pool['weight'].sum())
+        print(pool.query('weight > 0'))
+
         pool.loc[:, 'kept'] = pool['selected'] * (pool['selected'].cumsum() <= self.conf.stay_num) * (pool['rankpct'] >= self.conf.no_zone)
         pool.loc[:, 'buffered'] = pool['selected'] * ~pool['kept'] * (pool['rankpct'] >= self.conf.buffer_zone)
 
