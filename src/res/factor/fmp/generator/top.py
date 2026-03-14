@@ -71,7 +71,7 @@ class TopStocksPortfolioCreator(PortCreator):
 
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
         pool.loc[:, 'selected'] = pool['weight'].astype(float).fillna(0) > 0
-        pool.loc[:, 'kept'] = (pool['selected'].cumsum() <= self.conf.stay_num) * (pool['rankpct'] >= self.conf.no_zone)
+        pool.loc[:, 'kept'] = pool['selected'] * (pool['selected'].cumsum() <= self.conf.stay_num) * (pool['rankpct'] >= self.conf.no_zone)
         pool.loc[:, 'buffered'] = pool['selected'] * ~pool['kept'] * (pool['rankpct'] >= self.conf.buffer_zone)
 
         # buffered = pool.query('buffered')
@@ -81,6 +81,7 @@ class TopStocksPortfolioCreator(PortCreator):
         stay = pool.query('selected & (buffered | kept)')
         if len(stay) > self.conf.n_best:
             Logger.stdout(f'at model date {self.model_date}, {len(stay)} stocks are selected, but only {self.conf.n_best} stocks are allowed: {stay.secid.tolist()}')
+            print(pool['selected'].sum())
             print(stay)
             raise ValueError(f'len(stay) > self.conf.n_best: {len(stay)} > {self.conf.n_best}')
         stay_secid = stay['secid'].to_numpy() # noqa
