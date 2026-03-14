@@ -79,6 +79,10 @@ class TopStocksPortfolioCreator(PortCreator):
         #     Logger.stdout(f'at model date {self.model_date}, {len(buffered)} stocks are buffered : {buffered.secid.tolist()}')
 
         stay = pool.query('selected & (buffered | kept)')
+        if len(stay) > self.conf.n_best:
+            Logger.stdout(f'at model date {self.model_date}, {len(stay)} stocks are selected, but only {self.conf.n_best} stocks are allowed: {stay.secid.tolist()}')
+            print(stay)
+            raise ValueError(f'len(stay) > self.conf.n_best: {len(stay)} > {self.conf.n_best}')
         stay_secid = stay['secid'].to_numpy() # noqa
 
         stay_ind_count : pd.Series | Any = stay.groupby('indus')['secid'].count()
