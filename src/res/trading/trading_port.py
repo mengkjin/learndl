@@ -269,8 +269,7 @@ class TrackingPort(TradingPort):
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
                         alpha_details = False , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
-        with Logger.Profiler('Load Alpha'):
-            alpha = self.Alpha.get(date)
+        alpha = self.Alpha.get(date)
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
@@ -320,12 +319,13 @@ class BacktestPort(TradingPort):
         self.new_ports[date] = df
         return self
 
-    def rebuild(self , date : int | None = None , export = True , indent : int = 1 , vb_level : int = 2):
+    def rebuild(self , date : int | None = None , export = True , indent : int = 0 , vb_level : int = 2):
         date = CALENDAR.updated(date)
+        Logger.stdout(f'Rebuild portfolio for {self.name} at {CALENDAR.dates_str([date])} start ...' , indent = indent , vb_level = vb_level)
         for path in self.result_dir.joinpath('portfolio').glob('*.feather'):
             path.unlink()
         self.result_path_account.unlink(missing_ok = True)
-        df = self.build_backward(date , export = export , indent = indent , vb_level = vb_level)
+        df = self.build_backward(date , export = export , indent = indent + 1 , vb_level = vb_level)
         self.new_ports[date] = df
         return self
     

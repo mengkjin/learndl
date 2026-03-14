@@ -494,7 +494,7 @@ def _db_path(db_src , db_key , date = None , use_alt = False , closest = False ,
     else:
         assert date is not None , f'{db_src} use date type but date is None'
         new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{SAVE_OPT_DB}')
-
+        
     if not new_path.exists() and use_alt:
         alt_path = _db_path_alt(db_src , db_key , date , closest = False)
         if alt_path is not None:

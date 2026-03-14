@@ -35,6 +35,8 @@ class GeneralModel(ABC):
     def get_model(self , date : int , latest = True):
         return self.get(date , latest)
     def get(self , date : int , latest = True):
+        if date in self.models:
+            return self.models[date]
         use_date = self.latest_avail_date(date) if latest else date
         if use_date not in self.models and use_date in self.available_dates():
             self.append(self.load_day_model(date))

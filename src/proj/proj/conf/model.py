@@ -1,6 +1,7 @@
 # basic variables in factor package
 from typing import Literal
-from src.proj.abc import stderr
+from src.proj.abc import stderr 
+from src.proj.env import MACHINE
 
 __all__ = ['ModelConfig' , 'Model']
 
@@ -66,10 +67,16 @@ class ModelTrainConfig:
 class ModelConfig:
     def __init__(self):
         self._train = ModelTrainConfig()
+        self._settings = MACHINE.configs('setting' , 'model')
 
     @property
     def TRAIN(self):
         """config of model train , include resume options"""
         return self._train
+
+    @property
+    def SETTINGS(self):
+        """settings of model , including prediction models / hidden extraction models"""
+        return self._settings
 
 Model = ModelConfig()

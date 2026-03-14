@@ -2,14 +2,13 @@ import re
 from typing import Any , Literal
 from pathlib import Path
 
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , Logger
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
 
 TYPE_MODULE_TYPES = Literal['nn' , 'boost' , 'factor' ,'']
 MODULE_TYPES : list[TYPE_MODULE_TYPES] = ['nn' , 'boost' , 'factor' , '']
-MODEL_SETTINGS = MACHINE.configs('setting' , 'model')
 
 def parse_model_input(model_input : Path | str | None) -> dict[str,Any]:
     """return full model name and root path of a given model input"""

@@ -11,7 +11,7 @@ from src.proj import PATH , Logger , LogFile , DB , Proj
 from src.proj.calendar import CALENDAR
 from src.proj.func import torch_load
 
-from .abc import MODEL_SETTINGS , parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
+from .abc import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 
 __all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'PredictionModel' , 'HiddenExtractionModel']
 
@@ -442,7 +442,7 @@ class PredictionModel(ModelPath):
     '''
     START_DT = 20170101
     FMP_STEP = 5
-    MODEL_DICT : dict[str,dict[str,Any]] = MODEL_SETTINGS['prediction']
+    MODEL_DICT : dict[str,dict[str,Any]] = Proj.Conf.Model.SETTINGS['prediction']
 
     def __new__(cls , *args , **kwargs) -> 'PredictionModel | Any':
         return super().__new__(cls , *args , **kwargs)
@@ -532,9 +532,9 @@ class PredictionModel(ModelPath):
         """save model pred"""
         DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
 
-    def load_pred(self , date : int , indent = 1 , vb_level : int = Proj.vb.max , **kwargs) -> pd.DataFrame:
+    def load_pred(self , date : int , closest = False , indent = 1 , vb_level : int = Proj.vb.max , **kwargs) -> pd.DataFrame:
         """load model pred"""
-        df = DB.load('pred' , self.pred_name , date , indent = indent , vb_level = vb_level , **kwargs)
+        df = DB.load('pred' , self.pred_name , date , closest = closest , indent = indent , vb_level = vb_level , **kwargs)
         if not df.empty and self.pred_name not in df.columns:
             assert self.model_clean_name in df.columns or self.model_name in df.columns , \
                 f'{self.pred_name} / {self.model_clean_name} / {self.model_name} not in df.columns : {df.columns}'
@@ -564,7 +564,7 @@ class HiddenExtractionModel(ModelPath):
     for a hidden extraction model to extract hidden states
     model dict stored in configs/proj/model_settings.yaml file under hidden_extraction section
     '''
-    MODEL_DICT : dict[str,dict[str,Any]] = MODEL_SETTINGS['hidden_extraction']
+    MODEL_DICT : dict[str,dict[str,Any]] = Proj.Conf.Model.SETTINGS['hidden_extraction']
     def __new__(cls , *args , **kwargs) -> 'HiddenExtractionModel | Any':
         return super().__new__(cls , *args , **kwargs)
 

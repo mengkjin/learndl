@@ -68,6 +68,11 @@ def melt_frame(df : pd.DataFrame) -> pd.DataFrame:
     """
     if 'factor_name' in df.index.names:
         return df
+    elif len(df.columns) == 1:
+        col_name = df.columns[0]
+        melted = df.rename(columns={col_name: 'value'})
+        melted['factor_name'] = col_name
+        return melted.set_index('factor_name' , append=True)
     else:
         return df.melt(var_name = 'factor_name' , ignore_index = False).set_index('factor_name' , append=True)
 
@@ -76,7 +81,10 @@ def pivot_frame(df : pd.DataFrame) -> pd.DataFrame:
     pivot the dataframe from long to wide
     """
     if 'factor_name' in df.index.names:
-        return df.pivot_table(index = ['date' , 'secid'] , columns = 'factor_name' , values = 'value')
+        if df.index.get_level_values('factor_name').nunique() == 1:
+            return df.rename(columns={'value': df.index.get_level_values('factor_name')[0]}).reset_index(['factor_name'] , drop=True)
+        else:
+            return df.pivot_table(index = ['date' , 'secid'] , columns = 'factor_name' , values = 'value')
     else:
         return df
 
@@ -169,6 +177,34 @@ def eval_grp_avg(
         rtn.append(grp_avg_ret)
     rtn = pd.concat(rtn, axis=1, sort=True)
     return rtn
+
+
+def normalize_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+                 weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
+    """
+    normalize the dataframe factor data by fill method , weighted whiten , and winsorize
+    can specify the order of the steps
+    """
+    if df.empty:
+        return df
+    if 'date' not in df.index.names:
+        df = df.set_index('date' , append=True)
+    if 'secid' not in df.index.names:
+        df = df.set_index('secid' , append=True)
+    if None in df.index.names:
+        df = df.reset_index([None] , drop=True)
+    assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
+    for step in order:
+        if step == 'fillna':   
+            df = fillna(df , fill_method = fill_method , pivot = False)
+        elif step == 'winsor': 
+            df = winsor(df , pivot = False)
+        elif step == 'whiten': 
+            df = whiten(df , ffmv_weighted = weighted_whiten , pivot = False)
+        else:
+            raise ValueError(f'step {step} not supported')
+    df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True).rename_axis(None , axis = 1)
+    return df
 
 def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group_num : int = 10) -> pd.Series | Any:
     """
@@ -1003,7 +1039,7 @@ class StockFactor:
         """
         if not order:
             return self
-        df = self.normalize_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
+        df = normalize_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
         if inplace:
             return self.update(df , normalized = True)
         else:
@@ -1077,28 +1113,9 @@ class StockFactor:
 
     @staticmethod
     def normalize_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-                  weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
+                    weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
         """
         normalize the dataframe factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
-        if df.empty:
-            return df
-        if 'date' not in df.index.names:
-            df = df.set_index('date' , append=True)
-        if 'secid' not in df.index.names:
-            df = df.set_index('secid' , append=True)
-        if None in df.index.names:
-            df = df.reset_index([None] , drop=True)
-        assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
-        for step in order:
-            if step == 'fillna':   
-                df = fillna(df , fill_method = fill_method)
-            elif step == 'winsor': 
-                df = winsor(df)
-            elif step == 'whiten': 
-                df = whiten(df , ffmv_weighted = weighted_whiten)
-            else:
-                raise ValueError(f'step {step} not supported')
-        df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True).rename_axis(None , axis = 1)
-        return df
+        return normalize_df(df , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)

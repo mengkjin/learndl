@@ -3,7 +3,7 @@ from pathlib import Path
 import threading
 from typing import Any , Literal
 
-from src.proj.env.machine import MACHINE
+from src.proj.env import MACHINE
 from src.proj.abc import stderr , Silence
 
 from .state import ProjStates

@@ -4,8 +4,9 @@ import pandas as pd
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , Literal
+from typing import Any , Literal , Callable
 
+from src.proj import Proj
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 
@@ -110,17 +111,20 @@ class Amodel:
             return cls.from_dataframe(date , data , secid , filter_date=True)
         
     @classmethod
-    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray | Literal['equal'] | None = None , name : str = 'combined_alpha' , normalize = True):
-        if len(alphas) == 1:
-            return alphas[0]
+    def combine(cls , alphas : list['Amodel | None'] , weights : list[float] | np.ndarray | Literal['equal'] | None = None , name : str = 'combined_alpha' , normalize = True):
         if weights == 'equal' or weights is None:
             weights = np.ones(len(alphas)) / len(alphas)
+        assert any(alpha is not None for alpha in alphas) , 'all alphas must be non-None'
         assert len(alphas) == len(weights) , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
-        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas])) if alphas else np.array([])
-        alpha = np.sum(np.array([alpha.align(secid).alpha for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
+        valid_alphas = [alpha for alpha in alphas if alpha is not None]
+        if len(valid_alphas) == 1:
+            return valid_alphas[0]
+        date = [alpha.date for alpha in alphas if alpha is not None][0]
+        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas if alpha is not None])) if alphas else np.array([])
+        alpha = np.sum(np.array([alpha.align(secid).alpha if alpha is not None else np.zeros(len(secid)) for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
         if normalize: 
             alpha = zscore(alpha)
-        return cls(alphas[0].date , alpha , secid , name)
+        return cls(date , alpha , secid , name)
 
 class AlphaModel(GeneralModel):
     '''Alpha model instance, contains alpha for multiple days'''
@@ -201,7 +205,7 @@ class CompositeAlpha:
         
         if isinstance(self.weights , list):
             assert len(self.components) == len(self.weights) , f'components {self.components} and weights {self.weights} must have the same length'
-    
+
     @property
     def composite_name(self) -> str:
         if isinstance(self.name , list) or ',' in self.name:
@@ -210,52 +214,65 @@ class CompositeAlpha:
             return self.name
 
     @property
-    def composite_components(self) -> list[str]:
+    def composite_components(self) -> list['CompositeAlphaComponent']:
         if isinstance(self.components , list):
-            return self.components
+            return [CompositeAlphaComponent(component) for component in self.components]
         else:
-            return [self.composite_name]
-
-    def get_alphas(self , date : int) -> list[Amodel]:
-        return [self.get_single_alpha(alpha , date).item() for alpha in self.composite_components]
+            return [CompositeAlphaComponent(self.composite_name)]
 
     def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
+        from src.res.factor.util.classes import StockFactor
         if not isinstance(date , (list , np.ndarray)):
             date = [date]
+
+        comp_alpha_models = [StockFactor(comp.loads(date)).normalize(inplace=True).alpha_model() for comp in self.composite_components]
         models : list[Amodel] = []
         for d in date:
-            amodel = Amodel.combine(self.get_alphas(d) , self.weights)
+            amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in comp_alpha_models] , self.weights)
             models.append(amodel)
         return AlphaModel(self.composite_name , models)
 
-    @staticmethod
-    def get_single_alpha(alpha_name : str , date : int) -> AlphaModel:
-        from src.res.factor.util.classes.stock_factor import StockFactor
-        from src.res.factor.calculator import StockFactorHierarchy
-        from src.res.model.util import PredictionModel
-        from src.proj import DB
-        
-        if alpha_name in PredictionModel.MODEL_DICT:
-            reg_model = PredictionModel.SelectModels(alpha_name)[0]
-            dates = reg_model.pred_dates
-            df = reg_model.load_pred(dates[dates <= date].max()).assign(date = date)
-        elif '@' in alpha_name:
-            exprs = alpha_name.split('@')
-            alpha_type = exprs[0]
-            alpha_name = exprs[1]
+class CompositeAlphaComponent:
+    def __init__(self , name : str):
+        self.name = name
+
+        if name in Proj.Conf.Model.SETTINGS['prediction']:
+            self.loads = self.db_loads('pred' , name)
+        elif '@' in name:
+            exprs = name.split('@')
+            alpha_type , alpha_name = exprs[:2]
             alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
-            if alpha_type == 'sellside':
-                df = DB.load(alpha_type , alpha_name , date , closest = True , vb_level = 'inf')
+            if alpha_type in ['sellside' , 'pred']:
+                self.loads = self.db_loads(alpha_type , alpha_name , alpha_column)
             elif alpha_type == 'factor':
-                df = StockFactorHierarchy.get_factor(alpha_name).Load(date , closest = True)
-            elif alpha_type == 'pred':
-                df = DB.load('pred' , alpha_name , date , closest = True , vb_level = 'inf')
+                self.loads = self.factor_loads(alpha_name)
             else:
                 raise Exception(f'{alpha_type} is not a valid alpha type')
-            df = pd.DataFrame(columns=['secid' , 'date' , alpha_column]) if df.empty else df.assign(date = date).loc[:,['secid' , 'date' , alpha_column]]
         else:
-            raise Exception(f'{alpha_name} is not a valid alpha')
+            raise Exception(f'{name} is not a valid alpha')
 
-        factor = StockFactor(df)
-        assert len(factor.factor_names) == 1 , f'expect 1 factor name , got {factor.factor_names}'
-        return factor.normalize().alpha_model()
+    @classmethod
+    def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:
+        from src.proj import DB
+        def wrapper(date : int | list[int] | np.ndarray) -> pd.DataFrame:
+            if not isinstance(date , (list , np.ndarray)):
+                date = [date]
+            column = db_column if db_column is not None else db_key
+            df = DB.loads(db_src , db_key , date , vb_level = 'inf')
+            if min(date) not in df['date']:
+                df = pd.concat([DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'inf').assign(date = min(date)) , df])
+            df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
+            return df
+        return wrapper
+
+    @classmethod
+    def factor_loads(cls , factor_name : str) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:
+        from src.res.factor.calculator import StockFactorHierarchy
+        def wrapper(date : int | list[int] | np.ndarray) -> pd.DataFrame:
+            if not isinstance(date , (list , np.ndarray)):
+                date = [date]
+            df = StockFactorHierarchy.get_factor(factor_name).Loads(date)
+            if min(date) not in df['date']:
+                df = pd.concat([StockFactorHierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date)) , df])
+            return df
+        return wrapper

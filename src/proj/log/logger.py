@@ -429,6 +429,8 @@ class Logger:
         def __exit__(self, type, value, trace):
             if not self.silent:
                 new_stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
+        def __repr__(self):
+            return f'{self.__class__.__name__}({self.key},vb_level={self.vb_level},enter_vb_level={self.enter_vb_level})'
 
         @property
         def enter_str(self):
