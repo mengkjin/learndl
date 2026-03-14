@@ -875,7 +875,7 @@ class StockFactor:
         update the alpha models
         """
         assert name in self.factor_names , f'{name} is not in the factor names : {self.factor_names}'
-        return AlphaModel.from_dataframe(self.frame()[name] , name)
+        return AlphaModel.from_dataframe(self.frame().drop_duplicates(subset=['date','secid'])[name] , name)
 
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
                         nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close' ,

@@ -241,7 +241,8 @@ class CompositeAlpha:
         if not isinstance(date , (list , np.ndarray)):
             date = [date]
 
-        comp_alpha_models = [StockFactor(comp.loads(date)).normalize(inplace=True).alpha_model() for comp in self.composite_components]
+        factors = [StockFactor(comp.loads(date)) for comp in self.composite_components]
+        comp_alpha_models = [factor.normalize(inplace=True).alpha_model() for factor in factors]
         models : list[Amodel] = []
         for d in date:
             amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in comp_alpha_models] , self.weights , date = d)
@@ -278,9 +279,11 @@ class CompositeAlphaComponent:
                 date = [date]
             column = db_column if db_column is not None else db_key
             df = DB.loads(db_src , db_key , date , vb_level = 'inf')
-            if min(date) not in df['date']:
+            if min(date) < min(df['date']):
+                print(f'{db_src} {db_key} {min(date)} not in {df["date"].unique()}')
                 df = pd.concat([DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'inf').assign(date = min(date)) , df])
             assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
+            print(df)
             df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
             return df
         return wrapper
@@ -292,7 +295,7 @@ class CompositeAlphaComponent:
             if not isinstance(date , (list , np.ndarray)):
                 date = [date]
             df = StockFactorHierarchy.get_factor(factor_name).Loads(date)
-            if min(date) not in df['date']:
+            if min(date) < min(df['date']):
                 df = pd.concat([StockFactorHierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date)) , df])
             return df
         return wrapper
