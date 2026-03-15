@@ -2,15 +2,15 @@
 type: data # [data , hidden , factor , combo] , specify below
 
 filter.secid: null # random.200 , random.1000 , ...
-filter.date: null # 20220101-20240930 (yyyyMMdd-yyyyMMdd)
+filter.date: null # 20241101-20250331 (yyyyMMdd-yyyyMMdd)
 
-sequence.lens: {day: 30, style: 30, indus: 30 , factor: 1, hidden: 1} # others will be 1
+sequence.lens: {day: 30, 30m: 30, style: 30, indus: 30 , factor: 1, hidden: 1} # others will be 1
 sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1} # others will be 1
 
 data.prenorm:   # should the day be prenormalized? recommendation : not to change (also apply to hidden and factor)
   day: {'divlast' : True  , 'histnorm' : True}
 
-data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
+data.types: 30m # ['day+30m' , 30m , day , ...] , use if input_type is data
 
 hidden.types: # list of hidden states , use if input_type is hidden
   - gru_day_V0.0.best

@@ -19,7 +19,6 @@ class simple_lstm(nn.Module):
         o = self.lstm(x)[0][:,-1]
         return self.fc(o) , {'hidden' : o}
     
-
 class mod_lstm(nn.Module):
     def __init__(self , input_dim , output_dim , dropout=0.0 , num_layers = 2):
         super().__init__()

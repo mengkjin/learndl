@@ -82,7 +82,6 @@ class DataModule(BaseDataModule):
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision, 
                                      factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date)
-        
         self.filter_datas()
         Logger.stdout(f'{self.__class__.__name__} : data shape is ' , self.datas.shape)
         
@@ -105,6 +104,8 @@ class DataModule(BaseDataModule):
         self.filter_datas_secid()
 
     def filter_datas_date(self) -> None | tuple[int | None , int | None]:
+        if self.use_data == 'predict':
+            return None
         value = self.config.input_filter_date
         if value is None:
             return None
@@ -174,7 +175,7 @@ class DataModule(BaseDataModule):
         return 99991231 if self.use_data == 'predict' else self.config.end_date
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
-              param : dict[str,Any] = {'seqlens' : {}} , 
+              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
         if self.setup_new_param(stage , param , model_date , **kwargs):
             self.setup_input_prepare()
@@ -428,6 +429,8 @@ class DataModule(BaseDataModule):
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_files = [PATH.batch.joinpath(f'{set_key}.{bnum}.pt') for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
+                if b_i.numel() == 0:
+                    continue
                 assert torch.isin(b_i[:,1] , index1).all() , f'all b_i[:,1] must be in index1'
                 index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
 
@@ -498,7 +501,7 @@ class DataModule(BaseDataModule):
             return [i[p] for p in BatchSampler(permutation(np.arange(len(i))) , bs , drop_last=False)]
         def sequential_sampling(beg , end , posit = pos , valid = valid):
             return [posit[:,j][valid[:,j]] for j in range(beg , end)]
-        
+
         sample_index = {}
         if self.stage == 'fit':
             sep = int(l1 * train_ratio)
@@ -518,6 +521,7 @@ class DataModule(BaseDataModule):
                 sample_index['valid'] = sequential_sampling(sep , l1)
         else:
             sample_index[self.stage] = sequential_sampling(0 , l1)
+
         return sample_index    
 
     @classmethod

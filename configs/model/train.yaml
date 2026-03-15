@@ -30,11 +30,12 @@ trainer.gradient.clip_value: 10.0
 # keys (e.g. 'ccc', 'hidden_corr', 'hidden_corr_deprecated') and loss_kwargs (e.g. {'lamb' :  0.001 ,}) 
 # the first key is the primary one to be used for multilosses
 criterion.loss: 
-  ccc: {}  
+  ccc_hcorr: {lamb : 0.01}
+  # ccc: {}  
   # mse: {}
   # pearson: {}
-  hidden_corr:  {'lamb' :  0. ,}
-  hidden_corr_deprecated:  {'lamb' :  0.001 ,}
+  # hidden_corr:  {'lamb' :  0. ,}
+  # hidden_corr_deprecated:  {'lamb' :  0.001 ,}
 
 # score params , should be a dict, can be one of mse, pearson, ccc, spearman
 # it is used for validation set calculation and early stopping

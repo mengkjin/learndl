@@ -63,12 +63,12 @@ callbacks.CudaEmptyCache: {'batch_interval' : 20}
 callbacks.DetailedAlphaAnalysis: {'use_num' : 'avg'}
 
 conditional.short_test:
-  model.beg_date: 20240701
-  model.end_date: 20240930
+  model.beg_date: 20241101
+  model.end_date: 20250331
   model.window: 240
   train.max_epoch: 3
   input.filter.secid: random.200
-  input.filter.date: 20220101-20240930
+  input.filter.date: 20241101-20250331
   callbacks.DetailedAlphaAnalysis:
     tasks: ['factor' , 't50']
 conditional.transformer:

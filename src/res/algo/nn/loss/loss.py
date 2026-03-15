@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from src.func.metric import mse , pearson , ccc
 
@@ -16,7 +17,9 @@ class BaseLoss(nn.Module):
         super().__init__()
 
     def __call__(self , *args , **kwargs) -> torch.Tensor | dict[str,torch.Tensor]:
-        return self.forward(*args , **kwargs)
+        output = self.forward(*args , **kwargs)
+        assert isinstance(output,torch.Tensor) or isinstance(output,dict) , f'output of {self.key} should be a tensor or a dict , but got {output}'
+        return output
 
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor | dict[str,torch.Tensor]:
         raise NotImplementedError
@@ -83,6 +86,51 @@ class LossQuantile(BaseLoss):
         
         v = torch.stack(losses,dim=-1).mean(dim=-1)
         return v
+
+class CCCHiddenCorrLoss(BaseLoss):
+    key = 'ccc_hcorr'
+    def __init__(self, lamb : float = 0.01):
+        super().__init__()
+        self.lamb = lamb
+        self.ccc_loss = LossCCC()
+        self.hidden_corr_loss = LossHiddenCorr()
+
+    def forward(self , label : torch.Tensor , pred : torch.Tensor , hidden : torch.Tensor , **kwargs) -> dict[str,torch.Tensor]:
+        return {
+            'ccc' : self.ccc_loss.forward(label , pred) ,
+            'hidden_corr' : self.hidden_corr_loss.forward(hidden = hidden) * self.lamb
+        }
+
+class ABCMLoss(BaseLoss):
+    """ABCM:基于神经网络的alpha因子和beta因子协同挖掘模型"""
+    key = 'abcm'
+    def __init__(self, lamb : float = 0.1):
+        super().__init__()
+        self.lamb = lamb
+
+    def forward(self, pred : torch.Tensor , label : torch.Tensor , alphas : torch.Tensor , betas : torch.Tensor , betas_peer : torch.Tensor , **kwargs):
+        assert label.shape[-1] == 2 , label.shape
+        mse = F.mse_loss(pred.squeeze() , label[...,0].squeeze())
+        rsquare = self.rsquare_loss(alphas , label[...,1])
+        corr = self.corr_loss(betas)
+        turnover = self.turnover_loss(betas , betas_peer)
+        
+        return mse + rsquare + self.lamb * corr + turnover
+
+    def rsquare_loss(self, hiddens : torch.Tensor , label : torch.Tensor , **kwargs):
+        assert hiddens.ndim == 2 , hiddens.shape
+        y_norm = label.norm()
+        pred = hiddens @ (hiddens.T @ hiddens).inverse() @ hiddens.T @ label
+        res_norm = (label - pred).norm()
+        return 1 - res_norm / y_norm
+
+    def corr_loss(self, hiddens : torch.Tensor , **kwargs):
+        h = (hiddens - hiddens.mean(dim=0,keepdim=True)) / (hiddens.std(dim=0,keepdim=True) + 1e-6)
+        pen = h.T.cov().norm()
+        return pen
+
+    def turnover_loss(self, betas : torch.Tensor , betas_peer : torch.Tensor , **kwargs):
+        return (betas - betas_peer).norm()
 
 class Loss:
     options = {cls.key : cls for cls in BaseLoss.__subclasses__() if cls.key != ''}

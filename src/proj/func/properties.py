@@ -30,7 +30,14 @@ def shape(obj : Any , keys : list[str] | None = None) -> Any:
     if obj is None: 
         return []
     elif keys is not None:
-        return {key:shape(getattr(obj , key)) for key in keys}
+        shape_dict = {}
+        for key in keys:
+            try:
+                shape_obj = obj[key]
+            except Exception:
+                shape_obj = getattr(obj , key)
+            shape_dict[key] = shape(shape_obj)
+        return shape_dict
     elif hasattr(obj , 'shape'): 
         obj_shape = getattr(obj , 'shape')
         if callable(obj_shape):

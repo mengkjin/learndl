@@ -137,7 +137,7 @@ class BatchInput:
             with Proj.Silence:
                 model_config = ModelConfig(None, override=override, test_mode=True)
                 data = DataModule(model_config , 'predict').load_data()
-                data.setup('predict' , model_date = data.datas.y.date[-50])
+                data.setup('predict' , model_date = data.datas.y.date[-20])
                 batch_input = data.predict_dataloader()[0]
             Logger.stdout(batch_input.info)
             return batch_input
@@ -253,7 +253,8 @@ class BatchOutput:
             inputs = inputs['x']
         device0 = Device.get_device(module)
         device1 = Device.get_device(inputs)
-        assert device0 == device1 , (device0 , device1)
+        if device0 != device1:
+            module = module.to(device1)
         outputs = module(inputs ,  **kwargs)
         batch_output = cls(outputs)
         Logger.stdout(batch_output.info)
