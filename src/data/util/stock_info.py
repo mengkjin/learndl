@@ -65,6 +65,8 @@ class InfoDataAccess:
         return df
 
     def add_indus(self , df : pd.DataFrame , date : int | TradeDate | None = None , na_industry_as : Any = None):
+        if df.empty:
+            return df
         df = df.join(self.get_indus(date) , on = 'secid' , how = 'left')
         if na_industry_as is not None: 
             df['indus'] = df['indus'].fillna(na_industry_as)

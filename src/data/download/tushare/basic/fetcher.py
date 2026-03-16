@@ -246,7 +246,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame')
             elif df.empty: 
                 break
-            elif len(dfs) >= max_fetch_times: 
+            elif max_fetch_times > 0 and len(dfs) >= max_fetch_times: 
                 raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
             df = df.dropna(axis=1, how='all')
             if not df.empty: 

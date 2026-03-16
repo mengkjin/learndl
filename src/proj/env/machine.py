@@ -1,9 +1,10 @@
 # please check this path before running the code
-import sys , socket , platform , os , torch
+import sys , socket , platform , os , torch , pytz
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from tzlocal import get_localzone
 
 __all__ = ['MACHINE']
 
@@ -129,6 +130,9 @@ class MACHINE:
     cpu_count = os.cpu_count() or 1
     max_workers = 40 if platform_server else cpu_count
     best_device = _get_best_device()
+
+    timezone = get_localzone()
+    local = str(timezone) == str(pytz.timezone('Asia/Shanghai') )
     
     assert main_path.exists() , f'main_path not exists: {main_path}'
     assert Path(__file__).is_relative_to(main_path) , f'{__file__} is not in {main_path}'
@@ -142,6 +146,7 @@ class MACHINE:
             'Machine Name' : cls.name, 
             'Is Server' : cls.cuda_server, 
             'System' : cls.system_name, 
+            'Timezone' : cls.timezone,
             'Main Path' : cls.main_path, 
             'Python Path' : cls.python_path,
             'Best Device' : cls.best_device,

@@ -78,6 +78,8 @@ class ReinforcePortfolioCreatorConfig:
         return DB.dates(*self.screener_src_key)
 
     def screener_rename(self , df : pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
         if 'alpha' not in df.columns:
             df = df.rename(columns={self.screener_col : 'alpha'})
         if 'alpha' not in df.columns:
