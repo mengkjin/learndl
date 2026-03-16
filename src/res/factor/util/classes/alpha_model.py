@@ -174,7 +174,7 @@ class AlphaModel(GeneralModel):
             name = models[0].name
         return cls(name , models)
 
-    def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] | 'AlphaModel' | None , override = True):
+    def append(self , model : 'Amodel | list[Amodel] | dict[int,Amodel] | AlphaModel | None' , override = True):
         if model is None:
             ...
         elif isinstance(model , Amodel):
