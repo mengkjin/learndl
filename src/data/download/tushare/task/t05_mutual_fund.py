@@ -40,7 +40,7 @@ class FundPortfolioFetcher(TushareFetcher):
     
     def get_data(self , date):
         renamer = {'ts_code' : 'fund_id'}
-        if MACHINE.local:
+        if MACHINE.utc8:
             limit , max_fetch_times = 3000 , 500
         else:
             limit , max_fetch_times = 1000 , 2000

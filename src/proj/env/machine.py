@@ -132,7 +132,7 @@ class MACHINE:
     best_device = _get_best_device()
 
     timezone = get_localzone()
-    local = str(timezone) == str(pytz.timezone('Asia/Shanghai') )
+    utc8 = str(timezone) == str(pytz.timezone('Asia/Shanghai') )
     
     assert main_path.exists() , f'main_path not exists: {main_path}'
     assert Path(__file__).is_relative_to(main_path) , f'{__file__} is not in {main_path}'
