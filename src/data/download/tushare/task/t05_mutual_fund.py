@@ -40,7 +40,7 @@ class FundPortfolioFetcher(TushareFetcher):
     
     def get_data(self , date):
         renamer = {'ts_code' : 'fund_id'}
-        df = self.iterate_fetch(self.pro.fund_portfolio , limit = 3000 , period = str(date) , max_fetch_times=500)
+        df = self.iterate_fetch(self.pro.fund_portfolio , limit = 1000 , period = str(date) , max_fetch_times=2000)
         if df.empty: 
             return df
         df = ts_code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)

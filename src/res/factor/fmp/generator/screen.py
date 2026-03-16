@@ -48,6 +48,8 @@ class ScreeningPortfolioCreatorConfig:
 
     def get_sorting_alpha(self , model_date : int , indus = True) -> pd.DataFrame:
         df = DB.load(*self.sorter_src_key , model_date , closest = True)
+        if df.empty:
+            return df
         df = self.sorter_rename(df)
         if indus:
             df = DATAVENDOR.INFO.add_indus(df , model_date , 'unknown')
