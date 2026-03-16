@@ -153,7 +153,7 @@ class AlphaModel(GeneralModel):
         self.models : dict[int,Amodel] = {}
         self.append(models)
     def load_day_model(self, date: int) -> Any:
-        # do something here
+        """load alpha model for a specific date , is not implemented in this class"""
         ...
     def item(self) -> Amodel:
         return super().item()
@@ -174,8 +174,10 @@ class AlphaModel(GeneralModel):
             name = models[0].name
         return cls(name , models)
 
-    def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] , override = True):
-        if isinstance(model , Amodel):
+    def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] | 'AlphaModel' | None , override = True):
+        if model is None:
+            ...
+        elif isinstance(model , Amodel):
             assert override or (model.date not in self.models.keys()) , model.date
             self.models[model.date] = model
         elif isinstance(model , list):
@@ -184,6 +186,19 @@ class AlphaModel(GeneralModel):
         elif isinstance(model , dict):
             for am in model.values():
                 self.append(am , override=override)
+        elif isinstance(model , AlphaModel):
+            assert model.name == self.name , f'model name must be the same as self.name: {model.name} != {self.name}'
+            for am in model.models.values():
+                self.append(am , override=override)
+        else:
+            raise ValueError(f'model must be a Amodel, list of Amodel, dict of Amodel, or AlphaModel: {type(model)}')
+        return self
+    
+    def subset(self , date : int | list[int] | np.ndarray):
+        if not isinstance(date , (list , np.ndarray)):
+            date = [date]
+        models = {d : self.models.get(d) for d in date if d in self.models}
+        return self.__class__(name = self.name , models = models)
 
     def get(self , date : int , latest = True , lag : int = 0) -> Amodel:
         if lag:
@@ -237,19 +252,20 @@ class CompositeAlpha:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
 
     def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
-        from src.res.factor.util.classes import StockFactor
         if not isinstance(date , (list , np.ndarray)):
             date = [date]
 
-        factors = [StockFactor(comp.loads(date)) for comp in self.composite_components]
-        comp_alpha_models = [factor.normalize(inplace=True).alpha_model() for factor in factors]
+        alpha_models = [comp.get_alpha_model(date) for comp in self.composite_components]
         models : list[Amodel] = []
         for d in date:
-            amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in comp_alpha_models] , self.weights , date = d)
+            amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in alpha_models] , self.weights , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 
 class CompositeAlphaComponent:
+    _cache_normalized : dict[str , AlphaModel] = {}
+    _cache_unnormalized : dict[str , AlphaModel] = {}
+
     def __init__(self , name : str):
         self.name = name
 
@@ -270,6 +286,38 @@ class CompositeAlphaComponent:
 
     def __repr__(self) -> str:
         return self.name
+
+    def get_alpha_model(self , date : int | list[int] | np.ndarray , normalize : bool = True) -> AlphaModel:
+        from src.res.factor.util.classes import StockFactor
+
+        cached_alpha_model = self.get_cache(self.name , normalize = normalize)
+        cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
+        new_dates = np.setdiff1d(date , cached_dates)
+        
+        factor = StockFactor(self.loads(new_dates))
+        if normalize:
+            factor = factor.normalize(inplace=True)
+        alpha_model = factor.alpha_model()
+        new_alpha_model = cached_alpha_model.append(alpha_model)
+        self.set_cache(new_alpha_model , self.name , normalize = normalize)
+        return new_alpha_model.subset(date)
+
+    @classmethod
+    def get_cache(cls , name : str , normalize : bool = True) -> AlphaModel:
+        if normalize:
+            alpha_model = cls._cache_normalized.get(name)
+        else:
+            alpha_model = cls._cache_unnormalized.get(name)
+        if alpha_model is None:
+            alpha_model = AlphaModel(name = name)
+        return alpha_model
+
+    @classmethod
+    def set_cache(cls , alpha_model : AlphaModel , name : str , normalize : bool = True):
+        if normalize:
+            cls._cache_normalized[name] = alpha_model
+        else:
+            cls._cache_unnormalized[name] = alpha_model
 
     @classmethod
     def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:

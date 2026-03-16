@@ -55,3 +55,9 @@ class GeneralModel(ABC):
     def item(self):
         assert len(self.models) == 1 , f'expect 1 model , but got {len(self.models)}'
         return list(self.models.values())[0]
+    def subset(self , date : int | list[int] | np.ndarray):
+        if not isinstance(date , (list , np.ndarray)):
+            date = [date]
+        new = self.copy()
+        new.models = {d : self.models.get(d) for d in date if d in self.models}
+        return new

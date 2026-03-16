@@ -1,4 +1,4 @@
-from src.proj import CALENDAR
+from src.proj import CALENDAR , Logger , Proj
 from .trading_port import BacktestPort
 
 class TradingPortfolioBacktestor:
@@ -19,3 +19,19 @@ class TradingPortfolioBacktestor:
         tp.rebuild(date , export = export , indent = indent , vb_level = vb_level)
         tp.analyze(end = date)
         return tp
+
+    @classmethod
+    def update(cls , indent : int = 0 , vb_level : int = 1):
+        Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
+        date = CALENDAR.updated()
+            
+        updated_ports = {name:BacktestPort.load(name).build(date , indent = indent + 1 , vb_level = Proj.vb.max) 
+                         for name in BacktestPort.candidate_ports}
+        updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
+            
+        if len(updated_ports) == 0: 
+            Logger.alert1(f'No backtest portfolios updated on {date}' , indent = indent + 1)
+        else:
+            Logger.success(f'{len(updated_ports)} Backtest portfolios updated on {date}' , indent = indent + 1 , vb_level = vb_level)
+            for port_name in updated_ports:
+                updated_ports[port_name].analyze(key_fig = '' , vb_level = Proj.vb.max)

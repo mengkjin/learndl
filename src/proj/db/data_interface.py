@@ -6,7 +6,6 @@ import tarfile
 import io
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal , Generator , Callable
 
@@ -60,11 +59,6 @@ def _db_src_deprecated(i : int):
             return func(*args , **kwargs)
         return inner
     return wrapper
-
-def _today(offset = 0 , astype : Any = int):
-    """get today's date"""
-    d = datetime.today() + timedelta(days=offset)
-    return astype(d.strftime('%Y%m%d'))
 
 def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     """get dates from paths"""
@@ -154,9 +148,9 @@ def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
     paths = directory.rglob('*')
     dates = _paths_to_dates(paths)
     if end_dt   is not None: 
-        dates = dates[dates <= (end_dt   if end_dt   > 0 else _today(end_dt))]
+        dates = dates[dates <= end_dt]
     if start_dt is not None: 
-        dates = dates[dates >= (start_dt if start_dt > 0 else _today(start_dt))]
+        dates = dates[dates >= start_dt]
     if year is not None:     
         dates = dates[dates // 10000 == year]
     return dates

@@ -18,13 +18,17 @@ class TradingAPI:
         """
         Update trading portfolios for both laptop and server:
         """
-        reset_ports = reset_ports or []
-        wrap_update(TradingPortfolioTracker.update , 'update trading portfolios' , reset_ports = reset_ports)
+        wrap_update(TradingPortfolioTracker.update , 'update trading portfolios' , reset_ports = reset_ports or [])
+        wrap_update(TradingPortfolioBacktestor.update , 'update backtest portfolios')
 
     @classmethod
-    def Analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs): 
-        assert port_name in cls.available_ports() , f'port name {port_name} is not a valid analyze port'
-        return TradingPortfolioTracker.analyze(port_name , start , end , **kwargs)
+    def Analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs):
+        if port_name in cls.available_ports(backtest = True):
+            return TradingPortfolioBacktestor.analyze(port_name , start , end , **kwargs)
+        elif port_name in cls.available_ports(backtest = False):
+            return TradingPortfolioTracker.analyze(port_name , start , end , **kwargs)
+        else:
+            raise ValueError(f'port name {port_name} is not a valid analyze port')
 
     @classmethod
     def Backtest(cls , port_name_starter : str , start : int | None = None , end : int | None = None , **kwargs): 

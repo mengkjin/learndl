@@ -1,5 +1,6 @@
 focused_ports:
   - use_daily
+  - use_daily2
 
 # accepted fields:
 #   alpha: str or comma separated strings
@@ -20,13 +21,6 @@ focused_ports:
 #   indus_control: float , default is 0.1
 
 trading_ports:
-  test0:
-    alpha: gru_day_V1
-    universe: csi800+csi1000+csi2000
-
-  test1:
-    alpha: factor@df_scores_v0
-
   use_daily:
     alpha: big_combine
     components:
@@ -34,6 +28,13 @@ trading_ports:
       - factor@df_scores_v0
       - gru_day_V1
     weights: [1.0 , 1.0 , 1.0]
+
+  use_daily2:
+    alpha: 
+      - factor@ht_master_combined
+      - factor@df_scores_v0
+      - factor@df_scores_v3
+      - gru_day_V1
 
   master_daily:
     alpha: factor@ht_master_combined
@@ -55,21 +56,12 @@ backtest_ports:
       - factor@df_scores_v0
       - gru_day_V1
 
-  use_daily.backtest2:
-    alpha:
+  use_daily2.backtest:
+    alpha: 
       - factor@ht_master_combined
       - factor@df_scores_v0
+      - factor@df_scores_v3
       - gru_day_V1
-    buffer_zone: 0.9
-
-  ht_master_combined.backtest:
-    alpha: factor@ht_master_combined
-
-  df_scores_v0.backtest:
-    alpha: factor@df_scores_v0
-
-  gru_day_V1.backtest:
-    alpha: gru_day_V1
 
   event_factor_momentum.backtest:
     alpha: factor@event_factor_momentum

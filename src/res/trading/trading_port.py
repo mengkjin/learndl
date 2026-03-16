@@ -113,11 +113,7 @@ class TradingPort:
         return self.result_dir.joinpath(f'{self.name}_analytic_plot.pdf')
     
     def stored_dates(self , start : int | None = None , end : int | None = None) -> np.ndarray:
-        dates = DB.dir_dates(self.export_dir)
-        if start is not None: 
-            dates = dates[dates >= start]
-        if end is not None: 
-            dates = dates[dates <= end]
+        dates = DB.dir_dates(self.export_dir , start_dt = start , end_dt = end)
         return dates
     
     def is_first_date(self , date : int) -> bool:
@@ -233,7 +229,7 @@ class TradingPort:
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:
-                Logger.display(fig , caption = f'Figure: {name.title()}:')
+                Logger.display(fig , caption = f'Figure: {name.title()}:' , vb_level = vb_level)
 
         self.analyze_results = rslts
         self.analyze_figs = figs

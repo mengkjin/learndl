@@ -4,10 +4,13 @@ import pandas as pd
 
 from datetime import datetime , timedelta , time
 from typing import Any , Literal , Sequence
+from zoneinfo import ZoneInfo
 
 from src.proj.env import MACHINE    
 from src.proj.abc.singleton import singleton
 import src.proj.db as DB
+
+beijing_tz = ZoneInfo("Asia/Shanghai")
 
 @singleton
 class _Calendars:
@@ -127,14 +130,20 @@ class CALENDAR:
     YE = pd.date_range(start='1997-01-01', end='2099-12-31', freq='YE').strftime('%Y%m%d').to_numpy(int)
 
     @staticmethod
-    def today(offset = 0) -> int: 
-        d = datetime.today() 
+    def now(bj_tz = True) -> datetime:
+        if bj_tz:
+            return datetime.now(beijing_tz)
+        else:
+            return datetime.now()
+    @classmethod
+    def today(cls , offset = 0 , bj_tz = True) -> int: 
+        d = cls.now(bj_tz)
         if offset != 0:
             d = d + timedelta(days=offset)
         return int(d.strftime('%Y%m%d'))
-    @staticmethod
-    def time() -> int: 
-        return int(datetime.now().strftime('%H%M%S'))
+    @classmethod
+    def time(cls , bj_tz = True) -> int: 
+        return int(cls.now(bj_tz).strftime('%H%M%S'))
     @staticmethod
     def datetime(year : int = 2000 , month : int = 1 , day : int = 1 , * , lock_month = False) -> int:
         if month > 12 or month <= 0:
@@ -149,10 +158,10 @@ class CALENDAR:
             else:
                 date = date1.replace(month = real_month + 1 , day = 1) - timedelta(days = 1)
         return int(date.strftime('%Y%m%d'))
-    @staticmethod
-    def clock(date : int = 0 , h = 0 , m = 0 , s = 0):
+    @classmethod
+    def clock(cls , date : int = 0 , h = 0 , m = 0 , s = 0):
         if date <=0:
-            date_time = (datetime.today() + timedelta(days=date))
+            date_time = (cls.now(bj_tz = False) + timedelta(days=date))
         else:
             date_time = datetime.strptime(str(date) , '%Y%m%d')
         return int(date_time.replace(hour=h, minute=m, second=s).strftime('%Y%m%d%H%M%S'))
@@ -162,16 +171,14 @@ class CALENDAR:
             return False
         if modified_time < 1e8: 
             modified_time = modified_time * 1000000
-        current_time = datetime.now()
+        current_time = cls.now(bj_tz = True)
         required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
-        required_time = CALENDAR.clock(required_date , hour , minute)
+        required_time = cls.clock(required_date , hour , minute)
         return modified_time >= required_time
-    @classmethod
-    def now(cls):
-        return cls.today() * 1000000 + cls.time()
+    
     @classmethod
     def update_to(cls):
-        return cls.today(-1 if datetime.now().time() <= time(19, 59, 0) else 0)
+        return cls.today(-1 if cls.now(bj_tz = True).time() <= time(19, 59, 0) else 0)
     @staticmethod
     def updated(date : int | None = None):
         updated_date = DB.max_date('trade_ts' , 'day')

@@ -24,9 +24,9 @@ class TradingPortfolioTracker:
         last_ports = {name:tp.get_last_port(date).to_dataframe() for name,tp in updated_ports.items()}
             
         if len(updated_ports) == 0: 
-            Logger.alert1(f'No trading portfolios updated on {date}' , indent = indent + 1)
+            Logger.alert1(f'No tracking portfolios updated on {date}' , indent = indent + 1)
         else:
-            Logger.success(f'Trading portfolios updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
+            Logger.success(f'{len(updated_ports)} Tracking portfolios updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
             for port_name in updated_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
@@ -44,8 +44,7 @@ class TradingPortfolioTracker:
             Proj.email_attachments.append(path)
 
             for port_name in updated_ports:
-                if port_name in Proj.Conf.TradingPort.focused_ports:
-                    updated_ports[port_name].analyze(write_down = True , vb_level = vb_level + 1)
+                updated_ports[port_name].analyze(key_fig = '' , vb_level = vb_level + 1)
                     
     @classmethod
     def attachment_path(cls , date : int) -> Path:
