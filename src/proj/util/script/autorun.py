@@ -55,28 +55,39 @@ class AutoRunCatchers:
         'must accept context and return_scalar arguments' ,
         'an item of incompatible dtype' ,
         'parameter is deprecated and will be removed in Pillow 13'
+        'overflow encountered in reduce' ,
+        'overflow encountered in multiply' ,
     ]
-    def __init__(self , catchers : list[str] = ['crash_protector' , 'html' , 'markdown' , 'warning'] , task_id : str | None = None):
-        self.catchers = catchers
+    def __init__(
+        self , task_id : str | None = None , * , 
+        crash_protector_catcher : bool = True ,
+        html_catcher : bool = True ,
+        markdown_catcher : bool = True ,
+        warning_catcher : bool = True
+    ):
         self.task_id = task_id
+        self.crash_protector_catcher = crash_protector_catcher
+        self.html_catcher = html_catcher
+        self.markdown_catcher = markdown_catcher
+        self.warning_catcher = warning_catcher
 
     def enter(self , title : str , category : str , init_time : datetime):
-        self._catchers = []
-        if 'crash_protector' in self.catchers:
-            self._catchers.append(CrashProtectorCatcher(self.task_id))
-        if 'html' in self.catchers:
-            self._catchers.append(HtmlCatcher(title , category , init_time))
-        if 'markdown' in self.catchers:
-            self._catchers.append(MarkdownCatcher(title , category , init_time , to_share_folder=True))
-        if 'warning' in self.catchers:
-            self._catchers.append(WarningCatcher(self._catch_warnings))
+        self.catchers = []
+        if self.crash_protector_catcher:
+            self.catchers.append(CrashProtectorCatcher(self.task_id))
+        if self.html_catcher:
+            self.catchers.append(HtmlCatcher(title , category , init_time))
+        if self.markdown_catcher:
+            self.catchers.append(MarkdownCatcher(title , category , init_time , add_time_to_title=True , to_share_folder=True))
+        if self.warning_catcher:
+            self.catchers.append(WarningCatcher(self._catch_warnings))
 
-        for catcher in self._catchers:
+        for catcher in self.catchers:
             catcher.__enter__()
         return self
 
     def exit(self, *args):
-        for catcher in self._catchers[::-1]:
+        for catcher in self.catchers[::-1]:
             catcher.__exit__(*args)
         return self
 
@@ -110,14 +121,15 @@ class AutoRunTask:
         forfeit_if_done = False,
         verbosity : int | None = None , 
         task_id : str | None = None ,
+        markdown_catcher : bool = False ,
         **kwargs
     ):
         self.task_name = task_name
         self.task_key = task_key
-        self.init_time = datetime.now()
+        self.init_time = datetime.now() 
         self.task_id = task_id
 
-        self.catchers = AutoRunCatchers(task_id = task_id)
+        self.catchers = AutoRunCatchers(task_id , markdown_catcher = markdown_catcher)
         self.forfeit_if_done = forfeit_if_done
 
         self.verbosity = verbosity

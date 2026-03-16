@@ -160,9 +160,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
     
     def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
         if which == 'first':
-            df = self.trainer.record.get_preds(pred_dates = pred_dates , model_num = 0)
+            df = self.trainer.record.get_preds(pred_dates = pred_dates , model_num = 0 , latest = True)
         elif which == 'avg':
-            df = self.trainer.record.get_avg_preds(pred_dates = pred_dates)
+            df = self.trainer.record.get_avg_preds(pred_dates = pred_dates , latest = True)
         else:
             raise ValueError(f'Invalid which: {which}')
         df = df.rename(columns={'submodel':'factor_name'}).pivot_table('pred',['secid','date'],'factor_name').reset_index()

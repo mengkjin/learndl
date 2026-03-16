@@ -75,6 +75,7 @@ class BaseFactorAnalyticCalculator(ABC):
                 self.figs = {'all':figs} if isinstance(figs , Figure) else figs
             except Exception as e:
                 Logger.error(f"Error when plotting {self.__class__.__name__}: {e}")
+                Logger.print_exc(e)
                 self.figs = {}    
         return self
     @property

@@ -1110,18 +1110,27 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def collect_avg_preds(self):
         self.save_avg_preds(self.model_date)
         
-    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None) -> pd.DataFrame:
+    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , latest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
             return self.empty_preds()
         pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         if model_num is not None:
             pred_records = pred_records.query('model_num == @model_num')
-        assert not pred_records.empty , f'No pred records found for test dates {pred_dates}'
-        df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
+        if pred_records.empty:
+            Logger.error(f'No pred records found for test dates {pred_dates}')
+            if latest:
+                pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min()')
+                latest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
+                pred_records = pred_records.query('max_pred_date == @latest_pred_date')
+                df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
+            else:
+                df = self.empty_preds()
+        else:
+            df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
         return df
 
-    def get_avg_preds(self , pred_dates : np.ndarray) -> pd.DataFrame:
+    def get_avg_preds(self , pred_dates : np.ndarray , latest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
             return self.empty_preds()
@@ -1129,11 +1138,19 @@ class PredRecorder(ModelStreamLineWithTrainer):
         pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         [self.save_avg_preds(model_date) for model_date in np.setdiff1d(pred_records['model_date'] , avg_pred_records['model_date'])]
                 
+        
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         if avg_pred_records.empty:
             Logger.error(f'No avg pred records found for test dates {pred_dates}')
-            return self.empty_preds()
-        df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
+            if latest:
+                avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
+                latest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
+                avg_pred_records = avg_pred_records.query('max_pred_date == @latest_avg_pred_date')
+                df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
+            else:
+                df = self.empty_preds()
+        else:
+            df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
         return df
 
     def on_fit_model_end(self):

@@ -35,7 +35,7 @@
 from src.api import ModelAPI
 from src.proj.util import ScriptTool
 
-@ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2)
+@ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2 , markdown_catcher = True)
 def main(schedule_name : str | None = None , short_test : bool | None = None , 
          resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert schedule_name is not None , 'schedule_name is required'

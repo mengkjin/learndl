@@ -74,6 +74,12 @@ class Portfolio:
     def copy(self): 
         """return a copy of the portfolio"""
         return deepcopy(self)
+    def rescale(self , scale = 1. , inplace = False): 
+        if not inplace:
+            self = self.copy()
+        for port in self.ports.values():
+            port.rescale(scale , inplace = True)
+        return self
     @property
     def empty(self):
         """return True if the portfolio is empty"""

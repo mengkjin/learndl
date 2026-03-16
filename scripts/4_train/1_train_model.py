@@ -29,7 +29,7 @@
 from src.api import ModelAPI
 from src.proj.util import ScriptTool
 
-@ScriptTool('train_model' , '@module_name')
+@ScriptTool('train_model' , '@module_name' , markdown_catcher = True)
 def main(module_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert module_name is not None , 'module_name is required'
     ModelAPI.train_model(module_name , short_test , start = start , end = end)

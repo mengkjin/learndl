@@ -121,10 +121,11 @@ class Universe:
         for exclusion in UniverseExclusions.get_possible_exclusions():
             if exclusion not in exclusions or exclusion not in df.columns:
                 continue
-            df = df.query(f'~{exclusion}')
+            df = df.query(f'~{exclusion}').reset_index(drop = True)
+            df['weight'] = 1.0 / len(df)
         if df.empty:
             return pd.DataFrame(columns = ['date' , 'secid' , 'weight'])
-        df = df.assign(weight = 1.0).loc[:,['date' , 'secid' , 'weight']]
+        df = df.loc[:,['date' , 'secid' , 'weight']]
         return df
 
     @classmethod

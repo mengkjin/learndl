@@ -8,29 +8,17 @@
 # mode: shell
 
 from src.proj.util import ScriptTool 
+from src.proj import PATH
+import shutil
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    from src.proj import DB , CALENDAR
-    dates = CALENDAR.td_within(20170101 , 20991231)
-    for date in dates:
-        df = DB.load('pred' , 'gru_day_V0' , date)
-        if not df.empty and 'gru_day_V0' not in df.columns:
-            df = df.rename(columns={'gru_day': 'gru_day_V0'})
-            assert 'gru_day_V0' in df.columns , f'gru_day_V0 not in df.columns: {df.columns}'
-            DB.save(df , 'pred' , 'gru_day_V0' , date)
+    for path in PATH.model.rglob('detailed_alpha'):
+        if path.is_dir():
+            shutil.rmtree(path)
 
-        df = DB.load('pred' , 'gru_day_V1' , date)
-        if not df.empty and 'gru_day_V1' not in df.columns  :
-            df = df.rename(columns={'gru_avg': 'gru_day_V1'})
-            assert 'gru_day_V1' in df.columns , f'gru_day_V1 not in df.columns: {df.columns}'
-            DB.save(df , 'pred' , 'gru_day_V1' , date)
-
-        df = DB.load('pred' , 'gruRTN_day_V0' , date)
-        if not df.empty and 'gruRTN_day_V0' not in df.columns  :
-            df = df.rename(columns={'gruRTN_day': 'gruRTN_day_V0'})
-            assert 'gruRTN_day_V0' in df.columns , f'gruRTN_day_V0 not in df.columns: {df.columns}'
-            DB.save(df , 'pred' , 'gruRTN_day_V0' , date)
+    for path in PATH.result.rglob('*.tar'):
+        path.unlink()
         
 if __name__ == '__main__':
     main()
