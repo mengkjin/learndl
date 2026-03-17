@@ -11,6 +11,7 @@ class ModelAPI:
     Predictor  = app.ModelPredictor
     Extractor  = app.ModelHiddenExtractor
     FmpBuilder = app.ModelPortfolioBuilder
+    Calculator = app.ModelCalculator
 
     @classmethod
     def update(cls):

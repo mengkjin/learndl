@@ -299,6 +299,9 @@ class CompositeAlphaComponent:
         cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
         new_dates = np.setdiff1d(date , cached_dates)
         
+        if len(new_dates) == 0:
+            return cached_alpha_model.subset(date)
+            
         factor = StockFactor(self.loads(new_dates))
         if normalize:
             factor = factor.normalize(inplace=True)

@@ -166,6 +166,12 @@ class DataModule(BaseDataModule):
             else:
                 self.model_date_list = dates[::self.config.interval]
 
+    def reset_dataloaders(self):
+        '''reset for every fit / test / predict'''
+        self.loader_dict : dict[str , StoredFileLoader]  = {}
+        self.loader_dates : dict[str , list[int]] = {}
+        self.loader_param = self.LoaderParam()
+
     @property
     def beg_date(self):
         return -1 if self.use_data == 'predict' else self.config.beg_date
@@ -403,6 +409,10 @@ class DataModule(BaseDataModule):
         return BatchInputLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
     def extract_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['extract'] , self , desc = 'Extract')
+
+    def get_batch_input_of_date(self , date : int) -> BatchInput:
+        assert self.stage in ['predict' , 'test' , 'extract'] , f'stage should be predict , test or extract, but got {self.stage}'
+        return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
     
     def transfer_batch_to_device(self , batch : BatchInput , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':
@@ -415,6 +425,7 @@ class DataModule(BaseDataModule):
             self.loader_dict['valid'] = StoredFileLoader(self.storage , [] , 'static')
         else:
             self.loader_dict[self.stage] = StoredFileLoader(self.storage , [] , 'static')
+            self.loader_dates[self.stage] = []
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
         '''update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them'''   
@@ -424,6 +435,7 @@ class DataModule(BaseDataModule):
         sample_index = self.split_sample(valid , index0 , index1 , self.config.sample_method , 
                                          self.config.train_ratio , self.config.batch_size)
         self.storage.del_group(self.stage)
+        self.loader_dates[self.stage] = []
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract'] , set_key
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
@@ -440,6 +452,8 @@ class DataModule(BaseDataModule):
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
                 self.storage.save(BatchInput(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
+                if set_key in ['predict' , 'test' , 'extract']:
+                    self.loader_dates[set_key].append(self.y_date[int(xindex1[0].item())])
             self.loader_dict[set_key] = StoredFileLoader(self.storage , batch_files , shuf_opt)
 
     def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
