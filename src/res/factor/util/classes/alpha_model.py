@@ -152,6 +152,11 @@ class AlphaModel(GeneralModel):
         self.name = name
         self.models : dict[int,Amodel] = {}
         self.append(models)
+    def rename(self , name : str):
+        self.name = name
+        for model in self.models.values():
+            model.name = name
+        return self
     def load_day_model(self, date: int) -> Any:
         """load alpha model for a specific date , is not implemented in this class"""
         ...
@@ -267,22 +272,22 @@ class CompositeAlphaComponent:
     _cache_unnormalized : dict[str , AlphaModel] = {}
 
     def __init__(self , name : str):
-        self.name = name
-
         if name in Proj.Conf.Model.SETTINGS['prediction']:
-            self.loads = self.db_loads('pred' , name)
+            alpha_type , alpha_name , alpha_column = 'pred' , name , None
         elif '@' in name:
             exprs = name.split('@')
             alpha_type , alpha_name = exprs[:2]
-            alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
-            if alpha_type in ['sellside' , 'pred']:
-                self.loads = self.db_loads(alpha_type , alpha_name , alpha_column)
-            elif alpha_type == 'factor':
-                self.loads = self.factor_loads(alpha_name)
-            else:
-                raise Exception(f'{alpha_type} is not a valid alpha type')
+            alpha_column = exprs[2] if len(exprs) > 2 else None
         else:
             raise Exception(f'{name} is not a valid alpha')
+
+        self.name = f'{alpha_type}@{alpha_name}'
+        if alpha_type in ['sellside' , 'pred']:
+            self.loads = self.db_loads(alpha_type , alpha_name , alpha_column)
+        elif alpha_type == 'factor':
+            self.loads = self.factor_loads(alpha_name)
+        else:
+            raise Exception(f'{alpha_type} is not a valid alpha type')
 
     def __repr__(self) -> str:
         return self.name
@@ -297,7 +302,7 @@ class CompositeAlphaComponent:
         factor = StockFactor(self.loads(new_dates))
         if normalize:
             factor = factor.normalize(inplace=True)
-        alpha_model = factor.alpha_model()
+        alpha_model = factor.alpha_model().rename(self.name)
         new_alpha_model = cached_alpha_model.append(alpha_model)
         self.set_cache(new_alpha_model , self.name , normalize = normalize)
         return new_alpha_model.subset(date)

@@ -220,7 +220,7 @@ class ModelPath:
             return []
         else:
             candidates = []
-            for path in self.root_path.iterdir():
+            for path in self.root_path.glob('^!.*/$'):
                 model_path = self if path == self.base else ModelPath(path)
                 if model_path.model_clean_name == self.model_clean_name:
                     candidates.append(model_path)
@@ -253,7 +253,7 @@ class ModelPath:
     def load_config(self):
         """load model config"""
         from src.res.model.util.config import ModelConfig
-        return ModelConfig(self.base , stage = 0)
+        return ModelConfig(self.base , stage = 0 , resume = 1)
     def next_model_date(self):
         """next model date to train"""
         from src.proj.calendar import CALENDAR

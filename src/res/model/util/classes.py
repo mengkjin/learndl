@@ -1201,7 +1201,9 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return BatchOutput(output)
     
     def __repr__(self): 
-        return f'{self.__class__.__name__}(model_full_name={self.model_full_name})'
+        if self.trainer is None and self._config is None:
+            return f'{self.__class__.__name__}(not bounded to trainer or config)'
+        return f'{self.__class__.__name__}(config={self.config})'
 
     @classmethod
     def initialize(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
