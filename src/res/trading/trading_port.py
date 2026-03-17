@@ -212,8 +212,11 @@ class TradingPort:
             return self
 
         Logger.stdout(f'Analyze trading portfolio [{self.name}] at {CALENDAR.dates_str(port_dates)} start ...' , indent = indent , vb_level = vb_level)
-        
         account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine , indent = indent + 1 , vb_level = vb_level + 1).df
+        if len(account_df) <= 1:
+            Logger.stdout(f'trading portfolio [{self.name}] just start accounting and has no record' , indent = indent , vb_level = vb_level)
+            return self
+        
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
