@@ -265,17 +265,20 @@ class SummaryWriter(BaseCallBack):
 
     def pack_tensorboard_dir(self):
         # overwrite current run folder
+        ts_folder = self.config.base_path.snapshot('tensorboard')
+        if not ts_folder.exists() or not any(ts_folder.iterdir()):
+            return
         run_folder = PATH.tensorboard.joinpath('run')
         if run_folder.exists():
             shutil.rmtree(run_folder)
         run_folder.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(self.trainer.model_tensorboad_dir, run_folder)
+        shutil.copytree(ts_folder, run_folder)
 
         # pack run folder to tar file
         tar_filename = PATH.tensorboard.joinpath(f'{self.base_path.full_name}_{self.init_time.strftime("%Y%m%d%H%m")}.tar')
         with tarfile.open(tar_filename, 'w:gz') as tar:
-            for path in self.trainer.model_tensorboad_dir.iterdir():
-                tar.add(path, arcname=path.relative_to(self.trainer.model_tensorboad_dir))
+            for path in ts_folder.iterdir():
+                tar.add(path, arcname=path.relative_to(ts_folder))
 
     @classmethod
     def format_messages(cls , messages : dict[str, str | dict] , indent : int = 0) -> list[str]:
@@ -345,9 +348,11 @@ class SummaryWriter(BaseCallBack):
         if self.HIDDEN_FEATURE_MODE and self.epoch % self.HIDDEN_FEATURE_STEP == 0:
             self.add_hidden_summaries('epoch')
 
+    def on_after_fit_end(self):
+        self.pack_tensorboard_dir()
+
     def on_summarize_model(self):
         """pack tensorboard dir and export test summary to json"""
-        self.pack_tensorboard_dir()
         if self.status.test_summary.empty: 
             return
         
