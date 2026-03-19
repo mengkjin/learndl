@@ -1,7 +1,7 @@
 from src.proj import CALENDAR , Logger , Proj
 from .trading_port import BacktestPort
 
-class TradingPortfolioBacktestor:
+class BacktestPortfolioManager:
     @classmethod
     def available_ports(cls) -> list[str]:
         return list(BacktestPort.candidate_ports.keys())
@@ -30,8 +30,9 @@ class TradingPortfolioBacktestor:
         updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
             
         if len(updated_ports) == 0: 
-            Logger.alert1(f'No backtest portfolios updated on {date}' , indent = indent + 1)
+            Logger.alert1(f'No Backtest Portfolios Updated on {date}' , indent = indent + 1)
         else:
-            Logger.success(f'{len(updated_ports)} Backtest portfolios updated on {date}' , indent = indent + 1 , vb_level = vb_level)
-        for port_name in updated_ports:
-            updated_ports[port_name].analyze(key_fig = '' , vb_level = Proj.vb.max)
+            Logger.success(f'{len(updated_ports)} Backtest Portfolios Updated on {date}' , indent = indent + 1 , vb_level = vb_level)
+        for name in BacktestPort.candidate_ports:
+            tp = BacktestPort.load(name)
+            tp.analyze(key_fig = '' , vb_level = Proj.vb.max)

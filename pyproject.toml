@@ -52,6 +52,7 @@ dependencies = [
     "tsfresh>=0.21.1",
     "fastparquet>=2025.12.0",
     "tzlocal>=5.3.1",
+    "cryptography>=46.0.5",
 ]
 
 [tool.setuptools.dynamic]

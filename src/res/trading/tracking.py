@@ -6,7 +6,7 @@ from pathlib import Path
 from src.proj import PATH , Logger , Proj , CALENDAR
 from .trading_port import TrackingPort
 
-class TradingPortfolioTracker:
+class TrackingPortfolioManager:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
         Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
@@ -24,9 +24,9 @@ class TradingPortfolioTracker:
         last_ports = {name:tp.get_last_port(date).to_dataframe() for name,tp in updated_ports.items()}
             
         if len(updated_ports) == 0: 
-            Logger.alert1(f'No tracking portfolios updated on {date}' , indent = indent + 1)
+            Logger.alert1(f'No Tracking Portfolios Updated on {date}' , indent = indent + 1)
         else:
-            Logger.success(f'{len(updated_ports)} Tracking portfolios updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
+            Logger.success(f'{len(updated_ports)} Tracking Portfolios Updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
             for port_name in updated_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
@@ -43,8 +43,9 @@ class TradingPortfolioTracker:
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Proj.email_attachments.append(path)
 
-        for port_name in updated_ports:
-            updated_ports[port_name].analyze(key_fig = '' , vb_level = vb_level + 1)
+        for name in TrackingPort.candidate_ports:
+            tp = TrackingPort.load(name)
+            tp.analyze(key_fig = '' , vb_level = vb_level + 1)
                     
     @classmethod
     def attachment_path(cls , date : int) -> Path:

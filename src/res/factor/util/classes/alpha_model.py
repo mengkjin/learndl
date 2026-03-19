@@ -336,7 +336,8 @@ class CompositeAlphaComponent:
             column = db_column if db_column is not None else db_key
             df = DB.loads(db_src , db_key , date , vb_level = 'inf')
             if df.empty or min(date) < min(df['date']):
-                df = pd.concat([DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'inf').assign(date = min(date)) , df])
+                prev_df = DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'inf').assign(date = min(date))
+                df = prev_df if df.empty else pd.concat([prev_df , df])
             assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
             df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
             return df
@@ -350,6 +351,7 @@ class CompositeAlphaComponent:
                 date = [date]
             df = StockFactorHierarchy.get_factor(factor_name).Loads(date)
             if df.empty or min(date) < min(df['date']):
-                df = pd.concat([StockFactorHierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date)) , df])
+                prev_df = StockFactorHierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date))
+                df = prev_df if df.empty else pd.concat([prev_df , df])
             return df
         return wrapper

@@ -179,10 +179,10 @@ class JSDataUpdater():
         if not MACHINE.belong_to_jinmeng: 
             return
 
-        for db_src in DB.iter_db_srcs():
-            if DB.by_name(db_src):
+        for db_src in DB.DBPath.iter_srcs():
+            if DB.DBPath.ByName(db_src):
                 self.fetch_by_name(db_src)
-            elif DB.by_date(db_src):
+            elif DB.DBPath.ByDate(db_src):
                 self.fetch_by_date(db_src , start_dt , end_dt , force = force)
             else:
                 raise Exception(db_src)

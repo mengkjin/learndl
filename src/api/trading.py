@@ -1,4 +1,4 @@
-from src.res.trading import TradingPortfolioTracker , TradingPortfolioBacktestor
+from src.res.trading import TrackingPortfolioManager , BacktestPortfolioManager
 
 from src.proj import Logger , Proj
 from .util import wrap_update
@@ -18,15 +18,15 @@ class TradingAPI:
         """
         Update trading portfolios for both laptop and server:
         """
-        wrap_update(TradingPortfolioTracker.update , 'update trading portfolios' , reset_ports = reset_ports or [])
-        wrap_update(TradingPortfolioBacktestor.update , 'update backtest portfolios')
+        wrap_update(TrackingPortfolioManager.update , 'update trading portfolios' , reset_ports = reset_ports or [])
+        wrap_update(BacktestPortfolioManager.update , 'update backtest portfolios')
 
     @classmethod
     def Analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs):
         if port_name in cls.available_ports(backtest = True):
-            return TradingPortfolioBacktestor.analyze(port_name , start , end , **kwargs)
+            return BacktestPortfolioManager.analyze(port_name , start , end , **kwargs)
         elif port_name in cls.available_ports(backtest = False):
-            return TradingPortfolioTracker.analyze(port_name , start , end , **kwargs)
+            return TrackingPortfolioManager.analyze(port_name , start , end , **kwargs)
         else:
             raise ValueError(f'port name {port_name} is not a valid analyze port')
 
@@ -38,7 +38,7 @@ class TradingAPI:
             Logger.stdout(f'multiple backtest ports found for {port_name_starter}: {ports}')
             for port in ports:
                 with Logger.Paragraph(f'backtest {port}' , 3):
-                    TradingPortfolioBacktestor.analyze(port , start , end , **kwargs)
+                    BacktestPortfolioManager.analyze(port , start , end , **kwargs)
         elif len(ports) == 0:
             Logger.error(f'no backtest ports found starting with {port_name_starter}')
             Logger.stdout(f'available backtest ports: {available_ports}')

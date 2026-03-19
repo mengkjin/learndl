@@ -39,16 +39,8 @@ class DataVendor:
     CUSTOM_DATA = {}
     
     def __init__(self):
-        self.start_dt = 99991231
-        self.end_dt   = -1
-
-        dates = DB.dates('trade_ts' , 'day')
-        self.max_date   = dates[-1] if len(dates) else -1
-        self.min_date   = dates[0] if len(dates) else 99991231
-
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.day_secids : dict[int,np.ndarray] = {}
-        self.last_quote_dt = self.max_date
 
         self.init_stocks()
 

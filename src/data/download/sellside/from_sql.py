@@ -450,7 +450,7 @@ class SellsideSQLDownloader:
         try:
             df = self.query_factor_values(start , end , connection)
         except Exception as e:
-            Logger.error(f'In {self.__class__.__name__} : Error in download_period: {e}')
+            Logger.error(f'In {self.__class__.__name__} : Error in download_period of {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}: {e}')
             Logger.print_exc(e)
             return False
         if (num_dates := self.save_data(df)) > 0:

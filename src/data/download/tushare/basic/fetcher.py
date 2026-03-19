@@ -30,9 +30,9 @@ class TushareFetcherMeta(ABCMeta):
             assert db_key , f'{name} DB_KEY must be set'
             assert update_freq , f'{name} UPDATE_FREQ must be set'
             if db_type in ['info' , 'time_series']:
-                assert DB.by_name(db_src) , (db_type , db_src , db_key)
+                assert DB.DBPath.ByName(db_src) , (db_type , db_src , db_key)
             elif db_type in ['date' , 'fina' , 'rolling' , 'fundport']:
-                assert DB.by_date(db_src) , (db_type , db_src , db_key)
+                assert DB.DBPath.ByDate(db_src) , (db_type , db_src , db_key)
             else:
                 raise KeyError(db_type)
             cls.registry[name] = new_cls

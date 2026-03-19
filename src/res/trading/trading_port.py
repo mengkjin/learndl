@@ -111,6 +111,13 @@ class TradingPort:
     @property
     def result_path_plot(self) -> Path:
         return self.result_dir.joinpath(f'{self.name}_analytic_plot.pdf')
+
+    @property
+    def trading_portfolio_type(self) -> Literal['tracking' , 'backtest']:
+        if self.backtest:
+            return 'backtest'
+        else:
+            return 'tracking'
     
     def stored_dates(self , start : int | None = None , end : int | None = None) -> np.ndarray:
         dates = DB.dir_dates(self.export_dir , start_dt = start , end_dt = end)
@@ -211,10 +218,10 @@ class TradingPort:
             Logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        Logger.stdout(f'Analyze trading portfolio [{self.name}] at {CALENDAR.dates_str(port_dates)} start ...' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}] at {CALENDAR.dates_str(port_dates)} start ...' , indent = indent , vb_level = vb_level)
         account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine , indent = indent + 1 , vb_level = vb_level + 1).df
         if len(account_df) <= 1:
-            Logger.stdout(f'trading portfolio [{self.name}] just start accounting and has no record' , indent = indent , vb_level = vb_level)
+            Logger.stdout(f'{self.trading_portfolio_type.title()} Portfolio [{self.name}] just start accounting and has no record' , indent = indent , vb_level = vb_level)
             return self
         
         candidates = {task.task_name():task for task in TASK_LIST}
@@ -236,7 +243,7 @@ class TradingPort:
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        Logger.success(f'Analyze trading portfolio [{self.name}]!' , indent = indent , vb_level = vb_level)
+        Logger.success(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}]!' , indent = indent , vb_level = vb_level)
         return self
 
 class TrackingPort(TradingPort):

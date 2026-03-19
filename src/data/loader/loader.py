@@ -26,7 +26,7 @@ class BlockLoader:
 
     @property
     def src_path(self):
-        return DB.src_path(self.db_src)
+        return DB.DBPath.Parent(self.db_src)
 
     def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> DataBlock:
         """Load block data , alias for load"""
