@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Logger , CALENDAR
+from src.proj import Duration , Logger , Dates
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount
 from .optimizer import OptimizedPortfolioCreator
@@ -140,7 +140,7 @@ class PortfolioBuilder:
             dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
-            Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {CALENDAR.dates_str(self.portfolio.port_date)}' , 
+            Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}' , 
                            indent = self.indent , vb_level = 'max')
         return self
 
@@ -323,7 +323,7 @@ class PortfolioGroupBuilder:
 
     def builders_info(self):
         Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs)' ,  
-                      f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {CALENDAR.dates_str(self.relevant_dates)})' , 
+                      f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Dates(self.relevant_dates)})' , 
                       indent = self.indent , vb_level = self.vb_level)
     
     def builders_setup(self):

@@ -10,7 +10,7 @@ from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import MACHINE , Logger , Duration , CALENDAR , DB
+from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
 from src.data.util import secid_adjust
 
 _connections : dict[str , dict[str , Any]] = {
@@ -432,7 +432,7 @@ class SellsideSQLDownloader:
             connection = self.get_connection()
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
+        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
             connection.stay_connect = True
@@ -450,13 +450,13 @@ class SellsideSQLDownloader:
         try:
             df = self.query_factor_values(start , end , connection)
         except Exception as e:
-            Logger.error(f'In {self.__class__.__name__} : Error in download_period of {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}: {e}')
+            Logger.error(f'In {self.__class__.__name__} : Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
             Logger.print_exc(e)
             return False
         if (num_dates := self.save_data(df)) > 0:
-            Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1 , vb_level = 1)
+            Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1 , vb_level = 1)
         else:
-            Logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {CALENDAR.dates_str([start , end])}' , indent = 1)
+            Logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , indent = 1)
         return True
 
     def query_start_dt(self , connection : Connection | None = None):
@@ -471,9 +471,9 @@ class SellsideSQLDownloader:
         conn = connection.connect()
         if self.date_fmt is not None:
             if start_dt: 
-                start_dt = CALENDAR.format(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+                start_dt = CALENDAR.reformat(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
             if end_dt:   
-                end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+                end_dt   = CALENDAR.reformat(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
         df_input = None
         i = 0

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import Proj , Logger , CALENDAR , DB
+from src.proj import Proj , Logger , CALENDAR , DB , Dates
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 from src.res.factor.util.stat.aggregate import eval_period_ret
@@ -426,7 +426,7 @@ class PortfolioAccountant:
                 self.resumed_account.filter_dates(end = resume_end)
 
             if not self.resumed_account.empty:
-                Logger.success(f'Load Account from {self.resume_path} at {CALENDAR.dates_str(self.resumed_account.model_date)}' , 
+                Logger.success(f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
                                indent = indent + 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
@@ -450,7 +450,7 @@ class PortfolioAccountant:
         else:
             port_min , port_max = self.port_dates.min() , self.port_dates.max()
             start = np.max([port_min , self.config.start , self.resumed_account.max_model_date + 1])
-            end   = np.min([DATAVENDOR.td(port_max,5) , self.config.end , CALENDAR.updated()])
+            end   = np.min([DATAVENDOR.td(port_max,5) , self.config.end , DATAVENDOR.td(CALENDAR.updated() , -1)])
             model_dates = DATAVENDOR.td_within(start , end)
 
         if len(model_dates) == 0:
@@ -474,7 +474,7 @@ class PortfolioAccountant:
             'analytic':None , 'attribution':None}).set_index('model_date')
 
         port_old = Port.none_port(model_dates[0])
-        Logger.stdout(f'{self.config.name} has {len(df)} account dates at {CALENDAR.dates_str([period_st[0] , period_ed[-1]])}' , 
+        Logger.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}' , 
                       indent = indent , vb_level = vb_level)
         for i , (mdate , ed) in enumerate(zip(model_dates , period_ed)):
             port_new = self.portfolio.get(mdate) if self.portfolio.has(mdate) else port_old

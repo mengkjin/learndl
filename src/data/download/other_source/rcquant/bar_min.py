@@ -5,7 +5,7 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
+from src.proj import PATH , MACHINE , Logger , CALENDAR , DB , Dates
 from src.proj.util import IOCatcher
 from src.data.util import secid_adjust , trade_min_reform
 
@@ -95,25 +95,23 @@ def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def target_dates(data_type : DATA_TYPES , date : int | None = None):
+def target_dates(data_type : DATA_TYPES , date : int | None = None) -> Dates:
     start = src_start_date(data_type)
     end   = CALENDAR.update_to() if date is None else date
     dates = CALENDAR.td_within(start , end)
-    return CALENDAR.diffs(dates , stored_dates(data_type , 1))
+    return Dates(CALENDAR.diffs(dates , stored_dates(data_type , 1)))
 
-def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> list[int]:
+def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Dates:
     if data_type != 'sec': 
-        return []
-    all_relevant_dates = np.array([])
+        return Dates()
+    dates : list[np.ndarray] = []
+    end = CALENDAR.update_to() if date is None else date
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , src_key(data_type , 1))
         stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
         target_dates = CALENDAR.diffs(source_dates , stored_dates)
-        dates = target_dates[target_dates >= src_start_date(data_type)]
-        all_relevant_dates = np.concatenate([all_relevant_dates , dates])
-    end = CALENDAR.update_to() if date is None else date
-    all_relevant_dates = np.unique(all_relevant_dates[all_relevant_dates <= end]).astype(int).tolist()
-    return all_relevant_dates
+        dates.append(target_dates[(target_dates >= src_start_date(data_type)) & (target_dates <= end)])
+    return Dates(*dates)
 
 def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': 
@@ -201,31 +199,31 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
 
 def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
-    dts = target_dates(data_type , date)
-    if len(dts) == 0: 
+    dates = target_dates(data_type , date)
+    if dates.empty: 
         Logger.skipping(f'RcQuant {data_type} bar min is up to date' , indent = 1)
         return True
     
-    if len(dts) == 0: 
+    if dates.empty: 
         Logger.skipping(f'RcQuant {data_type} bar min is up to date' , indent = 1)
     else:
-        for dt in dts:
+        for dt in dates:
             mark = rcquant_bar_min(dt , data_type , first_n)
             if not mark: 
                 Logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed' , indent = 1)
-        Logger.success(f'Download RcQuant {data_type} bar min at {CALENDAR.dates_str(dts)}' , indent = 1 , vb_level = 1)
+        Logger.success(f'Download RcQuant {data_type} bar min at {dates}' , indent = 1 , vb_level = 1)
 
-    dts = x_mins_target_dates(data_type , date)
-    if len(dts) == 0: 
+    dates = x_mins_target_dates(data_type , date)
+    if dates.empty: 
         ...
     else:
-        for dt in dts:
+        for dt in dates:
             for x_min in x_mins_to_update(dt , data_type = data_type):
                 min_df = DB.load('trade_ts' , src_key(data_type) , dt)
                 assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
                 x_min_df = trade_min_reform(min_df , x_min , 1)
                 DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = 1 , vb_level = 3)
-        Logger.success(f'Transform RcQuant {data_type} X-min bars at {CALENDAR.dates_str(dts)}' , indent = 1 , vb_level = 1)
+        Logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}' , indent = 1 , vb_level = 1)
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Literal , Callable
-from src.proj import Logger , CALENDAR , DB
+from src.proj import Logger , CALENDAR , DB , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -33,7 +33,7 @@ class DailyRiskUpdater(BasicCustomUpdater):
         for date in update_dates:
             cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 2)
 
-        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
+        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
     def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):

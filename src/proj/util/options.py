@@ -29,9 +29,14 @@ class OptionsDefinition:
         return [p.stem for p in PATH.conf.joinpath('schedule').glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
 
     @classmethod
-    def available_tradeports(cls) -> list[str]:
-        """Get the available trade ports in the trade_port directory"""
-        return [p.name for p in PATH.trade_port.iterdir() if not p.name.startswith('.')]
+    def available_trackingports(cls) -> list[str]:
+        """Get the available tracking ports in the trade_port directory"""
+        return [p.name for p in PATH.trade_port.joinpath('tracking').iterdir() if not p.name.startswith('.')]
+
+    @classmethod
+    def available_backtestports(cls) -> list[str]:
+        """Get the available backtest ports in the trade_port directory"""
+        return [p.name for p in PATH.trade_port.joinpath('backtest').iterdir() if not p.name.startswith('.')]
 
     @classmethod
     def available_factors(cls) -> list[str]:
@@ -98,9 +103,14 @@ class Options:
         return cls.cache.get('available_schedules')
 
     @classmethod
-    def available_tradeports(cls) -> list[str]:
+    def available_trackingports(cls) -> list[str]:
         """Get the available trade ports from the cache"""
-        return cls.cache.get('available_tradeports')
+        return cls.cache.get('available_trackingports')
+
+    @classmethod
+    def available_backtestports(cls) -> list[str]:
+        """Get the available backtest ports from the cache"""
+        return cls.cache.get('available_backtestports')
 
     @classmethod
     def available_factors(cls) -> list[str]:

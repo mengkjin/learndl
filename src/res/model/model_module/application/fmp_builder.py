@@ -5,7 +5,7 @@ import pandas as pd
 from collections.abc import Iterable
 from typing import Any
 
-from src.proj import Logger , CALENDAR
+from src.proj import Logger , CALENDAR , Dates
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
 from src.res.model.util import PredictionModel
@@ -144,10 +144,10 @@ class ModelPortfolioBuilder:
             portfolio.accounting(Benchmark(elements['benchmark']) , analytic = elements['lag'] == 0 , attribution = elements['lag'] == 0 , 
                                  with_index = get_port_index(fmp_name) , indent = indent + 1 , vb_level = vb_level + 2)
             self.account_manager.append_accounts(**{fmp_name : portfolio.account})
-            Logger.stdout(f'Finished accounting for {fmp_name} at {CALENDAR.dates_str(account_dates)}' , indent = indent + 1 , vb_level=vb_level + 1)
+            Logger.stdout(f'Finished accounting for {fmp_name} at {Dates(account_dates)}' , indent = indent + 1 , vb_level=vb_level + 1)
 
         if deploy:
-            with Logger.Timer(f'Deploy accounts for {self.reg_model} at {CALENDAR.dates_str(account_dates)}' , indent = indent , vb_level = vb_level + 1 , enter_vb_level = vb_level + 2):
+            with Logger.Timer(f'Deploy accounts for {self.reg_model} at {Dates(account_dates)}' , indent = indent , vb_level = vb_level + 1 , enter_vb_level = vb_level + 2):
                 self.account_manager.deploy(update_fmp_names , overwrite = True , indent = indent + 2 , vb_level = vb_level + 2)
             
         self._update_account_record = account_dates

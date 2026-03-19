@@ -8,4 +8,4 @@ from .log import Logger , LogFile
 
 from . import db as DB
 
-from .calendar import CALENDAR , TradeDate
+from .calendar import CALENDAR , TradeDate , Dates

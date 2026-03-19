@@ -98,7 +98,7 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            Logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:')
+            Logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:' , vb_level = 2)
             
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}

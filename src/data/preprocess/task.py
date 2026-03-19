@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 from typing import Any , Iterator
 
-from src.proj import Logger , Duration , CALENDAR
+from src.proj import Logger , Duration , CALENDAR , Dates
 from src.data.util import DataBlock
 
 from . import preprocessor as PrePro
@@ -52,7 +52,7 @@ class PreProcessorTask:
             keys = data_types
         processor = cls(predict , keys)
         Logger.note(f'Data PreProcessing start with {len(processor.keys)} datas and predict = {predict}!' , indent = indent , vb_level = vb_level)
-        Logger.stdout(f'Will process {str(list(processor.keys))} at {CALENDAR.dates_str([processor.load_start,processor.load_end])}' , 
+        Logger.stdout(f'Will process {str(list(processor.keys))} at {Dates(processor.load_start,processor.load_end)}' , 
                         indent = indent + 1 , vb_level = vb_level + 1)
 
         for key , proc in processor.processors():
@@ -93,7 +93,7 @@ class PreProcessorTask:
                 data_block.hist_norm(key , predict , processor.hist_start , processor.hist_end)
             
             # gc.collect()
-            Logger.success(f'Preprocess [{key.upper()}] (predict={predict},{CALENDAR.dates_str(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
+            Logger.success(f'Preprocess [{key.upper()}] (predict={predict},{Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
                            indent = indent + 1 , vb_level = vb_level + 1)
 
             del data_block

@@ -7,7 +7,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any , Literal , Type
 
-from src.proj import PATH , Logger , CALENDAR , DB
+from src.proj import PATH , Logger , CALENDAR , DB , Dates
 from .func import updatable , dates_to_update
 from .connect import TS_PARAMS
 
@@ -81,7 +81,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     def _info_fetcher_update_date(self) -> list[int] | np.ndarray:
         """update date for info fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
-        update_to = CALENDAR.update_to()    
+        update_to = CALENDAR.update_to()
         return [update_to] if self.updatable(self.last_date() , self.UPDATE_FREQ , update_to) else []
 
     def _date_fetcher_update_dates(self) -> list[int] | np.ndarray:
@@ -208,7 +208,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         dates = self.target_dates()
 
         if len(dates) == 0: 
-            Logger.skipping(f'{self.__class__.__name__} already fetched!' , indent = self._stdout_indent)
+            Logger.skipping(f'{self.__class__.__name__} already fetched up to {CALENDAR.update_to()}!' , indent = self._stdout_indent)
             return
 
         updated_dates = np.array([], dtype = int)
@@ -234,7 +234,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
-        Logger.success(f'{self.__class__.__name__} fetched for {CALENDAR.dates_str(updated_dates)}' , indent = self._stdout_indent)
+        Logger.success(f'{self.__class__.__name__} fetched for {Dates(updated_dates)}' , indent = self._stdout_indent)
 
     def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = 200 , **kwargs) -> pd.DataFrame:
         """iterate fetch from tushare"""

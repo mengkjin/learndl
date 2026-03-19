@@ -72,7 +72,7 @@ def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : 
             end_date = -1
         end_date = ret['date'].nlargest(-end_date).min()
 
-    period_names = {'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Qtr' , 'y' : 'Last Year'}
+    period_names = {'d' : 'Last Day' , 'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Qtr' , 'y' : 'Last Year'}
     datas = []
     for period in periods:
         start_dt , end_dt = CALENDAR.cd_start_end(end_date , 1 , period) # noqa

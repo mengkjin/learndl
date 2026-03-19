@@ -1,4 +1,4 @@
-from src.proj import CALENDAR , Logger , Proj
+from src.proj import CALENDAR , Logger , Proj , Dates
 from .trading_port import BacktestPort
 
 class BacktestPortfolioManager:
@@ -21,18 +21,22 @@ class BacktestPortfolioManager:
         return tp
 
     @classmethod
-    def update(cls , indent : int = 0 , vb_level : int = 1):
+    def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
         Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
+        reset_ports = reset_ports or []
         date = CALENDAR.updated()
-            
+        assert not reset_ports or all([port in BacktestPort.candidate_ports for port in reset_ports]) , \
+            f'expect all reset ports in port_list , got {reset_ports}'
         updated_ports = {name:BacktestPort.load(name).build(date , indent = indent + 1 , vb_level = Proj.vb.max) 
                          for name in BacktestPort.candidate_ports}
         updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
             
         if len(updated_ports) == 0: 
-            Logger.alert1(f'No Backtest Portfolios Updated on {date}' , indent = indent + 1)
+            Logger.alert1(f'No Backtest Portfolios Updated at {Dates(date)}' , indent = indent + 1)
         else:
-            Logger.success(f'{len(updated_ports)} Backtest Portfolios Updated on {date}' , indent = indent + 1 , vb_level = vb_level)
+            Logger.success(f'{len(updated_ports)} Backtest Portfolios Updated at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
+
         for name in BacktestPort.candidate_ports:
             tp = BacktestPort.load(name)
-            tp.analyze(key_fig = '' , vb_level = Proj.vb.max)
+            tp.analyze(key_fig = '' , indent = indent + 1 , vb_level = vb_level + 2)
+        Logger.success(f'{len(updated_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)

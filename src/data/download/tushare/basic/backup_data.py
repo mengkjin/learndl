@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.proj import PATH , CALENDAR , DB
+from src.proj import PATH , CALENDAR , DB , Dates
 from .func import ts_code_to_secid
 
 path_bak_data   = PATH.resource.joinpath('tushare_bak_data')
@@ -15,7 +15,7 @@ class TSBackUpDataTransform():
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
-        record_file = path_bak_data.joinpath(f'{key}_{CALENDAR.dates_str(date)}.csv')
+        record_file = path_bak_data.joinpath(f'{key}_{Dates(date)}.csv')
         df = pd.read_csv(record_file)
         df.columns = df.columns.str.lower()
         return df

@@ -3,7 +3,7 @@ import numpy as np
 
 from abc import ABCMeta , abstractmethod
 from typing import Literal , Type , Any
-from src.proj import Logger , CALENDAR , DB
+from src.proj import Logger , CALENDAR , DB , Dates
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -152,7 +152,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
         if total_dates == 0:
             Logger.skipping(f'All custom indices are up to date' , indent = indent , vb_level = vb_level)
         else:
-            Logger.success(f'{len(custom_indices)} custom indices updated at {CALENDAR.dates_str(total_dates)}' , indent = indent , vb_level = vb_level)
+            Logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
     def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):

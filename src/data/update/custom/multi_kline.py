@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Any , Literal
-from src.proj import CALENDAR , DB , Logger
+from src.proj import CALENDAR , DB , Logger , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -35,7 +35,7 @@ class MultiKlineUpdater(BasicCustomUpdater):
 
             for date in update_dates: 
                 cls.update_one(date , n_day , label_name , indent = indent + 1 , vb_level = vb_level + 2)
-            Logger.success(f'Update {cls.DB_SRC}/{label_name} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
+            Logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
     def update_one(cls , date : int , n_day : int , label_name : str , indent : int = 2 , vb_level : int = 2):

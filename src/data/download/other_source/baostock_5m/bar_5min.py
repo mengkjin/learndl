@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , CALENDAR , DB
+from src.proj import PATH , Logger , CALENDAR , DB , Dates
 from src.data.util import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
@@ -52,14 +52,13 @@ def updated_dates(x_min : int = 5):
 def updatable(date , last_date):
     return (len(updated_dates()) == 0) or (date > 0 and date > CALENDAR.cd(last_date , 6))
 
-def x_mins_update_dates(date) -> list[int]:
-    all_relevant_dates = np.array([])
+def x_mins_update_dates(date) -> Dates:
+    dates : list[np.ndarray] = []
     for x_min in [10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , '5min')
         stored_dates = DB.dates('trade_ts' , f'{x_min}min')
-        dates = CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates)
-        all_relevant_dates = np.concatenate([all_relevant_dates , dates])
-    return np.unique(all_relevant_dates).astype(int).tolist()
+        dates.append(CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates))
+    return Dates(*dates)
 
 def x_mins_to_update(date):
     x_mins : list[int] = []
@@ -188,17 +187,17 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
                 Logger.alert1(f'baostock 5min {last_dt} - {dt} failed' , indent = 1)
             updated = updated or mark
     if updated:
-        Logger.success(f'Download baostock 5min at {CALENDAR.dates_str(end_dt)}' , indent = 1)
+        Logger.success(f'Download baostock 5min at {Dates(end_dt)}' , indent = 1)
             
-    dts = x_mins_update_dates(date)
+    dates = x_mins_update_dates(date)
     updated = False
-    for dt in dts:
+    for dt in dates:
         for x_min in x_mins_to_update(dt):
             five_min_df = DB.load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
             DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt)
             updated = updated or mark
         Logger.stdout(f'baostock {x_min}min bars at {dt} transformed' , indent = 2 , vb_level = 2)
-    if len(dts) > 0:
-        Logger.success(f'Transform baostock X-min bars at {CALENDAR.dates_str(dts)}' , indent = 1)
+    if len(dates) > 0:
+        Logger.success(f'Transform baostock X-min bars at {dates}' , indent = 1)
     return True

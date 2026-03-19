@@ -7,19 +7,18 @@
 # email: True
 # mode: shell
 # parameters:
-#   reset_port_name : 
-#       type : Options.available_tradeports()
-#       prefix : "tradeport/"
-#       desc : port names by ","
+#   port_name : 
+#       type : Options.available_backtestports()
+#       desc : backtest trade port name
 #       required : True
 
 from src.api import TradingAPI
 from src.proj.util import ScriptTool
 
-@ScriptTool('reset_tradeports' , '@reset_port_name')
-def main(reset_port_name : str | None = None , **kwargs):
-    assert reset_port_name is not None , 'reset_port_name is required'
-    TradingAPI.update([reset_port_name])
+@ScriptTool('backtest_rebuild' , '@port_name')
+def main(port_name : str | None = None , **kwargs):
+    assert port_name is not None , 'port_name is required'
+    TradingAPI.backtest_rebuild(port_name)
 
 if __name__ == '__main__':
     main()

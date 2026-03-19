@@ -1,6 +1,5 @@
 focused_ports:
   - use_daily
-  - use_daily2
 
 # accepted fields:
 #   alpha: str or comma separated strings
@@ -22,14 +21,6 @@ focused_ports:
 
 trading_ports:
   use_daily:
-    alpha: big_combine
-    components:
-      - sellside@huatai.master_combined@master_combined
-      - factor@df_scores_v0
-      - gru_day_V1
-    weights: [1.0 , 1.0 , 1.0]
-
-  use_daily2:
     alpha: 
       - factor@ht_master_combined
       - factor@df_scores_v0
@@ -65,4 +56,4 @@ backtest_ports:
 
   event_factor_momentum.backtest:
     alpha: factor@event_factor_momentum
-    category: screen
+    # category: screen

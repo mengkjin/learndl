@@ -3,7 +3,7 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.proj import PATH , Logger , Proj , CALENDAR
+from src.proj import PATH , Logger , Proj , CALENDAR , Dates
 from .trading_port import TrackingPort
 
 class TrackingPortfolioManager:
@@ -24,9 +24,9 @@ class TrackingPortfolioManager:
         last_ports = {name:tp.get_last_port(date).to_dataframe() for name,tp in updated_ports.items()}
             
         if len(updated_ports) == 0: 
-            Logger.alert1(f'No Tracking Portfolios Updated on {date}' , indent = indent + 1)
+            Logger.alert1(f'No Tracking Portfolios Updated at {Dates(date)}' , indent = indent + 1)
         else:
-            Logger.success(f'{len(updated_ports)} Tracking Portfolios Updated on {date}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
+            Logger.success(f'{len(updated_ports)} Tracking Portfolios Updated at {Dates(date)}: [{", ".join(new_ports.keys())}]' , indent = indent + 1 , vb_level = vb_level)
             for port_name in updated_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
@@ -45,7 +45,9 @@ class TrackingPortfolioManager:
 
         for name in TrackingPort.candidate_ports:
             tp = TrackingPort.load(name)
-            tp.analyze(key_fig = '' , vb_level = vb_level + 1)
+            tp.analyze(key_fig = '' , indent = indent + 1 , vb_level = vb_level + 2)
+
+        Logger.success(f'{len(updated_ports)} Tracking Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
                     
     @classmethod
     def attachment_path(cls , date : int) -> Path:

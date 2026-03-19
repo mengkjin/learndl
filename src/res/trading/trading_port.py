@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Type , ClassVar
 
-from src.proj import PATH , Proj , Logger , CALENDAR , DB
+from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates
 from src.proj.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import Benchmark , Portfolio , CompositeAlpha , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
@@ -88,8 +88,8 @@ class TradingPort:
         raise NotImplementedError(f'{self.__class__.__name__} must implement result_dir in subclass')
 
     @property
-    def export_dir(self) -> Path:
-        raise NotImplementedError(f'{self.__class__.__name__} must implement export_dir in subclass')
+    def portfolio_dir(self) -> Path:
+        raise NotImplementedError(f'{self.__class__.__name__} must implement portfolio_dir in subclass')
 
     def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : int = 2) -> 'TradingPort':
         raise NotImplementedError(f'{self.__class__.__name__} must implement build in subclass')
@@ -98,7 +98,7 @@ class TradingPort:
         raise NotImplementedError(f'{self.__class__.__name__} must implement rebuild in subclass')
         
     def export_path(self , date : int) -> Path:
-        return self.export_dir.joinpath(f'{self.name}.{date}.feather')
+        return self.portfolio_dir.joinpath(f'{self.name}.{date}.feather')
 
     @property
     def result_path_account(self) -> Path:
@@ -120,7 +120,7 @@ class TradingPort:
             return 'tracking'
     
     def stored_dates(self , start : int | None = None , end : int | None = None) -> np.ndarray:
-        dates = DB.dir_dates(self.export_dir , start_dt = start , end_dt = end)
+        dates = DB.dir_dates(self.portfolio_dir , start_dt = start , end_dt = end)
         return dates
     
     def is_first_date(self , date : int) -> bool:
@@ -218,10 +218,10 @@ class TradingPort:
             Logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        Logger.stdout(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}] at {CALENDAR.dates_str(port_dates)} start ...' , indent = indent , vb_level = vb_level)
-        account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine , indent = indent + 1 , vb_level = vb_level + 1).df
+        Logger.stdout(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}] at {Dates(port_dates)} start ...' , indent = indent , vb_level = vb_level)
+        account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine , indent = indent + 1 , vb_level = vb_level + 2).df
         if len(account_df) <= 1:
-            Logger.stdout(f'{self.trading_portfolio_type.title()} Portfolio [{self.name}] just start accounting and has no record' , indent = indent , vb_level = vb_level)
+            Logger.stdout(f'{self.trading_portfolio_type.title()} Portfolio [{self.name}] just start accounting and has no record' , indent = indent , vb_level = vb_level + 1)
             return self
         
         candidates = {task.task_name():task for task in TASK_LIST}
@@ -261,7 +261,7 @@ class TrackingPort(TradingPort):
         return PATH.rslt_trade.joinpath('tracking' , self.name)
 
     @property
-    def export_dir(self) -> Path:
+    def portfolio_dir(self) -> Path:
         return PATH.trade_port.joinpath(self.name)
     
     def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : int = 2):
@@ -280,7 +280,7 @@ class TrackingPort(TradingPort):
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        Logger.stdout(f'Perform portfolio building for TradingPort {self.name} on {date}' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Perform portfolio building for TradingPort {self.name} at {Dates(date)}' , indent = indent , vb_level = vb_level)
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
@@ -316,42 +316,45 @@ class BacktestPort(TradingPort):
         return PATH.rslt_trade.joinpath('backtest' , self.name)
 
     @property
-    def export_dir(self) -> Path:
+    def portfolio_dir(self) -> Path:
         return PATH.rslt_trade.joinpath('backtest' , self.name , 'portfolio')
     
-    def build(self , date : int | None = None , export = True , indent : int = 1 , vb_level : int = 2):
+    def build(self , date : int | None = None , reset_port = False , export = True , indent : int = 1 , vb_level : int = 2):
         date = CALENDAR.updated(date)
-        df = self.build_backward(date , export = export , indent = indent , vb_level = vb_level)
+        df = self.build_backward(date , reset_port = reset_port , export = export , indent = indent , vb_level = vb_level)
         self.new_ports[date] = df
         return self
 
     def rebuild(self , date : int | None = None , export = True , indent : int = 0 , vb_level : int = 2):
         date = CALENDAR.updated(date)
-        Logger.stdout(f'Rebuild portfolio for {self.name} at {CALENDAR.dates_str([date])} start ...' , indent = indent , vb_level = vb_level)
-        for path in self.result_dir.joinpath('portfolio').glob('*.feather'):
-            path.unlink()
-        self.result_path_account.unlink(missing_ok = True)
-        df = self.build_backward(date , export = export , indent = indent + 1 , vb_level = vb_level)
+        Logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...' , indent = indent , vb_level = vb_level)
+        df = self.build_backward(date , reset_port = True , export = export , indent = indent + 1 , vb_level = vb_level)
         self.new_ports[date] = df
         return self
     
-    def build_backward(self , date : int , export = True , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
+    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
         
         if test_end < self.test_start: 
             return pd.DataFrame()
+        
+        if reset_port:
+            Logger.alert1(f'Reset {self.trading_portfolio_type.title()} Portfolio [{self.name}] for new build!' , indent = indent)
+            shutil.rmtree(self.portfolio_dir , ignore_errors = True)
+            self.portfolio_dir.mkdir(parents = True , exist_ok = True)
+            self.result_path_account.unlink(missing_ok = True)
 
         date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
         date_list = date_list[date_list > self.end_date()]
         if len(date_list) == 0: 
             return pd.DataFrame()
-        Logger.stdout(f'Loading alpha for {self.name} at {CALENDAR.dates_str(date_list)}' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
         alpha = self.Alpha.get(date_list)
-        Logger.stdout(f'Loading universe for {self.name} at {CALENDAR.dates_str(date_list)}' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
         universe = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])
-        Logger.stdout(f'Perform portfolio building for {self.name} at {CALENDAR.dates_str(date_list)}' , indent = indent , vb_level = vb_level)
+        Logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 

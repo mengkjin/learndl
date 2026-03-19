@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal , Any
-from src.proj import Logger , CALENDAR , DB
+from src.proj import Logger , CALENDAR , DB , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -40,7 +40,7 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
 
         cls.append_result(pd.concat(new_dfs) , indent = indent , vb_level = vb_level)
 
-        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {CALENDAR.dates_str(update_dates)}' , indent = indent , vb_level = vb_level)
+        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
     def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):

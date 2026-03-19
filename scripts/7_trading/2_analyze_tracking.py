@@ -8,9 +8,8 @@
 # mode: shell
 # parameters:
 #   port_name : 
-#       type : Options.available_tradeports()
-#       prefix : "tradeport/"
-#       desc : trade port name
+#       type : Options.available_trackingports()
+#       desc : tracking trade port name
 #       required : True
 #   start : 
 #       type : int

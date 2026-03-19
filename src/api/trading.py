@@ -14,12 +14,21 @@ class TradingAPI:
             return list(Proj.Conf.TradingPort.tracking_ports.keys())
 
     @classmethod
-    def update(cls, reset_ports : list[str] | None = None): 
+    def backtest_rebuild(cls , port_name : str):
+        """
+        Rebuild backtest portfolio for a given port:
+        """
+        BacktestPortfolioManager.rebuild(port_name).analyze()
+
+    @classmethod
+    def update(cls): 
         """
         Update trading portfolios for both laptop and server:
         """
-        wrap_update(TrackingPortfolioManager.update , 'update trading portfolios' , reset_ports = reset_ports or [])
-        wrap_update(BacktestPortfolioManager.update , 'update backtest portfolios')
+        def update_trading_ports():
+            TrackingPortfolioManager.update()
+            BacktestPortfolioManager.update()
+        wrap_update(update_trading_ports , 'update trading portfolios')
 
     @classmethod
     def Analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs):

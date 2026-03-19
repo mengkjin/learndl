@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import Logger , CALENDAR , Proj , DB 
+from src.proj import Logger , CALENDAR , Proj , DB , Dates
 from src.proj.func import singleton
 from src.data.util import DataBlock , INFO
 
@@ -150,7 +150,7 @@ class DataVendor:
         if data_key == 'daily_quotes':
             block0 = block0.adjust_price()
         
-        Logger.success(f'DATAVENDOR.{data_key} expand from {CALENDAR.dates_str([loaded_start,loaded_end])} to {CALENDAR.dates_str([target_start,target_end])}')
+        Logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
         setattr(self , f'_block_{data_key}' , block0)
 
     def update_return_block(self , start_dt : int , end_dt : int):
@@ -165,14 +165,14 @@ class DataVendor:
             blk = blk.align_date(blk.date_within(start_dt , end_dt) , inplace = True)
             setattr(self , f'_block_daily_ret' , blk)
 
-    def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , extend = 0) -> DataBlock:
+    def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
         with Proj.Silence:
-            self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend)
+            self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend = extend)
         return getattr(self , f'_block_daily_quotes' , DataBlock())
 
-    def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , extend = 0) -> DataBlock:
+    def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
         with Proj.Silence:
-            self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend)
+            self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend = extend)
         return getattr(self , f'_block_risk_exp' , DataBlock())
 
     def get_returns_block(self , start_dt : int , end_dt : int):
