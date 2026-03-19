@@ -33,5 +33,5 @@ class TradingPortfolioBacktestor:
             Logger.alert1(f'No backtest portfolios updated on {date}' , indent = indent + 1)
         else:
             Logger.success(f'{len(updated_ports)} Backtest portfolios updated on {date}' , indent = indent + 1 , vb_level = vb_level)
-            for port_name in updated_ports:
-                updated_ports[port_name].analyze(key_fig = '' , vb_level = Proj.vb.max)
+        for port_name in updated_ports:
+            updated_ports[port_name].analyze(key_fig = '' , vb_level = Proj.vb.max)

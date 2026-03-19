@@ -63,7 +63,7 @@ class LogEntry:
         return cls(title , list(messages))
     
     @classmethod
-    def from_lines(cls , lines : list[str] , from_latest : bool = True) -> list['LogEntry']:
+    def from_lines(cls , lines : list[str] , from_latest : bool = True , pattern : str | None = None) -> list['LogEntry']:
         entries : list['LogEntry'] = []
         current_entry : LogEntry | None = None
         for line in lines:
@@ -83,6 +83,8 @@ class LogEntry:
                 ...
         if from_latest:
             entries = entries[::-1]
+        if pattern:
+            entries = [entry for entry in entries if re.match(pattern, entry.title)]
         return entries
 
 class LogFile:
@@ -169,13 +171,13 @@ class LogFile:
             portalocker.lock(f, portalocker.LOCK_EX)
             f.write('\n'.join(entry.to_lines()) + '\n')
 
-    def read_entry(self , max_entries : int = -1 , from_latest : bool = True):
+    def read_entry(self , max_entries : int = -1 , from_latest : bool = True , pattern : str | None = None):
         read_files = reversed(self.candidates) if from_latest else self.candidates
         entries : list[LogEntry] = []
         for file in read_files:
             with open(file , 'r') as f:
                 lines = f.readlines()
-            entries.extend(LogEntry.from_lines(lines , from_latest = from_latest))
+            entries.extend(LogEntry.from_lines(lines , from_latest = from_latest , pattern = pattern))
             if max_entries > 0 and len(entries) > max_entries:
                 break
         if max_entries > 0:

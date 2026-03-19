@@ -4,6 +4,7 @@ skip_horizon:  20 # must be larger than span of labels
 fitting_step:  5
 callbacks:
   - StatusDisplay
+  - SummaryWriter
   # - BatchDisplay
   - BasicTestResult
   - DetailedAlphaAnalysis
@@ -37,10 +38,10 @@ criterion.loss:
   # hidden_corr:  {'lamb' :  0. ,}
   # hidden_corr_deprecated:  {'lamb' :  0.001 ,}
 
-# score params , should be a dict, can be one of mse, pearson, ccc, spearman
+# accuracy params , should be a dict, can be one of mse, pearson, ccc, spearman
 # it is used for validation set calculation and early stopping
-# only one score criterion is allowed
-criterion.score:     
+# only one accuracy criterion is allowed
+criterion.accuracy:     
   spearman: {which_output: [0] , which_label: [0]}
   # mse, pearson, ccc, spearman
 

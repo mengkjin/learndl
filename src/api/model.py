@@ -22,7 +22,6 @@ class ModelAPI:
         wrap_update(cls.Extractor.update , 'update hidden')
         wrap_update(cls.Predictor.update , 'update predictors')
         wrap_update(cls.FmpBuilder.update , 'update predictor portfolios')
-
     
     @classmethod
     def update_models(cls , force_update = False):
@@ -147,3 +146,10 @@ class ModelAPI:
         for path in PATH.model_st.iterdir():
             model_path = ModelPath(path)
             model_path.clear_model_path()
+
+    @classmethod
+    def available_models(cls , include_short_test : bool = False):
+        '''
+        Get available models in model folder
+        '''
+        return cls.Trainer.available_models(include_short_test = include_short_test)

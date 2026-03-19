@@ -49,7 +49,7 @@ class BasicTestResult(BaseCallBack):
             'model_date' : self.status.model_date ,
             'submodel' : self.status.model_submodel ,
             'date' : self.metrics.epoch_batch_keys[-len(self.model_test_dates):] ,
-            'value' : self.metrics.epoch_batch_scores[-len(self.model_test_dates):]
+            'value' : self.metrics.epoch_batch_accuracies[-len(self.model_test_dates):]
         }).query('date in @self.model_test_dates')
         self.test_df_date = pd.concat([self.test_df_date , df_date])
 
@@ -97,8 +97,8 @@ class BasicTestResult(BaseCallBack):
             df_display = self.status.test_summary
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
-            score_criterion = list(self.config.criterion_score.keys())[0]
-            Logger.display(df_display , caption = f'Table: Test Summary ({score_criterion}) for Models:')
+            criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
+            Logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:')
             
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}

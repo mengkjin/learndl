@@ -6,7 +6,47 @@ from src.proj import Logger , Proj , PATH
 
 from .util import wrap_update
 
-def summary_account_period_ret(by_max_columns : int = 10):
+def model_account_summary(by_max_columns : int = 12):
+    acc_paths : dict[str , dict[str , Path]] = {}
+    fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rein' : 'reinforce'}
+    model_paths = ModelTrainer.all_resumable_models()
+    for model_path in model_paths:
+        acc_paths[model_path.model_name] = {}
+        for col , fmp in fmp_types.items():
+            available_paths = list(model_path.snapshot('detailed_alpha' , f'{fmp}_fmp_test' , 'account').glob('*best*.tar'))
+            if available_paths:
+                acc_paths[model_path.model_name][col] = available_paths[0]
+    
+    dfs = {model : PortfolioAccount.EvalPeriodRet(paths) for model , paths in acc_paths.items()}
+    dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
+    for i , df in enumerate(dfs):
+        caption = f'Summary of Model FMP Account Period Return (Total {len(dfs)} Tables):' if i == 0 else None
+        Logger.display(df , caption = caption)
+    return dfs
+
+def tport_account_summary(by_max_columns : int = 12):
+    acc_paths : dict[str , dict[str , Path]] = {}
+    
+    for tport in Proj.Conf.TradingPort.tracking_ports:
+        available_paths = list(PATH.rslt_trade.joinpath('tracking', tport).glob('account.tar'))
+        if available_paths:
+            acc_paths[tport] = {'port':available_paths[0]} 
+    for tport in Proj.Conf.TradingPort.backtest_ports:
+        available_paths = list(PATH.rslt_trade.joinpath('backtest', tport).glob('account.tar'))
+        if available_paths:
+            acc_paths[tport] = {'port':available_paths[0]} 
+    dfs = {model : PortfolioAccount.EvalPeriodRet(paths) for model , paths in acc_paths.items()}
+    dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
+    for i , df in enumerate(dfs):
+        caption = f'Summary of Trading Portfolio Account Period Return (Total {len(dfs)} Tables):' if i == 0 else None
+        Logger.display(df , caption = caption)
+    return dfs
+
+def account_summaries(by_max_columns : int = 12):
+    model_account_summary(by_max_columns)
+    tport_account_summary(by_max_columns)
+    
+def summary_account_period_ret(by_max_columns : int = 12):
     acc_paths : dict[str , dict[str , Path]] = {}
     fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rein' : 'reinforce'}
     model_paths = ModelTrainer.all_resumable_models()
@@ -52,4 +92,4 @@ class SummaryAPI:
 
     @classmethod
     def process(cls):
-        summary_account_period_ret()
+        account_summaries()

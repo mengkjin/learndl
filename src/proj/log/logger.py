@@ -28,7 +28,6 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
 
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 VB = Proj.vb
-SHOW_VB_LEVEL = False
 
 def new_stdout(*args , indent = 0 , color = None , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
     """
@@ -39,7 +38,7 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : int | Literal['max
         sep , end , file , flush: same as stdout
     """
     with VB.WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if SHOW_VB_LEVEL else args
+        args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
         fstr = stdout(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     return fstr
 
@@ -52,7 +51,7 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : int | Literal['max
         sep , end , file , flush: same as stdout
     """
     with VB.WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if SHOW_VB_LEVEL else args
+        args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
         fstr = stderr(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     LOG_FILE.write(fstr.unformatted())
     return fstr

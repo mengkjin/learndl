@@ -48,7 +48,7 @@ class ModelTestor:
             self.try_forward()
         batch_data = BatchData(self.batch_input , self.output)
         metrics = self.metrics.calculate('train' , batch_key = 'test' , batch_data = batch_data)
-        Logger.stdout(f'metric output : {metrics.batch_score}')
+        Logger.stdout(f'metric output : {metrics.batch_accuracy}')
         Logger.stdout(f'Test Metrics Success')
         return self
     

@@ -11,7 +11,7 @@ from . import conf as Conf
 
 __all__ = ['Proj']
 
-_project_settings = MACHINE.configs('setting' , 'verbosity')
+_project_settings = MACHINE.configs('setting' , 'project')
 
 class _LogWriterFile:
     def __init__(self):
@@ -190,9 +190,17 @@ class _Verbosity:
     def __bool__(self):
         return self.vb is not None
 
+class _ProjectSetting:
+    def __init__(self , key : str):
+        self.key = key
+    def __get__(self , instance, owner) -> bool:
+        return _project_settings.get(self.key , False)
+
 class _ProjMeta(type):
     """meta class of ProjConfig"""
     log_writer = _LogWriterFile()
+    debug_mode = _ProjectSetting('debug_mode')
+    show_vb_level = _ProjectSetting('show_vb_level')
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')

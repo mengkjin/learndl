@@ -3,8 +3,9 @@ short_test:
   model.end_date:   20250331 # 20240229
   model.window: 240
   train.max_epoch:  3
+  input.data.types: day
   input.filter.secid: random.200
-  input.filter.date: 20241101-20250331
+  input.filter.date: 20200101-20250331
   callbacks.DetailedAlphaAnalysis:  {tasks: ['factor' , 't50']}
 transformer:
   callbacks.ResetOptimizer:  {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }

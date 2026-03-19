@@ -11,7 +11,7 @@ def list_converge(arr , n = None , eps = 1e-6) -> bool:
     return len(arr) >= n and (max(arr[-n:]) - min(arr[-n:]) < eps)
 
 class EarlyStoppage(BaseCallBack):
-    '''stop fitting when validation score cease to improve'''
+    '''stop fitting when validation accuracy cease to improve'''
     CB_KEY_PARAMS = ['patience']
     def __init__(self , trainer , patience = 20 , **kwargs) -> None:
         self.patience = patience
@@ -29,7 +29,7 @@ class EarlyStoppage(BaseCallBack):
             self.status.fit_loop_breaker.add_status('EarlyStop' , self.metric_best_epoch)
 
 class ValidationConverge(BaseCallBack):
-    '''stop fitting when valid_score converge'''
+    '''stop fitting when valid_accuracy converge'''
     CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
         self.patience = patience
@@ -37,7 +37,7 @@ class ValidationConverge(BaseCallBack):
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if list_converge(self.metrics.attempt_metrics.averages['valid_scores'], self.patience , self.eps):
+        if list_converge(self.metrics.attempt_metrics.averages['valid_accuracies'], self.patience , self.eps):
             self.status.fit_loop_breaker.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
 class TrainConverge(BaseCallBack):
@@ -53,7 +53,7 @@ class TrainConverge(BaseCallBack):
             self.status.fit_loop_breaker.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
 class FitConverge(BaseCallBack):
-    '''stop fitting when train_loss and valid_score converge'''
+    '''stop fitting when train_loss and valid_accuracy converge'''
     CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
         self.patience = patience
@@ -62,7 +62,7 @@ class FitConverge(BaseCallBack):
 
     def on_validation_epoch_end(self):
         if (list_converge(self.metrics.attempt_metrics.averages['train_losses'], self.patience , self.eps) and 
-            list_converge(self.metrics.attempt_metrics.averages['valid_scores'], self.patience , self.eps)):
+            list_converge(self.metrics.attempt_metrics.averages['valid_accuracies'], self.patience , self.eps)):
             self.status.fit_loop_breaker.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
 
 class EarlyExitRetrain(BaseCallBack):
@@ -80,14 +80,14 @@ class EarlyExitRetrain(BaseCallBack):
         if (self.status.fit_loop_breaker and 
             self.status.fit_loop_breaker.trigger_ep <= self.earliest 
             and self.status.attempt < self.max_attempt):
-            if self.metrics.better_attempt(self.status.best_attempt_metric):
-                self.status.best_attempt_metric = self.metrics.best_epoch_metric
+            if self.status.update_best_attempt(self.metrics):
                 self.model.stack_model()
             self.metrics.collect_attempt()
-            self.metrics.new_attempt(**self.status.status)
+
             self.status.new_attempt()
             self.model.new_model(lr_multiplier = self.lr_multiplier[:self.status.attempt+1][-1])
-
+            self.metrics.new_attempt(**self.status.status)
+            
 class NanLossRetrain(BaseCallBack):
     '''retrain if fitting encounters nan loss'''
     CB_KEY_PARAMS = ['max_attempt']
@@ -106,9 +106,11 @@ class NanLossRetrain(BaseCallBack):
             Logger.warning(f'Initialize a new model to retrain! Lives remaining {self.remain_nan_life}')
             self.remain_nan_life -= 1
             self.metrics.collect_attempt()
-            self.metrics.new_attempt(**self.status.status)
+
             self.status.new_attempt('nanloss')
             self.model.new_model()
+            self.metrics.new_attempt(**self.status.status)
+            
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 

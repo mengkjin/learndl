@@ -1,4 +1,3 @@
 from .multiloss import MultiHeadLosses
-from .metric import CommonLoss , CommonScore , SpecialLoss
-from .score import Score
+from .accuracy import Accuracy
 from .loss import Loss

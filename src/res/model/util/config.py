@@ -453,8 +453,8 @@ class BaseConfig:
                 kwargs[k]['lamb'] = 1.
         return {k:v for k,v in kwargs.items() if v['lamb'] != 0}
     @property
-    def criterion_score(self) -> dict[str,dict[str,Any]]: 
-        kwargs = self['train.criterion.score'] or {}
+    def criterion_accuracy(self) -> dict[str,dict[str,Any]]: 
+        kwargs = self['train.criterion.accuracy'] or {}
         assert len(kwargs) > 0 , f'{kwargs} should be not empty'
         return kwargs
     @property
@@ -785,6 +785,12 @@ class ModelConfig(BaseConfig):
     @is_resuming.setter
     def is_resuming(self , value : bool):
         self._is_resuming = value
+
+    def log_operation(self , operation : str , sub_operation : str):
+        assert operation in ['fit' , 'test'] , f'operation {operation} is not valid'
+        assert sub_operation in ['start' , 'end'] , f'sub_operation {sub_operation} is not valid'
+        other_info = f'is_resuming={self.is_resuming}'
+        self.base_path.log_operation(f'{operation}_model >> {sub_operation} >> {other_info}')
     
     def update(self, update = None , **kwargs):
         update = update or {}
@@ -819,7 +825,7 @@ class ModelConfig(BaseConfig):
     
     def init_utils(self):
         self.metrics = Metrics(self.module_type , self.nn_category , self.base_path ,
-                               self.criterion_loss , self.criterion_score , self.criterion_multilosses)
+                               self.criterion_loss , self.criterion_accuracy , self.criterion_multilosses)
         self.checkpoint = Checkpoint(self.mem_storage)
         self.deposition = Deposition(self.base_path)
         return self

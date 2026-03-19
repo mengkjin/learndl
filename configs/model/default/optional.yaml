@@ -13,7 +13,7 @@ train.criterion.loss:
   ccc: {}
   hidden_corr: {'lamb' : 0.0}
   hidden_corr_deprecated: {'lamb' : 0.001}
-train.criterion.score:
+train.criterion.accuracy:
   spearman: {which_output: [0] , which_label: [0]}
 train.criterion.weight: {'fit' : 'equal' , 'test' : 'equal'}
 train.criterion.multilosses:
@@ -57,6 +57,7 @@ callbacks.EarlyExitRetrain: {'earliest' : 10 , 'max_attempt' : 4 , 'lr_multiplie
 callbacks.NanLossRetrain: {'max_attempt' : 4}
 callbacks.BatchDisplay: {}
 callbacks.StatusDisplay: {}
+callbacks.SummaryWriter: {}
 callbacks.TrainConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
 callbacks.FitConverge: {'patience' : 5 , 'eps' : 1.0e-5}
 callbacks.CudaEmptyCache: {'batch_interval' : 20}

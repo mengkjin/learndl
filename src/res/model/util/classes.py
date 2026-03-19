@@ -5,9 +5,11 @@ import torch
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from inspect import currentframe
 from pathlib import Path
-from typing import Any , final , Iterator , Literal , Callable
+from typing import Any , final , Iterator , Literal , Callable , Sized
+from torch.utils.tensorboard import SummaryWriter as TBSummaryWriter
 
 from src.proj import Proj , Logger , DB , PATH
 from src.proj.util import FilteredIterable
@@ -18,6 +20,7 @@ from src.data import ModuleData
 from .batch import BatchInput , BatchOutput , BatchData
 from .buffer import BaseBuffer
 from .config import ModelConfig
+from .metrics import Metrics
 from .model_path import ModelDict
 from .storage import MemFileStorage
 
@@ -30,9 +33,10 @@ class ModelStreamLine(ABC):
     def on_summarize_model(self): ...
     def on_data_end(self): ... 
     def on_data_start(self): ... 
-    def on_after_backward(self): ... 
     def on_after_fit_epoch(self): ... 
+    def on_after_backward(self): ... 
     def on_before_backward(self): ... 
+    def on_before_clip_gradients(self): ... 
     def on_before_save_model(self): ... 
     def on_before_fit_epoch_end(self): ... 
     def on_fit_end(self): ... 
@@ -81,6 +85,7 @@ class ModelStreamLine(ABC):
         'on_data_start' , 
         'on_after_backward' , 
         'on_after_fit_epoch' , 
+        'on_before_clip_gradients' ,
         'on_before_backward' , 
         'on_before_save_model' , 
         'on_before_fit_epoch_end' , 
@@ -199,25 +204,30 @@ class TrainerStatus(ModelStreamLine):
         self.epoch   : int = -1
         self.attempt : int = 0
         self.round   : int = 0
+
+        self.epoch_model : int = -1
         
         self.model_num  : int = -1
         self.model_date : int = -1
         self.model_submodel : str = 'best'
         self.epoch_event : list[str] = []
-        self.best_attempt_metric : Any = None
+
+        self.best_attempt : tuple[int , Any] = (-1 , None)
 
         self.fitted_model_num : int = 0
 
         self.fit_loop_breaker = _FitLoopBreaker(self.max_epoch)
         self.fit_iter_num : int = 0
 
+        self.start_times : dict[str,datetime] = {}
+        self.end_times : dict[str,datetime] = {}
         self.test_summary : pd.DataFrame = pd.DataFrame()
 
     def as_dict(self):
         d = {k:getattr(self,k) for k in 
              ['max_epoch' , 'stage' , 'dataset' , 'epoch' , 'attempt' , 
               'round' , 'model_num' , 'model_date' , 'model_submodel' , 
-              'epoch_event' , 'best_attempt_metric' , 'fitted_model_num']}
+              'epoch_event' , 'best_attempt' , 'fitted_model_num']}
         return d
 
     def __repr__(self):
@@ -235,10 +245,20 @@ class TrainerStatus(ModelStreamLine):
             'attempt' : self.attempt ,
             'round' : self.round
         }
-
+    def update_best_attempt(self , metrics : Metrics):
+        if metrics.better_attempt(self.best_attempt[1]):
+            self.best_attempt = (self.attempt , metrics.best_epoch_metric)
+            return True
+        return False
     def stage_data(self): self.stage = 'data'
     def stage_fit(self):  self.stage = 'fit'
     def stage_test(self): self.stage = 'test'
+    def on_before_data_start(self):    self.start_times['data'] = datetime.now()
+    def on_after_data_end(self):       self.end_times['data'] = datetime.now()
+    def on_before_fit_start(self):     self.start_times['fit'] = datetime.now()
+    def on_after_fit_end(self):        self.end_times['fit'] = datetime.now()
+    def on_before_test_start(self):    self.start_times['test'] = datetime.now()
+    def on_after_test_end(self):       self.end_times['test'] = datetime.now()
     def on_train_epoch_start(self): self.dataset = 'train'
     def on_validation_epoch_start(self): self.dataset = 'valid'
     def on_test_model_start(self): self.dataset = 'test'
@@ -247,23 +267,26 @@ class TrainerStatus(ModelStreamLine):
             Logger.note(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})')
         self.fit_iter_num += 1
         self.attempt = -1
-        self.best_attempt_metric = None
+        self.best_attempt = (-1 , None)
+        self.epoch = -1
+        self.epoch_model = -1
         self.new_attempt()
     def on_fit_model_end(self):
         self.fitted_model_num += 1
     def on_fit_epoch_start(self):
-        self.epoch   += 1
+        self.epoch += 1
+        self.epoch_model += 1
         self.epoch_event = []
     def on_fit_epoch_end(self):
         self.fit_loop_breaker.loop_end(self.epoch)
     def new_attempt(self , event : Literal['new_attempt' , 'nanloss'] = 'new_attempt'):
-        self.epoch   = -1
-        self.round   = 0
+        self.epoch = -1
+        self.round = 0
         self.epoch_event = []
         self.fit_loop_breaker.new_loop()
         self.add_event(event)
         if event == 'new_attempt': 
-            self.attempt += 1
+            self.attempt += 1        
 
     def add_event(self , event : str | None):
         if event: 
@@ -475,7 +498,13 @@ class BaseTrainer(ModelStreamLine):
     @property
     def deposition(self): return self.config.deposition   
     @property
+    def base_path(self): return self.config.base_path
+    @property
     def stage_queue(self): return self.config.stage_queue
+    @property
+    def batch_num(self): 
+        assert isinstance(self.dataloader , Sized) , f'dataloader is not a Sized object: {self.dataloader}'
+        return len(self.dataloader)
     @property
     def batch_data(self): return BatchData(self.batch_input , self.batch_output)
     @property
@@ -519,7 +548,10 @@ class BaseTrainer(ModelStreamLine):
         else:
             status = 'unknown'
         return self.config.base_path.rslt(f'{self.config.model_name}_{status}.html')
-    
+    @property
+    def model_tensorboad_dir(self):
+        return self.config.base_path.snapshot('tensorboard' , f'{self.model_num}.{self.model_date}')
+
     def main_process(self):
         '''Main stage of data & fit & test'''
         self.on_configure_model()
@@ -558,6 +590,7 @@ class BaseTrainer(ModelStreamLine):
         
     def stage_fit(self):
         '''stage of fitting'''
+        self.config.log_operation('fit' , 'start')
         self.on_before_fit_start()
         self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
@@ -570,9 +603,11 @@ class BaseTrainer(ModelStreamLine):
                 self.on_fit_model_date_end()
         self.on_fit_end()
         self.on_after_fit_end()
+        self.config.log_operation('fit' , 'end')
 
     def stage_test(self):
         '''stage of testing'''
+        self.config.log_operation('test' , 'start')
         self.on_before_test_start()
         self.on_test_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
@@ -586,6 +621,7 @@ class BaseTrainer(ModelStreamLine):
         self.on_before_test_end()
         self.on_test_end()
         self.on_after_test_end()
+        self.config.log_operation('test' , 'end')
 
     def iter_model_num_date(self): 
         '''iter of model_date and model_num , considering is_resuming'''
@@ -675,13 +711,14 @@ class BaseTrainer(ModelStreamLine):
         self.config.set_config_environment()
         
     def on_fit_model_start(self):
+        self.writer = TBSummaryWriter(self.model_tensorboad_dir)
         self.data.setup('fit' , self.model_param , self.model_date)
         self.model.new_model()
         self.metrics.new_model(self.model , self.model.complete_model_param , **self.status.status)
         self.metrics.new_attempt(**self.status.status)
 
     def on_fit_model_end(self): 
-        if self.metrics.better_attempt(self.status.best_attempt_metric): 
+        if self.status.update_best_attempt(self.metrics): 
             self.model.stack_model()
         self.model.dump_model()
         self.metrics.collect_attempt()
@@ -696,13 +733,13 @@ class BaseTrainer(ModelStreamLine):
 
     def on_train_epoch_end(self):
         self.metrics.collect_epoch()
-    
+        
     def on_validation_epoch_start(self):
         self.metrics.new_epoch(**self.status.status)
 
     def on_validation_epoch_end(self):
         self.metrics.collect_epoch()
-    
+        
     def on_test_model_start(self):
         self.data.setup('test' , self.model_param , self.model_date)
 
@@ -711,7 +748,9 @@ class BaseTrainer(ModelStreamLine):
         self.metrics.new_all(self.model , self.model.complete_model_param , **self.status.status)
         
     def on_test_submodel_end(self): 
-        self.metrics.collect_all()
+        self.metrics.collect_epoch()
+        self.metrics.collect_attempt()
+        self.metrics.collect_model()
 
     def on_test_batch_start(self):
         self.assert_equity(self.batch_dates[self.batch_idx] , self.data.batch_date0(self.batch_input)) 
@@ -748,6 +787,8 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def deposition(self): return self.config.deposition
     @property
     def device(self): return self.config.device
+    @property
+    def base_path(self): return self.config.base_path
     @property
     def data(self): return self.trainer.data
     @property
@@ -1177,12 +1218,11 @@ class PredRecorder(ModelStreamLineWithTrainer):
         avg_pred_records = self.avg_pred_records()
         if not avg_pred_records.empty:
             Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 2)
-      
 
 class BasePredictorModel(ModelStreamLineWithTrainer):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = []
-    COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
+    COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
     
     def __init__(self, *args , **kwargs) -> None:
         self.reset()

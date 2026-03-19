@@ -7,7 +7,7 @@ from src.res.model.model_module.util.data_transform import batch_data_to_boost_i
 
 class BoostPredictor(BasePredictorModel):
     '''a group of ensemble models , of same net structure'''
-    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
+    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
 
     def init_model(self , 
                    model_module : str | None = None , 

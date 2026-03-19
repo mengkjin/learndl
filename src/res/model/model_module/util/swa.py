@@ -20,7 +20,7 @@ def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
         raise KeyError(submodel)
 
 class SWAEnsembler(ABC):
-    '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
+    '''abstract class of fittest model, e.g. model with the best accuracy, swa model of best accuracies or last ones'''
     def __init__(self, ckpt : Checkpoint ,  *args , **kwargs) -> None:
         self.ckpt = ckpt
         self.reset()
@@ -28,7 +28,7 @@ class SWAEnsembler(ABC):
     @abstractmethod
     def reset(self): ...
     @abstractmethod
-    def assess(self , module , epoch : int , score = 0. , loss = 0.): '''score or loss to update assessment'''
+    def assess(self , module , epoch : int , accuracy = 0. , loss = 0.): '''accuracy or loss to update assessment'''
     @abstractmethod
     def collect(self , module , *args , **kwargs) -> nn.Module: '''output the final fittest model state dict'''
 
@@ -78,7 +78,7 @@ def update_swa_bn(loader , model : AveragedModel):
     model.train(was_training)
 
 class EnsembleBestOne(SWAEnsembler):
-    '''state dict of epoch with best score or least loss'''
+    '''state dict of epoch with best accuracy or least loss'''
     def __init__(self, ckpt : Checkpoint , *args , **kwargs) -> None:
         super().__init__(ckpt , *args , **kwargs)
 
@@ -86,7 +86,7 @@ class EnsembleBestOne(SWAEnsembler):
         self.epoch_fix  = -1
         self.metric_fix = None
 
-    def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , metrics : Metrics , accuracy = 0. , loss = 0.):
         if metrics.better_epoch(self.metric_fix):
             self.ckpt.disjoin(self , self.epoch_fix)
             self.epoch_fix = epoch
@@ -100,7 +100,7 @@ class EnsembleBestOne(SWAEnsembler):
         return net
 
 class EnsembleSWABest(SWAEnsembler):
-    '''state dict of n_best epochs with best score or least loss'''
+    '''state dict of n_best epochs with best accuracy or least loss'''
     def __init__(self, ckpt : Checkpoint , n_best = 5 ,  *args , **kwargs) -> None:
         super().__init__(ckpt ,  *args , **kwargs)
         assert n_best > 0, n_best
@@ -110,9 +110,9 @@ class EnsembleSWABest(SWAEnsembler):
         self.metric_list = []
         self.candidates  = []
         
-    def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , metrics : Metrics , accuracy = 0. , loss = 0.):
         if len(self.metric_list) == self.n_best :
-            arg = np.argmin(self.metric_list) if metrics.VAL_METRIC == 'score' else np.argmax(self.metric_list)
+            arg = np.argmin(self.metric_list) if metrics.VAL_METRIC == 'accuracy' else np.argmax(self.metric_list)
             if metrics.better_epoch(self.metric_list[arg]):
                 self.metric_list.pop(arg)
                 candid = self.candidates.pop(arg)
@@ -132,7 +132,7 @@ class EnsembleSWABest(SWAEnsembler):
         return swa.module.cpu()
     
 class EnsembleSWALast(SWAEnsembler):
-    '''state dict of n_last epochs around best score or least loss'''
+    '''state dict of n_last epochs around best accuracy or least loss'''
     def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 ,  *args , **kwargs) -> None:
         super().__init__(ckpt , *args , **kwargs)
         assert n_last > 0 and interval > 0, (n_last , interval)
@@ -145,7 +145,7 @@ class EnsembleSWALast(SWAEnsembler):
         self.metric_fix  = None
         self.candidates  = []
 
-    def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , metrics : Metrics , accuracy = 0. , loss = 0.):
         if metrics.better_epoch(self.metric_fix):
             self.epoch_fix = epoch
             self.metric_fix = metrics.last_epoch_metric 

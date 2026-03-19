@@ -8,7 +8,7 @@ from typing import Any , Callable , Literal
 
 from src.proj import Logger , Proj
 from src.proj.func import dfs_to_excel
-from src.res.algo.nn.loss import Score , Loss , MultiHeadLosses
+from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 
 from .model_path import ModelPath
 from .batch import BatchData
@@ -16,23 +16,23 @@ from .batch import BatchData
 class Metrics:
     '''calculator of batch output'''
     VAL_DATASET : Literal['train','valid'] = 'valid'
-    VAL_METRIC  : Literal['loss' ,'score'] = 'score'
+    VAL_METRIC  : Literal['loss' ,'accuracy'] = 'accuracy'
     
     def __init__(self , 
                  module_type = 'nn' , nn_category = None ,
                  model_base_path : ModelPath | Path | str | None = None ,
                  criterion_loss : dict[str,dict[str,Any]] = {'mse':{}} , 
-                 criterion_score : dict[str,dict[str,Any]] = {'spearman':{}} , 
+                 criterion_accuracy : dict[str,dict[str,Any]] = {'spearman':{}} , 
                  criterion_multilosses : dict[str,Any] = {} ,
                  **kwargs) -> None:
         assert len(criterion_loss) > 0 , f'{criterion_loss} should be not empty'
-        assert len(criterion_score) > 0 , f'{criterion_score} should be only one'
+        assert len(criterion_accuracy) > 0 , f'{criterion_accuracy} should be only one'
         
         self.module_type = module_type
         self.nn_category = nn_category
         self.model_base_path = ModelPath(model_base_path)
         self.criterion_loss = criterion_loss
-        self.criterion_score = criterion_score
+        self.criterion_accuracy = criterion_accuracy
         self.criterion_multilosses = criterion_multilosses
 
         self.batch_metrics = BatchMetrics()
@@ -41,20 +41,32 @@ class Metrics:
         self.model_metrics = ModelMetrics(self.model_base_path)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(loss={self.criterion_loss},metric={self.criterion_score})'
+        return f'{self.__class__.__name__}(loss={self.criterion_loss},metric={self.criterion_accuracy})'
 
     @property
-    def batch_score(self): 
-        return self.batch_metrics.total_score
+    def batch_accuracy(self): 
+        return self.batch_metrics.total_accuracy
     @property
     def batch_loss(self): 
         return self.batch_metrics.total_loss_item
     @property
-    def epoch_batch_scores(self): 
-        return self.epoch_metrics.averages['scores']
+    def epoch_batch_accuracies(self): 
+        return self.epoch_metrics.averages['accuracies']
     @property
     def epoch_batch_keys(self): 
         return np.array(self.epoch_metrics.batch_index)
+    @property
+    def epoch_losses(self) -> dict:
+        if not self.epoch_metrics.tables['losses']:
+            return {}
+        df = self.epoch_metrics.tables['losses'][-1]
+        return df.iloc[-1].to_dict()
+    @property
+    def epoch_accuracies(self) -> dict:
+        if not self.epoch_metrics.tables['accuracies']:
+            return {}
+        df = self.epoch_metrics.tables['accuracies'][-1]
+        return df.iloc[-1].to_dict()
     @property
     def last_epoch_metric(self) -> float:
         return self.attempt_metrics.latest(self.dataset , self.VAL_METRIC)
@@ -77,20 +89,20 @@ class Metrics:
             ignores.extend(['hidden_corr' , 'hidden_corr_deprecated'])
         return ignores
     @property
-    def ignore_score(self) -> list[str]:
+    def ignore_accuracy(self) -> list[str]:
         return []
 
     def calculate(self , dataset : Literal['train','valid','test','predict'] , batch_key : Any , batch_data : BatchData):
-        '''Calculate loss(with gradient), penalty , score'''
+        '''Calculate loss(with gradient), penalty , accuracy'''
         self.new_batch(batch_key = batch_key)
 
-        scores = self.score_function.scores(batch_data, self.which_output , self.which_label , require_grad = False)
+        accuracies = self.accuracy_function.accuracies(batch_data, self.which_output , self.which_label , require_grad = False)
         if self.module_type == 'nn' and dataset in ['train','valid']:
             losses = self.loss_function.losses(batch_data , self.which_output , self.which_label , require_grad = dataset == 'train')
         else:
             losses = {}
 
-        self.batch_metrics.set_values(scores , losses)
+        self.batch_metrics.set_values(accuracies , losses)
         self.collect_batch()
         return self
 
@@ -110,7 +122,7 @@ class Metrics:
         else:
             net = None
         self.loss_function = LossFunction(self.criterion_loss , net , self.ignore_loss , self.multilosses_kwargs)
-        self.score_function = ScoreFunction(self.criterion_score , net , self.ignore_score)
+        self.accuracy_function = AccuracyFunction(self.criterion_accuracy , net , self.ignore_accuracy)
         self.model_metrics.new(**kwargs)
         return self
 
@@ -139,22 +151,17 @@ class Metrics:
     def collect_model(self):
         self.model_metrics.close()
 
-    def collect_all(self):
-        self.collect_epoch()
-        self.collect_attempt()
-        self.collect_model()
-    
     def better_epoch(self , old_best_epoch : Any) -> bool:
         if old_best_epoch is None:
             return True
         last_metric = self.last_epoch_metric
-        return last_metric > old_best_epoch if self.VAL_METRIC == 'score' else last_metric < old_best_epoch
+        return last_metric > old_best_epoch if self.VAL_METRIC == 'accuracy' else last_metric < old_best_epoch
         
     def better_attempt(self , old_best_attempt : Any) -> bool:
         if old_best_attempt is None:
             return True
         best_metric = self.best_epoch_metric
-        return best_metric > old_best_attempt if self.VAL_METRIC == 'score' else best_metric < old_best_attempt
+        return best_metric > old_best_attempt if self.VAL_METRIC == 'accuracy' else best_metric < old_best_attempt
 
 class GradientMode:
     def __init__(self , require_grad : bool = True):
@@ -246,7 +253,7 @@ class LossFunction(MetricFunction):
             losses.update({key:value for key , value in data.output.other.items() if key.lower().startswith(prefix)})
         return losses
 
-class ScoreFunction(MetricFunction):
+class AccuracyFunction(MetricFunction):
     DISPLAY_LOG : dict[str,bool] = {}
     SearchList : list[str] = []
     ExcludeNan : bool = True
@@ -260,23 +267,35 @@ class ScoreFunction(MetricFunction):
         self.init_components()
 
     def init_components(self):
-        self.components : dict[str,ScoreComponent] = {}
+        self.components : dict[str,AccuracyComponent] = {}
         if self.net is not None:
             for name in self.SearchList:
                 if hasattr(self.net , name):
-                    self.components['net_specific'] = ScoreComponent(getattr(self.net , name))
+                    self.components['net_specific'] = AccuracyComponent(getattr(self.net , name))
                     return self
 
         for i , (criterion , kwargs) in enumerate(self.criterions.items()):
             if criterion in self.ignores:
                 continue
-            calculator = Score.get(criterion , **kwargs)
-            self.components[criterion] = ScoreComponent(calculator , **kwargs)
+            calculator = Accuracy.get(criterion , **kwargs)
+            self.components[criterion] = AccuracyComponent(calculator , **kwargs)
 
-    def scores(self , data : BatchData , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None , require_grad : bool = False) -> dict[str,float]:
-        scores = self(data, which_output = which_output , which_label = which_label , require_grad = require_grad)
-        scores = {key:value.item() if isinstance(value , Tensor) else value for key,value in scores.items()}
-        return scores
+    def accuracies(self , data : BatchData , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None , require_grad : bool = False) -> dict[str,float]:
+        accuracies = self(data, which_output = which_output , which_label = which_label , require_grad = require_grad)
+        accuracies = {key:value.item() if isinstance(value , Tensor) else value for key,value in accuracies.items()}
+        return accuracies
+
+    def hidden_accuracies(self , data : BatchData , which_label : int = 0 , require_grad : bool = False) -> torch.Tensor:
+        assert not require_grad , 'hidden accuracies do not support require_grad'
+        hidden = data.output.hidden
+        label = data.input.y[...,which_label:which_label+1]
+        component = self.components[list(self.components.keys())[0]]
+        with GradientMode(require_grad):
+            accuracies = component(pred = hidden , label = label)
+        if isinstance(accuracies , dict):
+            assert len(accuracies) == 1 , f'hidden accuracies should be a single value, but got {accuracies}'
+            accuracies = list(accuracies.values())[0]
+        return accuracies
 
 class MetricComponent:
     def __init__(
@@ -349,7 +368,7 @@ class LossComponent(MetricComponent):
             assert isinstance(output , Tensor) , f'loss output should be a Tensor when multilosses is applied, but got {output}'
             output = self.multilosses(output , mt_param = kwargs.get('mt_param' , {}))
         return output
-class ScoreComponent(MetricComponent):
+class AccuracyComponent(MetricComponent):
     def __call__(self , **kwargs) -> Tensor | dict[str,Tensor]:
         output = super().__call__(**kwargs)
         return output
@@ -359,11 +378,11 @@ class BatchMetrics:
         self.key = {}
         self.initiated = False
         self.collected = False
-        self.scores : dict[str,float] = {}
+        self.accuracies : dict[str,float] = {}
         self.losses : dict[str,Tensor] = {}
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(key={self.key},scores={self.scores},losses={self.losses})'
+        return f'{self.__class__.__name__}(key={self.key},accuracies={self.accuracies},losses={self.losses})'
 
     def new(self , batch_key : Any = None , **kwargs):
         assert not self.initiated , f'{self} is already initialized , please call close() first'
@@ -371,20 +390,20 @@ class BatchMetrics:
         self.collected = False
         self.key = {'batch':batch_key}
 
-    def set_values(self , scores : dict[str,float] , losses : dict[str,Tensor]):
+    def set_values(self , accuracies : dict[str,float] , losses : dict[str,Tensor]):
         assert self.initiated , 'BatchMetrics is not initialized , please call new(batch_key) first'
-        self.scores = scores
+        self.accuracies = accuracies
         self.losses = losses
         self._total_loss = None
-        self._total_score = None
+        self._total_accuracy = None
 
     def close(self):
         assert self.collected , f'{self} is not collected before closing, please be appended to some metrics first'
         self.initiated = False
 
     def empty_metrics(self , name : str) -> bool:
-        if name == 'scores':
-            return not bool(self.scores)
+        if name == 'accuracies':
+            return not bool(self.accuracies)
         elif name == 'losses':
             return not bool(self.losses)
         else:
@@ -400,29 +419,29 @@ class BatchMetrics:
         return self._total_loss
 
     @property
-    def total_score(self) -> float:
-        if not self.scores:
+    def total_accuracy(self) -> float:
+        if not self.accuracies:
             return np.nan
-        if not hasattr(self , '_total_score') or self._total_score is None:
-            scores = [value for value in self.scores.values()]
-            self._total_score = sum(scores) if scores else 0.
-        return self._total_score
+        if not hasattr(self , '_total_accuracy') or self._total_accuracy is None:
+            accuracies = [value for value in self.accuracies.values()]
+            self._total_accuracy = sum(accuracies) if accuracies else 0.
+        return self._total_accuracy
 
     @property
     def total_loss_item(self) -> float: 
         return self.total_loss.item()
 
     @property
-    def scores_items(self) -> dict[str,float]: 
-        return self.scores
+    def accuracies_items(self) -> dict[str,float]: 
+        return self.accuracies
 
     @property
     def losses_items(self) -> dict[str,float]:
         return {key:value.item() for key,value in self.losses.items()}
 
     @property
-    def table_scores(self) -> pd.DataFrame:
-        return pd.DataFrame(self.scores_items , index = pd.MultiIndex.from_frame(pd.DataFrame(self.key , index = [0])))
+    def table_accuracies(self) -> pd.DataFrame:
+        return pd.DataFrame(self.accuracies_items , index = pd.MultiIndex.from_frame(pd.DataFrame(self.key , index = [0])))
     @property
     def table_losses(self) -> pd.DataFrame:
         return pd.DataFrame(self.losses_items , index = pd.MultiIndex.from_frame(pd.DataFrame(self.key , index = [0])))
@@ -432,7 +451,7 @@ class BatchMetrics:
         return self.key['batch']
 
 class AggregatedMetrics:
-    def __init__(self , metric_names : list[str] = ['scores' , 'losses']) -> None:
+    def __init__(self , metric_names : list[str] = ['accuracies' , 'losses']) -> None:
         self.key = {}
         self.metric_names = metric_names
         self.initiated = False
@@ -478,7 +497,7 @@ class AggregatedMetrics:
 class EpochMetrics(AggregatedMetrics):
     '''record a list of batch metric and perform agg operations, usually used in an epoch'''
     def __init__(self):
-        super().__init__(['scores' , 'losses'])
+        super().__init__(['accuracies' , 'losses'])
         self.batch_index = []
 
     def new(self , dataset , epoch = 0 , **kwargs):
@@ -488,9 +507,9 @@ class EpochMetrics(AggregatedMetrics):
     def append(self , metrics : BatchMetrics):
         super().append(metrics)
         self.batch_index.append(metrics.batch_key)
-        self.tables['scores'].append(metrics.table_scores)
+        self.tables['accuracies'].append(metrics.table_accuracies)
         self.tables['losses'].append(metrics.table_losses)
-        self.averages['scores'].append(metrics.total_score)
+        self.averages['accuracies'].append(metrics.total_accuracy)
         self.averages['losses'].append(metrics.total_loss_item)
 
     @property
@@ -506,32 +525,32 @@ class EpochMetrics(AggregatedMetrics):
 class AttemptMetrics(AggregatedMetrics):
     '''record a list of dataset metric and perform agg operations, usually used in an attempt'''
     def __init__(self):
-        super().__init__(['train_scores' , 'valid_scores' , 'test_scores' , 'train_losses' , 'valid_losses' , 'test_losses'])
+        super().__init__(['train_accuracies' , 'valid_accuracies' , 'test_accuracies' , 'train_losses' , 'valid_losses' , 'test_losses'])
 
     def new(self , attempt : int = 0 , **kwargs):
         super().new(attempt = attempt)
 
     def append(self , metrics : EpochMetrics):
         super().append(metrics)
-        for metric in ['scores' , 'losses']:
+        for metric in ['accuracies' , 'losses']:
             if metrics.empty_metrics(metric):
                 continue
             self.tables[f'{metrics.dataset}_{metric}'].append(metrics.get_table(metric))
             self.averages[f'{metrics.dataset}_{metric}'].append(metrics.get_average(metric))
 
-    def latest(self , dataset : Literal['train','valid','test'] , metric : Literal['loss','score']) -> float:
-        metric_list = self.averages[f'{dataset}_losses'] if metric == 'loss' else self.averages[f'{dataset}_scores']
+    def latest(self , dataset : Literal['train','valid','test'] , metric : Literal['loss','accuracy']) -> float:
+        metric_list = self.averages[f'{dataset}_losses'] if metric == 'loss' else self.averages[f'{dataset}_accuracies']
         return metric_list[-1] if metric_list else 0.
 
-    def best(self , dataset : Literal['train','valid','test'] , metric : Literal['loss','score']) -> float | None:
-        metric_list = self.averages[f'{dataset}_losses'] if metric == 'loss' else self.averages[f'{dataset}_scores']
+    def best(self , dataset : Literal['train','valid','test'] , metric : Literal['loss','accuracy']) -> float | None:
+        metric_list = self.averages[f'{dataset}_losses'] if metric == 'loss' else self.averages[f'{dataset}_accuracies']
         if len(metric_list) == 0:
             return None
         return min(metric_list) if metric == 'loss' else max(metric_list)
 
 class ModelMetrics(AggregatedMetrics):
     def __init__(self , model_base_path : ModelPath | Path | str | None = None):
-        super().__init__(['train_scores' , 'valid_scores' , 'test_scores' , 'train_losses' , 'valid_losses' , 'test_losses'])
+        super().__init__(['train_accuracies' , 'valid_accuracies' , 'test_accuracies' , 'train_losses' , 'valid_losses' , 'test_losses'])
         self.model_base_path = ModelPath(model_base_path)
 
     def new(self , stage : Literal['fit' , 'test' , 'predict'] = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):
@@ -546,7 +565,7 @@ class ModelMetrics(AggregatedMetrics):
             self.averages[name].append(metrics.get_average(name))
 
     def close(self):
-        self.export_metrics()
+        # self.export_metrics()
         self.collected = True
         super().close()
 
@@ -560,10 +579,10 @@ class ModelMetrics(AggregatedMetrics):
             def summarize(x : pd.DataFrame , name : str , **kwargs):
                 return pd.Series({f'{name}_batches' : x.shape[0] , f'{name}' : x.sum(1).mean()})
             summaries = [df.set_index(['attempt' , 'epoch' , 'batch']).groupby(['attempt' , 'epoch']).apply(summarize , name = name , include_groups = False) for name , df in dfs.items()] 
-            summary = pd.concat(summaries , axis = 1).drop(columns = ['train_scores_batches' , 'valid_scores_batches']).\
-                rename(columns = {'train_scores':'train_score' , 'valid_scores':'valid_score' , 'train_losses':'train_loss' , 
+            summary = pd.concat(summaries , axis = 1).drop(columns = ['train_accuracies_batches' , 'valid_accuracies_batches']).\
+                rename(columns = {'train_accuracies':'train_accuracy' , 'valid_accuracies':'valid_accuracy' , 'train_losses':'train_loss' , 
                 'valid_losses':'valid_loss' ,'train_losses_batches':'train_batches' , 'valid_losses_batches':'valid_batches'})
-            columns = summary.columns.intersection(['train_batches' , 'train_loss' , 'train_score' , 'valid_batches' , 'valid_loss' , 'valid_score'])
+            columns = summary.columns.intersection(['train_batches' , 'train_loss' , 'train_accuracy' , 'valid_batches' , 'valid_loss' , 'valid_accuracy'])
             summary = summary.loc[:,columns].reset_index(drop = False)
             for attempt in summary['attempt'].unique():
                 dfs[f'attempt_{attempt}'] = summary.query('attempt == @attempt').drop(columns = ['attempt'])

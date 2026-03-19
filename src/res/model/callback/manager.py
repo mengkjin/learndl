@@ -3,9 +3,9 @@ from typing import Type
 
 from src.proj import Logger , Proj
 from src.res.model.util import BaseCallBack , BaseTrainer 
-from . import display, fit, test , nnspecific
+from . import monitor, fit, test , nnspecific
 
-SEARCH_MODS = [fit , display , test]
+SEARCH_MODS = [fit , monitor , test]
 
 class CallBackManager(BaseCallBack):
     def __init__(self , trainer , *args , **kwargs):

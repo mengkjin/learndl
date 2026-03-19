@@ -391,12 +391,14 @@ class StockFactorUpdater(BaseFactorUpdater):
         Logger.success(f'Stock Factor Update of {group} : {sum(job.done for job in jobs)} / {len(jobs)}' , indent = indent , vb_level = vb_level)
         if failed_jobs := [job for job in jobs if not job.done]: 
             Logger.alert1(f'Failed Stock Factors: {failed_jobs}', indent = indent)
-            if cls.multi_thread:
-                # if multi_thread is True, auto retry failed jobs
-                Logger.stdout(f'Auto Retry Failed Stock Factors...' , indent = indent)
-                parallel(cls.jobs_dict(failed_jobs) , method = cls.multi_thread , indent = indent + 1)
-                if failed_jobs := [job for job in jobs if not job.done]:
-                    Logger.alert1(f'Failed Stock Factors Again: {failed_jobs}', indent = indent)
+            # if multi_thread is True, auto retry failed jobs
+            Logger.stdout(f'Auto Retry Failed Stock Factors...' , indent = indent)
+            parallel(cls.jobs_dict(failed_jobs) , method = cls.multi_thread , indent = indent + 1)
+            if new_failed_jobs := [job for job in jobs if not job.done]:
+                Logger.alert1(f'Failed Stock Factors Again: {new_failed_jobs}', indent = indent)
+            else:
+                Logger.success(f'All {len(failed_jobs)} FailedStock Factors are Processed Successfully!' , indent = indent , vb_level = vb_level)
+
 
 class MarketFactorUpdater(BaseFactorUpdater):
     """manager of market factor update jobs"""

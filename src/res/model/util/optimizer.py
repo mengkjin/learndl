@@ -65,6 +65,8 @@ class Optimizer:
         self.optimizer.zero_grad()
         batch_metrics.total_loss.backward(retain_graph = NAN_GRADS_HALT)
         self.check_nan_gradients(batch_metrics)
+        if hasattr(self.trainer , 'on_before_clip_gradients'):
+            getattr(self.trainer , 'on_before_clip_gradients')()
         self.clip_gradients()
         self.optimizer.step()
 
@@ -108,24 +110,26 @@ class Optimizer:
     def check_nan_gradients(self , metric : BatchMetrics):
         if not NAN_GRADS_HALT: 
             return
+        nan_grads = False
         for param in self.net.parameters():
             if param.grad is not None and torch.isnan(param.grad).any():
-                return True
-            
-        from src import api
-        setattr(api , 'mod', self.trainer)
-        Logger.stdout('total loss has nan gradients: ' , metric.total_loss)
+                nan_grads = True
+                break
+        if nan_grads:
+            from src import api
+            setattr(api , 'mod', self.trainer)
+            Logger.stdout('total loss has nan gradients: ' , metric.total_loss)
 
-        for key , loss in metric.losses.items():
-            Logger.stdout(key , loss)
-            self.optimizer.zero_grad()
-            # if loss.grad_fn is None: continue
-            loss.backward(retain_graph = True)
-            for name , param in self.net.named_parameters():
-                if param.grad is not None and torch.isnan(param.grad).any():
-                    Logger.stdout(name , param , param.grad)
+            for key , loss in metric.losses.items():
+                Logger.stdout(key , loss)
+                self.optimizer.zero_grad()
+                # if loss.grad_fn is None: continue
+                loss.backward(retain_graph = True)
+                for name , param in self.net.named_parameters():
+                    if param.grad is not None and torch.isnan(param.grad).any():
+                        Logger.stdout(name , param , param.grad)
 
-        raise KeyError
+            raise KeyError
 
     def clip_gradients(self):
         if self.clip_value is not None:

@@ -6,7 +6,7 @@ from src.res.model.util import BasePredictorModel , BatchInput
 
 class NullPredictor(BasePredictorModel):
     """null predictor for factor / db module (just pass through the data)"""
-    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
+    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
 
     def init_model(self , 
                    testor_mode : bool = False ,
