@@ -269,9 +269,7 @@ class SummaryWriter(BaseCallBack):
         if not ts_folder.exists() or not any(ts_folder.iterdir()):
             return
         run_folder = PATH.tensorboard.joinpath('run')
-        if run_folder.exists():
-            shutil.rmtree(run_folder)
-        run_folder.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(run_folder , ignore_errors=True)
         shutil.copytree(ts_folder, run_folder)
 
         # pack run folder to tar file

@@ -95,7 +95,7 @@ def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def target_dates(data_type : DATA_TYPES , date : int | None = None) -> Dates:
+def target_dates(data_type : DATA_TYPES , date : int | None = None):
     start = src_start_date(data_type)
     end   = CALENDAR.update_to() if date is None else date
     dates = CALENDAR.td_within(start , end)
@@ -111,7 +111,7 @@ def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Da
         stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
         target_dates = CALENDAR.diffs(source_dates , stored_dates)
         dates.append(target_dates[(target_dates >= src_start_date(data_type)) & (target_dates <= end)])
-    return Dates(*dates)
+    return Dates(np.unique(np.concatenate(dates)))
 
 def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': 

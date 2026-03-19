@@ -196,7 +196,7 @@ class CALENDAR:
             target_dates = cls.td_within(start_dt , end_dt) if td else cls.cd_within(start_dt , end_dt)
         if source_dates is None:
             source_dates = np.array([], dtype=int)
-        return np.setdiff1d(target_dates , source_dates)
+        return Dates(np.setdiff1d(target_dates , source_dates))
     
     @classmethod
     def td_filter(cls , date_list):
@@ -335,3 +335,62 @@ class CALENDAR:
         earliest_rollback_date = cls.td(cls.updated() , -max_rollback_days)
         assert rollback_date >= earliest_rollback_date , \
             f'rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}'
+
+class Dates(np.ndarray[int , Any]):
+    """
+    Dates util , takes possible input types and returns a list representation of dates, can convert to np.ndarray
+    accepts:
+    0. empty input: 
+       - empty dates[]
+    1. only 1 input arg:
+       - None : length 0 array
+       - date : int / TradeDate / string of digits , length 1 array
+       - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
+    2. exact 2 inputs:
+       - 2 date : must be both int / TradeDate / string of digits / None , start ~ end
+    3. 3 inputs:
+       - 1 dates / None , 2 date / None , must be dates , start , end
+    """
+    def __new__(cls , *args : Any , info = None):
+        if len(args) == 0:
+            dates = []
+        elif len(args) == 1:
+            if args[0] is None:
+                dates = []
+            elif isinstance(args[0] , (int , TradeDate , str)):
+                dates = [int(args[0])]
+            else:
+                dates = np.array(args[0], dtype=int)
+        elif len(args) == 2: 
+            start , end = args
+            dates = CALENDAR.td_within(start , end)
+        elif len(args) == 3:
+            dates , start , end = args
+            dates = CALENDAR.slice(dates , start , end)
+        else:
+            raise ValueError(f'Invalid number of arguments: {len(args)}')
+        obj = np.asarray(dates).view(cls)
+        obj.info = info
+        return obj
+
+    def __repr__(self) -> str:
+        return self.format_str()
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.info = getattr(obj, 'info', None)
+
+    @property
+    def empty(self) -> bool:
+        return len(self) == 0
+
+    def diffs(self , *others : Any) -> 'Dates':
+        return Dates(np.setdiff1d(self , Dates(*others)) , info = self.info)
+
+    def format_str(self) -> str:
+        if self.empty:
+            return 'Empty Dates'
+        else:
+            return f'{self.min()}~{self.max()}({len(self)}days)' if len(self) > 1 else str(self[0])
+        

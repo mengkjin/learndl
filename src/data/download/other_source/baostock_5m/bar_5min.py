@@ -58,7 +58,7 @@ def x_mins_update_dates(date) -> Dates:
         source_dates = DB.dates('trade_ts' , '5min')
         stored_dates = DB.dates('trade_ts' , f'{x_min}min')
         dates.append(CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates))
-    return Dates(*dates)
+    return Dates(np.unique(np.concatenate(dates)))
 
 def x_mins_to_update(date):
     x_mins : list[int] = []
