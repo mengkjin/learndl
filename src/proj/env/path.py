@@ -110,15 +110,20 @@ class PATH:
             d = yaml.safe_load(f)
         return d
 
-    @staticmethod
-    def dump_yaml(data , yaml_file : str | Path , **kwargs) -> None:
+    class IndentedDumper(yaml.Dumper):
+        """add indent for yaml list"""
+        def increase_indent(self, flow=False, indentless=False):
+            return super().increase_indent(flow, False)
+
+    @classmethod
+    def dump_yaml(cls , data , yaml_file : str | Path , * , indent = 2 , **kwargs) -> None:
         """Dump data to yaml file"""
         assert isinstance(data , dict) , type(data)
         yaml_file = Path(yaml_file)
         assert yaml_file.suffix == '.yaml' , yaml_file
         assert not yaml_file.exists() or not yaml_file.stat().st_size , f'{yaml_file} already exists'
         with open(yaml_file , 'a' if yaml_file.exists() else 'w') as f:
-            yaml.dump(data , f , **kwargs)
+            yaml.dump(data ,  f , Dumper = cls.IndentedDumper , indent = indent , **kwargs)
 
     @staticmethod
     def read_json(json_file : str | Path , encoding = 'utf-8' , **kwargs) -> dict[str, Any]:

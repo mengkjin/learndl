@@ -1,6 +1,29 @@
 # Global optional default config of TrainParam / TrainConfig ,
 # if not exists, do not show any information and will use the default value
 # do not modify this file directly (unless change code of TrainParam / TrainConfig)
+model.name: null
+model.module.nn: gru
+model.module.nn.boost_head: false
+model.module.nn.boost_head.boost: lgbm
+model.module.boost: xgboost
+model.module.boost.optuna: false
+model.module.boost.optuna.trials: 10
+model.module.factor: null
+model.interval: null
+model.interval.nn: 120
+model.interval.boost: 20
+model.interval.factor: 20
+model.window: null
+model.window.nn: 2400
+model.window.boost: 240
+
+input.sequence.lens: {day: 30, style: 30, indus: 30 , factor: 1, hidden: 1} 
+input.sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1}
+input.filter.secid: null
+input.filter.date: null
+input.data.prenorm:
+  day: {'divlast' : True  , 'histnorm' : True}
+  
 train.dataloader.sample_method: sequential
 train.dataloader.shuffle_option: epoch
 train.dataloader.train_ratio: 0.8
@@ -25,29 +48,6 @@ train.criterion.multilosses:
     ewa: {}
     gls: {}
     rws: {}
-
-model.name: null
-model.module.nn: gru
-model.module.nn.boost_head: false
-model.module.nn.boost_head.boost: lgbm
-model.module.boost: xgboost
-model.module.boost.optuna: false
-model.module.boost.optuna.trials: 10
-model.module.factor: null
-model.interval: null
-model.interval.nn: 120
-model.interval.boost: 20
-model.interval.factor: 20
-model.window: null
-model.window.nn: 2400
-model.window.boost: 240
-
-input.sequence.lens: {day: 30, style: 30, indus: 30 , factor: 1, hidden: 1} 
-input.sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1}
-input.filter.secid: null
-input.filter.date: null
-input.data.prenorm:
-  day: {'divlast' : True  , 'histnorm' : True}
 
 callbacks.ResetOptimizer: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
 callbacks.CallbackTimer: {}

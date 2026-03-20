@@ -13,18 +13,18 @@ model:
       - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
       - rtn_lag1_10 
 
-  input:  # input specification ----------------------------------------------------------------
-    type: combo # [data , hidden , factor] , specify below
+input:  # input specification ----------------------------------------------------------------
+  type: combo # [data , hidden , factor] , specify below
 
-    combo.types: [data , factor]
+  combo.types: [data , factor]
 
-    data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
+  data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
 
-    factor.types: # list of factor names , use if input_type is factor
-      fundament:  [quality , growth , value , earning]
+  factor.types: # list of factor names , use if input_type is factor
+    fundament:  [quality , growth , value , earning]
 
-    sequence.lens: {day: 2, factor: 1}
-    sequence.steps: {day: 10, factor: 1}
+  sequence.lens: {day: 2, factor: 1}
+  sequence.steps: {day: 10, factor: 1}
 
 algo:
   boost.lgbm:

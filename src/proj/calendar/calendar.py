@@ -374,6 +374,9 @@ class Dates(np.ndarray[int , Any]):
         return obj
 
     def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({self.format_str})'
+
+    def __str__(self) -> str:
         return self.format_str()
 
     def __array_finalize__(self, obj):
