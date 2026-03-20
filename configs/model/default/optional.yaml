@@ -68,6 +68,7 @@ conditional.short_test:
   model.end_date: 20250331
   model.window: 240
   train.max_epoch: 3
+  input.data.types: day
   input.filter.secid: random.200
   input.filter.date: 20241101-20250331
   callbacks.DetailedAlphaAnalysis:

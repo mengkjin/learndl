@@ -165,7 +165,8 @@ class ModelPath:
             return PATH.conf.joinpath(*args)
     def conf_file(self , *args) -> Path:
         """model config file"""
-        return self.conf(*args).with_suffix('.yaml')
+        path = self.conf(*args)
+        return path.with_name(f'{path.name}.yaml')
     def rslt(self , *args) -> Path:     
         """model results path"""
         return self('results' , *args)

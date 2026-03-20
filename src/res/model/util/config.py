@@ -14,13 +14,15 @@ from .model_path import ModelPath
 from .metrics import Metrics
 from .storage import Checkpoint, Deposition
 
-def get_config_dict(input: dict | Path | list[Path] | FlattenDict) -> FlattenDict:
+def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> FlattenDict:
     """
     get flattened config dict from input
     keep nested keys if they are in the input or are not all lowercase
     """
     def keep_nested(k: str) -> bool:
-        return ((k == 'input.factor.types') or not k.islower())
+        exclude_keys = ('input.sequence.lens' , 'input.sequence.steps' , 'input.factor.types' ,
+                        'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses')
+        return (k.endswith(exclude_keys) or not k.islower())
     if isinstance(input, FlattenDict):
         return input
     else:
@@ -72,15 +74,6 @@ def copy_file(source: Path | None, target: Path | None, overwrite=False):
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, target)
 
-def striped_list(factors: list[str] | dict | str):
-    if isinstance(factors, str):
-        return [factors.strip()]
-    else:
-        if isinstance(factors, dict):
-            factors = list(factors.values())
-        return [ff for f in factors for ff in striped_list(f)]
-
-
 class BaseConfig:
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
     REQUIRED_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "required.yaml"))
@@ -119,16 +112,22 @@ class BaseConfig:
         self.Param[key] = value
 
     def load_params(self):
-        config_files = [target if target.exists() else source for source, target in zip(self.source_conf_files(), self.target_conf_files())]
-        self.train_param = get_config_dict(config_files)
+        if (self.base_path and not self.base_path.is_null_model) and (conf_file := self.base_path.conf_file("model")).exists():
+            self.train_param = get_config_dict(conf_file)
+        else:
+            config_files = [target if target.exists() else source for source, target in zip(self.source_conf_files(), self.target_conf_files())]
+            self.train_param = get_config_dict(config_files)
+        if (self.base_path and not self.base_path.is_null_model) and (schedule_path := self.base_path.conf_file("schedule")).exists():
+            self.schedule_conf = get_config_dict(schedule_path)
+        else:
+            self.schedule_conf = get_config_dict(schedule_config(self.base_path, self.schedule_name))
         return self
 
     def override_params(self):
-        self.schedule_conf = get_config_dict(schedule_config(self.base_path, self.schedule_name))
         model_module_candidate = {
             "base_path": self.base_path.full_module_name,
             "force_module": str(self.force_module).lower().replace(" ", "").replace("/", "@") if self.force_module else None,
-            "schedule_name": self.schedule_conf["model"].pop("model.module", None),
+            "schedule_name": self.schedule_conf["model"].get("model.module", None),
         }
         assert sum(bool(v) for v in model_module_candidate.values()) <= 1, (
             f"only one of base_path , force_module , schedule_name can be provided, but got {model_module_candidate}"
@@ -158,64 +157,51 @@ class BaseConfig:
         if not self.base_path:
             full_name = self.generate_model_full_name()
             self.base_path.with_full_name(full_name)
-        assert self.base_path, (
-            f"base_path is still not set after generating model full name {full_name}"
-        )
-        assert self.base_path.module_type == self.module_type, (
-            f"module_type {self.module_type} is not the same as base_path.module_type {self.base_path.module_type}"
-        )
-        assert self.base_path.model_module == self.model_module, (
-            f"model_module {self.model_module} is not the same as base_path.model_module {self.base_path.model_module}"
-        )
 
+        # check base_path is set correctly
+        assert self.base_path, f"base_path is still not set after generating model full name {full_name}"
+        assert self.base_path.module_type == self.module_type, f"module_type {self.module_type} is not the same as base_path.module_type {self.base_path.module_type}"
+        assert self.base_path.model_module == self.model_module, f"model_module {self.model_module} is not the same as base_path.model_module {self.base_path.model_module}"
+
+        # check short_test is set correctly
         if self.should_be_short_test and not self.short_test:
-            Logger.alert1(
-                "Should be at server or short_test, but short_test is False now!"
-            )
+            Logger.alert1("Should be at server or short_test, but short_test is False now!")
 
+        # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
         if nn_category == "tra":
             assert self.sample_method != "total_shuffle", self.sample_method
         if nn_category == "vae":
             assert self.sample_method == "sequential", self.sample_method
 
+        # check nn_datatype is set correctly
         nn_datatype = AlgoModule.nn_datatype(self.model_module)
         if nn_datatype:
             self["input.data.types"] = nn_datatype
 
+        # check submodels is set correctly
         if self.module_type != "nn" or self.boost_head:
             self["model.submodels"] = ["best"]
+        if "best" not in self.submodels:
+            self.submodels.insert(0, "best")
 
+        # check input_type is set correctly
+        if self.input_type != "data" or self.module_type != "nn":
+            assert self.sample_method == "sequential", self.sample_method
         if self.module_type == "factor":
             self["input.type"] = "factor"
             self["input.factor.types"] = []
             self["input.sequence.lens"] = self["input.sequence.lens"] | {"factor": 1}
 
-        if "best" not in self.submodels:
-            self.submodels.insert(0, "best")
-
-        if self.input_type != "data" or self.module_type != "nn":
-            assert self.sample_method == "sequential", self.sample_method
-
-        missing_required_keys = np.setdiff1d(
-            [*self.REQUIRED_CONFIG_PARAM.keys()], [*self.Param.keys()]
-        ).tolist()
+        # check missing required keys
+        missing_required_keys = np.setdiff1d(list(self.REQUIRED_CONFIG_PARAM.keys()), list(self.Param.keys())).tolist()
         if missing_required_keys:
-            Logger.error(
-                f"{missing_required_keys} are required but not in config files"
-            )
-            raise ValueError(
-                f"{missing_required_keys} are required but not in config files"
-            )
+            Logger.error(f"{missing_required_keys} are required but not in config files")
+            raise ValueError(f"{missing_required_keys} are required but not in config files")
 
-        redundant_keys = np.setdiff1d(
-            [*self.Param.keys()],
-            [*self.REQUIRED_CONFIG_PARAM.keys(), *self.OPTIONAL_CONFIG_PARAM.keys()],
-        ).tolist()
+        redundant_keys = np.setdiff1d(list(self.Param.keys()), list(self.REQUIRED_CONFIG_PARAM.keys()) + list(self.OPTIONAL_CONFIG_PARAM.keys())).tolist()
         if redundant_keys:
-            Logger.alert1(
-                f"{redundant_keys} in config files are not in default config params"
-            )
+            Logger.alert1(f"{redundant_keys} in config files are not in default config params")
 
         return self
 
@@ -266,8 +252,8 @@ class BaseConfig:
             schedule_path(self.base_path, self.schedule_name),
             overwrite,
         )
-        self.train_param.to_yaml(self.base_path.conf_file("model") , overwrite=overwrite)
-        self.schedule_conf.to_yaml(self.base_path.conf_file("schedule") , overwrite=overwrite)
+        self.train_param.dump_yaml(self.base_path.conf_file("model") , overwrite=overwrite , vb_level = 'inf')
+        self.schedule_conf.dump_yaml(self.base_path.conf_file("schedule") , overwrite=overwrite , vb_level = 'inf')
 
     @property
     def base_path(self):
@@ -281,9 +267,7 @@ class BaseConfig:
     def full_module_name(self):
         """get module_type@model_module out of model configs"""
         if not hasattr(self, "_full_module_name") or self._full_module_name is None:
-            mod_str = (
-                str(self["model.module"]).lower().replace(" ", "").replace("/", "@")
-            )
+            mod_str = str(self["model.module"]).lower().replace(" ", "").replace("/", "@")
             module_type = model_module_type(mod_str)
             if mod_str.startswith(f"{module_type}@"):
                 model_module = mod_str.removeprefix(f"{module_type}@")
@@ -375,9 +359,7 @@ class BaseConfig:
 
     @property
     def input_type(self) -> Literal["data", "hidden", "factor", "combo"]:
-        assert self["input.type"] in ["data", "hidden", "factor", "combo"], self[
-            "input.type"
-        ]
+        assert self["input.type"] in ["data", "hidden", "factor", "combo"], self["input.type"]
         return self["input.type"]
 
     @property
@@ -390,17 +372,10 @@ class BaseConfig:
 
     @property
     def input_data_types(self) -> list[str]:
-        if self.input_type == "data" or (
-            self.input_type == "combo" and "data" in self["input.combo.types"]
-        ):
-            data_types = self["input.data.types"]
+        if self.input_type == "data" or (self.input_type == "combo" and "data" in self["input.combo.types"]):
+            return self.unwrap_inputs(self["input.data.types"])
         else:
-            data_types = []
-        return (
-            str(data_types).split("+")
-            if isinstance(data_types, str)
-            else list(data_types)
-        )
+            return []
 
     @input_data_types.setter
     def input_data_types(self, value: list[str]):
@@ -412,31 +387,30 @@ class BaseConfig:
 
     @property
     def input_hidden_types(self) -> list[str]:
-        if self.input_type == "hidden" or (
-            self.input_type == "combo" and "hidden" in self["input.combo.types"]
-        ):
-            hidden_types = self["input.hidden.types"]
+        if self.input_type == "hidden" or (self.input_type == "combo" and "hidden" in self["input.combo.types"]):
+            return self.unwrap_inputs(self["input.hidden.types"])
         else:
-            hidden_types = []
-        return (
-            str(hidden_types).split("+")
-            if isinstance(hidden_types, str)
-            else list(hidden_types)
-        )
+            return []
 
     @property
     def input_factor_types(self) -> list[str]:
-        if self.input_type == "factor" or (
-            self.input_type == "combo" and "factor" in self["input.combo.types"]
-        ):
-            factors = self["input.factor.types"]
+        if self.input_type == "factor" or (self.input_type == "combo" and "factor" in self["input.combo.types"]):
+            return self.unwrap_inputs(self["input.factor.types"])
         else:
-            factors = []
-        return (
-            str(factors).split("+")
-            if isinstance(factors, str)
-            else striped_list(factors)
-        )
+            return []
+
+    @classmethod
+    def unwrap_inputs(cls , factors: list | dict | str) -> list[str]:
+        if isinstance(factors, str):
+            return factors.strip().split("+")
+        else:
+            if isinstance(factors, dict):
+                factors_lists = [cls.unwrap_inputs(f) for f in factors.values()]
+            elif isinstance(factors, list):
+                factors_lists = [cls.unwrap_inputs(f) for f in factors]
+            else:
+                raise ValueError(f"Invalid factors type: {type(factors)}")
+            return [f for facs in factors_lists for f in facs]
 
     @property
     def input_factor_names(self) -> list[str]:
@@ -631,7 +605,6 @@ class BaseConfig:
     def gc_collect_each_model(self) -> bool:
         return self.module_type == "nn"
 
-
 class ModelParam:
     def __init__(
         self,
@@ -671,16 +644,18 @@ class ModelParam:
             return path.with_stem(f"default")
 
     def load_params(self):
-        conf_file = self.target_conf_file()
-        if conf_file is None:
-            return self
-        if not conf_file.exists():
-            conf_file = self.source_conf_file()
-        if not conf_file.exists():
-            Logger.error(
-                f"{conf_file} does not exist, and default.yaml does not exist either."
-            )
-        self.model_param = get_config_dict(conf_file)
+        if (self.base_path and not self.base_path.is_null_model) and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
+            self.model_param = get_config_dict(conf_file)
+        else:
+            conf_file = self.target_conf_file()
+            if conf_file is None:
+                self.model_param = get_config_dict(None)
+            else:
+                if not conf_file.exists():
+                    conf_file = self.source_conf_file()
+                if not conf_file.exists():
+                    Logger.error(f"{conf_file} does not exist, and default.yaml does not exist either.")
+                self.model_param = get_config_dict(conf_file)
         return self
 
     def override_params(self):
@@ -699,12 +674,8 @@ class ModelParam:
             assert self.n_model <= 5, self.n_model
 
         if self.model_module == "tra":
-            assert "hist_loss_seq_len" in self.Param, (
-                f"{self.Param} has no hist_loss_seq_len"
-            )
-            assert "hist_loss_horizon" in self.Param, (
-                f"{self.Param} has no hist_loss_horizon"
-            )
+            assert "hist_loss_seq_len" in self.Param, f"{self.Param} has no hist_loss_seq_len"
+            assert "hist_loss_horizon" in self.Param, f"{self.Param} has no hist_loss_horizon"
 
         if self.boost_head:
             self.boost_head_param = ModelParam(
@@ -729,9 +700,10 @@ class ModelParam:
                 self.base_path.conf_file("param", self.boost_head),
                 overwrite,
             )
-        self.model_param.to_yaml(self.base_path.conf_file("algo") , overwrite=overwrite)
+
+        self.model_param.dump_yaml(self.base_path.conf_file(f"algo.{self.model_module}") , overwrite=overwrite , vb_level = 'inf')
         if self.boost_head:
-            self.boost_head_param.model_param.to_yaml(self.base_path.conf_file("algo_boost_head") , overwrite=overwrite)
+            self.boost_head_param.model_param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head}") , overwrite=overwrite , vb_level = 'inf')
         return self
 
     def expand(self):
@@ -862,12 +834,8 @@ class ModelConfig(BaseConfig):
             self.initialize_fitting()
 
         self.device = Device(try_cuda=self.try_cuda)
-        assert self.BaseConfig.base_path is self.base_path, (
-            f"{self.BaseConfig.base_path} != {self.base_path}"
-        )
-        assert self.ModelParam.base_path is self.ModelParam.base_path, (
-            f"{self.ModelParam.base_path} != {self.ModelParam.base_path}"
-        )
+        assert self.BaseConfig.base_path is self.base_path, f"{self.BaseConfig.base_path} != {self.base_path}"
+        assert self.ModelParam.base_path is self.ModelParam.base_path, f"{self.ModelParam.base_path} != {self.ModelParam.base_path}"
 
     def __repr__(self):
         return f"{self.__class__.__name__}(base_path={self.base_path})"
@@ -989,9 +957,7 @@ class ModelConfig(BaseConfig):
 
     @property
     def boost_head_param(self) -> dict[str, Any]:
-        assert len(self.ModelParam.boost_head_param.params) == 1, (
-            self.ModelParam.boost_head_param.params
-        )
+        assert len(self.ModelParam.boost_head_param.params) == 1, self.ModelParam.boost_head_param.params
         return self.ModelParam.boost_head_param.params[0]
 
     @property
@@ -1031,28 +997,14 @@ class ModelConfig(BaseConfig):
 
     def log_operation(self, operation: str, sub_operation: str):
         assert operation in ["fit", "test"], f"operation {operation} is not valid"
-        assert sub_operation in ["start", "end"], (
-            f"sub_operation {sub_operation} is not valid"
-        )
+        assert sub_operation in ["start", "end"], f"sub_operation {sub_operation} is not valid"
         other_info = f"is_resuming={self.is_resuming}"
-        self.base_path.log_operation(
-            f"{operation}_model >> {sub_operation} >> {other_info}"
-        )
-
-    def update(self, update=None, **kwargs):
-        update = update or {}
-        for k, v in update.items():
-            setattr(self, k, v)
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-        return self
+        self.base_path.log_operation(f"{operation}_model >> {sub_operation} >> {other_info}")
 
     def set_config_environment(self, manual_seed=None) -> None:
         self.set_random_seed(manual_seed if manual_seed else self.random_seed)
         torch.set_default_dtype(self.precision)
-        torch.backends.cuda.matmul.__setattr__(
-            "allow_tf32", self["env.allow_tf32"]
-        )  # = self.allow_tf32
+        torch.backends.cuda.matmul.__setattr__("allow_tf32", self["env.allow_tf32"])  # = self.allow_tf32
         torch.autograd.anomaly_mode.set_detect_anomaly(self["env.detect_anomaly"])
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -1096,9 +1048,7 @@ class ModelConfig(BaseConfig):
         np.random.seed(seed)
         random.seed(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
-        os.environ["KMP_DUPLICATE_LIB_OK"] = (
-            "True"  # 重复加载libiomp5md.dll https://zhuanlan.zhihu.com/p/655915099
-        )
+        os.environ["KMP_DUPLICATE_LIB_OK"] = ("True")  # 重复加载libiomp5md.dll https://zhuanlan.zhihu.com/p/655915099
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
@@ -1142,12 +1092,11 @@ class ModelConfig(BaseConfig):
 
         if value == -1:
             if not self.base_path.is_null_model:
-                value = 2
-            else:
-                Logger.note(
-                    f"--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only"
-                )
+                Logger.note(f"--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only")
                 value = int(input(f"[0, fit & test] , [1, fit only] , [2, test only]"))
+
+        if self.base_path.is_null_model:
+            value = 2
 
         match value:
             case 0:
@@ -1159,17 +1108,9 @@ class ModelConfig(BaseConfig):
             case _:
                 raise ValueError(f"Invalid stage option: {value}")
 
-        if self.base_path.is_null_model and "fit" in stage_queue:
-            stage_queue.remove("fit")
-
         self.stage_queue = stage_queue
-        Logger.note(
-            "--Process Queue : {:s}".format(
-                " + ".join(map(lambda x: (x[0].upper() + x[1:]), stage_queue))
-            ),
-            color="lightblue",
-            vb_level=vb_level,
-        )
+        Logger.note("--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), stage_queue))),
+                    color="lightblue", vb_level=vb_level)
 
     def parser_resume(self, value=-1, vb_level: int = 1):
         """
@@ -1186,9 +1127,7 @@ class ModelConfig(BaseConfig):
             else:
                 candidates = self.base_path.find_resumable_candidates()
                 if candidates:
-                    Logger.note(
-                        f"Multiple model path of {self.model_clean_name} exists, input [0] to deny resuming , [1] to confirm resuming!"
-                    )
+                    Logger.note(f"Multiple model path of {self.model_clean_name} exists, input [0] to deny resuming , [1] to confirm resuming!")
                     value = int(input(f"[0, not resuming] , [1, resuming]"))
                 else:
                     value = 0
@@ -1202,10 +1141,7 @@ class ModelConfig(BaseConfig):
                 raise ValueError(f"Invalid resume option: {value}")
 
         self.is_resuming = is_resuming
-        Logger.note(
-            f"Confirm Resume Training!" if is_resuming else "Start Training New!",
-            vb_level=vb_level,
-        )
+        Logger.note(f"Confirm Resume Training!" if is_resuming else "Start Training New!", vb_level=vb_level)
 
     def parser_select(self, value=-1, vb_level: int = 1):
         """
@@ -1235,31 +1171,16 @@ class ModelConfig(BaseConfig):
                 if self.base_path.model_name_index not in candidates_indices:
                     value = 0
                 else:
-                    value = int(
-                        np.setdiff1d(
-                            np.arange(1, max(candidates_indices) + 1),
-                            candidates_indices,
-                        ).min()
-                    )
-                    Logger.note(
-                        f"ModelPath(s) of {self.model_clean_name} exists, will create a new ModelPath with index {value} to Train New!",
-                        vb_level=vb_level,
-                    )
+                    value = int(np.setdiff1d(np.arange(1, max(candidates_indices) + 1),candidates_indices).min())
+                    Logger.note(f"ModelPath(s) of {self.model_clean_name} exists, will create a new ModelPath with index {value} to Train New!", vb_level=vb_level)
             else:
                 if len(candidates_indices) == 1:
                     value = candidates_indices[0]
                 else:
-                    Logger.note(
-                        f"Multiple ModelPath of {self.model_clean_name} exists, input number to choose!",
-                        vb_level=vb_level,
-                    )
-                    Logger.note(
-                        f"Options include: {candidates_indices}", vb_level=vb_level
-                    )
+                    Logger.note(f"Multiple ModelPath of {self.model_clean_name} exists, input number to choose!", vb_level=vb_level)
+                    Logger.note(f"Options include: {candidates_indices}", vb_level=vb_level)
                     value = int(input(f"Which Model to Resume?"))
-                    assert value in candidates_indices, (
-                        f"value {value} is not in candidates_indices {candidates_indices}"
-                    )
+                    assert value in candidates_indices, (f"value {value} is not in candidates_indices {candidates_indices}")
 
         match value:
             case 0:
@@ -1275,14 +1196,10 @@ class ModelConfig(BaseConfig):
             and "fit" in self.stage_queue
             and self.resumable
         ):
-            Logger.error(
-                f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!"
-            )
+            Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")
             raise Exception(f"{self.base_path} resumable but choose not to resume!")
 
-    def print_out(
-        self, color: str | None = None, vb_level: int = 2, min_key_len: int = -1
-    ):
+    def print_out(self, color: str | None = None, vb_level: int = 2, min_key_len: int = -1):
         info_strs: list[tuple[int, str, str]] = []  # indent , key , value
 
         info_strs.append((0, "Module", f"{self.full_module_name}"))
@@ -1293,13 +1210,7 @@ class ModelConfig(BaseConfig):
         else:
             if self.module_type == "boost":
                 if self.boost_optuna:
-                    info_strs.append(
-                        (
-                            0,
-                            "Boost Params",
-                            f"Optuna for {self.boost_optuna_trials} trials",
-                        )
-                    )
+                    info_strs.append((0, "Boost Params", f"Optuna for {self.boost_optuna_trials} trials"))
                 else:
                     info_strs.append((0, "Boost Params", ""))
                     for k, v in self.ModelParam.Param.items():
@@ -1334,19 +1245,9 @@ class ModelConfig(BaseConfig):
         info_strs.append((0, "Resuming", f"{self.is_resuming}"))
         if self.is_resuming:
             info_strs.append((1, "Resume Test", f"{Proj.Conf.Model.TRAIN.resume_test}"))
-            info_strs.append(
-                (1, "Resume Perf", f"{Proj.Conf.Model.TRAIN.resume_test_factor_perf}")
-            )
-            info_strs.append(
-                (1, "Resume FMP", f"{Proj.Conf.Model.TRAIN.resume_test_fmp}")
-            )
-            info_strs.append(
-                (
-                    1,
-                    "Resume Account",
-                    f"{Proj.Conf.Model.TRAIN.resume_test_fmp_account}",
-                )
-            )
+            info_strs.append((1, "Resume Perf", f"{Proj.Conf.Model.TRAIN.resume_test_factor_perf}"))
+            info_strs.append((1, "Resume FMP", f"{Proj.Conf.Model.TRAIN.resume_test_fmp}"))
+            info_strs.append((1, "Resume Account", f"{Proj.Conf.Model.TRAIN.resume_test_fmp_account}"))
 
         Logger.stdout_pairs(
             info_strs,

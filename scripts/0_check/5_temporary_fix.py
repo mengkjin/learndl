@@ -8,17 +8,14 @@
 # mode: shell
 
 from src.proj.util import ScriptTool 
-from src.proj import PATH
-import shutil
+from src.api import ModelAPI
+from src.res.model.util.config import ModelConfig
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    for path in PATH.model.rglob('detailed_alpha'):
-        if path.is_dir():
-            shutil.rmtree(path)
-
-    for path in PATH.result.rglob('*.tar'):
-        path.unlink()
+    models = ModelAPI.available_models(True , True)
+    for model in models:
+        config = ModelConfig(model , stage = 2 , resume = 1 , selection = 0)
         
 if __name__ == '__main__':
     main()

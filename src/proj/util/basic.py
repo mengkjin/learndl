@@ -1,4 +1,4 @@
-from typing import Any, Callable , Iterable
+from typing import Any, Callable , Iterable , Literal
 from pathlib import Path
 from pprint import pformat
 import os
@@ -129,17 +129,19 @@ class FlattenDict:
     def to_dict(self):
         return self.flattened
 
-    def to_yaml(self, path: Path , overwrite: bool = False):
+    def dump_yaml(self, path: Path , overwrite: bool = False , vb_level: int | Literal['max','min','inf'] = 1):
         if path.exists() and not overwrite:
-            Logger.alert1(f'{path} already exists')
+            Logger.alert1(f'{path} already exists' , vb_level = vb_level)
             return
         if overwrite:
             path.unlink(missing_ok=True)
         PATH.dump_yaml(self.flattened, path)
 
     @classmethod
-    def from_input(cls, input: dict | Path | list[Path] , * , keep_nested: Callable[[str], bool] | None = None):
-        if isinstance(input, dict):
+    def from_input(cls, input: dict | Path | list[Path] | None , * , keep_nested: Callable[[str], bool] | None = None):
+        if input is None:
+            return cls()
+        elif isinstance(input, dict):
             return cls.from_dict(input , keep_nested = keep_nested)
         elif isinstance(input, Path):
             return cls.from_yaml(input , keep_nested = keep_nested)

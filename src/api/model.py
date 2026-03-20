@@ -148,8 +148,8 @@ class ModelAPI:
             model_path.clear_model_path()
 
     @classmethod
-    def available_models(cls , include_short_test : bool = False):
+    def available_models(cls , include_short_test : bool = False , include_factors : bool = False):
         '''
         Get available models in model folder
         '''
-        return cls.Trainer.available_models(include_short_test = include_short_test)
+        return cls.Trainer.available_models(include_short_test = include_short_test , include_factors = include_factors)

@@ -763,10 +763,12 @@ class BaseTrainer(ModelStreamLine):
     def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
         return AlgoModule.available_modules(module_type)
     @staticmethod
-    def available_models(include_short_test : bool = False):
+    def available_models(include_short_test : bool = False , include_factors : bool = False):
         root_paths = [PATH.model_nn , PATH.model_boost]
         if include_short_test:
             root_paths.append(PATH.model_st)
+        if include_factors:
+            root_paths.append(PATH.model_factor)
         bases = [f'{root.name}@{model.name}' for root in root_paths for model in root.iterdir() if model.is_dir() and not model.name.startswith('.')]
         return bases
 
