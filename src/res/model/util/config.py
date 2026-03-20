@@ -245,13 +245,13 @@ class BaseConfig:
         return [self.base_path.conf_file("model", cfg) for cfg in self.CONFIG_LIST]
 
     def copy_files(self, overwrite=False):
-        for source, target in zip(self.source_conf_files(), self.target_conf_files()):
-            copy_file(source, target, overwrite)
-        copy_file(
-            schedule_path(None, self.schedule_name),
-            schedule_path(self.base_path, self.schedule_name),
-            overwrite,
-        )
+        # for source, target in zip(self.source_conf_files(), self.target_conf_files()):
+        #     copy_file(source, target, overwrite)
+        # copy_file(
+        #     schedule_path(None, self.schedule_name),
+        #     schedule_path(self.base_path, self.schedule_name),
+        #     overwrite,
+        # )
         self.train_param.dump_yaml(self.base_path.conf_file("model") , overwrite=overwrite , vb_level = 'inf')
         self.schedule_conf.dump_yaml(self.base_path.conf_file("schedule") , overwrite=overwrite , vb_level = 'inf')
 
@@ -694,12 +694,12 @@ class ModelParam:
         if not self.base_path.is_null_model:
             copy_file(self.source_conf_file(), self.target_conf_file(), overwrite)
         
-        if self.boost_head:
-            copy_file(
-                PATH.conf.joinpath("algo", "boost", f"{self.boost_head}.yaml"),
-                self.base_path.conf_file("param", self.boost_head),
-                overwrite,
-            )
+        # if self.boost_head:
+        #     copy_file(
+        #         PATH.conf.joinpath("algo", "boost", f"{self.boost_head}.yaml"),
+        #         self.base_path.conf_file("param", self.boost_head),
+        #         overwrite,
+        #     )
 
         self.model_param.dump_yaml(self.base_path.conf_file(f"algo.{self.model_module}") , overwrite=overwrite , vb_level = 'inf')
         if self.boost_head:
