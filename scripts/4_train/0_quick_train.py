@@ -4,7 +4,7 @@
 # date: 2026-03-20
 # description: Quick Train Model
 # content: 基于默认的模型配置,快速训练(short_test = True)一个模型
-# email: False
+# email: True
 # mode: shell
 # file_editor:
 #   name : "Model Config File Editor"

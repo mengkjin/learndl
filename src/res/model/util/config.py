@@ -610,22 +610,17 @@ class AlgoConfig:
     def __repr__(self):
         return f"{self.__class__.__name__}(model_name={self.model_name})"
 
-    def target_conf_file(self) -> Path | None:
-        if not self.base_path or self.base_path.is_null_model:
-            return None
-        else:
-            return self.base_path.conf_file("param", self.model_module)
-
     def source_conf_file(self) -> Path:
         path = PATH.conf.joinpath("algo", self.module_type, f"{self.model_module}.yaml")
-        if not path.exists():
-            path = path.with_stem(f"default")
-        if not path.exists():
+        default_path = path.with_stem(f"default")
+        if not path.exists() and not default_path.exists():
             Logger.error(f"{path} does not exist, and default.yaml does not exist either.")
-        return path
+        return path if path.exists() else default_path
 
     def load_params(self):
-        if (self.base_path and not self.base_path.is_null_model) and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
+        if self.base_path.is_null_model:
+            self.model_param = get_config_dict(None)
+        elif self.base_path and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
             self.model_param = get_config_dict(conf_file)
         else:
             self.model_param = get_config_dict(self.source_conf_file())
