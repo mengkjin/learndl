@@ -112,7 +112,7 @@ class FactorAPI:
                        factor_type : Literal['factor' , 'pred'] = 'factor' , 
                        benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                        start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
-                       write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
+                       write_down = True , display_figs = False , indent : int = 0 , vb_level : Any = 1 , 
                        **kwargs):
             with Logger.Paragraph('test factor performance' , 3):
                 factor = get_factor(names , factor_type , start_dt , end_dt , step)
@@ -123,7 +123,7 @@ class FactorAPI:
         def FmpOptim(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
                      benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                      start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
-                     write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
+                     write_down = True , display_figs = False , indent : int = 0 , vb_level : Any = 1 , 
                      prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
                      **kwargs):
             with Logger.Paragraph('test optimized fmp' , 3):
@@ -135,7 +135,7 @@ class FactorAPI:
         def FmpTop(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
                    benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
                    start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
-                   write_down = True , display_figs = False , indent : int = 0 , vb_level : int = 1 , 
+                   write_down = True , display_figs = False , indent : int = 0 , vb_level : Any = 1 , 
                    **kwargs):
             with Logger.Paragraph('test top fmp' , 3):
                 factor = get_factor(names , factor_type , start_dt , end_dt , step)

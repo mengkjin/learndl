@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Logger , Dates
+from src.proj import Duration , Logger , Dates , Proj
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount
 from .optimizer import OptimizedPortfolioCreator
@@ -68,7 +68,7 @@ class PortfolioBuilder:
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
                  build_on : Portfolio | None = None , resume_path : Path | str | None = None , 
-                 indent : int = 0 , vb_level : int = 1 , **kwargs):
+                 indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         self.category     = category
@@ -80,7 +80,7 @@ class PortfolioBuilder:
 
         self.resume_path  = resume_path
         self.indent       = indent
-        self.vb_level     = vb_level
+        self.vb_level     = Proj.vb.level(vb_level)
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
@@ -204,7 +204,7 @@ class PortfolioBuilder:
         return self
 
     @classmethod
-    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         elements = parse_full_name(full_name)
         assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
         return cls(alpha = alpha , build_on = build_on , indent = indent , vb_level = vb_level , **elements , **kwargs)
@@ -266,7 +266,7 @@ class PortfolioGroupBuilder:
         end_dt : int = 99991231 ,
         caller = None ,
         indent : int = 0 , 
-        vb_level : int = 1 ,
+        vb_level : Any = 1 ,
         **kwargs
     ):
         
@@ -292,7 +292,7 @@ class PortfolioGroupBuilder:
             'trade_engine' : trade_engine}
 
         self.indent = indent
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None and resume else None
         self.caller = caller

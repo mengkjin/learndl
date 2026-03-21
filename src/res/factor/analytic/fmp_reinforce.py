@@ -17,7 +17,7 @@ class ReinforceCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
 
-    def calc(self , account_df : pd.DataFrame , indent : int = 0 , vb_level : int = 1):
+    def calc(self , account_df : pd.DataFrame , indent : int = 0 , vb_level : Any = 1):
         with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account_df)
         return self
@@ -79,7 +79,7 @@ class ReinforceFMPTest(BaseFactorAnalyticTest):
         Perf_Year ,
     ]
 
-    def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : int = 1):
+    def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : Any = 1):
         alpha_models = factor.alpha_models()
         benchmarks = [factor.universe(load = True).get('all').rename('univ')]
         self.update_kwargs()
@@ -89,7 +89,7 @@ class ReinforceFMPTest(BaseFactorAnalyticTest):
             start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
-    def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : int = 1 , **kwargs):
+    def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         self.generate(factor , benchmark , indent = indent , vb_level = vb_level)
         if self.total_account.empty:
             Logger.error(f'No accounts created for {self.test_name}!')

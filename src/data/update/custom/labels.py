@@ -1,9 +1,9 @@
 import pandas as pd
 
 import numpy as np
-from typing import Literal
+from typing import Any , Literal
 
-from src.proj import CALENDAR , DB , Logger , Dates
+from src.proj import CALENDAR , DB , Logger , Dates , Proj
 from src.data.loader import TRADE , RISK
 
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -16,7 +16,8 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
     LAGS = [False , True]
 
     @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all classic labels is not supported yet for {cls.__name__}')
         for days in cls.DAYS:
@@ -42,7 +43,7 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
                 Logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , days : int , lag1 : bool , label_name : str , indent : int = 2 , vb_level : int = 2):
+    def update_one(cls , date : int , days : int , lag1 : bool , label_name : str , indent : int = 2 , vb_level : Any = 2):
         DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , indent = indent , vb_level = vb_level)
 
 def calc_classic_labels(date : int , days : int , lag1 : bool) -> pd.DataFrame | None:

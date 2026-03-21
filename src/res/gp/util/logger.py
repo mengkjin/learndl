@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Sequence , Literal , Any
 
-from src.proj import PATH
+from src.proj import PATH , Proj
 from src.proj import Logger
 from src.proj.func import torch_load
 from src.res.gp.param import gpDefaults
@@ -22,20 +22,20 @@ class gpLogger:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , job_dir : Path | str | None = None , status : gpStatus | None = None , vb_level : int = 2 , *args , **kwargs) -> None:
+    def __init__(self , job_dir : Path | str | None = None , status : gpStatus | None = None , vb_level : Any = 2 , *args , **kwargs) -> None:
         self.initiate(job_dir , status , vb_level , *args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'job_dir')
 
-    def initiate(self , job_dir : Path | str | None = None , status : gpStatus | None = None , vb_level : int = 2) -> None:
+    def initiate(self , job_dir : Path | str | None = None , status : gpStatus | None = None , vb_level : Any = 2) -> None:
         if self.initiated:
             return
 
         self.job_dir = gpDefaults.dir_result.joinpath('bendi') if job_dir is None else Path(job_dir)
         self.status = status if status is not None else gpStatus(0 , 0)
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
 
         for dir in [self.dir_logbook , self.dir_tensors , self.dir_records]:
             dir.mkdir(parents=True, exist_ok=True)

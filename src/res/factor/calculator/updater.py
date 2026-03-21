@@ -19,7 +19,7 @@ CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
 class _BaseJob(ABC):
     """base job class"""
-    def __init__(self , calc : FactorCalculator , overwrite : bool = False , vb_level : int = 1):
+    def __init__(self , calc : FactorCalculator , overwrite : bool = False , vb_level : Any = 1):
         self.calc = calc
         self.overwrite = overwrite
         self.vb_level = vb_level
@@ -66,7 +66,7 @@ class _BaseJob(ABC):
         
 class _JobFactorDate(_BaseJob):
     """single factor single date update job"""
-    def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , vb_level : int = 1 , **kwargs):
+    def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , vb_level : Any = 1 , **kwargs):
         super().__init__(calc , overwrite , vb_level)
         self.date = date
 
@@ -84,14 +84,14 @@ class _JobFactorDate(_BaseJob):
         self.done = self.calc.update_day_factor(
             self.date , indent = indent , vb_level = self.vb_level , overwrite = self.overwrite , catch_errors = CATCH_ERRORS)
     
-    def preview(self , indent : int = 1 , vb_level : int = 1) -> None:
+    def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
         """preview the job"""
         Logger.stdout(f'{self.level} : {self.factor_name} at {self.date}' , indent = indent , vb_level = vb_level)
 
 class _JobFactorAll(_BaseJob):
     """single factor update all job"""
     def __init__(self , calc : FactorCalculator , start : int | None = None , end : int | None = None , 
-                 overwrite : bool = False , vb_level : int = 1 , **kwargs):
+                 overwrite : bool = False , vb_level : Any = 1 , **kwargs):
         super().__init__(calc , overwrite , vb_level)
         self.start = start
         self.end = end
@@ -112,14 +112,14 @@ class _JobFactorAll(_BaseJob):
         )
         self.done = True
 
-    def preview(self , indent : int = 1 , vb_level : int = 1) -> None:
+    def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
         """preview the job"""
         Logger.stdout(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}' , indent = indent , vb_level = vb_level)
 
 class _JobFactorStats(_BaseJob):
     """single factor stats update all job"""
     def __init__(self , calc : FactorCalculator , stats_type : Literal['daily' , 'weekly'] , 
-                 year : int , dates : np.ndarray , overwrite : bool = False , vb_level : int = 1 , **kwargs):
+                 year : int , dates : np.ndarray , overwrite : bool = False , vb_level : Any = 1 , **kwargs):
         super().__init__(calc , overwrite , vb_level)
         self.stats_type = stats_type
         self.year = year
@@ -147,7 +147,7 @@ class _JobFactorStats(_BaseJob):
             raise ValueError(f'Invalid stats type: {self.stats_type}')
         self.done = True
     
-    def preview(self , indent : int = 1 , vb_level : int = 1) -> None:
+    def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
         """preview the job"""
         Logger.stdout(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}' , indent = indent , vb_level = vb_level)
 
@@ -198,7 +198,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                     overwrite = False , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """
         collect FactorCalculator jobs for all factors between start and end date
         """
@@ -207,6 +207,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         if end is None: 
             end = min(CALENDAR.updated() , Proj.Conf.Factor.UPDATE.end)
 
+        vb_level = Proj.vb.level(vb_level)
         for calc in cls.calculators(all , selected_factors , **kwargs):
             if cls.update_type in ['affiliate']:
                 ...
@@ -235,8 +236,9 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def before_process_jobs(cls , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
-                            overwrite = False , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                            overwrite = False , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """before process jobs"""
+        vb_level = Proj.vb.level(vb_level)
         for calc in cls.calculators(all , selected_factors , **kwargs):
             if isinstance(calc , WeightedPoolingCalculator):
                 calc.drop_pooling_weight(after = start , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 1)
@@ -246,11 +248,11 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , **kwargs) -> None:
         """preview update jobs for all factors between start and end date"""
-        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = Proj.vb.inf)
+        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = 'never')
         [job.preview() for job in cls.jobs]
 
     @classmethod
-    def after_process_jobs(cls , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+    def after_process_jobs(cls , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """after process jobs"""
         failed_jobs = [job for job in cls.jobs if not job.done]
         if failed_jobs:
@@ -264,12 +266,13 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def process_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , indent : int = 0 , vb_level : int = 1 , timeout : int = -1 , **kwargs) -> None:
+                     overwrite = False , indent : int = 0 , vb_level : Any = 1 , timeout : int = -1 , **kwargs) -> None:
         """
         update update jobs for all factors between start and end date
         default behavior is to collect jobs first to find all FactorCalculators then update one by one
         timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         """
+        vb_level = Proj.vb.level(vb_level)
         cls.collect_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
         start_time = datetime.now()
         cls.before_process_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
@@ -302,7 +305,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         raise NotImplementedError(f'grouped_jobs is not implemented for {cls.__name__}')
         
     @classmethod
-    def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+    def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """process a group of jobs"""   
         raise NotImplementedError(f'process_group_jobs is not implemented for {cls.__name__}')
 
@@ -383,7 +386,7 @@ class StockFactorUpdater(BaseFactorUpdater):
 
     @classmethod
     def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , 
-                           indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                           indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """process a group of stock factor update jobs"""
         DATAVENDOR.data_storage_control()
         Logger.stdout(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)) , indent = indent , vb_level = vb_level)
@@ -413,7 +416,7 @@ class MarketFactorUpdater(BaseFactorUpdater):
         
     @classmethod
     def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , 
-                           indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                           indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
         parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
@@ -431,7 +434,7 @@ class PoolingFactorUpdater(BaseFactorUpdater):
         
     @classmethod
     def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , 
-                           indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                           indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
         parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
@@ -449,7 +452,7 @@ class AffiliateFactorUpdater(BaseFactorUpdater):
 
     @classmethod
     def process_group_jobs(cls , group : Any , jobs : list[_BaseJob] , 
-                           indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                           indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
         parallel(cls.jobs_dict(jobs) , method = cls.multi_thread , indent = indent + 1)
@@ -467,7 +470,7 @@ class FactorStatsUpdater(BaseFactorUpdater):
 
     @classmethod
     def process_group_jobs(cls , group : Any , jobs : list[_BaseJob] , 
-                           indent : int = 1 , vb_level : int = 2 , **kwargs) -> None:
+                           indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """process a group of factor stats update jobs"""
         Logger.stdout(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates' , indent = indent , vb_level = vb_level)
         if len(jobs) <= 10:

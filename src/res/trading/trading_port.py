@@ -3,7 +3,7 @@ import numpy as np
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal , Type , ClassVar
+from typing import Any , Literal , Type , ClassVar
 
 from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates
 from src.proj.func import dfs_to_excel , figs_to_pdf
@@ -91,10 +91,10 @@ class TradingPort:
     def portfolio_dir(self) -> Path:
         raise NotImplementedError(f'{self.__class__.__name__} must implement portfolio_dir in subclass')
 
-    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : int = 2) -> 'TradingPort':
+    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : Any = 2) -> 'TradingPort':
         raise NotImplementedError(f'{self.__class__.__name__} must implement build in subclass')
 
-    def rebuild(self , date : int | None = None , export = True , indent : int = 1 , vb_level : int = 2) -> 'TradingPort':
+    def rebuild(self , date : int | None = None , export = True , indent : int = 1 , vb_level : Any = 2) -> 'TradingPort':
         raise NotImplementedError(f'{self.__class__.__name__} must implement rebuild in subclass')
         
     def export_path(self , date : int) -> Path:
@@ -179,7 +179,7 @@ class TradingPort:
     def empty_pre_portfolio(self , date : int) -> Portfolio:
         return Portfolio.from_ports(Port.none_port(CALENDAR.td(date , -1).td , self.name , self.init_value))
  
-    def save_port(self , pf : pd.DataFrame , date : int , indent : int = 1 , vb_level : int = 2):
+    def save_port(self , pf : pd.DataFrame , date : int , indent : int = 1 , vb_level : Any = 2):
         path = self.export_path(date)
         path.parent.mkdir(parents=True, exist_ok=True)
         DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent , vb_level = vb_level)
@@ -195,7 +195,7 @@ class TradingPort:
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False , 
                           trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' ,
-                          indent : int = 1 , vb_level : int = 2):
+                          indent : int = 1 , vb_level : Any = 2):
         self.load_portfolio(start , end)
         benchmark = Benchmark(self.benchmark)
         index = {
@@ -209,8 +209,9 @@ class TradingPort:
         return self.portfolio.account
 
     def analyze(self , start : int | None = None , end : int | None = None , 
-                indent : int = 0 , vb_level : int = 1 , write_down = True , display_all = False , key_fig = 'perf_curve', 
+                indent : int = 0 , vb_level : Any = 1 , write_down = True , display_all = False , key_fig = 'perf_curve', 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
+        vb_level = Proj.vb.level(vb_level)
         start = start if start is not None else -1
         end = end if end is not None else 99991231
         port_dates = self.stored_dates(start , end)
@@ -264,17 +265,18 @@ class TrackingPort(TradingPort):
     def portfolio_dir(self) -> Path:
         return PATH.trade_port.joinpath(self.name)
     
-    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : int = 2):
+    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : Any = 2):
         date = CALENDAR.updated(date)
         df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True , indent = indent , vb_level = vb_level)
         self.new_ports[date] = df
         return self
 
-    def rebuild(self , date : int , export = True , indent : int = 1 , vb_level : int = 2):
+    def rebuild(self , date : int , export = True , indent : int = 1 , vb_level : Any = 2):
         raise TypeError(f'tracking port cannot rebuild. if you truely want to rebuild a tracking port, manually delete the portfolio folder and run build(end_date) again.')
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
-                        alpha_details = False , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
+                        alpha_details = False , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame:
+        vb_level = Proj.vb.level(vb_level)
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
@@ -319,20 +321,21 @@ class BacktestPort(TradingPort):
     def portfolio_dir(self) -> Path:
         return PATH.rslt_trade.joinpath('backtest' , self.name , 'portfolio')
     
-    def build(self , date : int | None = None , reset_port = False , export = True , indent : int = 1 , vb_level : int = 2):
+    def build(self , date : int | None = None , reset_port = False , export = True , indent : int = 1 , vb_level : Any = 2):
         date = CALENDAR.updated(date)
         df = self.build_backward(date , reset_port = reset_port , export = export , indent = indent , vb_level = vb_level)
         self.new_ports[date] = df
         return self
 
-    def rebuild(self , date : int | None = None , export = True , indent : int = 0 , vb_level : int = 2):
+    def rebuild(self , date : int | None = None , export = True , indent : int = 0 , vb_level : Any = 2):
         date = CALENDAR.updated(date)
         Logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...' , indent = indent , vb_level = vb_level)
         df = self.build_backward(date , reset_port = True , export = export , indent = indent + 1 , vb_level = vb_level)
         self.new_ports[date] = df
         return self
     
-    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame:
+    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame:
+        vb_level = Proj.vb.level(vb_level)
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
         

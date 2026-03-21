@@ -325,7 +325,7 @@ class BaseDataModule(ABC):
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchInput]: '''return predict dataloaders'''
     @classmethod
-    def initialize(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level = 2 , min_key_len = -1 , **kwargs):
+    def initialize(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level : Any = 2 , min_key_len = -1 , **kwargs):
         data = cls(config , use_data = use_data , *args , **kwargs)
         Logger.stdout_pairs({'Use Data' : data.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
         return data
@@ -824,7 +824,7 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         for param in self.CB_KEY_PARAMS:
             assert hasattr(self , param) , f'{self.__class__.__name__} has no attribute {param}'
 
-    def print_info(self , vb_level : int = 2):
+    def print_info(self , vb_level : Any = 2):
         info = self.get_info()
         info_str = f'CallBack {info[0]}({info[1]})'
         if info[2]:
@@ -844,9 +844,9 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.at_exit(self.__hook_stack.pop())
     def __bool__(self):
         return not self.turn_off
-    def at_enter(self , hook : str , vb_level : int = Proj.vb.max):  
+    def at_enter(self , hook : str , vb_level : Any = 'max'):  
         Logger.stdout(f'{hook} of callback {self.__class__.__name__} start' , vb_level = vb_level)
-    def at_exit(self , hook : str , vb_level : int = Proj.vb.max): 
+    def at_exit(self , hook : str , vb_level : Any = 'max'): 
         getattr(self , hook)()
         Logger.stdout(f'{hook} of callback {self.__class__.__name__} end' , vb_level = vb_level)
 
@@ -1006,7 +1006,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         """
         self.retrained_models.append((self.model_date , self.model_num))
 
-    def purge_retrained_model_preds(self , vb_level : int = 2):
+    def purge_retrained_model_preds(self , vb_level : Any = 2):
         """purge past predictions when trained new models"""
         if not self.retrained_models:
             return
@@ -1030,7 +1030,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         else:
             Logger.stdout(f'{self.__class__.__name__} : No retrained models found, no purge needed' , vb_level = vb_level)
 
-    def purge_outdated_model_preds(self , vb_level : int = 2):
+    def purge_outdated_model_preds(self , vb_level : Any = 2):
         archive_records = self.archive_model_records()
         pred_records = self.pred_records()
         new_pred_records = archive_records.merge(pred_records , on=['model_num' , 'model_date'] , how='outer')
@@ -1047,7 +1047,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
             Path(path).unlink()
             self.save_preds(df , model_date , model_num)
 
-    def purge_obsolete_model_preds(self , vb_level : int = 2):
+    def purge_obsolete_model_preds(self , vb_level : Any = 2):
         """purge obsolete model predictions"""
         
         pred_records = self.pred_records()
@@ -1071,7 +1071,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         purge_info += f' deleted!'
         Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
 
-    def setup_resuming_status(self , vb_level : int = 2):
+    def setup_resuming_status(self , vb_level : Any = 2):
         """
         setup resuming status for previous saved predictions
         notes:
@@ -1248,7 +1248,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return f'{self.__class__.__name__}(config={self.config})'
 
     @classmethod
-    def initialize(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level = 2 , min_key_len = -1 , **kwargs):
+    def initialize(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level : Any = 2 , min_key_len = -1 , **kwargs):
         from src.res.model.model_module.module import get_predictor_module
         binder = config if trainer is None else trainer
         model = get_predictor_module(config , **kwargs).bound_with(binder)

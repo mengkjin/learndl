@@ -33,7 +33,7 @@ class ReinforcePortfolioCreatorConfig:
     indus_control   : float = 0.1
 
     @classmethod
-    def init_from(cls , indent : int = 1 , vb_level : int = 3 , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v is not None}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if use_kwargs and drop_kwargs: 
@@ -93,7 +93,7 @@ class ReinforcePortfolioCreator(PortCreator):
     DEFAULT_SCREEN_RATIO = DEFAULT_SCREEN_RATIO
     DEFAULT_SCREEN_ALPHA = DEFAULT_SCREENER
 
-    def setup(self , indent : int = 1 , vb_level : int = 3 , **kwargs):
+    def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs):
         self.conf = ReinforcePortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         return self
     

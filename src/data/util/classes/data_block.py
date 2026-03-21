@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar , Literal
 
-from src.proj import PATH , Logger , CALENDAR , DB , Proj
+from src.proj import PATH , Logger , CALENDAR , DB
 from src.proj.db.memory_map import ArrayMemoryMap
 from src.proj.func import torch_load
 from src.func import index_merge , forward_fillna
@@ -250,7 +250,7 @@ class DataBlock(Stock4D):
         return DataBlockNorm.calculate(self , key , predict , start_dt , end_dt , step_day , **kwargs)
 
     def extend_to(self , db_src : str , db_key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
-                  dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level = Proj.vb.max):
+                  dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'):
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
         block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
@@ -299,7 +299,7 @@ class DataBlock(Stock4D):
         return raw_path
 
     @classmethod
-    def load_preprocess(cls , key : str , predict = False , vb_level = 2 , **kwargs) -> 'DataBlock':
+    def load_preprocess(cls , key : str , predict = False , vb_level : Any = 2 , **kwargs) -> 'DataBlock':
         block = cls.load_dump(category = 'preprocess' , predict = predict , preprocess_key = key)
         if predict and key == 'y' and not block.empty:
             block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
@@ -307,7 +307,7 @@ class DataBlock(Stock4D):
 
     @classmethod
     def blocks_align(cls , blocks : dict[str,'DataBlock'] , * , start_dt = None , end_dt = None ,
-                     intersect_secid = True , inplace : Literal[True] = True , vb_level = 2) -> dict[str,'DataBlock']:
+                     intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2) -> dict[str,'DataBlock']:
         if len(blocks) <= 1:
             return blocks
         
@@ -345,7 +345,7 @@ class DataBlock(Stock4D):
 
     @classmethod
     def load_from_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
-                     dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
+                     dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
 
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
@@ -368,7 +368,7 @@ class DataBlock(Stock4D):
 
     @classmethod
     def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
-                 dates = None , feature = None , use_alt = True , vb_level = Proj.vb.max):
+                 dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
         if dates is None:
             dates = CALENDAR.td_within(start_dt , end_dt)
 

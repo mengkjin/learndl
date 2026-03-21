@@ -5,7 +5,7 @@ import pandas as pd
 from collections.abc import Iterable
 from typing import Any
 
-from src.proj import Logger , CALENDAR , Dates
+from src.proj import Logger , CALENDAR , Dates , Proj
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
 from src.res.model.util import PredictionModel
@@ -53,7 +53,7 @@ class ModelPortfolioBuilder:
         table = table[table['name'] == port_name]
         return Portfolio.from_dataframe(table , name = port_name)
     
-    def iter_builder_kwargs(self , date : int | None = None , indent : int = 0 , vb_level : int = 1):
+    def iter_builder_kwargs(self , date : int | None = None , indent : int = 0 , vb_level : Any = 1):
         alpha = self.reg_model.pred_name if date is None else self.alpha_model(date) # None only for name
         iter_args = itertools.product(self.FMP_TYPES , self.SUB_TYPES , self.BENCHMARKS , self.N_BESTS)
         for fmp_type , sub_type , benchmark , n_best in iter_args:
@@ -74,11 +74,11 @@ class ModelPortfolioBuilder:
         for kwargs in self.iter_builder_kwargs():
             yield PortfolioBuilder.get_full_name(**kwargs)
 
-    def iter_builders(self , date : int , indent : int = 0 , vb_level : int = 1):
+    def iter_builders(self , date : int , indent : int = 0 , vb_level : Any = 1):
         for kwargs in self.iter_builder_kwargs(date , indent = indent , vb_level = vb_level):           
             yield PortfolioBuilder(**kwargs).setup()
         
-    def update_fmps(self , update = True , overwrite = False , indent = 1 , vb_level : int = 2):
+    def update_fmps(self , update = True , overwrite = False , indent = 1 , vb_level : Any = 2):
         '''get update dates and build portfolios'''
         assert update != overwrite , 'update and overwrite must be different here'
         self._update_fmps_record = []
@@ -88,7 +88,8 @@ class ModelPortfolioBuilder:
         self.build_fmps(dates , deploy = True , indent = indent , vb_level = vb_level)
         return dates
     
-    def build_fmps(self , dates : list[int] | np.ndarray , deploy = True , indent = 1 , vb_level : int = 2):
+    def build_fmps(self , dates : list[int] | np.ndarray , deploy = True , indent = 1 , vb_level : Any = 2):
+        vb_level = Proj.vb.level(vb_level)
         for date in dates:
             self.fmp_tables[date] = self.build_day(date , indent = indent + 1 , vb_level = vb_level + 2) 
             Logger.stdout(f'Finished build fmps for {self.reg_model} at {date}' , indent = indent + 1 , vb_level = vb_level + 1)
@@ -96,14 +97,14 @@ class ModelPortfolioBuilder:
                 self.reg_model.save_fmp(self.fmp_tables[date] , date , False , indent = indent + 1 , vb_level = vb_level + 2)
             self._update_fmps_record.append(date)
         
-    def build_day(self , date : int , indent : int = 1 , vb_level : int = 1):
+    def build_day(self , date : int , indent : int = 1 , vb_level : Any = 1):
         ports = [builder.build(date).port.to_dataframe() for builder in self.iter_builders(date , indent = indent , vb_level = vb_level)]
         df = pd.concat(ports).reset_index(drop=True)
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
         return df
 
-    def load_accounts(self , resume = True , indent : int = 2 , vb_level : int = 3):
+    def load_accounts(self , resume = True , indent : int = 2 , vb_level : Any = 3):
         if resume: 
             self.account_manager.load_dir()
             Logger.stdout(f'accounts include names: {self.account_manager.account_names}' , indent = indent , vb_level = vb_level)
@@ -123,7 +124,8 @@ class ModelPortfolioBuilder:
         ret = {name:last_dates.get(name , self.reg_model.start_dt) for name in fmp_names}
         return ret
     
-    def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : int = 3):
+    def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : Any = 3):
+        vb_level = Proj.vb.level(vb_level)
         self.load_accounts(resume = resume , indent = indent + 1 , vb_level = vb_level + 1)
         self._update_account_record = []
 
@@ -153,7 +155,8 @@ class ModelPortfolioBuilder:
         self._update_account_record = account_dates
 
     @classmethod
-    def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
+    def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         '''Update prediction models' factor model portfolios'''
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)

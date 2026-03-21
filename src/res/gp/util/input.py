@@ -47,7 +47,7 @@ class InputElement:
         return InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
 
     def get_datablock(self , start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
-        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start_dt , end_dt , vb_level = Proj.vb.inf)
+        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start_dt , end_dt , vb_level = 'never')
         return self.adjust_datablock(block)
 
     def adjust_datablock(self , block : DataBlock , cp_block : DataBlock | None = None) -> DataBlock:
@@ -97,8 +97,7 @@ def get_features_block(src : str , key : str , features : list[str] | None , sta
     '''
     secid = DATAVENDOR.secid(end_dt)
     dates = CALENDAR.td_within(start_dt , end_dt)
-    block = BlockLoader(src , key , feature = features).\
-        load(start_dt , end_dt , vb_level = Proj.vb.inf).\
+    block = BlockLoader(src , key , feature = features).load(start_dt , end_dt , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
     return block
 
@@ -182,7 +181,7 @@ def init_neutral_exp(start_dt : int = 20100101 , end_dt : int = 20241231 , * , d
     '''
     secid = DATAVENDOR.secid(end_dt)
     dates = CALENDAR.td_within(start_dt , end_dt)
-    block = BlockLoader('models' , 'tushare_cne5_exp').load(start_dt , end_dt , vb_level = Proj.vb.inf).\
+    block = BlockLoader('models' , 'tushare_cne5_exp').load(start_dt , end_dt , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
     values = block.loc(feature = Proj.Conf.Factor.RISK.indus + ['size']).squeeze().to(device)
     return values
@@ -212,14 +211,14 @@ def init_labels_raw(start_dt : int = 20100101 , end_dt : int = 20241231 , * , ne
 class gpInput:
     """遗传规划输入,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
     def __init__(self , param : gpParameters , status : gpStatus , logger : gpLogger , 
-                 vb_level : int = 2):
+                 vb_level : Any = 2):
         self.param     = param
         self.status    = status
         self.logger    = logger
         self.inputs :    list[torch.Tensor] = []
         self.tensors :   dict[str , torch.Tensor] = {}
         self.records :   dict[str , Any] = {}
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(inputs={len(self.inputs)}, tensors={len(self.tensors)}, records={len(self.records)})'

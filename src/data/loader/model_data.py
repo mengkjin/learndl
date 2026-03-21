@@ -15,7 +15,7 @@ class RiskModelAccess(DateDataAccess):
     }
     
     def data_loader(self , date , data_type):
-        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'inf')
+        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'never')
         return df
 
     def db_loads_callback(self , *args , **kwargs):

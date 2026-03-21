@@ -15,7 +15,7 @@ class ExposureAccess(DateDataAccess):
     DB_KEYS = {'daily_risk' : 'daily_risk'}
     
     def data_loader(self , date , data_type):
-        df : pd.DataFrame = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 99 , use_alt = True)
+        df : pd.DataFrame = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'never' , use_alt = True)
         if not df.empty: 
             df = df[df['secid'].isin(INFO.get_secid(date))]
         return df

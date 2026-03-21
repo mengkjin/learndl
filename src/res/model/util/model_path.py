@@ -364,12 +364,12 @@ class HiddenPath:
         dates = [int(p.name.removesuffix(suffix)) for p in parent.iterdir() if p.name.endswith(suffix)]
         return np.sort(dates)
 
-    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int , indent : int = 1 , vb_level : int = 2) -> None:
+    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int , indent : int = 1 , vb_level : Any = 2) -> None:
         """save hidden dataframe"""
         hidden_path = self.target_path(model_date)
         DB.save_df(hidden_df , hidden_path , overwrite = True , prefix = f'Hidden States' , indent = indent , vb_level = vb_level)
 
-    def get_hidden_df(self , model_date : int , exact = False , indent : int = 1 , vb_level : int = 2) -> tuple[int, pd.DataFrame]:
+    def get_hidden_df(self , model_date : int , exact = False , indent : int = 1 , vb_level : Any = 2) -> tuple[int, pd.DataFrame]:
         """get hidden dataframe"""
         if not exact: 
             model_date = self.latest_hidden_model_date(model_date)
@@ -529,27 +529,27 @@ class PredictionModel(ModelPath):
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : int = Proj.vb.max , reason : str = '') -> None:
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : Any = 'max' , reason : str = '') -> None:
         """save model pred"""
         df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
         DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
 
-    def load_pred(self , date : int , closest = False , indent = 1 , vb_level : int = Proj.vb.max , **kwargs) -> pd.DataFrame:
+    def load_pred(self , date : int , closest = False , indent = 1 , vb_level : Any = 'max' , **kwargs) -> pd.DataFrame:
         """load model pred"""
         df = DB.load('pred' , self.pred_name , date , closest = closest , indent = indent , vb_level = vb_level , **kwargs)
         if not df.empty and self.pred_name not in df.columns:
             assert self.model_clean_name in df.columns or self.model_name in df.columns , \
                 f'{self.pred_name} / {self.model_clean_name} / {self.model_name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = Proj.vb.max , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 'max' , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
         return df
 
-    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : int = 2) -> None:
+    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : Any = 2) -> None:
         """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = indent , vb_level = vb_level)
 
-    def load_fmp(self , date : int , vb_level : int = 2 , **kwargs) -> pd.DataFrame:
+    def load_fmp(self , date : int , vb_level : Any = 2 , **kwargs) -> pd.DataFrame:
         """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 

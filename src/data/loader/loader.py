@@ -1,7 +1,7 @@
 import pandas as pd
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any , Literal
 
 from src.proj import PATH , Logger , DB , Proj , CALENDAR
 from src.data.util import DataBlock
@@ -28,9 +28,10 @@ class BlockLoader:
     def src_path(self):
         return DB.DBPath.Parent(self.db_src)
 
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> DataBlock:
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
         """Load block data , alias for load"""
         sub_blocks = []
+        vb_level = Proj.vb.level(vb_level)
         with Logger.Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level , enter_vb_level=vb_level+1):
             for db_key in self.iter_keys():
                 with Logger.Timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , indent = indent +1 , vb_level = vb_level + 1):
@@ -64,7 +65,7 @@ class FrameLoader:
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> pd.DataFrame:
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : Any = 1) -> pd.DataFrame:
         """Load frame data from database"""
         df = DB.loads(self.db_src , self.db_key , start_dt = start_dt , end_dt = end_dt , use_alt = self.use_alt , indent = indent , vb_level = vb_level)
         return df
@@ -89,10 +90,11 @@ class FactorLoader(BlockLoader):
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
         self.kwargs = kwargs
         
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> DataBlock:
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
+        vb_level = Proj.vb.level(vb_level)
         with Logger.Timer(f'factor blocks reading [{len(self.names)} factors]' , indent = indent , vb_level = vb_level):
             dates = CALENDAR.td_within(start_dt , end_dt)
             for calc in FactorCalculator.iter(selected_factors = self.names , **self.kwargs):
@@ -128,10 +130,11 @@ class FactorCategory1Loader(BlockLoader):
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
         self.kwargs = kwargs
         
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : int = 1) -> DataBlock:
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
         """Load factor data , alias for load"""
         from src.res.factor.calculator import FactorCalculator
         factors : list[pd.DataFrame] = []
+        vb_level = Proj.vb.level(vb_level)
         with Logger.Timer(f'factor blocks reading [{self.category0} , {self.category1}]' , indent = indent , vb_level = vb_level):
             dates = CALENDAR.td_within(start_dt , end_dt)
             for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.kwargs):

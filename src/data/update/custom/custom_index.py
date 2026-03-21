@@ -3,7 +3,7 @@ import numpy as np
 
 from abc import ABCMeta , abstractmethod
 from typing import Literal , Type , Any
-from src.proj import Logger , CALENDAR , DB , Dates
+from src.proj import Logger , CALENDAR , DB , Dates , Proj
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -92,7 +92,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
             return 0.
         return prev_port.fut_ret(date)
 
-    def update_dates(self , dates : np.ndarray | list[int] , indent : int = 1 , vb_level : int = 1):
+    def update_dates(self , dates : np.ndarray | list[int] , indent : int = 1 , vb_level : Any = 1):
         """update index return for given dates"""
         if len(dates) == 0:
             return
@@ -136,7 +136,8 @@ class CustomIndexUpdater(BasicCustomUpdater):
         return list(CustomIndex.iter_custom_indices())
     
     @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
 
@@ -155,7 +156,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
             Logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):
+    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
         for custom_index in CustomIndex.iter_custom_indices():
             custom_index.update_dates([date] , indent = indent , vb_level = vb_level)
 

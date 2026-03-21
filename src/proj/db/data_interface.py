@@ -180,7 +180,7 @@ class DFProcessor:
 
     @classmethod
     def load_process(cls , df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
-                     df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : int | Literal['max','min','inf'] = 'max'):
+                     df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'):
         """process dataframe"""
         if date_colname and date is not None: 
             df[date_colname] = date
@@ -362,7 +362,7 @@ class DBPath:
             path = self.path_exact(date)
         return path
 
-    def path(self , date : int | None = None , use_alt = False , closest = False , indent = 1 , vb_level : int | Literal['max','min','inf'] = 'max') -> Path:
+    def path(self , date : int | None = None , use_alt = False , closest = False , indent = 1 , vb_level : Any = 'max') -> Path:
         """
         Get path of database
         Parameters
@@ -411,7 +411,7 @@ class DBPath:
             [d.rmdir() for d in self.parent.iterdir() if d.is_dir()]
             self.parent.rmdir()
 
-def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
+def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : Any = 1):
     """save dataframe to path"""
     if df is None or df.empty: 
         return False
@@ -428,7 +428,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True ,
         Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
+def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite = True , prefix = '' , indent = 1 , vb_level : Any = 1):
     """save multiple dataframes to path (must be a directory or a tar file)"""
     if not dfs or all(df.empty for df in dfs.values()):
         return False
@@ -450,7 +450,7 @@ def save_dfs(dfs : dict[str , pd.DataFrame] , path : Path | str , * , overwrite 
     Logger.stdout(f'{prefix} {status["overwritten"]} Overwritten , {status["created"]} Created: {path}' , indent = indent , vb_level = vb_level , italic = True)
     return True
 
-def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
+def append_df(df : pd.DataFrame | None , path : Path | str , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : Any = 1):
     """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
     path = Path(path)
     if df is None or df.empty: 
@@ -560,7 +560,7 @@ def load_dfs_seperately(
         dfs = {d:df.assign(**{key_column:d}) for d,df in dfs.items()}
     return dfs
 
-def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
+def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : Any = 1):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -588,7 +588,7 @@ def load_dfs_from_tar(path : str | Path , * , raise_if_not_exist = False) -> dic
     dfs = FileIOHandler.load_tar(path , mapper = DFProcessor.load_mapper)
     return dfs
 
-def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1):
+def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : Any = 1):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -608,12 +608,12 @@ def pack_files_to_tar(files : list[str | Path] , path : Path | str , *, overwrit
         return False
 
 def unpack_files_from_tar(path : Path | str , target : Path | str , * , 
-                          overwrite = False , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1) -> None:
+                          overwrite = False , indent = 1 , vb_level : Any = 1) -> None:
     """unpack files from tar file"""
     path = Path(path)
     target = Path(target)
     assert path.suffix == '.tar' , f'{path} is not a tar file'
-    sub_vb_level = Proj.vb.parse_vb(vb_level) + 1
+    sub_vb_level = Proj.vb.level(vb_level) + 1
     with tarfile.open(path, 'r') as tar:  
         for member in tar.getmembers():
             target_path = target.joinpath(member.name)
@@ -635,7 +635,7 @@ def max_date(db_src , db_key , *, use_alt = False):
     return db_path.max_date(use_alt = use_alt)
 
 def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , *, 
-         overwrite = True , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1 , reason : str = ''):
+         overwrite = True , indent = 1 , vb_level : Any = 1 , reason : str = ''):
     '''
     Save data to database
     Parameters  
@@ -657,7 +657,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
 
 def load(db_src , db_key , date = None , *, 
          date_colname = None , use_alt = False , closest = False , 
-         raise_if_not_exist = False , indent = 1 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs) -> pd.DataFrame: 
+         raise_if_not_exist = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
     Parameters
@@ -689,7 +689,7 @@ def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
           date_colname = 'date' , use_alt = False , 
           parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
           fill_datavendor = False ,
-          indent = 1 , vb_level : int | Literal['max','min','inf'] = 1 , **kwargs):
+          indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database"""
     if DBPath.ByName(db_src):
         df = load(db_src , db_key , use_alt = use_alt , indent = indent , vb_level = vb_level , **kwargs)

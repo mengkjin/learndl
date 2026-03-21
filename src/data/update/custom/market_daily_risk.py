@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal , Any
-from src.proj import Logger , CALENDAR , DB , Dates
+from src.proj import Logger , CALENDAR , DB , Dates , Proj
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -12,7 +12,8 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
     DB_KEY = 'risk'
     
     @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
             stored_dates = np.array([])
@@ -43,11 +44,11 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
         Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):
+    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
         cls.append_result(calc_market_daily_risk(date) , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def append_result(cls , new_df : pd.DataFrame , indent : int = 1 , vb_level : int = 1):
+    def append_result(cls , new_df : pd.DataFrame , indent : int = 1 , vb_level : Any = 1):
         old_df = DB.load(cls.DB_SRC , cls.DB_KEY)
         df = pd.concat([old_df , new_df])
         if not df.empty:

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Literal , Callable
-from src.proj import Logger , CALENDAR , DB , Dates
+from src.proj import Logger , CALENDAR , DB , Dates , Proj
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -12,7 +12,8 @@ class DailyRiskUpdater(BasicCustomUpdater):
     DB_KEY = 'daily_risk'
 
     @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : int = 1):
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
             stored_dates = np.array([])
@@ -36,7 +37,7 @@ class DailyRiskUpdater(BasicCustomUpdater):
         Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : int = 2):
+    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
         DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
 
 def fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:

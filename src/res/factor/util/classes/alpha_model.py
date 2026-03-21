@@ -334,9 +334,9 @@ class CompositeAlphaComponent:
             if not isinstance(date , (list , np.ndarray)):
                 date = [date]
             column = db_column if db_column is not None else db_key
-            df = DB.loads(db_src , db_key , date , vb_level = 'inf')
+            df = DB.loads(db_src , db_key , date , vb_level = 'never')
             if df.empty or min(date) < min(df['date']):
-                prev_df = DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'inf').assign(date = min(date))
+                prev_df = DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'never').assign(date = min(date))
                 df = prev_df if df.empty else pd.concat([prev_df , df])
             assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
             df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]

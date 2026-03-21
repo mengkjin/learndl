@@ -62,7 +62,7 @@ def eval_year_ret(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ret']
 
-def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1 , periods : list[str] = ['w' , 'm' , 'q' , 'y']) -> pd.Series:
+def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1) -> pd.Series:
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
@@ -74,9 +74,9 @@ def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : 
 
     period_names = {'d' : 'Last Day' , 'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Qtr' , 'y' : 'Last Year'}
     datas = []
-    for period in periods:
+    for period , name in period_names.items():
         start_dt , end_dt = CALENDAR.cd_start_end(end_date , 1 , period) # noqa
-        datas.append((period_names[period] , _period_ret(ret.query('date <= @end_dt and date >= @start_dt')['ret'])))
+        datas.append((name , _period_ret(ret.query('date <= @end_dt and date >= @start_dt')['ret'])))
     
     df = pd.DataFrame(datas , columns = ['period' , 'ret'])
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')

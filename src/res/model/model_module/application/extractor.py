@@ -4,6 +4,7 @@ import pandas as pd
 
 from datetime import datetime
 from itertools import product
+from typing import Any
 
 from src.proj import Logger , CALENDAR , Proj
 from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel
@@ -54,7 +55,7 @@ class ModelHiddenExtractor:
     def model_dates(self):
         return self.model_path.model_dates
         
-    def load_model_data(self , indent : int = 1 , vb_level : int = 2):
+    def load_model_data(self , indent : int = 1 , vb_level : Any = 2):
         if not getattr(self , 'data_loaded' , False):
             with Proj.Silence:
                 self.data = DataModule(self.config , 'both').load_data()
@@ -78,7 +79,8 @@ class ModelHiddenExtractor:
         return model_iter
 
     def extract_hidden(self , model_dates : list | np.ndarray | int | None = None ,
-                       update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
+                       update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         model_iter = self.model_iter(model_dates , update)
         self._current_update_dates = []
         with torch.no_grad():
@@ -93,7 +95,7 @@ class ModelHiddenExtractor:
                 self._current_update_dates.append(model_date)
         return self
     
-    def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False , indent : int = 1 , vb_level : int = 2) -> pd.DataFrame | None:
+    def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame | None:
         self.load_model_data(indent = indent , vb_level = vb_level)
         model_num , submodel = hidden_path.model_num , hidden_path.submodel
         self.model.load_model(model_num , model_date , submodel)
@@ -131,7 +133,8 @@ class ModelHiddenExtractor:
         return cls(HiddenExtractionModel(model_name))
 
     @classmethod
-    def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : int = 1):
+    def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = HiddenExtractionModel.SelectModels(model_name)
         if model_name is None: 

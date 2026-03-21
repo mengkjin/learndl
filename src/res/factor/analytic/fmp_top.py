@@ -15,7 +15,7 @@ plotter = Plotter(test_title(test_type))
 class TopCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
-    def calc(self , account_df : pd.DataFrame , indent : int = 1 , vb_level : int = 1):
+    def calc(self , account_df : pd.DataFrame , indent : int = 1 , vb_level : Any = 1):
         with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account_df)
         return self
@@ -117,7 +117,7 @@ class TopFMPTest(BaseFactorAnalyticTest):
     ]
 
     def generate(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
-                 n_bests = [20,30,50,100] , indent : int = 0 , vb_level : int = 1):
+                 n_bests = [20,30,50,100] , indent : int = 0 , vb_level : Any = 1):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(n_bests = n_bests)
@@ -127,7 +127,7 @@ class TopFMPTest(BaseFactorAnalyticTest):
         self.total_account = self.portfolio_group.build().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-             n_bests = [20,30,50,100] , indent : int = 0 , vb_level : int = 1 , **kwargs):
+             n_bests = [20,30,50,100] , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         self.generate(factor , benchmark , n_bests = n_bests , indent = indent , vb_level = vb_level)
         if self.total_account.empty:
             Logger.error(f'No accounts created for {self.test_name}!')

@@ -251,7 +251,7 @@ class PortfolioAccount:
             account.loc[date , 'attribution'] = v #type:ignore
         return cls(account.reset_index(drop = False) , index = index)
 
-    def save(self , path : Path | str | None = None , vb_level : int = 1 , indent : int = 0):
+    def save(self , path : Path | str | None = None , vb_level : Any = 1 , indent : int = 0):
         if path is None or self.empty:
             return self
         path = Path(path)
@@ -403,7 +403,7 @@ class PortfolioAccountant:
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
                    daily = False , cache = False , with_index : dict[str,Any] | None = None ,
                    resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
-                   indent : int = 0 , vb_level : int = 1):
+                   indent : int = 0 , vb_level : Any = 1):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
             config = config_or_benchmark
@@ -414,6 +414,7 @@ class PortfolioAccountant:
         self.account.config = config
         self.resume_path = resume_path
 
+        vb_level = Proj.vb.level(vb_level)
         if Proj.Conf.Model.TRAIN.resume_test_fmp_account:
             self.resumed_account = PortfolioAccount.load(self.resume_path)
             if resume_drop_last:
@@ -440,7 +441,8 @@ class PortfolioAccountant:
     def config(self) -> AccountConfig:
         return self.account.config
     
-    def go(self , cache = False , indent : int = 1 , vb_level : int = 2):
+    def go(self , cache = False , indent : int = 1 , vb_level : Any = 2):
+        vb_level = Proj.vb.level(vb_level)
         if cache and self.config.key in self.cached_accounts:
             self.account = self.cached_accounts[self.config.key]
             return self
@@ -581,7 +583,7 @@ class PortfolioAccountManager:
         [self.load_single(path , append = append) for path in self.account_dir.iterdir() if path.suffix == '.pkl']
         return self
     
-    def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : int = 1):
+    def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : Any = 1):
         if fmp_names is None: 
             fmp_names = list(self.accounts.keys())
         fmp_paths = {name:self.account_dir.joinpath(f'{name}.tar') for name in fmp_names}

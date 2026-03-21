@@ -353,7 +353,7 @@ class FactorStats:
     def save(self , path : Path) -> int:
         path.mkdir(parents=True , exist_ok=True)
         for name , stat in self.stats.items():
-            DB.save_df(stat , path.joinpath(f'{name}.feather') , vb_level = 'inf')
+            DB.save_df(stat , path.joinpath(f'{name}.feather') , vb_level = 'never')
         return len(self.stats)
 
     @classmethod

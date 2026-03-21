@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal , Any
 
 from src.proj import MACHINE , Logger
 from src.res.factor.util import PortCreator , PortCreateResult , Port
@@ -24,7 +24,7 @@ class OptimizedPortfolioCreatorConfig:
     opt_short : bool = True
 
     @classmethod
-    def init_from(cls , indent : int = 1 , vb_level : int = 3 , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v != cls.__dataclass_fields__[k].default}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if use_kwargs and drop_kwargs: 
@@ -50,7 +50,7 @@ class OptimizedPortfolioCreator(PortCreator):
     def __init__(self , name : str):
         super().__init__(name)
 
-    def setup(self , indent : int = 1 , vb_level : int = 3 , **kwargs): 
+    def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs): 
         self.conf = OptimizedPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         self.opt_input = OptimizedPortfolioInput(self.name , self.conf.opt_config)
         return self

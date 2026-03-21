@@ -1,7 +1,9 @@
 from src.proj import PATH , Logger
 import torch
 import shutil
-from typing import Literal
+from typing import Literal , Any
+
+from src.proj import Proj
 from .default import gpDefaults
 
 class gpParameters:
@@ -19,13 +21,13 @@ class gpParameters:
         self.initiate(job_id , train , continuation , test_code , **kwargs)
 
     def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , 
-                 vb_level : int = 2 ,**kwargs):
+                 vb_level : Any = 2 ,**kwargs):
         self.job_id = job_id
         self.train = train
         self.continuation = continuation
         self.test_code = test_code
         self.kwargs = kwargs
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
         self.make_job_dir()
         self.load_params()
 

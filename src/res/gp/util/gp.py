@@ -1,7 +1,7 @@
 import numpy as np
 
 from deap import tools
-from typing import Sequence , Callable
+from typing import Any , Sequence , Callable
 
 from src.proj import Logger , Proj
 from src.res.gp.param import gpParameters
@@ -24,15 +24,15 @@ class GeneticProgramming:
         return cls._instance
 
     def __init__(self , job_id : int | None = None , train : bool = True , start_iter = 0 , start_gen = 0 , 
-                 test_code : bool = False , timer = True , vb_level : int = 2 , **kwargs):
-
-        self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , vb_level = vb_level , **kwargs)
+                 test_code : bool = False , timer = True , vb_level : Any = 2 , **kwargs):
+        self.vb_level  = Proj.vb.level(vb_level)
+        self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , vb_level = self.vb_level , **kwargs)
         self.status    = gpStatus(self.param.n_iter , self.param.n_gen , start_iter , start_gen , self.param.train)
-        self.memory    = MemoryManager(self.param.device , vb_level = vb_level)
-        self.logger    = gpLogger(self.param.job_dir , self.status , vb_level = vb_level + 1)
-        self.input     = gpInput(self.param , self.status , self.logger , vb_level = vb_level + 1)
+        self.memory    = MemoryManager(self.param.device , vb_level = self.vb_level)
+        self.logger    = gpLogger(self.param.job_dir , self.status , vb_level = self.vb_level + 1)
+        self.input     = gpInput(self.param , self.status , self.logger , vb_level = self.vb_level + 1)
         
-        self.timer     = gpTimer(timer , vb_level = vb_level + 2)
+        self.timer     = gpTimer(timer , vb_level = self.vb_level + 2)
         self.evaluator = gpEvaluator(self.param , self.input , self.status , self.timer , self.logger)
 
     @property
@@ -75,7 +75,7 @@ class GeneticProgramming:
     def load_data(self):
         with self.timer.timer('stage' , 'Data' , title= 'Load Data' , timer_level = 5):
             self.input.load_data()
-            Logger.stdout(f'{len(self.param.gp_raw_list)} raw datas , {len(self.param.gp_fac_list)} factors loaded!' , indent = 1 , vb_level = 2)
+            Logger.stdout(f'{len(self.param.gp_raw_list)} raw datas , {len(self.param.gp_fac_list)} factors loaded!' , indent = 1 , vb_level = self.vb_level)
         return self
 
     def preparation(self , **kwargs):
@@ -138,7 +138,7 @@ class GeneticProgramming:
     
             # Populate new population to pop_num
             population = self.population(population , self.forbidden + [str(ind) for ind in halloffame]).purify()
-            Logger.note(f'Generation {i_gen} : {restore_info}, Populate to {len(population)}' , indent = 1 , vb_level = 4)
+            Logger.note(f'Generation {i_gen} : {restore_info}, Populate to {len(population)}' , indent = 1 , vb_level = self.vb_level + 2)
             
             # Evaluate the new population , add evaluation result to historybook , update forbidden list
             self.evaluator.evaluate_population(population , historybook = self.historybook , **kwargs)
@@ -268,9 +268,9 @@ class GeneticProgramming:
                 elite_group.append(factor_value , **infos)
                 msg = f'Hof{i:_>3d} Pass Test [{str(hof)}] (Elite{elite_group.i_elite:_>3d},{"|".join([f"{k}{v:+.2f}" for k,v in infos.items()])})'
                 self.memory.check(showoff = self.param.test_code and Proj.vb.is_max_level)
-                Logger.success(f'{str(hof)} : {msg}' , indent = 2 , vb_level = 2)
+                Logger.success(f'{str(hof)} : {msg}' , indent = 2 , vb_level = self.vb_level)
             else:
-                Logger.alert1(f'{str(hof)} : {msg}' , indent = 2 , vb_level = 2)
+                Logger.alert1(f'{str(hof)} : {msg}' , indent = 2 , vb_level = self.vb_level)
 
         self.update_forbidden(elite_group.all_names())
         self.logger.dump_generation([], [], self.forbidden , overall = True)
@@ -324,7 +324,7 @@ class GeneticProgramming:
 
     @classmethod
     def main(cls , job_id : int | None = None , start_iter = 0 , start_gen = 0 , test_code : bool = False , 
-             timer = True , vb : int | None = None , vb_level : int = 2 , **kwargs):
+             timer = True , vb : int | None = None , vb_level : Any = 2 , **kwargs):
         """
         训练的主程序,[大循环]的过程出发点,从start_iter的start_gen开始训练
         input:

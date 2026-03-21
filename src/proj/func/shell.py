@@ -1,7 +1,7 @@
 import fnmatch , psutil , subprocess , time , argparse
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any , Literal
 
 from src.proj.env import MACHINE
 from src.proj.log import Logger
@@ -31,7 +31,7 @@ def get_running_scripts(exclude_scripts : list[str] | str | None = None , script
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
                       log_path : Path | None = None ,
-                      vb_level : int = 1):
+                      vb_level : Any = 1):
     # running_scripts = get_running_scripts(exclude_scripts)
     main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to {mode}'
     if MACHINE.is_windows:

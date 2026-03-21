@@ -5,5 +5,6 @@ show_vb_level: false # if true, all Logger export will be prefixed vb_level of t
 vb:  3
 vb_max: 10
 vb_min: 0
-vb_inf: 99
+vb_never: 99
+vb_always: -99
 vb_level_callback: 99 # to show all callback messages, set to values less than vb_inf

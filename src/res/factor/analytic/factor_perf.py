@@ -17,7 +17,7 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     COMPULSORY_BENCHMARKS : Any = None
         
-    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None , indent : int = 1 , vb_level : int = 1):
+    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None , indent : int = 1 , vb_level : Any = 1):
         with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level):
             func = self.calculator()
             rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
@@ -241,7 +241,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
     ]
 
     def calc(self , factor : StockFactor , benchmarks: list[Benchmark|Any] | Any = None , * , 
-             indent : int = 0 , vb_level : int = 1 , **kwargs):
+             indent : int = 0 , vb_level : Any = 1 , **kwargs):
         factor = factor.filter_dates_between(self.start_dt , self.end_dt)
         if Proj.Conf.Model.TRAIN.resume_test_factor_perf:
             factor.cache_factor_stats.load(self.factor_stats_resume_path)

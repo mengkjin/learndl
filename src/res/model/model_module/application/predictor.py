@@ -126,7 +126,7 @@ class ModelPredictor:
                 dates = np.setdiff1d(self.reg_model.pred_dates , deployed_dates)
             self._current_deploy_dates = []
             for date in dates:
-                df = self.reg_model.load_pred(date , vb_level = Proj.vb.inf)
+                df = self.reg_model.load_pred(date , vb_level = 'never')
                 df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
                 self._current_deploy_dates.append(date)
         except OSError as e:
@@ -152,7 +152,7 @@ class ModelPredictor:
         return cls(model , use_data)
     
     @classmethod
-    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : int = 1):
+    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         if start_dt is not None or end_dt is not None:
@@ -175,7 +175,7 @@ class ModelPredictor:
         return md
 
     @classmethod
-    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : int = 1):
+    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : Any = 1):
         """Recalculate all model predictions"""
         Logger.note(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
         if start_dt is not None or end_dt is not None:

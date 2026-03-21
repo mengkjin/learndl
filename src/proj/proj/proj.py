@@ -102,10 +102,47 @@ class _UniqueFileList:
                     self.file_list.remove(file)
                     self.alter1(f'Removed file {file} from {self.name} due to banned patterns!' , vb_level = 'max')
 
-class _Verbosity:
+class _VerbosityLevel(int):
     max : int = _project_settings.get('vb_max' , 10)
     min : int = _project_settings.get('vb_min' , 0)
-    inf : int = _project_settings.get('vb_inf' , 99)
+    never : int = _project_settings.get('vb_never' , 99)
+    always : int = _project_settings.get('vb_always' , -99)
+    assert never > max > min > always , (never , max , min , always)
+    def __new__(cls , arg : int | None | Literal['max','min','never','always'] | Any):
+        if isinstance(arg , int):
+            if cls.always < arg < cls.never:
+                v = min(max(arg , cls.min) , cls.max)
+            else:
+                v = arg
+        elif arg in ['max','min','never','always']:
+            v = getattr(cls , arg)
+        elif arg is None:
+            v = Proj.vb.vb
+        else:
+            raise ValueError(f'Invalid argument type: {type(arg)}: {arg}')
+        return int.__new__(cls , v)
+
+    def __add__(self , other : int):
+        assert other >= 0 , other
+        v = int(self)
+        if self.always < v < self.never:
+            return _VerbosityLevel(v + other)
+        else:
+            return self
+    def __sub__(self , other : int):
+        assert other >= 0 , other
+        v = int(self)
+        if self.always < v < self.never:
+            return _VerbosityLevel(v - other)
+        else:
+            return self
+
+class _Verbosity:
+    level = _VerbosityLevel
+    max : int = level.max
+    min : int = level.min
+    never : int = level.never
+    always : int = level.always
     level_callback : int = _project_settings.get('vb_level_callback' , 10)
         
     def __init__(self):
@@ -115,23 +152,9 @@ class _Verbosity:
     def __repr__(self):
         return f'{self.vb}'
 
-    @classmethod
-    def parse_vb(cls , vb : int | None | Literal['max','min','inf']) -> int:
-        match vb:
-            case 'max':
-                return cls.max
-            case 'min':
-                return cls.min
-            case 'inf':
-                return cls.inf
-            case None:
-                return Proj.vb.vb
-            case _:
-                return vb
-
     class WithVbLevel:
-        def __init__(self , vb_level : int | None | Literal['max','min','inf']):
-            self.vb_level = _Verbosity.parse_vb(vb_level)
+        def __init__(self , vb_level : int | None | Literal['max','min','never','always'] | Any):
+            self.vb_level = Proj.vb.level(vb_level)
 
         def __enter__(self):
             Proj.vb.vb_level = self.vb_level
@@ -141,8 +164,8 @@ class _Verbosity:
             Proj.vb.vb_level = None
 
     class WithVB:
-        def __init__(self , vb : int | None | Literal['max','min','inf']):
-            self.vb = _Verbosity.parse_vb(vb)
+        def __init__(self , vb : int | None | Literal['max','min','never','always'] | Any):
+            self.vb = Proj.vb.level(vb)
             self.vb_prev : int | None = None
 
         def __enter__(self):
@@ -164,12 +187,12 @@ class _Verbosity:
             stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
         self.vb = value
 
-    def ignore(self , vb_level : int | Literal['max','min','inf'] = 1):
-        level = _Verbosity.parse_vb(vb_level)
+    def ignore(self , vb_level : int | Literal['max','min','never','always'] | Any = 1):
+        level = Proj.vb.level(vb_level)
         if level is None:
             return False
         else:
-            return level >= self.inf or self.vb < min(level , self.max)
+            return level >= self.never or self.vb < min(level , self.max)
 
     @property
     def is_max_level(self):

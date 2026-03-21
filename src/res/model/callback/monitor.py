@@ -22,11 +22,11 @@ class CallbackTimer(BaseCallBack):
     def __bool__(self):
         """disable callback timer"""
         return False # self.recording and not self.turn_off
-    def at_enter(self , hook_name , vb_level : int = Proj.vb.max):
+    def at_enter(self , hook_name , vb_level : Any = 'max'):
         super().at_enter(hook_name , vb_level)
         if self.recording: 
             self.record_start_time[hook_name] = datetime.now()
-    def at_exit(self, hook_name , vb_level : int = Proj.vb.max):
+    def at_exit(self, hook_name , vb_level : Any = 'max'):
         if self.recording: 
             self.record_hook_durations[hook_name].append((datetime.now() - self.record_start_time[hook_name]).total_seconds())
         super().at_exit(hook_name , vb_level)

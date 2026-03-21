@@ -48,7 +48,7 @@ class ModelTrainer(BaseTrainer):
            stage = -1 , resume = -1 , selection = -1 ,
            **kwargs):
         if title and paragraph:
-            paragraph_context = Logger.Paragraph(title.title() , 1)
+            paragraph_context = Logger.Paragraph(title.title() , 1 , enter_vb_level = 2)
         else:
             paragraph_context = nullcontext()
             
@@ -62,7 +62,7 @@ class ModelTrainer(BaseTrainer):
             trainer = cls.initialize(base_path = base_path , use_data = use_data , 
                                      stage = stage , resume = resume , selection = selection , **kwargs)
             
-            if base_path:
+            if base_path and check_operation:
                 last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
                 if skip:
                     Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
@@ -128,7 +128,8 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 
               start : int | None = None , end : int | None = None , **kwargs):
-        return cls.GO(title = f'Train Model of Module {module}' , module = module , 
+        title = f'Train Model of Module {module}' if module else 'Train Model'
+        return cls.GO(title = title , module = module , 
                       short_test = short_test , start = start , end = end , **kwargs)
     
     @classmethod

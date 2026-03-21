@@ -18,7 +18,7 @@ class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
 
-    def calc(self , account_df : pd.DataFrame , indent : int = 0 , vb_level : int = 1):
+    def calc(self , account_df : pd.DataFrame , indent : int = 0 , vb_level : Any = 1):
         with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account_df)
         return self
@@ -121,7 +121,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
     ]
 
     def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
-              add_lag = 1 , optim_config = None , indent : int = 0 , vb_level : int = 1):
+              add_lag = 1 , optim_config = None , indent : int = 0 , vb_level : Any = 1):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(add_lag = add_lag , optim_config = optim_config)
@@ -133,7 +133,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , 
-             indent : int = 0 , vb_level : int = 1 , **kwargs):
+             indent : int = 0 , vb_level : Any = 1 , **kwargs):
         self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , indent = indent , vb_level = vb_level)
         if self.total_account.empty:
             Logger.error(f'No accounts created for {self.test_name}!')

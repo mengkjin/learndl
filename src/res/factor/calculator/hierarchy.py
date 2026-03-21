@@ -1,7 +1,7 @@
 import pandas as pd
 
 from itertools import combinations
-from typing import Generator , Iterator , Type , Literal
+from typing import Generator , Iterator , Type , Literal , Any
 
 from .factor_calc import FactorCalculator
 
@@ -169,7 +169,7 @@ class StockFactorHierarchy:
         return cls().pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
-                              multi_thread = True , ignore_error = True , vb_level = 1 , **kwargs) -> dict[str , pd.Series]:
+                              multi_thread = True , ignore_error = True , vb_level : Any = 1 , **kwargs) -> dict[str , pd.Series]:
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None

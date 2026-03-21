@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 from typing import Any , Iterator
 
-from src.proj import Logger , Duration , CALENDAR , Dates
+from src.proj import Logger , Duration , CALENDAR , Dates , Proj
 from src.data.util import DataBlock
 
 from . import preprocessor as PrePro
@@ -36,8 +36,9 @@ class PreProcessorTask:
             yield blk , getattr(PrePro , f'PrePro_{blk.lower()}')()
     
     @classmethod
-    def main(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : int = 1 , 
+    def main(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : Any = 1 , 
              force_update : bool = False):
+        vb_level = Proj.vb.level(vb_level)
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)

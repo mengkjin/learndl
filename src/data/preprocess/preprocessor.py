@@ -2,6 +2,7 @@ import torch
 import numpy as np
 
 from abc import ABC , abstractmethod
+from typing import Any
 
 from src.proj import Proj
 from src.func.tensor import neutralize_2d , process_factor
@@ -21,8 +22,9 @@ class BaseTypePreProcessor(ABC):
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
         
-    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , indent = 0 , vb_level = 1 , **kwargs):
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , indent = 0 , vb_level : Any = 1 , **kwargs):
         blocks : dict[str,DataBlock] = {}
+        vb_level = Proj.vb.level(vb_level)
         for src_key , loader in self.block_loaders().items():
             blocks[src_key] = loader.load(start_dt , end_dt , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align(secid_align , date_align , inplace = True)
             secid_align = blocks[src_key].secid
@@ -151,7 +153,8 @@ class PrePro_week(BaseTypePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
-    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , indent = 0 , vb_level = 1 , **kwargs):
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , indent = 0 , vb_level : Any = 1 , **kwargs):
+        vb_level = Proj.vb.level(vb_level)
         if start_dt is not None and start_dt < 0: 
             start_dt = 2 * start_dt
         blocks : dict[str,DataBlock] = {}

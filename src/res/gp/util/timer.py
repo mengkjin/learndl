@@ -1,25 +1,25 @@
 import torch
 from datetime import datetime
 
-from typing import Literal, Callable
+from typing import Any , Literal, Callable
 import pandas as pd
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.res.gp.func import primas
 from .memory import MemoryManager
 
 class AccTimer:
-    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, vb_level : int = 2 , memory_check = False):
+    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, vb_level : Any = 2 , memory_check = False):
         self.key = key
         self.title = title.title()
         self.time_costs : list[float] = []
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
         if not title:
             self.paragraph = None
         elif timer_level != 5:
             self.paragraph = Logger.Paragraph(title , timer_level)
         else:
-            self.paragraph = Logger.Timer(title , enter_vb_level = vb_level , vb_level = vb_level)
+            self.paragraph = Logger.Timer(title , enter_vb_level = self.vb_level , vb_level = self.vb_level)
         self.memory_check = memory_check and torch.cuda.is_available()
 
     def __repr__(self) -> str:
@@ -82,18 +82,18 @@ class gpTimer:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , record = False , vb_level : int = 2) -> None:
+    def __init__(self , record = False , vb_level : Any = 2) -> None:
         self.initiate(record , vb_level)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'recording')
 
-    def initiate(self , record = False , vb_level : int = 2) -> None:
+    def initiate(self , record = False , vb_level : Any = 2) -> None:
         if self.initiated:
             return
         self.recording = record
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
         self.timers : dict[str, dict[str, AccTimer]] = {}
 
     def __repr__(self):

@@ -781,12 +781,12 @@ class ModelConfig(BaseModelConfig):
         return self.algo_config.boost_head_config
 
     @classmethod
-    def initialize(cls, base_path: ModelPath | Path | str | None, *, vb_level=2, min_key_len=-1, **kwargs):
+    def initialize(cls, base_path: ModelPath | Path | str | None, *, vb_level : Any = 2, min_key_len = -1, **kwargs):
         config = cls(base_path, **kwargs).start_model()
         config.print_out(vb_level=vb_level, min_key_len=min_key_len)
         return config
 
-    def process_parser(self, vb_level: int = 1):
+    def process_parser(self, vb_level : Any = 1):
         """
         stage:
             [-1] , if nn / boost then choose stage, else just data + test
@@ -803,7 +803,7 @@ class ModelConfig(BaseModelConfig):
             [1,2,3,...] , choose by model_index if is_resuming
         """
         if self.base_path:
-            vb_level = Proj.vb.inf
+            vb_level = 'never'
 
         self.parser_stage(self.options.stage, vb_level)
         self.parser_resume(self.options.resume, vb_level)
@@ -821,11 +821,11 @@ class ModelConfig(BaseModelConfig):
                 Logger.alert1(f"{self.base_path} is cleared")
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
-        self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , overwrite=self.short_test , vb_level = 'inf')
-        self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , overwrite=self.short_test , vb_level = 'inf')
-        self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , overwrite=self.short_test , vb_level = 'inf')
+        self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , overwrite=self.short_test , vb_level = 'never')
+        self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , overwrite=self.short_test , vb_level = 'never')
+        self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , overwrite=self.short_test , vb_level = 'never')
         if self.boost_head_config:
-            self.boost_head_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head_config.model_module}") , overwrite=False , vb_level = 'inf')
+            self.boost_head_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head_config.model_module}") , overwrite=False , vb_level = 'never')
         return self
 
     @property
@@ -959,7 +959,7 @@ class ModelConfig(BaseModelConfig):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
-    def parser_stage(self, value=-1, vb_level: int = 1):
+    def parser_stage(self, value=-1, vb_level: Any = 1):
         """
         parser stage queue
         value:
@@ -993,7 +993,7 @@ class ModelConfig(BaseModelConfig):
         Logger.note("--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), stage_queue))),
                     color="lightblue", vb_level=vb_level)
 
-    def parser_resume(self, value=-1, vb_level: int = 1):
+    def parser_resume(self, value=-1, vb_level: Any = 1):
         """
         parser resume flag
         value:
@@ -1024,7 +1024,7 @@ class ModelConfig(BaseModelConfig):
         self.is_resuming = is_resuming
         Logger.note(f"Confirm Resume Training!" if is_resuming else "Start Training New!", vb_level=vb_level)
 
-    def parser_select(self, value=-1, vb_level: int = 1):
+    def parser_select(self, value=-1, vb_level: Any = 1):
         """
         parse model_name selection if model_name dirs exists
         value:
@@ -1080,7 +1080,7 @@ class ModelConfig(BaseModelConfig):
             Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")
             raise Exception(f"{self.base_path} resumable but choose not to resume!")
 
-    def print_out(self, color: str | None = None, vb_level: int = 2, min_key_len: int = -1):
+    def print_out(self, color: str | None = None, vb_level: Any = 2, min_key_len: int = -1):
         info_strs: list[tuple[int, str, str]] = []  # indent , key , value
 
         info_strs.append((0, "Module", f"{self.full_module_name}"))

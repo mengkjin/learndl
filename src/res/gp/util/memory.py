@@ -1,5 +1,5 @@
 import torch
-from src.proj import Logger
+from src.proj import Logger , Proj
 import numpy as np
 from typing import Any
 
@@ -12,17 +12,17 @@ class MemoryManager():
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , device = None , vb_level : int = 2 , *args , **kwargs) -> None:
+    def __init__(self , device = None , vb_level : Any = 2 , *args , **kwargs) -> None:
         self.initiate(device , vb_level , *args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'cuda_avail')
 
-    def initiate(self , device : torch.device | None = None , vb_level : int = 2) -> None:
+    def initiate(self , device : torch.device | None = None , vb_level : Any = 2) -> None:
         if self.initiated:
             return
-        self.vb_level = vb_level
+        self.vb_level = Proj.vb.level(vb_level)
         if device is not None:
             self.device = device
             self.gmem_total = self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit if self.device.type == 'cuda' else 0.

@@ -1,7 +1,7 @@
 import inspect
-from typing import Type
+from typing import Any , Type
 
-from src.proj import Logger , Proj
+from src.proj import Logger
 from src.res.model.util import BaseCallBack , BaseTrainer 
 from . import monitor, fit, test , nnspecific
 
@@ -12,13 +12,13 @@ class CallBackManager(BaseCallBack):
         super().__init__(trainer)   
         self.callbacks = self.get_callbacks(trainer)
         
-    def at_enter(self , hook , vb_level : int = Proj.vb.max):
+    def at_enter(self , hook , vb_level : Any = 'max'):
         [cb.at_enter(hook , vb_level) for cb in self.callbacks]
-    def at_exit(self, hook , vb_level : int = Proj.vb.max):
+    def at_exit(self, hook , vb_level : Any = 'max'):
         [cb.at_exit(hook , vb_level) for cb in self.callbacks]
 
     @classmethod
-    def initialize(cls , trainer : BaseTrainer , * , vb_level = 2 , min_key_len = -1):
+    def initialize(cls , trainer : BaseTrainer , * , vb_level : Any = 2 , min_key_len = -1):
         cbm = cls(trainer)
         infos = [cb.get_info() for cb in cbm.callbacks]
         infos_dict = {name:f'({param}); {doc}' if doc else f'({param})' for name , param , doc in infos}

@@ -28,9 +28,9 @@ class BasicTestResult(BaseCallBack):
     @property
     def path_result(self): return self.config.base_path.rslt('basic_test.xlsx')
     
-    def save_test_df(self , vb_level : int = 3):
+    def save_test_df(self , vb_level : Any = 3):
         df = self.get_test_df()
-        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 'inf')
+        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 'never')
         Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
 
     def get_test_df(self) -> pd.DataFrame:
@@ -108,7 +108,7 @@ class BasicTestResult(BaseCallBack):
                 df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
                 df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
                 rslt[f'{model_num}'] = df
-            [DB.save_df(df , self.snap_folder.joinpath(f'{key}.feather') , overwrite = True , vb_level = 'inf') for key,df in rslt.items()]
+            [DB.save_df(df , self.snap_folder.joinpath(f'{key}.feather') , overwrite = True , vb_level = 'never') for key,df in rslt.items()]
             dfs_to_excel(rslt , self.path_result, print_prefix = 'Test Summary')
 
 
@@ -116,14 +116,14 @@ class DetailedAlphaAnalysis(BaseCallBack):
     '''factor and portfolio level analysis'''
     CB_ORDER : int = 50
     CB_KEY_PARAMS = ['tasks']
-    TABLE_VB_LEVELS = {'factor@frontface':Proj.vb.max}
+    TABLE_VB_LEVELS = {'factor@frontface':'max'}
     FIGURE_VB_LEVELS = {
         'factor@ic_curve@best.market': 2 , 
-        'factor@group_return@best':Proj.vb.max ,
+        'factor@group_return@best':'max' ,
         't50@drawdown@best.univ':2 ,
         'screen@drawdown@best.univ':2 ,
         'reinforce@drawdown@best.univ':2 ,
-        'revscreen@drawdown@best.univ':Proj.vb.inf , # never display
+        'revscreen@drawdown@best.univ':'never' , # never display
     }
 
     def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'reinforce'] , **kwargs) -> None:
@@ -149,9 +149,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def path_result_plot(self): return self.config.base_path.rslt('detailed_alpha_plot.pdf')
     @property
-    def table_vb_levels(self) -> dict[str,int]: return {k:v for k,v in self.TABLE_VB_LEVELS.items() if k in self.test_results}
+    def table_vb_levels(self) -> dict[str,Any]: return {k:v for k,v in self.TABLE_VB_LEVELS.items() if k in self.test_results}
     @property
-    def figure_vb_levels(self) -> dict[str,int]: return {k:v for k,v in self.FIGURE_VB_LEVELS.items() if k in self.test_figures}
+    def figure_vb_levels(self) -> dict[str,Any]: return {k:v for k,v in self.FIGURE_VB_LEVELS.items() if k in self.test_figures}
     @property
     def factor_names(self) -> list[str] | Any: 
         return self.trainer.model_submodels
@@ -195,7 +195,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
             raise ValueError(f'Invalid resuming test fmp option: {Proj.Conf.Model.TRAIN.resume_test_fmp}')
 
 
-    def factor_test(self , indent : int = 0 , vb_level : int = 2):
+    def factor_test(self , indent : int = 0 , vb_level : Any = 2):
         with Logger.Paragraph('Factor Perf Test' , 3):
             with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor_for_factor_test()
@@ -215,7 +215,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
-    def fmp_test(self , indent : int = 0 , vb_level : int = 2):
+    def fmp_test(self , indent : int = 0 , vb_level : Any = 2):
         with Logger.Paragraph('Factor FMP Test' , 3):
             with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
                 factor = self.get_factor_for_fmp_test()

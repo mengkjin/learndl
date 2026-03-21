@@ -1,3 +1,5 @@
+from typing import Any
+
 from src.proj import CALENDAR , Logger , Proj , Dates
 from .trading_port import BacktestPort
 
@@ -13,7 +15,7 @@ class BacktestPortfolioManager:
         return tp.build(date).analyze(start = start , end = end , **kwargs)
 
     @classmethod
-    def rebuild(cls , port_name : str , date : int | None = None , export = True , indent : int = 1 , vb_level : int = 2):
+    def rebuild(cls , port_name : str , date : int | None = None , export = True , indent : int = 1 , vb_level : Any = 2):
         tp = BacktestPort.load(port_name)
         date = date if date is not None else CALENDAR.updated()
         tp.rebuild(date , export = export , indent = indent , vb_level = vb_level)
@@ -21,13 +23,14 @@ class BacktestPortfolioManager:
         return tp
 
     @classmethod
-    def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : int = 1):
-        Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
+    def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
+        vb_level = Proj.vb.level(vb_level)
+        Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         assert not reset_ports or all([port in BacktestPort.candidate_ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
-        updated_ports = {name:BacktestPort.load(name).build(date , indent = indent + 1 , vb_level = Proj.vb.max) 
+        updated_ports = {name:BacktestPort.load(name).build(date , indent = indent + 1 , vb_level = 'max') 
                          for name in BacktestPort.candidate_ports}
         updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
             

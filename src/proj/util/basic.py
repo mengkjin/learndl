@@ -1,4 +1,4 @@
-from typing import Any, Callable , Iterable , Literal
+from typing import Any, Callable , Iterable
 from pathlib import Path
 from pprint import pformat
 import os
@@ -129,7 +129,7 @@ class FlattenDict:
     def to_dict(self):
         return self.flattened
 
-    def dump_yaml(self, path: Path , overwrite: bool = False , vb_level: int | Literal['max','min','inf'] = 1):
+    def dump_yaml(self, path: Path , overwrite: bool = False , vb_level: Any = 1):
         if path.exists() and not overwrite:
             Logger.alert1(f'{path} already exists' , vb_level = vb_level)
             return

@@ -2,7 +2,7 @@ import functools , time , random
 import portalocker
 
 from datetime import datetime
-from typing import Callable
+from typing import Any, Callable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
@@ -11,7 +11,7 @@ __all__ = ['ScriptLock' , 'ScriptLockMultiple']
 class ScriptLock:
     LOCK_DIR = PATH.runtime.joinpath('script_lock')
     
-    def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , vb_level : int = 1):
+    def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , vb_level : Any = 1):
         """
         init script lock
         Args:
@@ -98,7 +98,7 @@ class ScriptLockMultiple:
     LOCK_DIR = PATH.runtime.joinpath('script_lock_multiple')
     
     def __init__(self, lock_name: str, lock_num: int = 1, timeout: int | None = None, 
-                 wait_time: int = 1, vb_level : int = 1):
+                 wait_time: int = 1, vb_level : Any = 1):
         """
         initialize multiple lock manager
         Args:

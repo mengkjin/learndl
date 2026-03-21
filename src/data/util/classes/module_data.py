@@ -97,11 +97,12 @@ class ModuleData:
                    y_labels : list[str] | None = None , 
                    predict : bool = False , dtype : str | Any = torch.float , 
                    save_upon_loading : bool = True , 
-                   vb_level = 2):
+                   vb_level : Any = 2):
         '''
         load all x/y data if input_type is data or factor
         if predict is True, only load recent data
         '''
+        vb_level = Proj.vb.level(vb_level)
         if dtype is None: 
             dtype = torch.float
         if isinstance(dtype , str): 
@@ -138,7 +139,7 @@ class ModuleData:
         data.y.align_feature(y_labels , inplace = True)
         return data
 
-    def load_factor(self , factor_names : list[str] | None , start_dt : int | None = None , end_dt : int | None = None , vb_level = 2):
+    def load_factor(self , factor_names : list[str] | None , start_dt : int | None = None , end_dt : int | None = None , vb_level : Any = 2):
         '''load factor data'''
         if not factor_names:
             return self
@@ -147,7 +148,7 @@ class ModuleData:
         end_dt = min(end_dt or self.date[-1] , self.date[-1])
         with Logger.Timer(f'Load {factor_title} ({start_dt} - {end_dt})' , vb_level = vb_level):
             from src.data.loader import FactorLoader
-            self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = Proj.vb.inf).align_secid_date(self.secid , self.date , inplace = True)
+            self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 'never').align_secid_date(self.secid , self.date , inplace = True)
         return self
 
     @staticmethod
@@ -192,7 +193,7 @@ class ModuleData:
         return PATH.datacache.joinpath(data_cache_key , f'{date}.pt')
 
     @classmethod
-    def datacache_load(cls , date : int | None , data_type_list : list[str] , y_labels : list[str] | None = None , vb_level = 2):
+    def datacache_load(cls , date : int | None , data_type_list : list[str] , y_labels : list[str] | None = None , vb_level : Any = 2):
         if date is None:
             return None
         path = cls.datacache_path(date , data_type_list)
