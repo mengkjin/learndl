@@ -47,31 +47,35 @@ class ScheduleConfig:
 
     @classmethod
     def get_config_dict(cls , base_path: ModelPath | None, schedule_name: str | None, model_name: str | None) -> FlattenDict:
-        name = schedule_name or model_name
-        d = get_config_dict(cls.find_path(base_path, name))
-        if name and d:
-            Logger.alert1(f'Using schedule name "{name}" to load config')
-            if 'model.name' in d:
-                assert d['model.name'] == name, f"model.name {d['model.name']} is not the same as model_name {name}"
+        use_name = schedule_name or model_name
+        config_path = cls.find_path(base_path, use_name)
+        config = get_config_dict(config_path)
+        if not base_path and config:
+            Logger.alert1(f'Using schedule name "{use_name}" to load config')
+        if use_name and config:
+            if 'model.name' in config:
+                assert config['model.name'] == use_name, f"model.name {config['model.name']} is not the same as model_name {use_name}"
             else:
-                d.update({'model.name': name} , relevant_only = False)
-        return d
+                config.update({'model.name': use_name} , relevant_only = False)
+        return config
 
     @classmethod
     def find_path(cls , base_path: ModelPath | None, name: str | None) -> Path | None:
-        if base_path is None and not name:
-            return None
-        elif base_path and (conf_path := base_path.conf_file("schedule")).exists():
-            return conf_path
+        if base_path:
+            config_path = base_path.conf_file("schedule")
+            return config_path if config_path.exists() else None
         elif not name:
             return None
         else:
             schedule_path_0 = PATH.conf.joinpath("schedule").joinpath(f"{name}.yaml")
             schedule_path_1 = PATH.shared_schedule.joinpath(f"{name}.yaml")
-            assert schedule_path_0.exists() or schedule_path_1.exists(), f"{name} does not exist in config/schedule or .local_resources/shared/schedule_model/schedule"
             assert not (schedule_path_0.exists() and schedule_path_1.exists()), f"{name} exists in both config/schedule and .local_resources/shared/schedule_model/schedule"
-            path = schedule_path_0 if schedule_path_0.exists() else schedule_path_1
-            return path
+            if schedule_path_0.exists():
+                return schedule_path_0
+            elif schedule_path_1.exists():
+                return schedule_path_1
+            else:
+                return None
 
 class BaseModelConfig:
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
@@ -127,10 +131,10 @@ class BaseModelConfig:
         model_module_candidate = {
             "base_path": self.base_path.full_module_name,
             "force_module": str(self.force_module).lower().replace(" ", "").replace("/", "@") if self.force_module else None,
-            "schedule_name": self.schedule_config.get("model.module", None),
+            "schedule": self.schedule_name and self.schedule_config.get("model.module", None),
         }
         assert sum(bool(v) for v in model_module_candidate.values()) <= 1, (
-            f"only one of base_path , force_module , schedule_name can be provided, but got {model_module_candidate}"
+            f"only one of base_path , force_module , schedule can be provided, but got {model_module_candidate}"
         )
         model_modules = [v for v in model_module_candidate.values() if v]
         if model_modules:

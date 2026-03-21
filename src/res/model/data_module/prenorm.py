@@ -65,4 +65,7 @@ class PrenormOperator:
         1.divlast: divide by the last value, get seq-mormalized x
         2.histnorm: normalized by history avg and std
         """
-        return self.prenorms[key].prenorm(x , self.histnorms.get(key , None))
+        if key in self.histnorms:
+            return self.prenorms[key].prenorm(x , self.histnorms.get(key , None))
+        else:
+            return x
