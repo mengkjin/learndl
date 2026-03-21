@@ -4,11 +4,12 @@ type: data # [data , hidden , factor , combo] , specify below
 filter.secid: null # random.200 , random.1000 , ...
 filter.date: null # 20241101-20250331 (yyyyMMdd-yyyyMMdd)
 
-sequence.lens: {day: 30, 30m: 30, style: 30, indus: 30 , factor: 1, hidden: 1} # others will be 1
-sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1} # others will be 1
+sequence.lens: {day: 30, 30m: 30, style: 30, indus: 30 , factor: 1, hidden: 1, week: 50} # others will be 1
+sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1, week: 5} # others will be 1
 
-data.prenorm:   # should the day be prenormalized? recommendation : not to change (also apply to hidden and factor)
-  day: {'divlast' : True  , 'histnorm' : True}
+# should the data be prenormalized? recommendation : not to change (also apply to hidden and factor)
+data.prenorm.day: {'divlast' : True  , 'histnorm' : True}
+data.prenorm.week: {'channelnorm' : True}
 
 data.types: 30m # ['day+30m' , 30m , day , ...] , use if input_type is data
 

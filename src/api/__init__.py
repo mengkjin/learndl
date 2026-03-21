@@ -5,3 +5,4 @@ from .trading import TradingAPI
 from .notification import NotificationAPI
 from .summary import SummaryAPI
 from .update import UpdateAPI
+from .tsboard import launch_tensorboard

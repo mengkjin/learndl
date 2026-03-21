@@ -145,7 +145,7 @@ class DataBlock(Stock4D):
         
     @staticmethod
     def guess_fillna(name : str , fillna : Literal['guess'] | bool | None = 'guess' , 
-                     excl : tuple[str,...] = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')) -> bool:
+                     excl : tuple[str,...] = ('y','day','15m','min','30m','60m','week')) -> bool:
         if fillna == 'guess':
             return name.startswith(excl) == 0
         else:
@@ -299,28 +299,20 @@ class DataBlock(Stock4D):
         return raw_path
 
     @classmethod
-    def load_preprocess(
-        cls , keys : list[str] | str , predict = False , 
-        fillna : Literal['guess'] | bool | None = 'guess' , intersect_secid = True ,
-        start_dt = None , end_dt = None , dtype : str | Any = torch.float , vb_level = 2 , **kwargs
-    ) -> dict[str,'DataBlock']:
-        if isinstance(keys , str):
-            keys = [keys]
-        fillnas = {key:cls.guess_fillna(cls.path_preprocess(key , predict).stem.lower() , fillna) for key in keys}
-        
-        block_title = f'{len(keys)} DataBlocks' if len(keys) > 3 else f'DataBlock [{",".join(keys)}]'
-        with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
-            blocks : dict[str,'DataBlock'] = {}
-            for key in keys:
-                block = cls.load_dump(category = 'preprocess' , predict = predict , preprocess_key = key)
-                if predict and key == 'y' and not block.empty:
-                    block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
-                blocks[key] = block
+    def load_preprocess(cls , key : str , predict = False , vb_level = 2 , **kwargs) -> 'DataBlock':
+        block = cls.load_dump(category = 'preprocess' , predict = predict , preprocess_key = key)
+        if predict and key == 'y' and not block.empty:
+            block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
+        return block
 
+    @classmethod
+    def blocks_align(cls , blocks : dict[str,'DataBlock'] , * , start_dt = None , end_dt = None ,
+                     intersect_secid = True , inplace : Literal[True] = True , vb_level = 2) -> dict[str,'DataBlock']:
         if len(blocks) <= 1:
             return blocks
-
-        with Logger.Timer(f'Align {block_title} (predict={predict})' , vb_level = vb_level):
+        
+        block_title = f'{len(blocks)} DataBlocks' if len(blocks) > 3 else f'DataBlock [{",".join(blocks.keys())}]'
+        with Logger.Timer(f'Align {block_title}' , vb_level = vb_level):
             # sligtly faster than .align(secid = secid , date = date)
             if intersect_secid:  
                 newsecid = index_merge([blk.secid for blk in blocks.values()] , method = 'intersect')
@@ -332,9 +324,17 @@ class DataBlock(Stock4D):
             max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
             newdate = newdate[newdate >= max_min_date]
             
-            for key , blk in blocks.items():
-                blk.align_secid_date(newsecid , newdate , inplace = True).ffill(fillnas[key]).to(dtype)
+            for blk in blocks.values():
+                blk.align_secid_date(newsecid , newdate , inplace = inplace)
 
+        return blocks
+
+    @classmethod
+    def blocks_fillna(cls , blocks : dict[str,'DataBlock'] , * , 
+                      fillna : Literal['guess'] | bool | None = 'guess') -> dict[str,'DataBlock']:
+        fillnas = {key:cls.guess_fillna(key , fillna) for key in blocks}
+        for key , blk in blocks.items():
+            blk.ffill(fillnas[key])
         return blocks
 
     @classmethod
@@ -386,7 +386,7 @@ class DataBlock(Stock4D):
                 block = block.merge_others(new_block , inplace = True)
             if (len(update_dates) > 0 and loaded) or not cls.path_raw(db_src , db_key).exists():
                 block.save_dump()
-            block = block.align(feature = feature , inplace = True)
+            block = block.align(date = dates , feature = feature , inplace = True)
         else:
             block = cls.load_from_db(db_src , db_key , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
         return block
@@ -465,8 +465,9 @@ class DataBlockNorm:
     std : torch.Tensor
     dtype : Any = None
 
+    # calculation method for histnorm, do not change for training. Instead, change the prenorm method in configs/model/input.yaml
     DIVLAST  : ClassVar[list[str]] = ['day']
-    HISTNORM : ClassVar[list[str]] = ['day','15m','min','30m','60m','week']
+    HISTNORM : ClassVar[list[str]] = ['day','15m','min','30m','60m']
 
     def __post_init__(self):
         self.avg = self.avg.to(self.dtype)
@@ -481,7 +482,7 @@ class DataBlockNorm:
         if predict or (key not in cls.HISTNORM): 
             return None
 
-        default_maxday = {'day' : 60}
+        default_maxday = {'day' : 60 , 'week' : 60}
         maxday = default_maxday.get(key , 1)
 
         date_slice = np.repeat(True , len(block.date))
@@ -504,7 +505,7 @@ class DataBlockNorm:
         x_endpoint = x.shape[1]-1 + step_day * np.arange(-len_step + 1 , 1)
         x_div = torch.ones(len(secid) , len_step , 1 , len(feat)).to(x)
         re_shape = (*x_div.shape[:2] , -1)
-        if key in cls.DIVLAST: # divide by endpoint , day dataset
+        if key in cls.DIVLAST: # divide by endpoint , day dataset only
             x_div.copy_(x[:,x_endpoint,-1:])
             
         nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)

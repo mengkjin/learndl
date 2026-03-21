@@ -1084,7 +1084,10 @@ torch._logging.set_logs(dynamo=False)  # 关闭
 注意事项
 torch._logging 的 API 可能在未来调整，建议查阅当前版本的文档。
 
-在 Jupyter Notebook 中，日志会输出到启动 notebook 的终端或内核日志中，可能不会直接显示在 cell 输出里。你可以通过 import sys; print('...', file=sys.stderr) 验证，或临时使用 os.environ 方法重启内核。
+在 Jupyter Notebook 中，日志会输出到启动 notebook 的终端或内核日志中，可能不会直接显示在 cell 输出里。你可以通过 
+import sys
+sys.stderr('...') 
+验证，或临时使用 os.environ 方法重启内核。
 
 总结
 你完全可以在 Python 中动态控制 torch.compile 的日志输出，推荐使用 torch._logging.set_logs 方法，它提供了最大的灵活性。通过日志，你可以判断函数是否有图断裂、是否频繁重编译，从而决定是否需要改写代码。

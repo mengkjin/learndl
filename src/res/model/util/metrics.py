@@ -2,15 +2,12 @@ import numpy as np
 import pandas as pd
 import torch
 
-from pathlib import Path
 from torch import nn , Tensor
 from typing import Any , Callable , Literal
 
 from src.proj import Logger , Proj
-from src.proj.func import dfs_to_excel
 from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 
-from .model_path import ModelPath
 from .batch import BatchData
 
 class Metrics:
@@ -20,7 +17,6 @@ class Metrics:
     
     def __init__(self , 
                  module_type = 'nn' , nn_category = None ,
-                 model_base_path : ModelPath | Path | str | None = None ,
                  criterion_loss : dict[str,dict[str,Any]] = {'mse':{}} , 
                  criterion_accuracy : dict[str,dict[str,Any]] = {'spearman':{}} , 
                  criterion_multilosses : dict[str,Any] = {} ,
@@ -30,7 +26,6 @@ class Metrics:
         
         self.module_type = module_type
         self.nn_category = nn_category
-        self.model_base_path = ModelPath(model_base_path)
         self.criterion_loss = criterion_loss
         self.criterion_accuracy = criterion_accuracy
         self.criterion_multilosses = criterion_multilosses
@@ -38,7 +33,7 @@ class Metrics:
         self.batch_metrics = BatchMetrics()
         self.epoch_metrics = EpochMetrics()
         self.attempt_metrics = AttemptMetrics()
-        self.model_metrics = ModelMetrics(self.model_base_path)
+        self.model_metrics = ModelMetrics()
 
     def __repr__(self):
         return f'{self.__class__.__name__}(loss={self.criterion_loss},metric={self.criterion_accuracy})'
@@ -549,9 +544,8 @@ class AttemptMetrics(AggregatedMetrics):
         return min(metric_list) if metric == 'loss' else max(metric_list)
 
 class ModelMetrics(AggregatedMetrics):
-    def __init__(self , model_base_path : ModelPath | Path | str | None = None):
+    def __init__(self):
         super().__init__(['train_accuracies' , 'valid_accuracies' , 'test_accuracies' , 'train_losses' , 'valid_losses' , 'test_losses'])
-        self.model_base_path = ModelPath(model_base_path)
 
     def new(self , stage : Literal['fit' , 'test' , 'predict'] = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):
         super().new(stage = stage , model_num = model_num , model_date = model_date , submodel = submodel)
@@ -570,8 +564,6 @@ class ModelMetrics(AggregatedMetrics):
         super().close()
 
     def export_metrics(self):
-        if not self.model_base_path or self.key['stage'] != 'fit':
-            return
         dfs = {name : self.get_table(name) for name in self.metric_names}
         dfs = {name : df.reset_index(drop = False).drop(columns = ['stage','model_num','model_date','submodel','dataset']) 
                for name , df in dfs.items() if not df.empty}
@@ -586,9 +578,7 @@ class ModelMetrics(AggregatedMetrics):
             summary = summary.loc[:,columns].reset_index(drop = False)
             for attempt in summary['attempt'].unique():
                 dfs[f'attempt_{attempt}'] = summary.query('attempt == @attempt').drop(columns = ['attempt'])
-            path = self.model_base_path.snapshot('fitting_metrics' , self.model_name)
-            path.parent.mkdir(parents = True , exist_ok = True)
-            dfs_to_excel(dfs , path , print_prefix = 'Model Fitting Metrics' , vb_level = 'max')
+        return dfs
 
     @property
     def model_name(self) -> str:

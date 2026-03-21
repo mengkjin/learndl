@@ -114,7 +114,12 @@ class ModuleData:
             data = cls.datacache_load(last_date , data_type_list , y_labels , vb_level = vb_level)
 
         if data is None:
-            blocks = DataBlock.load_preprocess(['y' , *data_type_list], predict , dtype = dtype , vb_level = vb_level)
+            block_title = f'{len(data_type_list) + 1} DataBlocks' if len(data_type_list) > 3 else f'DataBlock [{",".join(['y' , *data_type_list])}]'
+            with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
+                blocks = {key:DataBlock.load_preprocess(key, predict , dtype = dtype , vb_level = vb_level) for key in ['y' , *data_type_list]}
+            with Logger.Timer(f'Align {block_title} (predict={predict})' , vb_level = vb_level):
+                blocks = DataBlock.blocks_align(blocks , vb_level = vb_level + 1)
+            blocks = DataBlock.blocks_fillna(blocks)
             norms  = DataBlock.load_preprocess_norms(['y' , *data_type_list], predict , dtype = dtype)
 
             y : DataBlock = blocks['y']

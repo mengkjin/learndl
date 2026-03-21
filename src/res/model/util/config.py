@@ -1,6 +1,7 @@
-import os, random, shutil, torch
+import os, random, torch
 import numpy as np
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Type
 
@@ -28,64 +29,58 @@ def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> Fla
     else:
         return FlattenDict.from_input(input , keep_nested = keep_nested)
 
-def schedule_path(base_path: ModelPath | None, name: str | None) -> Path | None:
-    if not name:
-        return None
-    if base_path:
-        path = base_path.conf("schedule").joinpath(f"{name}.yaml")
-    else:
-        schedule_path_0 = PATH.conf.joinpath("schedule").joinpath(f"{name}.yaml")
-        schedule_path_1 = PATH.shared_schedule.joinpath(f"{name}.yaml")
-        assert schedule_path_0.exists() or schedule_path_1.exists(), (
-            f"{name} does not exist in config/schedule or .local_resources/shared/schedule_model/schedule"
-        )
-        assert not (schedule_path_0.exists() and schedule_path_1.exists()), (
-            f"{name} exists in both config/schedule and .local_resources/shared/schedule_model/schedule"
-        )
-        path = schedule_path_0 if schedule_path_0.exists() else schedule_path_1
-    return path
+class ScheduleConfig:
+    def __init__(self, base_path: ModelPath | None = None, schedule_name: str | None = None, model_name: Any | None = None):
+        self.base_path = base_path
+        self.schedule_name = schedule_name
+        self.model_name = model_name if isinstance(model_name, str) else None
+        self.Param = self.get_config_dict(self.base_path, self.schedule_name , self.model_name)
 
-def schedule_config(base_path: ModelPath | None, name: str | None):
-    # schedule configs are used to override the train config
-    if base_path:
-        schedules = list(base_path.conf("schedule").glob("*.yaml"))
-        assert len(schedules) <= 1, f"multiple schedules found: {schedules}"
-        name = schedules[0].stem if schedules else None
+    def __getitem__(self, key: str) -> Any:
+        return self.Param[key]
 
-    path = schedule_path(base_path, name)
-    p = PATH.read_yaml(path) if path and path.exists() else {}
+    def __setitem__(self, key: str, value: Any):
+        self.Param[key] = value
 
-    model_conf: dict[str, Any] = p.get("model", {})
-    algo_conf: dict[str, Any] = p.get("algo", {})
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.Param.get(key, default)
 
-    schedule_conf = {"model": model_conf, "algo": algo_conf}
-    return schedule_conf
+    @classmethod
+    def get_config_dict(cls , base_path: ModelPath | None, schedule_name: str | None, model_name: str | None) -> FlattenDict:
+        name = schedule_name or model_name
+        d = get_config_dict(cls.find_path(base_path, name))
+        if name and d:
+            Logger.alert1(f'Using schedule name "{name}" to load config')
+            if 'model.name' in d:
+                assert d['model.name'] == name, f"model.name {d['model.name']} is not the same as model_name {name}"
+            else:
+                d.update({'model.name': name} , relevant_only = False)
+        return d
 
-def copy_file(source: Path | None, target: Path | None, overwrite=False):
-    if (
-        source is None
-        or not source.exists()
-        or target is None
-        or target == source
-        or (target.exists() and not overwrite)
-    ):
-        return
-    assert source.is_file(), f"{source} is not a file"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, target)
+    @classmethod
+    def find_path(cls , base_path: ModelPath | None, name: str | None) -> Path | None:
+        if base_path is None and not name:
+            return None
+        elif base_path and (conf_path := base_path.conf_file("schedule")).exists():
+            return conf_path
+        elif not name:
+            return None
+        else:
+            schedule_path_0 = PATH.conf.joinpath("schedule").joinpath(f"{name}.yaml")
+            schedule_path_1 = PATH.shared_schedule.joinpath(f"{name}.yaml")
+            assert schedule_path_0.exists() or schedule_path_1.exists(), f"{name} does not exist in config/schedule or .local_resources/shared/schedule_model/schedule"
+            assert not (schedule_path_0.exists() and schedule_path_1.exists()), f"{name} exists in both config/schedule and .local_resources/shared/schedule_model/schedule"
+            path = schedule_path_0 if schedule_path_0.exists() else schedule_path_1
+            return path
 
-class BaseConfig:
+class BaseModelConfig:
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
     REQUIRED_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "required.yaml"))
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
 
     def __init__(
-        self,
-        base_path: ModelPath | Path | str | None,
-        *,
-        module: str | None = None,
-        schedule_name: str | None = None,
-        override=None,
+        self, base_path: ModelPath | Path | str | None, *,
+        module: str | None = None, schedule_name: str | None = None, override=None,
         **kwargs,
     ):
         self.base_path = ModelPath(base_path)
@@ -111,23 +106,28 @@ class BaseConfig:
     def __setitem__(self, key: str, value: Any):
         self.Param[key] = value
 
+    @property
+    def Param(self):
+        return self._model_param
+
+    @Param.setter
+    def Param(self, value: FlattenDict):
+        self._model_param = value
+
     def load_params(self):
-        if (self.base_path and not self.base_path.is_null_model) and (conf_file := self.base_path.conf_file("model")).exists():
-            self.train_param = get_config_dict(conf_file)
+        if (self.base_path and not self.base_path.is_null_model and not self.short_test) and (conf_file := self.base_path.conf_file("model")).exists():
+            self.Param = get_config_dict(conf_file)
         else:
-            config_files = [target if target.exists() else source for source, target in zip(self.source_conf_files(), self.target_conf_files())]
-            self.train_param = get_config_dict(config_files)
-        if (self.base_path and not self.base_path.is_null_model) and (schedule_path := self.base_path.conf_file("schedule")).exists():
-            self.schedule_conf = get_config_dict(schedule_path)
-        else:
-            self.schedule_conf = get_config_dict(schedule_config(self.base_path, self.schedule_name))
+            self.Param = get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
+        model_name = ('' if self.force_module else self.Param['model.name']) or ''
+        self.schedule_config = ScheduleConfig(self.base_path, self.schedule_name , model_name)
         return self
 
     def override_params(self):
         model_module_candidate = {
             "base_path": self.base_path.full_module_name,
             "force_module": str(self.force_module).lower().replace(" ", "").replace("/", "@") if self.force_module else None,
-            "schedule_name": self.schedule_conf["model"].get("model.module", None),
+            "schedule_name": self.schedule_config.get("model.module", None),
         }
         assert sum(bool(v) for v in model_module_candidate.values()) <= 1, (
             f"only one of base_path , force_module , schedule_name can be provided, but got {model_module_candidate}"
@@ -139,18 +139,21 @@ class BaseConfig:
         # deal with short_test given short_test model path / override / should be short_test
         if self.base_path and self.base_path.is_short_test:
             self.override["env.short_test"] = True
-        else:
-            if (short_test := self.override.pop("short_test", None)) is not None:
-                self.override["env.short_test"] = short_test
-            if self.should_be_short_test and ("env.short_test" not in self.override):
-                self.override["env.short_test"] = True
-
-        self.train_param.update(self.schedule_conf["model"])
+        elif (short_test := self.override.pop("short_test", None)) is not None:
+            self.override["env.short_test"] = short_test
+        elif self.should_be_short_test and ("env.short_test" not in self.override):
+            self.override["env.short_test"] = True
+        if "env.short_test" in self.override:
+            self.Param['env.short_test'] = self.override.pop("env.short_test")
         if self.short_test:
-            self.train_param.update(self.train_param.get("conditional.short_test", {}) , relevant_only = True)
+            self.Param.update(self.Param.get("conditional.short_test", {}))
+
+        self.Param.update(self.schedule_config.Param)
+
         if self.model_module == "transformer":
-            self.train_param.update(self.train_param.get("conditional.transformer", {}) , relevant_only = True)
-        self.train_param.update(self.override , relevant_only = True)
+            self.Param.update(self.Param.get("conditional.transformer", {}))
+        
+        self.Param.update(self.override)
         return self
 
     def check_validity(self):
@@ -177,7 +180,7 @@ class BaseConfig:
         # check nn_datatype is set correctly
         nn_datatype = AlgoModule.nn_datatype(self.model_module)
         if nn_datatype:
-            self["input.data.types"] = nn_datatype
+            self.input_data_types = nn_datatype
 
         # check submodels is set correctly
         if self.module_type != "nn" or self.boost_head:
@@ -225,35 +228,18 @@ class BaseConfig:
             full_name = f"st@{full_name}"
         return full_name
 
-    def generate_model_param(self):
-        model_param = ModelParam(
+    def generate_algo_config(self):
+        model_param = AlgoConfig(
             self.base_path,
             module=self.model_module,
             boost_head=self.boost_head,
             short_test=self.short_test,
-            schedule_conf=self.schedule_conf,
-            override={k: v for k, v in self.override.items() if k not in self.train_param.keys()},
+            schedule_config=self.schedule_config,
+            override={k: v for k, v in self.override.items() if k not in self.Param.keys()},
         ).expand()
         # reversely update specific params in model_param to self.Param
-        self.train_param.update(model_param.Param , relevant_only = True)
+        self.Param.update(model_param.Param)
         return model_param
-
-    def source_conf_files(self) -> list[Path]:
-        return [PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST]
-
-    def target_conf_files(self) -> list[Path]:
-        return [self.base_path.conf_file("model", cfg) for cfg in self.CONFIG_LIST]
-
-    def copy_files(self, overwrite=False):
-        # for source, target in zip(self.source_conf_files(), self.target_conf_files()):
-        #     copy_file(source, target, overwrite)
-        # copy_file(
-        #     schedule_path(None, self.schedule_name),
-        #     schedule_path(self.base_path, self.schedule_name),
-        #     overwrite,
-        # )
-        self.train_param.dump_yaml(self.base_path.conf_file("model") , overwrite=overwrite , vb_level = 'inf')
-        self.schedule_conf.dump_yaml(self.base_path.conf_file("schedule") , overwrite=overwrite , vb_level = 'inf')
 
     @property
     def base_path(self):
@@ -303,10 +289,6 @@ class BaseConfig:
         return self.base_path.model_clean_name
 
     @property
-    def Param(self):
-        return self.train_param
-
-    @property
     def should_be_short_test(self):
         return not self.base_path and not MACHINE.cuda_server
 
@@ -322,7 +304,10 @@ class BaseConfig:
 
     @property
     def short_test(self) -> bool:
-        return bool(self["env.short_test"])
+        if self.base_path:
+            return self.base_path.is_short_test
+        else:
+            return bool(self["env.short_test"])
 
     @short_test.setter
     def short_test(self, value: bool):
@@ -378,7 +363,7 @@ class BaseConfig:
             return []
 
     @input_data_types.setter
-    def input_data_types(self, value: list[str]):
+    def input_data_types(self, value: list[str] | str):
         self["input.data.types"] = value
 
     @property
@@ -553,13 +538,8 @@ class BaseConfig:
         if kwargs:
             assert "name" in kwargs, f"{kwargs} has no name"
             assert "params" in kwargs, f"{kwargs} has no params"
-            assert kwargs["name"] in ["ewa", "hybrid", "dwa", "ruw", "gls", "rws"], (
-                f"{kwargs['name']} must be one of ewa, hybrid, dwa, ruw, gls, rws"
-            )
-            kwargs = {
-                "name": kwargs["name"],
-                "params": kwargs["params"][kwargs["name"]],
-            }
+            assert kwargs["name"] in ["ewa", "hybrid", "dwa", "ruw", "gls", "rws"], f"{kwargs['name']} must be one of ewa, hybrid, dwa, ruw, gls, rws"
+            kwargs = {"name": kwargs["name"],"params": kwargs["params"][kwargs["name"]]}
         return kwargs
 
     @property
@@ -591,11 +571,7 @@ class BaseConfig:
 
     @property
     def callback_kwargs(self) -> dict[str, dict]:
-        return {
-            k.replace("callbacks.", ""): v
-            for k, v in self.Param.items()
-            if k.startswith("callbacks.")
-        }
+        return {k.replace("callbacks.", ""): v for k, v in self.Param.items() if k.startswith("callbacks.")}
 
     @property
     def try_cuda(self) -> bool:
@@ -605,7 +581,7 @@ class BaseConfig:
     def gc_collect_each_model(self) -> bool:
         return self.module_type == "nn"
 
-class ModelParam:
+class AlgoConfig:
     def __init__(
         self,
         base_path: ModelPath | Path | str | None,
@@ -614,14 +590,14 @@ class ModelParam:
         module: str | None = None,
         boost_head: bool | str = False,
         short_test: bool | None = None,
-        schedule_conf: FlattenDict | dict[str, dict[str, Any]] | None = None,
+        schedule_config: ScheduleConfig | None = None,
         **kwargs,
     ):
         self.base_path = ModelPath(base_path)
         self.model_module = module
         self.boost_head = boost_head
         self.short_test = short_test
-        self.schedule_conf = get_config_dict(schedule_conf or {"model": {}, "algo": {}})
+        self.schedule_config = schedule_config or ScheduleConfig()
         self.override = (override or {}) | kwargs
         self.load_params()
         self.override_params()
@@ -638,28 +614,21 @@ class ModelParam:
 
     def source_conf_file(self) -> Path:
         path = PATH.conf.joinpath("algo", self.module_type, f"{self.model_module}.yaml")
-        if path.exists():
-            return path
-        else:
-            return path.with_stem(f"default")
+        if not path.exists():
+            path = path.with_stem(f"default")
+        if not path.exists():
+            Logger.error(f"{path} does not exist, and default.yaml does not exist either.")
+        return path
 
     def load_params(self):
         if (self.base_path and not self.base_path.is_null_model) and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
             self.model_param = get_config_dict(conf_file)
         else:
-            conf_file = self.target_conf_file()
-            if conf_file is None:
-                self.model_param = get_config_dict(None)
-            else:
-                if not conf_file.exists():
-                    conf_file = self.source_conf_file()
-                if not conf_file.exists():
-                    Logger.error(f"{conf_file} does not exist, and default.yaml does not exist either.")
-                self.model_param = get_config_dict(conf_file)
+            self.model_param = get_config_dict(self.source_conf_file())
         return self
 
     def override_params(self):
-        self.model_param.update(self.schedule_conf["algo"].get(f"{self.module_type}.{self.model_module}", {}))
+        self.model_param.update(self.schedule_config.get(f"algo.{self.model_module}", {}))
         self.model_param.update(self.override)
         return self
 
@@ -678,32 +647,15 @@ class ModelParam:
             assert "hist_loss_horizon" in self.Param, f"{self.Param} has no hist_loss_horizon"
 
         if self.boost_head:
-            self.boost_head_param = ModelParam(
+            self.boost_head_config = AlgoConfig(
                 self.base_path,
                 module=self.boost_head,
                 boost_head=False,
-                schedule_conf=self.schedule_conf,
-                **self.override,
+                schedule_config=self.schedule_config,
+                override=self.override,
             )
-        return self
-
-    def copy_files(self, overwrite=False):
-        if not self.base_path:
-            return self
-
-        if not self.base_path.is_null_model:
-            copy_file(self.source_conf_file(), self.target_conf_file(), overwrite)
-        
-        # if self.boost_head:
-        #     copy_file(
-        #         PATH.conf.joinpath("algo", "boost", f"{self.boost_head}.yaml"),
-        #         self.base_path.conf_file("param", self.boost_head),
-        #         overwrite,
-        #     )
-
-        self.model_param.dump_yaml(self.base_path.conf_file(f"algo.{self.model_module}") , overwrite=overwrite , vb_level = 'inf')
-        if self.boost_head:
-            self.boost_head_param.model_param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head}") , overwrite=overwrite , vb_level = 'inf')
+        else:
+            self.boost_head_config = None
         return self
 
     def expand(self):
@@ -711,13 +663,13 @@ class ModelParam:
 
         for mm in range(self.n_model):
             par = {
-                k: v[mm % len(v)] if isinstance(v, (list, tuple)) else v
-                for k, v in self.Param.items()
+                key: value[mm % len(value)] if isinstance(value, (list, tuple)) else value
+                for key, value in self.Param.items()
             }
             self.params.append(par)
 
-        if self.boost_head:
-            self.boost_head_param.expand()
+        if self.boost_head_config:
+            self.boost_head_config.expand()
         return self
 
     def update_param_dict(
@@ -742,9 +694,7 @@ class ModelParam:
             self.update_param_dict(param, "input_dim", input_dim)
             self.update_param_dict(param, "inday_dim", inday_dim)
             if len(keys) == 1:
-                value: int = (config.seq_lens | param.get("seqlens", {})).get(
-                    keys[0], 1
-                )
+                value: int = (config.seq_lens | param.get("seqlens", {})).get(keys[0], 1)
                 self.update_param_dict(param, "seq_len", value)
         return self
 
@@ -790,138 +740,102 @@ class ModelParam:
             self._boost_head = ""
         else:
             self._boost_head = value = "lgbm" if value is True else value
-            assert AlgoModule.is_valid(self._boost_head, "boost"), (
-                f"{self._boost_head} is not a valid boost module"
-            )
+            assert AlgoModule.is_valid(self._boost_head, "boost"), f"{self._boost_head} is not a valid boost module"
 
     @property
     def max_num_output(self) -> int:
         return max(self.Param.get("num_output", [1]))
 
+@dataclass
+class ModelConfigOptions:
+    start: int | None = None
+    end: int | None = None
+    stage: int = -1
+    resume: int = -1
+    selection: int = -1
 
-class ModelConfig(BaseConfig):
+class ModelConfig(BaseModelConfig):
     def __init__(
         self,
-        base_path: ModelPath | Path | str | None,
-        *,
-        module: str | None = None,
-        schedule_name: str | None = None,
-        override=None,
-        stage=-1,
-        resume=-1,
-        selection=-1,
-        makedir=True,
-        start: int | None = None,
-        end: int | None = None,
-        test_mode=False,
+        base_path: ModelPath | Path | str | None = None, *,
+        module: str | None = None, schedule_name: str | None = None, override=None,
+        start: int | None = None, end: int | None = None, stage=-1, resume=-1, selection=-1,
         **kwargs,
     ):
-        self.start = int(start) if start is not None else None
-        self.end = int(end) if end is not None else None
-        self.BaseConfig = BaseConfig(
-            base_path,
-            module=module,
-            schedule_name=schedule_name,
-            override=override,
-            **kwargs,
-        )
-        self.ModelParam = self.BaseConfig.generate_model_param()
-
-        assert self.base_path, self.base_path
-
-        if not test_mode:
-            self.process_parser(stage, resume, selection)
-            self.initialize_fitting()
-
+        self.options = ModelConfigOptions(start, end, stage, resume, selection)
+        self.model_config = BaseModelConfig(base_path, module=module, schedule_name=schedule_name, override=override, **kwargs)
+        self.algo_config = self.model_config.generate_algo_config()
         self.device = Device(try_cuda=self.try_cuda)
-        assert self.BaseConfig.base_path is self.base_path, f"{self.BaseConfig.base_path} != {self.base_path}"
-        assert self.ModelParam.base_path is self.ModelParam.base_path, f"{self.ModelParam.base_path} != {self.ModelParam.base_path}"
+        assert self.base_path, self.base_path
+        assert self.model_config.base_path is self.base_path, f"{self.model_config.base_path} != {self.base_path}"
+        assert self.algo_config.base_path is self.algo_config.base_path, f"{self.algo_config.base_path} != {self.algo_config.base_path}"
 
     def __repr__(self):
         return f"{self.__class__.__name__}(base_path={self.base_path})"
 
+    @property
+    def schedule_config(self) -> ScheduleConfig:
+        return self.model_config.schedule_config
+
+    @property
+    def boost_head_config(self) -> AlgoConfig | None:
+        return self.algo_config.boost_head_config
+
     @classmethod
-    def initialize(
-        cls,
-        base_path: ModelPath | Path | str | None,
-        *,
-        vb_level=2,
-        min_key_len=-1,
-        **kwargs,
-    ):
-        config = cls(base_path, **kwargs)
+    def initialize(cls, base_path: ModelPath | Path | str | None, *, vb_level=2, min_key_len=-1, **kwargs):
+        config = cls(base_path, **kwargs).start_model()
         config.print_out(vb_level=vb_level, min_key_len=min_key_len)
         return config
 
-    @classmethod
-    def default(
-        cls,
-        *,
-        module=None,
-        override=None,
-        stage=0,
-        resume=0,
-        selection=0,
-        makedir=False,
-    ):
-        if module:
-            override = override or {}
-            override["model.module"] = module
-        return cls(
-            None,
-            override=override,
-            stage=stage,
-            resume=resume,
-            selection=selection,
-            makedir=makedir,
-        )
-
-    @classmethod
-    def load_model(
-        cls,
-        model_name: ModelPath | Path | str,
-        *,
-        override=None,
-        short_test: bool | None = None,
-        stage=2,
-        resume=1,
-        selection=0,
-    ):
+    def process_parser(self, vb_level: int = 1):
         """
-        load a existing model's config
-        stage is mostly irrelevant here, because mostly we are loading a model's config to pred
+        stage:
+            [-1] , if nn / boost then choose stage, else just data + test
+            [ 0] , data + fit + test
+            [ 1] , data + fit
+            [ 2] , data + test
+        resume:
+            [-1] , if not st and model_path(s) exists then choose
+            [ 0] , no
+            [ 1] , yes
+        selection:
+            [-1] , choose if optional
+            [ 0] , raw model name unless fitting and not resuming
+            [1,2,3,...] , choose by model_index if is_resuming
         """
-        model_path = ModelPath(model_name)
-        assert model_path.base.exists(), f"{model_path.base} does not exist"
-        return cls(
-            model_path,
-            override=override,
-            short_test=short_test,
-            stage=stage,
-            resume=resume,
-            selection=selection,
-        )
+        if self.base_path:
+            vb_level = Proj.vb.inf
 
-    def initialize_fitting(self):
-        self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
+        self.parser_stage(self.options.stage, vb_level)
+        self.parser_resume(self.options.resume, vb_level)
+        self.parser_select(self.options.selection, vb_level)
+        return self
+
+    def start_model(self):
+        self.process_parser()
+
         if "fit" in self.stage_queue and not self.is_resuming:
             if self.base_path.base.exists():
-                if (
-                    not self.short_test
-                    and not self.base_path.is_null_model
-                    and self.BaseConfig.resumable
-                ):
-                    raise Exception(
-                        f"{self.model_name} resumable , re-train has to delete folder manually"
-                    )
+                if (not self.short_test and not self.base_path.is_null_model and self.model_config.resumable):
+                    raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
                 Logger.alert1(f"{self.base_path} is cleared")
-        self.BaseConfig.copy_files(overwrite=self.short_test)
-        self.ModelParam.copy_files(overwrite=self.short_test)
+
+        self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
+        self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , overwrite=self.short_test , vb_level = 'inf')
+        self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , overwrite=self.short_test , vb_level = 'inf')
+        self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , overwrite=self.short_test , vb_level = 'inf')
+        if self.boost_head_config:
+            self.boost_head_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head_config.model_module}") , overwrite=False , vb_level = 'inf')
+        return self
+
+    @property
+    def Param(self):
+        return self.model_config.Param
 
     @property
     def base_path(self) -> ModelPath:
-        return self.BaseConfig.base_path
+        return self.model_config.base_path
 
     @property
     def is_null_model(self) -> bool:
@@ -929,23 +843,19 @@ class ModelConfig(BaseConfig):
 
     @property
     def full_module_name(self):
-        return self.BaseConfig.full_module_name
-
-    @property
-    def Param(self):
-        return self.BaseConfig.Param
+        return self.model_config.full_module_name
 
     @property
     def model_name(self) -> str | Any:
-        return self.BaseConfig.model_name
+        return self.model_config.model_name
 
     @property
     def model_param(self) -> list[dict[str, Any]]:
-        return self.ModelParam.params
+        return self.algo_config.params
 
     @property
     def model_num(self) -> int:
-        return self.ModelParam.n_model
+        return self.algo_config.n_model
 
     @property
     def short_test(self) -> bool:
@@ -953,29 +863,30 @@ class ModelConfig(BaseConfig):
 
     @property
     def model_num_list(self) -> list[int]:
-        return list(range(self.ModelParam.n_model))
+        return list(range(self.algo_config.n_model))
 
     @property
     def boost_head_param(self) -> dict[str, Any]:
-        assert len(self.ModelParam.boost_head_param.params) == 1, self.ModelParam.boost_head_param.params
-        return self.ModelParam.boost_head_param.params[0]
+        assert self.algo_config.boost_head_config, "boost_head_config is not set"
+        assert len(self.algo_config.boost_head_config.params) == 1, self.algo_config.boost_head_config.params
+        return self.algo_config.boost_head_config.params[0]
 
     @property
     def beg_date(self) -> int:
-        beg_date = self.BaseConfig.beg_date
+        beg_date = self.model_config.beg_date
         if self.module_type == "factor":
             beg_date = max(beg_date, self.factor_calculator.get_min_date())
-        if self.start is not None:
-            beg_date = max(beg_date, self.start)
+        if self.options.start is not None:
+            beg_date = max(beg_date, self.options.start)
         return beg_date
 
     @property
     def end_date(self) -> int:
-        end_date = self.BaseConfig.end_date
+        end_date = self.model_config.end_date
         if self.module_type == "factor":
             end_date = min(end_date, self.factor_calculator.get_max_date())
-        if self.end is not None:
-            end_date = min(end_date, self.end)
+        if self.options.end is not None:
+            end_date = min(end_date, self.options.end)
         return end_date
 
     @property
@@ -1014,7 +925,7 @@ class ModelConfig(BaseConfig):
         do it in whenever x_data is changed
         """
         if self.module_type == "nn" and x_data:
-            self.ModelParam.update_data_param(x_data, self)
+            self.algo_config.update_data_param(x_data, self)
 
     def weight_scheme(self, stage: str, no_weight=False) -> str | None:
         if stage == "fit":
@@ -1022,17 +933,12 @@ class ModelConfig(BaseConfig):
         else:
             # includes test / predict / extract
             stg = "test"
-        return (
-            None
-            if no_weight
-            else self.BaseConfig.Param[f"train.criterion.weight"].get(stg, "equal")
-        )
+        return None if no_weight else self.model_config.Param[f"train.criterion.weight"].get(stg, "equal")
 
     def init_utils(self):
         self.metrics = Metrics(
             self.module_type,
             self.nn_category,
-            self.base_path,
             self.criterion_loss,
             self.criterion_accuracy,
             self.criterion_multilosses,
@@ -1053,30 +959,6 @@ class ModelConfig(BaseConfig):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
-
-    def process_parser(self, stage=-1, resume=-1, selection=-1, vb_level: int = 1):
-        """
-        stage:
-            [-1] , if nn / boost then choose stage, else just data + test
-            [ 0] , data + fit + test
-            [ 1] , data + fit
-            [ 2] , data + test
-        resume:
-            [-1] , if not st and model_path(s) exists then choose
-            [ 0] , no
-            [ 1] , yes
-        selection:
-            [-1] , choose if optional
-            [ 0] , raw model name unless fitting and not resuming
-            [1,2,3,...] , choose by model_index if is_resuming
-        """
-        if self.base_path:
-            vb_level = Proj.vb.inf
-
-        self.parser_stage(stage, vb_level)
-        self.parser_resume(resume, vb_level)
-        self.parser_select(selection, vb_level)
-        return self
 
     def parser_stage(self, value=-1, vb_level: int = 1):
         """
@@ -1213,15 +1095,15 @@ class ModelConfig(BaseConfig):
                     info_strs.append((0, "Boost Params", f"Optuna for {self.boost_optuna_trials} trials"))
                 else:
                     info_strs.append((0, "Boost Params", ""))
-                    for k, v in self.ModelParam.Param.items():
+                    for k, v in self.algo_config.Param.items():
                         info_strs.append((2, k, f"{v}"))
             else:
                 if self.boost_head:
                     info_strs.append((0, "Use Boost Head", f"{self.boost_head}"))
                 info_strs.append((0, "Model Params", ""))
-                for k, v in self.ModelParam.Param.items():
+                for k, v in self.algo_config.Param.items():
                     info_strs.append((1, k, f"{v}"))
-            info_strs.append((0, "Model Num", f"{self.ModelParam.n_model}"))
+            info_strs.append((0, "Model Num", f"{self.algo_config.n_model}"))
             info_strs.append((0, "Inputs", f"{self.input_type}"))
             if self.input_type == "data":
                 info_strs.append((1, "Data Types", f"{self.input_data_types}"))

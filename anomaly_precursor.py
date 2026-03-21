@@ -13,6 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.optim as optim
 
+from src.proj import Logger
+
 random_seed = 42
 min_samples_leaf=10
 min_samples_split=20
@@ -95,7 +97,7 @@ def generate_input_data(L = 1000 , horizon = 5, delay = 1 , incomplete_x10 : boo
 
     df = df.set_index(['id' , 'time']).sort_index()
 
-    print(f"label event ratio: {df['label'].mean():.3f}")
+    Logger.stdout(f"label event ratio: {df['label'].mean():.3f}")
     return df
 
 def get_input_data():
@@ -163,7 +165,7 @@ def preprocess(df : pd.DataFrame , horizon = 5 , delay = 1 , bad_percentage : fl
             df[col] = df[col].fillna(0)
 
     df = df.sort_index()
-    print(f"label event ratio: {len(df.query('label == 1')) / len(df.query('label != -1')):.3f} , compare to bad_percentage: {bad_percentage:.2f} , bad_threshold: {bad_threshold:.2f}")
+    Logger.stdout(f"label event ratio: {len(df.query('label == 1')) / len(df.query('label != -1')):.3f} , compare to bad_percentage: {bad_percentage:.2f} , bad_threshold: {bad_threshold:.2f}")
     return df.drop(columns=['y_raw' , 'threshold' , 'y_rolling'])
 
 def get_rule(tree_obj, feature_names, leaf_id):
@@ -262,7 +264,7 @@ class ClassicDecisionTree:
             precision = 0
         else:
             precision = (self.dataset['valid']['label'] & y_pred).sum() / y_pred.sum()
-        print(f"Overall precision: {precision:.2f}")
+        Logger.stdout(f"Overall precision: {precision:.2f}")
 
         # Inspect leaf probabilities
         leaf_ids_train = self.dt.apply(self.dataset['train'].drop(['time','y','label'], axis=1 , errors='ignore'))
@@ -276,14 +278,14 @@ class ClassicDecisionTree:
             leaf_stats[leaf] = {'precision': leaf_precision, 'support': leaf_support}
 
         self.high_prec_leaves = [leaf for leaf, stats in leaf_stats.items() if stats['precision'] >= self.min_precision]
-        print(f"\nFound {len(self.high_prec_leaves)} leaves with ≥{self.min_precision:.0%} precision in training.")
+        Logger.stdout(f"\nFound {len(self.high_prec_leaves)} leaves with ≥{self.min_precision:.0%} precision in training.")
 
         # Now define feature names (uncommented)
         feature_names = self.dataset['train'].columns.tolist()
 
         for leaf in self.high_prec_leaves[:5]:
             rule = get_rule(self.dt.tree_, feature_names, leaf)
-            print(f"Leaf {leaf}: precision={leaf_stats[leaf]['precision']:.3f}, "
+            Logger.stdout(f"Leaf {leaf}: precision={leaf_stats[leaf]['precision']:.3f}, "
                 f"support={leaf_stats[leaf]['support']}, rule: {rule}")
 
     def validate(self):
@@ -297,15 +299,15 @@ class ClassicDecisionTree:
                 prec = val_labels[mask].mean()
                 val_nums.append(mask.sum())
                 val_precisions.append(prec)
-                print(f"Leaf {leaf} validation precision: {prec:.3f} (n={mask.sum()})")
+                Logger.stdout(f"Leaf {leaf} validation precision: {prec:.3f} (n={mask.sum()})")
             else:
                 val_precisions.append(0)
-                print(f"Leaf {leaf} has no validation samples")
-        print(f"ratio of label events in validation set: {self.dataset['valid']['label'].mean():.2%} ({self.dataset['valid']['label'].sum().astype(int).item()}/{len(self.dataset['valid']['label'])})")
+                Logger.stdout(f"Leaf {leaf} has no validation samples")
+        Logger.stdout(f"ratio of label events in validation set: {self.dataset['valid']['label'].mean():.2%} ({self.dataset['valid']['label'].sum().astype(int).item()}/{len(self.dataset['valid']['label'])})")
         if val_precisions:
-            print(f"Average val precision of high-precision leaves: {sum(val_precisions) / sum(val_nums):.2%} ({sum(val_precisions)}/{sum(val_nums)} samples)")
+            Logger.stdout(f"Average val precision of high-precision leaves: {sum(val_precisions) / sum(val_nums):.2%} ({sum(val_precisions)}/{sum(val_nums)} samples)")
         else:
-            print("No high-precision leaves appeared in validation set.")
+            Logger.stdout("No high-precision leaves appeared in validation set.")
 
     def run(self):
         self.feature_extraction()
@@ -542,8 +544,8 @@ class NNDecisionTree:
         self.dataset['y_train'] = y_data[train_indices]
         self.dataset['y_val'] = y_data[val_indices]
 
-        print(f"Total windows: {X_data.shape[0]}, Features: {X_data.shape[2]}")
-        print(f"Train: {len(train_indices)}, Val: {len(val_indices)}")
+        Logger.stdout(f"Total windows: {X_data.shape[0]}, Features: {X_data.shape[2]}")
+        Logger.stdout(f"Train: {len(train_indices)}, Val: {len(val_indices)}")
 
     def _build_nn(self, n_features):
         """Factory method to create the specified backbone."""
@@ -625,13 +627,13 @@ class NNDecisionTree:
                 best_state_dicts['classifier'] = classifier.state_dict()
             else:
                 if epoch - best_epoch >= self.early_stopping:
-                    print(f"Early stopping at epoch {epoch+1}")
-                    print(f"Epoch {epoch+1}/{self.epochs} | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Real Bad: {int(real_bad):0d}/{int(y_num):0d} | Pred Bad: {int(pred_bad):0d}/{int(y_num):0d} | Precise Bad: {int(precise_bad):0d}/{int(pred_bad):0d}")
+                    Logger.stdout(f"Early stopping at epoch {epoch+1}")
+                    Logger.stdout(f"Epoch {epoch+1}/{self.epochs} | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Real Bad: {int(real_bad):0d}/{int(y_num):0d} | Pred Bad: {int(pred_bad):0d}/{int(y_num):0d} | Precise Bad: {int(precise_bad):0d}/{int(pred_bad):0d}")
                     self.model.load_state_dict(best_state_dicts['backbone'])
                     break
 
             if (epoch+1) % 10 == 0:
-                print(f"Epoch {epoch+1}/{self.epochs} | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Real Bad: {int(real_bad):0d}/{int(y_num):0d} | Pred Bad: {int(pred_bad):0d}/{int(y_num):0d} | Precise Bad: {int(precise_bad):0d}/{int(pred_bad):0d}")
+                Logger.stdout(f"Epoch {epoch+1}/{self.epochs} | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Real Bad: {int(real_bad):0d}/{int(y_num):0d} | Pred Bad: {int(pred_bad):0d}/{int(y_num):0d} | Precise Bad: {int(precise_bad):0d}/{int(pred_bad):0d}")
 
     def extract_embeddings(self):
         """Forward all data through the trained backbone to get embeddings."""
@@ -663,13 +665,13 @@ class NNDecisionTree:
         self.leaf_stats = leaf_stats
         self.high_prec_leaves = high_prec
 
-        print(f"Found {len(high_prec)} leaves with ≥{self.min_precision:.0%} precision (train).")
+        Logger.stdout(f"Found {len(high_prec)} leaves with ≥{self.min_precision:.0%} precision (train).")
 
         # Print a few example rules
         feature_names = [f"embed_{i}" for i in range(self.embedding_dim)]
         for leaf in high_prec[:5]:
             rule = get_rule(dt.tree_, feature_names, leaf)
-            print(f"Leaf {leaf}: prec={leaf_stats[leaf]['precision']:.3f}, sup={leaf_stats[leaf]['support']}, rule: {rule}")
+            Logger.stdout(f"Leaf {leaf}: prec={leaf_stats[leaf]['precision']:.3f}, sup={leaf_stats[leaf]['support']}, rule: {rule}")
 
     def validate_decision_tree(self):
         """Evaluate high-precision leaves on validation set."""
@@ -683,14 +685,14 @@ class NNDecisionTree:
                 prec = val_labels[mask].mean()
                 val_nums.append(mask.sum())
                 val_precisions.append(val_labels[mask].sum())
-                print(f"Leaf {leaf} val prec: {prec:.3f} (n={mask.sum()})")
+                Logger.stdout(f"Leaf {leaf} val prec: {prec:.3f} (n={mask.sum()})")
             else:
-                print(f"Leaf {leaf} has no validation samples")
-        print(f"ratio of label events in validation set: {val_labels.mean():.2%} ({val_labels.sum().astype(int).item()}/{len(val_labels)})")
+                Logger.stdout(f"Leaf {leaf} has no validation samples")
+        Logger.stdout(f"ratio of label events in validation set: {val_labels.mean():.2%} ({val_labels.sum().astype(int).item()}/{len(val_labels)})")
         if val_precisions:
-            print(f"Average val precision of high-precision leaves: {sum(val_precisions) / sum(val_nums):.2%} ({sum(val_precisions)}/{sum(val_nums)} samples)")
+            Logger.stdout(f"Average val precision of high-precision leaves: {sum(val_precisions) / sum(val_nums):.2%} ({sum(val_precisions)}/{sum(val_nums)} samples)")
         else:
-            print("No high-precision leaves appeared in validation set.")
+            Logger.stdout("No high-precision leaves appeared in validation set.")
 
     def run(self):
         self.data_split()

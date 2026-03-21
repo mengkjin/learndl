@@ -532,7 +532,7 @@ class BaseTrainer(ModelStreamLine):
     @property
     def prev_model_date(self): return self.data.prev_model_date(self.model_date)
     @property
-    def model_param(self): return self.config.ModelParam.params[self.model_num]
+    def model_param(self): return self.config.algo_config.params[self.model_num]
     @property
     def model_submodels(self): return self.config.submodels
     @property
@@ -550,7 +550,7 @@ class BaseTrainer(ModelStreamLine):
         return self.config.base_path.rslt(f'{self.config.model_name}_{status}.html')
     @property
     def model_tensorboad_dir(self):
-        return self.config.base_path.snapshot('tensorboard' , f'{self.model_num}.{self.model_date}')
+        return self.config.base_path.snapshot('tensorboard' , f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}')
 
     def main_process(self):
         '''Main stage of data & fit & test'''

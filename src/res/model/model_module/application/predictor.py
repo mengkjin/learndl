@@ -28,7 +28,7 @@ class ModelPredictor:
         else:
             self.model_nums = list(self.reg_model.num)
 
-        self.config = ModelConfig.load_model(self.model_name)
+        self.config = ModelConfig(self.model_name , stage=2 , resume=1).start_model()
         self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
 

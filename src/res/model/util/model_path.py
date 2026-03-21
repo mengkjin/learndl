@@ -201,7 +201,7 @@ class ModelPath:
             Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
             return
         else:
-            [shutil.rmtree(folder) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
+            [shutil.rmtree(folder , ignore_errors=True) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
             self.log_operation('clear_model_path')
     
     def remove_model_path(self):

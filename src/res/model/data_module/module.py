@@ -4,7 +4,7 @@ import pandas as pd
 
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
-from typing import Any , Literal
+from typing import Any , Literal , Callable
 
 from src.proj import PATH , Logger , CALENDAR , MACHINE
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
@@ -13,11 +13,12 @@ from src.func import tensor as T
 from src.res.factor.util import Benchmark
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , MemFileStorage , StoredFileLoader , HiddenPath
 from .loader import BatchInputLoader
+from .prenorm import PrenormOperator
 
 __all__ = ['DataModule']
 
-def rolling_rotation(x : torch.Tensor , index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , seqlen : int , step = 1 , dim = 1 , squeeze_out = True) -> torch.Tensor:
-    '''rotate [stock , date , inday , feature] to [sample , rolling , inday , feature]'''
+def rolling_rotation(x : torch.Tensor , index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , seqlen : int = 1 , step : int = 1 , dim = 1 , squeeze_out = True) -> torch.Tensor:
+    '''rotate [stock , date , inday , feature] to [sample , rolling sequence (by step) , inday , feature]'''
     assert x.ndim == 4 , x.ndim
     assert len(index0) == len(index1) , (index0 , index1)
     assert index1.max() < x.shape[dim] , (index1.max() , x.shape)
@@ -37,6 +38,28 @@ def rolling_rotation(x : torch.Tensor , index0 : torch.Tensor | Any , index1 : t
         new_x = new_x.squeeze(-2)
     return new_x
 
+def finite_position(data : torch.Tensor , index1 : torch.Tensor | None = None , 
+                    seqlen : int = 1 , step : int = 1 , endpoint_nonzero = False , x_all_valid = True):
+    '''return finite position (with shape of len(index[0]) * step_len) the first 2 dims'''
+    if index1 is None: 
+        index1 = torch.arange(data.shape[1])
+    assert data.ndim > 2 , data.ndim
+    sum_dim = tuple(range(2,data.ndim))
+    agg = data.sum(sum_dim).isfinite()
+    if seqlen * step > 1:
+        agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
+    try:
+        predicate : Callable[...,torch.Tensor] = torch.all if x_all_valid else torch.any
+        valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
+    except MemoryError:
+        predicate = torch.multiply if x_all_valid else torch.add
+        valid = torch.full_like((agg[:,:len(index1)]), x_all_valid)
+        for i in range(seqlen):
+            valid = predicate(valid , agg[:,index1 + i * step])
+    if endpoint_nonzero: 
+        valid *= data[:,index1].not_equal(0).all(sum_dim)     
+    return valid
+
 class DataModule(BaseDataModule):    
     """
     DataModule for model fitting / testing / predicting
@@ -51,7 +74,7 @@ class DataModule(BaseDataModule):
         use_data: 'fit' , 'predict' , 'both' 
             if 'predict' only load recent data
         '''
-        self.config   = ModelConfig.default(stage=0) if config is None else config
+        self.config   = ModelConfig(stage=0) if config is None else config
         self.use_data = use_data
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
@@ -88,8 +111,8 @@ class DataModule(BaseDataModule):
         self.config.update_data_param(self.datas.x)
         self.labels_n = int(self.datas.y.shape[-1])
 
+        self.prenorm_operator = PrenormOperator(self.config , self.datas.norms)
         self.set_critical_dates()
-        self.parse_prenorm_method()
         self.reset_dataloaders()
 
         if self.empty_x:
@@ -343,41 +366,13 @@ class DataModule(BaseDataModule):
         y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         '''
-        valid = None if y is None else self.valid_sample(y,1,index1)
+        valid = None if y is None else finite_position(y, index1 , 1)
         for k , v in x.items(): 
-            new_val = self.valid_sample(v , self.seq_lens[k] * self.seq_steps[k] , index1 , k in DataBlockNorm.DIVLAST , x_all_valid)
+            new_val = finite_position(v , index1 , self.seq_lens[k] , self.seq_steps[k] , k in DataBlockNorm.DIVLAST , x_all_valid)
             if x_all_valid:
                 valid = new_val * (True if valid is None else valid)
             else:
                 valid = new_val + (False if valid is None else valid)
-        return valid
-    
-    @staticmethod
-    def valid_sample(data : torch.Tensor , rolling_window : int | None = 1 , index1 : torch.Tensor | None = None , 
-                     endpoint_nonzero = False , x_all_valid = True):
-        '''return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims'''
-        if rolling_window is None: 
-            rolling_window = 1
-        if index1 is None: 
-            index1 = torch.arange(data.shape[1])
-        assert rolling_window > 0 , rolling_window
-        data = torch.cat([torch.zeros_like(data[:,:rolling_window]) , data],dim=1).unsqueeze(2)
-        sum_dim = tuple(range(2,data.ndim))
-        
-        if x_all_valid:
-            nans = data[:,index1 + rolling_window].isnan().sum(sum_dim)
-            for i in range(1 , rolling_window): 
-                nans += data[:,index1 - i + rolling_window].isnan().sum(sum_dim)
-            valid = nans == 0
-        else:
-            finite = data[:,index1 + rolling_window].isfinite().sum(sum_dim)
-            for i in range(1 , rolling_window): 
-                finite += data[:,index1 - i + rolling_window].isfinite().sum(sum_dim)
-            valid = finite > 0
-
-        if endpoint_nonzero: 
-            valid *= ((data[:,index1 + rolling_window] == 0).sum(sum_dim) == 0)
-        
         return valid
      
     def standardize_y(self , y : torch.Tensor , valid : torch.Tensor | None , index1 : torch.Tensor | None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
@@ -462,7 +457,7 @@ class DataModule(BaseDataModule):
             slen = self.seq_lens[model_data_type]
             step = self.seq_steps[model_data_type]
             data = rolling_rotation(data , index0 , index1 , slen , step)
-            data = self.prenorm(data , model_data_type)
+            data = self.prenorm_operator.prenorm(model_data_type , data)
             datas.append(data)
         return datas
 
@@ -471,32 +466,9 @@ class DataModule(BaseDataModule):
             return None
         return y[index0 , index1]
         
-    def parse_prenorm_method(self):
-        self.prenorm_divlast  : list[str] = []
-        self.prenorm_histnorm : list[str] = []
-        for mdt in self.input_keys: 
-            method : dict = self.config.input_data_prenorm.get(mdt , {})
-            divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
-            histnorm = method.get('histnorm' , True) and (mdt in DataBlockNorm.HISTNORM)
-            if (divlast or histnorm): 
-                Logger.success(f'Pre-Norm [{mdt}] : {dict(divlast=divlast, histnorm=histnorm)}' , vb_level = 'max')
-            if divlast: 
-                self.prenorm_divlast.append(mdt)
-            if histnorm: 
-                self.prenorm_histnorm.append(mdt)
-
     def prenorm(self , x : torch.Tensor, key : str) -> torch.Tensor:
-        '''
-        return panel_normalized x
-        1.divlast: divide by the last value, get seq-mormalized x
-        2.histnorm: normalized by history avg and std
-        '''
-        if key in self.prenorm_divlast and x.shape[-2] > 1:
-            x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if key in self.prenorm_histnorm:
-            x = x - self.datas.norms[key].avg[-x.shape[-2]:]
-            x = x / (self.datas.norms[key].std[-x.shape[-2]:] + 1e-6)
-        return x
+        """return panel-normalized x"""
+        return self.prenorm_operator.prenorm(key , x)
 
     def split_sample(self , valid : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor ,
                      sample_method : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential' ,

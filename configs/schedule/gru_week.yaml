@@ -1,11 +1,9 @@
 model:
   # main model configs ----------------------------------------------------------------
-  name          : xgb_of_factors # any name or null
-  module        : xgboost  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+  name          : gru_week # any name or null
+  module        : resnet_gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
   submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
 
-
-  window  : 1250
   # labels specification ------------------------------------------------------------
   # rtn : raw return | std : standardized return | res : risk model residual
   # if module is nn , use multiloss combination of the labels
@@ -15,16 +13,10 @@ model:
     - rtn_lag1_10 
 
 input:  # input specification ----------------------------------------------------------------
-  type: factor # [data , hidden , factor] , specify below
-
-  factor.types: # list of factor names , use if input_type is factor
-    fundament:  [quality , growth , value , earning]
-    analyst:    [surprise , coverage , forecast , adjustment]
-    behavioral: [momentum , volatility , correlation , liquidity]
-    money_flow: [holding , trading]
-    high_frequency: [hf_momentum , hf_volatility , hf_correlation , hf_liquidity]
+  type: data # [data , hidden , factor] , specify below
+  data.types: week # ['day+30m' , 30m , day , ...] , use if input_type is data
+  sequence.lens: {week: 50}
+  sequence.steps: {week: 5}
 
 algo:
-  xgboost:
-    seqlens:        [{day: 1}]
-    max_depth:      [6 , 8 , 10]
+  

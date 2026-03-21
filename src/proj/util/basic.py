@@ -42,11 +42,9 @@ class TempFile:
 
 class FlattenDict:
     def __init__(self, input: 'FlattenDict | dict[str, Any] | None' = None , * , keep_nested : Callable[[str], bool] | None = None , **kwargs):
-        self.raw = input or {}
-        if isinstance(self.raw, FlattenDict):
-            self.flattened = self.raw.flattened
-        else:
-            self.flattened : dict[str, Any] = self.flatten_dict(self.raw , keep_nested = keep_nested)
+        self.raw = input.raw if isinstance(input, FlattenDict) else input or {}
+        self.keep_nested = keep_nested
+        self.flattened : dict[str, Any] = self.flatten_dict(self.raw , keep_nested = self.keep_nested)
 
     def __bool__(self):
         return bool(self.flattened)
@@ -78,14 +76,14 @@ class FlattenDict:
             return out
 
     def __setitem__(self, key: str, value: Any):
-        assert key in self.flattened , f'{key} not found in {self.keys()} , cannot set value , use update instead'
+        assert key in self.flattened , f'{key} not found in {self.keys()} , cannot set value , use update with relevant_only = False instead'
         self.flattened[key] = value
 
-    def update(self, d : 'dict[str, Any] | FlattenDict' , relevant_only: bool = False):
-        flattened_input = d if isinstance(d, FlattenDict) else self.flatten_dict(d)
+    def update(self, d : 'dict[str, Any] | FlattenDict' , relevant_only: bool = True):
+        flattened_input = self.flatten_dict(d , keep_nested = self.keep_nested)
         for k, v in flattened_input.items():
             if k in self.flattened or not relevant_only:
-                self.flattened[k] = v
+                self.flattened[k] = v  
         return self
 
     def get(self, key: str, default: Any = None):
@@ -103,7 +101,9 @@ class FlattenDict:
         return cls.nested_dict({k.removeprefix(f'{key}.'): v for k, v in d.items() if k.startswith(f'{key}.')})
 
     @classmethod
-    def flatten_dict(cls , d: dict , prefix: str = '' , * , keep_nested: Callable[[str], bool] | None = None):
+    def flatten_dict(cls , d: 'dict | FlattenDict' , prefix: str = '' , * , keep_nested: Callable[[str], bool] | None = None):
+        if isinstance(d, FlattenDict):
+            d = d.raw
         target = {}
         for k, v in d.items():
             new_k = f'{prefix}{k}'
@@ -138,21 +138,15 @@ class FlattenDict:
         PATH.dump_yaml(self.flattened, path)
 
     @classmethod
-    def from_input(cls, input: dict | Path | list[Path] | None , * , keep_nested: Callable[[str], bool] | None = None):
-        if input is None:
-            return cls()
-        elif isinstance(input, dict):
-            return cls.from_dict(input , keep_nested = keep_nested)
+    def from_input(cls, input: 'dict | Path | list[Path] | FlattenDict | None' , * , keep_nested: Callable[[str], bool] | None = None):
+        if input is None or isinstance(input, (FlattenDict, dict)):
+            return cls(input , keep_nested = keep_nested)
         elif isinstance(input, Path):
             return cls.from_yaml(input , keep_nested = keep_nested)
         elif isinstance(input, list):
             return cls.from_yamls(input , keep_nested = keep_nested)
         else:
             raise ValueError(f"Invalid input type: {type(input)}")
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any] , * , keep_nested: Callable[[str], bool] | None = None):
-        return cls(d , keep_nested = keep_nested)
 
     @classmethod
     def from_yaml(cls, path: Path , * , keep_nested: Callable[[str], bool] | None = None):

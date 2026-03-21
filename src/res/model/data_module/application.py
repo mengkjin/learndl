@@ -20,7 +20,7 @@ def get_realistic_batch_data(input_data_types='day') -> BatchInput:
         'short_test':True,
         'input.data.types':input_data_types
     }
-    model_config = ModelConfig(None, override=override, test_mode=True)
+    model_config = ModelConfig(override=override)
     data = DataModule(model_config , 'predict').load_data()
     data.setup('predict' , model_date = data.datas.y.date[-50])
     batch_input = data.predict_dataloader()[0]

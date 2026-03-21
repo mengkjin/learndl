@@ -16,7 +16,7 @@ class ModelHiddenExtractor:
         self.hidden_model = model
         self.backward_days = backward_days
         self.forward_days  = forward_days
-        self.config = ModelConfig.load_model(self.model_path , override={'train.dataloader.sample_method':'sequential'} , short_test = False)
+        self.config = ModelConfig(self.model_path , override={'train.dataloader.sample_method':'sequential'} , short_test = False , stage=2 , resume=1).start_model()
         self.model  = get_predictor_module(self.config)
         assert isinstance(self.model , NNPredictor) , self.model
         # self.load_model_data() # must load data before loading model, to get input_dim parameter

@@ -8,7 +8,7 @@ from .null import NullPredictor
 
 def get_predictor_module(module : str | ModelConfig , *args , **kwargs):
     if isinstance(module , str):
-        module = ModelConfig.default(module = module)
+        module = ModelConfig(module = module)
     module_type = module.module_type
     boost_head = module.boost_head
 

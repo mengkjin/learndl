@@ -1,5 +1,5 @@
 # main model configs ----------------------------------------------------------------
-name          : null  # any name or null
+name          : gru_week  # any name or null
 module        : resnet_gru
 # nn : can be nn / nn@{gru} ... / {gru} ...
 # boost : can be boost / boost@{lgbm} ... / {lgbm} ...

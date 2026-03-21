@@ -66,11 +66,11 @@ class PreProcessorTask:
             Logger.stdout(f'Preprocess [{key.upper()}] with predict={predict} start...' , indent = indent + 1 , vb_level = vb_level + 3)
             
             with Logger.Timer(f'[{key}] dumped loading' , indent = indent + 2 , vb_level = vb_level + 3):
-                dump_block = DataBlock.load_preprocess(key , predict)[key]
-                dump_last_date = CALENDAR.td(dump_block.date[-1] , -LOAD_OVERLAP_DAYS).td if not dump_block.empty else -1
+                dumped_blocks = DataBlock.load_preprocess(key , predict)
+                dumped_last_date = CALENDAR.td(dumped_blocks.date[-1] , -LOAD_OVERLAP_DAYS).td if not dumped_blocks.empty else -1
 
             with Logger.Timer(f'[{key}] blocks loading' , indent = indent + 2 , vb_level = vb_level + 3 , enter_vb_level = vb_level + 5):
-                load_start = max(processor.load_start , dump_last_date)
+                load_start = max(processor.load_start , dumped_last_date)
                 block_dict = proc.load_blocks(load_start, processor.load_end, indent = indent + 2 , vb_level = vb_level + 5)
 
             with Logger.Timer(f'[{key}] blocks process' , indent = indent + 2 , vb_level = vb_level + 3):
@@ -83,7 +83,7 @@ class PreProcessorTask:
                 new_block = new_block.mask_values(mask = processor.mask)
 
             with Logger.Timer(f'[{key}] blocks merging' , indent = indent + 2 , vb_level = vb_level + 3):
-                data_block = dump_block.merge_others(new_block , inplace = True)
+                data_block = dumped_blocks.merge_others(new_block , inplace = True)
 
             with Logger.Timer(f'[{key}] blocks dumping' , indent = indent + 2 , vb_level = vb_level + 3):
                 data_block = data_block.align_date(data_block.date_within(processor.load_start , processor.load_end) , inplace = True)

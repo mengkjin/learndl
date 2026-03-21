@@ -20,7 +20,7 @@ class ModelTestor:
             'input.data.types' : data_types , 
             'model.module.nn.boost_head' : False
         }
-        self.config = ModelConfig.default(module = module , override = override_cfg)
+        self.config = ModelConfig(module = module , override = override_cfg , stage=2 , resume=1).start_model()
         self.data = DataModule(self.config , 'predict').load_data()
         self.data.setup('predict' , self.config.model_param[0] , self.data.model_date_list[0])   
         

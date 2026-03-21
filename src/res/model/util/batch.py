@@ -133,9 +133,11 @@ class BatchInput:
                 'input.data.types':data_type ,
                 'model.labels': ['std_lag1_10' , 'std_lag1_20'] if label_num == 2 else ['std_lag1_10'],
                 'num_output':[label_num],
+                'input.sequence.steps':{'week':1},
+                'input.sequence.lens':{'week':30},
             }
             with Proj.Silence:
-                model_config = ModelConfig(None, override=override, test_mode=True)
+                model_config = ModelConfig(override=override)
                 data = DataModule(model_config , 'predict').load_data()
                 data.setup('predict' , model_date = data.datas.y.date[-20])
                 batch_input = data.predict_dataloader()[0]
