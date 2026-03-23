@@ -42,15 +42,13 @@ class FetcherTask:
             suffix = f" [{px}]" if px else ""
             return call_with_retry(lambda: fetcher.fetch_date(self.start, self.end), label=f"{self.title}{suffix}", attempts=attempts)
 
-    def _client_options(self, use_proxies: bool = True, proxy_first : bool = True) -> Generator[tuple[str | None, bool | None], None, None]:
-        if not proxy_first:
-            yield None, None
+    def _client_options(self, use_proxies: bool = True, proxy_only : bool = True) -> Generator[tuple[str | None, bool | None], None, None]:
         if use_proxies:
             proxies = ExchangeFetcherStates.get_proxies(self.exchange)
             random.shuffle(proxies)
             for px in proxies:
                 yield px, False
-        if proxy_first:
+        if not proxy_only:
             yield None, None
 
     def run(self, *, proxy: str | None = None, trust_env: bool | None = None, auto_discover_proxy: bool = False , indent : int = 1 , vb_level : Any = 3) -> list[Announcement] | None:
@@ -64,7 +62,7 @@ class FetcherTask:
 
         result = None
         i = -1
-        for proxy, trust_env in self._client_options(use_proxies=auto_discover_proxy, proxy_first=True):
+        for proxy, trust_env in self._client_options(use_proxies=auto_discover_proxy, proxy_only=True):
             i += 1
             if not ExchangeFetcherStates.get_proxy_state(self.exchange , proxy):
                 continue
