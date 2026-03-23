@@ -108,10 +108,12 @@ class ExchangeFetcherStates:
     _states : dict[str, bool] = {exchange: True for exchange in EXCHANGES}
     _proxy_states: dict[str, dict[None | str , bool]] = {exchange: {None: False} for exchange in EXCHANGES}
     _proxy_fail_counts: dict[str, dict[None | str , int]] = {exchange:{None:0} for exchange in EXCHANGES}
+    _proxy_refresh_counts: dict[str, int] = {exchange: 0 for exchange in EXCHANGES}
 
-    _locks : dict[str, Lock] = {'states': Lock(), 'proxy_states': Lock(), 'proxy_fail_counts': Lock(), 'proxies': Lock()}
+    _locks : dict[str, Lock] = {'states': Lock(), 'proxy_states': Lock(), 'proxy_fail_counts': Lock(), 'proxies': Lock() , 'proxy_refresh_counts': Lock()}
 
     MAX_CONNECTION_FAILURES = 2
+    MAX_PROXIES_FETCH_COUNTS = 3
     verify_urls = {
         "sse": "https://www.sse.com.cn", 
         "szse": "https://www.szse.cn", 
@@ -148,10 +150,20 @@ class ExchangeFetcherStates:
     @classmethod
     def set_state(cls , exchange: str , state: bool , indent : int = 1 , vb_level : Any = 0):
         with cls._locks['states']:
-            cls._states[exchange] = state
             if state is False:
-                Logger.alert2(f"Exchange {exchange} may have failed too many times, this task will not try this exchange anymore" , indent = indent , vb_level = vb_level)
-
+                with cls._locks['proxy_refresh_counts']:
+                    if cls._proxy_refresh_counts[exchange] >= cls.MAX_PROXIES_FETCH_COUNTS:
+                        with cls._locks['proxies']:
+                            cls._proxies[exchange].clear()
+                        cls.get_proxies(exchange)
+                        cls._states[exchange] = state
+                        cls._proxy_refresh_counts[exchange] += 1
+                        Logger.alert2(f"Exchange {exchange} may have failed too many times, try to refresh the proxy list" , indent = indent , vb_level = vb_level)
+                    else:
+                        Logger.alert2(f"Exchange {exchange} may have failed too many times, this task will not try this exchange anymore" , indent = indent , vb_level = vb_level)
+            else:
+                cls._states[exchange] = state
+        
     @classmethod
     def get_proxy_state(cls , exchange: str , proxy: str | None) -> bool:
         with cls._locks['proxy_states']:

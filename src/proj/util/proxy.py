@@ -13,9 +13,9 @@ from src.proj.calendar import BJTZ
 
 class ProxyGetter:
     @classmethod
-    def get_working_proxies(cls , url: str) -> list[str]:
+    def get_working_proxies(cls , url: str , force_refresh: bool = False) -> list[str]:
         """Get working proxies"""
-        return ZDAYEProxiesPool.get_working_proxies(url)
+        return ZDAYEProxiesPool.get_working_proxies(url , force_refresh = force_refresh)
 
 CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -123,7 +123,7 @@ class BaseProxiesPool(ABC):
     file_lock = threading.Lock()
 
     @abstractmethod
-    def fetch_proxy_candidates(self , max_count: int = 20) -> list[str]:
+    def fetch_proxy_candidates(self , max_count: int = 100) -> list[str]:
         """Fetch proxy candidates from free proxy list."""
         raise NotImplementedError
 
@@ -164,7 +164,7 @@ class BaseProxiesPool(ABC):
 
     @classmethod
     def get_working_proxies(
-        cls , verify_url: str = VERIFY_URL, * , max_count: int = 50, min_count: int = 10, verify_timeout: float = 8.0, verify_workers: int = 24,
+        cls , verify_url: str = VERIFY_URL, * , max_count: int = 100, min_count: int = 10, verify_timeout: float = 8.0, verify_workers: int = 24,
         force_refresh: bool = False) -> list[str]:
         """
         return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
@@ -241,13 +241,13 @@ class ZDAYEProxiesPool(BaseProxiesPool):
                 Logger.stderr(f"[!] Failed to parse JSON response: {e}")
                 return []
 
-    def fetch_proxy_candidates(self , max_count: int = 20 , type: Literal["http", "https"] = "https") -> list[str]:
+    def fetch_proxy_candidates(self , max_count: int = 100 , type: Literal["http", "https"] = "https") -> list[str]:
         """Get free proxies from Zdaye API"""
         return self._get_zdaye_proxies(max_count, type , silent = True)
 
 class FPLProxiesPool(BaseProxiesPool):
     """Auto discover HTTP proxies from public proxy list."""
-    def fetch_proxy_candidates(self , max_count: int = 20) -> list[str]:
+    def fetch_proxy_candidates(self , max_count: int = 100) -> list[str]:
         """Fetch proxy candidates from free proxy list."""
         headers = {"User-Agent": CHROME_UA}
         with httpx.Client(
