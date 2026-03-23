@@ -12,6 +12,7 @@ from .options import Options
 from .sqlite import DBConnHandler
 
 from .script import *
+from .proxy import ProxyGetter
 
 from . import plot as Plot
 

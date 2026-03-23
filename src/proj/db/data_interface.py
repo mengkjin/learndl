@@ -25,6 +25,23 @@ __all__ = [
 DATAFRAME_SUFFIX   : Literal['feather' , 'parquet'] = 'feather'
 DEFAULT_PARALLEL_METHOD : Literal['thread' , 'process' , 'dask' , 'none'] = 'thread'   # in Mac-Matthew , thread > dask > none > process
 
+SRC_ALTERNATIVES : dict[str , list[str]] = {
+    'trade_ts' : ['trade_js'] ,
+    'benchmark_ts' : ['benchmark_js']
+}
+DB_BY_NAME  : list[str] = [
+    'information_js' , 'information_ts' , 'index_daily_ts' ,  'index_daily_custom' , 'market_daily']
+DB_BY_DATE  : list[str] = [
+    'models' , 'sellside' , 'exposure' , 'trade_js' , 'labels_js' , 'benchmark_js' , 
+    'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts' ,
+    'crawler'
+]
+EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly' , 'pooling_weight']
+EXPORT_BY_DATE : list[str] = ['stock_factor' , 'model_prediction' , 'universe']
+for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
+    assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
+
+
 def paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     """get dates from paths"""
     datestrs = [p.stem[-8:] for p in paths]
@@ -201,20 +218,11 @@ class DFProcessor:
     
 class DBPath:
     """DB Path structure of db_src and db_key"""
-    src_alternatives : dict[str , list[str]] = {
-        'trade_ts' : ['trade_js'] ,
-        'benchmark_ts' : ['benchmark_js']
-    }
-    db_by_name  : list[str] = [
-        'information_js' , 'information_ts' , 'index_daily_ts' ,  'index_daily_custom' , 'market_daily']
-    db_by_date  : list[str] = [
-        'models' , 'sellside' , 'exposure' , 'trade_js' , 'labels_js' , 'benchmark_js' , 
-        'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts'
-    ]
-    export_by_name : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly' , 'pooling_weight']
-    export_by_date : list[str] = ['stock_factor' , 'model_prediction' , 'universe']
-    for name in export_by_name + export_by_date:
-        assert name not in db_by_name + db_by_date , f'{name} must not in db_by_name and db_by_date'
+    src_alternatives = SRC_ALTERNATIVES
+    db_by_name = DB_BY_NAME
+    db_by_date = DB_BY_DATE
+    export_by_name = EXPORT_BY_NAME
+    export_by_date = EXPORT_BY_DATE
 
     instance_cache : dict[str , 'DBPath'] = {}
 
@@ -411,9 +419,9 @@ class DBPath:
             [d.rmdir() for d in self.parent.iterdir() if d.is_dir()]
             self.parent.rmdir()
 
-def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , indent = 1 , vb_level : Any = 1):
+def save_df(df : pd.DataFrame | None , path : Path | str , *, overwrite = True , prefix = '' , empty_ok = False , indent = 1 , vb_level : Any = 1):
     """save dataframe to path"""
-    if df is None or df.empty: 
+    if df is None or (not empty_ok and df.empty): 
         return False
     prefix = prefix or ''
     path = Path(path)

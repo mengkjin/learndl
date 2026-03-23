@@ -8,18 +8,11 @@
 # mode: shell
 
 from src.proj.util import ScriptTool 
-from src.api import ModelAPI
-from src.res.model.util.config import ModelConfig
-import shutil
+from src.data.crawler.announcement.agent import AnnouncementAgent
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    models = ModelAPI.available_models(True , True)
-    for model in models:
-        config = ModelConfig(model , stage = 2 , resume = 1 , selection = 0)
-        config.base_path.conf_file('algo').unlink(missing_ok = True)
-        shutil.rmtree(config.base_path.conf('model') , ignore_errors = True)
-        shutil.rmtree(config.base_path.conf('param') , ignore_errors = True)
+    AnnouncementAgent.parallel_run(20220101,20260318,workers=10)
         
 if __name__ == '__main__':
     main()

@@ -116,13 +116,14 @@ class PATH:
             return super().increase_indent(flow, False)
 
     @classmethod
-    def dump_yaml(cls , data , yaml_file : str | Path , * , indent = 2 , **kwargs) -> None:
+    def dump_yaml(cls , data , yaml_file : str | Path , * , indent = 2 , overwrite = False , **kwargs) -> None:
         """Dump data to yaml file"""
         assert isinstance(data , dict) , type(data)
         yaml_file = Path(yaml_file)
+        yaml_file.parent.mkdir(parents=True, exist_ok=True)
         assert yaml_file.suffix == '.yaml' , yaml_file
-        assert not yaml_file.exists() or not yaml_file.stat().st_size , f'{yaml_file} already exists'
-        with open(yaml_file , 'a' if yaml_file.exists() else 'w') as f:
+        assert not yaml_file.exists() or not yaml_file.stat().st_size or overwrite , f'{yaml_file} already exists'
+        with open(yaml_file , 'w') as f:
             yaml.dump(data ,  f , Dumper = cls.IndentedDumper , indent = indent , **kwargs)
 
     @staticmethod
@@ -139,12 +140,13 @@ class PATH:
         return d
 
     @staticmethod
-    def dump_json(data , json_file : str | Path , ensure_ascii = False , indent = 4 , **kwargs) -> None:
+    def dump_json(data , json_file : str | Path , ensure_ascii = False , indent = 4 , overwrite = False , **kwargs) -> None:
         """Dump data to json file"""
         assert isinstance(data , dict) , type(data)
         json_file = Path(json_file)
+        json_file.parent.mkdir(parents=True, exist_ok=True)
         assert json_file.suffix == '.json' , json_file
-        assert not json_file.exists() or not json_file.stat().st_size , f'{json_file} already exists'
+        assert not json_file.exists() or not json_file.stat().st_size or overwrite , f'{json_file} already exists'
         with open(json_file , 'w' , **kwargs) as f:
             json.dump(data , f , ensure_ascii = ensure_ascii , indent = indent , **kwargs)
 
