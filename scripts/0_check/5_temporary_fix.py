@@ -12,7 +12,7 @@ from src.data.crawler.announcement.agent import AnnouncementAgent
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    AnnouncementAgent.parallel_run(20220101,20260318,workers=10)
+    AnnouncementAgent.update()
         
 if __name__ == '__main__':
     main()

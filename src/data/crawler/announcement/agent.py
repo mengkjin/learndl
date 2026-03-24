@@ -86,7 +86,7 @@ class AnnouncementAgent:
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 3, group_num: int = 100, indent : int = 1 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, group_num: int = 100, indent : int = 1 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb.level(vb_level)
         workers = min(max(1, workers), 6)
