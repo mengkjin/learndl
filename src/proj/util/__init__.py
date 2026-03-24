@@ -10,9 +10,10 @@ from .email import Email
 from .device import Device , MemoryPrinter
 from .options import Options
 from .sqlite import DBConnHandler
+from .http import http_session
 
 from .script import *
-from .proxy import ProxyGetter
+from .proxy import ProxyAPI
 
 from . import plot as Plot
 

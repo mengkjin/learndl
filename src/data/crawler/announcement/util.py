@@ -1,6 +1,4 @@
 import json
-import time
-import httpx
 import re
 import threading
 import pandas as pd
@@ -11,26 +9,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Callable, TypeVar
 
-from src.proj import Logger , CALENDAR , DB
-
-CHROME_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-)
+from src.proj import CALENDAR , DB , Logger
+from src.proj.util.http import catch_http_errors
 
 BJTZ = ZoneInfo("Asia/Shanghai")
 
 T = TypeVar("T")
-
-# Server disconnected, client refused, timeout, etc. can be retried
-TRANSIENT = (
-    httpx.RemoteProtocolError,
-    httpx.ConnectError,
-    httpx.ReadTimeout,
-    httpx.WriteTimeout,
-    httpx.ConnectTimeout,
-    httpx.PoolTimeout,
-)
 
 def range_dates(start: int, end: int , step: int = 1) -> list[tuple[int , int]]:
     end = min(end, CALENDAR.update_to())
@@ -44,28 +28,12 @@ def range_dates(start: int, end: int , step: int = 1) -> list[tuple[int , int]]:
 
 def call_with_retry(func: Callable[[], T], * , label: str, attempts: int = 1, base_delay: float = 1.5) -> T | None:
     """If failed, retry with exponential backoff; if all failed, alert the reason and return ``None``."""
-    for i in range(attempts):
-        try:
-            return func()
-        except TRANSIENT as e:
-            if i == attempts - 1:
-                Logger.alert1(f"  [{label}] Reached maximum retry attempts, giving up: {e}")
-                return None
-            delay = base_delay * (2**i)
-            Logger.alert1(f"  [{label}] {type(e).__name__}: {e!s}, retry in {delay:.1f}s ({i + 1}/{attempts})")
-            time.sleep(delay)
-        except httpx.HTTPStatusError as e:
-            code = e.response.status_code
-            if code in (429, 502, 503, 504):
-                if i == attempts - 1:
-                    Logger.alert1(f"  [{label}] HTTP {code}, giving up: {e}")
-                    return None
-                delay = base_delay * (2**i)
-                Logger.alert1(f"  [{label}] HTTP {code}, retry in {delay:.1f}s ({i + 1}/{attempts})")
-                time.sleep(delay)
-                continue
-            raise
-    return None
+    try:
+        return catch_http_errors(func, label=label, attempts=attempts, base_delay=base_delay)
+    except Exception as e:
+        Logger.error(f"call_with_retry {label} failed: {e}")
+        Logger.alert2(f"uncaught exception in call_with_retry {e.__class__.__name__}: {e}")
+        return None
 
 def parse_jsonp(text: str) -> object:
     text = text.strip()
@@ -73,27 +41,6 @@ def parse_jsonp(text: str) -> object:
     if not m:
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
-
-def http_client(
-    *,
-    proxy: str | None = None,
-    trust_env: bool | None = None,
-    **kwargs: object,
-) -> httpx.Client:
-    # Disable keep-alive to reduce "Server disconnected" type half-open connections
-    limits = httpx.Limits(max_keepalive_connections=0, max_connections=20)
-    kw: dict = {
-        "headers": {"User-Agent": CHROME_UA},
-        "timeout": httpx.Timeout(120.0, connect=30.0),
-        "follow_redirects": True,
-        "limits": limits,
-    }
-    if proxy:
-        kw["proxy"] = proxy
-    if trust_env is not None:
-        kw["trust_env"] = trust_env
-    kw.update(kwargs)
-    return httpx.Client(**kw)
 
 @dataclass
 class Announcement:
@@ -223,6 +170,22 @@ class Announcement:
             p = "/" + p
         return base + p
 
+    @classmethod
+    def df_columns(cls) -> list[str]:
+        return [
+            "exchange",
+            "sec_code",
+            "sec_name",
+            "title",
+            "category",
+            "announce_date",
+            "detail_path",
+            "source_id",
+            "crawled_at",
+            "secid",
+            "date",
+        ]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "exchange": self.exchange,
@@ -280,13 +243,11 @@ class AnnouncementExporter:
         elif isinstance(data, list):
             data = pd.DataFrame([ann.to_dict() for ann in data if ann])
 
-        if data.empty:
-            Logger.alert1(f"No data to save for {start}~{end} {self.exchange}")
-            return
-
         df = pd.DataFrame(data)
+        if df.empty:
+            df = pd.DataFrame(columns=Announcement.df_columns())
         ex_codes = df["exchange"].unique()
-        if len(ex_codes) != 1:
+        if len(ex_codes) > 1:
             raise ValueError("save_exchange_day only accepts rows with a single exchange")
         for date in CALENDAR.cd_within(start, end):
             df_date = df.query("date == @date").reset_index(drop=True)

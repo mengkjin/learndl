@@ -1,19 +1,22 @@
-import httpx 
 import random
-from pprint import pformat
+from curl_cffi import requests
 from datetime import datetime
-from typing import Any , Generator
+from typing import Any, Callable , Literal
 from urllib.parse import urlencode
 from abc import ABC, abstractmethod
-from dataclasses import dataclass , field
-
-from threading import Lock
+from dataclasses import dataclass
 
 from src.proj import Logger
-from src.proj.util import ProxyGetter
-from .util import parse_jsonp , CHROME_UA , Announcement , http_client , call_with_retry , range_dates , AnnouncementExporter
+from src.proj.util import ProxyAPI
+from src.proj.util.http import http_session , CHROME_UA , temporary_timeout_expand
+from .util import parse_jsonp , Announcement , call_with_retry , range_dates , AnnouncementExporter
 
 EXCHANGES : list[str] = ['sse', 'szse', 'bse']
+EXCHANGE_URLS = {
+    "sse": "https://www.sse.com.cn", 
+    "szse": "https://www.szse.cn", 
+    "bse": "https://www.bse.cn"
+}
 
 @dataclass
 class FetcherTask:
@@ -22,11 +25,13 @@ class FetcherTask:
     end: int
     redownload: bool = False
 
-    proxies : list[str | None] = field(default_factory=lambda: [None])
-
     @property
     def exporter(self) -> AnnouncementExporter:
         return AnnouncementExporter(self.exchange)
+
+    @property
+    def url(self) -> str:
+        return EXCHANGE_URLS[self.exchange]
 
     @property
     def title(self) -> str:
@@ -36,60 +41,56 @@ class FetcherTask:
     def should_be_skipped(self) -> bool:
         return self.exporter.should_skip_download(self.start, self.end, redownload=self.redownload)
 
-    def _fetch(self, px: str | None, te: bool | None , attempts: int = 1) -> list[Announcement] | None:
-        with http_client(proxy=px, trust_env=te) as client:
+    @property
+    def proxy_pool(self):
+        if not hasattr(self, '_proxy_pool'):
+            self._proxy_pool = ProxyAPI.get_proxy_pool(list(EXCHANGE_URLS.values()))
+        return self._proxy_pool
+
+    def fetch(self, proxy: str | None, * , attempts: int = 1) -> list[Announcement] | None:
+        with http_session(proxy=proxy , trust_env = proxy is None) as client:
             fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, client)
-            suffix = f" [{px}]" if px else ""
+            suffix = f" [{proxy}]" if proxy else ""
             return call_with_retry(lambda: fetcher.fetch_date(self.start, self.end), label=f"{self.title}{suffix}", attempts=attempts)
+    
+    def claw(self , proxy: str | None, * , attempts: int = 1) -> bool:
+        if self.should_be_skipped:
+            return False
+        announcements = self.fetch(proxy, attempts=attempts)
+        if announcements is not None:
+            self.exporter.save_data(announcements, self.start, self.end)
+            return True
+        return False
 
-    def _client_options(self, use_proxies: bool = True, proxy_only : bool = True) -> Generator[tuple[str | None, bool | None], None, None]:
-        if use_proxies:
-            proxies = ExchangeFetcherStates.get_proxies(self.exchange)
-            random.shuffle(proxies)
-            for px in proxies:
-                yield px, False
-        if not proxy_only:
-            yield None, None
-
-    def run(self, *, proxy: str | None = None, trust_env: bool | None = None, auto_discover_proxy: bool = False , indent : int = 1 , vb_level : Any = 3) -> list[Announcement] | None:
+    def run(self, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3) -> bool:
         """Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) still fails and ``auto_discover_proxy`` is enabled."""
-        if not ExchangeFetcherStates.get_state(self.exchange):
-            return
-
+        result = False
         if self.should_be_skipped:
             Logger.skipping(f"{self.title}, already have historical data (use redownload to force re-download)" , indent = indent, vb_level = vb_level)
-            return
+            return result
+            
+        if not self.proxy_pool.is_invalid_url(self.url):
+            for _ in range(max_proxies_try):
+                proxy = self.proxy_pool.acquire(url=self.url)
+                if proxy is None:
+                    break
+                result = self.claw(proxy.addr)
+                self.proxy_pool.release(proxy, result is not None)
+                if result is not None:
+                    break
+        if result is None:
+            self.claw(None)
 
-        result = None
-        i = -1
-        for proxy, trust_env in self._client_options(use_proxies=auto_discover_proxy, proxy_only=True):
-            i += 1
-            if not ExchangeFetcherStates.get_proxy_state(self.exchange , proxy):
-                continue
-            result = self._fetch(proxy, trust_env)
-            if result is not None:
-                ExchangeFetcherStates.set_proxy_state(self.exchange , proxy, True)
-                break
-            ExchangeFetcherStates.add_proxy_fail_counts(self.exchange , proxy , indent = indent , vb_level = vb_level - 2)
-            if auto_discover_proxy and proxy is None and i == 0:
-                Logger.alert1(f"{self.title} failed to connect, will try to discover public proxy list" , indent = indent, vb_level = vb_level)
-        
-        if result is not None:
-            self.exporter.save_data(result, self.start, self.end)
-        else:
-            if auto_discover_proxy and i >= 1:
-                ExchangeFetcherStates.set_state(self.exchange, False)
         return result
-
-    def run_with_proxies(self, *, indent : int = 1 , vb_level : Any =2) -> None:
-        self.run(auto_discover_proxy=True, indent = indent, vb_level = vb_level)
 
     @classmethod
     def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False) -> list['FetcherTask']:
         tasks = []
         for start, end in range_dates(start, end, step):
             for exchange in EXCHANGES:
-                tasks.append(FetcherTask(exchange, start, end , redownload))
+                task = FetcherTask(exchange, start, end , redownload)
+                if not task.should_be_skipped:
+                    tasks.append(task)
         return tasks
 
     @classmethod
@@ -103,125 +104,46 @@ class FetcherTask:
             buckets[i % n].append(task)
         return [bucket for bucket in buckets if bucket]
 
-class ExchangeFetcherStates:
-    _proxies : dict[str, list[str]] = {exchange: [] for exchange in EXCHANGES}
-    _states : dict[str, bool] = {exchange: True for exchange in EXCHANGES}
-    _proxy_states: dict[str, dict[None | str , bool]] = {exchange: {None: False} for exchange in EXCHANGES}
-    _proxy_fail_counts: dict[str, dict[None | str , int]] = {exchange:{None:0} for exchange in EXCHANGES}
-    _proxy_refresh_counts: dict[str, int] = {exchange: 0 for exchange in EXCHANGES}
-
-    _locks : dict[str, Lock] = {'states': Lock(), 'proxy_states': Lock(), 'proxy_fail_counts': Lock(), 'proxies': Lock() , 'proxy_refresh_counts': Lock()}
-
-    MAX_CONNECTION_FAILURES = 2
-    MAX_PROXIES_FETCH_COUNTS = 3
-    verify_urls = {
-        "sse": "https://www.sse.com.cn", 
-        "szse": "https://www.szse.cn", 
-        "bse": "https://www.bse.cn"
-    }
-
-    @classmethod
-    def get_proxies(cls , exchange: str) -> list[str]:
-        with cls._locks['proxies']:
-            if not cls._proxies[exchange]:
-                proxies = ProxyGetter.get_working_proxies(cls.verify_urls[exchange])
-                cls._proxies[exchange] = proxies
-            return cls._proxies[exchange]
-
-    @classmethod
-    def init_all_proxies(cls) -> None:
-        for exchange in EXCHANGES:
-            cls.get_proxies(exchange)
-
-    @classmethod
-    def list_all_proxies(cls) -> str:
-        return pformat(cls._proxies)
-
-    @classmethod
-    def get_states(cls) -> dict[str, bool]:
-        with cls._locks['states']:
-            return {exchange: state for exchange, state in cls._states.items()}
-
-    @classmethod
-    def get_state(cls , exchange: str) -> bool:
-        with cls._locks['states']:
-            return cls._states[exchange]
-
-    @classmethod
-    def set_state(cls , exchange: str , state: bool , indent : int = 1 , vb_level : Any = 0):
-        with cls._locks['states']:
-            if state is False:
-                with cls._locks['proxy_refresh_counts']:
-                    if cls._proxy_refresh_counts[exchange] >= cls.MAX_PROXIES_FETCH_COUNTS:
-                        with cls._locks['proxies']:
-                            cls._proxies[exchange].clear()
-                        cls.get_proxies(exchange)
-                        cls._states[exchange] = state
-                        cls._proxy_refresh_counts[exchange] += 1
-                        Logger.alert2(f"Exchange {exchange} may have failed too many times, try to refresh the proxy list" , indent = indent , vb_level = vb_level)
-                    else:
-                        Logger.alert2(f"Exchange {exchange} may have failed too many times, this task will not try this exchange anymore" , indent = indent , vb_level = vb_level)
-            else:
-                cls._states[exchange] = state
-        
-    @classmethod
-    def get_proxy_state(cls , exchange: str , proxy: str | None) -> bool:
-        with cls._locks['proxy_states']:
-            return cls._proxy_states[exchange].get(proxy, True)
-
-    @classmethod
-    def set_proxy_state(cls , exchange: str , proxy: str | None , state: bool , indent : int = 1 , vb_level : Any = 0):
-        with cls._locks['proxy_states']:
-            cls._proxy_states[exchange][proxy] = state
-        if state:
-            cls.set_state(exchange, True , indent = indent , vb_level = vb_level)
-        else:
-            Logger.alert1(f"Exchange {exchange} with proxy {proxy} Aborted, exceed the limit of connection failures" , indent = indent , vb_level = vb_level)
-
-    @classmethod
-    def add_proxy_fail_counts(cls , exchange: str , proxy: str | None , indent : int = 1 , vb_level : Any = 0):
-        with cls._locks['proxy_fail_counts']:
-            cls._proxy_fail_counts[exchange][proxy] = cls._proxy_fail_counts[exchange].get(proxy, 0) + 1
-            if cls._proxy_fail_counts[exchange][proxy] >= cls.MAX_CONNECTION_FAILURES:
-                cls.set_proxy_state(exchange, proxy, False , indent = indent , vb_level = vb_level)
-                
-    @classmethod
-    def reset_states(cls) -> None:
-        """When a new task starts, clear the disabled and failure counts for each exchange."""
-        with cls._locks['proxies']:
-            cls._proxies = {exchange: [] for exchange in EXCHANGES}
-        with cls._locks['states']:
-            cls._states = {exchange: True for exchange in EXCHANGES}
-        with cls._locks['proxy_states']:
-            cls._proxy_states = {exchange: {None: True} for exchange in EXCHANGES}
-        with cls._locks['proxy_fail_counts']:
-            cls._proxy_fail_counts = {exchange: {None: 0} for exchange in EXCHANGES}
-
 class AnnoucementFetcher(ABC):
+    exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 
-    def __init__(self, client: httpx.Client):
+    def __init__(self, client: requests.Session):
         self.client = client
 
-    def fetch_date(self , start: int , end: int | None = None) -> list[Announcement]:
+    def fetch_date(self , start: int , end: int | None = None) -> list[Announcement] | None:
         if end is None:
             end = start
         out: list[Announcement] = []
         seen: set[tuple[str, str, str, int]] = set()
         for kwargs in self.FETCH_KWARGS:
-            announcements = self.fetch_announcements(start, end, **kwargs)
+            try:
+                announcements = self.fetch_announcements(start, end, **kwargs)
+            except TimeoutError as e:
+                Logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
+                return None
             for ann in announcements:
                 if ann and ann.key not in seen:
                     out.append(ann)
                 seen.add(ann.key)
         return out
 
+    def request_with_timeouterror(self, func: Callable[..., requests.Response], *args, **kwargs) -> requests.Response:
+        try:
+            r = func(*args, **kwargs)
+            r.raise_for_status()
+        except TimeoutError:
+            with temporary_timeout_expand(self.client):
+                r = func(*args, **kwargs)
+                r.raise_for_status()
+        return r
+
     @abstractmethod
     def fetch_announcements(self, start : int, end: int) -> list[Announcement]:
         raise NotImplementedError
 
     @classmethod
-    def exchange_fetcher(cls, exchange: str , client: httpx.Client):
+    def exchange_fetcher(cls, exchange: str , client: requests.Session):
         if exchange.lower() == "sse":
             return SSEAnnFetcher(client)
         elif exchange.lower() == "szse":
@@ -231,8 +153,8 @@ class AnnoucementFetcher(ABC):
         else:
             raise ValueError(f"Invalid exchange: {exchange}")
 
-
 class SSEAnnFetcher(AnnoucementFetcher):
+    exchange = "sse"
     REFERER = "https://www.sse.com.cn/"
     JSONP_URL = "https://query.sse.com.cn/security/stock/queryCompanyBulletinNew.do"
     FETCH_KWARGS : list[dict[str, Any]] = [{"stock_type": "1"}, {"stock_type": "8"}]
@@ -258,8 +180,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
                 "TITLE": "",
                 "stockType": stock_type,
             }
-            r = self.client.get(self.JSONP_URL,params=params,headers={"Referer": self.REFERER})
-            r.raise_for_status()
+            r = self.request_with_timeouterror(self.client.get, self.JSONP_URL, params=params, headers={"Referer": self.REFERER})
             payload = parse_jsonp(r.text)
             if not isinstance(payload, dict):
                 break
@@ -285,6 +206,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
         return rows
 
 class SZSEAnnFetcher(AnnoucementFetcher):
+    exchange = "szse"
     REFERER = "https://www.szse.cn/disclosure/listed/notice/index.html"
     ANN_LIST = "https://www.szse.cn/api/disc/announcement/annList"
 
@@ -305,8 +227,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
         while True:
             body = {**body_base, "pageNum": page_num}
             url = f"{self.ANN_LIST}?random={random.random()}"
-            r = self.client.post(url, json=body, headers=headers)
-            r.raise_for_status()
+            r = self.request_with_timeouterror(self.client.post, url, json=body, headers=headers)
             data = r.json()
             chunk = data.get("data") or []
             if not chunk:
@@ -320,6 +241,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
         return out
 
 class BSEAnnFetcher(AnnoucementFetcher):
+    exchange = "bse"
     REFERER = "https://www.bse.cn/disclosure/announcement.html"
     ANNOUNCE_URL = "https://www.bse.cn/disclosureInfoController/companyAnnouncement.do"
 
@@ -338,8 +260,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
 
         while True:
             body = self._query_body(page, start, end)
-            r = self.client.post(self.ANNOUNCE_URL, content=body, headers=headers)
-            r.raise_for_status()
+            r = self.request_with_timeouterror(self.client.post, self.ANNOUNCE_URL, data=body, headers=headers)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, list) or not payload:
                 break

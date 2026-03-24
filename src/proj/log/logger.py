@@ -416,29 +416,40 @@ class Logger:
         def __init__(self , *args , silent = False , indent = 0 , 
                      vb_level : Any = 1 , enter_vb_level : Any = 'max'): 
             self.key = '/'.join(args)
+            self.key_suffix = ''
             self.silent = silent
             self.indent = indent
             self.vb_level = Proj.vb.level(vb_level)
             self.enter_vb_level = Proj.vb.level(enter_vb_level)
+            self.exit_infos : list[str] = []
     
         def __enter__(self):
             self._init_time = datetime.now()
             if not self.silent: 
-                new_stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
+                Logger.stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
+            return self
         def __exit__(self, type, value, trace):
             if not self.silent:
-                new_stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
+                if self.exit_infos:
+                    Logger.stdout(','.join(self.exit_infos) , indent = self.indent + 1 , vb_level = self.vb_level)
+                Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
         def __repr__(self):
             return f'{self.__class__.__name__}({self.key},vb_level={self.vb_level},enter_vb_level={self.enter_vb_level})'
+        def add_exit_infos(self , *msgs):
+            """Set the infos"""
+            self.exit_infos.extend(msgs)
+        def add_key_suffix(self , *msgs):
+            """Set the exit string"""
+            self.key_suffix = ' '.join(msgs)
 
         @property
         def enter_str(self):
             """Get the enter string"""
-            return f'{self.__class__.__name__}({self.key}) start ... '
+            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) start ... '
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.__class__.__name__}({self.key}) finished! Cost {Duration(since = self._init_time)}'
+            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Duration(since = self._init_time)}'
 
     class Paragraph:
         """
@@ -450,20 +461,31 @@ class Logger:
         VB_LEVEL = 1
         def __init__(self , title : str , level : Literal[1,2,3,4,5] , char : Literal['-' , '=' , '*'] = '*', 
                      vb_level : Any = 0 , enter_vb_level : Any = 0):
-            self.title = title.title()
+            self.key = title.title()
+            self.key_suffix = ''
             self.level = level
             self.char : Literal['-' , '=' , '*'] = char
             self.color = ['lightyellow' , 'lightgreen' , 'lightcyan' , 'white' , 'gray'][level-1]
             self.vb_level = max(Proj.vb.level(vb_level) , 1 if level == 1 else 2)
             self.enter_vb_level = max(Proj.vb.level(enter_vb_level) , 1 if level == 1 else 2)
+            self.exit_infos : list[str] = []
 
         def __enter__(self):
             self._init_time = datetime.now()
-            self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}', vb_level = self.enter_vb_level)
+            self.write(f'{self.key}{self.key_suffix} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}', vb_level = self.enter_vb_level)
+            return self
         def __exit__(self, *args): 
             self._end_time = datetime.now()
-            self.write(f'{self.title} Finish at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}, Cost {Duration(self._end_time - self._init_time)}' ,
+            if self.exit_infos:
+                Logger.stdout(','.join(self.exit_infos) , indent = 1 , vb_level = self.vb_level , color = self.color , bold = True)
+            self.write(f'{self.key}{self.key_suffix} Finish at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}, Cost {Duration(self._end_time - self._init_time)}' ,
                        vb_level = self.vb_level)
+        def add_exit_infos(self , *msgs):
+            """Set the infos"""
+            self.exit_infos.extend(msgs)
+        def add_key_suffix(self , *msgs):
+            """Set the exit string"""
+            self.key_suffix = ' '.join(msgs)
         def write(self , message : str , vb_level : Any = 0):
             Logger.divider(char = self.char , msg = message , color = self.color , bold = True , vb_level = vb_level)
     
@@ -475,7 +497,8 @@ class Logger:
                      enter_vb_level : Any = 1 , indent : int = 0,
                      **kwargs) -> None:
             self.profiling = title is not None
-            self.title = title
+            self.key = title
+            self.key_suffix = ''
             if self.profiling: 
                 super().__init__(builtins = builtins) 
             self.display = display
@@ -486,31 +509,40 @@ class Logger:
             self.indent = indent
             self.enter_vb_level = Proj.vb.level(enter_vb_level)
             self.vb_level = Proj.vb.level(vb_level)
+            self.exit_infos : list[str] = []
+        def add_exit_infos(self , *msgs):
+            """Set the infos"""
+            self.exit_infos.extend(msgs)
+        def add_key_suffix(self , *msgs):
+            """Set the exit string"""
+            self.key_suffix = ' '.join(msgs)
 
         @property
         def enter_str(self):
             """Get the enter string"""
-            return f'{self.__class__.__name__}({self.title}) start ... '
+            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) start ... '
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.__class__.__name__}({self.title}) finished! Cost {Duration(since = self.start_time)}'
+            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Duration(since = self.start_time)}'
 
         def __enter__(self):
             if self.profiling: 
                 self.start_time = datetime.now()
-                new_stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
+                Logger.stdout(self.enter_str , indent = self.indent , vb_level = self.enter_vb_level)
                 return super().__enter__()
             else:
                 return self
 
         def __exit__(self, type , value , trace):
+            if self.exit_infos:
+                Logger.stdout(','.join(self.exit_infos) , vb_level = self.vb_level , indent = self.indent + 1 , bold = True)
             if type is not None:
                 Logger.error(f'Error in Profiler ' , type , value)
                 new_print_exc(value)
             elif self.profiling:
                 if self.display:
-                    new_stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
+                    Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
                     df = self.get_df(sort_on = self.sort_on , highlight = self.highlight)
                     Display(df.loc[:,self.columns].head(self.n_head))
                 return super().__exit__(type , value , trace)
@@ -532,8 +564,8 @@ class Logger:
             df['percall'] = df['cumtime'] / df['ncalls']
             column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'percall' , 'where' , 'memory' , 'full_name', 'caller']
             df = df.loc[:,column_order]
-            if self.title is not None: 
-                path = PATH.logs.joinpath('profiler' , f'{self.title.replace(" ","_")}.csv')
+            if self.key is not None: 
+                path = PATH.logs.joinpath('profiler' , f'{self.key.replace(" ","_")}.csv')
                 df.to_csv(path)
                 Logger.footnote(f'Profile result saved to {path}')
             if isinstance(highlight , str): 
