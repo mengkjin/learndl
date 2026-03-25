@@ -104,9 +104,14 @@ class ProxyCaller:
         self.url = url
         self.finished = False
         self.result = None
+        self.banned = False
 
     def __call__(self, *args: Any, **kwargs: Any) -> bool | None:
         return self.proxied(*args, **kwargs)
+
+    def ban(self):
+        """Ban the caller"""
+        self.banned = True
 
     def proxied(self , *args: Any, **kwargs: Any) -> bool | None:
         """Call the function with a proxy"""
@@ -140,16 +145,18 @@ class ProxyCallerList:
     def all_finished(self) -> bool:
         return len(self) == 0 or all(caller.finished for caller in self.callers)
 
-    @property
-    def unable_to_proceed(self) -> bool:
+    def is_unable_to_proceed(self) -> bool:
         """Whether the proxy pool is unable to proceed"""
-        if self.all_finished:
-            return True
-        return all(self.pool.url_shutdown(url) for url in self.remain_urls)
+        self.check_shutdown()
+        return len(self) == 0 or all(caller.finished or caller.banned for caller in self.callers)
 
-    @property
-    def remain_urls(self) -> list[str]:
-        return list(set(caller.url for caller in self.callers if not caller.finished))
+    def check_shutdown(self):
+        """Ban the url"""
+        if isinstance(self.pool , ProxyPool) and self.pool.shutdown:
+            [caller.ban() for caller in self.callers]
+        elif isinstance(self.pool , ProxyPoolMultiURL):
+            shutdown_urls = [url for url in self.pool.verify_urls if self.pool.url_shutdown(url)]
+            [caller.ban() for caller in self.callers if caller.url in shutdown_urls]
 
     def results(self) -> list[bool | None]:
         return [caller.result for caller in self.callers]
@@ -276,7 +283,7 @@ class ProxyPool:
         groups = callers.partition(grouping_num)
         for group in groups:
             group.execute(max_workers=max_workers , **kwargs)
-            if group.unable_to_proceed:
+            if group.is_unable_to_proceed():
                 break
         return callers.results()
 
@@ -410,7 +417,7 @@ class ProxyPoolMultiURL:
         groups = callers.partition(grouping_num)
         for group in groups:
             group.execute(max_workers=max_workers , **kwargs)
-            if group.unable_to_proceed:
+            if group.is_unable_to_proceed():
                 break
         return callers.results()
 
@@ -484,23 +491,24 @@ class ProxyPoolAutoRefresh(ProxyPoolMultiURL):
         if less than threshold requires another refresh, it means the proxy pool is not working well, we will give up to refresh
         """
         for url in self.verify_urls:
-            valid_proxy_ratio = self.valid_proxy_ratio(url)
-            if self.refresh_enabled[url] and valid_proxy_ratio < self.refresh_threshold:
-                refresh_time = datetime.now()
-                if refresh_time - self.refresh_time[url] < timedelta(seconds=self.refresh_interval):
-                    Logger.alert1(f"URL {url} Proxies refresh re-called too soon, will not refresh anymore")
-                    self.refresh_enabled[url] = False
-                    continue
-                self.refresh_proxies(url , verbose = 0)
-                self.refresh_attempt[url] += 1
-                if self.proxies[url]:
-                    Logger.success(f"URL {url} Proxies valid ratio drop to {valid_proxy_ratio:.2f}, refresh to {len(self.proxies[url])} proxies")
-                if self.refresh_attempt[url] >= self.refresh_max_attempts:
-                    self.refresh_enabled[url] = False
-                    Logger.alert1(f"URL {url} Proxies refresh count reached max attempts {self.refresh_max_attempts} , will not refresh anymore")
-                elif self.is_invalid_url(url):
-                    self.refresh_enabled[url] = False
-                    Logger.alert1(f"URL {url} Proxies refresh failed with no new proxies, will not refresh anymore")
+            if ((valid_proxy_ratio := self.valid_proxy_ratio(url)) >= self.refresh_threshold) or not self.refresh_enabled[url]:
+                continue
+            prefix = f'URL {url} Proxies '
+            refresh_time = datetime.now()
+            if refresh_time - self.refresh_time[url] < timedelta(seconds=self.refresh_interval):
+                Logger.alert1(f"{prefix}refresh re-called too soon, will not refresh anymore")
+                self.refresh_enabled[url] = False
+                continue
+            self.refresh_proxies(url , verbose = 0)
+            self.refresh_attempt[url] += 1
+            if self.proxies[url]:
+                Logger.success(f"{prefix}valid ratio drop to {valid_proxy_ratio:.2f}, refresh to {len(self.proxies[url])} proxies")
+            if self.refresh_attempt[url] >= self.refresh_max_attempts:
+                self.refresh_enabled[url] = False
+                Logger.alert1(f"{prefix}refresh count reached max attempts {self.refresh_max_attempts}, will not refresh anymore")
+            elif self.is_invalid_url(url):
+                self.refresh_enabled[url] = False
+                Logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
                 
     def execute(self , url_func_tuples : Iterable[tuple[str, Callable[..., bool]]] , * , 
                 fallback_to_raw_ip: bool = False,
@@ -508,12 +516,14 @@ class ProxyPoolAutoRefresh(ProxyPoolMultiURL):
         callers = ProxyCallerList.from_inputs(self , url_func_tuples)
         groups = callers.partition(grouping_num)
         for group in groups:
-            while True:
+            for _ in range(10):
                 group.execute(max_workers=max_workers , **kwargs)
                 self.refresh()
-                if group.unable_to_proceed:
+                if group.is_unable_to_proceed():
                     break
-            if callers.unable_to_proceed:
+            else:
+                Logger.alert2(f"Proxy pool is refreshed too many times, but still able to proceed, WHY?")
+            if not group.is_unable_to_proceed() or callers.is_unable_to_proceed():
                 break
         if fallback_to_raw_ip and not callers.all_finished:
             callers.fallback()
