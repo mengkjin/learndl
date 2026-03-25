@@ -1,6 +1,7 @@
 import random
 import threading
 import time
+import numpy as np
 from datetime import datetime , timedelta
 from typing import Callable , Any , Iterable , Literal
 
@@ -11,12 +12,22 @@ from .verifier import ProxyVerifier
 
 MAX_WORKERS : int = 3 # max workers for the proxy pool for a single url, cannot set to large as it will cause the proxy pool to be overwhelmed
 
-class StatedProxy:
+def test_proxies():
+    """Test fake proxies"""
+    return [
+        "1.2.3.4:8080",
+        "5.6.7.8:3128",
+        "9.10.11.12:9999",
+        "4.4.4.4:8080",
+        "5.5.5.5:3129",
+    ]
+
+class ProxyWithStats:
     """A stated proxy, can be used to track the state of a proxy"""
     invalid_threshold : int = 3
     max_concurrent : int = 2
 
-    _instances : dict[str, 'StatedProxy'] = {}
+    _instances : dict[str, 'ProxyWithStats'] = {}
 
     def __new__(cls, addr: str):
         if addr not in cls._instances:
@@ -85,35 +96,148 @@ class StatedProxy:
         else:
             self.stats['error'] += 1
 
+class ProxyCaller:
+    """A function that can be used to execute a function with a proxy"""
+    def __init__(self, pool: 'ProxyPoolMultiURL | ProxyPool', func: Callable[..., bool] , url: str = ''):
+        self.pool = pool
+        self.func = func
+        self.url = url
+        self.finished = False
+        self.result = None
+
+    def __call__(self, *args: Any, **kwargs: Any) -> bool | None:
+        return self.proxied(*args, **kwargs)
+
+    def proxied(self , *args: Any, **kwargs: Any) -> bool | None:
+        """Call the function with a proxy"""
+        proxy = self.pool.acquire(self.url)
+        if proxy is None:
+            return None
+        self.result = self.func(proxy.addr , *args, **kwargs)
+        self.finished = True
+        self.pool.release(proxy, self.result)
+        return self.result
+
+    def fallback(self , *args: Any, **kwargs: Any) -> bool:
+        """Fallback to raw ip"""
+        self.result = self.func(None , *args, **kwargs)
+        self.finished = True
+        return self.result
+
+class ProxyCallerList:
+    """A list of proxy callers"""
+    def __init__(self, callers: list['ProxyCaller'] , pool: 'ProxyPoolMultiURL | ProxyPool'):
+        self.callers = callers
+        self.pool = pool
+
+    def __len__(self) -> int:
+        return len(self.callers)
+
+    def __bool__(self) -> bool:
+        return bool(self.callers)
+
+    @property
+    def all_finished(self) -> bool:
+        return len(self) == 0 or all(caller.finished for caller in self.callers)
+
+    @property
+    def unable_to_proceed(self) -> bool:
+        """Whether the proxy pool is unable to proceed"""
+        if self.all_finished:
+            return True
+        return all(self.pool.url_shutdown(url) for url in self.remain_urls)
+
+    @property
+    def remain_urls(self) -> list[str]:
+        return list(set(caller.url for caller in self.callers if not caller.finished))
+
+    def results(self) -> list[bool | None]:
+        return [caller.result for caller in self.callers]
+
+    def realigned_callers(self) -> list['ProxyCaller']:
+        """Realign callers to the make iteration more diverse"""
+        step_size = int(np.round(np.sqrt(len(self.callers))))
+        sor = sorted(self.callers , key = lambda x: x.url)
+        new = []
+        for i in range(0, step_size):
+            new.extend(sor[i::step_size])
+        assert len(new) == len(new) , (len(new) , len(self.callers))
+        return new
+
+    def execute(self , * , max_workers : int = MAX_WORKERS):
+        """Execute the unfinished callers with a thread pool"""
+        unfinished_callers = [caller for caller in self.callers if not caller.finished]
+        if max_workers == 1:
+            for caller in unfinished_callers:
+                caller.proxied()
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                fut_map = {pool.submit(caller.proxied): caller for caller in unfinished_callers}
+                for fut in as_completed(fut_map):
+                    fut.result()
+
+    def fallback(self):
+        """Fallback to raw ip"""
+        for caller in self.callers:
+            if not caller.finished:
+                caller.fallback()
+
+    @classmethod
+    def from_inputs(
+        cls , pool: 'ProxyPoolMultiURL | ProxyPool', 
+        inputs : Iterable[Callable[..., bool]] | Iterable[tuple[str, Callable[..., bool]]]
+    ) -> 'ProxyCallerList':
+        """Create a ProxyCallerList from inputs of Iterable[func: Callable[..., bool]] | Iterable[tuple[url: str, func: Callable[..., bool]]]"""
+        callers : list[ProxyCaller] = []
+        for func in inputs:
+            if isinstance(func , tuple):
+                callers.append(ProxyCaller(pool , func[1] , func[0]))
+            else:
+                callers.append(ProxyCaller(pool , func))
+        self = cls(callers , pool)
+        return self
+
+    def partition(self , grouping_num : int = 100) -> list['ProxyCallerList']:
+        """Partition the callers into groups"""
+        if not self.callers:
+            return []
+        callers = self.realigned_callers()
+        num_groups = np.ceil(len(callers) / grouping_num)
+        max_callers_per_group = np.ceil(len(callers) / num_groups)
+        groups = []
+        for i in range(num_groups):
+            groups.append(ProxyCallerList(callers[i * max_callers_per_group:(i + 1) * max_callers_per_group] , self.pool))
+        return groups
+
 class ProxyPool:
     """Proxy pool, can be used to acquire and release proxies in a thread-safe manner"""
     def __init__(self, proxies: dict[str , list[str]] | list[str] , * , invalid_threshold: int | None = None, max_concurrent: int | None = None):
         self.lock = threading.Lock()
         self.condition = threading.Condition(self.lock)
-        StatedProxy.set_class_attrs(invalid_threshold = invalid_threshold, max_concurrent = max_concurrent)
-        self.proxies: list[StatedProxy] = [StatedProxy(proxy) for proxy in proxies]
+        ProxyWithStats.set_class_attrs(invalid_threshold = invalid_threshold, max_concurrent = max_concurrent)
+        self.proxies: list[ProxyWithStats] = [ProxyWithStats(proxy) for proxy in proxies]
         self.invalid_printed = False
 
     def __len__(self) -> int:
         return len(self.proxies)
 
     def __bool__(self) -> bool:
-        return not self._is_all_invalid()
+        return not self.shutdown
 
     @property
     def shutdown(self) -> bool:
         """Whether the proxy pool is shutdown"""
-        return self._is_all_invalid()
+        return self.valid_proxy_ratio() == 0.0
 
-    def _is_all_invalid(self) -> bool:
-        """Whether all proxies are invalid"""
-        return all(proxy.invalid for proxy in self.proxies)
+    def url_shutdown(self , *args) -> bool:
+        """Whether the url is shutdown"""
+        return self.shutdown
 
-    def _valid_proxy_ratio(self) -> float:
+    def valid_proxy_ratio(self) -> float:
         """The ratio of invalid proxies"""
-        return sum(proxy.valid for proxy in self.proxies) / len(self.proxies)
+        return 0.0 if not self.proxies else sum(proxy.valid for proxy in self.proxies) / len(self.proxies)
 
-    def _pick_a_proxy(self) -> StatedProxy | None:
+    def pick_a_proxy(self) -> ProxyWithStats | None:
         """Get available proxies"""
         available_proxies = [proxy for proxy in self.proxies if proxy.available]
         if available_proxies:
@@ -122,82 +246,44 @@ class ProxyPool:
             return proxy
         return None
 
-    def acquire(self) -> StatedProxy | None:
+    def acquire(self , *args) -> ProxyWithStats | None:
         """Acquire a proxy, if no available proxy but some proxies are not invalid, wait until a proxy is available, otherwise return None"""
         with self.condition:
             while True:
                 # condition 1: if all proxies are invalid, return None
-                if self._is_all_invalid():
+                if self.shutdown:
                     if not self.invalid_printed:
                         Logger.alert2(f"All proxies are invalid, return None")
                         self.invalid_printed = True
                     return None
 
                 # condition 2: if there are available proxies, randomly select one and return it
-                if proxy := self._pick_a_proxy():
+                if proxy := self.pick_a_proxy():
                     return proxy
 
                 # condition 3: if there are no available proxies, wait until a proxy is available
                 self.condition.wait()
 
-    def release(self, proxy: StatedProxy, success: bool) -> None:
+    def release(self, proxy: ProxyWithStats, success: bool) -> None:
         """Release a proxy, and update the state of this usage."""
         with self.condition:
             proxy.release(success)
             # notify all waiting threads that the proxy state has changed
             self.condition.notify_all()
 
-    def join(self , func: Callable[..., bool] , func_name_suffix: str = '') -> Callable[..., bool | None]:
-        """
-        Join a function to the proxy pool, return a new function
-        input function should have the first argument as a proxy, and return a bool value (True if success, False if failed, cannot return None)
-        return a new function without the proxy argument as it will be acquired from the proxy pool, and return a bool value
-        """
-        def wrapper(*args: Any, **kwargs: Any) -> bool | None:
-            proxy = self.acquire()
-            if proxy is None:
-                return None
-            ret = func(proxy.addr , *args, **kwargs)
-            self.release(proxy, ret)
-            return ret
-        wrapper.__name__ = f'{func.__name__}{func_name_suffix}'
-        return wrapper
-
-    def execute_group(self , calls : Iterable[tuple[int, Callable[..., bool | None]]] , results : list[bool | None] , * , max_workers : int = MAX_WORKERS , **kwargs) -> bool:
-        unfinished_calls = [(i, call) for i, call in calls if results[i] is None]
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            fut_map = {pool.submit(call , **kwargs): (i,call) for i, call in unfinished_calls}
-            for fut in as_completed(fut_map):
-                results[fut_map[fut][0]] = fut.result()
-        return not any(results[i] is None for i, _ in unfinished_calls)
-
     def execute(self , funcs : Iterable[Callable[..., bool]] , * , max_workers : int = MAX_WORKERS , grouping_num : int = 100 , **kwargs) -> list[bool | None]:
-        calls = [(i , self.join(func , f'_{i}')) for i , func in enumerate(funcs)]
-        results : list[bool | None] = [None for _ in range(len(calls))]
-        groups : list[list[tuple[int, Callable[..., bool | None]]]] = [[] for _ in range(len(calls) // grouping_num + 1)]
-        for i in range(len(calls)):
-            groups[i % len(groups)].append(calls[i])
+        callers = ProxyCallerList.from_inputs(self , funcs)
+        groups = callers.partition(grouping_num)
         for group in groups:
-            self.execute_group(group , results , max_workers=max_workers , **kwargs)
-            if self._is_all_invalid():
+            group.execute(max_workers=max_workers , **kwargs)
+            if group.unable_to_proceed:
                 break
-        return results
-
-    @classmethod
-    def test_proxies(cls):
-        """Test fake proxies"""
-        return [
-            "1.2.3.4:8080",
-            "5.6.7.8:3128",
-            "9.10.11.12:9999",
-            "4.4.4.4:8080",
-            "5.5.5.5:3129",
-        ]
+        return callers.results()
 
     @classmethod
     def test(cls):
         """return a test proxy pool"""
-        return cls(cls.test_proxies() , invalid_threshold=1 , max_concurrent=2)
+        return cls(test_proxies() , invalid_threshold=1 , max_concurrent=2)
 
     def test_workers(self , max_workers : int = 3):
         """test a number of workers"""
@@ -218,7 +304,6 @@ class ProxyPool:
         workers = [lambda proxy, i=i: test_worker(proxy, worker_id=i) for i in range(4 * len(self))]
         return self.execute(workers , max_workers=max_workers)
 
-
 class ProxyPoolMultiURL:
     """Proxy pool, can be used to acquire and release proxies in a thread-safe manner"""
     def __init__(self, target_url: list[str] | str | Literal['test'], * , 
@@ -230,16 +315,14 @@ class ProxyPoolMultiURL:
         self.lock = threading.Lock()
         self.condition = threading.Condition(self.lock)
         self.verify_urls = target_url if isinstance(target_url , list) else [target_url]
-        StatedProxy.set_class_attrs(invalid_threshold = invalid_threshold, max_concurrent = max_concurrent)
-        self.proxies : dict[str , list[StatedProxy]] = {url: [] for url in self.verify_urls}
+        ProxyWithStats.set_class_attrs(invalid_threshold = invalid_threshold, max_concurrent = max_concurrent)
+        self.proxies : dict[str , list[ProxyWithStats]] = {url: [] for url in self.verify_urls}
         self.refresh_time = {url: datetime.now() for url in self.verify_urls}
         self.invalid_printed = {url: False for url in self.verify_urls}
-        self.refresh_proxies(url = 'all' , input_proxies=proxies , go_with_cached_proxies=go_with_cached_proxies)
+        self.refresh_proxies(url = 'all' , go_with_cached_proxies=go_with_cached_proxies , verbose = 1)
         
-    def refresh_proxies(self , url : str | Literal['all' , 'test'] , input_proxies : dict[str , list[str]] | None = None ,
-                        go_with_cached_proxies: bool = False):
+    def refresh_proxies(self , url : str | Literal['all' , 'test'] , go_with_cached_proxies: bool = False , verbose: int = 3):
         """Get the working proxies from the pool's proxy API"""
-        input_proxies = input_proxies or {}
         if url == 'all':
             urls = self.verify_urls
         else:
@@ -247,24 +330,24 @@ class ProxyPoolMultiURL:
         with self.condition:
             for url in urls:
                 enabled_proxies = [proxy for proxy in self.proxies.get(url, []) if not proxy.invalid]
-                new_proxies = input_proxies[url] if url in input_proxies else self.get_working_proxies(url, go_with_cached_proxies)
-                new_proxies = [StatedProxy(proxy) for proxy in new_proxies]
+                new_proxies = self.get_working_proxies(url, go_with_cached_proxies , verbose = verbose)
+                new_proxies = [ProxyWithStats(proxy) for proxy in new_proxies]
                 self.proxies[url] = enabled_proxies + new_proxies
                 self.refresh_time[url] = datetime.now()
 
     @classmethod
-    def get_working_proxies(cls , url : str , go_with_cached_proxies: bool = False) -> list[str]:
+    def get_working_proxies(cls , url : str , go_with_cached_proxies: bool = False , verbose: int = 3) -> list[str]:
         """Get the working proxies from the pool's proxy API"""
         if url == 'test':
-            return cls.test_proxies()
+            return test_proxies()
         else:
-            return ProxyVerifier.get_working_proxies(url, go_with_cached_proxies=go_with_cached_proxies)
+            return ProxyVerifier.get_working_proxies(url, go_with_cached_proxies=go_with_cached_proxies , verbose=verbose)
 
     def __len__(self) -> int:
         return len(self.verify_urls)
 
     def __bool__(self) -> bool:
-        return not self._is_all_invalid()
+        return not self.shutdown
 
     @property
     def num_proxies(self) -> dict[str, int]:
@@ -273,21 +356,21 @@ class ProxyPoolMultiURL:
     @property
     def shutdown(self) -> bool:
         """Whether the proxy pool is shutdown"""
-        return self._is_all_invalid()
+        return all(self.url_shutdown(url) for url in self.verify_urls)
 
-    def _is_all_invalid(self) -> bool:
-        """Whether all proxies are invalid"""
-        return all(self.is_invalid_url(url) for url in self.verify_urls)
+    def url_shutdown(self , url: str) -> bool:
+        """Whether the url is shutdown"""
+        return self.is_invalid_url(url)
 
     def is_invalid_url(self , url: str) -> bool:
         """Whether the url is invalid"""
-        return all(proxy.invalid for proxy in self.proxies[url])
+        return self.valid_proxy_ratio(url) == 0
 
-    def _valid_proxy_ratio(self , url: str) -> float:
+    def valid_proxy_ratio(self , url: str) -> float:
         """The ratio of invalid proxies"""
-        return sum(proxy.valid for proxy in self.proxies[url]) / len(self.proxies[url])
+        return 0 if not self.proxies[url] else sum(proxy.valid for proxy in self.proxies[url]) / len(self.proxies[url])
 
-    def _pick_a_proxy(self , url: str) -> StatedProxy | None:
+    def pick_a_proxy(self , url: str) -> ProxyWithStats | None:
         """Get available proxies"""
         available_proxies = [proxy for proxy in self.proxies[url] if proxy.available]
         if available_proxies:
@@ -296,8 +379,9 @@ class ProxyPoolMultiURL:
             return proxy
         return None
 
-    def acquire(self , url: str) -> StatedProxy | None:
+    def acquire(self , url: str) -> ProxyWithStats | None:
         """Acquire a proxy, if no available proxy but some proxies are not invalid, wait until a proxy is available, otherwise return None"""
+        assert url , "url is required"
         with self.condition:
             while True:
                 # condition 1: if all proxies for the url are invalid, return None
@@ -308,69 +392,27 @@ class ProxyPoolMultiURL:
                     return None
 
                 # condition 2: if there are available proxies, randomly select one and return it
-                if proxy := self._pick_a_proxy(url):
+                if proxy := self.pick_a_proxy(url):
                     return proxy
 
                 # condition 3: if there are no available proxies, wait until a proxy is available
                 self.condition.wait()
 
-    def release(self, proxy: StatedProxy, success: bool) -> None:
+    def release(self, proxy: ProxyWithStats, success: bool) -> None:
         """Release a proxy, and update the state of this usage."""
         with self.condition:
             proxy.release(success)
             # notify all waiting threads that the proxy state has changed
             self.condition.notify_all()
 
-    def join(self , func: Callable[..., bool] , url: str , func_name_suffix: str = '') -> Callable[..., bool | None]:
-        """
-        Join a function to the proxy pool, return a new function
-        input function should have the first argument as a proxy, and return a bool value
-        return a new function without the proxy argument as it will be acquired from the proxy pool, and return a bool value
-        """
-        def wrapper(*args: Any, **kwargs: Any) -> bool | None:
-            proxy = self.acquire(url)
-            if proxy is None:
-                return None
-            ret = func(proxy.addr , *args, **kwargs)
-            self.release(proxy, ret)
-            return ret
-        wrapper.__name__ = f'{func.__name__}{func_name_suffix}'
-        return wrapper
-
-    def execute_group(self , calls : Iterable[tuple[int, Callable[..., bool | None]]] , results : list[bool | None] , * , max_workers : int = MAX_WORKERS , **kwargs) -> bool:
-        unfinished_calls = [(i, call) for i, call in calls if results[i] is None]
-        if max_workers == 1:
-            for i, call in unfinished_calls:
-                results[i] = call(**kwargs)
-        else:
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                fut_map = {pool.submit(call , **kwargs): (i,call) for i, call in unfinished_calls}
-                for fut in as_completed(fut_map):
-                    results[fut_map[fut][0]] = fut.result()
-        return not any(results[i] is None for i, _ in unfinished_calls)
-
     def execute(self , url_func_tuples : Iterable[tuple[str, Callable[..., bool]]] , * , max_workers : int = MAX_WORKERS , grouping_num : int = 100 , **kwargs) -> list[bool | None]:
-        calls = [(i , self.join(func , url , f'_{i}')) for i , (url, func) in enumerate(url_func_tuples)]
-        results : list[bool | None] = [None for _ in range(len(calls))]
-        groups : list[list[tuple[int, Callable[..., bool | None]]]] = [[] for _ in range(len(calls) // grouping_num + 1)]
-        for i in range(len(calls)):
-            groups[i % len(groups)].append(calls[i])
+        callers = ProxyCallerList.from_inputs(self , url_func_tuples)
+        groups = callers.partition(grouping_num)
         for group in groups:
-            self.execute_group(group , results , max_workers=max_workers , **kwargs)
-            if self.shutdown:
-                return results
-        return results
-
-    @classmethod
-    def test_proxies(cls):
-        """Test fake proxies"""
-        return [
-            "1.2.3.4:8080",
-            "5.6.7.8:3128",
-            "9.10.11.12:9999",
-            "4.4.4.4:8080",
-            "5.5.5.5:3129",
-        ]
+            group.execute(max_workers=max_workers , **kwargs)
+            if group.unable_to_proceed:
+                break
+        return callers.results()
 
     @classmethod
     def test(cls):
@@ -430,10 +472,9 @@ class ProxyPoolAutoRefresh(ProxyPoolMultiURL):
         self.refresh_max_attempts = refresh_max_attempts
         self.refresh_threshold = refresh_threshold
 
-    @property
-    def shutdown(self) -> bool:
-        """Whether the proxy pool is shutdown"""
-        return self._is_all_invalid() and not any(enabled for enabled in self.refresh_enabled.values())
+    def url_shutdown(self , url: str) -> bool:
+        """Whether the url is shutdown"""
+        return self.is_invalid_url(url) and not self.refresh_enabled[url]
 
     def refresh(self):
         """
@@ -443,36 +484,40 @@ class ProxyPoolAutoRefresh(ProxyPoolMultiURL):
         if less than threshold requires another refresh, it means the proxy pool is not working well, we will give up to refresh
         """
         for url in self.verify_urls:
-            valid_proxy_ratio = self._valid_proxy_ratio(url)
+            valid_proxy_ratio = self.valid_proxy_ratio(url)
             if self.refresh_enabled[url] and valid_proxy_ratio < self.refresh_threshold:
                 refresh_time = datetime.now()
-                if self.refresh_attempt[url] >= self.refresh_max_attempts or refresh_time - self.refresh_time[url] < timedelta(seconds=self.refresh_interval):
-                    Logger.alert2(
-                        f"Proxy valid ratio {valid_proxy_ratio:.2f} is dropped below threshold {self.refresh_threshold:.2f} ," , 
-                        f"but cannot refresh due to too many attempts ({self.refresh_attempt[url]}) or refresh interval not reached ({(refresh_time - self.refresh_time[url]).total_seconds():.1f} seconds)"
-                    )
+                if refresh_time - self.refresh_time[url] < timedelta(seconds=self.refresh_interval):
+                    Logger.alert1(f"URL {url} Proxies refresh re-called too soon, will not refresh anymore")
                     self.refresh_enabled[url] = False
                     continue
-                self.refresh_proxies(url)
+                self.refresh_proxies(url , verbose = 0)
                 self.refresh_attempt[url] += 1
-                Logger.success(f"Proxy valid ratio {valid_proxy_ratio:.2f} is dropped below threshold {self.refresh_threshold:.2f} , refreshed proxy pool attempt {self.refresh_attempt[url]}")
-
-    def execute(self , url_func_tuples : Iterable[tuple[str, Callable[..., bool]]]  , * , max_workers : int = MAX_WORKERS , grouping_num : int = 100 , **kwargs) -> list[bool | None]:
-        calls = [(i , self.join(func , url , f'_{i}')) for i , (url, func) in enumerate(url_func_tuples)]
-        results : list[bool | None] = [None for _ in range(len(calls))]
-        groups : list[list[tuple[int, Callable[..., bool | None]]]] = [[] for _ in range(len(calls) // grouping_num + 1)]
-        for i in range(len(calls)):
-            groups[i % len(groups)].append(calls[i])
-
+                if self.proxies[url]:
+                    Logger.success(f"URL {url} Proxies valid ratio drop to {valid_proxy_ratio:.2f}, refresh to {len(self.proxies[url])} proxies")
+                if self.refresh_attempt[url] >= self.refresh_max_attempts:
+                    self.refresh_enabled[url] = False
+                    Logger.alert1(f"URL {url} Proxies refresh count reached max attempts {self.refresh_max_attempts} , will not refresh anymore")
+                elif self.is_invalid_url(url):
+                    self.refresh_enabled[url] = False
+                    Logger.alert1(f"URL {url} Proxies refresh failed with no new proxies, will not refresh anymore")
+                
+    def execute(self , url_func_tuples : Iterable[tuple[str, Callable[..., bool]]] , * , 
+                fallback_to_raw_ip: bool = False,
+                max_workers : int = MAX_WORKERS , grouping_num : int = 100 , **kwargs) -> list[bool | None]:
+        callers = ProxyCallerList.from_inputs(self , url_func_tuples)
+        groups = callers.partition(grouping_num)
         for group in groups:
             while True:
-                group_executed = self.execute_group(group , results , max_workers=max_workers , **kwargs)
+                group.execute(max_workers=max_workers , **kwargs)
                 self.refresh()
-                if group_executed:
+                if group.unable_to_proceed:
                     break
-                if self.shutdown:
-                    return results
-        return results
+            if callers.unable_to_proceed:
+                break
+        if fallback_to_raw_ip and not callers.all_finished:
+            callers.fallback()
+        return callers.results()
 
     @classmethod
     def test(cls , * , refresh_interval: int = 1 , refresh_max_attempts: int = 1 , refresh_threshold: float = 0.1):

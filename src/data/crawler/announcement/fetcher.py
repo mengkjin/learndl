@@ -55,7 +55,7 @@ class FetcherTask:
     
     def claw(self , proxy: str | None, * , attempts: int = 1) -> bool:
         if self.should_be_skipped:
-            return False
+            return True
         announcements = self.fetch(proxy, attempts=attempts)
         if announcements is not None:
             self.exporter.save_data(announcements, self.start, self.end)

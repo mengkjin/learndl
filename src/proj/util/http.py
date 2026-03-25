@@ -20,6 +20,7 @@ def http_session(
     proxy: str | None = None,
     trust_env: bool = False,       # curl_cffi 默认不信任环境变量
     verify: bool = True,
+    allow_redirects : bool = True,
     timeout: float | tuple[float, float] | None = None,
     **kwargs,
 ) -> requests.Session:
@@ -34,7 +35,7 @@ def http_session(
     # overall timeout (connect timeout + read timeout)
     # The timeout parameter of curl_cffi can be a (connect, read) tuple, or a single float (overall).
     session.timeout = (30.0, 300.0) if timeout is None else timeout # (connect, read)
-    session.allow_redirects = True
+    session.allow_redirects = allow_redirects
     session.verify = verify
     session.trust_env = trust_env
     if proxy:
@@ -57,9 +58,14 @@ def temporary_timeout_expand(session : requests.Session, expansion : float = 2.)
     finally:
         session.timeout = old_timeout
 
-def test_connection(target_url: str, proxy: str | None = None, verify: bool = True, timeout: float | tuple[float, float] = (4.0, 8.0)) -> bool:
+def test_connection(target_url: str, proxy: str | None = None, timeout : float = 10. , fast_test: bool = False) -> bool:
+    kwargs = {
+        'verify': False if fast_test else True,
+        'timeout': timeout / 2 if fast_test else timeout,
+        'allow_redirects': False,
+    }
     try:
-        with http_session(proxy=proxy, trust_env=proxy is None, verify=verify, timeout=timeout) as session:
+        with http_session(proxy=proxy, trust_env=proxy is None, **kwargs) as session:
             r = session.head(target_url)
             status = r.status_code < 400
     except Exception:
@@ -117,7 +123,7 @@ def catch_http_errors(func: Callable[[], Any], * , label: str, attempts: int = 1
                 Logger.alert1(f"  [{label}] HTTP {e.response.status_code}, retry in {delay:.1f}s ({i + 1}/{attempts})")
                 time.sleep(delay)
                 continue
-        except (httpx.HTTPError , httpx.ProxyError, requests.exceptions.HTTPError , requests.exceptions.ProxyError) as e:
+        except (httpx.HTTPError , requests.exceptions.RequestException) as e:
             if i == attempts - 1:
                 Logger.alert1(f"  [{label}] Reached maximum retry attempts, giving up: {e}")
                 return None

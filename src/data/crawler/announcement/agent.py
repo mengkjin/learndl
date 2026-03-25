@@ -43,9 +43,7 @@ class AnnouncementAgent:
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         
-        success = cls.run_with_proxy(start, end, redownload = redownload , workers = workers, indent = indent, vb_level = vb_level, **kwargs)
-        if not success:
-            success = cls.run_sequential(start, end, redownload = redownload , no_proxy = True, indent = indent, vb_level = vb_level, **kwargs)
+        success =cls.run_with_proxy(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = True, indent = indent, vb_level = vb_level, **kwargs)
         if success:
             Logger.success(f'{cls.__name__} Update at {Dates(start, end)}' , indent = indent , vb_level = vb_level)
         else:
@@ -86,7 +84,7 @@ class AnnouncementAgent:
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, group_num: int = 100, indent : int = 1 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, group_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 1 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb.level(vb_level)
         workers = min(max(1, workers), 6)
@@ -94,7 +92,7 @@ class AnnouncementAgent:
         Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)")
         proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent, vb_level = vb_level)
         calls = [(task.url , task.claw) for i , task in enumerate(tasks)]
-        results = proxy_pool.execute(calls , max_workers=workers , grouping_num=group_num)
+        results = proxy_pool.execute(calls , max_workers=workers , grouping_num=group_num , fallback_to_raw_ip=fallback_to_raw_ip)
         return all(results)
 
     
