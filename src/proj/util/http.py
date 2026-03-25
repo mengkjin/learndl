@@ -3,12 +3,11 @@ import ssl
 import sys
 import time
 from contextlib import contextmanager
-from typing import Union , Callable , Any
+from typing import Union , Iterable , Generator , TypeVar
 from curl_cffi import requests
 
-from src.proj.log import Logger
-
 _SSLVerify = Union[str, ssl.SSLContext]
+T = TypeVar("T")
 
 CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -110,23 +109,11 @@ def default_http_verify() -> _SSLVerify:
     import certifi
     return certifi.where()
 
-def catch_http_errors(func: Callable[[], Any], * , label: str, attempts: int = 1, base_delay: float = 1.5) -> Any | None:
-    for i in range(attempts):
-        try:
-            return func()
-        except (httpx.HTTPStatusError , requests.exceptions.HTTPError) as e:
-            if e.response is not None and e.response.status_code in (429, 502, 503, 504):
-                if i == attempts - 1:
-                    Logger.alert1(f"  [{label}] HTTP {e.response.status_code}, giving up: {e}")
-                    return None
-                delay = base_delay * (2**i)
-                Logger.alert1(f"  [{label}] HTTP {e.response.status_code}, retry in {delay:.1f}s ({i + 1}/{attempts})")
-                time.sleep(delay)
-                continue
-        except (httpx.HTTPError , requests.exceptions.RequestException) as e:
-            if i == attempts - 1:
-                Logger.alert1(f"  [{label}] Reached maximum retry attempts, giving up: {e}")
-                return None
-            delay = base_delay * (2**i)
-            Logger.alert1(f"  [{label}] {type(e).__name__}: {e!s}, retry in {delay:.1f}s ({i + 1}/{attempts})")
-            time.sleep(delay)
+def iterate_with_interval_control(iterable: Iterable[T], * , interval: float = 1.0) -> Generator[T, None, None]:
+    last_time = time.time()
+    for i , item in enumerate(iterable):
+        if i > 0 and (cost := time.time() - last_time) < interval:
+            time.sleep(interval - cost)
+        last_time = time.time()
+        yield item
+        

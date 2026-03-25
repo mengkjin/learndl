@@ -1,6 +1,6 @@
 from typing import Literal , Any
 
-from .fetcher import FetcherTask , EXCHANGE_URLS
+from .fetcher import FetcherTask , EXCHANGE_URLS , URL_KEYS
 from src.proj import Logger , CALENDAR , Proj , Dates
 from src.proj.util.proxy import ProxyAPI , ProxyVerifier
 
@@ -61,38 +61,38 @@ class AnnouncementAgent:
     def get_proxy_pool(cls , go_with_cached_proxies , * , indent : int = 1 , vb_level : Any = 1):
         """get the ProxyPool(AutoRefreshProxyPool)"""
         with Logger.Timer(f"Warmup ProxyPool", indent = indent, vb_level = vb_level) as timer:
-            proxy_pool = ProxyAPI.get_proxy_pool(list(EXCHANGE_URLS.values()) , go_with_cached_proxies=go_with_cached_proxies)
+            proxy_pool = ProxyAPI.get_proxy_pool(URL_KEYS , go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
         return proxy_pool
 
     @classmethod
     def run_sequential(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , 
-                       no_proxy: bool = False, go_with_cached_proxies : bool = False, indent : int = 1 , vb_level : Any = 1) -> bool:
+                       no_proxy: bool = False, go_with_cached_proxies : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
         """sequential run all announcement tasks"""
         vb_level = Proj.vb.level(vb_level)
         tasks = FetcherTask.tasks_flat(start, end, step, redownload)
-        Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)")
+        Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)" , indent = indent, vb_level = vb_level)
         if no_proxy:
             results = [False for _ in range(len(tasks))]
             for i , task in enumerate(tasks):
-                results[i] = task.claw(None)
+                results[i] = isinstance(task.claw(None), bool)
         else:
-            proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent, vb_level = vb_level)
-            calls = [(task.url , task.claw) for i , task in enumerate(tasks)]
-            results = proxy_pool.execute(calls , max_workers=1)
+            proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent + 1, vb_level = vb_level)
+            callers = FetcherTask.to_proxy_caller_list(tasks)
+            results = proxy_pool.execute(callers , max_workers=1)
         return all(results)
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, group_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 1 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, group_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb.level(vb_level)
         workers = min(max(1, workers), 6)
         tasks = FetcherTask.tasks_flat(start, end, step, redownload)
-        Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)")
-        proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent, vb_level = vb_level)
-        calls = [(task.url , task.claw) for i , task in enumerate(tasks)]
-        results = proxy_pool.execute(calls , max_workers=workers , grouping_num=group_num , fallback_to_raw_ip=fallback_to_raw_ip)
+        Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)" , indent = indent, vb_level = vb_level)
+        proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent + 1, vb_level = vb_level)
+        callers = FetcherTask.to_proxy_caller_list(tasks)
+        results = proxy_pool.execute(callers , max_workers=workers , grouping_num=group_num , fallback_to_raw_ip=fallback_to_raw_ip)
         return all(results)
 
     

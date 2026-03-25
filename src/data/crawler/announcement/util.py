@@ -7,10 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Callable, TypeVar
+from typing import TypeVar
 
-from src.proj import CALENDAR , DB , Logger
-from src.proj.util.http import catch_http_errors
+from src.proj import CALENDAR , DB
 
 BJTZ = ZoneInfo("Asia/Shanghai")
 
@@ -25,15 +24,6 @@ def range_dates(start: int, end: int , step: int = 1) -> list[tuple[int , int]]:
         date_tuples.append((d_start , min(d_end , end)))
         d_start = CALENDAR.cd(d_end , 1)
     return date_tuples
-
-def call_with_retry(func: Callable[[], T], * , label: str, attempts: int = 1, base_delay: float = 1.5) -> T | None:
-    """If failed, retry with exponential backoff; if all failed, alert the reason and return ``None``."""
-    try:
-        return catch_http_errors(func, label=label, attempts=attempts, base_delay=base_delay)
-    except Exception as e:
-        Logger.error(f"call_with_retry {label} failed: {e}")
-        Logger.alert2(f"uncaught exception in call_with_retry {e.__class__.__name__}: {e}")
-        return None
 
 def parse_jsonp(text: str) -> object:
     text = text.strip()

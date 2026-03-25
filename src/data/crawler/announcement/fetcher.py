@@ -8,8 +8,10 @@ from dataclasses import dataclass
 
 from src.proj import Logger
 from src.proj.util import ProxyAPI
+from src.proj.util.proxy.ppool import ProxyCaller , ProxyCallerList
 from src.proj.util.http import http_session , CHROME_UA , temporary_timeout_expand
-from .util import parse_jsonp , Announcement , call_with_retry , range_dates , AnnouncementExporter
+from src.proj.util.error_handler import ErrorHandler
+from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter
 
 EXCHANGES : list[str] = ['sse', 'szse', 'bse']
 EXCHANGE_URLS = {
@@ -17,6 +19,7 @@ EXCHANGE_URLS = {
     "szse": "https://www.szse.cn", 
     "bse": "https://www.bse.cn"
 }
+URL_KEYS = tuple(sorted(EXCHANGE_URLS.values()))
 
 @dataclass
 class FetcherTask:
@@ -44,25 +47,35 @@ class FetcherTask:
     @property
     def proxy_pool(self):
         if not hasattr(self, '_proxy_pool'):
-            self._proxy_pool = ProxyAPI.get_proxy_pool(list(EXCHANGE_URLS.values()))
+            self._proxy_pool = ProxyAPI.get_proxy_pool(URL_KEYS)
         return self._proxy_pool
 
-    def fetch(self, proxy: str | None, * , attempts: int = 1) -> list[Announcement] | None:
+    def fetch_date(self, proxy: str | None) -> list[Announcement] | Exception:
         with http_session(proxy=proxy , trust_env = proxy is None) as client:
             fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, client)
-            suffix = f" [{proxy}]" if proxy else ""
-            return call_with_retry(lambda: fetcher.fetch_date(self.start, self.end), label=f"{self.title}{suffix}", attempts=attempts)
-    
-    def claw(self , proxy: str | None, * , attempts: int = 1) -> bool:
+            return fetcher.fetch_date(self.start, self.end)
+
+    def fetch_date_with_error_handler(self, proxy: str | None):
+        fetch_date = ErrorHandler(self.fetch_date, handle_types=['http', 'all'], label=f"{self.title}" + (f"[{proxy}]" if proxy else ""))
+        return fetch_date(proxy)
+
+    def claw(self , proxy: str | None) -> bool | Exception:
         if self.should_be_skipped:
             return True
-        announcements = self.fetch(proxy, attempts=attempts)
-        if announcements is not None:
-            self.exporter.save_data(announcements, self.start, self.end)
+        result = self.fetch_date_with_error_handler(proxy)
+        value = result.unwrap(error='return')
+        if isinstance(value, Exception):
+            return value
+        elif isinstance(value, list):
+            self.exporter.save_data(value, self.start, self.end)
             return True
-        return False
+        else:
+            return False
 
-    def run(self, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3) -> bool:
+    def to_proxy_caller(self) -> ProxyCaller:
+        return ProxyCaller(self.proxy_pool, self.claw, self.url)
+
+    def run(self, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3 , error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
         """Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) still fails and ``auto_discover_proxy`` is enabled."""
         result = False
         if self.should_be_skipped:
@@ -74,13 +87,15 @@ class FetcherTask:
                 proxy = self.proxy_pool.acquire(url=self.url)
                 if proxy is None:
                     break
-                result = self.claw(proxy.addr)
+                result = self.claw(proxy.url)
                 self.proxy_pool.release(proxy, result is not None)
                 if result is not None:
                     break
         if result is None:
-            self.claw(None)
+            result = self.claw(None)
 
+        if error == 'raise' and isinstance(result, Exception):
+            raise result
         return result
 
     @classmethod
@@ -94,15 +109,8 @@ class FetcherTask:
         return tasks
 
     @classmethod
-    def tasks_groups(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , 
-                     max_groups: int = 100, min_tasks_per_group: int = 3) -> list[list['FetcherTask']]:
-        """partition the tasks into num_groups groups"""
-        tasks = cls.tasks_flat(start, end, step, redownload)
-        n = min(max(1, max_groups), len(tasks) // min_tasks_per_group)
-        buckets: list[list[FetcherTask]] = [[] for _ in range(n)]
-        for i, task in enumerate(tasks):
-            buckets[i % n].append(task)
-        return [bucket for bucket in buckets if bucket]
+    def to_proxy_caller_list(cls , tasks: list['FetcherTask']) -> ProxyCallerList:
+        return ProxyCallerList([task.to_proxy_caller() for task in tasks] , pool=ProxyAPI.get_proxy_pool(URL_KEYS))
 
 class AnnoucementFetcher(ABC):
     exchange: Literal["sse", "szse", "bse"]
@@ -111,7 +119,7 @@ class AnnoucementFetcher(ABC):
     def __init__(self, client: requests.Session):
         self.client = client
 
-    def fetch_date(self , start: int , end: int | None = None) -> list[Announcement] | None:
+    def fetch_date(self , start: int , end: int | None = None) -> list[Announcement] | TimeoutError:
         if end is None:
             end = start
         out: list[Announcement] = []
@@ -121,7 +129,7 @@ class AnnoucementFetcher(ABC):
                 announcements = self.fetch_announcements(start, end, **kwargs)
             except TimeoutError as e:
                 Logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
-                return None
+                return e
             for ann in announcements:
                 if ann and ann.key not in seen:
                     out.append(ann)

@@ -10,6 +10,8 @@ from typing import Iterable
 from src.proj.log import Logger
 from src.proj.util.http import http_session , test_connection
 
+from .abc import Proxy , ProxySet
+
 @dataclass
 class VerifyRecord:
     target_url: str
@@ -64,6 +66,10 @@ class VerificationRecords:
                 return self.records[(target_url, proxy_url)].status
             return None
 
+    def unverified_proxies(self, target_url: str , proxies: Iterable[Proxy | str]) -> ProxySet:
+        with self.lock:
+            return ProxySet([proxy for proxy in proxies if (target_url, str(proxy)) not in self.records])
+
     def stats(self) -> pd.DataFrame:
         if not self.records:
             return pd.DataFrame()
@@ -80,23 +86,29 @@ class ProxyVerifier:
     VERIFICATION_RECORDS = VerificationRecords()
 
     @classmethod
-    def verify_single(cls , proxy_url: str, target_url: str , * , timeout: float = 10.0 , fast_test: bool = False) -> bool:
+    def verify_single(cls , proxy: Proxy | str , target_url: str , * , timeout: float = 10.0 , fast_test: bool = False) -> bool:
         """Whether the proxy can access the test URL (GET, non-4xx/5xx is considered available)."""
-        record = cls.VERIFICATION_RECORDS.get_record(target_url, proxy_url)
+        record = cls.VERIFICATION_RECORDS.get_record(target_url, str(proxy))
         if isinstance(record, bool):
             return record
         with record:
-            status = test_connection(target_url, proxy_url, timeout , fast_test=fast_test)
+            status = test_connection(target_url, str(proxy), timeout , fast_test=fast_test)
             record.set_status(status)
+            if status and isinstance(proxy, Proxy):
+                proxy.verified.append(target_url)
         return status
 
     @classmethod
-    def dummy_single(cls , proxy_url: str, target_url: str , *args , timeout: float = 10.0 , **kwargs) -> bool:
-        record = cls.VERIFICATION_RECORDS.get_record(target_url, proxy_url)
+    def unverified_proxies(cls, target_url: str , proxies: Iterable[Proxy | str]) -> ProxySet:
+        return cls.VERIFICATION_RECORDS.unverified_proxies(target_url, proxies)
+
+    @classmethod
+    def dummy_single(cls , proxy: Proxy | str, target_url: str , *args , timeout: float = 10.0 , **kwargs) -> bool:
+        record = cls.VERIFICATION_RECORDS.get_record(target_url, str(proxy))
         if isinstance(record, bool):
             return record
         with record:
-            with http_session(proxy=proxy_url,trust_env=False,verify=False,timeout=timeout):
+            with http_session(proxy=str(proxy),trust_env=False,verify=False,timeout=timeout):
                 wait_time = random.uniform(0, timeout) + 0.2
                 time.sleep(wait_time)
                 check_time = random.normalvariate(timeout * 0.2 , timeout * 0.3) + 0.2
@@ -109,8 +121,11 @@ class ProxyVerifier:
         return cls.VERIFICATION_RECORDS.stats()
 
     @classmethod
-    def parallel_verification(cls , proxies: Iterable[str] , target_url : str , timeout : float = 10.0 , * , fast_test: bool = False, workers : int = 50 , dummy: bool = False) -> list[str]:
+    def parallel_verification(cls , proxies: Iterable[Proxy | str] , target_url : str , timeout : float = 10.0 , * , 
+                              fast_test: bool = False, workers : int = 50 , dummy: bool = False) -> ProxySet:
         cands = dict.fromkeys(proxies , False)
+        if not cands:
+            return ProxySet()
         workers = max(1, min(workers, len(cands)))
         single = cls.verify_single if not dummy else cls.dummy_single
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -118,66 +133,19 @@ class ProxyVerifier:
             for fut in as_completed(fut_map):
                 if fut.result():
                     cands[fut_map[fut]] = True
-        return [proxy for proxy , valid in cands.items() if valid]
+        return ProxySet([proxy for proxy , valid in cands.items() if valid])
 
     @classmethod
-    def verified_proxies(cls , proxies: list[str], target_url: str , * , timeout: float = 10.0, workers: int = 50, silent: bool = False, dummy: bool = False, prefix: str = '') -> list[str]:
+    def verified_proxies(cls , proxies: Iterable[Proxy | str] , target_url: str , * , timeout: float = 10.0, workers: int = 50, silent: bool = False, dummy: bool = False) -> ProxySet:
         """parallel verify, take the first ``max_keep`` passed proxies in the original order of the candidate list."""
-        if not proxies:
-            return []
+        proxies = ProxySet(proxies)
         with Logger.Timer(f'Quick Verify ({timeout/2:.1f}s) for {cls.QUICK_VERIFY_URL}', indent = 1, vb_level = 3 , silent=silent) as timer:
             passed_proxies = cls.parallel_verification(proxies,cls.QUICK_VERIFY_URL,timeout,fast_test=True,workers=workers,dummy=dummy)
             timer.add_key_suffix(f', {len(passed_proxies)}/{len(proxies)} passed')
-        if not passed_proxies:
-            return []
         with Logger.Timer(f'Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 3 , silent=silent) as timer:
             final_proxies = cls.parallel_verification(passed_proxies,target_url,timeout,fast_test=False,workers=workers,dummy=dummy)
             timer.add_key_suffix(f', {len(final_proxies)}/{len(passed_proxies)} passed')
         return final_proxies
-
-    @classmethod
-    def get_working_proxies(
-        cls , target_url: str , min_count: int = 5, * , max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
-        dummy: bool = False, go_with_cached_proxies: bool = False, verbose: int = 3) -> list[str]:
-        """
-        return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
-        if force_refresh is True, ignore the expired cache.
-        """
-        from src.proj.util.proxy.finder import FreeProxyFinder as Finder
-        from src.proj.util.proxy.cache import ProxyCache as Cache
-        Logger.highlight(f'Get working proxies for {target_url}' + (f' with dummy verification' if dummy else '') , vb_level = 0 if verbose >= 1 else 'inf')
-        finder = Finder()
-        for _ in range(2):
-            verified_proxies : list[str] = []
-            for round in range(max_round + 1):
-                prefix = f'Round {round} '
-                if len(verified_proxies) >= min_count:
-                    break
-                timer_find = Logger.Timer(f'{prefix}{"Load" if round == 0 else "Find"} Proxies', indent = 1, vb_level = 3 , silent=verbose <= 2)
-                timer_quick = Logger.Timer(f'{prefix}Quick Verify ({timeout/2:.1f}s) for {cls.QUICK_VERIFY_URL}', indent = 1, vb_level = 3 , silent=verbose <= 2)
-                timer_final = Logger.Timer(f'{prefix}Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 3 , silent=verbose <= 2)
-                with timer_find as timer:
-                    cands = Cache.get_cached_proxies('all') if round == 0 else finder.find()
-                    timer.add_key_suffix(f', get {len(cands)} proxies')
-                if go_with_cached_proxies and round == 0:
-                    return cands
-                if not cands:
-                    continue
-                with timer_quick as timer:
-                    passed_proxies = cls.parallel_verification(cands,cls.QUICK_VERIFY_URL,timeout,fast_test=True,workers=workers,dummy=dummy)
-                    timer.add_key_suffix(f', {len(passed_proxies)}/{len(cands)} passed')
-                if not passed_proxies:
-                    continue
-                with timer_final as timer:
-                    final_proxies = cls.parallel_verification(passed_proxies,target_url,timeout,fast_test=False,workers=workers,dummy=dummy)
-                    timer.add_key_suffix(f', {len(final_proxies)}/{len(passed_proxies)} passed')
-                verified_proxies += final_proxies
-            if verified_proxies:
-                break
-        verified_proxies = list(set(verified_proxies))
-        if not dummy and verified_proxies:
-            Cache.update(target_url, verified_proxies)
-        return verified_proxies
 
     @classmethod
     def get_real_ip(cls, timeout: float = 5.0) -> str:
@@ -190,10 +158,10 @@ class ProxyVerifier:
             return ""
 
     @classmethod
-    def check_proxy_anonymity(cls, proxy: str, real_ip: str , test_url: str = "https://httpbin.org/ip", timeout: float = 5.0) -> str | None:
+    def check_proxy_anonymity(cls, proxy: Proxy | str, real_ip: str , test_url: str = "https://httpbin.org/ip", timeout: float = 5.0) -> Proxy | None:
         """Check proxy anonymity (whether transparent)"""
         try:
-            resp = requests.get(test_url, proxy=proxy, timeout=timeout)
+            resp = requests.get(test_url, proxy=str(proxy), timeout=timeout)
             resp.raise_for_status()
             data = resp.json()
             proxy_ip = data.get("origin", "")
@@ -215,21 +183,22 @@ class ProxyVerifier:
             if is_transparent:
                 return None
             else:
-                return proxy
+                return Proxy(proxy)
         except Exception:
             return None
 
     @classmethod
-    def filter_proxies_by_anonymity(cls, proxies: list[str]) -> list[str]:
+    def filter_proxies_by_anonymity(cls, proxies: Iterable[Proxy | str]) -> ProxySet:
         real_ip = cls.get_real_ip()
         if not real_ip:
             Logger.alert2("Failed to get real public IP, cannot check proxy anonymity")
-            return []
+            return ProxySet()
 
-        results = []
+        proxies = ProxySet(proxies)
+        anonymized_proxies = dict.fromkeys(proxies , False)
         with ThreadPoolExecutor(max_workers=50) as pool:
             fut_map = {pool.submit(cls.check_proxy_anonymity, proxy, real_ip): proxy for proxy in proxies}
             for fut in as_completed(fut_map):
-                if result := fut.result():
-                    results.append(result)
-        return results
+                if fut.result():
+                    anonymized_proxies[fut_map[fut]] = True
+        return ProxySet([proxy for proxy , valid in anonymized_proxies.items() if valid])

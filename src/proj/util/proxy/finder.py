@@ -9,20 +9,22 @@ from bs4 import BeautifulSoup , Tag
 from src.proj.abc import Silence
 from src.proj.log import Logger
 
+from .abc import ProxySet
+
 class BaseProxiesFinder(ABC):
     """Auto discover HTTP proxies from public proxy list."""
     @abstractmethod
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         raise NotImplementedError
 
-    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Find proxies from free proxy list."""
         try:
-            return self.find_candidates(level_type=level_type)
+            return self.find_candidates(level_type=level_type).set_source(self.__class__.__name__)
         except Exception as e:
             Logger.alert1(f"[!] Error occurred while finding proxies through {self}: {e}")
-            return []
+            return ProxySet()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}"
@@ -36,12 +38,12 @@ class ZDAYEFinder(BaseProxiesFinder):
     INTERVAL = 1.2
     last_request_time = 0
 
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Get free proxies from Zdaye API"""
         candidates = []
         for protocol in ["https" , "socks5" , "https" , "https"]:
             candidates += self._get_zdaye_proxies(None, protocol, level_type , silent = True)
-        return list(set(candidates))
+        return ProxySet(candidates)
 
     @classmethod
     def _zdaye_api_url(cls, count: int | None = 100 , protocol_type: Literal["any" , "socks4" , "socks5" , "http", "https"] | str = "http" , level_type: Literal["any" , "anonymous"] = "anonymous") -> str:
@@ -66,7 +68,8 @@ class ZDAYEFinder(BaseProxiesFinder):
         return url
 
     @classmethod
-    def _get_zdaye_proxies(cls, count: int | None = None , protocol_type: Literal["any" , "socks4" , "socks5" , "http", "https"] | str = "http" , level_type: Literal["any" , "anonymous"] = "anonymous" , silent: bool = False) -> list[str]:
+    def _get_zdaye_proxies(cls, count: int | None = None , protocol_type: Literal["any" , "socks4" , "socks5" , "http", "https"] | str = "http" , 
+                           level_type: Literal["any" , "anonymous"] = "anonymous" , silent: bool = False) -> list[str]:
         """Get proxies from Zdaye API"""
         with Silence(silent):
             url = cls._zdaye_api_url(count, protocol_type, level_type)
@@ -112,14 +115,14 @@ class FreeProxyListNetFinder(BaseProxiesFinder):
     """Auto discover HTTP proxies from public proxy list."""
     MAIN_PAGE = "https://free-proxy-list.net/"
     LIST_URLS = ["https://free-proxy-list.net/zh-cn/us-proxy.html"]
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
         for url in self.LIST_URLS:
             r = requests.get(url)
             r.raise_for_status()
             candidates = self._parse_proxy_table(r.text , level_type)
-        return list(set(candidates))
+        return ProxySet(candidates)
 
     @classmethod
     def _parse_proxy_table(cls , html: str , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
@@ -143,18 +146,19 @@ class FreeProxyListNetFinder(BaseProxiesFinder):
             out.append(f"http://{ip}:{port}")
         return out
 
-class FreeProxyListCCFinder:
+class FreeProxyListCCFinder(BaseProxiesFinder):
     """Auto discover HTTP proxies from public proxy list."""
     MAIN_PAGE = "https://freeproxylist.cc/"
     LIST_URLS = ["https://freeproxylist.cc/servers/" , *[f"https://freeproxylist.cc/servers/{i}.html" for i in range(2, 6)]]
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+
+    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
         for url in self.LIST_URLS:
             r = requests.get(url)
             r.raise_for_status()
             candidates += self._parse_proxy_table(r.text , level_type)
-        return list(set(candidates))
+        return ProxySet(candidates)
 
     @classmethod
     def _parse_proxy_table(cls , html: str , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
@@ -178,11 +182,12 @@ class FreeProxyListCCFinder:
             out.append(f"http://{ip}:{port}")
         return out
 
-class FreeProxyWorldFinder:
+class FreeProxyWorldFinder(BaseProxiesFinder):
     """Auto discover HTTP proxies from public proxy list."""
     MAIN_PAGE = "freeproxy.world"
     FORMAT_URL = "freeproxy.world/?type={protocol}&anonymity={anonymity_level}&country=&speed=1000&port="
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+
+    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
         for protocol in ['https' , 'socks5']:
@@ -190,7 +195,7 @@ class FreeProxyWorldFinder:
             r = requests.get(url)
             r.raise_for_status()
             candidates += self._parse_proxy_table(r.text , protocol)
-        return list(set(candidates))
+        return ProxySet(candidates)
 
     @classmethod
     def _parse_proxy_table(cls , html: str , protocol: Literal["http" , "socks4" , "socks5" , "https"] | str = "https") -> list[str]:
@@ -222,15 +227,14 @@ class ProxiflyFinder(BaseProxiesFinder):
     }
     LIST_URLS = [f"https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/{protocol}/data.txt" for protocol in ["socks5" , "https"]]
 
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
         for url in self.LIST_URLS:
             resp = requests.get(url, timeout=10.0)
-            lines = resp.text.splitlines()
-            lines = [line.strip() for line in lines if line.strip()]
+            lines = [line.strip() for line in resp.text.splitlines() if line.strip()]
             candidates += random.sample(lines , min(100 , len(lines) // 2))
-        return list(set(candidates))
+        return ProxySet(candidates)
 
 class FreeProxyFinder:
     FINDERS_TYPE = {
@@ -250,10 +254,9 @@ class FreeProxyFinder:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({len(self)} finders)"
 
-    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Get free proxies from Zdaye API"""
-        proxies = []
+        proxies = ProxySet()
         for finder in self.finders.values():
-            proxies += finder.find(level_type=level_type)
-        proxies = list(set(proxies))
+            proxies.extend(finder.find(level_type=level_type))
         return proxies
