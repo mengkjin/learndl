@@ -2,6 +2,7 @@ import time
 import random
 import threading
 import pandas as pd
+from curl_cffi import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Iterable
@@ -10,7 +11,7 @@ from src.proj.log import Logger
 from src.proj.util.http import http_session , test_connection
 
 @dataclass
-class VerifRecord:
+class VerifyRecord:
     target_url: str
     proxy_url: str
     status: bool = False
@@ -45,14 +46,14 @@ class VerifRecord:
 
 class VerificationRecords:
     def __init__(self):
-        self.records : dict[tuple[str, str], VerifRecord] = {}
+        self.records : dict[tuple[str, str], VerifyRecord] = {}
         self.lock = threading.Lock()
 
-    def get_record(self, target_url: str, proxy_url: str) -> VerifRecord | bool:
+    def get_record(self, target_url: str, proxy_url: str) -> VerifyRecord | bool:
         status = self.get_status(target_url, proxy_url)
         if status is not None:
             return status
-        record = VerifRecord(target_url, proxy_url)
+        record = VerifyRecord(target_url, proxy_url)
         with self.lock:
             self.records[(target_url, proxy_url)] = record
         return record
@@ -156,7 +157,7 @@ class ProxyVerifier:
                 timer_quick = Logger.Timer(f'{prefix}Quick Verify ({timeout/2:.1f}s) for {cls.QUICK_VERIFY_URL}', indent = 1, vb_level = 3 , silent=verbose <= 2)
                 timer_final = Logger.Timer(f'{prefix}Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 3 , silent=verbose <= 2)
                 with timer_find as timer:
-                    cands = Cache.get_cached_proxies('all') if round == 0 else finder.find_candidates()
+                    cands = Cache.get_cached_proxies('all') if round == 0 else finder.find()
                     timer.add_key_suffix(f', get {len(cands)} proxies')
                 if go_with_cached_proxies and round == 0:
                     return cands
@@ -177,3 +178,58 @@ class ProxyVerifier:
         if not dummy and verified_proxies:
             Cache.update(target_url, verified_proxies)
         return verified_proxies
+
+    @classmethod
+    def get_real_ip(cls, timeout: float = 5.0) -> str:
+        """Get real public IP without using proxy"""
+        try:
+            resp = requests.get("https://httpbin.org/ip", timeout=timeout)
+            return resp.json().get("origin", "")
+        except Exception as e:
+            Logger.stderr(f"Failed to get real public IP: {e}")
+            return ""
+
+    @classmethod
+    def check_proxy_anonymity(cls, proxy: str, real_ip: str , test_url: str = "https://httpbin.org/ip", timeout: float = 5.0) -> str | None:
+        """Check proxy anonymity (whether transparent)"""
+        try:
+            resp = requests.get(test_url, proxy=proxy, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            proxy_ip = data.get("origin", "")
+            headers = resp.headers
+            via = headers.get("Via", "")
+            x_forwarded_for = headers.get("X-Forwarded-For", "")
+
+            is_transparent = False
+            # if the proxy returned IP is equal to the real IP, it means it is a transparent proxy (or direct connection)
+            if proxy_ip == real_ip:
+                is_transparent = True
+            # if the response header has X-Forwarded-For and contains the real IP, it is also considered a transparent proxy
+            elif x_forwarded_for and real_ip in x_forwarded_for:
+                is_transparent = True
+            # if the response header has Via field, it usually means there is a proxy in the middle (not necessarily transparent, but indicates non-anonymous)
+            elif via:
+                is_transparent = True
+
+            if is_transparent:
+                return None
+            else:
+                return proxy
+        except Exception:
+            return None
+
+    @classmethod
+    def filter_proxies_by_anonymity(cls, proxies: list[str]) -> list[str]:
+        real_ip = cls.get_real_ip()
+        if not real_ip:
+            Logger.alert2("Failed to get real public IP, cannot check proxy anonymity")
+            return []
+
+        results = []
+        with ThreadPoolExecutor(max_workers=50) as pool:
+            fut_map = {pool.submit(cls.check_proxy_anonymity, proxy, real_ip): proxy for proxy in proxies}
+            for fut in as_completed(fut_map):
+                if result := fut.result():
+                    results.append(result)
+        return results

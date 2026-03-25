@@ -14,13 +14,7 @@ MAX_WORKERS : int = 3 # max workers for the proxy pool for a single url, cannot 
 
 def test_proxies():
     """Test fake proxies"""
-    return [
-        "1.2.3.4:8080",
-        "5.6.7.8:3128",
-        "9.10.11.12:9999",
-        "4.4.4.4:8080",
-        "5.5.5.5:3129",
-    ]
+    return ["1.2.3.4:8080", "5.6.7.8:3128", "9.10.11.12:9999", "4.4.4.4:8080", "5.5.5.5:3129"]
 
 class ProxyWithStats:
     """A stated proxy, can be used to track the state of a proxy"""
