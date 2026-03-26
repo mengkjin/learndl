@@ -214,7 +214,7 @@ class ModuleData:
         except Exception as e:
             Logger.error(f'Failed to load Module Data: {e}')
             Logger.print_exc(e)
-            raise e
+            raise
 
         cls.datacache_purge_old(data_type_list)
         return data

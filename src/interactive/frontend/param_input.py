@@ -160,7 +160,7 @@ class ParamInputsForm:
                 Logger.stdout(cmd)
                 Logger.stdout(pstr)
                 Logger.error(f"Error parsing param: {pstr} - {e}")
-                raise e
+                raise
 
             value = param_value.strip()
             if value == 'True': 

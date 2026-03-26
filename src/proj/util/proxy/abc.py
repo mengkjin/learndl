@@ -2,6 +2,9 @@ import re
 import random
 from typing import Iterable , Literal
 
+INVALID_THRESHOLD = 3
+MAX_CONCURRENT = 2
+
 class Proxy:
     """A basic proxy class"""
     def __new__(cls, url: 'str | Proxy', source: str = 'unknown'):
@@ -28,6 +31,9 @@ class Proxy:
     def __hash__(self) -> int:
         return hash(self.url)
 
+    def __bool__(self) -> bool:
+        return bool(self.url)
+
     def set_url(self, url: 'str | Proxy') -> 'Proxy':
         if isinstance(url, Proxy):
             self.set_source(url.source)
@@ -35,7 +41,7 @@ class Proxy:
         else:
             url_addr = url
         self.protocal, self.host, self.port = self.url_segregate(url_addr)
-        self.url = url_addr
+        self.url : str = url_addr
         return self
 
     def set_source(self, source: str) -> 'Proxy':
@@ -78,11 +84,11 @@ class ProxySet:
     def __contains__(self , proxy: Proxy) -> bool:
         return proxy in self.proxies
 
-    def append(self , proxy: Proxy):
-        self.proxies = Proxy.unique(self.proxies + [proxy])
+    def __bool__(self) -> bool:
+        return bool(self.proxies)
 
-    def extend(self , proxies: Iterable[Proxy]):
-        self.proxies = Proxy.unique(self.proxies + list(proxies))
+    def extend(self , proxies: Iterable[Proxy | str]):
+        self.proxies = Proxy.unique(self.proxies + [Proxy(proxy) for proxy in proxies])
 
     def to_urls(self) -> list[str]:
         return [proxy.url for proxy in self.proxies]
@@ -99,14 +105,15 @@ class ProxySet:
 
 class ProxyStats(Proxy):
     """A stated proxy, can be used to track the state of a proxy"""
-    invalid_threshold : int = 3
-    max_concurrent : int = 2
     _instances : dict[str, 'ProxyStats'] = {}
 
     def __new__(cls, url: str | Proxy, source: str = 'unknown'):
         if str(url) not in cls._instances:
             cls._instances[str(url)] = super().__new__(cls, url, source = source)
         return cls._instances[str(url)]
+
+    def __bool__(self) -> bool:
+        return self.valid
 
     @property
     def stats(self) -> dict[Literal['occupied', 'error', 'success'], int]:
@@ -118,27 +125,20 @@ class ProxyStats(Proxy):
             }
         return self._stats
 
-    @classmethod
-    def set_class_attrs(cls, invalid_threshold: int | None = None, max_concurrent: int | None = None):
-        if invalid_threshold is not None:
-            cls.invalid_threshold = invalid_threshold
-        if max_concurrent is not None:
-            cls.max_concurrent = max_concurrent
-
     @property
     def valid(self) -> bool:
         """Whether the proxy is valid"""
-        return self.stats['error'] < self.invalid_threshold
+        return self.stats['error'] < INVALID_THRESHOLD
 
     @property
     def invalid(self) -> bool:
         """Whether the proxy is invalid (error count >= invalid threshold)"""
-        return self.stats['error'] >= self.invalid_threshold
+        return self.stats['error'] >= INVALID_THRESHOLD
 
     @property
     def available(self) -> bool:
         """Whether the proxy is available (valid and occupied < max concurrent)"""
-        return self.valid and self.stats['occupied'] < self.max_concurrent
+        return self.valid and self.stats['occupied'] < MAX_CONCURRENT
 
     @property
     def total_count(self) -> int:
@@ -158,7 +158,8 @@ class ProxyStats(Proxy):
         else:
             self.stats['error'] += 1
 
-    def unique(self, proxies: Iterable['ProxyStats']) -> list['ProxyStats']:
+    @classmethod
+    def unique(cls, proxies: Iterable['ProxyStats']) -> list['ProxyStats']:
         return list(set(proxies))
 
 class ProxyStatsSet(ProxySet):
@@ -170,10 +171,20 @@ class ProxyStatsSet(ProxySet):
     def __iter__(self):
         return iter(self.proxies)
 
+    def __bool__(self) -> bool:
+        return self.valid_count > 0
+
+    def extend(self , proxies: Iterable[ProxyStats | Proxy | str]):
+        self.proxies = ProxyStats.unique(self.proxies + [ProxyStats(proxy) for proxy in proxies])
+
     @property
     def valid_ratio(self) -> float:
         """The ratio of invalid proxies"""
-        return 0.0 if not self.proxies else sum(proxy.valid for proxy in self.proxies) / len(self.proxies)
+        return 0.0 if not self.proxies else self.valid_count / len(self.proxies)
+
+    @property
+    def valid_count(self) -> int:
+        return sum(proxy.valid for proxy in self.proxies)
 
     def pick_one(self) -> ProxyStats | None:
         """Get available proxies"""

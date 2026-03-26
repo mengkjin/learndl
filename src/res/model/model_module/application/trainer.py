@@ -11,7 +11,7 @@ from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
     def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
-        '''initialized configuration'''
+        '''init configuration'''
         self.config   = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , min_key_len = 30 , **kwargs)
     def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
         assert use_data != 'predict' , 'use_data cannot be predict when training models'

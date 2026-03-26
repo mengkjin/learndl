@@ -327,14 +327,14 @@ class Stock4D:
             Logger.error(f'Failed to convert DataFrame to NdData: {e}')
             Logger.print_exc(e)
             Logger.display(df[df.index.duplicated()] , caption = 'Duplicate index in DataFrame')
-            raise e
+            raise
         try:
             block = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
-        except Exception as e:
+        except Exception:
             import src
             setattr(src , 'xarr' , xarr)
             Logger.stdout(xarr)
-            raise e
+            raise
         return block
 
     def to_dataframe(self , drop_inday = True , start_dt : int | None = None , end_dt : int | None = None):

@@ -14,7 +14,7 @@ def call_tensorboard(log_dir : str | Path):
     except subprocess.CalledProcessError as e:
         Logger.error(f"Failed to launch: {e}")
         Logger.print_exc(e)
-        raise e
+        raise
 
 def run_local_tensorboard():
     log_dir = PATH.tensorboard.joinpath('run')

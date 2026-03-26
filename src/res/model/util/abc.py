@@ -116,8 +116,8 @@ def split_full_name(text : str) -> tuple[str,TYPE_MODULE_TYPES,str,str,str]:
             assert model_module == model_clean_name , f'model_module {model_module} and model_clean_name {model_clean_name} are not the same for {text} as a {module_type} model'
             assert model_name_index == '' , f'model_name_index {model_name_index} is not empty for {text} as a {module_type} model'
     except ValueError as e:
-        Logger.error(f'Failed to split full name [{text}]')
-        raise e
+        Logger.error(f'Failed to split full name [{text}] : {e}')
+        raise
     return st , module_type , model_module , model_clean_name , model_name_index
 
 def model_module_type(model_module : str) -> TYPE_MODULE_TYPES:

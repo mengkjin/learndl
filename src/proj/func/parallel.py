@@ -101,7 +101,7 @@ class FuncCall:
             Logger.alert1(f'{key} >> {func}({args} , {kwargs}) generated an exception: {e}')
         except Exception as e:
             Logger.error(f'{key} >> {func}({args} , {kwargs}) generated an exception: {e}')
-            raise e
+            raise
 
     def go(self) -> Any:
         self.try_call(self.func_input , self.key , self.result_dict , self.catch_errors , **self.kwargs)

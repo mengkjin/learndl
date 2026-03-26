@@ -85,7 +85,7 @@ class FileIOHandler:
                 df = pd.read_parquet(path , engine='fastparquet')
         except Exception as e:
             Logger.error(f'Error loading {path}: {e}')
-            raise e
+            raise
         if mapper is not None:
             df = mapper(df)
         return df
@@ -101,7 +101,7 @@ class FileIOHandler:
         except Exception as e:
             Logger.error(f'Error saving {path}: {e}')
             Logger.display(df , caption = 'Error saving DataFrame')
-            raise e
+            raise
 
     @classmethod
     def load_tar(cls , path : Path , mapper : Callable[[pd.DataFrame], pd.DataFrame] | None = None) -> dict[str , pd.DataFrame]:
@@ -120,7 +120,7 @@ class FileIOHandler:
                         dfs[member.name] = df
             except Exception as e:
                 Logger.error(f'Error loading {path}: {e}')
-                raise e
+                raise
         return dfs
 
     @classmethod

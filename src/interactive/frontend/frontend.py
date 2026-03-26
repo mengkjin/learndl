@@ -277,7 +277,7 @@ class ActionLogger:
                 except Exception as e:
                     err_msg = Logger.print_exc(e)
                     cls.record_error(t0 , func.__name__ , err_msg)
-                    raise e
+                    raise
             return inner
         return wrapper
 

@@ -12,7 +12,6 @@ class StockFactorHierarchy:
     '''hierarchy of factor classes'''
     assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
     _instance = None
-    initialized = False
     pool = FactorCalculator.registry
 
     def __new__(cls):
@@ -21,7 +20,20 @@ class StockFactorHierarchy:
         return cls._instance
 
     def __init__(self):
+        if getattr(self, '_inited', False):
+            return
         self.initialize()
+        self._inited = True
+        
+    @classmethod
+    def initialize(cls) -> None:
+        """initialize the hierarchy of factor classes"""
+        FactorCalculator.import_definitions()
+        cls.hier : dict[str , list[Type[FactorCalculator]]] = {}
+        for obj in cls.pool.values():
+            if obj.level not in cls.hier: 
+                cls.hier[obj.level] = []
+            cls.hier[obj.level].append(obj)
     
     def __repr__(self):
         str_level_factors = [','.join(f'{level}({len(factors)})' for level , factors in self.hier.items())]
@@ -34,19 +46,6 @@ class StockFactorHierarchy:
     def __getitem__(self , key : str):
         '''return a list of factor classes in a given level / or a factor class by factor_name'''
         return self.pool[key] if key in self.pool else self.hier[key]
-
-    @classmethod
-    def initialize(cls) -> None:
-        """initialize the hierarchy of factor classes"""
-        if cls.initialized:
-            return
-        FactorCalculator.import_definitions()
-        cls.hier : dict[str , list[Type[FactorCalculator]]] = {}
-        for obj in cls.pool.values():
-            if obj.level not in cls.hier: 
-                cls.hier[obj.level] = []
-            cls.hier[obj.level].append(obj)
-        cls.initialized = True
 
     @classmethod
     def load_factor_table(cls) -> pd.DataFrame:

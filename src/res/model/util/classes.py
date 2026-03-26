@@ -470,19 +470,19 @@ class BaseTrainer(ModelStreamLine):
         
     @abstractmethod
     def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
-        '''initialized configuration'''
+        '''init configuration'''
         self.config : ModelConfig
     @abstractmethod
     def init_model(self , **kwargs): 
-        '''initialized data_module'''
+        '''init data_module'''
         self.model : BasePredictorModel
     @abstractmethod
     def init_callbacks(self , **kwargs): 
-        '''initialized data_module'''
+        '''init callbacks'''
         self.callback : BaseCallBack
     @abstractmethod
     def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
-        '''initialized data_module'''
+        '''init data_module'''
         self.data : BaseDataModule
 
     def init_utils(self , **kwargs):

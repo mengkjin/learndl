@@ -750,7 +750,7 @@ class StockFactor:
     @property
     def prior_input(self) -> pd.DataFrame | DataBlock:
         """
-        return the prior input of the factor (DataFrame or DataBlock that is initialized with)
+        return the prior input of the factor (DataFrame or DataBlock that is init with)
         """
         if self.input_df is not None:
             return self.input_df

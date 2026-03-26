@@ -112,7 +112,7 @@ class OutputDeflector:
                 getattr(self.catcher, 'close')()
             except Exception as e:
                 Logger.error(f"Error closing catcher: {e}")
-                raise e
+                raise
 
 class DeflectorGroup:
     def __init__(self , catcher : 'OutputCatcher' , 

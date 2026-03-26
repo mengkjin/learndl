@@ -102,7 +102,7 @@ class GeneticProgramming:
             forbidden:      all individuals with null return (and those in the hallof fame) 
             max_round:      max iterations to approching 99% of pop_num
         output:
-            population:     initialized pruned and deduplicated population of syntax
+            population:     pruned and deduplicated population of syntax
         """
         with self.timer.timer('process' , 'Population'):
             last_gen = Population.from_list(last_gen or [])

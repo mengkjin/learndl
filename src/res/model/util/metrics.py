@@ -170,7 +170,7 @@ class GradientMode:
         torch.set_grad_enabled(self.prev)
 
 class MetricFunction:
-    DISPLAY_LOG : dict[str,bool] = {}
+    # DISPLAY_LOG : dict[str,bool] = {}
     SearchList : list[str] = []
     ExcludeNan : bool = True
     def __init__(
@@ -197,9 +197,10 @@ class MetricFunction:
             inputs = data.loss_inputs(exclude_nan = self.ExcludeNan)
             results : dict[str,Tensor] = {}
             for criterion , component in self.components.items():
-                if not self.DISPLAY_LOG.get(criterion , False):
-                    Logger.success(f'{self.__class__.__name__} {criterion} calculated!' , vb_level = 'max')
-                    self.DISPLAY_LOG[criterion] = True
+                Logger.only_once(f'{self.__class__.__name__} {criterion} calculated!' , object = self.__class__ , mark = criterion , printer = Logger.success , vb_level = 'max')
+                # if not self.DISPLAY_LOG.get(criterion , False):
+                #     Logger.success(f'{self.__class__.__name__} {criterion} calculated!' , vb_level = 'max')
+                #     self.DISPLAY_LOG[criterion] = True
                 loss = component(which_output = which_output , which_label = which_label , **inputs)
                 if isinstance(loss , dict):
                     results.update(loss)
@@ -208,7 +209,7 @@ class MetricFunction:
         return results
 
 class LossFunction(MetricFunction):
-    DISPLAY_LOG : dict[str,bool] = {}
+    # DISPLAY_LOG : dict[str,bool] = {}
     SearchList : list[str] = ['loss' , 'Loss' , 'loss_function']
     ExcludeNan : bool = False
     def __init__(
@@ -249,7 +250,7 @@ class LossFunction(MetricFunction):
         return losses
 
 class AccuracyFunction(MetricFunction):
-    DISPLAY_LOG : dict[str,bool] = {}
+    # DISPLAY_LOG : dict[str,bool] = {}
     SearchList : list[str] = []
     ExcludeNan : bool = True
     def __init__(
@@ -380,13 +381,13 @@ class BatchMetrics:
         return f'{self.__class__.__name__}(key={self.key},accuracies={self.accuracies},losses={self.losses})'
 
     def new(self , batch_key : Any = None , **kwargs):
-        assert not self.initiated , f'{self} is already initialized , please call close() first'
+        assert not self.initiated , f'{self} is already initiated , please call close() first'
         self.initiated = True
         self.collected = False
         self.key = {'batch':batch_key}
 
     def set_values(self , accuracies : dict[str,float] , losses : dict[str,Tensor]):
-        assert self.initiated , 'BatchMetrics is not initialized , please call new(batch_key) first'
+        assert self.initiated , 'BatchMetrics is not initiated , please call new(batch_key) first'
         self.accuracies = accuracies
         self.losses = losses
         self._total_loss = None
@@ -456,7 +457,7 @@ class AggregatedMetrics:
     def __repr__(self):
         return f'{self.__class__.__name__}(key={self.key},metrics={self.metric_names})'
     def new(self , **kwargs):
-        assert not self.initiated , f'{self} is already initialized , please call close() first'
+        assert not self.initiated , f'{self} is already initiated , please call close() first'
         self.initiated = True
         self.collected = False
         self.key = kwargs
@@ -464,7 +465,7 @@ class AggregatedMetrics:
             self.tables[name].clear()
             self.averages[name].clear()
     def append(self , metrics : 'BatchMetrics | AggregatedMetrics'):
-        assert self.initiated , f'{self} is not initialized , please call new() first'
+        assert self.initiated , f'{self} is not initiated , please call new() first'
         assert not metrics.collected , f'{metrics} is already collected , please call new() first'
         metrics.collected = True
         # define specific append method for different levels

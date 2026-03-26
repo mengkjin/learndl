@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from src.proj import Logger
 from src.proj.util import ProxyAPI
-from src.proj.util.proxy.ppool import ProxyCaller , ProxyCallerList
+from src.proj.util.proxy.caller import ProxyCaller
 from src.proj.util.http import http_session , CHROME_UA , temporary_timeout_expand
 from src.proj.util.error_handler import ErrorHandler
 from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter
@@ -72,23 +72,26 @@ class FetcherTask:
         else:
             return False
 
-    def to_proxy_caller(self) -> ProxyCaller:
-        return ProxyCaller(self.proxy_pool, self.claw, self.url)
+    def to_proxy_caller(self , pool) -> ProxyCaller:
+        return ProxyCaller(self.claw, self.url, pool = pool)
 
-    def run(self, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3 , error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
+    def run(self, pool = None, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3 , error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
         """Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) still fails and ``auto_discover_proxy`` is enabled."""
         result = False
         if self.should_be_skipped:
             Logger.skipping(f"{self.title}, already have historical data (use redownload to force re-download)" , indent = indent, vb_level = vb_level)
             return result
+
+        if pool is None:
+            pool = ProxyAPI.get_proxy_pool(self.url)
             
-        if not self.proxy_pool.is_invalid_url(self.url):
+        if pool.proxies[self.url].valid_count > 0:
             for _ in range(max_proxies_try):
-                proxy = self.proxy_pool.acquire(url=self.url)
+                proxy = pool.acquire(url=self.url)
                 if proxy is None:
                     break
                 result = self.claw(proxy.url)
-                self.proxy_pool.release(proxy, result is not None)
+                pool.release(proxy, result is not None)
                 if result is not None:
                     break
         if result is None:
@@ -107,10 +110,6 @@ class FetcherTask:
                 if not task.should_be_skipped:
                     tasks.append(task)
         return tasks
-
-    @classmethod
-    def to_proxy_caller_list(cls , tasks: list['FetcherTask']) -> ProxyCallerList:
-        return ProxyCallerList([task.to_proxy_caller() for task in tasks] , pool=ProxyAPI.get_proxy_pool(URL_KEYS))
 
 class AnnoucementFetcher(ABC):
     exchange: Literal["sse", "szse", "bse"]

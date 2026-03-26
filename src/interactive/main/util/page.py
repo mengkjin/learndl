@@ -180,7 +180,7 @@ class ScriptRunnerRunButton(ControlPanelButton):
     def refresh(self , runner : ScriptRunner):
         with st.session_state[self.key]:
             if SC.param_inputs_form is None:
-                raise ValueError("ParamInputsForm is not initialized")
+                raise ValueError("ParamInputsForm is not initiated")
             params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
             
             if SC.get_script_runner_validity(params):

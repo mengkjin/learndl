@@ -1,13 +1,14 @@
-from typing import Literal , Any
+from typing import Literal , Any , Iterable
 
-from .fetcher import FetcherTask , EXCHANGE_URLS , URL_KEYS
+from .fetcher import FetcherTask , EXCHANGE_URLS
 from src.proj import Logger , CALENDAR , Proj , Dates
 from src.proj.util.proxy import ProxyAPI , ProxyVerifier
+from src.proj.util.proxy.caller import ProxyCallerList
 
 __all__ = ["AnnouncementAgent"]
 
 class AnnouncementAgent:
-    START_DATE = 20220101
+    START_DATE = 20200101
 
     @classmethod
     def update(cls):
@@ -58,41 +59,39 @@ class AnnouncementAgent:
         Logger.display(ProxyVerifier.stats() , vb_level = vb_level)
 
     @classmethod
-    def get_proxy_pool(cls , go_with_cached_proxies , * , indent : int = 1 , vb_level : Any = 1):
+    def get_proxy_pool(cls , urls : Iterable[str] | str = EXCHANGE_URLS.keys() , go_with_cached_proxies = False , * , indent : int = 1 , vb_level : Any = 1):
         """get the ProxyPool(AutoRefreshProxyPool)"""
         with Logger.Timer(f"Warmup ProxyPool", indent = indent, vb_level = vb_level) as timer:
-            proxy_pool = ProxyAPI.get_proxy_pool(URL_KEYS , go_with_cached_proxies=go_with_cached_proxies)
+            proxy_pool = ProxyAPI.get_proxy_pool(urls , go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
         return proxy_pool
 
     @classmethod
-    def run_sequential(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , 
-                       no_proxy: bool = False, go_with_cached_proxies : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
-        """sequential run all announcement tasks"""
-        vb_level = Proj.vb.level(vb_level)
+    def get_proxy_caller_list(
+        cls , start: int, end: int, step: int = 1, redownload: bool = False , * ,
+        use_proxy = True , go_with_cached_proxies = False, ignore_proxy_threshold : int = 2 , 
+        indent : int = 1 , vb_level : Any = 1
+    ) -> ProxyCallerList:
         tasks = FetcherTask.tasks_flat(start, end, step, redownload)
         Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)" , indent = indent, vb_level = vb_level)
-        if no_proxy:
-            results = [False for _ in range(len(tasks))]
-            for i , task in enumerate(tasks):
-                results[i] = isinstance(task.claw(None), bool)
+        unique_urls = set([task.url for task in tasks])
+        if use_proxy:
+            target_urls = [url for url in unique_urls if sum(task.url == url for task in tasks) > ignore_proxy_threshold]
         else:
-            proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent + 1, vb_level = vb_level)
-            callers = FetcherTask.to_proxy_caller_list(tasks)
-            results = proxy_pool.execute(callers , max_workers=1)
-        return all(results)
+            target_urls = []
+        proxy_pool = cls.get_proxy_pool(target_urls, go_with_cached_proxies, indent = indent, vb_level = vb_level)
+        caller_list = ProxyCallerList({task.title: task.to_proxy_caller(proxy_pool) for task in tasks} , pool = proxy_pool)
+        return caller_list
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, group_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, grouping_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb.level(vb_level)
-        workers = min(max(1, workers), 6)
-        tasks = FetcherTask.tasks_flat(start, end, step, redownload)
-        Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)" , indent = indent, vb_level = vb_level)
-        proxy_pool = cls.get_proxy_pool(go_with_cached_proxies , indent = indent + 1, vb_level = vb_level)
-        callers = FetcherTask.to_proxy_caller_list(tasks)
-        results = proxy_pool.execute(callers , max_workers=workers , grouping_num=group_num , fallback_to_raw_ip=fallback_to_raw_ip)
-        return all(results)
+        caller_list = cls.get_proxy_caller_list(
+            start, end, step, redownload, use_proxy = True, 
+            go_with_cached_proxies = go_with_cached_proxies , indent = indent, vb_level = vb_level)
+        results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 10) , grouping_num=grouping_num , fallback_to_raw_ip=fallback_to_raw_ip)
+        return all([result if isinstance(result, bool) else False for result in results])
 
     

@@ -9,7 +9,7 @@ from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH
 from src.proj.proj import Proj
-from src.proj.abc import Duration , stdout , stderr , FormatStr
+from src.proj.abc import Duration , stdout , stderr , FormatStr , Once
 
 from .display import Display
 from .logfile import LogFile
@@ -105,12 +105,6 @@ class Logger:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-
-    @classmethod
-    def log_only(cls , *args , **kwargs):
-        """dump to log writer with no display"""
-        if Proj.log_writer:
-            Proj.log_writer.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
     def stdout(cls , *args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
@@ -278,6 +272,17 @@ class Logger:
     def critical(cls , *args , indent : int = 0 , vb_level : Any = 0 , **kwargs):
         """Critical level stderr"""
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['critical'] | kwargs))
+
+    @classmethod
+    def only_once(cls , *args , object : Any | None = None , mark : str = 'default' , printer = new_stdout ,  **kwargs):
+        """print the message only once for the same object and key"""
+        Once.run(printer , args , kwargs , mark , Logger if object is None else object)
+
+    @classmethod
+    def log_only(cls , *args , **kwargs):
+        """dump to log writer with no display"""
+        if Proj.log_writer:
+            Proj.log_writer.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
     def divider(cls , width : int = 140 , char : Literal['-' , '=' , '*'] = '-' , msg : str | None = None , 
