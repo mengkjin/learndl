@@ -91,7 +91,7 @@ class AnnouncementAgent:
         caller_list = cls.get_proxy_caller_list(
             start, end, step, redownload, use_proxy = True, 
             go_with_cached_proxies = go_with_cached_proxies , indent = indent, vb_level = vb_level)
-        results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 10) , grouping_num=grouping_num , fallback_to_raw_ip=fallback_to_raw_ip)
+        results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 10) , fallback_to_raw_ip=fallback_to_raw_ip)
         return all([result if isinstance(result, bool) else False for result in results])
 
     
