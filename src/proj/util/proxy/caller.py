@@ -179,7 +179,7 @@ class ProxyCallerList:
         groups = [ProxyCallerList(callers[i * max_callers_per_group:(i + 1) * max_callers_per_group] , pool = self.pool) for i in range(num_groups)]
         return groups
 
-    def execute(self , * , max_workers : int = 3):
+    def execute(self , * , max_workers : int = 10):
         """Execute the unfinished callers with a thread pool"""
         unfinished_callers = [caller for caller in self.callers if not caller.finished]
         if not unfinished_callers:
@@ -194,17 +194,21 @@ class ProxyCallerList:
                     fut.result()
 
     def execute_with_partition(
-        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 3 , **kwargs) -> list[bool | Exception]:
-        grouping_num = int(np.round(np.sqrt(len(self.callers))))
-        for _ in range(10):
+        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , **kwargs) -> list[bool | Exception]:
+        grouping_num = max(int(np.round(np.sqrt(len(self.callers)))) , 2 * max_workers)
+        for i_iter in range(10):
             groups = self.partition(grouping_num)
-            for group in groups:
+            Logger.stdout(f"Execute with partitioning in Round {i_iter}, partition into {len(groups)} groups" , indent = 1 , vb_level = 'max')
+            for i_group, group in enumerate(groups):
                 group.execute(max_workers=max_workers , **kwargs)
+                Logger.stdout(f"Finished executing {len(group.callers)} callers for group {i_group}," ,  
+                              f"{len(group.unfinished_callers())} unfinished" , indent = 2 , vb_level = 'max')
                 self.pool.adaptive_refresh()
+                Logger.stdout(f"Try Refresh Proxy Pool for group {i_group} in round {i_iter} finished" , indent = 2 , vb_level = 'max')
             if self.is_unable_to_proceed():
                 break
         else:
-            Logger.alert2(f"After 10 attempts, the proxy pool is still able to proceed, WHY?")
+            Logger.alert2(f"After 10 Rounds, the proxy pool is still able to proceed, WHY?")
             
             Logger.alert1(self.unfinished_callers())
         if fallback_to_raw_ip and not self.all_finished:
@@ -212,7 +216,7 @@ class ProxyCallerList:
         return self.results()
 
     def execute_with_partition_old(
-        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 3 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
         groups = self.partition(grouping_num)
         for group in groups:
             for i in range(10):

@@ -1,7 +1,7 @@
 import random
 from curl_cffi import requests
 from datetime import datetime
-from typing import Any, Callable , Literal
+from typing import Any , Literal
 from urllib.parse import urlencode
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from src.proj import Logger
 from src.proj.util import ProxyAPI
 from src.proj.util.proxy.caller import ProxyCaller
-from src.proj.util.http import http_session , CHROME_UA , temporary_timeout_expand
+from src.proj.util.http import http_session , CHROME_UA , request_with_timeouterror
 from src.proj.util.error_handler import ErrorHandler
 from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter
 
@@ -51,9 +51,8 @@ class FetcherTask:
         return self._proxy_pool
 
     def fetch_date(self, proxy: str | None) -> list[Announcement] | Exception:
-        with http_session(proxy=proxy , trust_env = proxy is None) as client:
-            fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, client)
-            return fetcher.fetch_date(self.start, self.end)
+        fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, proxy)
+        return fetcher.fetch_date(self.start, self.end)
 
     def fetch_date_with_error_handler(self, proxy: str | None):
         fetch_date = ErrorHandler(self.fetch_date, handle_types=['http', 'all'], label=f"{self.title}" + (f"[{proxy}]" if proxy else ""))
@@ -62,6 +61,9 @@ class FetcherTask:
     def claw(self , proxy: str | None) -> bool | Exception:
         if self.should_be_skipped:
             return True
+        # time.sleep(2)
+        # print(f"claw {self.title} with proxy {proxy}")
+        # return True
         result = self.fetch_date_with_error_handler(proxy)
         value = result.unwrap(error='return')
         if isinstance(value, Exception):
@@ -115,48 +117,48 @@ class AnnoucementFetcher(ABC):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 
-    def __init__(self, client: requests.Session):
-        self.client = client
+    def __init__(self, proxy: str | None = None):
+        self.proxy = proxy
 
-    def fetch_date(self , start: int , end: int | None = None) -> list[Announcement] | TimeoutError:
+    def init_session(self) -> requests.Session:
+        self.session = http_session(proxy=self.proxy , trust_env = self.proxy is None , timeout = (15,150))
+        return self.session
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.proxy})"
+
+    def fetch_date(
+        self , start: int , end: int | None = None
+    ) -> list[Announcement] | TimeoutError | requests.exceptions.Timeout:
         if end is None:
             end = start
         out: list[Announcement] = []
         seen: set[tuple[str, str, str, int]] = set()
-        for kwargs in self.FETCH_KWARGS:
-            try:
-                announcements = self.fetch_announcements(start, end, **kwargs)
-            except TimeoutError as e:
-                Logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
-                return e
-            for ann in announcements:
-                if ann and ann.key not in seen:
-                    out.append(ann)
-                seen.add(ann.key)
+        with self.init_session():
+            for kwargs in self.FETCH_KWARGS:
+                try:
+                    announcements = self.fetch_announcements(start, end, **kwargs)
+                except (TimeoutError , requests.exceptions.Timeout) as e:
+                    Logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
+                    return e
+                for ann in announcements:
+                    if ann and ann.key not in seen:
+                        out.append(ann)
+                    seen.add(ann.key)
         return out
-
-    def request_with_timeouterror(self, func: Callable[..., requests.Response], *args, **kwargs) -> requests.Response:
-        try:
-            r = func(*args, **kwargs)
-            r.raise_for_status()
-        except TimeoutError:
-            with temporary_timeout_expand(self.client):
-                r = func(*args, **kwargs)
-                r.raise_for_status()
-        return r
 
     @abstractmethod
     def fetch_announcements(self, start : int, end: int) -> list[Announcement]:
         raise NotImplementedError
 
     @classmethod
-    def exchange_fetcher(cls, exchange: str , client: requests.Session):
+    def exchange_fetcher(cls, exchange: str , proxy: str | None = None):
         if exchange.lower() == "sse":
-            return SSEAnnFetcher(client)
+            return SSEAnnFetcher(proxy)
         elif exchange.lower() == "szse":
-            return SZSEAnnFetcher(client)
+            return SZSEAnnFetcher(proxy)
         elif exchange.lower() == "bse":
-            return BSEAnnFetcher(client)
+            return BSEAnnFetcher(proxy)
         else:
             raise ValueError(f"Invalid exchange: {exchange}")
 
@@ -187,7 +189,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
                 "TITLE": "",
                 "stockType": stock_type,
             }
-            r = self.request_with_timeouterror(self.client.get, self.JSONP_URL, params=params, headers={"Referer": self.REFERER})
+            r = request_with_timeouterror(self.session ,'get' , self.JSONP_URL, params=params, headers={"Referer": self.REFERER})
             payload = parse_jsonp(r.text)
             if not isinstance(payload, dict):
                 break
@@ -234,7 +236,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
         while True:
             body = {**body_base, "pageNum": page_num}
             url = f"{self.ANN_LIST}?random={random.random()}"
-            r = self.request_with_timeouterror(self.client.post, url, json=body, headers=headers)
+            r = request_with_timeouterror(self.session , 'post' , url, json=body, headers=headers)
             data = r.json()
             chunk = data.get("data") or []
             if not chunk:
@@ -255,7 +257,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
     def fetch_announcements(self, start : int, end: int) -> list[Announcement]:
         """Beijing Stock Exchange: POST companyAnnouncement.do (POST JSON, paging by page."""
         # warmup
-        r = self.client.get(self.REFERER, headers={"User-Agent": CHROME_UA})
+        r = self.session.get(self.REFERER, headers={"User-Agent": CHROME_UA})
         r.raise_for_status()
         headers = {
             "Referer": self.REFERER,
@@ -267,7 +269,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
 
         while True:
             body = self._query_body(page, start, end)
-            r = self.request_with_timeouterror(self.client.post, self.ANNOUNCE_URL, data=body, headers=headers)
+            r = request_with_timeouterror(self.session , 'post' , self.ANNOUNCE_URL, data=body, headers=headers)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, list) or not payload:
                 break

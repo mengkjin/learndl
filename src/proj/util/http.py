@@ -3,8 +3,10 @@ import ssl
 import sys
 import time
 from contextlib import contextmanager
-from typing import Union , Iterable , Generator , TypeVar
+from typing import Union , Iterable , Generator , TypeVar , Literal
 from curl_cffi import requests
+
+from src.proj.log import Logger
 
 _SSLVerify = Union[str, ssl.SSLContext]
 T = TypeVar("T")
@@ -20,7 +22,7 @@ def http_session(
     trust_env: bool = False,       # curl_cffi 默认不信任环境变量
     verify: bool = True,
     allow_redirects : bool = True,
-    timeout: float | tuple[float, float] | None = None,
+    timeout: float | tuple[float, float] = (30.0, 300.0),
     **kwargs,
 ) -> requests.Session:
     """
@@ -33,7 +35,7 @@ def http_session(
     session.headers.update({"User-Agent": CHROME_UA})
     # overall timeout (connect timeout + read timeout)
     # The timeout parameter of curl_cffi can be a (connect, read) tuple, or a single float (overall).
-    session.timeout = (30.0, 300.0) if timeout is None else timeout # (connect, read)
+    session.timeout = timeout # (connect, read)
     session.allow_redirects = allow_redirects
     session.verify = verify
     session.trust_env = trust_env
@@ -45,17 +47,49 @@ def http_session(
     return session
 
 @contextmanager
-def temporary_timeout_expand(session : requests.Session, expansion : float = 2.):
+def temporary_timeout_session(session : requests.Session, new_timeout : float | tuple[float, float]):
     old_timeout = session.timeout
-    if isinstance(old_timeout, tuple):
-        new_timeout = (old_timeout[0] * expansion, old_timeout[1] * expansion)
-    else:
-        new_timeout = old_timeout * expansion
     session.timeout = new_timeout
     try:
         yield
     finally:
         session.timeout = old_timeout
+
+def timeout_expanding_sessions(session : requests.Session, expansion : float = 2. , max_count : int = 1):
+    """
+    automatically expand the timeout of the session by the given expansion factor and max count
+    will return a generator of (max_count + 1) sessions with progressively longer timeouts
+    - the first session has the original timeout
+    - the last session has the timeout expanded by the given expansion factor ** max_count
+    """
+    assert expansion ** max_count < 10 , f'expansion ** max_count = {expansion ** max_count} is too large'
+    old_timeout = session.timeout
+    timeouts = []
+    for i in range(max_count + 1):
+        x = expansion ** i
+        timeouts.append((old_timeout[0] * x, old_timeout[1] * x) if isinstance(old_timeout, tuple) else old_timeout * x)
+    for timeout in timeouts:
+        with temporary_timeout_session(session, timeout):
+            yield session
+
+def request_with_timeouterror(session: requests.Session, request_method: Literal['get', 'post'], *args, expansion : float = 2. , max_retry_count: int = 2, **kwargs) -> requests.Response:
+    match request_method:
+        case 'get':
+            method = session.get
+        case 'post':
+            method = session.post
+        case _:
+            raise ValueError(f"Invalid request method: {request_method}")
+    for i , _ in enumerate(timeout_expanding_sessions(session , expansion = expansion, max_count = max_retry_count)):
+        try:
+            r = method(*args, **kwargs)
+            r.raise_for_status()
+            return r
+        except (TimeoutError , requests.exceptions.Timeout) as e:
+            if i == max_retry_count:
+                raise e
+            Logger.alert1(f"requests.Session(timeout={session.timeout}) encountered TimeoutError (expand {expansion} times to retry): {e!s}")
+    raise
 
 def test_connection(target_url: str, proxy: str | None = None, timeout : float = 10. , fast_test: bool = False) -> bool:
     kwargs = {

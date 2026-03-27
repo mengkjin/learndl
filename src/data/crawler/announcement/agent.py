@@ -73,7 +73,7 @@ class AnnouncementAgent:
         indent : int = 1 , vb_level : Any = 1
     ) -> ProxyCallerList:
         tasks = FetcherTask.tasks_flat(start, end, step, redownload)
-        Logger.stdout(f"Task iteration: total {len(tasks)} tasks (non-overlapping date blocks x exchanges)" , indent = indent, vb_level = vb_level)
+        Logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {start}~{end} for 3 exchanges" , indent = indent, vb_level = vb_level)
         unique_urls = set([task.url for task in tasks])
         if use_proxy:
             target_urls = [url for url in unique_urls if sum(task.url == url for task in tasks) > ignore_proxy_threshold]
@@ -85,13 +85,13 @@ class AnnouncementAgent:
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, grouping_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb(vb_level)
         caller_list = cls.get_proxy_caller_list(
             start, end, step, redownload, use_proxy = True, 
             go_with_cached_proxies = go_with_cached_proxies , indent = indent, vb_level = vb_level)
-        results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 10) , fallback_to_raw_ip=fallback_to_raw_ip)
+        results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 50) , fallback_to_raw_ip=fallback_to_raw_ip)
         return all([result if isinstance(result, bool) else False for result in results])
 
     

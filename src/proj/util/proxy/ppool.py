@@ -155,7 +155,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
         self.refresh_proxies(detail_level = 'none')
         self.refresh_attempt += 1
         if self.proxies:
-            Logger.success(f"{prefix}valid ratio drop to {valid_ratio:.2f}, refresh to {len(self.proxies)} proxies")
+            Logger.success(f"{prefix}valid ratio drop to {valid_ratio:.2f}, refresh to {len(self.proxies)} proxies (attempt {self.refresh_attempt}/{self.refresh_max_attempts})")
         if self.refresh_attempt >= self.refresh_max_attempts:
             self.refresh_enabled = False
             Logger.alert1(f"{prefix}refresh count reached max attempts {self.refresh_max_attempts}, will not refresh anymore")
