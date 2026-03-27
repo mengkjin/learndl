@@ -33,7 +33,7 @@ class AnnouncementAgent:
 
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , * , indent : int = 1 , vb_level : Any = 1 , workers: int = 3, **kwargs):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             raise ValueError(f'Recalculate all is not supported for {cls.__name__}')
         elif update_type == 'update':
@@ -87,7 +87,7 @@ class AnnouncementAgent:
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
                        workers: int = 10, grouping_num: int = 100, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         caller_list = cls.get_proxy_caller_list(
             start, end, step, redownload, use_proxy = True, 
             go_with_cached_proxies = go_with_cached_proxies , indent = indent, vb_level = vb_level)

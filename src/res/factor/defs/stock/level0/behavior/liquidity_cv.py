@@ -4,11 +4,11 @@ from src.res.factor.calculator import LiquidityFactor
 
 
 def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 'turnover'] , min_finite_ratio = 0.25):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     if data_type == 'amount':
-        vals = DATAVENDOR.TRADE.get_volumes(start_date , end_date , volume_type = 'amount')
+        vals = DATAVENDOR.TRADE.get_volumes(start , end , volume_type = 'amount')
     elif data_type == 'turnover':
-        vals = DATAVENDOR.TRADE.get_turnovers(start_date , end_date)
+        vals = DATAVENDOR.TRADE.get_turnovers(start , end)
     else:
         raise ValueError(f'data_type must be "amount" or "turnover" , but got {data_type}')
     vals = DATAVENDOR.TRADE.mask_min_finite(vals , min_finite_ratio = min_finite_ratio)

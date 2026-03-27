@@ -1,10 +1,4 @@
-import pandas as pd
-import numpy as np
-
 from datetime import datetime , timedelta
-from typing import Callable
-from .output import stdout , stderr
-
 class Duration:
     """Duration class, used to calculate the duration of the input or the start time"""
     def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None):
@@ -65,67 +59,3 @@ class Duration:
             if seconds >= 1:
                 fmtstrs.append(f'{seconds:.0f} Sec')
             return ' '.join(fmtstrs)
-    
-class Timer:
-    """simple timer to count time"""
-    def __init__(self , *args , silent = False , indent = 0 , at_enter : bool = False): 
-        stderr(f'Timer is deprecated, use Logger.Timer instead' , color = 'lightred' , bold = True)
-        self.key = '/'.join(args)
-        self.silent = silent
-        self.indent = indent
-        self.at_enter = at_enter
-
-    def __enter__(self):
-        self._init_time = datetime.now()
-        if not self.silent and self.at_enter: 
-            stdout(self.enter_str , indent = self.indent)
-    def __exit__(self, type, value, trace):
-        if not self.silent:
-            stdout(self.exit_str , indent = self.indent)
-
-    @property
-    def enter_str(self):
-        """Get the enter string"""
-        return f'{self.key} start ... '
-    @property
-    def exit_str(self):
-        """Get the exit string"""
-        return f'{self.key} finished! Cost {Duration(since = self._init_time)}'
-
-class PTimer:
-    """process timer , call to record and .summarize() to display the summary"""
-    def __init__(self , record = True) -> None:
-        self.recording = record
-        self.recorder = {} if record else None
-
-    class ptimer:
-        """process timer class, used to record the time of the input function"""
-        def __init__(self , target : dict[str,list[float]] | None , key):
-            self.target , self.key = target , key
-            if self.target is not None and key not in self.target.keys(): 
-                self.target[self.key] = []
-        def __enter__(self):
-            if self.target is not None: 
-                self._init_time = datetime.now()
-        def __exit__(self, type, value, trace):
-            if self.target is not None: 
-                self.target[self.key].append((datetime.now() - self._init_time).total_seconds())
-
-    def func_timer(self , func : Callable):
-        """timer wrapper for a function"""
-        def wrapper(*args , **kwargs):
-            with self.ptimer(self.recorder , func.__name__):
-                return func(*args , **kwargs)
-        return wrapper if self.recording else func
-
-    def __call__(self , *args):
-        return self.ptimer(self.recorder , '/'.join(args))
-    
-    def summarize(self):
-        """summarize the recorded time"""
-        if self.recorder is not None:
-            tb = pd.DataFrame([[k , len(self.recorder[k]) , np.sum(self.recorder[k])] for k in self.recorder.keys()] ,
-                                columns = pd.Index(['keys' , 'num_calls', 'total_time']))
-            tb['avg_time'] = tb['total_time'] / tb['num_calls']
-            df = tb.sort_values(by=['total_time'],ascending=False)
-            stdout(df)

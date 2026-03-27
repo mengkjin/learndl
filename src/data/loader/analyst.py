@@ -24,7 +24,7 @@ class AnalystDataAccess(DateDataAccess):
     def get_trailing_reports(self , date : int , n_month : int = 3 , lag_month : int = 0, latest = False , **filter_kwargs):
         d0 = CALENDAR.cd(date , -30 * (n_month + lag_month))
         d1 = CALENDAR.cd(date , -30 * lag_month) 
-        dates = CALENDAR.cd_within(d0 , d1)
+        dates = CALENDAR.range(d0 , d1 , 'cd')
         reports : list[pd.DataFrame] = []
         for date in dates:
             df = self.get_report(date)
@@ -39,8 +39,8 @@ class AnalystDataAccess(DateDataAccess):
         return df
     
     @staticmethod
-    def weighted_val(df : pd.DataFrame , end_date : int , col : str , half_life : int = 180):
-        df = df.assign(_w = np.exp(-np.log(2) * CALENDAR.cd_diff_array(end_date , df['report_date']) / half_life))
+    def weighted_val(df : pd.DataFrame , end : int , col : str , half_life : int = 180):
+        df = df.assign(_w = np.exp(-np.log(2) * CALENDAR.cd_diff_array(end , df['report_date']) / half_life))
         return df.groupby('secid').apply(lambda x,**kwg:(x[col] * x['_w']).sum() / x['_w'].sum() , include_groups = False)
     
     @staticmethod

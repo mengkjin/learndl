@@ -7,7 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Proj , DB , Logger
+from src.proj import DB , Logger
 from src.proj.func import properties
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
@@ -438,7 +438,7 @@ class StockFactor:
     def __new__(cls , factor = None , *args , **kwargs):
         if not isinstance(factor , StockFactor):
             factor = super().__new__(cls)
-        Proj.States.factor = factor
+        cls._factor = factor
         return factor
 
     def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' = None , * ,

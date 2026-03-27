@@ -12,7 +12,7 @@ from src.proj.func import change_power_mode
 
 def main():
     #running_scripts = get_running_scripts(__file__)
-    log_path = PATH.log_main.joinpath('suspend','power_check.log')
+    log_path = PATH.logs.joinpath('suspend','power_check.log')
     change_power_mode('balanced' , log_path , True)
 
 if __name__ == '__main__':

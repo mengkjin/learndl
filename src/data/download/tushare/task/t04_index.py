@@ -64,12 +64,12 @@ class IndexDaily(TimeSeriesFetcher):
             ldate = min(ldate , self.rollback_date)
         return ldate
     
-    def get_data(self , index : str , start_date : int , end_date : int):
-        if start_date > end_date:
+    def get_data(self , index : str , start : int , end : int):
+        if start > end:
             return pd.DataFrame()
         if self.rollback_date is not None:
-            start_date = min(start_date , self.rollback_date)
-        df = self.iterate_fetch(self.pro.index_daily , limit = 5000 , ts_code = index , start_date = str(start_date) , end_date = str(end_date))
+            start = min(start , self.rollback_date)
+        df = self.iterate_fetch(self.pro.index_daily , limit = 5000 , ts_code = index , start_date = str(start) , end_date = str(end))
         return df
 
     def target_dates(self):
@@ -88,13 +88,13 @@ class IndexDaily(TimeSeriesFetcher):
         for index in self.TARGET_INDEX:
             path = DB.path(self.DB_SRC , index)
             old_df = pd.DataFrame()
-            start_date = self.START_DATE
+            start = self.START_DATE
             if path.exists():
                 _df = DB.load_df(path)
                 if 'trade_date' in old_df.columns:
-                    start_date = int(old_df['trade_date'].max()) + 1
+                    start = int(old_df['trade_date'].max()) + 1
                     old_df = _df
-            df = self.get_data(index , start_date , end_dt)
+            df = self.get_data(index , start , end_dt)
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).astype({'trade_date':int}).sort_values('trade_date')
             DB.save(df , self.DB_SRC , index , indent = 1 , vb_level = 3)
             updated_dates.extend(df['trade_date'].unique())
@@ -107,19 +107,19 @@ class ZXIndexDaily(DayFetcher):
     START_DATE = 20100101
     DB_KEY = 'zx_industry_index'
     
-    def get_data(self , date : int , end_date : int | None = None):
-        if end_date is None:
-            end_date = date
-        df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end_date))
+    def get_data(self , date : int , end : int | None = None):
+        if end is None:
+            end = date
+        df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end))
         if not df.empty:
             df = df.astype({'trade_date':int})
         return df
 
-    def get_zx_index_quotes(self , start_date : int , end_date : int):
+    def get_zx_index_quotes(self , start : int , end : int):
         """get zx index quotes"""
         date_dfs : dict[Any , pd.DataFrame] = {}
         index_dfs : dict[Any , pd.DataFrame] = {}
-        data = self.get_data(start_date , end_date)
+        data = self.get_data(start , end)
         if data.empty:
             return date_dfs , index_dfs
         for date , df in data.groupby('trade_date' , group_keys = True):

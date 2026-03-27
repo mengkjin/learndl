@@ -35,7 +35,7 @@ class gpLogger:
 
         self.job_dir = gpDefaults.dir_result.joinpath('bendi') if job_dir is None else Path(job_dir)
         self.status = status if status is not None else gpStatus(0 , 0)
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
 
         for dir in [self.dir_logbook , self.dir_tensors , self.dir_records]:
             dir.mkdir(parents=True, exist_ok=True)

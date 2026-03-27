@@ -75,11 +75,11 @@ class FamaFrench3:
         return (ret_H - ret_L).rename('hml')
 
     def fit(self , half_life = 0 , min_finite_ratio = 0.25):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(self.date , self.N_MONTHS , 'm')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(self.date , self.N_MONTHS , 'm')
 
-        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , mask = False , pivot = False).rename(columns={'pctchange':'ret'})
-        mv   = DATAVENDOR.TRADE.get_mv(start_date , end_date , mv_type = 'circ_mv' , pivot = False , prev=True).rename(columns={'circ_mv':'mv'})
-        btop = 1 / DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'pb' , pivot = False , prev = True).rename(columns={'pb':'bp'})
+        rets = DATAVENDOR.TRADE.get_returns(start , end , mask = False , pivot = False).rename(columns={'pctchange':'ret'})
+        mv   = DATAVENDOR.TRADE.get_mv(start , end , mv_type = 'circ_mv' , pivot = False , prev=True).rename(columns={'circ_mv':'mv'})
+        btop = 1 / DATAVENDOR.TRADE.get_val_data(start , end , 'pb' , pivot = False , prev = True).rename(columns={'pb':'bp'})
         rets = rets.merge(mv , on = ['date' , 'secid']).merge(btop , on = ['date' , 'secid'])
         rets['mv_add']= rets['mv'] * rets['ret']
         stk = rets.pivot_table('ret' , 'date' , 'secid')

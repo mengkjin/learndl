@@ -6,30 +6,30 @@ from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
 from src.func.transform import lm_resid
 
-def get_amplitudes(start_date , end_date , pivot = True):
-    quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['high' , 'low' , 'preclose'] , adj_price = False)
+def get_amplitudes(start , end , pivot = True):
+    quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['high' , 'low' , 'preclose'] , adj_price = False)
     amplitudes = ((quotes['high'] - quotes['low']) / quotes['preclose']).rename('amplitude').\
         to_frame()
     if pivot: 
         amplitudes = amplitudes.pivot_table('amplitude' , 'date' , 'secid').fillna(0)
     return amplitudes
 
-def get_slicing(start_date , end_date , sliced_by : Literal['amplitude' , 'vol' , 'cp'] , slice_ratio = 0.5):
+def get_slicing(start , end , sliced_by : Literal['amplitude' , 'vol' , 'cp'] , slice_ratio = 0.5):
     if sliced_by == 'amplitude':
-        slice_values = get_amplitudes(start_date , end_date , pivot = True)
+        slice_values = get_amplitudes(start , end , pivot = True)
     elif sliced_by == 'vol':
-        slice_values =  DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'volume' , pivot = True)
+        slice_values =  DATAVENDOR.TRADE.get_volumes(start , end , 'volume' , pivot = True)
     elif sliced_by == 'cp':
-        slice_values =  DATAVENDOR.TRADE.get_quotes(start_date , end_date , 'close' , pivot = True , adj_price = False)
+        slice_values =  DATAVENDOR.TRADE.get_quotes(start , end , 'close' , pivot = True , adj_price = False)
     sliced_pct = slice_values.rank(axis = 0 , pct = True , method = 'first') 
     slicing = sliced_pct >= slice_ratio 
     return slicing , ~slicing
 
 def mom_low_amp_v2(date , n_days : int , low_amplitude_ratio = 0.7):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_days , 'd' , 0)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_days , 'd' , 0)
 
-    quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['pctchange' , 'high' , 'low' , 'preclose' , 'close' , 'status' , 'limit'] , adj_price = False)
-    mkt_ret = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
+    quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['pctchange' , 'high' , 'low' , 'preclose' , 'close' , 'status' , 'limit'] , adj_price = False)
+    mkt_ret = DATAVENDOR.TRADE.get_market_return(start , end)
 
     quotes = quotes.join(mkt_ret , on = ['date'] , how = 'left')
 
@@ -52,9 +52,9 @@ class mom_ltampl_v1(MomentumFactor):
     description = '160日长端动量(低振幅)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 160 , 'd' , 0)
-        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
-        _ , low = get_slicing(start_date , end_date , 'amplitude' , 0.7)
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 160 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start , end , pivot = True)
+        _ , low = get_slicing(start , end , 'amplitude' , 0.7)
         mom = rets.where(low , np.nan).sum()
         return mom
     
@@ -70,9 +70,9 @@ class mom_slicevol1m(MomentumFactor):
     description = '1个月理想反转(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
-        high , low = get_slicing(start_date , end_date , 'vol')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start , end , pivot = True)
+        high , low = get_slicing(start , end , 'vol')
         mom = rets.where(high , np.nan).sum() - rets.where(low , np.nan).sum()
         return mom
     
@@ -81,10 +81,10 @@ class corr_slicevol1m(CorrelationFactor):
     description = '1个月corr差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
-        market_rets = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
-        high , low = get_slicing(start_date , end_date , 'vol')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start , end , pivot = True)
+        market_rets = DATAVENDOR.TRADE.get_market_return(start , end)
+        high , low = get_slicing(start , end , 'vol')
         h_stk , h_mkt = rets.where(high , np.nan) , (high.T * market_rets['market']).T.where(high , np.nan)
         l_stk , l_mkt = rets.where(low , np.nan) , (low.T * market_rets['market']).T.where(low , np.nan)
         diff = h_stk.corrwith(h_mkt , axis = 0) - l_stk.corrwith(l_mkt , axis = 0)
@@ -95,10 +95,10 @@ class beta_slicevol1m(CorrelationFactor):
     description = '1个月beta差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
-        market_rets = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
-        high , low = get_slicing(start_date , end_date , 'vol')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start , end , pivot = True)
+        market_rets = DATAVENDOR.TRADE.get_market_return(start , end)
+        high , low = get_slicing(start , end , 'vol')
         h_stk , h_mkt = rets.where(high , np.nan) , (high.T * market_rets['market']).T.where(high , np.nan)
         l_stk , l_mkt = rets.where(low , np.nan) , (low.T * market_rets['market']).T.where(low , np.nan)
         diff = h_stk.corrwith(h_mkt , axis = 0) * h_stk.std() / h_mkt.std() - l_stk.corrwith(l_mkt , axis = 0) * l_stk.std() / l_mkt.std()
@@ -109,9 +109,9 @@ class skew_slicevol1m(MomentumFactor):
     description = '1个月skew差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
-        high , low = get_slicing(start_date , end_date , 'vol')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start , end , pivot = True)
+        high , low = get_slicing(start , end , 'vol')
         h_rets , l_rets = rets.where(high , np.nan) , rets.where(low , np.nan)
         diff = h_rets.skew() - l_rets.skew()
         return diff
@@ -121,8 +121,8 @@ class ampl_slicecp1m(MomentumFactor):
     description = '1个月振幅(收盘价切分，较大)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        ampl = get_amplitudes(start_date , end_date , pivot = True)
-        high , _ = get_slicing(start_date , end_date , 'cp')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        ampl = get_amplitudes(start , end , pivot = True)
+        high , _ = get_slicing(start , end , 'cp')
         ampl = ampl.where(high , np.nan).mean()
         return ampl

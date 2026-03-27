@@ -585,7 +585,7 @@ class SellsideSQLDownloader:
 
     @classmethod
     def update_dates(cls , start_dt , end_dt , keys = None):
-        dates = CALENDAR.td_within(start_dt , end_dt)
+        dates = CALENDAR.range(start_dt , end_dt , 'td')
         if len(dates) == 0: 
             return NotImplemented
 
@@ -613,7 +613,7 @@ if __name__ == '__main__':
 
     start_dt = 20100901 
     end_dt   = 20100915
-    dates = CALENDAR.td_within(start_dt , end_dt)
+    dates = CALENDAR.range(start_dt , end_dt , 'td')
 
     factors_set = SellsideSQLDownloader.factors_and_conns('dongfang.hfq_chars')
     factor , connection = factors_set[0]

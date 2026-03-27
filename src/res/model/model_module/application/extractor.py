@@ -57,7 +57,7 @@ class ModelHiddenExtractor:
         
     def load_model_data(self , indent : int = 1 , vb_level : Any = 2):
         if not getattr(self , 'data_loaded' , False):
-            with Proj.Silence:
+            with Proj.silence:
                 self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
             Logger.stdout(f'Load Model Data for Hidden Model {self.hidden_name} successfully!' , indent = indent , vb_level = vb_level)
@@ -80,7 +80,7 @@ class ModelHiddenExtractor:
 
     def extract_hidden(self , model_dates : list | np.ndarray | int | None = None ,
                        update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         model_iter = self.model_iter(model_dates , update)
         self._current_update_dates = []
         with torch.no_grad():
@@ -134,7 +134,7 @@ class ModelHiddenExtractor:
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = HiddenExtractionModel.SelectModels(model_name)
         if model_name is None: 

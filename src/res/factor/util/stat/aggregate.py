@@ -40,14 +40,14 @@ def eval_basic_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Serie
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
-    start_date = ret['date'].min()
-    end_date = ret['date'].max()
-    total_days = CALENDAR.cd_diff(start_date , end_date) + 1
+    start = ret['date'].min()
+    end = ret['date'].max()
+    total_days = CALENDAR.cd_diff(start , end) + 1
     total_return = _period_ret(ret['ret'])
     annualized_return = (1 + total_return) ** (365 / total_days) - 1
     datas = [
-        ('Start' , str(start_date)),
-        ('End' , str(end_date)),
+        ('Start' , str(start)),
+        ('End' , str(end)),
         ('Total' , f'{total_return * 100:.2f}%'),
         ('Annual' , f'{annualized_return * 100:.2f}%'),
     ]
@@ -62,33 +62,33 @@ def eval_year_ret(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ret']
 
-def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1) -> pd.Series:
+def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = -1) -> pd.Series:
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
     
-    if end_date <= 0:
-        if end_date == 0:
-            end_date = -1
-        end_date = ret['date'].nlargest(-end_date).min()
+    if end <= 0:
+        if end == 0:
+            end = -1
+        end = ret['date'].nlargest(-end).min()
 
     period_names = {'d' : 'Last Day' , 'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Qtr' , 'y' : 'Last Year'}
     datas = []
     for period , name in period_names.items():
-        start_dt , end_dt = CALENDAR.cd_start_end(end_date , 1 , period) # noqa
+        start_dt , end_dt = CALENDAR.cd_start_end(end , 1 , period) # noqa
         datas.append((name , _period_ret(ret.query('date <= @end_dt and date >= @start_dt')['ret'])))
     
     df = pd.DataFrame(datas , columns = ['period' , 'ret'])
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ret']
 
-def eval_period_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end_date : int = -1) -> pd.Series:
+def eval_period_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = -1) -> pd.Series:
     basic_stats = eval_basic_stats(*input)
     year_ret = eval_year_ret(*input)
-    recent_ret = eval_recent_ret(*input , end_date = end_date)
+    recent_ret = eval_recent_ret(*input , end = end)
     return pd.concat([basic_stats , year_ret , recent_ret])
         
-def eval_period_ret_multi(inputs : dict | pd.DataFrame , end_date : int = -1) -> pd.DataFrame:
+def eval_period_ret_multi(inputs : dict | pd.DataFrame , end : int = -1) -> pd.DataFrame:
     """
     get the period return of multiple inputs
     inputs can be a dict of (name , (date , ret)) or a pd.DataFrame with date and ret columns
@@ -102,7 +102,7 @@ def eval_period_ret_multi(inputs : dict | pd.DataFrame , end_date : int = -1) ->
     if isinstance(inputs , pd.DataFrame):
         assert 'date' in inputs.columns , f'inputs must contain date and ret columns , got {inputs.columns}'
         names = inputs.columns.drop(['date'])
-        dfs = {name : eval_period_ret(inputs.loc[:,['date' , name]] , end_date = end_date) for name in names}
+        dfs = {name : eval_period_ret(inputs.loc[:,['date' , name]] , end = end) for name in names}
     else:
-        dfs = {name : eval_period_ret(inputs[name] , end_date = end_date) for name in inputs}
+        dfs = {name : eval_period_ret(inputs[name] , end = end) for name in inputs}
     return pd.concat(dfs , axis = 1)

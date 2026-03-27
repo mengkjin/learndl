@@ -454,8 +454,8 @@ class TuShareCNE5_Calculator:
     @classmethod
     def updatable_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
         '''get updatable dates of a given job of "exposure" or "risk"'''
-        end_date = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
-        dates = CALENDAR.diffs(cls.START_DATE , end_date , cls.updated_dates(job))
+        end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
+        dates = CALENDAR.diffs(cls.START_DATE , end , cls.updated_dates(job))
         return dates
 
     @classmethod
@@ -506,9 +506,9 @@ class TuShareCNE5_Calculator:
         CALENDAR.check_rollback_date(rollback_date)
         Logger.note(f'Update: {cls.__name__} rollback from {rollback_date}!')
         task = cls()
-        start_date = CALENDAR.td(rollback_date , 1)
-        end_date = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
-        dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+        start = CALENDAR.td(rollback_date , 1)
+        end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
+        dates = CALENDAR.range(start , end , 'td')
         for date in dates:
             task.update_date(date , 'exposure')
         for date in task.updatable_dates('risk'): 

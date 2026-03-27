@@ -64,8 +64,8 @@ class TsRoller:
     def unfold_chunk_slice_x(chunk_size = 8e8):
         def decorator(func : Callable[..., Tensor]):
             def wrapper(x : Tensor , d : int , *args , **kwargs):
-                chunk_num = int(np.ceil(np.prod(x.shape) * d / chunk_size))
-                chunk_len = int(np.ceil((x.shape[1] + (chunk_num - 1) * d) / chunk_num))
+                chunk_num = (np.prod(x.shape) * d / chunk_size).__ceil__()
+                chunk_len = ((x.shape[1] + (chunk_num - 1) * d) / chunk_num).__ceil__()
                 sub_rets : list[Tensor] = []
                 for i in range(chunk_num):
                     start = max(i * chunk_len - d , 0)
@@ -81,8 +81,8 @@ class TsRoller:
     def unfold_chunk_slice_xy(chunk_size = 4e8):
         def decorator(func : Callable[..., Tensor]):
             def wrapper(x : Tensor , y : Tensor , d : int , *args , **kwargs):
-                chunk_num = int(np.ceil(np.prod(x.shape) * d / chunk_size))
-                chunk_len = int(np.ceil((x.shape[1] + (chunk_num - 1) * d) / chunk_num))
+                chunk_num = (np.prod(x.shape) * d / chunk_size).__ceil__()
+                chunk_len = ((x.shape[1] + (chunk_num - 1) * d) / chunk_num).__ceil__()
                 sub_rets : list[Tensor] = []
                 for i in range(chunk_num):
                     start = max(i * chunk_len - d , 0)

@@ -8,10 +8,10 @@ from src.res.factor.calculator import CorrelationFactor
 def vp_correlation(date , n_months : int , volume_type : Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr'] = 'volume' ,
                    price_type : Literal['open' , 'high' , 'close' , 'low' , 'vwap'] = 'close' ,
                    min_finite_ratio = 0.25):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     
-    volume = DATAVENDOR.TRADE.get_quotes(start_date, end_date , volume_type , pivot = True)
-    price = DATAVENDOR.TRADE.get_quotes(start_date, end_date , price_type , mask=True , pivot = True)
+    volume = DATAVENDOR.TRADE.get_quotes(start, end , volume_type , pivot = True)
+    price = DATAVENDOR.TRADE.get_quotes(start, end , price_type , mask=True , pivot = True)
 
     corr = price.corrwith(volume)
     mask = np.isfinite(price).sum() < len(price) * min_finite_ratio

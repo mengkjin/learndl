@@ -27,7 +27,7 @@ class gpParameters:
         self.continuation = continuation
         self.test_code = test_code
         self.kwargs = kwargs
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
         self.make_job_dir()
         self.load_params()
 

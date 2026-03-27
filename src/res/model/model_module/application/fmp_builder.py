@@ -89,7 +89,7 @@ class ModelPortfolioBuilder:
         return dates
     
     def build_fmps(self , dates : list[int] | np.ndarray , deploy = True , indent = 1 , vb_level : Any = 2):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         for date in dates:
             self.fmp_tables[date] = self.build_day(date , indent = indent + 1 , vb_level = vb_level + 2) 
             Logger.stdout(f'Finished build fmps for {self.reg_model} at {date}' , indent = indent + 1 , vb_level = vb_level + 1)
@@ -125,12 +125,12 @@ class ModelPortfolioBuilder:
         return ret
     
     def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : Any = 3):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         self.load_accounts(resume = resume , indent = indent + 1 , vb_level = vb_level + 1)
         self._update_account_record = []
 
         last_end_dates   = self.account_last_end_dates()
-        update_fmp_names = [name for name , end_date in last_end_dates.items() if end_date < CALENDAR.updated()]
+        update_fmp_names = [name for name , end in last_end_dates.items() if end < CALENDAR.updated()]
         if len(update_fmp_names) == 0: 
             return
 
@@ -156,7 +156,7 @@ class ModelPortfolioBuilder:
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         '''Update prediction models' factor model portfolios'''
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)

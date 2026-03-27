@@ -3,8 +3,8 @@ from src.res.factor.calculator import MomentumFactor
 
 
 def mdr(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    returns = DATAVENDOR.TRADE.get_returns(start_date , end_date)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    returns = DATAVENDOR.TRADE.get_returns(start , end)
     return returns.max()
 
 class mom_mdr1m(MomentumFactor):

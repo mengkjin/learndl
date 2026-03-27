@@ -17,7 +17,7 @@ class CallbackTimer(BaseCallBack):
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.recording = Proj.vb.is_max_level
-        self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.possible_hooks}
+        self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.base_hooks()}
         self.record_start_time : dict[str,datetime] = {}
     def __bool__(self):
         """disable callback timer"""
@@ -357,7 +357,7 @@ class SummaryWriter(BaseCallBack):
         test_name = f'{self.config.base_path.full_name}'
 
         duration : dict[str,str] = {
-            stage : f'{Duration(self.status.end_times[stage] - self.status.start_times[stage])}' for stage in self.config.stage_queue
+            stage : f'{Duration(self.status.end_times[stage] - self.status.start_times[stage])}' for stage in self.config.queue_of_stages
         }
         metrics : dict[str,str] = {}
         for col in self.status.test_summary.columns:
@@ -370,7 +370,7 @@ class SummaryWriter(BaseCallBack):
             f'model' : f'{self.config.model_name} x {len(self.config.model_num_list)})',
             f'submodel' : f'{self.config.submodels}',
             f'start' : f'{self.init_time.strftime("%Y-%m-%d %H:%M:%S")}',
-            f'stages' : f'{self.config.stage_queue}',
+            f'stages' : f'{self.config.queue_of_stages}',
             f'inputs' : self.data.input_keys_subkeys,
             f'labels' : f'{self.config.labels}',
             f'range' : f'{self.config.beg_date} - {self.config.end_date}',

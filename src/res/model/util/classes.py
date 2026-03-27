@@ -3,12 +3,12 @@ import numpy as np
 import pandas as pd
 import torch
 
-from abc import ABC , abstractmethod
+from abc import ABC , abstractmethod , ABCMeta
 from dataclasses import dataclass
 from datetime import datetime
 from inspect import currentframe
 from pathlib import Path
-from typing import Any , final , Iterator , Literal , Callable , Sized
+from typing import Any , final , Iterator , Literal , Sized
 from torch.utils.tensorboard import SummaryWriter as TBSummaryWriter
 
 from src.proj import Proj , Logger , DB , PATH
@@ -23,9 +23,11 @@ from .config import ModelConfig
 from .metrics import Metrics
 from .model_path import ModelDict
 from .storage import MemFileStorage
-
-class ModelStreamLine(ABC):
+class BaseStreamLine(ABC):
     """Base class for all model stream lines , e.g. trainer, predictor, data module, etc."""
+    @staticmethod
+    def base_hooks():
+        return [hook for hook in dir(BaseStreamLine) if hook.startswith(('stage_' , 'on_'))]
     def stage_data(self): ...
     def stage_fit(self):  ...
     def stage_test(self): ...
@@ -72,93 +74,29 @@ class ModelStreamLine(ABC):
     def on_before_test_start(self): ...
     def on_before_test_end(self): ...
     def on_after_test_end(self): ...
+
+class BaseStreamLineMeta(ABCMeta): 
+    def __new__(cls, name, bases, attrs):
+        new_cls = super().__new__(cls, name, bases, attrs)
+
+        # check if the class defines extra hooks
+        current = set([hook for hook in dir(new_cls) if hook.startswith(('stage_' , 'on_'))])
+        base_hooks = set(getattr(new_cls, 'base_hooks', lambda: [])())
+        extra = current - base_hooks
+        if extra:
+            Logger.warning(f'{new_cls.__name__} defines extra hooks: {extra}')
+
+        # check if the class defines placeholdernames for hooks
+        placeholder_names = set([hook for hook in dir(new_cls) if hook.startswith(('_raw_'))])
+        if placeholder_names:
+            Logger.warning(f'{new_cls.__name__} defines placeholder names for hooks: {placeholder_names}')
+        return new_cls
+
+class ModelStreamLine(BaseStreamLine, metaclass=BaseStreamLineMeta):
+    """Base class for all model stream lines , e.g. trainer, predictor, data module, etc."""
     def execute_hook(self , hook : str):
         getattr(self , hook)()
-
-    possible_hooks : list[str] = [
-        'stage_data' ,
-        'stage_fit' ,
-        'stage_test' ,
-        'on_configure_model' ,
-        'on_summarize_model' ,
-        'on_data_end' , 
-        'on_data_start' , 
-        'on_after_backward' , 
-        'on_after_fit_epoch' , 
-        'on_before_clip_gradients' ,
-        'on_before_backward' , 
-        'on_before_save_model' , 
-        'on_before_fit_epoch_end' , 
-        'on_fit_end' , 
-        'on_fit_epoch_end' , 
-        'on_fit_epoch_start' , 
-        'on_fit_model_end' , 
-        'on_fit_model_start' , 
-        'on_fit_model_date_end' , 
-        'on_fit_model_date_start' , 
-        'on_fit_start' ,
-        'on_test_batch_end' ,
-        'on_test_batch_start' , 
-        'on_test_end' , 
-        'on_test_model_end' , 
-        'on_test_model_start' , 
-        'on_test_model_date_end' , 
-        'on_test_model_date_start' , 
-        'on_test_submodel_end' , 
-        'on_test_submodel_start' , 
-        'on_test_start' , 
-        'on_train_batch_end' , 
-        'on_train_batch_start' , 
-        'on_train_epoch_end' , 
-        'on_train_epoch_start' , 
-        'on_validation_batch_end' , 
-        'on_validation_batch_start' ,
-        'on_validation_epoch_end' ,
-        'on_validation_epoch_start' ,
-        'on_before_data_start' ,
-        'on_after_data_end' ,
-        'on_before_fit_start' ,
-        'on_after_fit_end' ,
-        'on_before_test_start' ,
-        'on_before_test_end' ,
-        'on_after_test_end' ,
-    ]
-
-class HookWrapper:
-    """
-    Wrapper for hooks, used to wrap the hooks of the trainer and the model
-    The order of the hooks is:
-    - callback enter hook
-    - status hooks
-    - trainer hooks
-    - model hooks
-    - predrecorder hooks
-    - callback exit hooks
-    """
-    wrap_count : int = 0
-    max_wrap_count = 1
-    raw_hooks : dict[str , Callable] = {}
-
-    @classmethod
-    def wrap(cls , trainer : 'BaseTrainer'):
-        assert cls.wrap_count < cls.max_wrap_count , f'Callbacks are already wrapped {cls.wrap_count} times'
-        for hook in trainer.possible_hooks:
-            cls.raw_hooks[hook] = getattr(trainer , hook)
-            setattr(trainer , hook , cls.wrap_single_hook(trainer , hook))
-        cls.wrap_count += 1
-
-    @classmethod
-    def wrap_single_hook(cls , trainer : 'BaseTrainer' , hook : str):
-        def wrapper(*args , **kwargs) -> None:
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.level_callback)
-            trainer.callback.at_enter(hook , Proj.vb.level_callback)
-            trainer.status.execute_hook(hook)
-            cls.raw_hooks[hook](*args , **kwargs)
-            trainer.model.execute_hook(hook)
-            trainer.record.execute_hook(hook)
-            trainer.callback.at_exit(hook , Proj.vb.level_callback)
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.level_callback)
-        return wrapper
+    
 
 @dataclass
 class _EndEpochStamp:
@@ -438,17 +376,51 @@ class BaseDataModule(ABC):
     @property
     def device(self): return self.config.device
 
+class TrainerHookWrapper:
+    """
+    Wrapper for hooks, used to wrap the hooks of the trainer and the model
+    The order of the hooks is:
+    - callback enter hook
+    - status hooks
+    - trainer hooks
+    - model hooks
+    - predrecorder hooks
+    - callback exit hooks
+    """
+    wrapped_records : dict[int , bool] = {}
+    max_wrap_count = 1
+
+    @classmethod
+    def wrap(cls , trainer : 'BaseTrainer'):
+        key = id(trainer)
+        assert cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
+        for hook in trainer.base_hooks():
+            setattr(trainer , f'_raw_{hook}' , getattr(trainer , hook))
+            setattr(trainer , hook , cls.wrap_single_hook(trainer , hook))
+        cls.wrapped_records[key] = True
+
+    @classmethod
+    def wrap_single_hook(cls , trainer : 'BaseTrainer' , hook : str):
+        def wrapper(*args , **kwargs) -> None:
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.callback)
+            trainer.callback.at_enter(hook , Proj.vb.callback)
+            trainer.status.execute_hook(hook)
+            getattr(trainer , f'_raw_{hook}')(*args , **kwargs)
+            trainer.model.execute_hook(hook)
+            trainer.record.execute_hook(hook)
+            trainer.callback.at_exit(hook , Proj.vb.callback)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.callback)
+        return wrapper
+
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
     _instance : 'BaseTrainer | None' = None
-    _raw_hooks : dict[str, Callable] = {}
-    _hooks_wrapped : bool = False
 
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            HookWrapper.wrap(cls._instance)
-            Proj.States.trainer = cls._instance
+            new_cls = super().__new__(cls)
+            TrainerHookWrapper.wrap(new_cls)
+            cls._instance = new_cls
         return cls._instance
     
     @final
@@ -500,7 +472,7 @@ class BaseTrainer(ModelStreamLine):
     @property
     def base_path(self): return self.config.base_path
     @property
-    def stage_queue(self): return self.config.stage_queue
+    def queue_of_stages(self): return self.config.queue_of_stages
     @property
     def batch_num(self): 
         assert isinstance(self.dataloader , Sized) , f'dataloader is not a Sized object: {self.dataloader}'
@@ -539,11 +511,11 @@ class BaseTrainer(ModelStreamLine):
     def if_transfer(self): return self.config.transfer_training     
     @property
     def html_catcher_export_path(self): 
-        if 'fit' in self.stage_queue and 'test' in self.stage_queue:
+        if 'fit' in self.queue_of_stages and 'test' in self.queue_of_stages:
             status = 'fitting_testing'
-        elif 'test' in self.stage_queue:
+        elif 'test' in self.queue_of_stages:
             status = 'testing'
-        elif 'fit' in self.stage_queue:
+        elif 'fit' in self.queue_of_stages:
             status = 'fitting'
         else:
             status = 'unknown'
@@ -556,19 +528,19 @@ class BaseTrainer(ModelStreamLine):
         '''Main stage of data & fit & test'''
         self.on_configure_model()
 
-        if not self.stage_queue:
+        if not self.queue_of_stages:
             Logger.error("stage_queue is empty , please check src.proj.Proj.States.trainer")
             raise Exception("stage_queue is empty , please check src.proj.Proj.States.trainer")
 
-        if 'data' in self.stage_queue:
+        if 'data' in self.queue_of_stages:
             with Logger.Paragraph('Stage [Data]' , 2):
                 self.stage_data()
 
-        if 'fit' in self.stage_queue:  
+        if 'fit' in self.queue_of_stages:  
             with Logger.Paragraph('Stage [Fit]' , 2):
                 self.stage_fit()
 
-        if 'test' in self.stage_queue: 
+        if 'test' in self.queue_of_stages: 
             with Logger.Paragraph('Stage [Test]' , 2):
                 self.stage_test()
         

@@ -98,7 +98,7 @@ def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
 def target_dates(data_type : DATA_TYPES , date : int | None = None):
     start = src_start_date(data_type)
     end   = CALENDAR.update_to() if date is None else date
-    dates = CALENDAR.td_within(start , end)
+    dates = CALENDAR.range(start , end , type = 'td')
     return Dates(CALENDAR.diffs(dates , stored_dates(data_type , 1)))
 
 def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Dates:
@@ -138,10 +138,10 @@ def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     write_list(secdf , date , data_type)
     return secdf
 
-def rcquant_trading_dates(start_date, end_date):
+def rcquant_trading_dates(start, end):
     if not rcquant_init(): 
         return []
-    return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
+    return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start, end, market='cn')]
 
 def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):    
     def code_map(x : str):

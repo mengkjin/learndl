@@ -6,8 +6,8 @@ from src.res.factor.calculator import LiquidityFactor
 from src.func.transform import apply_ols
 
 def turnover_classic(date , n_months : int , lag_months : int = 0 , min_finite_ratio = 0.25):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    turns = DATAVENDOR.TRADE.mask_min_finite(DATAVENDOR.TRADE.get_turnovers(start_date , end_date , turnover_type = 'fr') , 
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    turns = DATAVENDOR.TRADE.mask_min_finite(DATAVENDOR.TRADE.get_turnovers(start , end , turnover_type = 'fr') , 
                                          min_finite_ratio = min_finite_ratio)
     turns = turns.mean()
     return turns
@@ -52,15 +52,15 @@ class turn_unexpected(LiquidityFactor):
     description = '1个月意外换手率'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'm' , 1)
-        x = DATAVENDOR.TRADE.get_market_amount(start_date, end_date) / 1e8
-        y = DATAVENDOR.TRADE.get_turnovers(start_date, end_date)
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'm' , 1)
+        x = DATAVENDOR.TRADE.get_market_amount(start, end) / 1e8
+        y = DATAVENDOR.TRADE.get_turnovers(start, end)
 
         coef = pd.DataFrame(apply_ols(x , y) , index = pd.Index(['intercept' , 'slope']) , columns = y.columns)
 
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm')
-        x = DATAVENDOR.TRADE.get_market_amount(start_date, end_date) / 1e8
-        y = DATAVENDOR.TRADE.get_turnovers(start_date, end_date)
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm')
+        x = DATAVENDOR.TRADE.get_market_amount(start, end) / 1e8
+        y = DATAVENDOR.TRADE.get_turnovers(start, end)
 
         pred = pd.DataFrame(x.values * coef.loc[['slope'],:].values + coef.loc[['intercept'],:].values , 
                             index = x.index , columns = coef.columns)

@@ -38,7 +38,7 @@ class PreProcessorTask:
     @classmethod
     def main(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : Any = 1 , 
              force_update : bool = False):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)

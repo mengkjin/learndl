@@ -3,9 +3,9 @@ from src.res.factor.calculator import VolatilityFactor
 
 
 def skewness_volwei(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    vol = DATAVENDOR.TRADE.get_quotes(start_date,end_date,'volume',pivot=True) + 1e-6
-    ret = DATAVENDOR.TRADE.get_returns(start_date,end_date,'close',pivot=True)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    vol = DATAVENDOR.TRADE.get_quotes(start,end,'volume',pivot=True) + 1e-6
+    ret = DATAVENDOR.TRADE.get_returns(start,end,'close',pivot=True)
 
     wgt = vol / vol.mean()
     ret -= (ret * wgt).mean()

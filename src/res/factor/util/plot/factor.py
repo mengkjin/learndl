@@ -225,7 +225,7 @@ class Plotter:
         self.plot_iter.set_args(data , show , title_prefix , 'Cross-Sectional Distribution' , ['factor_name' , 'benchmark'])
         for df , fig in self.plot_iter.iter():
             assert not df['date'].duplicated().any() , df['date']
-            lay_out = (3, min(int(np.ceil(len(df) / 3)) , 3))
+            lay_out = (3, min((len(df) / 3).__ceil__() , 3))
             for i in range(min(len(df) , lay_out[0] * lay_out[1])):
                 ax = fig.add_subplot(*lay_out , i + 1)
                 day_df = df.iloc[i]
@@ -506,7 +506,7 @@ class Plotter:
         for i , sub_data in enumerate(group_plot):     
             with Plot.PlotFactorData(sub_data , title = title , show=show and i==0 , suptitle=True) as (df , fig):
                     assert not df['date'].duplicated().any() , df['date']
-                    lay_out = (3, min(int(np.ceil(len(df) / 3)) , 3))
+                    lay_out = (3, min((len(df) / 3).__ceil__() , 3))
                     for i in range(min(len(df) , lay_out[0] * lay_out[1])):
                         ax = fig.add_subplot(*lay_out , i + 1)
                         day_df = df.iloc[i]

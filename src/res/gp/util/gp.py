@@ -25,7 +25,7 @@ class GeneticProgramming:
 
     def __init__(self , job_id : int | None = None , train : bool = True , start_iter = 0 , start_gen = 0 , 
                  test_code : bool = False , timer = True , vb_level : Any = 2 , **kwargs):
-        self.vb_level  = Proj.vb.level(vb_level)
+        self.vb_level  = Proj.vb(vb_level)
         self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , vb_level = self.vb_level , **kwargs)
         self.status    = gpStatus(self.param.n_iter , self.param.n_gen , start_iter , start_gen , self.param.train)
         self.memory    = MemoryManager(self.param.device , vb_level = self.vb_level)

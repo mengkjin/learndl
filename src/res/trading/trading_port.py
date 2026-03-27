@@ -211,7 +211,7 @@ class TradingPort:
     def analyze(self , start : int | None = None , end : int | None = None , 
                 indent : int = 0 , vb_level : Any = 1 , write_down = True , display_all = False , key_fig = 'perf_curve', 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         start = start if start is not None else -1
         end = end if end is not None else 99991231
         port_dates = self.stored_dates(start , end)
@@ -276,7 +276,7 @@ class TrackingPort(TradingPort):
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
                         alpha_details = False , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame:
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
@@ -335,7 +335,7 @@ class BacktestPort(TradingPort):
         return self
     
     def build_backward(self , date : int , reset_port = False , export = True , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame:
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
         
@@ -348,7 +348,7 @@ class BacktestPort(TradingPort):
             self.portfolio_dir.mkdir(parents = True , exist_ok = True)
             self.result_path_account.unlink(missing_ok = True)
 
-        date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
+        date_list = CALENDAR.range(self.test_start , test_end , 'td' , step = self.step)
         date_list = date_list[date_list > self.end_date()]
         if len(date_list) == 0: 
             return pd.DataFrame()

@@ -3,9 +3,9 @@ from src.res.factor.calculator import MomentumFactor
 
 
 def price_weivol(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    vol  = DATAVENDOR.TRADE.get_quotes(start_date,end_date,'volume',pivot=True)
-    cp   = DATAVENDOR.TRADE.get_quotes(start_date,end_date,'close',pivot=True)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    vol  = DATAVENDOR.TRADE.get_quotes(start,end,'volume',pivot=True)
+    cp   = DATAVENDOR.TRADE.get_quotes(start,end,'close',pivot=True)
     weivol = (vol * cp).sum() / vol.sum() / cp.iloc[-1]
     return weivol
 

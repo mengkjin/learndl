@@ -169,7 +169,7 @@ class PATH:
 
     @staticmethod
     def file_modified_date(path : Path | str , default = 19970101) -> int:
-        """Get the modified date of the file"""
+        """Get the modified date of the file in '%Y%m%d' format"""
         path = Path(path)
         if path.exists():
             return int(datetime.fromtimestamp(path.stat().st_mtime).strftime('%Y%m%d'))
@@ -178,7 +178,7 @@ class PATH:
 
     @staticmethod
     def file_modified_time(path : Path | str , default = 19970101000000) -> int:
-        """Get the modified time of the file"""
+        """Get the modified time of the file in '%Y%m%d%H%M%S' format"""
         path = Path(path)
         if path.exists():
             return int(datetime.fromtimestamp(path.stat().st_mtime).strftime('%Y%m%d%H%M%S'))

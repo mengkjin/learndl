@@ -12,7 +12,7 @@ class ModelCalculator:
         
         self.config = self.model_path.load_config()
         self.model = get_predictor_module(self.config)
-        with Proj.Silence:
+        with Proj.silence:
             self.data_module  = DataModule(self.config , 'both').load_data() 
 
     def __repr__(self) -> str:

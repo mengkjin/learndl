@@ -284,7 +284,7 @@ class MarketEventMomentumFactorWeight:
         """evaluate factor weights for a given date range"""
         if not hasattr(self , 'event_perf'):
             self.eval_event_perf(start , end)
-        full_dates = CALENDAR.td_within(start , end)
+        full_dates = CALENDAR.range(start , end , 'td')
         self.event_factor_weight = EventFactorWeight(self.event_perf , full_dates , self.factor_names).eval()
         return self
 
@@ -324,7 +324,7 @@ class event_factor_momentum_test(WeightedPoolingCalculator):
     def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         if dates is None:
-            dates = CALENDAR.slice(CALENDAR.td_within(start , end) , self.init_date , CALENDAR.updated())
+            dates = CALENDAR.slice(CALENDAR.range(start , end , 'td') , self.init_date , CALENDAR.updated())
         factor_weight = MarketEventMomentumFactorWeight(self.sub_factors)
         factor_weight.eval_factor_weights(min(dates) , max(dates))
         df = factor_weight.factor_weight_full.loc[dates].reset_index(['date'] ,drop = False).rename_axis(None , axis = 1)
@@ -367,7 +367,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
     def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         if dates is None:
-            dates = CALENDAR.slice(CALENDAR.td_within(start , end) , self.init_date , CALENDAR.updated())
+            dates = CALENDAR.slice(CALENDAR.range(start , end , 'td') , self.init_date , CALENDAR.updated())
         factor_weight = MarketEventMomentumFactorWeight(self.sub_factors)
         factor_weight.eval_factor_weights(min(dates) , max(dates))
         df = factor_weight.factor_weight_full.loc[dates].reset_index(['date'] ,drop = False).rename_axis(None , axis = 1)

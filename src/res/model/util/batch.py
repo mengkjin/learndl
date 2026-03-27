@@ -136,7 +136,7 @@ class BatchInput:
                 'input.sequence.steps':{'week':1},
                 'input.sequence.lens':{'week':30},
             }
-            with Proj.Silence:
+            with Proj.silence:
                 model_config = ModelConfig(override=override)
                 data = DataModule(model_config , 'predict').load_data()
                 data.setup('predict' , model_date = data.datas.y.date[-20])

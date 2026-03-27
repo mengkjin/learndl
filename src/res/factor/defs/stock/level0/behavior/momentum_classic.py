@@ -3,8 +3,8 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
 def mom_classic(date , n_months : int , lag_months : int = 0 , return_type : Literal['close' , 'overnight' , 'intraday'] = 'close'):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , return_type = return_type , mask = True)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    rets = DATAVENDOR.TRADE.get_returns(start , end , return_type = return_type , mask = True)
     mom = (rets + 1).prod() - 1
     return mom
 
@@ -69,9 +69,9 @@ class mom_new1m(MomentumFactor):
     description = '1个月日内-日间合成因子'
 
     def calc_factor(self , date : int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm' , 0)
-        rets_intraday = DATAVENDOR.TRADE.get_returns(start_date , end_date , return_type = 'intraday' , mask = True)
-        rets_overnight = DATAVENDOR.TRADE.get_returns(start_date , end_date , return_type = 'overnight' , mask = True)
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm' , 0)
+        rets_intraday = DATAVENDOR.TRADE.get_returns(start , end , return_type = 'intraday' , mask = True)
+        rets_overnight = DATAVENDOR.TRADE.get_returns(start , end , return_type = 'overnight' , mask = True)
 
         mom = rets_intraday.rank(axis = 1 , pct = True) - rets_overnight.rank(axis = 1 , pct = True)
         return mom.sum()

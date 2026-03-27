@@ -118,8 +118,8 @@ class DataModule(BaseDataModule):
         if self.empty_x:
             Logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
             Logger.note(f'{self.input_type} input keys: {self.input_keys}')
-            self.config.stage_queue.remove('fit')
-            self.config.stage_queue.remove('test')
+            self.config.queue_of_stages.remove('fit')
+            self.config.queue_of_stages.remove('test')
         return self
 
     def filter_datas(self):
@@ -167,7 +167,7 @@ class DataModule(BaseDataModule):
         dates = self.datas.date_within(self.beg_date , self.end_date)
         # check if dates is align with CALENDAR
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
-        calendar_dates = CALENDAR.td_within(min(dates) , max(dates))
+        calendar_dates = CALENDAR.range(min(dates) , max(dates) , 'td')
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
             Logger.error(f'dates is not align with calendar dates!')
             if len(np.setdiff1d(dates , calendar_dates)) > 0:

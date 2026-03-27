@@ -344,14 +344,14 @@ class HiddenPath:
         return self.target_hidden_path(self.model_name , self.model_num , model_date , self.submodel)
     
     def last_modified_date(self , model_date : int | None = None) -> int:
-        """last modified date of the hidden path"""
+        """last modified date of the hidden path in '%Y%m%d' format"""
         if model_date is None: 
             model_dates = self.model_dates()
             model_date = int(model_dates.max()) if len(model_dates) else -1
         return PATH.file_modified_date(self.target_path(model_date))
     
     def last_modified_time(self , model_date : int | None = None) -> int:
-        """last modified time of the hidden path"""
+        """last modified time of the hidden path in '%Y%m%d%H%M%S' format"""
         if model_date is None: 
             model_dates = self.model_dates()
             model_date = int(model_dates.max()) if len(model_dates) else -1
@@ -517,7 +517,7 @@ class PredictionModel(ModelPath):
         """model pred target dates"""
         start_dt = max(self.start_dt , int(CALENDAR.td(min(self.model_dates) , 1)))
         end_dt = None
-        return CALENDAR.td_within(start_dt , end_dt)
+        return CALENDAR.range(start_dt , end_dt , 'td')
     
     @property
     def fmp_dates(self) -> np.ndarray:

@@ -172,13 +172,13 @@ class ModelTrainer(BaseTrainer):
                       selection = selection, start = start , end = end , **kwargs)
 
     @classmethod
-    def resumable_factors(cls , start_date : int | None = None , end_date : int | None = None , **kwargs) -> list[ModelPath]:
+    def resumable_factors(cls , start : int | None = None , end : int | None = None , **kwargs) -> list[ModelPath]:
         factors = [p.factor_name for p in FactorCalculator.iter(meta_type = 'pooling' , updatable = True)] + \
             [p.factor_name for p in FactorCalculator.iter(category1 = 'sellside' , updatable = True)]
 
         available_factors : list[ModelPath] = [
             ModelPath(f'factor@{factor}') for factor in factors
-            if len(StockFactorHierarchy.get_factor(factor).stored_dates(start_date, end_date)) > 0
+            if len(StockFactorHierarchy.get_factor(factor).stored_dates(start, end)) > 0
         ]
         return available_factors
 

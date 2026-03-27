@@ -5,8 +5,8 @@ from src.res.factor.calculator import VolatilityFactor
 
 
 def exret_std(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    exrets = DATAVENDOR.RISK.get_exret(start_date , end_date , pivot=True)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    exrets = DATAVENDOR.RISK.get_exret(start , end , pivot=True)
     return exrets.std() * np.sqrt(252)
 
 class exret_std1m(VolatilityFactor):

@@ -813,7 +813,7 @@ class ModelConfig(BaseModelConfig):
     def start_model(self):
         self.process_parser()
 
-        if "fit" in self.stage_queue and not self.is_resuming:
+        if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():
                 if (not self.short_test and not self.base_path.is_null_model and self.model_config.resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
@@ -889,13 +889,13 @@ class ModelConfig(BaseModelConfig):
         return end_date
 
     @property
-    def stage_queue(self) -> list[Literal["data", "fit", "test"]]:
+    def queue_of_stages(self) -> list[Literal["data", "fit", "test"]]:
         """stage queue for training"""
-        return getattr(self, "_stage_queue", [])
+        return getattr(self, "_queue_of_stages", [])
 
-    @stage_queue.setter
-    def stage_queue(self, value: list[Literal["data", "fit", "test"]]):
-        self._stage_queue = value
+    @queue_of_stages.setter
+    def queue_of_stages(self, value: list[Literal["data", "fit", "test"]]):
+        self._queue_of_stages = value
 
     @property
     def is_resuming(self) -> bool:
@@ -969,7 +969,7 @@ class ModelConfig(BaseModelConfig):
             2: test only
         """
         assert value in [-1, 0, 1, 2], f"stage must be -1, 0, 1, or 2, got {value}"
-        stage_queue: list[Literal["data", "fit", "test"]] = ["data", "fit", "test"]
+        queue_of_stages: list[Literal["data", "fit", "test"]] = ["data", "fit", "test"]
 
         if value == -1:
             if not self.base_path.is_null_model:
@@ -981,16 +981,16 @@ class ModelConfig(BaseModelConfig):
 
         match value:
             case 0:
-                stage_queue = ["data", "fit", "test"]
+                queue_of_stages = ["data", "fit", "test"]
             case 1:
-                stage_queue = ["data", "fit"]
+                queue_of_stages = ["data", "fit"]
             case 2:
-                stage_queue = ["data", "test"]
+                queue_of_stages = ["data", "test"]
             case _:
                 raise ValueError(f"Invalid stage option: {value}")
 
-        self.stage_queue = stage_queue
-        Logger.note("--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), stage_queue))),
+        self.queue_of_stages = queue_of_stages
+        Logger.note("--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), queue_of_stages))),
                     color="lightblue", vb_level=vb_level)
 
     def parser_resume(self, value=-1, vb_level: Any = 1):
@@ -1032,7 +1032,7 @@ class ModelConfig(BaseModelConfig):
         -1: choose if optional
             if short_test or null_model or no candidates:
                 don't change the base_path
-            elif fit is in stage_queue:
+            elif fit is in queue_of_stages:
                 -1: choose (if model_name dirs exists, ask to choose one)
                 0: raw model_name dir if is_resuming , create a new model_name dir otherwise
                 1,2,3,...: choose one by model_index, start from 1 (if not is_resuming , raise error)
@@ -1048,7 +1048,7 @@ class ModelConfig(BaseModelConfig):
             candidates_indices = sorted([mp.model_name_index for mp in candidates])
             if self.short_test or self.base_path.is_null_model or not candidates:
                 value = 0
-            elif "fit" in self.stage_queue and not self.is_resuming:
+            elif "fit" in self.queue_of_stages and not self.is_resuming:
                 if self.base_path.model_name_index not in candidates_indices:
                     value = 0
                 else:
@@ -1074,7 +1074,7 @@ class ModelConfig(BaseModelConfig):
             not self.short_test
             and not self.is_resuming
             and not self.base_path.is_null_model
-            and "fit" in self.stage_queue
+            and "fit" in self.queue_of_stages
             and self.resumable
         ):
             Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")
@@ -1122,7 +1122,7 @@ class ModelConfig(BaseModelConfig):
             info_strs.append((0, "Shuffling", f"{self.shuffle_option}"))
             info_strs.append((0, "Random Seed", f"{self.random_seed}"))
         info_strs.append((0, "Short Test", f"{self.short_test}"))
-        info_strs.append((0, "Stage Queue", f"{self.stage_queue}"))
+        info_strs.append((0, "Stage Queue", f"{self.queue_of_stages}"))
         info_strs.append((0, "Resuming", f"{self.is_resuming}"))
         if self.is_resuming:
             info_strs.append((1, "Resume Test", f"{Proj.Conf.Model.TRAIN.resume_test}"))

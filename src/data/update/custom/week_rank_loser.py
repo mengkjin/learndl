@@ -16,7 +16,7 @@ class WeekRankLoserUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
             stored_dates = np.array([])
@@ -28,8 +28,8 @@ class WeekRankLoserUpdater(BasicCustomUpdater):
         else:
             raise ValueError(f'Invalid update type: {update_type}')
             
-        end_date = CALENDAR.updated()
-        update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
+        end = CALENDAR.updated()
+        update_dates = CALENDAR.diffs(cls.START_DATE , end , stored_dates)
         if len(update_dates) == 0:
             Logger.skipping(f'{cls.DB_SRC}/{cls.DB_KEY} is up to date' , indent = indent , vb_level = vb_level)
             return

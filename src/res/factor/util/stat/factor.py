@@ -240,7 +240,7 @@ def calc_distrib_curve(
     sampling_date_num : int = 20 , hist_bins : int = 50 ,
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
-    use_date = factor.date[::int(np.ceil(len(factor.date) / sampling_date_num))]
+    use_date = factor.date[::(len(factor.date) / sampling_date_num).__ceil__()]
     rtn_dfs : list[pd.DataFrame] = []
     for factor_name in factor.factor_names:
         hist_dict = {}

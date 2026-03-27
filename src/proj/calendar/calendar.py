@@ -1,380 +1,498 @@
+"""
+Calendar tools: 
+CALENDAR for static/class methods 
+Dates for date array view.
+"""
+
 import numpy as np
 import pandas as pd
+import torch
 
-from datetime import datetime , timedelta , time
-from typing import Any , Literal , Sequence
+from datetime import datetime, timedelta, time
+from typing import Any, Literal, Union , Sequence
 
 import src.proj.db as DB
 
-from .basic import BC , BJTZ
+from .basic import BC, BJTZ
 from .trade_date import TradeDate
 
-def date_convert_to_index(date):
-    if isinstance(date , TradeDate): 
-        date = [date.td]
-    elif isinstance(date , pd.Series): 
-        date = date.to_numpy(int) #.tolist()
-    return date
+DateType = Union[int, TradeDate]
+DateTypeWithNone = Union[int, TradeDate, None]
+DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series , torch.Tensor]
+
+def get_cd(date : DateType) -> int:
+    return date.cd if isinstance(date, TradeDate) else date
+
+def get_td(date : DateType) -> int:
+    return date.td if isinstance(date, TradeDate) else date
+
+def get_cds(dates: DatesType):
+    """
+    Convert the 'date' parameter of 'td_array' / '*_diff_array' to an integer array index key.
+    Single element of this package 'TradeDate' will be expanded to its 'td'; 'pd.Series' will be converted to 'ndarray'.
+    """
+    if isinstance(dates, (TradeDate , int)):
+        dates = np.array([get_cd(dates)])
+    elif isinstance(dates, pd.Series):
+        dates = dates.to_numpy(int)
+    elif isinstance(dates, np.ndarray):
+        ...
+    elif isinstance(dates, Sequence):
+        dates = np.array([get_cd(d) for d in dates])
+    elif isinstance(dates , torch.Tensor):
+        dates = dates.cpu().numpy()
+    return dates.astype(int)
 
 class CALENDAR:
-    """
-    trade calendar util
-    """
+    """Static tools for trading date and natural date conversion, interval truncation, quarter end, etc."""
 
-    ME = pd.date_range(start='1997-01-01', end='2099-12-31', freq='ME').strftime('%Y%m%d').to_numpy(int)
-    QE = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').to_numpy(int)
-    YE = pd.date_range(start='1997-01-01', end='2099-12-31', freq='YE').strftime('%Y%m%d').to_numpy(int)
+    ME = pd.date_range(start="1997-01-01", end="2099-12-31", freq="ME").strftime("%Y%m%d").to_numpy(int)
+    QE = pd.date_range(start="1997-01-01", end="2099-12-31", freq="QE").strftime("%Y%m%d").to_numpy(int)
+    YE = pd.date_range(start="1997-01-01", end="2099-12-31", freq="YE").strftime("%Y%m%d").to_numpy(int)
 
     _update_to = None
 
     @staticmethod
-    def now(bj_tz = True) -> datetime:
+    def now(bj_tz=True) -> datetime:
+        """Current time; use 'BJTZ' (Shanghai) if 'bj_tz' is True."""
         if bj_tz:
             return datetime.now(BJTZ)
-        else:
-            return datetime.now()
+        return datetime.now()
+
     @classmethod
-    def today(cls , offset = 0 , bj_tz = True) -> int: 
+    def today(cls, offset=0, bj_tz=True) -> int:
+        """Today's natural date 'YYYYMMDD'; 'offset' is the number of days offset from today."""
         d = cls.now(bj_tz)
         if offset != 0:
             d = d + timedelta(days=offset)
-        return int(d.strftime('%Y%m%d'))
+        return int(d.strftime("%Y%m%d"))
+
     @classmethod
-    def time(cls , bj_tz = True) -> int: 
-        return int(cls.now(bj_tz).strftime('%H%M%S'))
+    def time(cls, bj_tz=True) -> int:
+        """Current time 'HHMMSS' as an integer."""
+        return int(cls.now(bj_tz).strftime("%H%M%S"))
+
     @staticmethod
-    def datetime(year : int = 2000 , month : int = 1 , day : int = 1 , * , lock_month = False) -> int:
+    def datetime(year: int = 2000, month: int = 1, day: int = 1, *, lock_month=False) -> int:
+        """
+        Combine year, month and day to form the natural date 'YYYYMMDD'; 
+        - the 'month' and 'day' can overflow;
+        - 'lock_month' controls the month end semantics.
+        """
         if month > 12 or month <= 0:
             year += (month - 1) // 12
             month = (month - 1) % 12 + 1
-        date1 = datetime(year , month , 1)
+        date1 = datetime(year, month, 1)
         real_month = date1.month if lock_month else None
         date = date1 + timedelta(days=day - 1)
         if real_month is not None and date.month != real_month:
             if date.month < real_month:
-                date = date1.replace(day = 1)
+                date = date1.replace(day=1)
             else:
-                date = date1.replace(month = real_month + 1 , day = 1) - timedelta(days = 1)
-        return int(date.strftime('%Y%m%d'))
-    @classmethod
-    def clock(cls , date : int = 0 , h = 0 , m = 0 , s = 0):
-        if date <=0:
-            date_time = (cls.now(bj_tz = False) + timedelta(days=date))
-        else:
-            date_time = datetime.strptime(str(date) , '%Y%m%d')
-        return int(date_time.replace(hour=h, minute=m, second=s).strftime('%Y%m%d%H%M%S'))
-    @classmethod
-    def is_updated_today(cls , modified_time : int | None , hour = 20 , minute = 0):
-        if modified_time is None:
-            return False
-        if modified_time < 1e8: 
-            modified_time = modified_time * 1000000
-        current_time = cls.now(bj_tz = True)
-        required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
-        required_time = cls.clock(required_date , hour , minute)
-        return modified_time >= required_time
-    
-    @classmethod
-    def update_to(cls):
-        if cls._update_to is None:
-            cls._update_to = cls.today(-1 if cls.now(bj_tz = True).time() <= time(19, 59, 0) else 0)
-        return cls._update_to
-    @staticmethod
-    def updated(date : int | None = None):
-        updated_date = DB.max_date('trade_ts' , 'day')
-        if date is not None:
-            updated_date = min(updated_date , date)
-        return updated_date
-    
-    @staticmethod
-    def td(date : int | TradeDate , offset : int = 0):
-        return TradeDate(date).offset(offset)
-    
-    @classmethod
-    def td_array(cls , date , offset : int = 0 , backward = True):
-        td_arr = TradeDate.as_numpy(BC.full.loc[date_convert_to_index(date) , 'td' if backward else 'td_forward'])
-        if offset != 0: 
-            d_index = TradeDate.as_numpy(BC.full.loc[td_arr , 'td_index']) + offset
-            d_index = np.maximum(np.minimum(d_index , len(BC.trd) - 1) , 0)
-            td_arr = TradeDate.as_numpy(BC.trd.loc[d_index , 'calendar'])
-        return td_arr
-    
-    @staticmethod
-    def cd(date : int | TradeDate , offset : int = 0):
-        d = date.cd if isinstance(date , TradeDate) else int(date)
-        if offset == 0 or d <= BC.min_date or d >= BC.max_date: 
-            return d
-        d = datetime.strptime(str(d) , '%Y%m%d') + timedelta(days=offset)
-        return int(d.strftime('%Y%m%d'))
-    
-    @staticmethod
-    def cd_array(date , offset : int = 0):
-        cd_arr = np.array([d.cd if isinstance(d , TradeDate) else int(d) for d in date])
-        if offset != 0: 
-            cd_arr = np.minimum(cd_arr , CALENDAR.calendar_end())
-            d_index = BC.full.loc[cd_arr , 'cd_index'] + offset
-            d_index = np.maximum(np.minimum(d_index , len(BC.cal) - 1) , 0)
-            cd_arr = BC.cal.loc[d_index , 'calendar'].to_numpy(int)
-        return cd_arr
-    
-    @staticmethod
-    def td_diff(date1 , date2) -> int | Any:
-        diff = BC.full.loc[[date1 , date2] , 'td_index'].astype(int).diff().iloc[1]
-        assert isinstance(diff , int) , f'{date1} and {date2} are not in calendar'
-        return diff
-    
-    @staticmethod
-    def cd_diff(date1 , date2) -> int | Any:
-        try:
-            diff = int(BC.full.loc[[date1 , date2] , 'cd_index'].diff().dropna().astype(int).item())
-        except Exception:
-            diff = (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days
-        return diff
-    
-    @classmethod
-    def td_diff_array(cls , date1_arr , date2_arr) -> int | Any:
-        td1_arr = TradeDate.as_numpy(BC.full.loc[date_convert_to_index(date1_arr) , 'td_index'])
-        td2_arr = TradeDate.as_numpy(BC.full.loc[date_convert_to_index(date2_arr) , 'td_index'])
-        return td1_arr - td2_arr
-    
-    @classmethod
-    def cd_diff_array(cls , date1_arr , date2_arr) -> int | Any:
-        cd1_arr = TradeDate.as_numpy(BC.full.loc[date_convert_to_index(date1_arr) , 'cd_index'])
-        cd2_arr = TradeDate.as_numpy(BC.full.loc[date_convert_to_index(date2_arr) , 'cd_index'])
-        return cd1_arr - cd2_arr
-    
-    @staticmethod
-    def td_trailing(date , n : int):
-        return np.sort(BC.trd[BC.trd['calendar'] <= date].iloc[-n:]['calendar'].to_numpy()).astype(int)
-    
-    @staticmethod
-    def cd_trailing(date , n : int):
-        return np.sort(BC.cal[BC.cal['calendar'] <= date].iloc[-n:]['calendar'].to_numpy()).astype(int)
+                date = date1.replace(month=real_month + 1, day=1) - timedelta(days=1)
+        return int(date.strftime("%Y%m%d"))
 
     @classmethod
-    def start_dt(cls , date : int | TradeDate | None) -> int:
-        date_dt = 19900101 if date is None else int(date)
-        if date_dt < 0: 
+    def clock(cls, date: int = 0, h=0, m=0, s=0):
+        """
+        Combine the date and time to form the 'YYYYMMDDHHMMSS'; 
+        - relative to today if 'date<=0'.
+        """
+        if date <= 0:
+            date_time = cls.now(bj_tz=False) + timedelta(days=date)
+        else:
+            date_time = datetime.strptime(str(date), "%Y%m%d")
+        return int(date_time.replace(hour=h, minute=m, second=s).strftime("%Y%m%d%H%M%S"))
+
+    @classmethod
+    def is_updated_today(cls, modified_time: int | float | None, hour=20, minute=0):
+        """
+        Check if 'modified_time' is not earlier than the corresponding time of "required_date + hour:minute".
+        modified_time can be 'YYYYMMDD' or 'YYYYMMDDHHMMSS' or 'YYYYMMDDHHMMSS.MS'.
+        """
+        if modified_time is None:
+            return False
+        if modified_time < 1e8:
+            modified_time = modified_time * 1000000
+        current_time = cls.now(bj_tz=True)
+        required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
+        required_time = cls.clock(required_date, hour, minute)
+        return modified_time >= required_time
+
+    @classmethod
+    def update_to(cls):
+        """The cached "updated to" natural date; take today or yesterday based on whether the current time is after 19:59."""
+        if cls._update_to is None:
+            cls._update_to = cls.today(-1 if cls.now(bj_tz=True).time() <= time(19, 59, 0) else 0)
+        return cls._update_to
+
+    @staticmethod
+    def updated(date: DateTypeWithNone = None):
+        """The maximum date in the 'trade_ts/day' database table; optionally truncated by 'date'."""
+        updated_date = DB.max_date("trade_ts", "day")
+        if date is not None:
+            updated_date = min(updated_date, int(date))
+        return updated_date
+
+    @staticmethod
+    def td(date: DateType, offset: int = 0):
+        """Return 'TradeDate'; optionally offset by 'offset' steps."""
+        return TradeDate(date).offset(offset)
+
+    @classmethod
+    def td_array(cls, dates: DatesType, offset: int = 0, backward=True):
+        """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
+        pos = BC.pos_cd_array(get_cds(dates))
+        td_arr = (BC._td_col if backward else BC._td_forward)[pos]
+        td_arr = np.asarray(td_arr, dtype=np.int64)
+        if offset != 0:
+            pos_td = BC.pos_cd_array(td_arr)
+            d_index = BC._td_index[pos_td] + offset
+            d_index = np.maximum(np.minimum(d_index, BC.n_td - 1), 0)
+            td_arr = BC.trade_calendar_by_td_index(d_index)
+            td_arr = np.asarray(td_arr, dtype=np.int64)
+        return td_arr
+
+    @staticmethod
+    def cd(date: DateType, offset: int = 0):
+        """Return the natural date 'YYYYMMDD'; optionally offset by 'offset' steps."""
+        d = get_cd(date)
+        if offset == 0 or d <= BC.min_date or d >= BC.max_date:
+            return d
+        d = datetime.strptime(str(d), "%Y%m%d") + timedelta(days=offset)
+        return int(d.strftime("%Y%m%d"))
+
+    @staticmethod
+    def cd_array(dates: DatesType, offset: int = 0):
+        """Shift the natural date index of the sequence; the elements must be 'TradeDate' or natural dates that can be 'int'."""
+        cd_arr = get_cds(dates)
+        if offset != 0:
+            cd_arr = np.minimum(cd_arr, CALENDAR.calendar_end())
+            d_index = BC._cd_index[BC.pos_cd_array(cd_arr)] + offset
+            d_index = np.maximum(np.minimum(d_index, BC.n_cal - 1), 0)
+            cd_arr = np.asarray(BC.calendar_by_cd_index(d_index), dtype=np.int64)
+        return cd_arr
+
+    @staticmethod
+    def td_diff(date1 : DateType, date2 : DateType) -> int | Any:
+        """The difference in trading date index between two dates."""
+        try:
+            i1 = BC.pos_cd(get_cd(date1))
+            i2 = BC.pos_cd(get_cd(date2))
+            diff = int(BC._td_index[i2] - BC._td_index[i1])
+        except KeyError:
+            diff = None
+        assert isinstance(diff, int), f"{date1} and {date2} are not in calendar"
+        return diff
+
+    @staticmethod
+    def cd_diff(date1 : DateType, date2 : DateType) -> int | Any:
+        """The difference in natural date index between two dates"""
+        try:
+            i1 = BC.pos_cd(get_cd(date1))
+            i2 = BC.pos_cd(get_cd(date2))
+            diff = int(BC._cd_index[i2] - BC._cd_index[i1])
+        except KeyError:
+            diff = (datetime.strptime(str(date1), "%Y%m%d") - datetime.strptime(str(date2), "%Y%m%d")).days
+        return diff
+
+    @classmethod
+    def td_diff_array(cls, date1_arr : DatesType, date2_arr : DatesType) -> int | Any:
+        """The difference of two arrays of trading date."""
+        p1 = BC.pos_cd_array(get_cds(date1_arr))
+        p2 = BC.pos_cd_array(get_cds(date2_arr))
+        return BC._td_index[p1] - BC._td_index[p2]
+
+    @classmethod
+    def cd_diff_array(cls, date1_arr : DatesType, date2_arr : DatesType) -> int | Any:
+        """The difference of two arrays of natural dates."""
+        p1 = BC.pos_cd_array(get_cds(date1_arr))
+        p2 = BC.pos_cd_array(get_cds(date2_arr))
+        return BC._cd_index[p1] - BC._cd_index[p2]
+
+    @staticmethod
+    def td_trailing(date : DateType, n: int):
+        """The last 'n' trading days before 'date' (sorted slice)."""
+        return np.sort(BC.td_trailing_np(get_td(date), n)).astype(int)
+
+    @staticmethod
+    def cd_trailing(date : DateType, n: int):
+        """The last 'n' natural days before 'date' (sorted slice)."""
+        return np.sort(BC.cd_trailing_np(get_cd(date), n)).astype(int)
+
+    @classmethod
+    def as_start_date(cls, date: DateTypeWithNone) -> int:
+        """clear the start date of input start_dt (None -> 19900101, negative -> relative to today)"""
+        date_dt = 19900101 if date is None else get_cd(date)
+        if date_dt < 0:
             date_dt = cls.today(date_dt)
         return date_dt
-    
+
     @classmethod
-    def end_dt(cls , date : int | TradeDate | None) -> int:
-        date = 99991231 if date is None else int(date)
-        if date < 0: 
+    def as_end_date(cls, date: DateTypeWithNone) -> int:
+        """clear the end date of input end_dt (None -> 99991231, negative -> relative to today)"""
+        date = 99991231 if date is None else get_cd(date)
+        if date < 0:
             date = cls.today(date)
         return date
 
     @classmethod
-    def td_within(cls , start_dt : int | TradeDate | None = None , 
-                  end_dt : int | TradeDate | None = None , 
-                  step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None , updated = False):
-        dates = cls.slice(BC.trd['calendar'].to_numpy(int) , start_dt , end_dt)
-        if until_today: 
+    def range(
+        cls, start: DateTypeWithNone, end: DateTypeWithNone , type : Literal['td', 'cd'] = 'td' ,
+        step: int = 1 , until_today=True, updated=False,
+        slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None,
+    ) -> np.ndarray[int, Any]:
+        """return the range of dates between start and end"""
+        cal = BC._trade_calendar if type == 'td' else BC._cds
+        dates = cls.slice(cal, start, end)
+        if until_today:
             dates = dates[dates <= cls.today()]
-        if updated: 
+        if updated:
             dates = dates[dates <= cls.updated()]
         dates = dates[::step]
-        if slice is not None: 
-            dates = cls.slice(dates , slice[0] , slice[1])
+        if slice is not None:
+            dates = cls.slice(dates, *slice)
         return dates
 
     @classmethod
-    def diffs(cls , *args , td = True):
-        '''
-        return the difference between target dates and source dates
+    def td_within(
+        cls, start: DateTypeWithNone = None, end: DateTypeWithNone = None,
+        step: int = 1, until_today=True, updated=False,
+        slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None,
+    ) -> np.ndarray[int, Any]:
+        """All trading days within the interval; can be truncated to today, data update date, step and secondary 'slice'."""
+        return cls.range(start, end, 'td', step=step, until_today=until_today, updated=updated, slice=slice)
+
+    @classmethod
+    def cd_within(
+        cls, start: DateTypeWithNone = None, end: DateTypeWithNone = None,
+        step: int = 1, until_today=True, updated=False,
+        slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None,
+    ) -> np.ndarray[int, Any]:
+        """All natural days within the interval; can be truncated to today, data update date, step."""
+        return cls.range(start, end, 'cd', step=step, until_today=until_today, updated=updated, slice=slice)
+
+    @classmethod
+    def diffs(cls, *args, type: Literal['td', 'cd'] = 'td'):
+        """
+        Calculate the difference between two arrays of dates.
+
         inputs *args options:
-            1. start_dt , end_dt , source_dates , target_dates will be dates within start_dt and end_dt
-            2. target_dates , source_dates
-        td : bool , when using start_dt and end_dt , will return TradeDate (default=True)
-        '''
-        assert len(args) in [2, 3] , 'Use tuple date_target must be a tuple of length 2 or 3'
+            1. start , end , source_dates: target_dates will be dates within start and end
+            2. target_dates , source_dates.
+        type : 'td' or 'cd'
+        
+        """
+        assert len(args) in [2, 3], "Use tuple date_target must be a tuple of length 2 or 3"
         if len(args) == 2:
-            target_dates , source_dates = args
+            target_dates, source_dates = args
         else:
-            start_dt , end_dt , source_dates = args
-            target_dates = cls.td_within(start_dt , end_dt) if td else cls.cd_within(start_dt , end_dt)
+            start, end, source_dates = args
+            target_dates = cls.range(start, end , type) 
         if source_dates is None:
             source_dates = np.array([], dtype=int)
-        return Dates(np.setdiff1d(target_dates , source_dates))
-    
-    @classmethod
-    def td_filter(cls , date_list):
-        td_list = cls.td_within(min(date_list) , max(date_list))
-        return td_list[np.isin(td_list , date_list)]
-    
-    @classmethod
-    def cd_within(cls , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , step : int = 1 , 
-                  until_today = True , updated = False):    
-        dates = cls.slice(BC.cal['calendar'].to_numpy(int) , start_dt , end_dt)
-        if until_today: 
-            dates = dates[dates <= cls.today()]
-        if updated: 
-            dates = dates[dates <= cls.updated()]
-        return dates[::step]
-    
-    @staticmethod
-    def calendar_start(): 
-        md = np.min(BC.full.index.to_numpy())
-        return int(md)
-
-    @staticmethod
-    def calendar_end(): 
-        md = np.max(BC.full.index.to_numpy())
-        return int(md)
-
-    @staticmethod
-    def td_start_end(reference_date , period_num : int = 1 , 
-                     freq : Literal['d','w','m','q','y'] | str = 'm' , 
-                     lag_num : int = 0):
-        td = TradeDate(reference_date)
-        pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[freq]
-        start_dt = td - pdays * (period_num + lag_num) + 1
-        end_dt   = td - pdays * lag_num
-        return start_dt , end_dt
+        return Dates(np.setdiff1d(target_dates, source_dates))
 
     @classmethod
-    def cd_start_end(cls , reference_date , period_num : int = 1 , 
-                     freq : Literal['d','w','m','q','y'] | str = 'm' , 
-                     lag_num : int = 0):
-        cd = int(reference_date)
-        if freq in ['d' , 'w']:
-            pdays = {'d':1 , 'w':7}[freq]
-            start_dt = cd - pdays * (period_num + lag_num) + 1
-            end_dt   = cd - pdays * lag_num
-        elif freq in ['m' , 'q' , 'y']:
-            year , month , day = cd // 10000 , cd % 10000 // 100 , cd % 100
-            pmonths = {'m':1 , 'q':3 , 'y':12}[freq]
+    def td_filter(cls, dates: DatesType):
+        """filter the trading dates in a date list."""
+        cds = get_cds(dates)
+        tds = cls.range(min(cds), max(cds), 'td')
+        return np.intersect1d(tds, cds)
+
+    @staticmethod
+    def calendar_start():
+        """The minimum natural date in the calendar."""
+        return BC.min_date
+
+    @staticmethod
+    def calendar_end():
+        """The maximum natural date in the calendar."""
+        return BC.max_date
+
+    @classmethod
+    def td_start_end(
+        cls , reference_date : DateType,
+        period_num: int = 1, freq: Literal["d", "w", "m", "q", "y"] | str = "m", lag_num: int = 0,
+    ):
+        """Calculate the start and end date of a trading date interval based on the approximate trading date length (d/w/m/q/y) from the reference date."""
+        pdays = {"d": 1, "w": 7, "m": 21, "q": 63, "y": 252}[freq]
+        start = cls.td(reference_date , - pdays * (period_num + lag_num) + 1)
+        end = cls.td(reference_date , - pdays * lag_num)
+        return start, end
+
+    @classmethod
+    def cd_start_end(
+        cls, reference_date : DateType,
+        period_num: int = 1, freq: Literal["d", "w", "m", "q", "y"] | str = "m", lag_num: int = 0,
+    ):
+        """Calculate the start and end date of a natural date interval based on the approximate natural date length (d/w/m/q/y) from the reference date."""
+        if freq in ["d", "w"]:
+            pdays = {"d": 1, "w": 7}[freq]
+            start = cls.cd(reference_date , - pdays * (period_num + lag_num) + 1)
+            end = cls.cd(reference_date , - pdays * lag_num)
+        elif freq in ["m", "q", "y"]:
+            cd = get_cd(reference_date)
+            year, month, day = cd // 10000, cd % 10000 // 100, cd % 100
+            pmonths = {"m": 1, "q": 3, "y": 12}[freq]
             start_month = month - pmonths * (period_num + lag_num)
             end_month = month - pmonths * lag_num
-            start_dt = cls.cd(cls.datetime(year , start_month , day , lock_month = True) , 1)
-            end_dt = cls.datetime(year , end_month , day , lock_month = True)
+            start = cls.cd(cls.datetime(year, start_month, day, lock_month=True), 1)
+            end = cls.datetime(year, end_month, day, lock_month=True)
         else:
-            raise ValueError(f'Invalid frequency: {freq}')
-        return start_dt , end_dt
-    
+            raise ValueError(f"Invalid frequency: {freq}")
+        return start, end
+
     @staticmethod
-    def as_trade_date(date : int | Any):
+    def as_trade_date(date: DateType):
+        """Convert a natural date to a trading date."""
         return TradeDate(date)
 
     @staticmethod
-    def is_trade_date(date : int | TradeDate):
-        return BC.full.loc[int(date) , 'trade'] == 1
-    
+    def is_trade_date(date: DateType):
+        """Whether the date is a trading day; 'int(TradeDate)' is 'td', participate in the judgment."""
+        return True if isinstance(date, TradeDate) else BC.is_trade_cd(date)
+
     @staticmethod
     def trade_dates():
-        return BC.trd['calendar'].to_numpy(int)
+        """All trading dates 'YYYYMMDD' in ascending order (copy)."""
+        return BC._trade_calendar.copy()
 
     @classmethod
-    def slice(cls , dates , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
-        if isinstance(dates , list):
-            dates = np.array(dates)
-        dates = dates[(dates >= cls.start_dt(start_dt)) & (dates <= cls.end_dt(end_dt))]
-        if year  is not None: 
+    def slice(cls, dates: DatesType, start: DateTypeWithNone = None, end: DateTypeWithNone = None, year: int | None = None) -> np.ndarray:
+        """Filter the date sequence based on 'start_dt', 'end_dt' and 'year'."""
+        dates = get_cds(dates)
+        dates = dates[(dates >= cls.as_start_date(start)) & (dates <= cls.as_end_date(end))]
+        if year is not None:
             dates = dates[(dates // 10000) == year]
-        return dates
+        return dates.astype(int)
 
     @staticmethod
-    def reformat(date : Any , old_fmt = '%Y%m%d' , new_fmt = '%Y%m%d'):
-        if old_fmt == new_fmt: 
+    def reformat(date: Any, old_fmt="%Y%m%d", new_fmt="%Y%m%d"):
+        """Convert the date string format; return the original string if the two formats are the same."""
+        if old_fmt == new_fmt:
             return date
         return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
 
     @classmethod
-    def year_end(cls , date):
-        return cls.end_dt(date) // 10000 * 10000 + 1231
+    def year_end(cls, date: DateType):
+        """The last day of the year (December 31) of the year the date is in ('YYYYMMDD')."""
+        return get_td(date) // 10000 * 10000 + 1231
 
     @classmethod
-    def year_start(cls , date):
-        return cls.start_dt(date) // 10000 * 10000 + 101
+    def year_start(cls, date: DateType):
+        """The first day of the year (January 1) of the year the date is in ('YYYYMMDD')."""
+        return get_td(date) // 10000 * 10000 + 101
 
     @classmethod
-    def quarter_end(cls , date):
-        return cls.QE[cls.QE >= date][0]
+    def quarter_end(cls, date: DateType):
+        """The last day of the quarter."""
+        return cls.QE[cls.QE >= get_td(date)][0]
 
     @classmethod
-    def quarter_start(cls , date):
-        return cls.year_start(date) // 10000 * 10000 + (cls.year_start(date) % 10000 // 300 - 2)  * 100 + 1
+    def quarter_start(cls, date: DateType):
+        """The first day of the quarter."""
+        td = get_td(date)
+        return td // 10000 * 10000 + (td % 10000 // 100 / 3).__floor__() * 300 + 101
 
     @classmethod
-    def month_end(cls , date):
-        return cls.ME[cls.ME >= date][0]
+    def month_end(cls, date: DateType):
+        """The last day of the month."""
+        return cls.ME[cls.ME >= get_td(date)][0]
 
     @classmethod
-    def month_start(cls , date):
-        return cls.year_start(date) // 100 * 100 + 1
-    
+    def month_start(cls, date: DateType):
+        """The first day of the month."""
+        return get_td(date) // 100 * 100 + 1
+
     @classmethod
-    def qe_trailing(cls , date , n_past = 1 , n_future = 0 , another_date = None , year_only = False):
-        assert n_past >= 1 and n_future >= 0 , f'{n_past} and {n_future} must be greater than 1 and 0'
-        if another_date is None: 
-            another_date = date
+    def qe_trailing(cls, date: DateType, n_past=1, n_future=0, another_date: DateTypeWithNone = None, year_only=False):
+        """
+        Calculate the trailing quarter ends (or year ends) around 'date' and 'another_date'; optionally calculate the future 'n_future' quarter ends.
+        
+        inputs:
+            date: the date to calculate the trailing quarter ends
+            n_past: the number of past quarter ends to calculate
+            n_future: the number of future quarter ends to calculate
+            another_date: if supplied, all quarter/year ends between will be included in the result.
+            year_only: whether to calculate the trailing year ends
+        """
+        assert n_past >= 1 and n_future >= 0, f"{n_past} and {n_future} must be greater than 1 and 0"
+        
         dates = cls.YE if year_only else cls.QE
-        start = dates[dates <= min(date , another_date)][-n_past:]
-        mid   = dates[(dates > min(date , another_date)) & (dates <= max(date , another_date))]
-        end   = dates[dates >  max(date , another_date)][:n_future]
-        return np.concatenate([start , mid , end])
-    
+        d0 = get_td(date)
+        d1 = get_td(another_date) if another_date is not None else d0
+        d0 , d1 = min(d0, d1), max(d0, d1)
+        before = dates[dates <= d0][-n_past:]
+        between = dates[(dates > d0) & (dates <= d1)]
+        after = dates[dates > d1][:n_future]
+        return np.concatenate([before, between, after])
+
     @classmethod
-    def qe_within(cls , start_dt , end_dt , year_only = False):
+    def qe_within(cls, start : DateType, end : DateType, year_only : bool = False):
+        """The set of quarter ends (or year ends) within the interval. optionally can only include year ends."""
         if year_only:
-            return cls.YE[(cls.YE >= start_dt) & (cls.YE <= end_dt)]
-        else:
-            return cls.QE[(cls.QE >= start_dt) & (cls.QE <= end_dt)]
+            return cls.YE[(cls.YE >= get_td(start)) & (cls.YE <= get_td(end))]
+        return cls.QE[(cls.QE >= get_td(start)) & (cls.QE <= get_td(end))]
 
     @classmethod
-    def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):
-        if len(incomplete_qtr_ends) == 0: 
-            return np.array([] , dtype = int)
-        return cls.qe_within(min(incomplete_qtr_ends) , max(incomplete_qtr_ends))
-    
+    def qe_interpolate(cls, incomplete_qtr_ends: DatesType):
+        """Expand the minimum and maximum range of several quarter ends to a complete quarter end sequence."""
+        qes = get_cds(incomplete_qtr_ends)
+        if len(qes) == 0:
+            return qes
+        return cls.qe_within(min(qes), max(qes))
+
     @classmethod
-    def check_rollback_date(cls , rollback_date : int | None , max_rollback_days : int = 10):
-        if rollback_date is None: 
+    def check_rollback_date(cls, rollback_date: DateTypeWithNone, max_rollback_days: int = 10):
+        """Assert that 'rollback_date' is not earlier than max_rollback_days days before the updated date."""
+        if rollback_date is None:
             return
-        earliest_rollback_date = cls.td(cls.updated() , -max_rollback_days)
-        assert rollback_date >= earliest_rollback_date , \
-            f'rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}'
+        earliest_rollback_date = cls.td(cls.updated(), -max_rollback_days)
+        assert get_td(rollback_date) >= earliest_rollback_date, (
+            f"rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}"
+        )
 
-class Dates(np.ndarray[int , Any]):
+
+class Dates(np.ndarray[int, Any]):
     """
-    Dates util , takes possible input types and returns a list representation of dates, can convert to np.ndarray
-    accepts:
-    0. empty input: 
-       - empty dates[]
-    1. only 1 input arg:
-       - None : length 0 array
-       - date : int / TradeDate / string of digits , length 1 array
-       - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
-    2. exact 2 inputs:
-       - 2 date : must be both int / TradeDate / string of digits / None , start ~ end
-    3. 3 inputs:
-       - 1 dates / None , 2 date / None , must be dates , start , end
+    An integer date array view.
+    inputs:
+        0. empty input:
+            - empty dates[]
+        1. only 1 input arg:
+            - None : length 0 array
+            - date : int / TradeDate / string of digits , length 1 array
+            - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
+        2. exact 2 inputs: start , end
+        3. exact 3 inputs: dates , start , end
+            - will use start and end to slice the dates
     """
-    def __new__(cls , *args : Any , info = None):
+
+    def __new__(cls, *args: Any, info=None):
         if len(args) == 0:
             dates = []
         elif len(args) == 1:
             if args[0] is None:
                 dates = []
-            elif isinstance(args[0] , (int , TradeDate , str)):
+            elif isinstance(args[0], (int, TradeDate, str)):
                 dates = [int(args[0])]
             else:
                 dates = np.array(args[0], dtype=int)
-        elif len(args) == 2: 
-            start , end = args
-            dates = CALENDAR.td_within(start , end)
+        elif len(args) == 2:
+            start, end = args
+            dates = CALENDAR.td_within(start, end)
         elif len(args) == 3:
-            dates , start , end = args
-            dates = CALENDAR.slice(dates , start , end)
+            dates, start, end = args
+            dates = CALENDAR.slice(dates, start, end)
         else:
-            raise ValueError(f'Invalid number of arguments: {len(args)}')
+            raise ValueError(f"Invalid number of arguments: {len(args)}")
         obj = np.asarray(dates).view(cls)
         obj.info = info
         return obj
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.format_str})'
+        return f"{self.__class__.__name__}({self.format_str})"
 
     def __str__(self) -> str:
         return self.format_str()
@@ -382,18 +500,21 @@ class Dates(np.ndarray[int , Any]):
     def __array_finalize__(self, obj):
         if obj is None:
             return
-        self.info = getattr(obj, 'info', None)
+        self.info = getattr(obj, "info", None)
 
     @property
     def empty(self) -> bool:
+        """no dates in the array"""
         return len(self) == 0
 
-    def diffs(self , *others : Any) -> 'Dates':
-        return Dates(np.setdiff1d(self , Dates(*others)) , info = self.info)
+    def diffs(self, *others: Any) -> "Dates":
+        """The difference set of dates."""
+        return Dates(np.setdiff1d(self, Dates(*others)), info=self.info)
 
     def format_str(self) -> str:
+        """short text description of empty, single or multiple days."""
         if self.empty:
-            return 'Empty Dates'
-        else:
-            return f'{self.min()}~{self.max()}({len(self)}days)' if len(self) > 1 else str(self[0])
-        
+            return "Empty Dates"
+        if len(self) > 1:
+            return f"{self.min()}~{self.max()}({len(self)}days)"
+        return str(self[0])

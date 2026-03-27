@@ -22,7 +22,7 @@ class MemoryManager():
     def initiate(self , device : torch.device | None = None , vb_level : Any = 2) -> None:
         if self.initiated:
             return
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
         if device is not None:
             self.device = device
             self.gmem_total = self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit if self.device.type == 'cuda' else 0.

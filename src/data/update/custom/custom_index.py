@@ -32,7 +32,7 @@ class CustomIndexPortClass:
         return self._Port
 
 class CustomIndex(metaclass=CustomIndexMeta):
-    start_date : int = START_DATE
+    START_DATE : int = START_DATE
     index_name = CustomIndexName()
     PortClass = CustomIndexPortClass()
 
@@ -96,7 +96,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
         """update index return for given dates"""
         if len(dates) == 0:
             return
-        dates = np.sort(CALENDAR.slice(dates , self.start_date , CALENDAR.updated()))
+        dates = np.sort(CALENDAR.slice(dates , self.START_DATE , CALENDAR.updated()))
         pct_chg = np.array([self.index_return(date) for date in dates]) * 100
         df = pd.DataFrame({'trade_date' : dates , 'pct_chg' : pct_chg})
         old_df = DB.load_df(self.target_path)
@@ -112,8 +112,8 @@ class CustomIndex(metaclass=CustomIndexMeta):
         return old_df['trade_date'].to_numpy(int)
 
     def target_dates(self , update_type : Literal['recalc' , 'update' , 'rollback'] , 
-                     rollback_date : int = 99991231 , start_date : int = START_DATE , **kwargs):
-        full_dates = CALENDAR.td_within(max(start_date , self.start_date) , CALENDAR.updated())
+                     rollback_date : int = 99991231 , start : int = START_DATE , **kwargs):
+        full_dates = CALENDAR.range(max(start , self.START_DATE) , CALENDAR.updated() , 'td')
         if update_type == 'recalc':
             return full_dates
         elif update_type == 'update':
@@ -137,14 +137,14 @@ class CustomIndexUpdater(BasicCustomUpdater):
     
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
 
         total_dates = []
         custom_indices = list(CustomIndex.iter_custom_indices())
         for custom_index in custom_indices:
-            target_dates = custom_index.target_dates(update_type , rollback_date = cls._rollback_date , start_date = cls.START_DATE)
+            target_dates = custom_index.target_dates(update_type , rollback_date = cls._rollback_date , start = cls.START_DATE)
             if len(target_dates) == 0:
                 Logger.skipping(f'{custom_index.index_name} is up to date' , indent = indent + 1 , vb_level = vb_level + 2)
                 continue
@@ -162,7 +162,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
 
 class MicroCap_400(CustomIndex):
     def rebalance_dates(self) -> np.ndarray:
-        return CALENDAR.td_within(self.start_date , CALENDAR.updated())
+        return CALENDAR.range(self.START_DATE , CALENDAR.updated() , 'td')
 
     def rebalance_portfolio(self , date : int) -> pd.DataFrame:
         prev_date = CALENDAR.td(date , -1)

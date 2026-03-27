@@ -80,7 +80,7 @@ class PortfolioBuilder:
 
         self.resume_path  = resume_path
         self.indent       = indent
-        self.vb_level     = Proj.vb.level(vb_level)
+        self.vb_level     = Proj.vb(vb_level)
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
@@ -292,7 +292,7 @@ class PortfolioGroupBuilder:
             'trade_engine' : trade_engine}
 
         self.indent = indent
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None and resume else None
         self.caller = caller

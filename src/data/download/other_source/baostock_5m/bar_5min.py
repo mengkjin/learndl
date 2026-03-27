@@ -30,8 +30,8 @@ def baostock_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
     if path.exists():
         return DB.load_df(path)
-    end_date_str = f'{date // 10000}-{(date // 100) % 100}-{date % 100}'
-    secdf = bs.query_all_stock(end_date_str).get_data()
+    end_str = f'{date // 10000}-{(date // 100) % 100}-{date % 100}'
+    secdf = bs.query_all_stock(end_str).get_data()
     secdf['market'] = secdf['code'].str.slice(0,2)
     secdf['secid'] = secdf['code'].str.slice(3).astype(int)
     secdf['is_sec'] = ((secdf['market'] == 'sh') * (secdf['secid'] >= 600000) + \
@@ -97,8 +97,8 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
     tmp_dir = tmp_file_dir(start_dt , end_dt)
     tmp_dir.mkdir(exist_ok=True)
 
-    start_date_str = f'{start_dt // 10000}-{(start_dt // 100) % 100}-{start_dt % 100}'
-    end_date_str = f'{end_dt // 10000}-{(end_dt // 100) % 100}-{end_dt % 100}'
+    start_str = f'{start_dt // 10000}-{(start_dt // 100) % 100}-{start_dt % 100}'
+    end_str = f'{end_dt // 10000}-{(end_dt // 100) % 100}-{end_dt % 100}'
     
     sec_df : pd.DataFrame | Any = None
     while True:
@@ -118,8 +118,9 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
             
             Logger.stdout(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
             for i , code in enumerate(task_codes):
-                rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
-                                                  start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
+                rs = bs.query_history_k_data_plus(
+                    code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
+                    start_date=start_str,end_date=end_str,frequency='5', adjustflag='3')
                 assert rs is not None , f'{rs} is None , corrupted data'
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
@@ -170,7 +171,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
     pending_dt = pending_date()
     end_dt = CALENDAR.update_to() if date is None else date
     prev_dates = updated_dates(5)
-    target_dates = CALENDAR.td_within(max(prev_dates) , end_dt) if len(prev_dates) > 0 else []
+    target_dates = CALENDAR.range(max(prev_dates) , end_dt , 'cd') if len(prev_dates) > 0 else []
     if len(target_dates) == 0:
         Logger.skipping(f'Other source 5min {end_dt} already updated' , indent = 1)
         return True

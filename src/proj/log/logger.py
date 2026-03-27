@@ -424,8 +424,8 @@ class Logger:
             self.key_suffix = ''
             self.silent = silent
             self.indent = indent
-            self.vb_level = Proj.vb.level(vb_level)
-            self.enter_vb_level = Proj.vb.level(enter_vb_level)
+            self.vb_level = Proj.vb(vb_level)
+            self.enter_vb_level = Proj.vb(enter_vb_level)
             self.exit_infos : list[str] = []
     
         def __enter__(self):
@@ -471,8 +471,8 @@ class Logger:
             self.level = level
             self.char : Literal['-' , '=' , '*'] = char
             self.color = ['lightyellow' , 'lightgreen' , 'lightcyan' , 'white' , 'gray'][level-1]
-            self.vb_level = max(Proj.vb.level(vb_level) , 1 if level == 1 else 2)
-            self.enter_vb_level = max(Proj.vb.level(enter_vb_level) , 1 if level == 1 else 2)
+            self.vb_level = max(Proj.vb(vb_level) , 1 if level == 1 else 2)
+            self.enter_vb_level = max(Proj.vb(enter_vb_level) , 1 if level == 1 else 2)
             self.exit_infos : list[str] = []
 
         def __enter__(self):
@@ -512,8 +512,8 @@ class Logger:
             self.sort_on = sort_on
             self.highlight = highlight
             self.indent = indent
-            self.enter_vb_level = Proj.vb.level(enter_vb_level)
-            self.vb_level = Proj.vb.level(vb_level)
+            self.enter_vb_level = Proj.vb(enter_vb_level)
+            self.vb_level = Proj.vb(vb_level)
             self.exit_infos : list[str] = []
         def add_exit_infos(self , *msgs):
             """Set the infos"""

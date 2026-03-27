@@ -27,8 +27,8 @@ def calc_stability(numerator : pd.DataFrame | pd.Series | float | int , denomina
     return (ratio.mean() / ratio.std()).where(valid , np.nan)
 
 def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-    mv   = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'val' , 'total_mv' , 
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
+    mv   = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 
                                               prev = False , pivot = True , date_step = date_step)
     liab = DATAVENDOR.BS.acc('total_liab'   , date , n_year * 4 + 1 , pivot = True)
     debt = DATAVENDOR.BS.acc('bond_payable' , date , n_year * 4 + 1 , pivot = True)
@@ -48,8 +48,8 @@ def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
 
 def get_denominator_hist(denominator : Literal['mv' , 'ev'] | str , date : int , n_year = 3 , date_step = 21):
     if denominator == 'mv':
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-        v = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'val' , 'total_mv' , 
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
+        v = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 
                                                prev = False , pivot = True , date_step = date_step)
     elif denominator == 'ev':
         v = get_ev_hist(date , n_year , date_step)
@@ -74,9 +74,9 @@ class dtop_stability(ValueFactor):
     description = 'DP稳定性,均值除标准差'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'y')
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'y')
         dv_ttm = DATAVENDOR.TRADE.get_specific_data(
-            start_date , end_date , 'val' , 'dv_ttm' , pivot = True , date_step = 21)
+            start , end , 'val' , 'dv_ttm' , pivot = True , date_step = 21)
         return calc_stability(dv_ttm , 1)
 
 class etop_stability(ValueFactor):

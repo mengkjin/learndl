@@ -55,7 +55,7 @@ class DataVendor:
         self.FINA.truncate()
 
     def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with Proj.Silence:
+        with Proj.silence:
             self.all_stocks = self.INFO.get_desc(set_index=False , listed = listed , exchange = exchange)
             self.st_stocks = self.INFO.get_st()
 
@@ -82,7 +82,7 @@ class DataVendor:
                 end_dt = cls.cd(end_dt , extend)
             if start_dt is not None:
                 start_dt = cls.cd(start_dt , -extend)
-        dates = CALENDAR.td_within(start_dt , end_dt , step , updated = updated)
+        dates = CALENDAR.range(start_dt , end_dt , 'td' , step = step , updated = updated)
         return dates
     
     @staticmethod
@@ -166,17 +166,17 @@ class DataVendor:
             setattr(self , f'_block_daily_ret' , blk)
 
     def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
-        with Proj.Silence:
+        with Proj.silence:
             self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend = extend)
         return getattr(self , f'_block_daily_quotes' , DataBlock())
 
     def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
-        with Proj.Silence:
+        with Proj.silence:
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend = extend)
         return getattr(self , f'_block_risk_exp' , DataBlock())
 
     def get_returns_block(self , start_dt : int , end_dt : int):
-        with Proj.Silence:
+        with Proj.silence:
             self.update_return_block(start_dt , end_dt)
         return getattr(self , f'_block_daily_ret' , DataBlock())
     

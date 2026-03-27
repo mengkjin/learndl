@@ -27,7 +27,7 @@ class FactorUpdateConfig:
     def target_dates(self) -> np.ndarray:
         """target dates of factor update"""
         from src.proj import CALENDAR
-        return CALENDAR.slice(CALENDAR.td_within(self.init_date , step = self.step) , self.start , self.end)
+        return CALENDAR.slice(CALENDAR.range(self.init_date , None , 'td' , step = self.step) , self.start , self.end)
 
 class RiskModelConfig:
     @property

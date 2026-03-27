@@ -13,7 +13,7 @@ from src.proj.func import change_power_mode , get_running_scripts
 
 def main():
     running_scripts = get_running_scripts(__file__)
-    log_path = PATH.log_main.joinpath('suspend','power_check.log')
+    log_path = PATH.logs.joinpath('suspend','power_check.log')
     log_path.parent.mkdir(parents = True , exist_ok = True)
     if running_scripts:
         main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to saver'

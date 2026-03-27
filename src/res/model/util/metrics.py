@@ -111,7 +111,7 @@ class Metrics:
         self.model_param  = model_param
         if isinstance(model , nn.Module):
             net = model
-        elif hasattr(model , 'net') and [cls.__qualname__ for cls in Proj.States.trainer.model.__class__.__mro__]:
+        elif hasattr(model , 'net') and Proj.instances.trainer and [cls.__qualname__ for cls in Proj.instances.trainer.model.__class__.__mro__]:
             net = getattr(model , 'net')
             assert net is None or isinstance(net , nn.Module) , f'{net} is not a torch.nn.Module'
         else:

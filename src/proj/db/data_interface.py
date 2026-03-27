@@ -621,7 +621,7 @@ def unpack_files_from_tar(path : Path | str , target : Path | str , * ,
     path = Path(path)
     target = Path(target)
     assert path.suffix == '.tar' , f'{path} is not a tar file'
-    sub_vb_level = Proj.vb.level(vb_level) + 1
+    sub_vb_level = Proj.vb(vb_level) + 1
     with tarfile.open(path, 'r') as tar:  
         for member in tar.getmembers():
             target_path = target.joinpath(member.name)

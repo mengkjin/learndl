@@ -74,7 +74,7 @@ class DateDataAccess(ABC):
     def get_specific_data(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
                           data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True , 
                           date_step = 1):
-        dates = CALENDAR.td_array(CALENDAR.td_within(start_dt , end_dt , date_step) , -1 if prev else 0)
+        dates = CALENDAR.td_array(CALENDAR.range(start_dt , end_dt , 'td' , step = date_step) , -1 if prev else 0)
         if field is not None:
             remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
         else:

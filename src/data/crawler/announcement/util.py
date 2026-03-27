@@ -239,7 +239,7 @@ class AnnouncementExporter:
         ex_codes = df["exchange"].unique()
         if len(ex_codes) > 1:
             raise ValueError("save_exchange_day only accepts rows with a single exchange")
-        for date in CALENDAR.cd_within(start, end):
+        for date in CALENDAR.range(start, end , 'cd'):
             df_date = df.query("date == @date").reset_index(drop=True)
             path = self.export_path(date)
             with PathLock.get(path):
@@ -257,6 +257,6 @@ class AnnouncementExporter:
         if end >= CALENDAR.update_to():
             return False
         end = min(end, CALENDAR.update_to())
-        dates = CALENDAR.cd_within(start, end)
+        dates = CALENDAR.range(start, end , 'cd')
         exists = [path.exists() for path in [self.export_path(date) for date in dates]]
         return all(exists)

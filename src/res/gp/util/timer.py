@@ -13,7 +13,7 @@ class AccTimer:
         self.key = key
         self.title = title.title()
         self.time_costs : list[float] = []
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
         if not title:
             self.paragraph = None
         elif timer_level != 5:
@@ -93,7 +93,7 @@ class gpTimer:
         if self.initiated:
             return
         self.recording = record
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
         self.timers : dict[str, dict[str, AccTimer]] = {}
 
     def __repr__(self):

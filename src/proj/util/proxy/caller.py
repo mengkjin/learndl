@@ -174,8 +174,8 @@ class ProxyCallerList:
         if not self.callers:
             return []
         callers = self.realigned_callers(unfinished = True)
-        num_groups = int(np.ceil(len(callers) / grouping_num))
-        max_callers_per_group = int(np.ceil(len(callers) / num_groups))
+        num_groups = (len(callers) / grouping_num).__ceil__()
+        max_callers_per_group = (len(callers) / num_groups).__ceil__()
         groups = [ProxyCallerList(callers[i * max_callers_per_group:(i + 1) * max_callers_per_group] , pool = self.pool) for i in range(num_groups)]
         return groups
 

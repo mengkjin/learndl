@@ -14,20 +14,20 @@ def get_profit_ann_dt(date : int):
 
 def get_pead_df(date : int , price_type : Literal['open' , 'low'] , rank_pct : bool = True , running_days : int = 20):
     ann_cal = get_profit_ann_dt(date).set_index(['date','secid'])
-    dates = ann_cal.index.get_level_values('date')
+    dates = ann_cal.index.get_level_values('date').to_numpy()
 
-    end_date = dates.max()
+    end = dates.max()
     ann_cal['0'] = dates
     for i in range(running_days):
         dates = CALENDAR.td_array(dates , -1)
         ann_cal[f'-{i+1}'] = dates
-    start_date = CALENDAR.td(dates.min() , -20)
+    start = CALENDAR.td(dates.min() , -20)
     ann_cal = ann_cal.reset_index('date' , drop = True).\
         melt(var_name = 'prev_day' , value_name = 'date' , ignore_index = False).\
         reset_index(drop = False).set_index(['date' , 'secid']).astype({'prev_day':int})
 
-    quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['preclose' , price_type])
-    mv = DATAVENDOR.TRADE.get_mv(start_date , end_date , 'circ_mv')
+    quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['preclose' , price_type])
+    mv = DATAVENDOR.TRADE.get_mv(start , end , 'circ_mv')
 
     quotes['circ_mv'] = mv['circ_mv']
     quotes['pct_change'] = quotes[price_type] / quotes['preclose'] - 1
@@ -76,24 +76,24 @@ class _pead_calculator:
 
     def calc_ann_cal(self):
         ann_cal = get_profit_ann_dt(self.date).set_index(['date','secid'])
-        dates = ann_cal.index.get_level_values('date')
+        dates = ann_cal.index.get_level_values('date').to_numpy()
 
-        end_date = dates.max()
+        end = dates.max()
         ann_cal['0'] = dates
         for i in range(self.running_days):
             dates = CALENDAR.td_array(dates , -1)
             ann_cal[f'-{i+1}'] = dates
-        start_date = CALENDAR.td(dates.min() , -20)
+        start = CALENDAR.td(dates.min() , -20)
         ann_cal = ann_cal.reset_index('date' , drop = True).\
             melt(var_name = 'prev_day' , value_name = 'date' , ignore_index = False).\
             reset_index(drop = False).set_index(['date' , 'secid']).astype({'prev_day':int})
         self.ann_cal = ann_cal
-        self.start_date = start_date
-        self.end_date = end_date
+        self.start = start
+        self.end = end
 
     def calc_pead_quotes(self):
-        quotes = DATAVENDOR.TRADE.get_quotes(self.start_date , self.end_date , ['preclose' , 'open' , 'low'])
-        mv = DATAVENDOR.TRADE.get_mv(self.start_date , self.end_date , 'circ_mv')
+        quotes = DATAVENDOR.TRADE.get_quotes(self.start , self.end , ['preclose' , 'open' , 'low'])
+        mv = DATAVENDOR.TRADE.get_mv(self.start , self.end , 'circ_mv')
 
         quotes['circ_mv'] = mv['circ_mv']
         quotes['open_rtn'] = quotes['open'] / quotes['preclose'] - 1

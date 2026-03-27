@@ -254,7 +254,7 @@ class ControlRefreshInteractiveButton(ControlPanelButton):
     
     def refresh_all(self):
         with st.spinner("Refreshing..."):
-            with Proj.Silence:
+            with Proj.silence:
                 Options.update()
                 remake_all_script_detail_files()
         SC.rerun()

@@ -252,7 +252,7 @@ class DataBlock(Stock4D):
     def extend_to(self , db_src : str , db_key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
                   dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'):
         if dates is None:
-            dates = CALENDAR.td_within(start_dt , end_dt)
+            dates = CALENDAR.range(start_dt , end_dt , 'td')
         block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
         if self.price_adjusted:
             block = block.adjust_price()
@@ -302,7 +302,7 @@ class DataBlock(Stock4D):
     def load_preprocess(cls , key : str , predict = False , vb_level : Any = 2 , **kwargs) -> 'DataBlock':
         block = cls.load_dump(category = 'preprocess' , predict = predict , preprocess_key = key)
         if predict and key == 'y' and not block.empty:
-            block = block.align_date(CALENDAR.td_within(min(block.date) , CALENDAR.updated()))
+            block = block.align_date(CALENDAR.range(min(block.date) , CALENDAR.updated() , 'td'))
         return block
 
     @classmethod
@@ -348,7 +348,7 @@ class DataBlock(Stock4D):
                      dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
 
         if dates is None:
-            dates = CALENDAR.td_within(start_dt , end_dt)
+            dates = CALENDAR.range(start_dt , end_dt , 'td')
 
         df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
 
@@ -370,7 +370,7 @@ class DataBlock(Stock4D):
     def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
                  dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
         if dates is None:
-            dates = CALENDAR.td_within(start_dt , end_dt)
+            dates = CALENDAR.range(start_dt , end_dt , 'td')
 
         if f'{db_src}.{db_key}' in cls.FREQUENT_DBS:
             if len(dates) >= cls.FREQUENT_MIN_DATES:

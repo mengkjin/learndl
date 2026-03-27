@@ -176,7 +176,7 @@ class RiskModel(GeneralModel):
         assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'
         return model
     def load_day_model(self , date : int):
-        with Proj.Silence:
+        with Proj.silence:
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
             S = self.S_loader.load(date , date)

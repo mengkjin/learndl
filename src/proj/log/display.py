@@ -62,7 +62,7 @@ class Display:
         """
         display the object
         """
-        if Proj.Silence.silent or Proj.vb.ignore(vb_level):
+        if Proj.silence.silent or Proj.vb.ignore(vb_level):
             return
         with Proj.vb.WithVbLevel(vb_level):
             for callback in cls._callbacks_before:

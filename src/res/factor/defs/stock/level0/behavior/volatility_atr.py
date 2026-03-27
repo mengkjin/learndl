@@ -4,8 +4,8 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import VolatilityFactor
 
 def atr_classic(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['high' , 'low' , 'close' , 'preclose'])
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['high' , 'low' , 'close' , 'preclose'])
     quotes['tr'] = pd.concat([
         quotes['high'] - quotes['low'] ,
         abs(quotes['high'] - quotes['preclose']) ,

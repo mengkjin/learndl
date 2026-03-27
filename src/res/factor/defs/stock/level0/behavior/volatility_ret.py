@@ -4,8 +4,8 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import VolatilityFactor
 
 def ret_std_classic(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    returns = DATAVENDOR.TRADE.get_returns(start_date , end_date)
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    returns = DATAVENDOR.TRADE.get_returns(start , end)
     return returns.std() * np.sqrt(252)
 
 class ret_std1m(VolatilityFactor):

@@ -26,7 +26,7 @@ class gpGenerator:
                  halflife : int = 20 , 
                  min_coverage :float = 0.1 , 
                  **kwargs) -> None:
-        with Proj.Silence:
+        with Proj.silence:
             self.gp  = GeneticProgramming(job_id = job_id , train = False , **kwargs).load_data().preparation()
             self.process_key = process_key
             self.elitelog = self.load_log('elitelog').set_index('i_elite')

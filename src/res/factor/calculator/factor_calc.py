@@ -109,7 +109,7 @@ class _FactorDBKey:
 
 class _FactorCalendar:
     """calendar of factor"""
-    _dates = CALENDAR.td_within(Proj.Conf.Factor.UPDATE.init_date)
+    _dates = CALENDAR.range(Proj.Conf.Factor.UPDATE.init_date , None , 'td')
 
     def __init__(self , method : Literal['update' , 'calendar'] = 'calendar'):
         self.method = method
@@ -393,7 +393,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor(factor_names = [cls.factor_name])
         calc = cls()
-        func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb.level(vb_level) + 2}) for date in dates}
+        func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb(vb_level) + 2}) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs)
         if normalize: 
@@ -893,7 +893,7 @@ class MarketFactorCalculator(FactorCalculator):
             return pd.DataFrame()
         
         if start is not None or end is not None:
-            df = df.loc[df['date'].isin(CALENDAR.td_within(start , end))].reset_index(drop = True)
+            df = df.loc[df['date'].isin(CALENDAR.range(start , end , 'td'))].reset_index(drop = True)
         return df
 
     @classmethod

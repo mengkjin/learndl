@@ -48,7 +48,7 @@ class ModelPredictor:
         assert update != overwrite , 'update and overwrite must be different here'
         
         dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
-        with Proj.Silence:
+        with Proj.silence:
             self.predict_dates(dates)
         self.save_preds()
         self.deploy()

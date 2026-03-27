@@ -83,12 +83,13 @@ class AccountConfig:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
 class PortfolioAccount:
+    _instance : 'PortfolioAccount | None' = None
     columns_basic = ['model_date' , 'start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight' , 'pf_close' , 'pf_open' , 'pf_vwap']
     columns_all = columns_basic + ['analytic' , 'attribution']
 
     def __new__(cls , input = None , *args , **kwargs):
         instance = super().__new__(cls)
-        Proj.States.account = instance 
+        cls._account = instance 
         return instance
 
     def __init__(self , input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None , 
@@ -414,7 +415,7 @@ class PortfolioAccountant:
         self.account.config = config
         self.resume_path = resume_path
 
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if Proj.Conf.Model.TRAIN.resume_test_fmp_account:
             self.resumed_account = PortfolioAccount.load(self.resume_path)
             if resume_drop_last:
@@ -442,7 +443,7 @@ class PortfolioAccountant:
         return self.account.config
     
     def go(self , cache = False , indent : int = 1 , vb_level : Any = 2):
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if cache and self.config.key in self.cached_accounts:
             self.account = self.cached_accounts[self.config.key]
             return self

@@ -133,7 +133,7 @@ class TSBackUpDataTransform():
 
     def get_bakable_dates(self):
         """get all bakable dates (has csv files)"""
-        dates = CALENDAR.td_within(start_dt = CALENDAR.td(CALENDAR.updated() , 1) , end_dt = CALENDAR.update_to())
+        dates = CALENDAR.range(CALENDAR.td(CALENDAR.updated() , 1) , CALENDAR.update_to() , 'td')
         dates = [date for date in dates if self.bakable_date(date)]
         return dates
     
@@ -160,9 +160,9 @@ class TSBackUpDataTransform():
     def rollback(cls , rollback_date : int):
         """rollback all backed date data"""
         transformer = cls()
-        start_date = CALENDAR.td(rollback_date)
-        end_date = CALENDAR.td(CALENDAR.update_to())
-        dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+        start = CALENDAR.td(rollback_date)
+        end = CALENDAR.td(CALENDAR.update_to())
+        dates = CALENDAR.range(start , end , type = 'td')
         dates = np.intersect1d(dates , transformer.get_baked_dates())
         for date in dates:
             transformer.clear_day(date)

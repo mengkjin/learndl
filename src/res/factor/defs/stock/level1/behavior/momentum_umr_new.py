@@ -22,10 +22,10 @@ def get_market_event_dates(events = ['high_level_switch' , 'platform_breakout' ,
 def calc_umr_new(date , n_months : int , risk_window : int = 10):
     risk_type_list = ['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
         'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness']
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
 
-    rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , mask = True)
-    mkt_ret = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
+    rets = DATAVENDOR.TRADE.get_returns(start , end , mask = True)
+    mkt_ret = DATAVENDOR.TRADE.get_market_return(start , end)
     exc_rets = rets - mkt_ret.values
 
     n_days = exc_rets.shape[0]
@@ -45,11 +45,11 @@ def calc_umr_new(date , n_months : int , risk_window : int = 10):
         reset_index(drop = True).set_index('secid').reindex(rets.columns)
     commom_x = mv_indus.join(p_neg_rets)
 
-    risk_start_date = max(DATAVENDOR.CALENDAR.td(start_date , -2 * risk_window + 1) , DB.min_date('exposure' , 'daily_risk'))
+    risk_start_date = max(DATAVENDOR.CALENDAR.td(start , -2 * risk_window + 1) , DB.min_date('exposure' , 'daily_risk'))
     umrs : dict[str , pd.Series] = {}
     for risk_type in risk_type_list:
-        risks = DATAVENDOR.EXPO.get_risks(risk_start_date , end_date , field = risk_type , pivot = True)
-        special_dates = disclosure_dates.query('date > @risk_start_date & date <= @end_date').\
+        risks = DATAVENDOR.EXPO.get_risks(risk_start_date , end , field = risk_type , pivot = True)
+        special_dates = disclosure_dates.query('date > @risk_start_date & date <= @end').\
             assign(value = 1).pivot_table('value' , 'date' , 'secid').reindex_like(risks)
         special_dates.loc[special_dates.index.isin(market_event_dates)] = 1.
 

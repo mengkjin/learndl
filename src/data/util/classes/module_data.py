@@ -102,7 +102,7 @@ class ModuleData:
         load all x/y data if input_type is data or factor
         if predict is True, only load recent data
         '''
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         if dtype is None: 
             dtype = torch.float
         if isinstance(dtype , str): 

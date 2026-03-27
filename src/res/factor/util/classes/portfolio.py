@@ -102,7 +102,7 @@ class Portfolio:
     def random(cls):  
         """generate a random portfolio with 3 random ports"""
         rand_ps = cls('rand_port')
-        dates = CALENDAR.td_within(20241201 , 20241207)
+        dates = CALENDAR.range(20241201 , 20241207 , 'td')
         for date in dates: 
             rand_ps.append(Port.rand_port(date) , override = True)
         return rand_ps

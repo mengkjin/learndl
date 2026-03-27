@@ -207,7 +207,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         if end is None: 
             end = min(CALENDAR.updated() , Proj.Conf.Factor.UPDATE.end)
 
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         for calc in cls.calculators(all , selected_factors , **kwargs):
             if cls.update_type in ['affiliate']:
                 ...
@@ -238,7 +238,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                             all = True , selected_factors : list[str] | None = None ,
                             overwrite = False , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
         """before process jobs"""
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         for calc in cls.calculators(all , selected_factors , **kwargs):
             if isinstance(calc , WeightedPoolingCalculator):
                 calc.drop_pooling_weight(after = start , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 1)
@@ -272,7 +272,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         default behavior is to collect jobs first to find all FactorCalculators then update one by one
         timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         """
-        vb_level = Proj.vb.level(vb_level)
+        vb_level = Proj.vb(vb_level)
         cls.collect_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
         start_time = datetime.now()
         cls.before_process_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)

@@ -96,7 +96,7 @@ def get_features_block(src : str , key : str , features : list[str] | None , sta
         block:       DataBlock        
     '''
     secid = DATAVENDOR.secid(end_dt)
-    dates = CALENDAR.td_within(start_dt , end_dt)
+    dates = CALENDAR.range(start_dt , end_dt , 'td')
     block = BlockLoader(src , key , feature = features).load(start_dt , end_dt , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
     return block
@@ -163,7 +163,7 @@ def get_return_block(start_dt : int = 20100101 , end_dt : int = 20241231 , nday 
     '''
     element = InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01)
     secid = DATAVENDOR.secid(end_dt)
-    dates = CALENDAR.td_within(start_dt , end_dt)
+    dates = CALENDAR.range(start_dt , end_dt , 'td')
     new_end_dt = CALENDAR.td(end_dt , 20).td
     block = element.get_datablock(start_dt , new_end_dt)
     block.values = T.ts_delay(T.ts_product(block.values + 1 , nday) - 1 , -nday-delay , no_alert = True)
@@ -180,7 +180,7 @@ def init_neutral_exp(start_dt : int = 20100101 , end_dt : int = 20241231 , * , d
         neutral_exp:  neutral_exp tensor
     '''
     secid = DATAVENDOR.secid(end_dt)
-    dates = CALENDAR.td_within(start_dt , end_dt)
+    dates = CALENDAR.range(start_dt , end_dt , 'td')
     block = BlockLoader('models' , 'tushare_cne5_exp').load(start_dt , end_dt , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
     values = block.loc(feature = Proj.Conf.Factor.RISK.indus + ['size']).squeeze().to(device)
@@ -218,7 +218,7 @@ class gpInput:
         self.inputs :    list[torch.Tensor] = []
         self.tensors :   dict[str , torch.Tensor] = {}
         self.records :   dict[str , Any] = {}
-        self.vb_level = Proj.vb.level(vb_level)
+        self.vb_level = Proj.vb(vb_level)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(inputs={len(self.inputs)}, tensors={len(self.tensors)}, records={len(self.records)})'

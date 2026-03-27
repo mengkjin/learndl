@@ -11,7 +11,7 @@ from datetime import datetime
 from src.proj import PATH , MACHINE , Logger
 from src.proj.func import get_running_scripts
 
-default_log_path = PATH.log_main.joinpath('suspend','suspend_check.log')
+default_log_path = PATH.logs.joinpath('suspend','suspend_check.log')
 
 def suspend_this_machine(log_path = default_log_path):
     running_scripts = get_running_scripts(__file__)

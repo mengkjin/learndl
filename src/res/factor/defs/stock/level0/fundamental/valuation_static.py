@@ -55,8 +55,8 @@ def get_ev(date: int):
     return ev
 
 def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-    mv   = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'val' , 'total_mv' , 
+    start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
+    mv   = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 
                                               prev = False , pivot = True , date_step = date_step)
     liab = DATAVENDOR.BS.acc('total_liab'   , date , n_year * 4 + 1 , pivot = True)
     debt = DATAVENDOR.BS.acc('bond_payable' , date , n_year * 4 + 1 , pivot = True)
@@ -87,12 +87,12 @@ def get_denominator(denominator : Literal['mv' , 'cp' , 'ev'] | str , date : int
 
 def get_denominator_hist(denominator : Literal['mv' , 'cp' , 'ev1'] | str , date : int , n_year = 1 , date_step = 1):
     if denominator == 'mv':
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-        v = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'val' , 'total_mv' , 
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
+        v = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 
                                                prev = False , pivot = True , date_step = date_step)
     elif denominator == 'cp':
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-        v = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'trd' , 'close' , 
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
+        v = DATAVENDOR.TRADE.get_specific_data(start , end , 'trd' , 'close' , 
                                                prev = False , pivot = True , date_step = date_step)
     elif denominator == 'ev':
         v = get_ev_hist(date , n_year , date_step)
@@ -147,8 +147,8 @@ class dtop(ValueFactor):
         # some date this column is erronous
         dv_ttm = DATAVENDOR.TRADE.get_val(date).set_index(['secid'])['dv_ttm'] / 100
         if dv_ttm.notna().sum() <= 100:
-            start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
-            dv_ttm = DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'dv_ttm' , prev=False , pivot=False)
+            start , end = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
+            dv_ttm = DATAVENDOR.TRADE.get_val_data(start , end , 'dv_ttm' , prev=False , pivot=False)
             dv_ttm = dv_ttm.dropna().groupby('secid')['dv_ttm'].last() / 100
         return calc_valuation(dv_ttm , 1 , pct = False)
     
@@ -157,8 +157,8 @@ class dtop_rank1y(ValueFactor):
     description = '股东分红率,1年分位数'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
-        dv_ttm = DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'dv_ttm' , prev=False , pivot=True)
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
+        dv_ttm = DATAVENDOR.TRADE.get_val_data(start , end , 'dv_ttm' , prev=False , pivot=True)
         return calc_valuation(dv_ttm , 1 , pct = True)
     
 class dtop_rank3y(ValueFactor):
@@ -166,8 +166,8 @@ class dtop_rank3y(ValueFactor):
     description = '股东分红率,3年分位数'
     
     def calc_factor(self, date: int):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'y')
-        dv_ttm = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'val' , 'dv_ttm' , prev=False , pivot=True , date_step = 21)
+        start , end = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'y')
+        dv_ttm = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'dv_ttm' , prev=False , pivot=True , date_step = 21)
         return calc_valuation(dv_ttm , 1 , pct = True)
 
 class ebitev_ttm(ValueFactor):

@@ -14,11 +14,11 @@ def get_title_outperform(date : int , type : Literal['num' , 'pct']):
     target_quarter = f'{date // 10000}Q4'
     n_month = 12
     within_ann_days = 7
-    start_date = DATAVENDOR.CALENDAR.cd(date , -30 * n_month)
+    start = DATAVENDOR.CALENDAR.cd(date , -30 * n_month)
 
 
     df = DATAVENDOR.ANALYST.get_trailing_reports(date , n_month + 6)
-    df = df[(df['quarter'] == target_quarter) & (df['report_date'] >= start_date)].set_index(['secid','report_date']).sort_index()
+    df = df[(df['quarter'] == target_quarter) & (df['report_date'] >= start)].set_index(['secid','report_date']).sort_index()
 
     if within_ann_days is not None:
         assert within_ann_days > 0 , 'within_ann_days must be positive'
@@ -49,10 +49,10 @@ def get_profit_outperform(date : int , val : Literal['tp' , 'npro' , 'sales' , '
 
     profit['num'] = profit.groupby('secid').cumcount().astype(str)
 
-    end_date = profit.pivot_table(index = 'secid' , columns = 'num' , values = 'end_date').dropna().astype(int)
-    qtr = end_date % 10000 // 300
+    end = profit.pivot_table(index = 'secid' , columns = 'num' , values = 'end_date').dropna().astype(int)
+    qtr = end % 10000 // 300
     qtr.columns = ['qtr_1' , 'qtr_2']
-    qtr['target_quarter'] = ((end_date // 10000).iloc[:,-1].astype(str) + 'Q4')
+    qtr['target_quarter'] = ((end // 10000).iloc[:,-1].astype(str) + 'Q4')
 
     profit = profit.pivot_table(index = 'secid' , columns = 'num' , values = 'profit')
     profit.columns = ['profit_1' , 'profit_2']
