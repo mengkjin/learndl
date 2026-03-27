@@ -93,7 +93,7 @@ def eval_period_ret_multi(inputs : dict | pd.DataFrame , end : int = -1) -> pd.D
     get the period return of multiple inputs
     inputs can be a dict of (name , (date , ret)) or a pd.DataFrame with date and ret columns
     example:
-        dates = CALENDAR.td_within(20240101 , 20251231)
+        dates = CALENDAR.range(20240101 , 20251231 , 'td')
         ret1 = np.random.randn(len(dates)) / 100
         ret2 = np.random.randn(len(dates)) / 100
         df0 = eval_period_ret_multi({'ret1' : (dates , ret1) , 'ret2' : (dates , ret2)})

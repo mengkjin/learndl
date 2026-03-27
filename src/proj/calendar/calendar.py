@@ -222,7 +222,7 @@ class CALENDAR:
 
     @classmethod
     def as_start_date(cls, date: DateTypeWithNone) -> int:
-        """clear the start date of input start (None -> 19900101, negative -> relative to today)"""
+        """clear the start date of input date (None -> 19900101, negative -> relative to today)"""
         date_dt = 19900101 if date is None else get_cd(date)
         if date_dt < 0:
             date_dt = cls.today(date_dt)
@@ -230,7 +230,7 @@ class CALENDAR:
 
     @classmethod
     def as_end_date(cls, date: DateTypeWithNone) -> int:
-        """clear the end date of input end_date (None -> 99991231, negative -> relative to today)"""
+        """clear the end date of input date (None -> 99991231, negative -> relative to today)"""
         date = 99991231 if date is None else get_cd(date)
         if date < 0:
             date = cls.today(date)
@@ -481,7 +481,7 @@ class Dates(np.ndarray[int, Any]):
                 dates = np.array(args[0], dtype=int)
         elif len(args) == 2:
             start, end = args
-            dates = CALENDAR.td_within(start, end)
+            dates = CALENDAR.range(start, end, 'td')
         elif len(args) == 3:
             dates, start, end = args
             dates = CALENDAR.slice(dates, start, end)

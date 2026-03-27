@@ -110,7 +110,7 @@ def get_input_data():
     
     """
     from src.proj import CALENDAR
-    dates = CALENDAR.td_within(20100101 , 20250418)
+    dates = CALENDAR.range(20100101 , 20250418 , 'td')
     index_inputs : dict[str, pd.DataFrame] = {}
     index_inputs['microcap'] = pd.read_feather('data/DataBase/DB_index_daily_custom/microcap_400.feather').\
         rename(columns = {'trade_date' : 'date'}).set_index('date').reindex(dates)
