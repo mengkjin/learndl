@@ -589,12 +589,12 @@ class StockFactor:
         else:
             return self.twin(factor = df)
 
-    def filter_dates_between(self , start_dt : int , end_dt : int , inplace = False):
+    def filter_dates_between(self , start : int , end : int , inplace = False):
         """
-        filter the factor data by dates between start_dt and end_dt
+        filter the factor data by dates between start and end
         """
         dates = self.date
-        dates = dates[(dates >= start_dt) & (dates <= end_dt)]
+        dates = dates[(dates >= start) & (dates <= end)]
         return self.filter_dates(dates , inplace = inplace)
 
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
@@ -780,7 +780,7 @@ class StockFactor:
         """
         load the factor data from the database by factor name and date range
         """
-        df = DB.loads('factor' , factor_name , dates = dates , start_dt=start , end_dt=end)
+        df = DB.loads('factor' , factor_name , dates = dates , start=start , end=end)
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):

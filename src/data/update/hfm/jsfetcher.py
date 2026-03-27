@@ -105,19 +105,19 @@ class JSFetcher:
     def target_dates(self):
         return DB.dates(self.db_src , self.db_key)
     
-    def get_update_dates(self , start_dt = None , end_dt = None , trace = 0 , incremental = True , force = False):
+    def get_update_dates(self , start = None , end = None , trace = 0 , incremental = True , force = False):
         source_dates = self.source_dates()
         target_dates = self.target_dates()
         if force:
-            if start_dt is None or end_dt is None:
-                raise ValueError(f'start_dt and end_dt must not be None with force update!')
+            if start is None or end is None:
+                raise ValueError(f'start and end must not be None with force update!')
             target_dates = []
         if incremental: 
             if len(target_dates):
                 source_dates = source_dates[source_dates >= min(target_dates)]
         if trace > 0 and len(target_dates) > 0: 
             target_dates = target_dates[:-trace]
-        new_dates = CALENDAR.slice(CALENDAR.diffs(source_dates , target_dates) , start_dt , end_dt)
+        new_dates = CALENDAR.slice(CALENDAR.diffs(source_dates , target_dates) , start , end)
 
         return new_dates   
 

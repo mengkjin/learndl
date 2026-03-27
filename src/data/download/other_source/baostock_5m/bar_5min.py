@@ -18,12 +18,12 @@ final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
 task_path.mkdir(exist_ok=True , parents=True)
 
-def tmp_file_dir(start_dt : int , end_dt : int):
-    path = task_path.joinpath(f'{start_dt}_{end_dt}')
+def tmp_file_dir(start : int , end : int):
+    path = task_path.joinpath(f'{start}_{end}')
     return path
 
-def tmp_file_path(start_dt : int , end_dt : int , code : str):
-    path = task_path.joinpath(f'{start_dt}_{end_dt}' , str(code))
+def tmp_file_path(start : int , end : int , code : str):
+    path = task_path.joinpath(f'{start}_{end}' , str(code))
     return path
 
 def baostock_secdf(date : int):
@@ -88,17 +88,17 @@ def pending_date():
     d1 = last_date()
     return d0 if d0 > d1 else -1
 
-def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry_n : int = 10):
+def baostock_bar_5min(start : int , end : int , first_n : int = -1 , retry_n : int = 10):
     # date = 20240704
-    if end_dt < start_dt: 
+    if end < start: 
         return True
     retry = 0
     
-    tmp_dir = tmp_file_dir(start_dt , end_dt)
+    tmp_dir = tmp_file_dir(start , end)
     tmp_dir.mkdir(exist_ok=True)
 
-    start_str = f'{start_dt // 10000}-{(start_dt // 100) % 100}-{start_dt % 100}'
-    end_str = f'{end_dt // 10000}-{(end_dt // 100) % 100}-{end_dt % 100}'
+    start_str = f'{start // 10000}-{(start // 100) % 100}-{start % 100}'
+    end_str = f'{end // 10000}-{(end // 100) % 100}-{end % 100}'
     
     sec_df : pd.DataFrame | Any = None
     while True:
@@ -107,7 +107,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
         try:
             bs.login()
             if sec_df is None:
-                sec_df = baostock_secdf(end_dt).query('is_sec == 1')
+                sec_df = baostock_secdf(end).query('is_sec == 1')
                 if first_n > 0: 
                     sec_df = sec_df.iloc[:first_n]
             downloaded = [d.name for d in tmp_dir.iterdir()]
@@ -116,7 +116,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 bs.logout()
                 break
             
-            Logger.stdout(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
+            Logger.stdout(f'{start} - {end} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(
                     code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
@@ -124,14 +124,14 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 assert rs is not None , f'{rs} is None , corrupted data'
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
-                    DB.save_df(result , tmp_file_path(start_dt , end_dt , code) , vb_level = 'max' , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
+                    DB.save_df(result , tmp_file_path(start , end , code) , vb_level = 'max' , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
 
                 if i % 100 == 0:
-                    Logger.success(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
+                    Logger.success(f'{i + 1}/{len(task_codes)} {start} - {end} : {code}...' , end = '\r')
 
         except Exception as e:
             bs.logout()
-            Logger.error(f'Baostock 5min download failed at {start_dt} - {end_dt} : {code} , retry {retry} : {e}')
+            Logger.error(f'Baostock 5min download failed at {start} - {end} : {code} , retry {retry} : {e}')
             retry += 1
         else:
             break
@@ -169,18 +169,18 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
 
 def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
     pending_dt = pending_date()
-    end_dt = CALENDAR.update_to() if date is None else date
+    end = CALENDAR.update_to() if date is None else date
     prev_dates = updated_dates(5)
-    target_dates = CALENDAR.range(max(prev_dates) , end_dt , 'cd') if len(prev_dates) > 0 else []
+    target_dates = CALENDAR.range(max(prev_dates) , end , 'cd') if len(prev_dates) > 0 else []
     if len(target_dates) == 0:
-        Logger.skipping(f'Other source 5min {end_dt} already updated' , indent = 1)
+        Logger.skipping(f'Other source 5min {end} already updated' , indent = 1)
         return True
 
-    if pending_dt == end_dt: 
+    if pending_dt == end: 
         pending_dt = -1
 
     updated = False
-    for dt in [pending_dt , end_dt]:
+    for dt in [pending_dt , end]:
         last_dt = last_date(1)
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
@@ -188,7 +188,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
                 Logger.alert1(f'baostock 5min {last_dt} - {dt} failed' , indent = 1)
             updated = updated or mark
     if updated:
-        Logger.success(f'Download baostock 5min at {Dates(end_dt)}' , indent = 1)
+        Logger.success(f'Download baostock 5min at {Dates(end)}' , indent = 1)
             
     dates = x_mins_update_dates(date)
     updated = False

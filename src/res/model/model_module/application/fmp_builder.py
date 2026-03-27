@@ -114,14 +114,14 @@ class ModelPortfolioBuilder:
         last_dates = self.account_manager.account_last_model_dates()
         if fmp_names is None: 
             fmp_names = list(self.iter_fmp_names())
-        ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start_dt , -1).as_int()) for name in fmp_names}
+        ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start , -1).as_int()) for name in fmp_names}
         return ret
     
     def account_last_end_dates(self , fmp_names : list[str] | None = None):
         last_dates = self.account_manager.account_last_end_dates()
         if fmp_names is None: 
             fmp_names = list(self.iter_fmp_names())
-        ret = {name:last_dates.get(name , self.reg_model.start_dt) for name in fmp_names}
+        ret = {name:last_dates.get(name , self.reg_model.start) for name in fmp_names}
         return ret
     
     def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : Any = 3):

@@ -441,7 +441,7 @@ class PredictionModel(ModelPath):
     for a prediction model to predict recent/history data
     model dict stored in configs/proj/model_settings.yaml file under prediction section
     '''
-    START_DT = 20170101
+    START_DATE = 20170101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = Proj.Conf.Model.SETTINGS['prediction']
 
@@ -451,7 +451,7 @@ class PredictionModel(ModelPath):
     def __init__(self, pred_name : str , name: str | Any = None , 
                  submodel : Literal['best' , 'swalast' , 'swabest'] | Any = None ,
                  num  : int | list[int] | range | Literal['all'] | Any = None , 
-                 start_dt = START_DT , assertion = True) -> None:
+                 start = START_DATE , assertion = True) -> None:
         if assertion:
             assert pred_name in self.MODEL_DICT , f'{pred_name} is not a prediction model'
         if pred_name in self.MODEL_DICT:
@@ -465,8 +465,8 @@ class PredictionModel(ModelPath):
         self.submodel = submodel
         self.num = num
         self.model_path = ModelPath(self.full_name)
-        self.start_dt = start_dt
-        assert start_dt > 20070101 , f'start_dt must be a valid date , got {start_dt}'
+        self.start = start
+        assert start > 20070101 , f'start must be a valid date , got {start}'
 
     def __repr__(self) -> str:  
         return f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},submodel={self.submodel},num={str(self.num)})'
@@ -515,9 +515,9 @@ class PredictionModel(ModelPath):
     @property
     def pred_target_dates(self) -> np.ndarray:
         """model pred target dates"""
-        start_dt = max(self.start_dt , int(CALENDAR.td(min(self.model_dates) , 1)))
-        end_dt = None
-        return CALENDAR.range(start_dt , end_dt , 'td')
+        start = max(self.start , int(CALENDAR.td(min(self.model_dates) , 1)))
+        end = None
+        return CALENDAR.range(start , end , 'td')
     
     @property
     def fmp_dates(self) -> np.ndarray:

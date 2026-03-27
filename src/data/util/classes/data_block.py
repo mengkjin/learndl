@@ -245,14 +245,14 @@ class DataBlock(Stock4D):
         return self
     
     def hist_norm(self , key : str , predict = False ,
-                  start_dt : int | None = None , end_dt : int | None  = 20161231 , 
+                  start : int | None = None , end : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
-        return DataBlockNorm.calculate(self , key , predict , start_dt , end_dt , step_day , **kwargs)
+        return DataBlockNorm.calculate(self , key , predict , start , end , step_day , **kwargs)
 
-    def extend_to(self , db_src : str , db_key : str , start_dt : int | None = None , end_dt : int | None = None , * , 
+    def extend_to(self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * , 
                   dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'):
         if dates is None:
-            dates = CALENDAR.range(start_dt , end_dt , 'td')
+            dates = CALENDAR.range(start , end , 'td')
         block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
         if self.price_adjusted:
             block = block.adjust_price()
@@ -306,7 +306,7 @@ class DataBlock(Stock4D):
         return block
 
     @classmethod
-    def blocks_align(cls , blocks : dict[str,'DataBlock'] , * , start_dt = None , end_dt = None ,
+    def blocks_align(cls , blocks : dict[str,'DataBlock'] , * , start = None , end = None ,
                      intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2) -> dict[str,'DataBlock']:
         if len(blocks) <= 1:
             return blocks
@@ -320,7 +320,7 @@ class DataBlock(Stock4D):
             else:
                 newsecid = None
             
-            newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start_dt , max_value = end_dt)
+            newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start , max_value = end)
             max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
             newdate = newdate[newdate >= max_min_date]
             
@@ -344,11 +344,11 @@ class DataBlock(Stock4D):
         return DataBlockNorm.load_keys(keys, predict , dtype = dtype)
 
     @classmethod
-    def load_from_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
+    def load_from_db(cls , db_src : str , db_key : str , start = None , end = None , * , 
                      dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
 
         if dates is None:
-            dates = CALENDAR.range(start_dt , end_dt , 'td')
+            dates = CALENDAR.range(start , end , 'td')
 
         df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
 
@@ -367,10 +367,10 @@ class DataBlock(Stock4D):
         return block
 
     @classmethod
-    def load_raw(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , * , 
+    def load_raw(cls , db_src : str , db_key : str , start = None , end = None , * , 
                  dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
         if dates is None:
-            dates = CALENDAR.range(start_dt , end_dt , 'td')
+            dates = CALENDAR.range(start , end , 'td')
 
         if f'{db_src}.{db_key}' in cls.FREQUENT_DBS:
             if len(dates) >= cls.FREQUENT_MIN_DATES:
@@ -475,7 +475,7 @@ class DataBlockNorm:
 
     @classmethod
     def calculate(cls , block : DataBlock , key : str , predict = False ,
-                  start_dt : int | None = None , end_dt : int | None  = 20161231 , 
+                  start : int | None = None , end : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
         
         key = data_type_abbr(key)
@@ -486,10 +486,10 @@ class DataBlockNorm:
         maxday = default_maxday.get(key , 1)
 
         date_slice = np.repeat(True , len(block.date))
-        if start_dt is not None: 
-            date_slice[block.date < start_dt] = False
-        if end_dt   is not None: 
-            date_slice[block.date > end_dt]   = False
+        if start is not None: 
+            date_slice[block.date < start] = False
+        if end   is not None: 
+            date_slice[block.date > end]   = False
 
         secid , date , inday , feat = block.secid , block.date , block.shape[2] , block.feature
 

@@ -247,11 +247,11 @@ class UniverseExclusions:
             return np.array([])
         return val.query('close < 2.0')['secid'].to_numpy()
     @classmethod
-    def get_loser(cls , end_dt : int):
+    def get_loser(cls , end : int):
         """
         Loser stocks (in the last 50 weeks, never top 5% but at least twice bottom 5%)
         """
-        df = DB.load('exposure' , 'week_rank_loser' , end_dt)
+        df = DB.load('exposure' , 'week_rank_loser' , end)
         if df.empty:
             return np.array([])
         return df.query('loser')['secid'].to_numpy()

@@ -128,7 +128,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
         self.portfolio_group = PortfolioGroupBuilder(
             'optim' , alpha_models , benchmarks , resume = self.resume , 
             resume_path = self.resume_path , caller = self , 
-            start_dt = self.start_dt , end_dt = self.end_dt , indent = indent , vb_level = vb_level , **self.kwargs)
+            start = self.start , end = self.end , indent = indent , vb_level = vb_level , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,

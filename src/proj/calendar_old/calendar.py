@@ -152,24 +152,24 @@ class CALENDAR:
         return np.sort(BC.cal[BC.cal['calendar'] <= date].iloc[-n:]['calendar'].to_numpy()).astype(int)
 
     @classmethod
-    def start_dt(cls , date : int | TradeDate | None) -> int:
+    def as_start_date(cls , date : int | TradeDate | None) -> int:
         date_dt = 19900101 if date is None else int(date)
         if date_dt < 0: 
             date_dt = cls.today(date_dt)
         return date_dt
     
     @classmethod
-    def end_dt(cls , date : int | TradeDate | None) -> int:
+    def as_end_date(cls , date : int | TradeDate | None) -> int:
         date = 99991231 if date is None else int(date)
         if date < 0: 
             date = cls.today(date)
         return date
 
     @classmethod
-    def td_within(cls , start_dt : int | TradeDate | None = None , 
-                  end_dt : int | TradeDate | None = None , 
+    def td_within(cls , start : int | TradeDate | None = None , 
+                  end : int | TradeDate | None = None , 
                   step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None , updated = False):
-        dates = cls.slice(BC.trd['calendar'].to_numpy(int) , start_dt , end_dt)
+        dates = cls.slice(BC.trd['calendar'].to_numpy(int) , start , end)
         if until_today: 
             dates = dates[dates <= cls.today()]
         if updated: 
@@ -184,16 +184,16 @@ class CALENDAR:
         '''
         return the difference between target dates and source dates
         inputs *args options:
-            1. start_dt , end_dt , source_dates , target_dates will be dates within start_dt and end_dt
+            1. start , end , source_dates , target_dates will be dates within start and end
             2. target_dates , source_dates
-        td : bool , when using start_dt and end_dt , will return TradeDate (default=True)
+        td : bool , when using start and end , will return TradeDate (default=True)
         '''
         assert len(args) in [2, 3] , 'Use tuple date_target must be a tuple of length 2 or 3'
         if len(args) == 2:
             target_dates , source_dates = args
         else:
-            start_dt , end_dt , source_dates = args
-            target_dates = cls.td_within(start_dt , end_dt) if td else cls.cd_within(start_dt , end_dt)
+            start , end , source_dates = args
+            target_dates = cls.td_within(start , end) if td else cls.cd_within(start , end)
         if source_dates is None:
             source_dates = np.array([], dtype=int)
         return Dates(np.setdiff1d(target_dates , source_dates))
@@ -204,9 +204,9 @@ class CALENDAR:
         return td_list[np.isin(td_list , date_list)]
     
     @classmethod
-    def cd_within(cls , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , step : int = 1 , 
+    def cd_within(cls , start : int | TradeDate | None = None , end : int | TradeDate | None = None , step : int = 1 , 
                   until_today = True , updated = False):    
-        dates = cls.slice(BC.cal['calendar'].to_numpy(int) , start_dt , end_dt)
+        dates = cls.slice(BC.cal['calendar'].to_numpy(int) , start , end)
         if until_today: 
             dates = dates[dates <= cls.today()]
         if updated: 
@@ -229,9 +229,9 @@ class CALENDAR:
                      lag_num : int = 0):
         td = TradeDate(reference_date)
         pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[freq]
-        start_dt = td - pdays * (period_num + lag_num) + 1
-        end_dt   = td - pdays * lag_num
-        return start_dt , end_dt
+        start = td - pdays * (period_num + lag_num) + 1
+        end   = td - pdays * lag_num
+        return start , end
 
     @classmethod
     def cd_start_end(cls , reference_date , period_num : int = 1 , 
@@ -240,18 +240,18 @@ class CALENDAR:
         cd = int(reference_date)
         if freq in ['d' , 'w']:
             pdays = {'d':1 , 'w':7}[freq]
-            start_dt = cd - pdays * (period_num + lag_num) + 1
-            end_dt   = cd - pdays * lag_num
+            start = cd - pdays * (period_num + lag_num) + 1
+            end   = cd - pdays * lag_num
         elif freq in ['m' , 'q' , 'y']:
             year , month , day = cd // 10000 , cd % 10000 // 100 , cd % 100
             pmonths = {'m':1 , 'q':3 , 'y':12}[freq]
             start_month = month - pmonths * (period_num + lag_num)
             end_month = month - pmonths * lag_num
-            start_dt = cls.cd(cls.datetime(year , start_month , day , lock_month = True) , 1)
-            end_dt = cls.datetime(year , end_month , day , lock_month = True)
+            start = cls.cd(cls.datetime(year , start_month , day , lock_month = True) , 1)
+            end = cls.datetime(year , end_month , day , lock_month = True)
         else:
             raise ValueError(f'Invalid frequency: {freq}')
-        return start_dt , end_dt
+        return start , end
     
     @staticmethod
     def as_trade_date(date : int | Any):
@@ -266,10 +266,10 @@ class CALENDAR:
         return BC.trd['calendar'].to_numpy(int)
 
     @classmethod
-    def slice(cls , dates , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
+    def slice(cls , dates , start : int | TradeDate | None = None , end : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
         if isinstance(dates , list):
             dates = np.array(dates)
-        dates = dates[(dates >= cls.start_dt(start_dt)) & (dates <= cls.end_dt(end_dt))]
+        dates = dates[(dates >= cls.as_start_date(start)) & (dates <= cls.as_end_date(end))]
         if year  is not None: 
             dates = dates[(dates // 10000) == year]
         return dates
@@ -282,11 +282,11 @@ class CALENDAR:
 
     @classmethod
     def year_end(cls , date):
-        return cls.end_dt(date) // 10000 * 10000 + 1231
+        return cls.as_end_date(date) // 10000 * 10000 + 1231
 
     @classmethod
     def year_start(cls , date):
-        return cls.start_dt(date) // 10000 * 10000 + 101
+        return cls.as_start_date(date) // 10000 * 10000 + 101
 
     @classmethod
     def quarter_end(cls , date):
@@ -316,11 +316,11 @@ class CALENDAR:
         return np.concatenate([start , mid , end])
     
     @classmethod
-    def qe_within(cls , start_dt , end_dt , year_only = False):
+    def qe_within(cls , start , end , year_only = False):
         if year_only:
-            return cls.YE[(cls.YE >= start_dt) & (cls.YE <= end_dt)]
+            return cls.YE[(cls.YE >= start) & (cls.YE <= end)]
         else:
-            return cls.QE[(cls.QE >= start_dt) & (cls.QE <= end_dt)]
+            return cls.QE[(cls.QE >= start) & (cls.QE <= end)]
 
     @classmethod
     def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):

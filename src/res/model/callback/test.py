@@ -208,7 +208,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 Logger.divider(vb_level = vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
-                                                 start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date ,
+                                                 start = self.trainer.config.beg_date , end = self.trainer.config.end_date ,
                                                  indent = indent , vb_level = vb_level,
                                                  title_prefix=self.config.model_name)
 
@@ -231,7 +231,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 Logger.divider(vb_level = vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
-                                                 start_dt = self.trainer.config.beg_date , end_dt = self.trainer.config.end_date,
+                                                 start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
                                                  indent = indent , vb_level = vb_level,
                                                  title_prefix=self.config.model_name)
 

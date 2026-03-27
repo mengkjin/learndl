@@ -9,8 +9,8 @@ class AnalystReport(RollingFetcher):
     ROLLING_DATE_COL = 'report_date'
     ROLLING_SEP_DAYS = 30
     ROLLING_BACK_DAYS = 30
-    def get_data(self , start_dt , end_dt):
-        assert start_dt is not None and end_dt is not None , 'start_dt and end_dt must be provided'
-        df = self.iterate_fetch(self.pro.report_rc , limit = 2000 , max_fetch_times = 200 , start_date = int(start_dt) , end_date = int(end_dt))
+    def get_data(self , start , end):
+        assert start is not None and end is not None , 'start and end must be provided'
+        df = self.iterate_fetch(self.pro.report_rc , limit = 2000 , max_fetch_times = 200 , start_date = int(start) , end_date = int(end))
         df = ts_code_to_secid(df)
         return df

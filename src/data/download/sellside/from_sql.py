@@ -81,84 +81,84 @@ _default_factors : dict[str,dict[str,Any]] = {
     #     'factor_src' : 'haitong' ,
     #     'factor_set' : 'hf_factors' ,
     #     'date_col' : 'trade_dt' ,
-    #     'start_dt' : 20130101 , 
+    #     'start_date' : 20130101 , 
     # } ,
     # 'haitong.dl_factors' :{
     #     'factor_src' : 'haitong' ,
     #     'factor_set' : 'dl_factors' ,
     #     'date_col' : 'trade_dt' ,
-    #     'start_dt' : 20161230 ,
+    #     'start_date' : 20161230 ,
     'dongfang.hfq_chars' :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'hfq_chars' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20050101 ,
+        'start_date' : 20050101 ,
         'date_fmt' : '%Y%m%d' ,
     } ,
     'dongfang.l2_chars'  :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'l2_chars' ,
         'date_col' : 'trade_date' ,
-        'start_dt' : 20130930 ,
+        'start_date' : 20130930 ,
         'date_fmt' : '%Y%m%d'
     } ,
     'dongfang.ms_chars'  :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'ms_chars' ,
         'date_col' : 'trade_date' ,
-        'start_dt' : 20050101 ,
+        'start_date' : 20050101 ,
         'date_fmt' : '%Y%m%d' ,
     } ,
     'dongfang.order_flow':{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'order_flow' ,
         'date_col' : 'trade_date' ,
-        'start_dt' : 20130930 ,
+        'start_date' : 20130930 ,
         'date_fmt' : '%Y%m%d'
     } ,
     'dongfang.gp'        :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'gp' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20170101 ,
+        'start_date' : 20170101 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'dongfang.tra'       :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'tra' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20200101 ,
+        'start_date' : 20200101 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'dongfang.hist'      :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'hist' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20200101 ,
+        'start_date' : 20200101 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'dongfang.scores_v0' :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'scores_v0' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20171229 ,
-        'end_dt' : 20251231 ,
+        'start_date' : 20171229 ,
+        'end_date' : 20251231 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'dongfang.scores_v2' :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'scores_v2' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20171229 ,
-        'end_dt' : 20251231 ,
+        'start_date' : 20171229 ,
+        'end_date' : 20251231 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'dongfang.scores_v3' :{
         'factor_src' : 'dongfang' ,
         'factor_set' : 'scores_v3' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20171229 ,
-        'end_dt' : 20251231 ,
+        'start_date' : 20171229 ,
+        'end_date' : 20251231 ,
         'date_fmt' : '%Y-%m-%d' ,
         'connection_key' : 'dongfang2' ,
     } ,
@@ -166,56 +166,56 @@ _default_factors : dict[str,dict[str,Any]] = {
         'factor_src' : 'dongfang' ,
         'factor_set' : 'factorvae' ,
         'date_col' : 'tradingdate' ,
-        'start_dt' : 20200101 ,
+        'start_date' : 20200101 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'huayuan.scores_v0' :{
         'factor_src' : 'huayuan' ,
         'factor_set' : 'scores_v0' ,
         'date_col' : 'trade_dt' ,
-        'start_dt' : 20260101 ,
+        'start_date' : 20260101 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'huayuan.scores_v2' :{
         'factor_src' : 'huayuan' ,
         'factor_set' : 'scores_v2' ,
         'date_col' : 'trade_dt' ,
-        'start_dt' : 20260101 ,
+        'start_date' : 20260101 ,
         'date_fmt' : '%Y-%m-%d'
     } ,
     'huayuan.scores_v3' :{
         'factor_src' : 'huayuan' ,
         'factor_set' : 'scores_v3' ,
         'date_col' : 'trade_dt' ,
-        'start_dt' : 20260101 ,
+        'start_date' : 20260101 ,
         'date_fmt' : '%Y-%m-%d' ,
     } ,
     'huayuan.scores_v3_fast' :{
         'factor_src' : 'huayuan' ,
         'factor_set' : 'scores_v3_fast' ,
         'date_col' : 'trade_dt' ,
-        'start_dt' : 20171229 ,
+        'start_date' : 20171229 ,
         'date_fmt' : '%Y-%m-%d' ,
     } ,
     'huayuan.scores_v4_style' :{
         'factor_src' : 'huayuan' ,
         'factor_set' : 'scores_v4_style' ,
         'date_col' : 'trade_dt' ,
-        'start_dt' : 20171229 ,
+        'start_date' : 20171229 ,
         'date_fmt' : '%Y-%m-%d' ,
     } ,
     # 'guosheng.gs_pv_set1':{
     #     'factor_src' : 'guosheng' ,
     #     'factor_set' : 'gs_pv_set1' ,
     #     'date_col' : 'date' ,
-    #     'start_dt' : 20100129 ,
+    #     'start_date' : 20100129 ,
     #     'date_fmt' : '%Y%m%d'
     # } ,
     # 'kaiyuan.positive' :{
     #     'factor_src' : 'kaiyuan' ,
     #     'factor_set' : 'positive' ,
     #     'date_col' : 'date' ,
-    #     'start_dt' : 20140130 ,
+    #     'start_date' : 20140130 ,
     #     'sub_factors' : ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
     #                      'offense_defense','high_freq_shareholder','pe_change'] ,
     # } ,
@@ -223,14 +223,14 @@ _default_factors : dict[str,dict[str,Any]] = {
     #     'factor_src' : 'kaiyuan' ,
     #     'factor_set' : 'negative' ,
     #     'date_col' : 'date' ,
-    #     'start_dt' : 20140130 ,
+    #     'start_date' : 20140130 ,
     #     'sub_factors' : ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error'] ,
     # } ,
     'huatai.dl_factors' :{
         'factor_src' : 'huatai' ,
         'factor_set' : 'dl_factors' ,
         'date_col' : 'datetime' ,
-        'start_dt' : 20170101 ,
+        'start_date' : 20170101 ,
         'date_fmt' : '%Y-%m-%d' ,
         'sub_factors' : ['price_volume_nn','text_fadt_bert'] ,
     } ,
@@ -238,14 +238,14 @@ _default_factors : dict[str,dict[str,Any]] = {
         'factor_src' : 'huatai' ,
         'factor_set' : 'master_combined' ,
         'date_col' : 'datetime' ,
-        'start_dt' : 20170101 ,
+        'start_date' : 20170101 ,
         'date_fmt' : '%Y-%m-%d' ,
     } ,
     'huatai.fundamental_value' :{
         'factor_src' : 'huatai' ,
         'factor_set' : 'fundamental_value' ,
         'date_col' : 'datetime' ,
-        'start_dt' : 20170101 ,
+        'start_date' : 20170101 ,
         'date_fmt' : '%Y-%m-%d' ,
    } ,
 }
@@ -268,13 +268,13 @@ def date_offset(date : Any , offset : int = 0 , astype = int):
     new_date = dseries.strftime('%Y%m%d').to_numpy(astype)
     return new_date if iterable_input else new_date[0]
 
-def dates_segements(start_dt , end_dt , freq='QE' , astype : Any = int) -> list[tuple[int,int]]:
+def dates_segements(start , end , freq='QE' , astype : Any = int) -> list[tuple[int,int]]:
     """segregate dates into date intervals"""
-    if start_dt >= end_dt: 
+    if start >= end: 
         return []
-    dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
-    dt_starts = [date_offset(start_dt) , *date_offset(dt_list[:-1],1)]
-    dt_ends = [*dt_list[:-1] , date_offset(end_dt)]
+    dt_list = pd.date_range(str(start) , str(end) , freq=freq).strftime('%Y%m%d').astype(int)
+    dt_starts = [date_offset(start) , *date_offset(dt_list[:-1],1)]
+    dt_ends = [*dt_list[:-1] , date_offset(end)]
     return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
 
 @dataclass
@@ -346,8 +346,8 @@ class SellsideSQLDownloader:
     factor_src      : str
     factor_set      : str
     date_col        : str
-    start_dt        : int
-    end_dt          : int = 99991231
+    start_date      : int
+    end_date        : int = 99991231
     date_fmt        : str | None = None
     sub_factors     : list | None = None
     connection_key  : str = ''
@@ -384,47 +384,47 @@ class SellsideSQLDownloader:
         sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set)
         return sqlline
 
-    def sqlline_factor_values(self , start_dt : int | str , end_dt : int | str , sub_factor : str | None = None) -> str:
+    def sqlline_factor_values(self , start : int | str , end : int | str , sub_factor : str | None = None) -> str:
         if self.factor_src == 'haitong':
             if self.factor_set == 'hf_factors':
-                template = Template('select * from daily_factor_db.dbo.JSJJHFFactors t where t.${date_col} between \'${start_dt}\' and \'${end_dt}\'')
+                template = Template('select * from daily_factor_db.dbo.JSJJHFFactors t where t.${date_col} between \'${start}\' and \'${end}\'')
             else:
-                template = Template('select s_info_windcode , trade_dt , f_value , model from daily_factor_db.dbo.JSJJHFFactors2 t where t.${date_col} between \'${start_dt}\' and \'${end_dt}\'')
+                template = Template('select s_info_windcode , trade_dt , f_value , model from daily_factor_db.dbo.JSJJHFFactors2 t where t.${date_col} between \'${start}\' and \'${end}\'')
         elif self.factor_src == 'huatai':
             if self.factor_set == 'dl_factors':
-                template = Template('select * from ${sub_factor} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
+                template = Template('select * from ${sub_factor} where ${date_col} >= \'${start}\' and ${date_col} <= \'${end}\'')
             else:
-                template = Template('select * from ${factor_set} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
+                template = Template('select * from ${factor_set} where ${date_col} >= \'${start}\' and ${date_col} <= \'${end}\'')
         elif self.factor_src == 'kaiyuan':
-            template = Template('select * from public.${sub_factor} where ${date_col} >= \'${start_dt}\' and ${date_col} <= \'${end_dt}\'')
+            template = Template('select * from public.${sub_factor} where ${date_col} >= \'${start}\' and ${date_col} <= \'${end}\'')
         elif self.factor_src in ['dongfang' , 'huayuan' , 'guosheng' , 'guojin']:
-            template = Template('select * from ${factor_set} where ${date_col} between \'${start_dt}\' and \'${end_dt}\'')
+            template = Template('select * from ${factor_set} where ${date_col} between \'${start}\' and \'${end}\'')
         else:
             raise ValueError(f'Undefined factor values query for factor source: {self.factor_src}')
-        sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set , start_dt = start_dt , end_dt = end_dt , sub_factor = sub_factor)
+        sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set , start = start , end = end , sub_factor = sub_factor)
         return sqlline
 
     def get_connection(self):
         return Connection.connection(self.use_connection)
     
     def download(self , option : Literal['since' , 'dates' , 'all'] ,
-                 dates = [] , trace = 1 , start_dt = 20000101, end_dt = 99991231 , 
+                 dates = [] , trace = 1 , start = 20000101, end = 99991231 , 
                  connection : Connection | None = None):
         if option == 'dates':
             date_intervals = [(d,d) for d in dates]
         else:
-            start_dt = max(self.start_dt , start_dt)
-            end_dt = min(self.end_dt , end_dt)
+            start = max(self.start_date , start)
+            end = min(self.end_date , end)
             if option == 'since':
                 old_dates = DB.dates(self.DB_SRC , self.db_key)
                 if trace > 0 and len(old_dates) > trace: 
                     old_dates = old_dates[:-trace]
                 if len(old_dates): 
                     last1_dt = CALENDAR.cd(old_dates[-1],1)
-                    start_dt = max(start_dt , last1_dt)
+                    start = max(start , last1_dt)
 
-            end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to())).as_int()
-            date_intervals = dates_segements(start_dt , end_dt , self.FREQ , astype=int)
+            end = CALENDAR.td(min(end , CALENDAR.update_to())).as_int()
+            date_intervals = dates_segements(start , end , self.FREQ , astype=int)
         if not date_intervals: 
             return 
 
@@ -465,24 +465,24 @@ class SellsideSQLDownloader:
         conn = connection.connect()
         return pd.read_sql_query(self.sqlline_start_dt() , conn)
     
-    def query_factor_values(self , start_dt = 20230101 , end_dt = 20230131 , connection : Connection | None = None , retry = 1):
+    def query_factor_values(self , start = 20230101 , end = 20230131 , connection : Connection | None = None , retry = 1):
         if connection is None:
             connection = self.get_connection()
         conn = connection.connect()
         if self.date_fmt is not None:
-            if start_dt: 
-                start_dt = CALENDAR.reformat(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
-            if end_dt:   
-                end_dt   = CALENDAR.reformat(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            if start: 
+                start = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            if end:   
+                end   = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
         df_input = None
         i = 0
         while i <= retry:
             try:
                 if self.sub_factors is None:
-                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_dt , end_dt) , conn)
+                    df_input = pd.read_sql_query(self.sqlline_factor_values(start , end) , conn)
                 else:
-                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_dt , end_dt , sub_factor) , conn) for sub_factor in self.sub_factors}
+                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start , end , sub_factor) , conn) for sub_factor in self.sub_factors}
             except exc.ResourceClosedError:
                 Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
                 conn = connection.connect(reconnect = True)
@@ -584,8 +584,8 @@ class SellsideSQLDownloader:
             factor.download('since' , trace = trace , connection = connection)
 
     @classmethod
-    def update_dates(cls , start_dt , end_dt , keys = None):
-        dates = CALENDAR.range(start_dt , end_dt , 'td')
+    def update_dates(cls , start , end , keys = None):
+        dates = CALENDAR.range(start , end , 'td')
         if len(dates) == 0: 
             return NotImplemented
 
@@ -611,10 +611,10 @@ class SellsideSQLDownloader:
 if __name__ == '__main__':
     from src.data.download.sellside.from_sql import SellsideSQLDownloader
 
-    start_dt = 20100901 
-    end_dt   = 20100915
-    dates = CALENDAR.range(start_dt , end_dt , 'td')
+    start = 20100901 
+    end   = 20100915
+    dates = CALENDAR.range(start , end , 'td')
 
     factors_set = SellsideSQLDownloader.factors_and_conns('dongfang.hfq_chars')
     factor , connection = factors_set[0]
-    df = factor.query_factor_values(start_dt , end_dt , connection)
+    df = factor.query_factor_values(start , end , connection)

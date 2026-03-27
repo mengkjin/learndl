@@ -91,7 +91,7 @@ class BaseFactorAnalyticTest(ABC):
 
     def __init__(
         self , test_path : Path | str | None = None , 
-        resume : bool = False, save_resumable : bool = False , start_dt : int = -1 , end_dt : int = 99991231 , 
+        resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
         which : str | list[str] | Literal['all'] = 'all' , **kwargs
     ):
         candidates = {task.task_name():task for task in self.TASK_LIST}
@@ -100,8 +100,8 @@ class BaseFactorAnalyticTest(ABC):
         self.test_path = test_path
         self.resume = resume
         self.save_resumable = save_resumable
-        self.start_dt = start_dt
-        self.end_dt = end_dt
+        self.start = start
+        self.end = end
         if which == 'all':
             self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:
@@ -116,8 +116,8 @@ class BaseFactorAnalyticTest(ABC):
 
     @classmethod
     def create(cls , test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
-               start_dt : int = -1 , end_dt : int = 99991231 , which = 'all' , **kwargs):
-        testor = cls(test_path , resume , save_resumable , start_dt , end_dt , which , **kwargs)
+               start : int = -1 , end : int = 99991231 , which = 'all' , **kwargs):
+        testor = cls(test_path , resume , save_resumable , start , end , which , **kwargs)
         return testor
 
     def proceed(self , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,

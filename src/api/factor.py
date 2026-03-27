@@ -15,23 +15,23 @@ __all__ = [
     'StockFactor' , 'DATAVENDOR'
 ]
 
-def get_random_factor(start_dt = 20240101 , end_dt = 20240331 , step = 5 , default_random_n = 2):
-    return StockFactor(DATAVENDOR.random_factor(start_dt , end_dt , step , default_random_n).to_dataframe())
+def get_random_factor(start = 20240101 , end = 20240331 , step = 5 , default_random_n = 2):
+    return StockFactor(DATAVENDOR.random_factor(start , end , step , default_random_n).to_dataframe())
 
 def get_real_factor(names = None ,
                     factor_type : Literal['factor' , 'pred'] = 'factor' , 
-                    start_dt = 20240101 , end_dt = 20240331 , step = 5):
+                    start = 20240101 , end = 20240331 , step = 5):
     assert names and names != 'random' , 'Names are required and not random for real factor!'
-    return StockFactor(DATAVENDOR.real_factor(factor_type , names , start_dt , end_dt , step).to_dataframe())
+    return StockFactor(DATAVENDOR.real_factor(factor_type , names , start , end , step).to_dataframe())
 
 def get_factor(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
-               start_dt = 20240101 , end_dt = 20240331 , step = 5):
+               start = 20240101 , end = 20240331 , step = 5):
     if not names or names == 'random':
         Logger.stdout(f'Getting random factor values...')
-        return get_random_factor(start_dt , end_dt , step)
+        return get_random_factor(start , end , step)
     else:
         Logger.stdout(f'Getting factor values for {names}...')
-        return get_real_factor(names , factor_type , start_dt , end_dt , step)
+        return get_real_factor(names , factor_type , start , end , step)
 
 class FactorAPI:
     """
@@ -111,34 +111,34 @@ class FactorAPI:
         def FactorPerf(names = None ,
                        factor_type : Literal['factor' , 'pred'] = 'factor' , 
                        benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-                       start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
+                       start = 20240101 , end = 20240331 , step = 5 ,
                        write_down = True , display_figs = False , indent : int = 0 , vb_level : Any = 1 , 
                        **kwargs):
             with Logger.Paragraph('test factor performance' , 3):
-                factor = get_factor(names , factor_type , start_dt , end_dt , step)
+                factor = get_factor(names , factor_type , start , end , step)
                 ret = FactorTestAPI.FactorPerf(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
         
         @staticmethod
         def FmpOptim(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
                      benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-                     start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
+                     start = 20240101 , end = 20240331 , step = 5 ,
                      write_down = True , display_figs = False , indent : int = 0 , vb_level : Any = 1 , 
                      prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
                      **kwargs):
             with Logger.Paragraph('test optimized fmp' , 3):
-                factor = get_factor(names , factor_type , start_dt , end_dt , step)
+                factor = get_factor(names , factor_type , start , end , step)
                 ret = FactorTestAPI.FmpOptim(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , prob_type = prob_type ,**kwargs)
             return ret
         
         @staticmethod
         def FmpTop(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
                    benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-                   start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
+                   start = 20240101 , end = 20240331 , step = 5 ,
                    write_down = True , display_figs = False , indent : int = 0 , vb_level : Any = 1 , 
                    **kwargs):
             with Logger.Paragraph('test top fmp' , 3):
-                factor = get_factor(names , factor_type , start_dt , end_dt , step)
+                factor = get_factor(names , factor_type , start , end , step)
                 ret = FactorTestAPI.FmpTop(factor , benchmark , indent = indent , vb_level = vb_level , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
 

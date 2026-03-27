@@ -152,12 +152,12 @@ class JSDataUpdater():
                 Logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
         return result
     
-    def fetch_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
+    def fetch_by_date(self , db_src , start = None , end = None , force = False):
         params = self.get_db_params(db_src)
         if not params: 
             return
         result = None # {}
-        update_dates = [par.get_update_dates(start_dt=start_dt,end_dt=end_dt,force=force) for par in params]
+        update_dates = [par.get_update_dates(start=start,end=end,force=force) for par in params]
         full_dates = reduce(np.union1d, update_dates)
         update_cond  = np.stack([np.isin(full_dates , dts) for dts in update_dates] , -1)
         for i , date in enumerate(full_dates):
@@ -174,7 +174,7 @@ class JSDataUpdater():
                     Logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
         return result
 
-    def fetch_all(self ,start_dt = None , end_dt = None , force = False):
+    def fetch_all(self ,start = None , end = None , force = False):
         # selected DB is totally refreshed , so delete first
         if not MACHINE.belong_to_jinmeng: 
             return
@@ -183,7 +183,7 @@ class JSDataUpdater():
             if DB.DBPath.ByName(db_src):
                 self.fetch_by_name(db_src)
             elif DB.DBPath.ByDate(db_src):
-                self.fetch_by_date(db_src , start_dt , end_dt , force = force)
+                self.fetch_by_date(db_src , start , end , force = force)
             else:
                 raise Exception(db_src)
 

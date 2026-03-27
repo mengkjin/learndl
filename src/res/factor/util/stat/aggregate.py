@@ -75,8 +75,8 @@ def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end : int =
     period_names = {'d' : 'Last Day' , 'w' : 'Last Week' , 'm' : 'Last Month' , 'q' : 'Last Qtr' , 'y' : 'Last Year'}
     datas = []
     for period , name in period_names.items():
-        start_dt , end_dt = CALENDAR.cd_start_end(end , 1 , period) # noqa
-        datas.append((name , _period_ret(ret.query('date <= @end_dt and date >= @start_dt')['ret'])))
+        start , end = CALENDAR.cd_start_end(end , 1 , period) # noqa
+        datas.append((name , _period_ret(ret.query('date <= @end and date >= @start')['ret'])))
     
     df = pd.DataFrame(datas , columns = ['period' , 'ret'])
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')

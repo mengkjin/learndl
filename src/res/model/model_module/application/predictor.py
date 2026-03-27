@@ -43,11 +43,11 @@ class ModelPredictor:
             self.predict_dates([date])
         return self.df.query('date == @date')
     
-    def update_preds(self , update = True , overwrite = False , start_dt = None , end_dt = None):
+    def update_preds(self , update = True , overwrite = False , start = None , end = None):
         '''get update dates and predict these dates'''
         assert update != overwrite , 'update and overwrite must be different here'
         
-        dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
+        dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start , end)
         with Proj.silence:
             self.predict_dates(dates)
         self.save_preds()
@@ -152,17 +152,17 @@ class ModelPredictor:
         return cls(model , use_data)
     
     @classmethod
-    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : Any = 1):
+    def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
-        if start_dt is not None or end_dt is not None:
-            Logger.stdout(f'Update from {start_dt} to {end_dt}' , indent = indent + 1 , vb_level = vb_level)
+        if start is not None or end is not None:
+            Logger.stdout(f'Update from {start} to {end}' , indent = indent + 1 , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
             md = cls(model)
-            md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt)
+            md.update_preds(update = True , overwrite = False , start = start , end = end)
             if md._current_update_dates:
                 Logger.success(f'Update model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1 , vb_level = vb_level)
             else:
@@ -175,17 +175,17 @@ class ModelPredictor:
         return md
 
     @classmethod
-    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , indent : int = 0 , vb_level : Any = 1):
+    def recalculate(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         """Recalculate all model predictions"""
         Logger.note(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
-        if start_dt is not None or end_dt is not None:
-            Logger.stdout(f'Recalculate from {start_dt} to {end_dt}' , indent = indent + 1 , vb_level = vb_level)
+        if start is not None or end is not None:
+            Logger.stdout(f'Recalculate from {start} to {end}' , indent = indent + 1 , vb_level = vb_level)
         models = PredictionModel.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
             md = cls(model)
-            md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt)
+            md.update_preds(update = False , overwrite = True , start = start , end = end)
             if md._current_update_dates:
                 Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:

@@ -28,7 +28,7 @@ from src.api import ModelAPI
 
 @ScriptTool('recalc_preds')
 def main(start : int | None = None , end : int | None = None , **kwargs):
-    ModelAPI.recalculate_preds(start_dt = start , end_dt = end)
+    ModelAPI.recalculate_preds(start = start , end = end)
     
 if __name__ == '__main__':
     main()

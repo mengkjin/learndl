@@ -365,8 +365,8 @@ class RollingFetcher(TushareFetcher):
         assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
         updated_dates = []
         for i in range(len(dates) - 1):
-            start_dt , end_dt = CALENDAR.cd(dates[i] , 1) , dates[i+1]
-            df = self.get_data(start_dt , end_dt)
+            start , end = CALENDAR.cd(dates[i] , 1) , dates[i+1]
+            df = self.get_data(start , end)
             if df.empty: 
                 continue
             assert self.ROLLING_DATE_COL in df.columns , f'{self.ROLLING_DATE_COL} not in {df.columns}'

@@ -262,8 +262,8 @@ class PortfolioGroupBuilder:
         trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
         resume : bool = False ,
         resume_path : Path | str | None = None ,
-        start_dt : int = -1 ,
-        end_dt : int = 99991231 ,
+        start : int = -1 ,
+        end : int = 99991231 ,
         caller = None ,
         indent : int = 0 , 
         vb_level : Any = 1 ,
@@ -275,7 +275,7 @@ class PortfolioGroupBuilder:
         assert alpha_models , f'alpha_models must has elements!'
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
         self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([] , dtype=int))
-        self.relevant_dates = self.relevant_dates[(self.relevant_dates >= start_dt) & (self.relevant_dates <= end_dt)]
+        self.relevant_dates = self.relevant_dates[(self.relevant_dates >= start) & (self.relevant_dates <= end)]
         self.benchmarks = Benchmark.get_benchmarks(benchmarks)
 
         assert add_lag >= 0 , add_lag
@@ -296,8 +296,8 @@ class PortfolioGroupBuilder:
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None and resume else None
         self.caller = caller
-        self.start_dt = start_dt
-        self.end_dt = end_dt
+        self.start = start
+        self.end = end
 
         self.builders : list[PortfolioBuilder] = []
         self.accounted = False
@@ -341,7 +341,7 @@ class PortfolioGroupBuilder:
             return
         with Logger.Timer(f'{self.class_name}.resume' , indent = self.indent , vb_level = self.vb_level):
             for builder in self.builders:
-                builder.load_portfolio(start = self.start_dt , end = self.end_dt)
+                builder.load_portfolio(start = self.start , end = self.end)
         return self
 
     def save_portfolios(self):
@@ -410,7 +410,7 @@ class PortfolioGroupBuilder:
         with Logger.Timer(f'{self.class_name} accounting' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 1):
             for builder in self.builders:
                 with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1 , enter_vb_level = self.vb_level + 2):
-                    builder.accounting(self.start_dt , self.end_dt , **self.acc_kwargs)
+                    builder.accounting(self.start , self.end , **self.acc_kwargs)
         self.accounted = True
         return self
     

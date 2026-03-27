@@ -6,11 +6,11 @@ from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetch
 from src.proj import DB , CALENDAR , PATH
 from typing import Any
 
-def index_weight_get_data(instance : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
+def index_weight_get_data(instance : RollingFetcher , index_code , start , end , limit = 4000):
     """get index weight data by iterate fetch"""
-    assert start_dt is not None and end_dt is not None , 'start_dt and end_dt must be provided'
+    assert start is not None and end is not None , 'start and end must be provided'
     df = instance.iterate_fetch(instance.pro.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
-                            start_date = str(start_dt) , end_date = str(end_dt))
+                            start_date = str(start) , end_date = str(end))
     if df.empty: 
         return df
     df = ts_code_to_secid(df , 'con_code').rename(columns={'trade_date':instance.ROLLING_DATE_COL})
@@ -83,7 +83,7 @@ class IndexDaily(TimeSeriesFetcher):
         """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
         if not dates:
             return np.array([] , dtype = int)
-        end_dt = max(dates)
+        end = max(dates)
         updated_dates = []
         for index in self.TARGET_INDEX:
             path = DB.path(self.DB_SRC , index)
@@ -94,7 +94,7 @@ class IndexDaily(TimeSeriesFetcher):
                 if 'trade_date' in old_df.columns:
                     start = int(old_df['trade_date'].max()) + 1
                     old_df = _df
-            df = self.get_data(index , start , end_dt)
+            df = self.get_data(index , start , end)
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).astype({'trade_date':int}).sort_values('trade_date')
             DB.save(df , self.DB_SRC , index , indent = 1 , vb_level = 3)
             updated_dates.extend(df['trade_date'].unique())
@@ -187,8 +187,8 @@ class CSI300Weight(RollingFetcher):
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
 
-    def get_data(self , start_dt , end_dt):
-        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt)
+    def get_data(self , start , end):
+        return index_weight_get_data(self , self.INDEX_CODE , start , end)
         
 class CSI500Weight(RollingFetcher):
     """CSI 500 Weight"""
@@ -201,8 +201,8 @@ class CSI500Weight(RollingFetcher):
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
 
-    def get_data(self , start_dt , end_dt):
-        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt)
+    def get_data(self , start , end):
+        return index_weight_get_data(self , self.INDEX_CODE , start , end)
     
 class CSI800Weight(RollingFetcher):
     """CSI 800 Weight"""
@@ -214,8 +214,8 @@ class CSI800Weight(RollingFetcher):
     ROLLING_BACK_DAYS = 10
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
-    def get_data(self , start_dt , end_dt):
-        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt)
+    def get_data(self , start , end):
+        return index_weight_get_data(self , self.INDEX_CODE , start , end)
 
 class CSI1000Weight(RollingFetcher):
     """CSI 1000 Weight"""
@@ -227,8 +227,8 @@ class CSI1000Weight(RollingFetcher):
     ROLLING_BACK_DAYS = 10
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
-    def get_data(self , start_dt , end_dt):
-        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt , limit = 4000)
+    def get_data(self , start , end):
+        return index_weight_get_data(self , self.INDEX_CODE , start , end , limit = 4000)
     
 class CSI2000Weight(RollingFetcher):
     """CSI 2000 Weight"""
@@ -240,5 +240,5 @@ class CSI2000Weight(RollingFetcher):
     ROLLING_BACK_DAYS = 10
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
-    def get_data(self , start_dt , end_dt):
-        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt , limit = 4000)
+    def get_data(self , start , end):
+        return index_weight_get_data(self , self.INDEX_CODE , start , end , limit = 4000)

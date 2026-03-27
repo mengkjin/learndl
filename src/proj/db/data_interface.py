@@ -61,14 +61,14 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
+def dir_dates(directory : Path , start = None , end = None , year = None):
     """get dates from directory"""
     paths = directory.rglob('*')
     dates = paths_to_dates(paths)
-    if end_dt   is not None: 
-        dates = dates[dates <= end_dt]
-    if start_dt is not None: 
-        dates = dates[dates >= start_dt]
+    if end   is not None: 
+        dates = dates[dates <= end]
+    if start is not None: 
+        dates = dates[dates >= start]
     if year is not None:
         dates = dates[dates // 10000 == year]
     return dates
@@ -299,14 +299,14 @@ class DBPath:
         directory = self.parent
         return [int(y.stem) for y in directory.iterdir() if y.is_dir() and any(y.iterdir())] if directory.exists() else []
 
-    def dates(self , start_dt = None , end_dt = None , year = None , * , use_alt = False) -> np.ndarray:
+    def dates(self , start = None , end = None , year = None , * , use_alt = False) -> np.ndarray:
         """get dates from any database data"""
         if use_alt:
             candidates = [self] + self.alternatives()
-            dates = np.unique(np.concatenate([db_path.dates(start_dt , end_dt , year , use_alt = False) for db_path in candidates]))
+            dates = np.unique(np.concatenate([db_path.dates(start , end , year , use_alt = False) for db_path in candidates]))
         else:
             directory = self.parent.joinpath(str(year)) if year else self.parent
-            dates = dir_dates(directory , start_dt , end_dt)
+            dates = dir_dates(directory , start , end)
         return dates
     
     def min_date(self , * , use_alt = False):
@@ -345,7 +345,7 @@ class DBPath:
             return None
         year = int(date) // 10000
         for minus_year in range(within_years + 1):
-            dates = self.dates(end_dt = date , year = year - minus_year)
+            dates = self.dates(end = date , year = year - minus_year)
             if len(dates) > 0:
                 return max(dates)
         return None
@@ -693,7 +693,7 @@ def load(db_src , db_key , date = None , *,
     df = DFProcessor.load_process(df , date , date_colname , df_syntax = f'{db_path}' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
-def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
+def loads(db_src , db_key , dates = None , start = None , end = None , *,
           date_colname = 'date' , use_alt = False , 
           parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
           fill_datavendor = False ,
@@ -704,8 +704,8 @@ def loads(db_src , db_key , dates = None , start_dt = None , end_dt = None , *,
     else:
         db_path = DBPath(db_src , db_key)
         if dates is None:
-            assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided if dates is not provided'
-            dates = db_path.dates(start_dt , end_dt , use_alt = use_alt)
+            assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
+            dates = db_path.dates(start , end , use_alt = use_alt)
         paths : dict[int , Path] = {int(date):db_path.path(date , use_alt = use_alt) for date in dates}
         df = load_dfs(paths , key_column = date_colname , parallel = parallel)
         df = DFProcessor.load_process(df , df_syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
@@ -731,7 +731,7 @@ def path(db_src , db_key , date = None , * , use_alt = False) -> Path:
     """
     return DBPath(db_src , db_key).path(date , use_alt = use_alt)
 
-def dates(db_src , db_key , * , start_dt = None , end_dt = None , year = None , use_alt = False):
+def dates(db_src , db_key , * , start = None , end = None , year = None , use_alt = False):
     """get dates from any database data"""
-    return DBPath(db_src , db_key).dates(start_dt , end_dt , year , use_alt = use_alt)
+    return DBPath(db_src , db_key).dates(start , end , year , use_alt = use_alt)
     

@@ -27,9 +27,9 @@ class RiskModelAccess(DateDataAccess):
     def get_exp(self , date , field = None):
         return self.get(date , 'exp' , field)
     
-    def get_exret(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
+    def get_exret(self , start : int | TradeDate , end : int | TradeDate , 
                   mask = True , pivot = True , drop_old = False):
-        return self.get_specific_data(start_dt , end_dt , 'res' , 'resid' , prev = False , 
+        return self.get_specific_data(start , end , 'res' , 'resid' , prev = False , 
                                       mask = mask , pivot = pivot , drop_old = drop_old)
 
 RISK = RiskModelAccess()

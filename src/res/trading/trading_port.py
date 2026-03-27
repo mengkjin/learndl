@@ -120,7 +120,7 @@ class TradingPort:
             return 'tracking'
     
     def stored_dates(self , start : int | None = None , end : int | None = None) -> np.ndarray:
-        dates = DB.dir_dates(self.portfolio_dir , start_dt = start , end_dt = end)
+        dates = DB.dir_dates(self.portfolio_dir , start = start , end = end)
         return dates
     
     def is_first_date(self , date : int) -> bool:

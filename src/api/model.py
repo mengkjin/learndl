@@ -60,11 +60,11 @@ class ModelAPI:
         wrap_update(cls.Predictor.update , 'update predictors')
 
     @classmethod
-    def recalculate_preds(cls , start_dt = None , end_dt = None):
+    def recalculate_preds(cls , start = None , end = None):
         '''
         Recalculate factors for prediction models for both laptop and server:
         '''
-        wrap_update(cls.Predictor.recalculate , 'recalculate all predictors' , start_dt = start_dt , end_dt = end_dt)
+        wrap_update(cls.Predictor.recalculate , 'recalculate all predictors' , start = start , end = end)
     
     @classmethod
     def test_models(cls , module = 'tra_lstm' , data_types = 'day'):

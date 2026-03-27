@@ -76,13 +76,13 @@ class DataVendor:
                     self.TRADE.collections[data_type].add_long_frame(df.set_index(self.TRADE.DATE_KEY))
         
     @classmethod
-    def td_within(cls , start_dt : int | None = None , end_dt : int | None = None , step : int = 1 , updated = False , extend = 0):
+    def td_within(cls , start : int | None = None , end : int | None = None , step : int = 1 , updated = False , extend = 0):
         if extend > 0:
-            if end_dt is not None:
-                end_dt = cls.cd(end_dt , extend)
-            if start_dt is not None:
-                start_dt = cls.cd(start_dt , -extend)
-        dates = CALENDAR.range(start_dt , end_dt , 'td' , step = step , updated = updated)
+            if end is not None:
+                end = cls.cd(end , extend)
+            if start is not None:
+                start = cls.cd(start , -extend)
+        dates = CALENDAR.range(start , end , 'td' , step = step , updated = updated)
         return dates
     
     @staticmethod
@@ -96,29 +96,29 @@ class DataVendor:
 
     @classmethod
     def real_factor(cls , factor_type : Literal['pred' , 'factor'] , names : str | list[str] | np.ndarray , 
-                    start_dt = 20240101 , end_dt = 20240531 , step = 5):
+                    start = 20240101 , end = 20240531 , step = 5):
         if isinstance(names , str): 
             names = [names]
-        dates = DATAVENDOR.td_within(start_dt , end_dt , step)
+        dates = DATAVENDOR.td_within(start , end , step)
 
         values = [DB.loads(factor_type , name , dates , date_colname = 'date') for name in names]
         values = [v.set_index(['secid','date']) for v in values if not v.empty]
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
         else:
-            Logger.alert1(f'None of {factor_type} {names} found in {start_dt} ~ {end_dt}')
+            Logger.alert1(f'None of {factor_type} {names} found in {start} ~ {end}')
             return DataBlock()
 
     @classmethod
-    def stock_factor(cls , factor_names : str | list[str] | np.ndarray , start_dt = 20240101 , end_dt = 20240531 , step = 5):
-        return cls.real_factor('factor' , factor_names , start_dt , end_dt , step)
+    def stock_factor(cls , factor_names : str | list[str] | np.ndarray , start = 20240101 , end = 20240531 , step = 5):
+        return cls.real_factor('factor' , factor_names , start , end , step)
         
     @classmethod
-    def model_preds(cls , model_names : str | list[str] | np.ndarray , start_dt = 20240101 , end_dt = 20240531 , step = 5):
-        return cls.real_factor('pred' , model_names , start_dt , end_dt , step)
+    def model_preds(cls , model_names : str | list[str] | np.ndarray , start = 20240101 , end = 20240531 , step = 5):
+        return cls.real_factor('pred' , model_names , start , end , step)
             
-    def random_factor(self , start_dt = 20240101 , end_dt = 20240531 , step = 5 , nfactor = 2):
-        date  = self.td_within(start_dt , end_dt , step)
+    def random_factor(self , start = 20240101 , end = 20240531 , step = 5 , nfactor = 2):
+        date  = self.td_within(start , end , step)
         secid = self.secid()
         return DataBlock(np.random.randn(len(secid),len(date),1,nfactor),
                          secid,date,[f'factor{i+1}' for i in range(nfactor)])
@@ -153,16 +153,16 @@ class DataVendor:
         Logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
         setattr(self , f'_block_{data_key}' , block0)
 
-    def update_return_block(self , start_dt : int , end_dt : int):
-        td_within = self.td_within(start_dt , end_dt , updated = True)
+    def update_return_block(self , start : int , end : int):
+        td_within = self.td_within(start , end , updated = True)
         daily_ret = getattr(self , f'_block_daily_ret' , DataBlock())
         if daily_ret.date is None or not np.isin(td_within , daily_ret.date).all():
-            pre_start_dt = CALENDAR.cd(start_dt , -20)
-            extend_td_within = self.td_within(pre_start_dt , end_dt)
+            pre_start_dt = CALENDAR.cd(start , -20)
+            extend_td_within = self.td_within(pre_start_dt , end)
             blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).ffill()
             rtn = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan)
             blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
-            blk = blk.align_date(blk.date_within(start_dt , end_dt) , inplace = True)
+            blk = blk.align_date(blk.date_within(start , end) , inplace = True)
             setattr(self , f'_block_daily_ret' , blk)
 
     def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
@@ -175,9 +175,9 @@ class DataVendor:
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend = extend)
         return getattr(self , f'_block_risk_exp' , DataBlock())
 
-    def get_returns_block(self , start_dt : int , end_dt : int):
+    def get_returns_block(self , start : int , end : int):
         with Proj.silence:
-            self.update_return_block(start_dt , end_dt)
+            self.update_return_block(start , end)
         return getattr(self , f'_block_daily_ret' , DataBlock())
     
     def day_quote(self , date : int | Any , price : Literal['close' , 'vwap' , 'open'] = 'close'):

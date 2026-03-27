@@ -337,13 +337,13 @@ class Stock4D:
             raise
         return block
 
-    def to_dataframe(self , drop_inday = True , start_dt : int | None = None , end_dt : int | None = None):
-        if start_dt is not None or end_dt is not None:
+    def to_dataframe(self , drop_inday = True , start : int | None = None , end : int | None = None):
+        if start is not None or end is not None:
             date_slice = np.repeat(True,len(self.date))
-            if start_dt is not None: 
-                date_slice[self.date < start_dt] = False
-            if end_dt   is not None: 
-                date_slice[self.date > end_dt]   = False
+            if start is not None: 
+                date_slice[self.date < start] = False
+            if end   is not None: 
+                date_slice[self.date > end]   = False
             values = self.values[:,date_slice]
             date = self.date[date_slice]
         else:

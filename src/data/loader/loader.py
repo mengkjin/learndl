@@ -12,7 +12,7 @@ class BlockLoader:
     Loader for block data of db_src , db_key
     example:
         loader = BlockLoader(db_src = 'trade_ts' , db_key = 'day')
-        block = loader.load(start_dt = 20250101 , end_dt = 20250331)
+        block = loader.load(start = 20250101 , end = 20250331)
     """
     db_src  : str
     db_key  : str | list | None = None
@@ -28,14 +28,14 @@ class BlockLoader:
     def src_path(self):
         return DB.DBPath.Parent(self.db_src)
 
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
+    def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
         """Load block data , alias for load"""
         sub_blocks = []
         vb_level = Proj.vb(vb_level)
         with Logger.Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level , enter_vb_level=vb_level+1):
             for db_key in self.iter_keys():
                 with Logger.Timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , indent = indent +1 , vb_level = vb_level + 1):
-                    blk = DataBlock.load_raw(self.db_src , db_key , start_dt , end_dt , feature = self.feature , use_alt = self.use_alt , vb_level = vb_level + 2)
+                    blk = DataBlock.load_raw(self.db_src , db_key , start , end , feature = self.feature , use_alt = self.use_alt , vb_level = vb_level + 2)
                     sub_blocks.append(blk)
         with Logger.Timer(f'{self.db_src} blocks merging ({len(sub_blocks)})' , silent = len(sub_blocks) <= 1 , indent = indent , vb_level = vb_level): 
             block = DataBlock.merge(sub_blocks , inplace = True)
@@ -54,7 +54,7 @@ class FrameLoader:
     Loader for frame data of db_src , db_key
     example:
         loader = FrameLoader(db_src = 'trade_ts' , db_key = 'day')
-        df = loader.load(start_dt = 20250101 , end_dt = 20250331)
+        df = loader.load(start = 20250101 , end = 20250331)
     """
     db_src  : str
     db_key  : str
@@ -65,9 +65,9 @@ class FrameLoader:
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , indent = 1 , vb_level : Any = 1) -> pd.DataFrame:
+    def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> pd.DataFrame:
         """Load frame data from database"""
-        df = DB.loads(self.db_src , self.db_key , start_dt = start_dt , end_dt = end_dt , use_alt = self.use_alt , indent = indent , vb_level = vb_level)
+        df = DB.loads(self.db_src , self.db_key , start = start , end = end , use_alt = self.use_alt , indent = indent , vb_level = vb_level)
         return df
     
 class FactorLoader(BlockLoader):
@@ -75,7 +75,7 @@ class FactorLoader(BlockLoader):
     Loader for factor data given factor names
     example:
         loader = FactorLoader(names = ['df_scores_v0'])
-        df = loader.load(start_dt = 20250101 , end_dt = 20250331)
+        df = loader.load(start = 20250101 , end = 20250331)
     """
     def __init__(
         self , 
@@ -115,7 +115,7 @@ class FactorCategory1Loader(BlockLoader):
     Loader for factor data given category1
     example:
         loader = FactorCategory1Loader(category1 = 'quality')
-        df = loader.load(start_dt = 20250101 , end_dt = 20250331)
+        df = loader.load(start = 20250101 , end = 20250331)
     """
     def __init__(
         self , 

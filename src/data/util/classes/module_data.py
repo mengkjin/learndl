@@ -33,15 +33,15 @@ class ModuleData:
     def copy(self):
         return deepcopy(self)
 
-    def filter_dates(self , start_dt : int | None = None , end_dt : int | None = None , inplace = False):
-        if start_dt is None and end_dt is None:
+    def filter_dates(self , start : int | None = None , end : int | None = None , inplace = False):
+        if start is None and end is None:
             return self
         if not inplace:
             self = self.copy()
-        if start_dt is not None:
-            self.date = self.date[self.date >= start_dt]
-        if end_dt is not None:
-            self.date = self.date[self.date <= end_dt]
+        if start is not None:
+            self.date = self.date[self.date >= start]
+        if end is not None:
+            self.date = self.date[self.date <= end]
         for x_key in self.x:
             self.x[x_key] = self.x[x_key].align_date(self.date , inplace = True)
         self.y = self.y.align_date(self.date , inplace = True)
@@ -139,16 +139,16 @@ class ModuleData:
         data.y.align_feature(y_labels , inplace = True)
         return data
 
-    def load_factor(self , factor_names : list[str] | None , start_dt : int | None = None , end_dt : int | None = None , vb_level : Any = 2):
+    def load_factor(self , factor_names : list[str] | None , start : int | None = None , end : int | None = None , vb_level : Any = 2):
         '''load factor data'''
         if not factor_names:
             return self
         factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
-        start_dt = max(start_dt or self.date[0] , self.date[0])
-        end_dt = min(end_dt or self.date[-1] , self.date[-1])
-        with Logger.Timer(f'Load {factor_title} ({start_dt} - {end_dt})' , vb_level = vb_level):
+        start = max(start or self.date[0] , self.date[0])
+        end = min(end or self.date[-1] , self.date[-1])
+        with Logger.Timer(f'Load {factor_title} ({start} - {end})' , vb_level = vb_level):
             from src.data.loader import FactorLoader
-            self.x['factor'] = FactorLoader(factor_names).load(start_dt , end_dt , vb_level = 'never').align_secid_date(self.secid , self.date , inplace = True)
+            self.x['factor'] = FactorLoader(factor_names).load(start , end , vb_level = 'never').align_secid_date(self.secid , self.date , inplace = True)
         return self
 
     @staticmethod

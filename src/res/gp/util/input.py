@@ -46,8 +46,8 @@ class InputElement:
     def raw_input(self):
         return InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
 
-    def get_datablock(self , start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
-        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start_dt , end_dt , vb_level = 'never')
+    def get_datablock(self , start : int = 20100101 , end : int = 20241231) -> DataBlock:
+        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start , end , vb_level = 'never')
         return self.adjust_datablock(block)
 
     def adjust_datablock(self , block : DataBlock , cp_block : DataBlock | None = None) -> DataBlock:
@@ -85,29 +85,29 @@ INPUT_MAPPING = {
 }
 INPUT_MAPPING.update({k.upper():v.fac_input() for k,v in INPUT_MAPPING.items()})
 
-def get_features_block(src : str , key : str , features : list[str] | None , start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
+def get_features_block(src : str , key : str , features : list[str] | None , start : int = 20100101 , end : int = 20241231) -> DataBlock:
     '''
     获取特征
     input:
         features:    features
-        start_dt:    start date
-        end_dt:      end date
+        start:       start date
+        end:      end date
     output:
         block:       DataBlock        
     '''
-    secid = DATAVENDOR.secid(end_dt)
-    dates = CALENDAR.range(start_dt , end_dt , 'td')
-    block = BlockLoader(src , key , feature = features).load(start_dt , end_dt , vb_level = 'never').\
+    secid = DATAVENDOR.secid(end)
+    dates = CALENDAR.range(start , end , 'td')
+    block = BlockLoader(src , key , feature = features).load(start , end , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
     return block
 
-def load_inputs(inputs : list[str] , start_dt : int = 20100101 , end_dt : int = 20241231 , cp_block : DataBlock | None = None) -> DataBlock:
+def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 20241231 , cp_block : DataBlock | None = None) -> DataBlock:
     '''
     读取输入因子并转化成DataBlock,额外返回secid和date的ndarray
     input:
         filename:    filename gp data
-        start_dt:    start date
-        end_dt:      end date
+        start:       start date
+        end:      end date
         input_freq:  1 , 5 , ...
     output:
         block:       DataBlock        
@@ -118,13 +118,13 @@ def load_inputs(inputs : list[str] , start_dt : int = 20100101 , end_dt : int = 
     assert load_tuples , f'load_tuples is empty'
     
     if cp_block is None:
-        cp_block = get_cp_block(start_dt , end_dt)
+        cp_block = get_cp_block(start , end)
     blocks : list[DataBlock] = []
     
     for tup in load_tuples:
         sub_elements = [element for element in input_elements if element.load_tuple() == tup]
         load_features = list(set([element.feature for element in sub_elements]))
-        block = get_features_block(tup[0] , tup[1] , load_features , start_dt , end_dt)
+        block = get_features_block(tup[0] , tup[1] , load_features , start , end)
         raw_features = {element.feature : element for element in sub_elements if element.is_raw}
         if raw_features:
             raw_block = block.align_feature(list(raw_features.keys()) , inplace = False)
@@ -140,53 +140,53 @@ def load_inputs(inputs : list[str] , start_dt : int = 20100101 , end_dt : int = 
         block = DataBlock.merge(blocks , inplace = True).align_feature(inputs , inplace = True)
     return block
 
-def get_cp_block(start_dt : int = 20100101 , end_dt : int = 20241231) -> DataBlock:
+def get_cp_block(start : int = 20100101 , end : int = 20241231) -> DataBlock:
     '''
     获取收盘价
     input:
-        start_dt:    start date
-        end_dt:      end date
+        start:       start date
+        end:      end date
     output:
         cp_block:          close price tensor
     '''
-    return get_features_block('trade_ts' , 'day' , ['close'] , start_dt , end_dt)
+    return get_features_block('trade_ts' , 'day' , ['close'] , start , end)
 
-def get_return_block(start_dt : int = 20100101 , end_dt : int = 20241231 , nday : int = 10 , delay : int = 1) -> DataBlock:
+def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int = 10 , delay : int = 1) -> DataBlock:
     '''
     获取收益率
     input:
-        start_dt:    start date
-        end_dt:      end date
+        start:    start date
+        end:      end date
         extend:      extend
     output:
         return_block:      return tensor
     '''
     element = InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01)
-    secid = DATAVENDOR.secid(end_dt)
-    dates = CALENDAR.range(start_dt , end_dt , 'td')
-    new_end_dt = CALENDAR.td(end_dt , 20).td
-    block = element.get_datablock(start_dt , new_end_dt)
+    secid = DATAVENDOR.secid(end)
+    dates = CALENDAR.range(start , end , 'td')
+    new_end_dt = CALENDAR.td(end , 20).td
+    block = element.get_datablock(start , new_end_dt)
     block.values = T.ts_delay(T.ts_product(block.values + 1 , nday) - 1 , -nday-delay , no_alert = True)
     block = block.align_secid_date(secid , dates , inplace = True)
     return block
 
-def init_neutral_exp(start_dt : int = 20100101 , end_dt : int = 20241231 , * , device : torch.device | str | None = None) -> torch.Tensor:
+def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device : torch.device | str | None = None) -> torch.Tensor:
     '''
     获取中性化使用的行业因子和市值因子
     input:
-        start_dt:     start date
-        end_dt:       end date
+        start:        start date
+        end:       end date
     output:
         neutral_exp:  neutral_exp tensor
     '''
-    secid = DATAVENDOR.secid(end_dt)
-    dates = CALENDAR.range(start_dt , end_dt , 'td')
-    block = BlockLoader('models' , 'tushare_cne5_exp').load(start_dt , end_dt , vb_level = 'never').\
+    secid = DATAVENDOR.secid(end)
+    dates = CALENDAR.range(start , end , 'td')
+    block = BlockLoader('models' , 'tushare_cne5_exp').load(start , end , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
     values = block.loc(feature = Proj.Conf.Factor.RISK.indus + ['size']).squeeze().to(device)
     return values
 
-def init_labels_raw(start_dt : int = 20100101 , end_dt : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
+def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
                     device : torch.device | str | None = None) -> torch.Tensor:
     '''
     生成原始预测标签,中性化后的10日收益
@@ -194,13 +194,13 @@ def init_labels_raw(start_dt : int = 20100101 , end_dt : int = 20241231 , * , ne
         neutral_exp:    neutral_exp , industry and size factors
         nday:           nday
         delay:          delay
-        start_dt:       start date
-        end_dt:         end date
+        start:          start date
+        end:         end date
     output:
         labels_raw:     
     '''
     
-    rtn = get_return_block(start_dt , end_dt , nday , delay).values.squeeze().to(device)
+    rtn = get_return_block(start , end , nday , delay).values.squeeze().to(device)
     if neutral_exp is not None:
         neutral_exp = neutral_exp.to(rtn)
     labels_raw = T.neutralize_2d(rtn , neutral_exp , method = 'torch' , inplace = True)  # 市值行业中性化
@@ -224,10 +224,10 @@ class gpInput:
         return f'{self.__class__.__name__}(inputs={len(self.inputs)}, tensors={len(self.tensors)}, records={len(self.records)})'
 
     @property
-    def start_dt(self) -> int:
+    def start(self) -> int:
         return self.param.insample_dates[0]
     @property
-    def end_dt(self) -> int:
+    def end(self) -> int:
         return self.param.outsample_dates[1]
 
     @property
@@ -344,13 +344,13 @@ class gpInput:
         Logger.stdout(f'Load from DB' , indent = 1 , vb_level = self.vb_level)
         nrowchar = 0
 
-        cp_block = get_cp_block(self.start_dt , self.end_dt)
+        cp_block = get_cp_block(self.start , self.end)
 
-        self.tensors['neutral_exp'] = init_neutral_exp(self.start_dt , self.end_dt).to(self.device)
+        self.tensors['neutral_exp'] = init_neutral_exp(self.start , self.end).to(self.device)
         self.tensors['universe']   = ~cp_block.values.squeeze().isnan().to(self.device)
-        self.tensors['labels_raw'] = init_labels_raw(self.start_dt , self.end_dt  , neutral_exp = self.neutral_exp).to(self.device)
+        self.tensors['labels_raw'] = init_labels_raw(self.start , self.end  , neutral_exp = self.neutral_exp).to(self.device)
         
-        input_block = load_inputs(self.argnames , self.start_dt , self.end_dt , cp_block)
+        input_block = load_inputs(self.argnames , self.start , self.end , cp_block)
         self.records['date'] = input_block.date
         self.records['secid'] = input_block.secid
 

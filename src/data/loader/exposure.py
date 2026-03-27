@@ -24,12 +24,12 @@ class ExposureAccess(DateDataAccess):
         return self.get(date , 'daily_risk')
 
     def get_risks(
-        self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
+        self , start : int | TradeDate , end : int | TradeDate , 
         field : Literal['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
         'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'] | str | list , prev = False ,
         mask = False , pivot = False , **kwargs
     ) -> pd.DataFrame:
-        qte = self.get_specific_data(start_dt , end_dt , 'daily_risk' , field = field , prev = prev , 
+        qte = self.get_specific_data(start , end , 'daily_risk' , field = field , prev = prev , 
                                      mask = mask , pivot = False , drop_old = True)
         
         if pivot:
