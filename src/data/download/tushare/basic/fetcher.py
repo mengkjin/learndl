@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any , Literal , Type
 
 from src.proj import PATH , Logger , CALENDAR , DB , Dates
+from src.proj.util.error_handler import retry_call
 from .func import updatable , dates_to_update
 from .connect import TS_PARAMS
 
@@ -236,15 +237,18 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             dates = self.target_dates()
         Logger.success(f'{self.__class__.__name__} fetched for {Dates(updated_dates)}' , indent = self._stdout_indent)
 
-    def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = 200 , **kwargs) -> pd.DataFrame:
+    def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = -1 , **kwargs) -> pd.DataFrame:
         """iterate fetch from tushare"""
         dfs : list[pd.DataFrame] = []
         offset = 0
         while True:
-            df : pd.DataFrame | Any = fetch_func(**kwargs , offset = offset , limit = limit)
-            if not isinstance(df , pd.DataFrame): 
-                raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame')
+            df : pd.DataFrame | Any = retry_call(fetch_func , () , kwargs | {'offset' : offset , 'limit' : limit})
+            if isinstance(df , Exception):
+                raise df
+            elif not isinstance(df , pd.DataFrame): 
+                raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame, but got {df}')
             elif df.empty: 
+                # empty dataframe means no more data
                 break
             elif max_fetch_times > 0 and len(dfs) >= max_fetch_times: 
                 raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')

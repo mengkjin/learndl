@@ -393,7 +393,7 @@ class TrainerHookWrapper:
     @classmethod
     def wrap(cls , trainer : 'BaseTrainer'):
         key = id(trainer)
-        assert cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
+        assert not cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
         for hook in trainer.base_hooks():
             setattr(trainer , f'_raw_{hook}' , getattr(trainer , hook))
             setattr(trainer , hook , cls.wrap_single_hook(trainer , hook))
@@ -418,9 +418,9 @@ class BaseTrainer(ModelStreamLine):
 
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
-            new_cls = super().__new__(cls)
-            TrainerHookWrapper.wrap(new_cls)
-            cls._instance = new_cls
+            obj = super().__new__(cls)
+            TrainerHookWrapper.wrap(obj)
+            cls._instance = obj
         return cls._instance
     
     @final

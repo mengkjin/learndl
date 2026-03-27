@@ -1,7 +1,7 @@
 import httpx
 import time
 from curl_cffi.requests import exceptions
-from typing import Callable , Literal , TypeVar , Generic , Any
+from typing import Callable , Literal , TypeVar , Generic , Any , Type , Union , Tuple
 from src.proj.log import Logger
 
 T = TypeVar("T")
@@ -38,6 +38,11 @@ def retry_on_exceptions(func: Callable[..., T], error_handler: Callable[[Excepti
             return UnattainableException(f"Unattainable Exception: reached maximum retry attempts ({attempts}), giving up")
     return wrapper
 
+def exception_handler(e : Exception , exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception) -> str | Exception:
+    if isinstance(e, exceptions):
+        return f"{e!s}"
+    return e
+
 def http_handler(e: Exception) -> str | Exception:
     if isinstance(e, (httpx.HTTPStatusError , exceptions.HTTPError , httpx.HTTPError , exceptions.RequestException)):
         if isinstance(e, (httpx.HTTPStatusError , exceptions.HTTPError)) and e.response is not None and e.response.status_code in (429, 502, 503, 504):
@@ -48,6 +53,29 @@ def http_handler(e: Exception) -> str | Exception:
 
 def all_handler(e: Exception) -> str | Exception:
     return f"Unhandled exception [{get_exception_name(e)}]"
+
+def retry_call(
+    func: Callable, args: tuple = (), kwargs: dict | None = None,
+    attempts: int = 3,
+    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
+    base_delay: float = 1.5,
+) -> Any:
+    """
+    retry a function call with a given exceptions and delay
+    """
+    kwargs = kwargs or {}
+   
+    for i in range(attempts):
+        try:
+            return func(*args, **kwargs)
+        except exceptions as e:
+            if i == attempts - 1:
+                raise
+            delay = base_delay * (2**i)
+            Logger.skipping(f"Attempt {i + 1} / {attempts} failed: {e}. Retrying in {delay:.1f}s...")
+            time.sleep(delay)
+    else:
+        return UnattainableException(f"Unattainable Exception: reached maximum retry attempts ({attempts}), giving up")
 
 class ErrorHandler(Generic[T]):
     """
