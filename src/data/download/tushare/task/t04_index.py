@@ -10,7 +10,7 @@ def index_weight_get_data(instance : RollingFetcher , index_code , start , end ,
     """get index weight data by iterate fetch"""
     assert start is not None and end is not None , 'start and end must be provided'
     df = instance.iterate_fetch(instance.pro.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
-                            start_date = str(start) , end_date = str(end))
+                                start_date = str(start) , end_date = str(end))
     if df.empty: 
         return df
     df = ts_code_to_secid(df , 'con_code').rename(columns={'trade_date':instance.ROLLING_DATE_COL})

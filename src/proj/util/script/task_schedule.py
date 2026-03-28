@@ -9,9 +9,8 @@ from src.proj.log import Logger
 
 from ..shared_sync import SharedSync
 
-_share_folder = MACHINE.share_folder_path()
-if _share_folder is not None:
-    root_path = _share_folder.joinpath('task_schedule')
+if PATH.share_folder is not None:
+    root_path = PATH.share_folder.joinpath('task_schedule')
     root_path.mkdir(parents=True, exist_ok=True)
 else:
     root_path = Path()
@@ -133,7 +132,7 @@ class ScheduledTask:
 class TaskScheduler:
     machine_name = 'mengkjin-server'
     def __bool__(self):
-        return _share_folder is not None
+        return PATH.share_folder is not None
 
     @staticmethod
     def get_machine_tasks() -> dict[str , 'ScheduledTask']:

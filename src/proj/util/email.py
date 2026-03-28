@@ -12,7 +12,7 @@ from src.proj.proj import Proj
 from src.proj.log import Logger
 
 class EmailSetting:
-    EmailSettings = MACHINE.local_settings('email')
+    EmailSettings = MACHINE.secrets['accounts']['email']
 
     def __init__(self , name : str , server : Literal['netease'] = 'netease'):
         server_settings = self.EmailSettings.get(server , {})

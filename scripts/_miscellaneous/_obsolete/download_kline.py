@@ -5,11 +5,10 @@ from pathlib import Path
 
 from src.proj import MACHINE , Logger , DB
 
-aws_info = MACHINE.local_settings('aws')
-aws_access_key_id = aws_info['aws_access_key_id']
-aws_secret_access_key = aws_info['aws_secret_access_key']
+key_id = MACHINE.secrets['accounts']['aws']['access_key_id']
+access_key = MACHINE.secrets['accounts']['aws']['secret_access_key']
 
-session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name='cn-north-1')
+session = boto3.Session(aws_access_key_id=key_id, aws_secret_access_key=access_key, region_name='cn-north-1')
 s3 = session.resource('s3')
 bucket = s3.Bucket('datayes-data') # type: ignore
 download_path = Path('tmp_pydataloader')

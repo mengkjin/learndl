@@ -5,12 +5,12 @@ import pandas as pd
 from abc import abstractmethod , ABCMeta
 from importlib import import_module
 from pathlib import Path
-from typing import Any , Literal , Type
+from typing import Any , Literal , Type , Callable
 
 from src.proj import PATH , Logger , CALENDAR , DB , Dates
 from src.proj.util.error_handler import retry_call
 from .func import updatable , dates_to_update
-from .connect import TS_PARAMS
+from .connect import TS
 
 class TushareFetcherMeta(ABCMeta):
     """meta class of TushareFetcher , check if the subclass is valid and register all subclasses without abstract methods"""
@@ -39,6 +39,134 @@ class TushareFetcherMeta(ABCMeta):
             cls.registry[name] = new_cls
 
         return new_cls
+
+class TushareIterateFetcher:
+    base_path : Path = PATH.temp.joinpath('tushare_fetcher_breakpoint')
+    base_path.mkdir(parents=True, exist_ok=True)
+    survival_time : int = 4 # in hours
+
+    def __init__(self , fetcher_name : str , tushare_api : Callable , limit : int = 2000 , * , 
+                 max_fetch_times : int = -1 , breakpoint : bool = True , **kwargs):
+        self.fetcher_name = fetcher_name
+        self.tushare_api = tushare_api
+
+        self.limit = limit
+        self.max_fetch_times = max_fetch_times
+        self.kwargs = kwargs
+
+        self.breakpoint = breakpoint
+        kwargs_str = '_'.join([f'{k}={v}' for k, v in sorted(self.kwargs.items() , key = lambda x: x[0])])
+        self.breakpoint_path = self.base_path.joinpath(self.fetcher_name , f'{self.tushare_api.__qualname__} , {kwargs_str}')
+
+    def __repr__(self):
+        return f'Breakpoint of {self.fetcher_name} / {self.tushare_api.__qualname__}(limit={self.limit})'
+
+    @property
+    def metadata_path(self):
+        return self.breakpoint_path.joinpath('metadata.json')
+
+    def write_metadata(self , metadata : dict , overwrite : bool = False):
+        if not self.breakpoint:
+            return
+        PATH.dump_json(metadata , self.metadata_path , overwrite = overwrite)
+
+    def append_metadata(self , metadata : dict):
+        old_metadata = self.load_metadata()
+        old_metadata.update(metadata)
+        self.write_metadata(old_metadata , overwrite = True)
+
+    def load_metadata(self):
+        if not self.breakpoint:
+            return {}
+        return PATH.read_json(self.metadata_path)
+
+    def init_path(self):
+        if not self.breakpoint:
+            return
+        self.breakpoint_path.mkdir(parents=True, exist_ok=True)
+
+    def remove_path(self):
+        self.clear_breakpoint()
+        self.breakpoint_path.rmdir()
+
+    def clear_breakpoint(self):
+        [file.unlink() for file in self.breakpoint_path.glob('*')]
+
+    def check_expiration(self):
+        metadata = self.load_metadata()
+        if 'expiration_date' in metadata and metadata['expiration_date'] < CALENDAR.now().timestamp():
+            self.clear_breakpoint()
+            self.init_metadata()
+
+    def init_metadata(self):
+        create_time = CALENDAR.now().timestamp()
+        metadata = {
+            'create_time' : create_time,
+            'expiration_date' : create_time + self.survival_time * 3600,
+        }
+        self.write_metadata(metadata , overwrite = False)
+
+    def save_breakpoint(self , datas : dict[Any , pd.DataFrame] , next_offset : int):
+        if not self.breakpoint:
+            return
+        for offset , df in datas.items():
+            DB.save_df(df , self.breakpoint_path.joinpath(f'bkpt.{offset}.feather'))
+        metadata = {
+            'save_time' : CALENDAR.now().timestamp(),
+            'next_offset' : next_offset,
+            'breakpoints' : list(datas.keys()),
+        }
+        self.append_metadata(metadata)
+        Logger.success(f'Saved {self} to {self.breakpoint_path}' , indent = 1)
+
+    def load_breakpoint(self) -> tuple[int , dict[int , pd.DataFrame]]:
+        """return the offset and data of the breakpoint"""
+        self.init_path()
+        self.check_expiration()
+        metadata = self.load_metadata()
+        if 'next_offset' in metadata and 'breakpoints' in metadata:
+            try:
+                dfs = {}
+                for bkpt in metadata['breakpoints']:
+                    p = self.breakpoint_path.joinpath(f'bkpt.{bkpt}.feather')
+                    dfs[int(bkpt)] = DB.load_df(p)
+                Logger.success(f'Loaded {self} from {self.breakpoint_path} , next_offset={metadata['next_offset']}' , indent = 1)
+                return metadata['next_offset'] , dfs
+            except Exception as e:
+                Logger.error(f'Error loading breakpoint: {e}')
+                return 0 , {}
+        else:
+            return 0 , {}
+
+    def fetch(self) -> pd.DataFrame:
+        """iterate fetch from tushare"""
+        offset , dfs = self.load_breakpoint()
+        while True:
+            if self.max_fetch_times <= 0 or len(dfs) < self.max_fetch_times:
+                ret = retry_call(self.tushare_api , () , self.kwargs | {'offset' : offset , 'limit' : self.limit})
+                if not isinstance(ret , pd.DataFrame):
+                    raise TypeError(f'{self} must return a pd.DataFrame, but got {ret}')
+            else:
+                ret = Exception(f'{self} got more than {self.max_fetch_times} dfs')
+            if isinstance(ret , pd.DataFrame):
+                if ret.empty:
+                    break
+                ret = ret.dropna(axis=1, how='all')
+                if not ret.empty: 
+                    dfs[offset] = ret
+            elif isinstance(ret , Exception):
+                self.save_breakpoint(dfs , offset + self.limit)
+                raise ret
+            else:
+                raise Exception(f'{self} must return a pd.DataFrame or Exception, but got {ret}')
+            offset += self.limit
+        if dfs:
+            all_df = pd.concat([df for df in dfs.values() if not df.empty])
+            all_df = all_df.reset_index([idx for idx in all_df.index.names if idx is not None] , drop = False).reset_index(drop = True)
+            self.remove_path()
+            return all_df
+        else:
+            return pd.DataFrame()
 
 class TushareFetcher(metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""
@@ -109,7 +237,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     @property
     def pro(self):
         """get tushare pro api"""
-        return TS_PARAMS.pro
+        return TS.pro
 
     @property
     def db_by_name(self) -> bool:
@@ -187,7 +315,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
 
     def check_server_down(self) -> bool:
         """check if the tushare server is down"""
-        if TS_PARAMS.server_down:
+        if TS.server_down:
             if not getattr(self , '_print_server_down_message' , False):
                 Logger.error(f'{self.__class__.__name__} will not update because Tushare server is down')
                 setattr(self , '_print_server_down_message' , True)
@@ -226,7 +354,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                         time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
                     Logger.error(e)
-                    TS_PARAMS.server_down = True
+                    TS.server_down = True
                     self.check_server_down()
                     raise Exception('Tushare server is down, skip today\'s update')
                 else: 
@@ -237,32 +365,11 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             dates = self.target_dates()
         Logger.success(f'{self.__class__.__name__} fetched for {Dates(updated_dates)}' , indent = self._stdout_indent)
 
-    def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = -1 , **kwargs) -> pd.DataFrame:
+    def iterate_fetch(self , tushare_api : Callable , limit = 2000 , max_fetch_times = -1 , breakpoint : bool = False , **kwargs) -> pd.DataFrame:
         """iterate fetch from tushare"""
-        dfs : list[pd.DataFrame] = []
-        offset = 0
-        while True:
-            df : pd.DataFrame | Any = retry_call(fetch_func , () , kwargs | {'offset' : offset , 'limit' : limit})
-            if isinstance(df , Exception):
-                raise df
-            elif not isinstance(df , pd.DataFrame): 
-                raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame, but got {df}')
-            elif df.empty: 
-                # empty dataframe means no more data
-                break
-            elif max_fetch_times > 0 and len(dfs) >= max_fetch_times: 
-                raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
-            df = df.dropna(axis=1, how='all')
-            if not df.empty: 
-                dfs.append(df)
-            offset += limit
-        if dfs:
-            all_df = pd.concat([df for df in dfs if not df.empty])
-            all_df = all_df.reset_index([idx for idx in all_df.index.names if idx is not None] , drop = False).reset_index(drop = True)
-            return all_df
-        else:
-            return pd.DataFrame()
-
+        iterate_fetcher = TushareIterateFetcher(self.__class__.__name__ , tushare_api , limit , max_fetch_times = max_fetch_times , breakpoint = breakpoint , **kwargs)
+        return iterate_fetcher.fetch()
+        
     def missing_dates(self):
         """get missing dates"""
         return np.array([] , dtype = int)

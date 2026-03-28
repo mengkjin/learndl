@@ -59,8 +59,7 @@ def rcquant_init():
     if not rqdatac.initialized(): 
         try:
             with IOCatcher() as catcher:
-                rcquant_uri = MACHINE.local_settings('rcquant')['uri']
-                rqdatac.init(uri = rcquant_uri)
+                rqdatac.init(uri = MACHINE.secrets['accounts']['rcquant']['uri'])
             output = catcher.contents
             if _print := output['stdout']:
                 Logger.stdout(_print)
@@ -70,8 +69,8 @@ def rcquant_init():
                     Logger.alert1(f'RcQuant Warning >> {key_info.group(0)}' , indent = 1 , vb_level = 1)
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
-        except FileNotFoundError:
-            Logger.error(f'rcquant login info not found, please check .local_settings/rcquant.yaml')
+        except KeyError:
+            Logger.error(f'rcquant login info not found, please check .secret/accounts.yaml')
             return False
         except QuotaExceeded as e:
             Logger.error(f'rcquant init failed: {e}')

@@ -7,17 +7,14 @@ class SharedSync:
     """Shared folder sync manager, used to sync the shared folder to the local folder and vice versa"""
     SYNC_DIRS = ['schedule_model']
 
-    shared_folder = PATH.get_share_folder_path()
-    local_folder = PATH.local_shared
-
     @classmethod
     def shared_files(cls) -> list[Path]:
         """get the files to sync"""
         files = []
-        if cls.shared_folder is None:
+        if PATH.share_folder is None:
             return files
         for sync_dir in cls.SYNC_DIRS:
-            for file in cls.shared_folder.joinpath(sync_dir).rglob('*'):
+            for file in PATH.share_folder.joinpath(sync_dir).rglob('*'):
                 if file.is_file() and not file.name.startswith('.'):
                     files.append(file)
         return files
@@ -27,7 +24,7 @@ class SharedSync:
         """get the files to sync"""
         files = []
         for sync_dir in cls.SYNC_DIRS:
-            for file in cls.local_folder.joinpath(sync_dir).rglob('*'):
+            for file in PATH.local_share_folder.joinpath(sync_dir).rglob('*'):
                 if file.is_file() and not file.name.startswith('.'):
                     files.append(file)
         return files
@@ -35,16 +32,16 @@ class SharedSync:
     @classmethod
     def shared_to_local(cls , path : Path) -> Path | None:
         """get the target path of the shared folder"""
-        if cls.shared_folder is None:
+        if PATH.share_folder is None:
             return None
-        return cls.local_folder.joinpath(path.relative_to(cls.shared_folder))
+        return PATH.local_share_folder.joinpath(path.relative_to(PATH.share_folder))
 
     @classmethod
     def local_to_shared(cls , path : Path) -> Path | None:
         """get the target path of the shared folder"""
-        if cls.shared_folder is None:
+        if PATH.share_folder is None:
             return None
-        return cls.shared_folder.joinpath(path.relative_to(cls.local_folder))
+        return PATH.share_folder.joinpath(path.relative_to(PATH.local_share_folder))
 
     @classmethod 
     def sync(cls):

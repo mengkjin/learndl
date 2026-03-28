@@ -59,6 +59,7 @@ def retry_call(
     attempts: int = 3,
     exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
     base_delay: float = 1.5,
+    error: Literal['raise' , 'return'] = 'raise',
 ) -> Any:
     """
     retry a function call with a given exceptions and delay
@@ -70,7 +71,10 @@ def retry_call(
             return func(*args, **kwargs)
         except exceptions as e:
             if i == attempts - 1:
-                raise
+                if error == 'raise':
+                    raise
+                else:
+                    return e
             delay = base_delay * (2**i)
             Logger.skipping(f"Attempt {i + 1} / {attempts} failed: {e}. Retrying in {delay:.1f}s...")
             time.sleep(delay)

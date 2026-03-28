@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup , Tag
 
 from src.proj.abc import Silence
 from src.proj.log import Logger
-
+from src.proj.env import MACHINE
 from .abc import ProxySet
 
 class BaseProxiesFinder(ABC):
@@ -33,8 +33,8 @@ class ZDAYEFinder(BaseProxiesFinder):
     """Get proxies from Zdaye API"""
     MAIN_PAGE = "https://www.zdaye.com/"
     API_URL = "http://www.zdopen.com/FreeProxy/Get/"
-    APP_ID = "202603230720009329"     
-    AKEY   = "e8a0f7acf306edea"   
+    APP_ID = MACHINE.secrets['accounts']['zdaye']['app_id']
+    AKEY   = MACHINE.secrets['accounts']['zdaye']['akey']
     INTERVAL = 1.2
     last_request_time = 0
 

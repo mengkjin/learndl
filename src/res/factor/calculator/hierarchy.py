@@ -51,9 +51,9 @@ class StockFactorHierarchy:
     def load_factor_table(cls) -> pd.DataFrame:
         '''export factor stats to csv'''
         if MACHINE.updatable:
-            df = pd.read_csv(PATH.local_shared.joinpath('factor_list.csv'))
-        elif path := PATH.get_share_folder_path():
-            df = pd.read_csv(path.joinpath('factor_list.csv'))
+            df = pd.read_csv(PATH.local_share_folder.joinpath('factor_list.csv'))
+        elif PATH.share_folder is not None:
+            df = pd.read_csv(PATH.share_folder.joinpath('factor_list.csv'))
         else:
             df = pd.DataFrame()
         return df
@@ -63,9 +63,9 @@ class StockFactorHierarchy:
         '''export factor list to csv'''
         if MACHINE.updatable:
             df = cls.full_factor_table()
-            df.to_csv(PATH.local_shared.joinpath('factor_list.csv') , index = False)
-            if path := PATH.get_share_folder_path():
-                df.to_csv(path.joinpath('factor_list.csv') , index = False)
+            df.to_csv(PATH.local_share_folder.joinpath('factor_list.csv') , index = False)
+            if PATH.share_folder is not None:
+                df.to_csv(PATH.share_folder.joinpath('factor_list.csv') , index = False)
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:

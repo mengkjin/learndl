@@ -1044,8 +1044,8 @@ class MarkdownCatcher(OutputCatcher):
         self.add_time_to_title = add_time_to_title
         
         self.add_export_file(self.export_dir.joinpath(self.category.replace(' ' , '_') , self.filename))
-        if to_share_folder and (share_folder_path := MACHINE.share_folder_path()) is not None:
-            self.add_export_file(share_folder_path.joinpath('markdown_catcher' , self.filename))
+        if to_share_folder and PATH.share_folder is not None:
+            self.add_export_file(PATH.share_folder.joinpath('markdown_catcher' , self.filename))
         
         self.kwargs = kwargs
         self.seperating_by = seperating_by

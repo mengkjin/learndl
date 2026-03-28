@@ -1,10 +1,8 @@
 import tushare as ts
-from dataclasses import dataclass
+from src.proj import MACHINE
 
 _server_down = False
-_token = '08232196bbac2a4ec51587784169f501f6387de3ad2fbe7719b5444a'
-@dataclass
-class TushareParams:
+class TushareConnector:
     """
     parameters for tushare
         server_down: whether the tushare server is down
@@ -13,10 +11,17 @@ class TushareParams:
     """
     server_down : bool = _server_down
 
-    def __post_init__(self):
-        self.pro = self.get_pro_api()
-        
-    def get_pro_api(self):
-        return ts.pro_api(_token)
+    @property
+    def token(self):
+        return MACHINE.secrets['accounts']['tushare']['token']
 
-TS_PARAMS = TushareParams()
+    @property
+    def pro(self):
+        if not hasattr(self , '_pro'):
+            self._pro = ts.pro_api(self.token)
+        return self._pro
+        
+    def get_api(self):
+        return ts.pro_api(self.token)
+
+TS = TushareConnector()

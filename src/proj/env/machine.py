@@ -1,5 +1,5 @@
 # please check this path before running the code
-import sys , socket , platform , os , torch , pytz
+import sys , socket , platform , os , torch , pytz , yaml , json
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,13 +8,24 @@ from tzlocal import get_localzone
 
 __all__ = ['MACHINE']
 
+def get_project_root() -> Path:
+    """Get the project root path of the project, depending on the pyproject.toml file"""
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("pyproject.toml not found, please confirm the project root directory contains this file")
+
+MAIN_PATH = get_project_root()
+SECRETS_PATH = MAIN_PATH.joinpath('.secrets')
 @dataclass
 class _MachineSettings:
     name : str
     cuda_server : bool
-    main_path : Path
+    main_path : str
     python_path : str
-    mosek_lic_path : Path | None = None
+    share_folder : str | None = None
+    mosek_lic_path : str | None = None
     updatable : bool = False
     emailable : bool = False
     nickname : str = ''
@@ -22,6 +33,7 @@ class _MachineSettings:
     def __post_init__(self):
         if not self.nickname:
             self.nickname = self.name
+        assert Path(self.main_path) == MAIN_PATH , f'main_path {self.main_path} is not the same as {MAIN_PATH}'
 
     @property
     def belong_to_hfm(self) -> bool:
@@ -37,37 +49,6 @@ class _MachineSettings:
     is_linux = system_name == 'Linux' and os.name == 'posix'
     is_windows = system_name == 'Windows'
     is_macos = system_name == 'Darwin'
-    
-
-_machine_settings : dict[str , dict[str , Any]] = {
-    'mengkjin-server' : {
-        'name' : 'mengkjin-server' , 
-        'cuda_server' : True , 
-        'main_path' : Path('/home/mengkjin/workspace/learndl') , 
-        'python_path' : '/home/mengkjin/workspace/learndl/.venv/bin/python' , 
-        'mosek_lic_path' : Path('/home/mengkjin/mosek/mosek.lic') , 
-        'updatable' : True , 
-        'emailable' : True ,
-        'nickname' : 'Ubuntu'},
-    'HST-jinmeng' : {
-        'name' : 'HST-jinmeng' , 
-        'cuda_server' : False , 
-        'main_path' : Path('E:/workspace/learndl') , 
-        'python_path' : 'E:/workspace/learndl/.venv/Scripts/python.exe' , 
-        'mosek_lic_path' : Path('C:/Users/Administrator/mosek/mosek.lic') , 
-        'updatable' : True , 
-        'emailable' : True ,
-        'nickname' : 'Windows'},
-    'Mathews-Mac' : {
-        'name' : 'Mathews-Mac' , 
-        'cuda_server' : False , 
-        'main_path' : Path('/Users/mengkjin/workspace/learndl') , 
-        'python_path' : '/Users/mengkjin/workspace/learndl/.venv/bin/python' , 
-        'mosek_lic_path' : Path('/Users/mengkjin/mosek/mosek.lic') , 
-        'updatable' : False , 
-        'emailable' : False ,
-        'nickname' : 'Mac'},
-}
 
 def _get_best_device():
     """Get the best device for the machine: CUDA, MPS, or CPU"""
@@ -78,9 +59,21 @@ def _get_best_device():
     else:
         return 'CPU'
 
-def _get_os_name():
-    """Get the OS name"""
-    return os.name
+def _get_secrets() -> dict:
+    """Get the secrets of the project"""
+    secrets = {}
+    for file in SECRETS_PATH.iterdir():
+        if file.is_file():
+            assert file.suffix == '.yaml' or file.suffix == '.json' , f'{file} is not a yaml or json file'
+            if file.suffix == '.yaml':
+                with open(file , 'r') as f:
+                    secrets[file.stem] = yaml.safe_load(f)
+            elif file.suffix == '.json':
+                with open(file , 'r') as f:
+                    secrets[file.stem] = json.load(f)
+        else:
+            raise ValueError(f'{file} is not a file')
+    return secrets
 
 class MACHINE:
     """
@@ -104,14 +97,17 @@ class MACHINE:
     """
     name : str = socket.gethostname().split('.')[0]
     system_name = platform.system()
+    
+    main_path = MAIN_PATH
+    secrets = _get_secrets()
 
-    setting = _MachineSettings(**_machine_settings[name])
+    setting = _MachineSettings(**secrets['machines'][name])
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
     
     cuda_server = setting.cuda_server
-    main_path = setting.main_path
     python_path = setting.python_path
-    mosek_lic_path = setting.mosek_lic_path
+    share_folder = Path(setting.share_folder) if setting.share_folder else None
+    mosek_lic_path = Path(setting.mosek_lic_path) if setting.mosek_lic_path else None
     updatable = setting.updatable
     emailable = setting.emailable
     nickname = setting.nickname
@@ -155,7 +151,7 @@ class MACHINE:
     @classmethod
     def machine_main_path(cls , machine_name : str) -> Path:
         """Get the main path at another machine"""
-        return _machine_settings[machine_name]['main_path']
+        return Path(cls.secrets['machines'][machine_name]['main_path'])
     
     @classmethod
     def PATH(cls):
@@ -164,16 +160,6 @@ class MACHINE:
             from src.proj.env.path import PATH
             cls._path = PATH
         return cls._path
-
-    @classmethod
-    def local_settings(cls , name : str) -> dict:
-        """Get the local settings of the machine"""
-        return cls.PATH().get_local_settings(name)
-
-    @classmethod
-    def share_folder_path(cls) -> Path | None:
-        """Get the share folder path of the machine"""
-        return cls.PATH().get_share_folder_path()
         
     @classmethod
     def configs(cls , *args , raise_if_not_exist = True , **kwargs) -> dict:
