@@ -191,6 +191,8 @@ class Stock4D:
     def copy(self): return deepcopy(self)
 
     def align(self , secid = None , date = None , feature = None , inplace = False):
+        if not self.initiated:
+            return self
         blk = self.align_secid_date(secid , date , inplace = inplace)
         blk = blk.align_feature(feature , inplace = True)
         return blk

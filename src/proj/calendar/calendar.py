@@ -21,10 +21,10 @@ DateTypeWithNone = Union[int, TradeDate, None]
 DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series , torch.Tensor]
 
 def get_cd(date : DateType) -> int:
-    return date.cd if isinstance(date, TradeDate) else date
+    return int(date.cd if isinstance(date, TradeDate) else date)
 
 def get_td(date : DateType) -> int:
-    return date.td if isinstance(date, TradeDate) else date
+    return int(date.td if isinstance(date, TradeDate) else date)
 
 def get_cds(dates: DatesType):
     """
@@ -487,7 +487,7 @@ class Dates(np.ndarray[int, Any]):
             dates = CALENDAR.slice(dates, start, end)
         else:
             raise ValueError(f"Invalid number of arguments: {len(args)}")
-        obj = np.asarray(dates).view(cls)
+        obj = np.asarray(dates, dtype=int).view(cls)
         obj.info = info
         return obj
 

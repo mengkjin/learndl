@@ -61,9 +61,6 @@ class FetcherTask:
     def claw(self , proxy: str | None) -> bool | Exception:
         if self.should_be_skipped:
             return True
-        # time.sleep(2)
-        # print(f"claw {self.title} with proxy {proxy}")
-        # return True
         result = self.fetch_date_with_error_handler(proxy)
         value = result.unwrap(error='return')
         if isinstance(value, Exception):

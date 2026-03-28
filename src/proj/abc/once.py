@@ -7,24 +7,27 @@ class Once:
     Control the execution of a function / method to only once for the same object and key
 
     Example1:
-        Once.run(lambda *x, **y : print(x , y) , (1,2,3) , {'a':1} , 'test')
-        Once.run(lambda *x, **y : print(x , y) , (1,2,3) , {'a':1} , 'test')
+        import sys
+
+        Once.run(lambda *x, **y : sys.stdout.write(f"{x} {y}\n") , (1,2,3) , {'a':1} , 'test')
+        Once.run(lambda *x, **y : sys.stdout.write(f"{x} {y}\n") , (1,2,3) , {'a':1} , 'test')
 
     Example2:
+        import sys
         class MyClass:
             @Once.per_object("greeting")
             def greet1(self):
-                print(f"Hello1")
+                sys.stdout.write(f"Hello1\n")
             
             @staticmethod
             @Once.per_object("greeting" , object = MyClass) # type: ignore  # noqa: F821
             def greet2():
-                print(f"Hello2")
+                sys.stdout.write(f"Hello2\n")
 
             @classmethod
             @Once.per_object("greeting")
             def greet3(cls):
-                print(f"Hello3")
+                sys.stdout.write(f"Hello3\n")
 
         obj = MyClass()
         obj.greet1() 

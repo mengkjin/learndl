@@ -275,7 +275,7 @@ class Logger:
 
     @classmethod
     def only_once(cls , *args , object : Any | None = None , mark : str = 'default' , printer = new_stdout ,  **kwargs):
-        """print the message only once for the same object and key"""
+        """display the message only once for the same object and key"""
         Once.run(printer , args , kwargs , mark , Logger if object is None else object)
 
     @classmethod

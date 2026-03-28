@@ -142,9 +142,11 @@ class DataVendor:
         else:
             raise ValueError(f'Unknown dates type: {type(dates)}')
         target_start , target_end = self.cd(target_start , -extend) , self.cd(target_end , extend)
+        target_start , target_end = min(target_start , CALENDAR.update_to()) , min(target_end , CALENDAR.update_to())
 
         block0 : DataBlock = getattr(self , f'_block_{data_key}' , DataBlock())
         loaded_start , loaded_end = block0.min_date , block0.max_date
+        
         block0 = block0.extend_to(db_src , db_key , target_start , target_end , inplace = True)
 
         if data_key == 'daily_quotes':
