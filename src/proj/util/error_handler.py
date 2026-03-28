@@ -55,12 +55,12 @@ def all_handler(e: Exception) -> str | Exception:
     return f"Unhandled exception [{get_exception_name(e)}]"
 
 def retry_call(
-    func: Callable, args: tuple = (), kwargs: dict | None = None,
+    func: Callable[..., T], args: tuple = (), kwargs: dict | None = None,
     attempts: int = 3,
     exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
     base_delay: float = 1.5,
     error: Literal['raise' , 'return'] = 'raise',
-) -> Any:
+) -> T | Exception:
     """
     retry a function call with a given exceptions and delay
     """

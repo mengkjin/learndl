@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src.proj import MACHINE
-from src.data.download.tushare.basic import ts_code_to_secid , InfoFetcher , TushareFetcher , DayFetcher
+from src.data.download.tushare.basic import TS , InfoFetcher , TushareFetcher , DayFetcher
 
 class FundInfo(InfoFetcher):
     """mutual fund info"""
@@ -12,8 +12,8 @@ class FundInfo(InfoFetcher):
 
     def get_data(self , date):
         renamer = {'ts_code' : 'fund_id'}
-        df1 = self.iterate_fetch(self.pro.fund_basic , limit = 5000 , market='E')
-        df2 = self.iterate_fetch(self.pro.fund_basic , limit = 5000 , market='O')
+        df1 = self.iterate_fetch(self.api.fund_basic , limit = 5000 , market='E')
+        df2 = self.iterate_fetch(self.api.fund_basic , limit = 5000 , market='O')
 
         df = pd.concat([df1 , df2]).rename(columns=renamer)
         if df.empty: 
@@ -44,10 +44,10 @@ class FundPortfolioFetcher(TushareFetcher):
             limit , max_fetch_times = 3000 , 500
         else:
             limit , max_fetch_times = 1000 , 2000
-        df = self.iterate_fetch(self.pro.fund_portfolio , limit = limit , period = str(date) , max_fetch_times=max_fetch_times , breakpoint = True)
+        df = self.iterate_fetch(self.api.fund_portfolio , limit = limit , period = str(date) , max_fetch_times=max_fetch_times , breakpoint = True)
         if df.empty: 
             return df
-        df = ts_code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)
+        df = TS.code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)
         int_cols = df.columns.intersection(['ann_date' , 'end_date'])
         df = df.fillna({col:99991231 for col in int_cols}).astype({col:int for col in int_cols}).reset_index(drop=True)
         return df
@@ -59,7 +59,7 @@ class ETFDailyQuote(DayFetcher):
     def get_data(self , date : int):
         date_str = str(date)
         
-        quote = self.iterate_fetch(self.pro.fund_daily , limit = 2000 , trade_date=date_str)
+        quote = self.iterate_fetch(self.api.fund_daily , limit = 2000 , trade_date=date_str)
         if quote.empty: 
             return quote
         quote = quote.rename(columns={'pct_change':'pctchange','pre_close':'preclose','vol':'volume'})

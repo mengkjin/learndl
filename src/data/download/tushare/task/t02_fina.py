@@ -1,13 +1,13 @@
 # do not use relative import in this file because it will be running in top-level directory
-from src.data.download.tushare.basic import FinaFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import FinaFetcher , TS
 
 class FinaIndicator(FinaFetcher):
     """financial indicators"""
     DB_KEY = 'indicator'  
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.fina_indicator_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.fina_indicator_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class IncomeStatement(FinaFetcher):
@@ -15,8 +15,8 @@ class IncomeStatement(FinaFetcher):
     DB_KEY = 'income'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.income_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.income_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class BalanceSheet(FinaFetcher):
@@ -24,8 +24,8 @@ class BalanceSheet(FinaFetcher):
     DB_KEY = 'balance'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.balancesheet_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.balancesheet_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class CashFlow(FinaFetcher):
@@ -33,16 +33,16 @@ class CashFlow(FinaFetcher):
     DB_KEY = 'cashflow'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.cashflow_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.cashflow_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
 
 class Dividend(FinaFetcher):
     """dividend infomation"""
     DB_KEY = 'dividend'
     def get_data(self , date : int):
-        df = self.pro.dividend(end_date = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.dividend , end_date = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
 
 class Forecast(FinaFetcher):
@@ -51,8 +51,8 @@ class Forecast(FinaFetcher):
     CONSIDER_FUTURE = True
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.forecast_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.forecast_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class Express(FinaFetcher):
@@ -60,8 +60,8 @@ class Express(FinaFetcher):
     DB_KEY = 'express'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.express_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.express_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class MainBusiness(FinaFetcher):
@@ -69,8 +69,8 @@ class MainBusiness(FinaFetcher):
     DB_KEY = 'mainbz'
     DATA_FREQ = 'y'
     def get_data(self , date : int):
-        df = self.pro.fina_mainbz_vip(period = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.fina_mainbz_vip , period = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class DisclosureDate(FinaFetcher):
@@ -79,6 +79,6 @@ class DisclosureDate(FinaFetcher):
     CONSIDER_FUTURE = True
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
-        df = self.pro.disclosure_date(end_date = str(date))
-        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
+        df = self.locked_fetch(self.api.disclosure_date , end_date = str(date))
+        df = TS.code_to_secid(df , 'ts_code' , drop_old=False)
         return df

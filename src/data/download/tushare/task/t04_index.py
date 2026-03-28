@@ -2,18 +2,18 @@
 import pandas as pd
 import numpy as np
 
-from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , TS
 from src.proj import DB , CALENDAR , PATH
 from typing import Any
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start , end , limit = 4000):
     """get index weight data by iterate fetch"""
     assert start is not None and end is not None , 'start and end must be provided'
-    df = instance.iterate_fetch(instance.pro.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
+    df = instance.iterate_fetch(instance.api.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
                                 start_date = str(start) , end_date = str(end))
     if df.empty: 
         return df
-    df = ts_code_to_secid(df , 'con_code').rename(columns={'trade_date':instance.ROLLING_DATE_COL})
+    df = TS.code_to_secid(df , 'con_code').rename(columns={'trade_date':instance.ROLLING_DATE_COL})
     df = df.sort_values([instance.ROLLING_DATE_COL ,'weight'] , ascending=False)
     df['weight'] = df.groupby(instance.ROLLING_DATE_COL)['weight'].transform(lambda x: x / x.sum())
     return df
@@ -28,7 +28,7 @@ class IndexBasic(InfoFetcher):
         
         dfs : list[pd.DataFrame] = []
         for market in markets:
-            df = self.iterate_fetch(self.pro.index_basic , limit = 5000 , exchange=market.split('-')[0])
+            df = self.iterate_fetch(self.api.index_basic , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
         df = pd.concat([d for d in dfs if not d.empty]).drop_duplicates()
@@ -69,7 +69,7 @@ class IndexDaily(TimeSeriesFetcher):
             return pd.DataFrame()
         if self.rollback_date is not None:
             start = min(start , self.rollback_date)
-        df = self.iterate_fetch(self.pro.index_daily , limit = 5000 , ts_code = index , start_date = str(start) , end_date = str(end))
+        df = self.iterate_fetch(self.api.index_daily , limit = 5000 , ts_code = index , start_date = str(start) , end_date = str(end))
         return df
 
     def target_dates(self):
@@ -110,7 +110,7 @@ class ZXIndexDaily(DayFetcher):
     def get_data(self , date : int , end : int | None = None):
         if end is None:
             end = date
-        df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end))
+        df = self.iterate_fetch(self.api.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end))
         if not df.empty:
             df = df.astype({'trade_date':int})
         return df
@@ -163,16 +163,16 @@ class THSConcept(MonthFetcher):
     DB_SRC = 'membership_ts'
     DB_KEY = 'concept'
     def get_data(self , date : int):
-        df_theme = pd.concat([self.pro.ths_index(exchange = 'A', type = 'N') , 
-                              self.pro.ths_index(exchange = 'A', type = 'TH')]).reset_index(drop=True)
-        dfs = []
+        df_theme = pd.concat([self.locked_fetch(self.api.ths_index , exchange = 'A', type = 'N') , 
+                              self.locked_fetch(self.api.ths_index , exchange = 'A', type = 'TH')]).reset_index(drop=True)
+        dfs : list[pd.DataFrame] = []
         for i , ts_code in enumerate(df_theme['ts_code']):
             # Logger.stdout(i , ts_code)
-            df = self.pro.ths_member(ts_code = ts_code)
+            df = self.locked_fetch(self.api.ths_member , ts_code = ts_code)
             dfs.append(df)
         df_all = pd.concat([d for d in dfs if not d.empty]).rename(columns={'name':'concept'})
         df_all = df_all.merge(df_theme , on = 'ts_code' , how='left').rename(columns={'ts_code':'index_code'})
-        df_all = ts_code_to_secid(df_all , 'code')
+        df_all = TS.code_to_secid(df_all , 'code')
         df = df_all.reset_index(drop = True)
         return df
     

@@ -1,5 +1,5 @@
 # do not use relative import in this file because it will be running in top-level directory
-from src.data.download.tushare.basic import RollingFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import RollingFetcher , TS
 
 class AnalystReport(RollingFetcher):
     """analyst report infomation"""
@@ -11,6 +11,6 @@ class AnalystReport(RollingFetcher):
     ROLLING_BACK_DAYS = 30
     def get_data(self , start , end):
         assert start is not None and end is not None , 'start and end must be provided'
-        df = self.iterate_fetch(self.pro.report_rc , limit = 2000 , max_fetch_times = 200 , start_date = int(start) , end_date = int(end))
-        df = ts_code_to_secid(df)
+        df = self.iterate_fetch(self.api.report_rc , limit = 2000 , max_fetch_times = 200 , start_date = int(start) , end_date = int(end))
+        df = TS.code_to_secid(df)
         return df

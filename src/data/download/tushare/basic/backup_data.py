@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from src.proj import PATH , CALENDAR , DB , Dates
-from .func import ts_code_to_secid
+from .abc import TS
 
 path_bak_data   = PATH.resource.joinpath('tushare_bak_data')
 path_bak_record = PATH.resource.joinpath('tushare_bak_data_record')
@@ -51,7 +51,7 @@ class TSBackUpDataTransform():
         trade['turn_fl'] = (trade['volume'] / trade['float_share'] * 1e5).fillna(0)
         trade['turn_fr'] = (trade['volume'] / trade['free_share'] * 1e5).fillna(0)
 
-        trade = ts_code_to_secid(trade).set_index('secid').sort_index().reset_index().loc[
+        trade = TS.code_to_secid(trade).set_index('secid').sort_index().reset_index().loc[
             :,['secid', 'adjfactor', 'open', 'high', 'low', 'close', 'amount','volume', 'vwap', 
             'status', 'limit', 'pctchange', 'preclose', 'turn_tt','turn_fl', 'turn_fr']]
         return trade
@@ -60,19 +60,19 @@ class TSBackUpDataTransform():
         """transform daily valuation data"""
         val = self.get_bak_data(date , 'daily_basic')
         val.loc[:,['total_share','float_share','free_share','total_mv','circ_mv']] *= 1e4
-        val = ts_code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        val = TS.code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
     
     def day_moneyflow(self , date : int):
         """transform daily moneyflow data"""
         mf = self.get_bak_data(date , 'moneyflow')
-        mf = ts_code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        mf = TS.code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
     
     def day_limit(self , date : int):
         """transform daily limit data"""
         lmt = self.get_bak_data(date , 'stk_limit')
-        lmt = ts_code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        lmt = TS.code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
     
     def transform(self , date : int):

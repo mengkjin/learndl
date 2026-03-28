@@ -8,7 +8,7 @@ class ConvertibleBasic(InfoFetcher):
     UPDATE_FREQ = 'w'
 
     def get_data(self , date):
-        df = self.iterate_fetch(self.pro.cb_basic , limit = 5000)
+        df = self.iterate_fetch(self.api.cb_basic , limit = 5000)
         return df
 
 class ConvertibleDailyQuote(DayFetcher):
@@ -18,7 +18,7 @@ class ConvertibleDailyQuote(DayFetcher):
     def get_data(self , date : int):
         date_str = str(date)
         
-        quote = self.iterate_fetch(self.pro.cb_daily , limit = 2000 , trade_date=date_str)
+        quote = self.iterate_fetch(self.api.cb_daily , limit = 2000 , trade_date=date_str)
         if quote.empty: 
             return quote
         quote = quote.rename(columns={'pre_close':'preclose','vol':'volume' , 'pre_settle':'presettle'})

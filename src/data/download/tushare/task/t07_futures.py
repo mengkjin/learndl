@@ -12,7 +12,7 @@ class FuturesCalendar(InfoFetcher):
         markets = ['CFFEX-中金所' , 'DCE-大商所' , 'CZCE-郑商所' , 'SHFE-上期所' , 'INE-上海国际能源交易中心' , 'GFEX-广州期货交易所']
         dfs : list[pd.DataFrame] = []
         for market in markets:
-            df = self.iterate_fetch(self.pro.trade_cal , limit = 5000 , exchange=market.split('-')[0])
+            df = self.iterate_fetch(self.api.trade_cal , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
         df = pd.concat([d for d in dfs if not d.empty])
@@ -27,7 +27,7 @@ class FuturesBasic(InfoFetcher):
         markets = ['CFFEX-中金所' , 'DCE-大商所' , 'CZCE-郑商所' , 'SHFE-上期所' , 'INE-上海国际能源交易中心' , 'GFEX-广州期货交易所']
         dfs : list[pd.DataFrame] = []
         for market in markets:
-            df = self.iterate_fetch(self.pro.fut_basic , limit = 5000 , exchange=market.split('-')[0])
+            df = self.iterate_fetch(self.api.fut_basic , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
         df = pd.concat([d for d in dfs if not d.empty])
@@ -40,7 +40,7 @@ class FuturesDailyQuote(DayFetcher):
     def get_data(self , date : int):
         date_str = str(date)
         
-        quote = self.iterate_fetch(self.pro.fut_daily , limit = 2000 , trade_date=date_str)
+        quote = self.iterate_fetch(self.api.fut_daily , limit = 2000 , trade_date=date_str)
         if quote.empty: 
             return quote
         quote = quote.rename(columns={'pre_close':'preclose','vol':'volume' , 'pre_settle':'presettle'})

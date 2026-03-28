@@ -1,34 +1,34 @@
 # do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 
-from src.data.download.tushare.basic import DayFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import DayFetcher , TS
 
 class DailyQuote(DayFetcher):
     """Daily Quote"""
     DB_KEY = 'day'
     def get_data(self , date : int):
         date_str = str(date)
-        adj = self.pro.query('adj_factor',  trade_date=date_str).rename(columns={'adj_factor':'adjfactor'})
+        adj = self.locked_fetch(self.api.query , 'adj_factor',  trade_date=date_str).rename(columns={'adj_factor':'adjfactor'})
 
-        quote = self.pro.daily(trade_date=date_str)
+        quote = self.locked_fetch(self.api.daily , trade_date=date_str)
         if quote.empty: 
             return quote
         quote = quote.rename(columns={'pct_chg':'pctchange','pre_close':'preclose','vol':'volume'})
         quote['volume'] = quote['volume'] / 10. # to 10^3
         quote['vwap'] = np.where(quote['volume'] == 0 , quote['close'] , quote['amount'] / quote['volume'])
 
-        shr = self.pro.daily_basic(trade_date=date_str).loc[:,['ts_code','trade_date' , 'total_share','float_share','free_share']]
+        shr = self.locked_fetch(self.api.daily_basic , trade_date=date_str).loc[:,['ts_code','trade_date' , 'total_share','float_share','free_share']]
         shr.loc[:,['total_share','float_share','free_share']] *= 1e4
         shr.loc[shr['free_share'].isna() , 'free_share'] = shr.loc[shr['free_share'].isna() , 'float_share']
 
-        limit = self.pro.stk_limit(trade_date=date_str)
+        limit = self.locked_fetch(self.api.stk_limit , trade_date=date_str)
         if len(limit) == 0:
             limit = quote.loc[:,['ts_code' , 'trade_date' , 'close']].copy()
             limit['up_limit'] = (limit['close'] * 1.1).round(2)
             limit['down_limit'] = (limit['close'] * 0.9).round(2)
             limit = limit.drop(columns=['close'])
 
-        susp = self.pro.suspend_d(suspend_type='S', trade_date=date_str)
+        susp = self.locked_fetch(self.api.suspend_d , suspend_type='S', trade_date=date_str)
 
         mutual_col = ['ts_code' , 'trade_date']
 
@@ -41,7 +41,7 @@ class DailyQuote(DayFetcher):
         trade['turn_fl'] = (trade['volume'] / trade['float_share'] * 1e5).fillna(0)
         trade['turn_fr'] = (trade['volume'] / trade['free_share'] * 1e5).fillna(0)
 
-        trade = ts_code_to_secid(trade).set_index('secid').sort_index().reset_index().loc[
+        trade = TS.code_to_secid(trade).set_index('secid').sort_index().reset_index().loc[
             :,['secid', 'adjfactor', 'open', 'high', 'low', 'close', 'amount','volume', 'vwap', 
             'status', 'limit', 'pctchange', 'preclose', 'turn_tt','turn_fl', 'turn_fr']]
         return trade
@@ -50,10 +50,9 @@ class DailyValuation(DayFetcher):
     """Daily Valuation"""
     DB_KEY = 'day_val'   
     def get_data(self , date : int):
-        val = ts_code_to_secid(self.pro.daily_basic(trade_date=str(date)))
+        val = self.locked_fetch(self.api.daily_basic , trade_date=str(date))
         val.loc[:,['total_share','float_share','free_share','total_mv','circ_mv']] *= 1e4
-
-        val = ts_code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        val = TS.code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
     
 class DailyMoneyFlow(DayFetcher):
@@ -61,8 +60,8 @@ class DailyMoneyFlow(DayFetcher):
     START_DATE = 20100101
     DB_KEY = 'day_moneyflow'  
     def get_data(self , date : int):
-        mf = ts_code_to_secid(self.pro.moneyflow(trade_date=str(date)))
-        mf = ts_code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        mf = self.locked_fetch(self.api.moneyflow , trade_date=str(date))
+        mf = TS.code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
     
 class DailyLimit(DayFetcher):
@@ -70,8 +69,8 @@ class DailyLimit(DayFetcher):
     START_DATE = 20070101
     DB_KEY = 'day_limit'       
     def get_data(self , date : int):
-        lmt = ts_code_to_secid(self.pro.stk_limit(trade_date=str(date)))
-        lmt = ts_code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        lmt = self.locked_fetch(self.api.stk_limit , trade_date=str(date))
+        lmt = TS.code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
 '''
 class DailyOpenAuction(DateFetcher):
@@ -79,8 +78,8 @@ class DailyOpenAuction(DateFetcher):
     START_DATE = 20070101
     DB_KEY = 'day_open_auction'       
     def get_data(self , date : int):
-        auc = code_to_secid(self.pro.stk_auction_o(trade_date=str(date)))
-        auc = code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        auc = self.locked_fetch(self.api.stk_auction_o , trade_date=str(date))
+        auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return auc
     
 class DailyCloseAuction(DateFetcher):
@@ -88,8 +87,8 @@ class DailyCloseAuction(DateFetcher):
     START_DATE = 20070101
     DB_KEY = 'day_close_auction'       
     def get_data(self , date : int):
-        auc = code_to_secid(self.pro.stk_auction_c(trade_date=str(date)))
-        auc = code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        auc = self.locked_fetch(self.api.stk_auction_c , trade_date=str(date))
+        auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return auc
 '''
 

@@ -1,17 +1,17 @@
 import time
-import functools
 import numpy as np
 import pandas as pd
 
 from abc import abstractmethod , ABCMeta
 from importlib import import_module
 from pathlib import Path
-from typing import Any , Literal , Type , Callable
+from typing import Any , Literal , Type , Callable , TypeVar
 
 from src.proj import PATH , Logger , CALENDAR , DB , Dates
 from src.proj.util.error_handler import retry_call
-from .func import updatable , dates_to_update
-from .connect import TS
+from .abc import TS
+
+T = TypeVar('T')
 
 class TushareFetcherMeta(ABCMeta):
     """meta class of TushareFetcher , check if the subclass is valid and register all subclasses without abstract methods"""
@@ -46,7 +46,7 @@ class TushareIterateFetcher:
     base_path.mkdir(parents=True, exist_ok=True)
     survival_time : int = 4 # in hours
 
-    def __init__(self , fetcher_name : str , tushare_api : Callable , limit : int = 2000 , * , 
+    def __init__(self , fetcher_name : str , tushare_api : Callable[..., T] , limit : int = 2000 , * , 
                  max_fetch_times : int = -1 , breakpoint : bool = True , **kwargs):
         self.fetcher_name = fetcher_name
         self.tushare_api = tushare_api
@@ -57,7 +57,7 @@ class TushareIterateFetcher:
 
         self.breakpoint = breakpoint
 
-        self.api_name = '.'.join(self.tushare_api.args) if isinstance(self.tushare_api , functools.partial) else self.tushare_api.__name__
+        self.api_name = TS.get_func_name(self.tushare_api)
         kwargs_str = '_'.join([f'{k}={v}' for k, v in sorted(self.kwargs.items() , key = lambda x: x[0])])
         self.breakpoint_path = self.base_path.joinpath(self.fetcher_name , self.api_name , kwargs_str)
 
@@ -148,7 +148,7 @@ class TushareIterateFetcher:
         offset , dfs = self.load_breakpoint()
         while True:
             if self.max_fetch_times <= 0 or len(dfs) < self.max_fetch_times:
-                ret = retry_call(self.tushare_api , () , self.kwargs | {'offset' : offset , 'limit' : self.limit})
+                ret = retry_call(TS.locked(self.tushare_api) , () , self.kwargs | {'offset' : offset , 'limit' : self.limit})
                 if not isinstance(ret , pd.DataFrame):
                     raise TypeError(f'{self} must return a pd.DataFrame, but got {ret}')
             else:
@@ -221,7 +221,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     def _date_fetcher_update_dates(self) -> list[int] | np.ndarray:
         """update dates for date fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
-        return dates_to_update(self.last_date() , self.UPDATE_FREQ) 
+        return TS.dates_to_update(self.last_date() , self.UPDATE_FREQ) 
     
     def _fina_fetcher_update_dates(self , data_freq : Literal['y' , 'h' , 'q'] = 'q' , consider_future : bool = False) -> list[int] | np.ndarray:
         """update dates for fina fetcher"""
@@ -240,9 +240,9 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         return dates
 
     @property
-    def pro(self):
+    def api(self):
         """get tushare pro api"""
-        return TS.pro
+        return TS.api
 
     @property
     def db_by_name(self) -> bool:
@@ -280,9 +280,9 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         return ldate
 
     @staticmethod
-    def updatable(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    def updatable(last_date : int , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
         """check if the date is updatable given last date and frequency"""
-        return updatable(last_date , freq , update_to)
+        return TS.updatable(last_date , freq , update_to)
     
     def last_update_date(self) -> int:
         """last modified / updated date of the database"""
@@ -321,9 +321,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     def check_server_down(self) -> bool:
         """check if the tushare server is down"""
         if TS.server_down:
-            if not getattr(self , '_print_server_down_message' , False):
-                Logger.error(f'{self.__class__.__name__} will not update because Tushare server is down')
-                setattr(self , '_print_server_down_message' , True)
+            Logger.only_once(f'{self.__class__.__name__} will not update because Tushare server is down' , object = self , mark = 'tushare_server_down' , printer = Logger.error)
             return True
         return False
 
@@ -349,7 +347,8 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         
         while timeout_max_retries >= 0:
             try:
-                updated_dates = np.concatenate([updated_dates , self.update_dates(dates)])
+                new_dates = self.update_dates(dates)
+                updated_dates = np.concatenate([updated_dates , new_dates])
             except Exception as e:
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
@@ -370,7 +369,12 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             dates = self.target_dates()
         Logger.success(f'{self.__class__.__name__} fetched for {Dates(updated_dates)}' , indent = self._stdout_indent)
 
-    def iterate_fetch(self , tushare_api : Callable , limit = 2000 , max_fetch_times = -1 , breakpoint : bool = False , **kwargs) -> pd.DataFrame:
+    def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> T:
+        """locked fetch from tushare"""
+        with TS.lock:
+            return tushare_api(*args, **kwargs)
+
+    def iterate_fetch(self , tushare_api : Callable[..., T] , limit = 2000 , max_fetch_times = -1 , breakpoint : bool = False , **kwargs) -> pd.DataFrame:
         """iterate fetch from tushare"""
         iterate_fetcher = TushareIterateFetcher(self.__class__.__name__ , tushare_api , limit , max_fetch_times = max_fetch_times , breakpoint = breakpoint , **kwargs)
         return iterate_fetcher.fetch()
@@ -467,7 +471,7 @@ class RollingFetcher(TushareFetcher):
             return []
 
         rolling_last_date = max(self.START_DATE , CALENDAR.cd(self.last_date() , -self.ROLLING_BACK_DAYS))
-        update_dates = dates_to_update(rolling_last_date , self.UPDATE_FREQ , update_to)
+        update_dates = TS.dates_to_update(rolling_last_date , self.UPDATE_FREQ , update_to)
         d , dates = update_dates[0] , [update_dates[0]]
         while True:
             d = CALENDAR.cd(d , self.ROLLING_SEP_DAYS)
