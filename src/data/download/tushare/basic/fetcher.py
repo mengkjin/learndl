@@ -1,4 +1,5 @@
 import time
+import functools
 import numpy as np
 import pandas as pd
 
@@ -55,11 +56,13 @@ class TushareIterateFetcher:
         self.kwargs = kwargs
 
         self.breakpoint = breakpoint
+
+        self.api_name = '.'.join(self.tushare_api.args) if isinstance(self.tushare_api , functools.partial) else self.tushare_api.__name__
         kwargs_str = '_'.join([f'{k}={v}' for k, v in sorted(self.kwargs.items() , key = lambda x: x[0])])
-        self.breakpoint_path = self.base_path.joinpath(self.fetcher_name , f'{self.tushare_api.__qualname__} , {kwargs_str}')
+        self.breakpoint_path = self.base_path.joinpath(self.fetcher_name , f'{self.api_name} , {kwargs_str}')
 
     def __repr__(self):
-        return f'Breakpoint of {self.fetcher_name} / {self.tushare_api.__qualname__}(limit={self.limit})'
+        return f'Breakpoint of {self.fetcher_name} / {self.api_name}(limit={self.limit})'
 
     @property
     def metadata_path(self):
