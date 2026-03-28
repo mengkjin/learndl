@@ -59,7 +59,7 @@ class TushareIterateFetcher:
 
         self.api_name = '.'.join(self.tushare_api.args) if isinstance(self.tushare_api , functools.partial) else self.tushare_api.__name__
         kwargs_str = '_'.join([f'{k}={v}' for k, v in sorted(self.kwargs.items() , key = lambda x: x[0])])
-        self.breakpoint_path = self.base_path.joinpath(self.fetcher_name , f'{self.api_name} , {kwargs_str}')
+        self.breakpoint_path = self.base_path.joinpath(self.fetcher_name , self.api_name , kwargs_str)
 
     def __repr__(self):
         return f'Breakpoint of {self.fetcher_name} / {self.api_name}(limit={self.limit})'
@@ -90,10 +90,12 @@ class TushareIterateFetcher:
 
     def remove_path(self):
         self.clear_breakpoint()
-        self.breakpoint_path.rmdir()
+        if self.breakpoint_path.exists():
+            self.breakpoint_path.rmdir()
 
     def clear_breakpoint(self):
-        [file.unlink() for file in self.breakpoint_path.glob('*')]
+        if self.breakpoint_path.exists():
+            [file.unlink() for file in self.breakpoint_path.glob('*')]
 
     def check_expiration(self):
         metadata = self.load_metadata()
