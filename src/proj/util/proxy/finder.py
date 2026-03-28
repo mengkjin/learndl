@@ -33,8 +33,8 @@ class ZDAYEFinder(BaseProxiesFinder):
     """Get proxies from Zdaye API"""
     MAIN_PAGE = "https://www.zdaye.com/"
     API_URL = "http://www.zdopen.com/FreeProxy/Get/"
-    APP_ID = MACHINE.secrets['accounts']['zdaye']['app_id']
-    AKEY   = MACHINE.secrets['accounts']['zdaye']['akey']
+    APP_ID = MACHINE.secret['accounts']['zdaye']['app_id']
+    AKEY   = MACHINE.secret['accounts']['zdaye']['akey']
     INTERVAL = 1.2
     last_request_time = 0
 

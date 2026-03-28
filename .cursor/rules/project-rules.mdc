@@ -32,7 +32,7 @@ The project likely follows a structure similar to this (confirm by browsing):
 ├── results/              # exported results (not committed)
 ├── logs/                 # project and task logs (not committed)
 ├── .local_resources/     # private resources (not committed)
-├── .secrets/      # private settings (not committed)
+├── .secret/      # private settings (not committed)
 ├── .gitignore
 └── pyproject.toml        # project metadata & dependencies
 ```

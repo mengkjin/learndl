@@ -458,8 +458,8 @@ def kline_download():
     import boto3 , re , datetime , os    # type: ignore
     from pathlib import Path
 
-    key_id = MACHINE.secrets['accounts']['aws']['access_key_id']
-    access_key = MACHINE.secrets['accounts']['aws']['secret_access_key']
+    key_id = MACHINE.secret['accounts']['aws']['access_key_id']
+    access_key = MACHINE.secret['accounts']['aws']['secret_access_key']
 
     session = boto3.Session(aws_access_key_id=key_id, aws_secret_access_key=access_key, region_name='cn-north-1')
     s3 = session.resource('s3')

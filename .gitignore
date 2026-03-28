@@ -15,7 +15,7 @@ Desktop.ini
 # folder structure
 __old_version__/
 /.local_resources
-/.secrets
+/.secret
 /data
 /logs
 /models

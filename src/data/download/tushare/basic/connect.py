@@ -13,7 +13,7 @@ class TushareConnector:
 
     @property
     def token(self):
-        return MACHINE.secrets['accounts']['tushare']['token']
+        return MACHINE.secret['accounts']['tushare']['token']
 
     @property
     def pro(self):

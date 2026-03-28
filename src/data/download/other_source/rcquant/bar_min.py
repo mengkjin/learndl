@@ -59,7 +59,7 @@ def rcquant_init():
     if not rqdatac.initialized(): 
         try:
             with IOCatcher() as catcher:
-                rqdatac.init(uri = MACHINE.secrets['accounts']['rcquant']['uri'])
+                rqdatac.init(uri = MACHINE.secret['accounts']['rcquant']['uri'])
             output = catcher.contents
             if _print := output['stdout']:
                 Logger.stdout(_print)

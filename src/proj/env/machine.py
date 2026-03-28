@@ -17,7 +17,7 @@ def get_project_root() -> Path:
     raise RuntimeError("pyproject.toml not found, please confirm the project root directory contains this file")
 
 MAIN_PATH = get_project_root()
-SECRETS_PATH = MAIN_PATH.joinpath('.secrets')
+SECRET_PATH = MAIN_PATH.joinpath('.secret')
 @dataclass
 class _MachineSettings:
     name : str
@@ -59,21 +59,21 @@ def _get_best_device():
     else:
         return 'CPU'
 
-def _get_secrets() -> dict:
-    """Get the secrets of the project"""
-    secrets = {}
-    for file in SECRETS_PATH.iterdir():
+def _get_secret() -> dict:
+    """Get the secret of the project"""
+    secret = {}
+    for file in SECRET_PATH.iterdir():
         if file.is_file():
             assert file.suffix == '.yaml' or file.suffix == '.json' , f'{file} is not a yaml or json file'
             if file.suffix == '.yaml':
                 with open(file , 'r') as f:
-                    secrets[file.stem] = yaml.safe_load(f)
+                    secret[file.stem] = yaml.safe_load(f)
             elif file.suffix == '.json':
                 with open(file , 'r') as f:
-                    secrets[file.stem] = json.load(f)
+                    secret[file.stem] = json.load(f)
         else:
             raise ValueError(f'{file} is not a file')
-    return secrets
+    return secret
 
 class MACHINE:
     """
@@ -99,9 +99,9 @@ class MACHINE:
     system_name = platform.system()
     
     main_path = MAIN_PATH
-    secrets = _get_secrets()
+    secret = _get_secret()
 
-    setting = _MachineSettings(**secrets['machines'][name])
+    setting = _MachineSettings(**secret['machines'][name])
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
     
     cuda_server = setting.cuda_server
@@ -151,7 +151,7 @@ class MACHINE:
     @classmethod
     def machine_main_path(cls , machine_name : str) -> Path:
         """Get the main path at another machine"""
-        return Path(cls.secrets['machines'][machine_name]['main_path'])
+        return Path(cls.secret['machines'][machine_name]['main_path'])
     
     @classmethod
     def PATH(cls):
