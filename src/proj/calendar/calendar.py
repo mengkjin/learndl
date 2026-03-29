@@ -255,6 +255,19 @@ class CALENDAR:
         return dates
 
     @classmethod
+    def range_segments(cls, start: DateTypeWithNone, end: DateTypeWithNone , type : Literal['td', 'cd'] = 'td' , 
+                       step: int = 1 , until_today=True, updated=False,
+                       slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None) -> list[tuple[int,int]]:
+        """return the range of dates between start and end"""
+        dates = cls.range(start, end, type, step=step , until_today=until_today, updated=updated, slice=slice)
+        if len(dates) == 0:
+            return []
+        dt_starts = dates[::step]
+        dt_ends = np.full_like(dt_starts , dates[-1])
+        dt_ends[:-1] = dates[step-1::step]
+        return [(s,e) for s,e in zip(dt_starts , dt_ends)]
+
+    @classmethod
     def td_within(
         cls, start: DateTypeWithNone = None, end: DateTypeWithNone = None,
         step: int = 1, until_today=True, updated=False,

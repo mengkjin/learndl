@@ -1,4 +1,3 @@
-import re
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
@@ -6,276 +5,100 @@ import multiprocessing as mp
 from string import Template
 from dataclasses import dataclass
 from datetime import datetime
-from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
-from src.data.util import secid_adjust
+from src.data.util import secid_adjust , chinese_to_pinyin
 
-_connections : dict[str , dict[str , Any]] = {
-    'haitong': {
-        'dialect':'mssql+pyodbc' , 
-        'username' : 'JSJJDataReader' ,
-        'password' : 'JSJJDataReader' ,
-        'host' : 'rm-uf6777pp2098v0um6hm.sqlserver.rds.aliyuncs.com' ,
-        'port' : 3433 ,
-        'database' : 'daily_factor_db' ,
-        'driver':'FreeTDS' if MACHINE.is_linux else 'SQL Server'} ,
-    'dongfang': {
-        'dialect':'mysql+pymysql' , 
-        'username' : 'hfq_jiashi' ,
-        'password' : 'LTBi94we' ,
-        'host' : '139.196.77.199' ,
-        'port' : 81 ,
-        'database' : 'model'} ,
-    'dongfang2': {
-        'dialect':'mysql+pymysql' , 
-        'username' : 'score' ,
-        'password' : 'dfquant' ,
-        'host' : '139.196.77.199' ,
-        'port' : 81 ,
-        'database' : 'score'} ,
-    'kaiyuan': {
-        'dialect':'postgresql' , 
-        'username' : 'harvest_user' ,
-        'password' : 'harvest' ,
-        'host' : '1.15.124.26' ,
-        'port' : 5432 ,
-        'database' : 'kyfactor'} ,
-    'guosheng': {
-        'dialect':'postgresql' , 
-        'username' : 'jsquant' ,
-        'password' : '3hkpe89ksq' ,
-        'host' : 'frp-hub.top' ,
-        'port' : 43230 ,
-        'database' : 'gs_alpha'} ,
-    'huatai': {
-        'dialect':'mysql+pymysql' ,
-        'username' : 'client_jinm' ,
-        'password' : 'password_JINMENG20240304' ,
-        'host' : 'sh-cynosdbmysql-grp-jf1wgp6a.sql.tencentcdb.com' ,
-        'port' : 22087 ,
-        'database' : 'htfe_alpha_factors'} ,
-    'guojin': {
-        'dialect':'mysql+pymysql' ,
-        'username' : 'jsfund' ,
-        'password' : 'Gjquant_js!' ,
-        'host' : 'quantstudio.tpddns.cn' ,
-        'port' : 3306 ,
-        'database' : 'gjquant'} ,
-    'huayuan': {
-        'dialect':'mysql+pymysql' ,
-        'username' : 'zhengjintao' ,
-        'password' : 'hyquant' ,
-        'host' : '47.100.228.38' ,
-        'port' : 3306 ,
-        'database' : 'deeplearning'} ,
+# _connections : dict[str , dict[str , Any]] = {
+#     'haitong': {
+#         'dialect':'mssql+pyodbc' , 
+#         'username' : 'JSJJDataReader' ,
+#         'password' : 'JSJJDataReader' ,
+#         'host' : 'rm-uf6777pp2098v0um6hm.sqlserver.rds.aliyuncs.com' ,
+#         'port' : 3433 ,
+#         'database' : 'daily_factor_db' ,
+#         'driver':'FreeTDS' if MACHINE.is_linux else 'SQL Server'} ,
+#     'dongfang': {
+#         'dialect':'mysql+pymysql' , 
+#         'username' : 'hfq_jiashi' ,
+#         'password' : 'LTBi94we' ,
+#         'host' : '139.196.77.199' ,
+#         'port' : 81 ,
+#         'database' : 'model'} ,
+#     'dongfang2': {
+#         'dialect':'mysql+pymysql' , 
+#         'username' : 'score' ,
+#         'password' : 'dfquant' ,
+#         'host' : '139.196.77.199' ,
+#         'port' : 81 ,
+#         'database' : 'score'} ,
+#     'kaiyuan': {
+#         'dialect':'postgresql' , 
+#         'username' : 'harvest_user' ,
+#         'password' : 'harvest' ,
+#         'host' : '1.15.124.26' ,
+#         'port' : 5432 ,
+#         'database' : 'kyfactor'} ,
+#     'guosheng': {
+#         'dialect':'postgresql' , 
+#         'username' : 'jsquant' ,
+#         'password' : '3hkpe89ksq' ,
+#         'host' : 'frp-hub.top' ,
+#         'port' : 43230 ,
+#         'database' : 'gs_alpha'} ,
+#     'huatai': {
+#         'dialect':'mysql+pymysql' ,
+#         'username' : 'client_jinm' ,
+#         'password' : 'password_JINMENG20240304' ,
+#         'host' : 'sh-cynosdbmysql-grp-jf1wgp6a.sql.tencentcdb.com' ,
+#         'port' : 22087 ,
+#         'database' : 'htfe_alpha_factors'} ,
+#     'guojin': {
+#         'dialect':'mysql+pymysql' ,
+#         'username' : 'jsfund' ,
+#         'password' : 'Gjquant_js!' ,
+#         'host' : 'quantstudio.tpddns.cn' ,
+#         'port' : 3306 ,
+#         'database' : 'gjquant'} ,
+#     'huayuan': {
+#         'dialect':'mysql+pymysql' ,
+#         'username' : 'zhengjintao' ,
+#         'password' : 'hyquant' ,
+#         'host' : '47.100.228.38' ,
+#         'port' : 3306 ,
+#         'database' : 'deeplearning'} ,
+# }
 
-
-
+factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
+    'dongfang.hfq_chars' : (('dongfang' , 'hfq_chars'  , 'tradingdate' , 20050101 , None     , '%Y%m%d') , {}) ,
+    'dongfang.l2_chars'  : (('dongfang' , 'l2_chars'   , 'trade_date'  , 20130930 , None     , '%Y%m%d') , {}) ,
+    'dongfang.ms_chars'  : (('dongfang' , 'ms_chars'   , 'trade_date'  , 20050101 , None     , '%Y%m%d') , {}) ,
+    'dongfang.order_flow': (('dongfang' , 'order_flow' , 'trade_date'  , 20130930 , None     , '%Y%m%d') , {}) ,
+    'dongfang.gp'        : (('dongfang' , 'gp'         , 'tradingdate' , 20170101 , None     , '%Y-%m-%d') , {}) ,
+    'dongfang.tra'       : (('dongfang' , 'tra'        , 'tradingdate' , 20200101 , None     , '%Y-%m-%d') , {}) ,
+    'dongfang.hist'      : (('dongfang' , 'hist'       , 'tradingdate' , 20200101 , None     , '%Y-%m-%d') , {}) ,
+    'dongfang.scores_v0' : (('dongfang' , 'scores_v0'  , 'tradingdate' , 20171229 , 20251231 , '%Y-%m-%d') , {}) ,
+    'dongfang.scores_v2' : (('dongfang' , 'scores_v2'  , 'tradingdate' , 20171229 , 20251231 , '%Y-%m-%d') , {}) ,
+    'dongfang.scores_v3' : (('dongfang' , 'scores_v3' ,  'tradingdate' , 20171229 , 20251231 , '%Y-%m-%d') , {'connection_key' : 'dongfang2'}) ,
+    'dongfang.factorvae' : (('dongfang' , 'factorvae'  , 'tradingdate' , 20200101 , None     , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v0'  : (('huayuan'  , 'scores_v0'  , 'trade_dt'    , 20260101 , None     , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v2'  : (('huayuan'  , 'scores_v2'  , 'trade_dt'    , 20260101 , None     , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v3'  : (('huayuan'  , 'scores_v3'  , 'trade_dt'    , 20260101 , None     , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v3_fast'  : (('huayuan' , 'scores_v3_fast'  , 'trade_dt' , 20171229 , None , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v4_style' : (('huayuan' , 'scores_v4_style' , 'trade_dt' , 20171229 , None , '%Y-%m-%d') , {}) ,
+    'huatai.dl_factors'        : (('huatai' , 'dl_factors'        , 'datetime' , 20170101 , None , '%Y-%m-%d') , {'sub_factors' : ['price_volume_nn','text_fadt_bert']}) ,
+    'huatai.master_combined'   : (('huatai' , 'master_combined'   , 'datetime' , 20170101 , None , '%Y-%m-%d') , {}) ,
+    'huatai.fundamental_value' : (('huatai' , 'fundamental_value' , 'datetime' , 20170101 , None , '%Y-%m-%d') , {}) ,
+    # 'haitong.hf_factors' : (('haitong'  , 'hf_factors' , 'trade_dt'    , 20130101 , None     , '%Y%m%d') , {}) ,
+    # 'haitong.dl_factors' : (('haitong'  , 'dl_factors' , 'trade_dt'    , 20161230 , None     , '%Y%m%d') , {}) ,
+    # 'guosheng.gs_pv_set1': (('guosheng' , 'gs_pv_set1' , 'date'        , 20100129 , None     , '%Y%m%d') , {}) ,
+    # 'kaiyuan.positive'   : (('kaiyuan' , 'positive' , 'date' , 20140130 , None , '%Y%m%d') , 
+    #                         {'sub_factors' : ['active_trading','apm','opt_synergy_effect','large_trader_ret_error','offense_defense','high_freq_shareholder','pe_change']}) ,
+    # 'kaiyuan.negative'   : (('kaiyuan' , 'negative' , 'date' , 20140130 , None , '%Y%m%d') , 
+    #                         {'sub_factors' : ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error']}) ,
 }
-
-_default_factors : dict[str,dict[str,Any]] = {
-    # 'haitong.hf_factors' :{ 
-    #     'factor_src' : 'haitong' ,
-    #     'factor_set' : 'hf_factors' ,
-    #     'date_col' : 'trade_dt' ,
-    #     'start_date' : 20130101 , 
-    # } ,
-    # 'haitong.dl_factors' :{
-    #     'factor_src' : 'haitong' ,
-    #     'factor_set' : 'dl_factors' ,
-    #     'date_col' : 'trade_dt' ,
-    #     'start_date' : 20161230 ,
-    'dongfang.hfq_chars' :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'hfq_chars' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20050101 ,
-        'date_fmt' : '%Y%m%d' ,
-    } ,
-    'dongfang.l2_chars'  :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'l2_chars' ,
-        'date_col' : 'trade_date' ,
-        'start_date' : 20130930 ,
-        'date_fmt' : '%Y%m%d'
-    } ,
-    'dongfang.ms_chars'  :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'ms_chars' ,
-        'date_col' : 'trade_date' ,
-        'start_date' : 20050101 ,
-        'date_fmt' : '%Y%m%d' ,
-    } ,
-    'dongfang.order_flow':{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'order_flow' ,
-        'date_col' : 'trade_date' ,
-        'start_date' : 20130930 ,
-        'date_fmt' : '%Y%m%d'
-    } ,
-    'dongfang.gp'        :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'gp' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20170101 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'dongfang.tra'       :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'tra' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20200101 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'dongfang.hist'      :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'hist' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20200101 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'dongfang.scores_v0' :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'scores_v0' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20171229 ,
-        'end_date' : 20251231 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'dongfang.scores_v2' :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'scores_v2' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20171229 ,
-        'end_date' : 20251231 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'dongfang.scores_v3' :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'scores_v3' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20171229 ,
-        'end_date' : 20251231 ,
-        'date_fmt' : '%Y-%m-%d' ,
-        'connection_key' : 'dongfang2' ,
-    } ,
-    'dongfang.factorvae' :{
-        'factor_src' : 'dongfang' ,
-        'factor_set' : 'factorvae' ,
-        'date_col' : 'tradingdate' ,
-        'start_date' : 20200101 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'huayuan.scores_v0' :{
-        'factor_src' : 'huayuan' ,
-        'factor_set' : 'scores_v0' ,
-        'date_col' : 'trade_dt' ,
-        'start_date' : 20260101 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'huayuan.scores_v2' :{
-        'factor_src' : 'huayuan' ,
-        'factor_set' : 'scores_v2' ,
-        'date_col' : 'trade_dt' ,
-        'start_date' : 20260101 ,
-        'date_fmt' : '%Y-%m-%d'
-    } ,
-    'huayuan.scores_v3' :{
-        'factor_src' : 'huayuan' ,
-        'factor_set' : 'scores_v3' ,
-        'date_col' : 'trade_dt' ,
-        'start_date' : 20260101 ,
-        'date_fmt' : '%Y-%m-%d' ,
-    } ,
-    'huayuan.scores_v3_fast' :{
-        'factor_src' : 'huayuan' ,
-        'factor_set' : 'scores_v3_fast' ,
-        'date_col' : 'trade_dt' ,
-        'start_date' : 20171229 ,
-        'date_fmt' : '%Y-%m-%d' ,
-    } ,
-    'huayuan.scores_v4_style' :{
-        'factor_src' : 'huayuan' ,
-        'factor_set' : 'scores_v4_style' ,
-        'date_col' : 'trade_dt' ,
-        'start_date' : 20171229 ,
-        'date_fmt' : '%Y-%m-%d' ,
-    } ,
-    # 'guosheng.gs_pv_set1':{
-    #     'factor_src' : 'guosheng' ,
-    #     'factor_set' : 'gs_pv_set1' ,
-    #     'date_col' : 'date' ,
-    #     'start_date' : 20100129 ,
-    #     'date_fmt' : '%Y%m%d'
-    # } ,
-    # 'kaiyuan.positive' :{
-    #     'factor_src' : 'kaiyuan' ,
-    #     'factor_set' : 'positive' ,
-    #     'date_col' : 'date' ,
-    #     'start_date' : 20140130 ,
-    #     'sub_factors' : ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
-    #                      'offense_defense','high_freq_shareholder','pe_change'] ,
-    # } ,
-    # 'kaiyuan.negative' :{
-    #     'factor_src' : 'kaiyuan' ,
-    #     'factor_set' : 'negative' ,
-    #     'date_col' : 'date' ,
-    #     'start_date' : 20140130 ,
-    #     'sub_factors' : ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error'] ,
-    # } ,
-    'huatai.dl_factors' :{
-        'factor_src' : 'huatai' ,
-        'factor_set' : 'dl_factors' ,
-        'date_col' : 'datetime' ,
-        'start_date' : 20170101 ,
-        'date_fmt' : '%Y-%m-%d' ,
-        'sub_factors' : ['price_volume_nn','text_fadt_bert'] ,
-    } ,
-    'huatai.master_combined' :{
-        'factor_src' : 'huatai' ,
-        'factor_set' : 'master_combined' ,
-        'date_col' : 'datetime' ,
-        'start_date' : 20170101 ,
-        'date_fmt' : '%Y-%m-%d' ,
-    } ,
-    'huatai.fundamental_value' :{
-        'factor_src' : 'huatai' ,
-        'factor_set' : 'fundamental_value' ,
-        'date_col' : 'datetime' ,
-        'start_date' : 20170101 ,
-        'date_fmt' : '%Y-%m-%d' ,
-   } ,
-}
-        
-def factor_name_pinyin_conversion(text : str):
-    """convert a factor name with chinese characters to pinyin"""
-    text = text.replace('\'' , '2').replace('因子' , '')
-    hanzi_pattern = re.compile(r'[\u4e00-\u9fff]+')
-    hanzi_parts = hanzi_pattern.findall(text)
-    pinyin_parts = ['_'.join(lazy_pinyin(part)) for part in hanzi_parts]
-    for hanzi, pinyin in zip(hanzi_parts, pinyin_parts):
-        text = text.replace(hanzi, pinyin)
-    return text
-
-def date_offset(date : Any , offset : int = 0 , astype = int):
-    """offset a date by a given number of days"""
-    iterable_input = isinstance(date , Iterable)
-    date = pd.DatetimeIndex(np.array(date).astype(str) if iterable_input else [str(date)])
-    dseries : pd.DatetimeIndex = (date + pd.DateOffset(n=offset))
-    new_date = dseries.strftime('%Y%m%d').to_numpy(astype)
-    return new_date if iterable_input else new_date[0]
-
-def dates_segements(start , end , freq='QE' , astype : Any = int) -> list[tuple[int,int]]:
-    """segregate dates into date intervals"""
-    if start >= end: 
-        return []
-    dt_list = pd.date_range(str(start) , str(end) , freq=freq).strftime('%Y%m%d').astype(int)
-    dt_starts = [date_offset(start) , *date_offset(dt_list[:-1],1)]
-    dt_ends = [*dt_list[:-1] , date_offset(end)]
-    return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
 
 @dataclass
 class Connection:
@@ -328,9 +151,9 @@ class Connection:
         return self
 
     @classmethod
-    def default_connections(cls , keys = None):
+    def default_connections(cls , keys : list[str] | str | None = None):
         if keys is None:
-            keys = list(_connections.keys())
+            keys = cls.available_sources()
         elif isinstance(keys , str): 
             keys = [keys]
         connections = {key:cls.connection(key) for key in keys}
@@ -338,7 +161,35 @@ class Connection:
 
     @classmethod
     def connection(cls , key : str):
-        return Connection(**_connections[key])
+        kwargs = MACHINE.secret['accounts']['sellside'][key]
+        type = kwargs.pop('type')
+        assert type.startswith('sql') , f'{key} is not a valid sql source'
+        if type.endswith('.disabled'):
+            Logger.alert1(f'{key} is disabled')
+        
+        driver = {
+            'linux' : kwargs.pop('driver.linux' , None) ,
+            'windows' : kwargs.pop('driver.windows' , None) ,
+            'macos' : kwargs.pop('driver.macos' , None) ,
+        }
+        kwargs['driver'] = driver.get(MACHINE.system_name , None)
+        return Connection(**kwargs)
+
+    @classmethod
+    def available_sources(cls) -> list[str]:
+        return [key for key , value in MACHINE.secret['accounts']['sellside'].items() if value['type'] == 'sql']
+
+    @classmethod
+    def test_all_connections(cls) -> None:
+        for key in cls.available_sources():
+            try:
+                connection = cls.connection(key)
+                connection.connect()
+                connection.close()
+                Logger.success(f'{key} connection test passed')
+            except Exception as e:
+                Logger.error(f'{key} connection test failed: {e}')
+                Logger.print_exc(e)
 
 @dataclass
 class SellsideSQLDownloader:
@@ -353,7 +204,6 @@ class SellsideSQLDownloader:
     connection_key  : str = ''
 
     DB_SRC : ClassVar[str] = 'sellside'
-    FREQ   : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
     MAX_WORKERS: ClassVar[int] = 1
 
     @property
@@ -408,7 +258,7 @@ class SellsideSQLDownloader:
         return Connection.connection(self.use_connection)
     
     def download(self , option : Literal['since' , 'dates' , 'all'] ,
-                 dates = [] , trace = 1 , start = 20000101, end = 99991231 , 
+                 dates : Iterable[int] = () , trace = 1 , start = 20000101, end = 99991231 , 
                  connection : Connection | None = None):
         if option == 'dates':
             date_intervals = [(d,d) for d in dates]
@@ -424,7 +274,7 @@ class SellsideSQLDownloader:
                     start = max(start , last1_dt)
 
             end = CALENDAR.td(min(end , CALENDAR.update_to())).as_int()
-            date_intervals = dates_segements(start , end , self.FREQ , astype=int)
+            date_intervals = CALENDAR.range_segments(start , end , 'td' , 60)
         if not date_intervals: 
             return 
 
@@ -443,7 +293,7 @@ class SellsideSQLDownloader:
             with mp.Pool(processes=self.MAX_WORKERS) as pool:  
                 pool.starmap(self.download_period, [(*inter , connection) for inter in date_intervals])
  
-    def download_period(self , start , end , connection : Connection | None = None):
+    def download_period(self , start : int , end : int , connection : Connection | None = None):
         if connection is None:
             connection = self.get_connection()
         t0 = datetime.now()
@@ -465,24 +315,22 @@ class SellsideSQLDownloader:
         conn = connection.connect()
         return pd.read_sql_query(self.sqlline_start_dt() , conn)
     
-    def query_factor_values(self , start = 20230101 , end = 20230131 , connection : Connection | None = None , retry = 1):
+    def query_factor_values(self , start : int = 20230101 , end : int = 20230131 , connection : Connection | None = None , retry = 1):
         if connection is None:
             connection = self.get_connection()
         conn = connection.connect()
         if self.date_fmt is not None:
-            if start: 
-                start = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
-            if end:   
-                end   = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            start_str = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            end_str = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
         df_input = None
         i = 0
         while i <= retry:
             try:
                 if self.sub_factors is None:
-                    df_input = pd.read_sql_query(self.sqlline_factor_values(start , end) , conn)
+                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_str , end_str) , conn)
                 else:
-                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start , end , sub_factor) , conn) for sub_factor in self.sub_factors}
+                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_str , end_str , sub_factor) , conn) for sub_factor in self.sub_factors}
             except exc.ResourceClosedError:
                 Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
                 conn = connection.connect(reconnect = True)
@@ -537,7 +385,7 @@ class SellsideSQLDownloader:
             ...
         elif self.factor_src == 'guosheng':
             assert isinstance(df_input , pd.DataFrame) , f'guosheng {type(df_input)} is not a pd.DataFrame'
-            df.columns = [factor_name_pinyin_conversion(col) for col in df.columns]
+            df.columns = [chinese_to_pinyin(col) for col in df.columns]
             
         df = secid_adjust(df , drop_old=True)
         df = df.rename(columns = {self.date_col.lower():'date'})
@@ -562,15 +410,29 @@ class SellsideSQLDownloader:
         return status
 
     @classmethod
-    def default_factors(cls , keys = None):
+    def default_factors(cls , keys : list[str] | str | None = None):
         if keys is None:
-            keys = list(_default_factors.keys())
+            keys = cls.available_factors()
         elif isinstance(keys , str):
             keys = [keys]
         downloaders : dict[str,'SellsideSQLDownloader'] = {}
         for key in keys:
-            downloaders[key] = cls(**_default_factors[key])
+            args , kwargs = factor_settings[key]
+            downloaders[key] = cls(*args , **kwargs)
         return downloaders
+
+    @classmethod
+    def available_factors(cls) -> list[str]:
+        return list(factor_settings.keys())
+
+    @classmethod
+    def test_all_factors(cls) -> None:
+        for factor , connection in cls.factors_and_conns():
+            try:
+                factor.query_start_dt(connection = connection)
+                Logger.success(f'{factor.factor_src}.{factor.factor_set} start dt query passed')
+            except Exception as e:
+                Logger.error(f'{factor.factor_src}.{factor.factor_set} start dt query failed: {e}')
 
     @classmethod
     def factors_and_conns(cls , keys = None):

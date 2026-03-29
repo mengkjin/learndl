@@ -369,13 +369,16 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             dates = self.target_dates()
         Logger.success(f'{self.__class__.__name__} fetched for {Dates(updated_dates)}' , indent = self._stdout_indent)
 
-    def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> T:
-        """locked fetch from tushare"""
+    def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> pd.DataFrame:
+        """fetch from tushare with threading lock"""
         with TS.lock:
-            return tushare_api(*args, **kwargs)
+            ret = tushare_api(*args, **kwargs)
+        if not isinstance(ret , pd.DataFrame):
+            raise TypeError(f'{self} must return a pd.DataFrame, but got {ret}')
+        return ret
 
     def iterate_fetch(self , tushare_api : Callable[..., T] , limit = 2000 , max_fetch_times = -1 , breakpoint : bool = False , **kwargs) -> pd.DataFrame:
-        """iterate fetch from tushare"""
+        """iterate fetch from tushare with threading lock (defined in TushareIterateFetcher)"""
         iterate_fetcher = TushareIterateFetcher(self.__class__.__name__ , tushare_api , limit , max_fetch_times = max_fetch_times , breakpoint = breakpoint , **kwargs)
         return iterate_fetcher.fetch()
         

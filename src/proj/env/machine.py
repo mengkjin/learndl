@@ -3,7 +3,7 @@ import sys , socket , platform , os , torch , pytz , yaml , json
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any , Literal
 from tzlocal import get_localzone
 
 __all__ = ['MACHINE']
@@ -45,10 +45,17 @@ class _MachineSettings:
     def hfm_factor_dir(self) -> Path | None:
         return Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if self.belong_to_hfm else None
 
+
+def _get_system_name():
     system_name = platform.system()
-    is_linux = system_name == 'Linux' and os.name == 'posix'
-    is_windows = system_name == 'Windows'
-    is_macos = system_name == 'Darwin'
+    if system_name == 'Linux' and os.name == 'posix':
+        return 'linux'
+    elif system_name == 'Windows':
+        return 'windows'
+    elif system_name == 'Darwin':
+        return 'macos'
+    else:
+        raise ValueError(f'Unsupported system name: {system_name}')
 
 def _get_best_device():
     """Get the best device for the machine: CUDA, MPS, or CPU"""
@@ -79,6 +86,7 @@ class MACHINE:
     """
     Machine setting for the project
     name : str , machine_name
+    system_name : str , system name
     server : bool , is this machine a server
     main_path : str , main_path of the project
     python_path : str , python_path
@@ -96,7 +104,7 @@ class MACHINE:
 
     """
     name : str = socket.gethostname().split('.')[0]
-    system_name = platform.system()
+    system_name : Literal['linux' , 'windows' , 'macos'] = _get_system_name()
     
     main_path = MAIN_PATH
     secret = _get_secret()
@@ -116,9 +124,9 @@ class MACHINE:
     belong_to_jinmeng = setting.belong_to_jinmeng
     hfm_factor_dir = setting.hfm_factor_dir
 
-    is_linux = system_name == 'Linux' and os.name == 'posix'
-    is_windows = system_name == 'Windows'
-    is_macos = system_name == 'Darwin'
+    is_linux = system_name == 'linux'
+    is_windows = system_name == 'windows'
+    is_macos = system_name == 'macos'
     
     platform_server = name == 'mengkjin-server'
     platform_coding = is_macos

@@ -1,6 +1,8 @@
+import re
 import pandas as pd
 import numpy as np
 
+from pypinyin import lazy_pinyin
 from typing import Any
 from src.proj import DB
 
@@ -104,3 +106,13 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     if 'vwap' in df.columns: 
         data_new['vwap'] = data_new['amount'] / data_new['volume']
     return data_new.reset_index(drop=False)
+
+def chinese_to_pinyin(text : str):
+    '''convert chinese characters to pinyin'''
+    text = text.replace('\'' , '2').replace('因子' , '')
+    hanzi_pattern = re.compile(r'[\u4e00-\u9fff]+')
+    hanzi_parts = hanzi_pattern.findall(text)
+    pinyin_parts = ['_'.join(lazy_pinyin(part)) for part in hanzi_parts]
+    for hanzi, pinyin in zip(hanzi_parts, pinyin_parts):
+        text = text.replace(hanzi, pinyin)
+    return text

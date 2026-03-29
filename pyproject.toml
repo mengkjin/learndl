@@ -57,6 +57,8 @@ dependencies = [
     "truststore>=0.10.1",
     "httpx[socks]>=0.28.1",
     "curl-cffi>=0.14.0",
+    "pyodbc>=5.3.0",
+    "psycopg2-binary>=2.9.11",
 ]
 
 [tool.setuptools.dynamic]
