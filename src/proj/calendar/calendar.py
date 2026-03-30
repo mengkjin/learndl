@@ -379,11 +379,12 @@ class CALENDAR:
         return dates.astype(int)
 
     @staticmethod
-    def reformat(date: Any, old_fmt="%Y%m%d", new_fmt="%Y%m%d"):
+    def reformat(date: Any, old_fmt = "%Y%m%d", new_fmt : str | None = "%Y%m%d"):
         """Convert the date string format; return the original string if the two formats are the same."""
-        if old_fmt == new_fmt:
+        if old_fmt != new_fmt and new_fmt is not None:
+            return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
+        else:
             return date
-        return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
 
     @classmethod
     def year_end(cls, date: DateType):

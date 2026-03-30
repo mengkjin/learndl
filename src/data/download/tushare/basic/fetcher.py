@@ -79,7 +79,7 @@ class TushareIterateFetcher:
         self.write_metadata(old_metadata , overwrite = True)
 
     def load_metadata(self):
-        if not self.breakpoint:
+        if not self.breakpoint or not self.metadata_path.exists():
             return {}
         return PATH.read_json(self.metadata_path)
 
@@ -99,7 +99,7 @@ class TushareIterateFetcher:
 
     def check_expiration(self):
         metadata = self.load_metadata()
-        if 'expiration_date' in metadata and metadata['expiration_date'] < CALENDAR.now().timestamp():
+        if not metadata or ('expiration_date' in metadata and metadata['expiration_date'] < CALENDAR.now().timestamp()):
             self.clear_breakpoint()
             self.init_metadata()
 

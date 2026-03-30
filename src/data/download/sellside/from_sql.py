@@ -12,28 +12,28 @@ from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
 from src.data.util import secid_adjust , chinese_to_pinyin
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
-    'dongfang.hfq_chars' : (('dongfang' , 'hfq_chars'  , 'tradingdate' , 20050101 , None     , '%Y%m%d') , {}) ,
-    'dongfang.l2_chars'  : (('dongfang' , 'l2_chars'   , 'trade_date'  , 20130930 , None     , '%Y%m%d') , {}) ,
-    'dongfang.ms_chars'  : (('dongfang' , 'ms_chars'   , 'trade_date'  , 20050101 , None     , '%Y%m%d') , {}) ,
-    'dongfang.order_flow': (('dongfang' , 'order_flow' , 'trade_date'  , 20130930 , None     , '%Y%m%d') , {}) ,
-    'dongfang.gp'        : (('dongfang' , 'gp'         , 'tradingdate' , 20170101 , None     , '%Y-%m-%d') , {}) ,
-    'dongfang.tra'       : (('dongfang' , 'tra'        , 'tradingdate' , 20200101 , None     , '%Y-%m-%d') , {}) ,
-    'dongfang.hist'      : (('dongfang' , 'hist'       , 'tradingdate' , 20200101 , None     , '%Y-%m-%d') , {}) ,
+    'dongfang.hfq_chars' : (('dongfang' , 'hfq_chars'  , 'tradingdate' , 20050101 , 99991231 , '%Y%m%d') , {}) ,
+    'dongfang.l2_chars'  : (('dongfang' , 'l2_chars'   , 'trade_date'  , 20130930 , 99991231 , '%Y%m%d') , {}) ,
+    'dongfang.ms_chars'  : (('dongfang' , 'ms_chars'   , 'trade_date'  , 20050101 , 99991231 , '%Y%m%d') , {}) ,
+    'dongfang.order_flow': (('dongfang' , 'order_flow' , 'trade_date'  , 20130930 , 99991231 , '%Y%m%d') , {}) ,
+    'dongfang.gp'        : (('dongfang' , 'gp'         , 'tradingdate' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,
+    'dongfang.tra'       : (('dongfang' , 'tra'        , 'tradingdate' , 20200101 , 99991231 , '%Y-%m-%d') , {}) ,
+    'dongfang.hist'      : (('dongfang' , 'hist'       , 'tradingdate' , 20200101 , 99991231 , '%Y-%m-%d') , {}) ,
     'dongfang.scores_v0' : (('dongfang' , 'scores_v0'  , 'tradingdate' , 20171229 , 20251231 , '%Y-%m-%d') , {}) ,
     'dongfang.scores_v2' : (('dongfang' , 'scores_v2'  , 'tradingdate' , 20171229 , 20251231 , '%Y-%m-%d') , {}) ,
     'dongfang.scores_v3' : (('dongfang' , 'scores_v3' ,  'tradingdate' , 20171229 , 20251231 , '%Y-%m-%d') , {'connection_key' : 'dongfang2'}) ,
-    'dongfang.factorvae' : (('dongfang' , 'factorvae'  , 'tradingdate' , 20200101 , None     , '%Y-%m-%d') , {}) ,
-    'huayuan.scores_v0'  : (('huayuan'  , 'scores_v0'  , 'trade_dt'    , 20260101 , None     , '%Y-%m-%d') , {}) ,
-    'huayuan.scores_v2'  : (('huayuan'  , 'scores_v2'  , 'trade_dt'    , 20260101 , None     , '%Y-%m-%d') , {}) ,
-    'huayuan.scores_v3'  : (('huayuan'  , 'scores_v3'  , 'trade_dt'    , 20260101 , None     , '%Y-%m-%d') , {}) ,
+    'dongfang.factorvae' : (('dongfang' , 'factorvae'  , 'tradingdate' , 20200101 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v0'  : (('huayuan'  , 'scores_v0'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v2'  : (('huayuan'  , 'scores_v2'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v3'  : (('huayuan'  , 'scores_v3'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v3_fast'  : (('huayuan' , 'scores_v3_fast'  , 'trade_dt' , 20171229 , None , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v4_style' : (('huayuan' , 'scores_v4_style' , 'trade_dt' , 20171229 , None , '%Y-%m-%d') , {}) ,
     'huatai.dl_factors'        : (('huatai' , 'dl_factors'        , 'datetime' , 20170101 , None , '%Y-%m-%d') , {'sub_factors' : ['price_volume_nn','text_fadt_bert']}) ,
     'huatai.master_combined'   : (('huatai' , 'master_combined'   , 'datetime' , 20170101 , None , '%Y-%m-%d') , {}) ,
     'huatai.fundamental_value' : (('huatai' , 'fundamental_value' , 'datetime' , 20170101 , None , '%Y-%m-%d') , {}) ,
-    # 'haitong.hf_factors' : (('haitong'  , 'hf_factors' , 'trade_dt'    , 20130101 , None     , '%Y%m%d') , {}) ,
-    # 'haitong.dl_factors' : (('haitong'  , 'dl_factors' , 'trade_dt'    , 20161230 , None     , '%Y%m%d') , {}) ,
-    # 'guosheng.gs_pv_set1': (('guosheng' , 'gs_pv_set1' , 'date'        , 20100129 , None     , '%Y%m%d') , {}) ,
+    # 'haitong.hf_factors' : (('haitong'  , 'hf_factors' , 'trade_dt'    , 20130101 , 99991231 , '%Y%m%d') , {}) ,
+    # 'haitong.dl_factors' : (('haitong'  , 'dl_factors' , 'trade_dt'    , 20161230 , 99991231 , '%Y%m%d') , {}) ,
+    # 'guosheng.gs_pv_set1': (('guosheng' , 'gs_pv_set1' , 'date'        , 20100129 , 99991231 , '%Y%m%d') , {}) ,
     # 'kaiyuan.positive'   : (('kaiyuan' , 'positive' , 'date' , 20140130 , None , '%Y%m%d') , 
     #                         {'sub_factors' : ['active_trading','apm','opt_synergy_effect','large_trader_ret_error','offense_defense','high_freq_shareholder','pe_change']}) ,
     # 'kaiyuan.negative'   : (('kaiyuan' , 'negative' , 'date' , 20140130 , None , '%Y%m%d') , 
@@ -101,18 +101,17 @@ class Connection:
 
     @classmethod
     def connection(cls , key : str):
-        kwargs = MACHINE.secret['accounts']['sellside'][key]
-        type = kwargs.pop('type')
+        kwargs : dict[str,Any] = MACHINE.secret['accounts']['sellside'][key]
+        type : str = kwargs.pop('type')
         assert type.startswith('sql') , f'{key} is not a valid sql source'
         if type.endswith('.disabled'):
             Logger.alert1(f'{key} is disabled')
         
-        driver = {
-            'linux' : kwargs.pop('driver.linux' , None) ,
-            'windows' : kwargs.pop('driver.windows' , None) ,
-            'macos' : kwargs.pop('driver.macos' , None) ,
-        }
-        kwargs['driver'] = driver.get(MACHINE.system_name , None)
+        for system in ['linux' , 'windows' , 'macos']:
+            driver : str | None = kwargs.pop(f'driver.{system}' , None)
+            if driver and system == MACHINE.system_name:
+                kwargs['driver'] = driver
+        
         return Connection(**kwargs)
 
     @classmethod
@@ -145,6 +144,14 @@ class SellsideSQLDownloader:
 
     DB_SRC : ClassVar[str] = 'sellside'
     MAX_WORKERS: ClassVar[int] = 1
+
+    def __post_init__(self):
+        assert 19900101 <= self.start_date <= self.end_date <= 99991231 , f'start_date {self.start_date} must be greater than 19900101 and less than end_date {self.end_date} and less than 99991231'
+        assert self.date_fmt is None or len(self.date_fmt) == 8 , f'date_fmt {self.date_fmt} must be 8 characters'
+        assert self.sub_factors is None or all(isinstance(sub_factor , str) for sub_factor in self.sub_factors) , f'sub_factors {self.sub_factors} must be a list of strings'
+        assert self.connection_key is None or isinstance(self.connection_key , str) , f'connection_key {self.connection_key} must be a string'
+        assert self.connection_key is None or self.connection_key in Connection.available_sources() , f'connection_key {self.connection_key} must be a valid connection key'
+        assert self.connection_key is None or self.connection_key in Connection.available_sources() , f'connection_key {self.connection_key} must be a valid connection key'
 
     @property
     def db_key(self) -> str:
@@ -259,9 +266,8 @@ class SellsideSQLDownloader:
         if connection is None:
             connection = self.get_connection()
         conn = connection.connect()
-        if self.date_fmt is not None:
-            start_str = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
-            end_str = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+        start_str = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+        end_str   = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
         df_input = None
         i = 0
