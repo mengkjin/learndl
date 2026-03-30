@@ -87,7 +87,7 @@ class AnnouncementAgent:
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, fallback_to_raw_ip : bool = False, indent : int = 0 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, fallback_to_raw_ip : bool = True, indent : int = 0 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb(vb_level)
         caller_list = cls.get_proxy_caller_list(

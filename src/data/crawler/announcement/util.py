@@ -9,7 +9,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import TypeVar
 
-from src.proj import CALENDAR , DB
+from src.proj import CALENDAR , DB , Logger
 
 BJTZ = ZoneInfo("Asia/Shanghai")
 
@@ -29,6 +29,7 @@ def parse_jsonp(text: str) -> object:
     text = text.strip()
     m = re.match(r"^[a-zA-Z0-9_$]+\((.*)\)\s*;?\s*$", text, re.DOTALL)
     if not m:
+        Logger.error(f"Response is not JSONP format: {text}")
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
 

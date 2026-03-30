@@ -121,6 +121,16 @@ class AnnoucementFetcher(ABC):
         self.session = http_session(proxy=self.proxy , trust_env = self.proxy is None , timeout = (15,150))
         return self.session
 
+    @property
+    def session(self) -> requests.Session:
+        if not hasattr(self, '_session'):
+            self._session = self.init_session()
+        return self._session
+
+    @session.setter
+    def session(self, session: requests.Session):   
+        self._session = session
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.proxy})"
 
