@@ -8,6 +8,7 @@ from pathlib import Path
 from dataclasses import dataclass , field
 from datetime import datetime
 from matplotlib.figure import Figure
+from string import Template
 
 from src.proj.env import PATH , MACHINE
 from src.proj.proj import Proj
@@ -439,7 +440,7 @@ class TimedOutput:
             return False
         return self.type == other.type and str(self.content) == str(other.content)
     
-    def to_html(self , index: int = 0):
+    def to_template(self):
         """Convert the output item to html"""
         if self.content is None: 
             text = None
@@ -451,17 +452,23 @@ class TimedOutput:
             text = str_to_html(self.content)
         if text is None: 
             return None
-        text = f"""
-                <tr class="output-row">
-                    <td class="index-cell">{index}</td>
-                    <td class="type-cell {self.type_fmt}-type">{self.type_str}</td>
-                    <td class="vb-level-cell {self.type_fmt}-bg">{self.vb_level_str}</td>
-                    <td class="time-cell {self.type_fmt}-bg">{self.time_str}</td>
-                    <td class="content-cell {self.type_fmt}-bg {self.type_fmt}-content">{text}</td>
-                </tr>
-"""
-        return text
+        template = Template(HtmlCatcher.Templates['row'].safe_substitute(
+            type_fmt=self.type_fmt,
+            type_str=self.type_str,
+            vb_level_fmt=self.type_fmt,
+            vb_level_str=self.vb_level_str,
+            time_str=self.time_str,
+            text=text,
+        ))
+        return template
 
+    def to_html2(self , index : int) -> str | None:
+        """Convert the output item to html"""
+        template = self.to_template()
+        if template is None:
+            return None
+        return template.substitute(index=index)
+        
 class HtmlCatcher(OutputCatcher):
     """
     Html catcher for stdout, stderr, dataframe, and image (use Logger.display to display), export to html file at exit
@@ -476,6 +483,7 @@ class HtmlCatcher(OutputCatcher):
 
     PrimaryInstance : 'HtmlCatcher | None' = None
     Capturing : bool = True
+    Templates : dict[str, Template] = PATH.load_templates('html' , 'html_catcher')
 
     def __init__(self, title: str | None = None , category : str = 'miscelaneous', init_time: datetime | None = None , 
                  add_time_to_title: bool = True, **kwargs):
@@ -608,14 +616,11 @@ class HtmlCatcher(OutputCatcher):
         """generate html file with time ordered outputs"""
         assert self.PrimaryInstance is not None , f"Primary instance is not set when generating html"
 
-        html_segments = []
-        for i, output in enumerate(self.PrimaryInstance.outputs[self.start_point:]):
-            html_content = output.to_html(i)
-            if html_content is None: 
-                continue
-            html_segments.append(html_content)
+        templates = [output.to_template() for output in self.PrimaryInstance.outputs[self.start_point:]]
+        templates = [template for template in templates if template is not None]
+        rows = [templates.substitute(index=i) for i, templates in enumerate(templates)]
 
-        return ''.join([self._html_head() , *html_segments , self._html_tail()])
+        return ''.join([self.html_head() , *rows , self.html_tail()])
  
     def add_output(self, content: str | pd.DataFrame | pd.Series | Figure | Any , output_type: str | None = None):
         """add output to time ordered list"""
@@ -652,12 +657,15 @@ class HtmlCatcher(OutputCatcher):
         """Get the contents of the html catcher"""
         return self.generate_html()
        
-    def _html_head(self):
+    def html_head(self) -> str:
         """Generate the html head , including the styles of the html file, and basic information of the catcher"""
+        title = self.title.title()
+        
         key_width = 80
         if self.kwargs:
             key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , key_width)
         finish_time = datetime.now()
+
         script_infos = {
             'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
@@ -682,282 +690,18 @@ class HtmlCatcher(OutputCatcher):
         infos_outputs = '<div class="add-infos add-title"> NUMBER OF OUTPUTS </div>' + \
             '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
                         for key, value in output_infos.items()])
-        
-        head = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self.title.title()} - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</title>
-    <style>
-        body {{
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            line-height: 1.;
-            margin: 1px;
-        }}
-        .container {{
-            max-width: 1600px;
-            margin: 0 auto;
-        }}
-        .header {{
-            background-color: #2d2d30;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border-left: 4px solid #007acc;
-            border-right: 4px solid #007acc;
-        }}
-        .footer {{
-            color: #888;
-            font-size: 11px;
-            display: flex;
-        }}
-        .add-infos {{
-            color: #888;
-            font-size: 11px;
-            display: flex;
-        }}
-        .add-title {{
-            color: #007acc;
-            font-size: 12px;
-            font-weight: bold;
-        }}
-        .add-key {{
-            width: {key_width}px;     
-            text-align: left;
-            flex-shrink: 0;
-        }}
-        .add-seperator {{
-            margin: 0 0.5em;
-            padding : 0 10px;
-        }}
-        .add-value {{
-            text-align: left;
-        }}
-        .output-table {{
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            background-color: #252526;
-            border-radius: 5px;
-            overflow: hidden;
-            border-left: 4px solid gray;
-            border-right: 4px solid gray;
-        }}
-        .table-header {{
-            background-color: #2d2d30;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }}
-        .table-header th {{
-            padding: 12px 4px;
-            font-weight: bold;
-            border-top: 2px solid #3a3a3a;
-            border-bottom: 2px solid #3a3a3a;
-            color: #ffffff;
-        }}
-        .col-index {{
-            text-align: center;
-            width: 10px;
-            min-width: 1px;
-        }}
-        .col-type {{
-            border-left: 0.5px solid #3a3a3a;
-            text-align: center;
-            width: 50px;
-            min-width: 50px;
-        }}
-        .col-vb-level {{
-            border-left: 0.5px solid #3a3a3a;
-            text-align: center;
-            width: 10px;
-            min-width: 1px;
-        }}
-        .col-time {{
-            border-left: 0.5px solid #3a3a3a;
-            text-align: center;
-            width: 50px;
-            min-width: 50px;
-        }}
-        .col-content {{
-            border-left: 0.5px solid #3a3a3a;
-            text-align: left;
-            width: auto;
-        }}
-        .output-row td {{
-            border-bottom: 0.5px solid #3a3a3a;
-            transition: background-color 0.15s ease;
-            font-weight: bold;
-            vertical-align: top;
-            font-size: 11px;
-            padding: 1px 4px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        }}
-        .output-row:last-child td {{
-            border-bottom: 2px solid #3a3a3a;
-        }}
-        .output-row:hover{{
-            outline: 2px solid white;
-            transition: all 0.25s ease;
-        }}
-        .output-row:hover td {{
-            background-color: #3b3b3b !important;
-        }}
-        .index-cell {{
-            text-align: center;
-        }}
-        .type-cell {{
-            border-left: 0.5px solid #3a3a3a;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }}
-        .vb-level-cell {{
-            border-left: 0.5px solid #3a3a3a;
-            text-align: center;
-            color: #9ca3af;
-        }}
-        .time-cell {{
-            border-left: 0.5px solid #3a3a3a;
-            color: #9ca3af;
-            white-space: nowrap;
-        }}
-        .content-cell {{
-            border-left: 0.5px solid #3a3a3a;
-            word-wrap: break-word;
-            word-break: break-word;
-            overflow-x: auto;
-            max-width: 100%;
-        }}
-        .stdout-type {{
-            color: #4dff8e;
-            border-left: 3px solid #4dff8e;
-            background-color: #00802f;
-        }}
-        .stdout-bg {{
-            background-color: #031909;
-        }}
-        .stdout-content {{
-            white-space: pre-wrap;
-        }}
-
-        .stderr-type {{
-            color: #ff4d4d;
-            border-left: 3px solid #ff4d4d;
-            background-color: #800000;
-        }}
-        .stderr-bg {{
-            background-color: #190303;
-        }}
-        .stderr-content {{
-            white-space: pre-wrap;
-        }}
-
-        .dataframe-type {{
-            color: #4d72ff;
-            border-left: 3px solid #4d72ff;
-            background-color: #001a80;
-        }}
-        .dataframe-bg {{
-            background-color: #000a33;
-        }}
-
-        .image-type {{
-            color: #ffb84d;
-            border-left: 3px solid #ffb84d;
-            background-color: #804c00;
-        }}
-        .image-bg {{
-            background-color: #191103;
-        }}
-
-        .other-type {{
-            color: #db4dff;
-            border-left: 3px solid #db4dff;
-            background-color: #660080;
-        }}
-        .other-bg {{
-            background-color: #150319;
-        }}
-        .other-content {{
-            white-space: pre-wrap;
-        }}
-
-        .dataframe table {{
-            border-collapse: collapse;
-            width: auto;
-            max-width: 100%;
-            font-size: 11px;
-        }}
-        .dataframe th, .dataframe td {{
-            border: 1px solid #ddd;
-            padding: 4px 6px;
-            text-align: left;
-        }}
-        .dataframe th {{
-            font-weight: bold;
-        }}
-        .dataframe thead th {{
-            background-color: #808080;
-            color: white;
-            font-weight: bold;
-        }}
-        .df-text {{
-            color: #333;
-            margin: 5px 0;
-            font-weight: bold;
-            font-size: 12px;
-        }}
-        .df-fallback {{
-            background-color: #f8f8f8;
-            border: 1px solid #ddd;
-            padding: 8px;
-            border-radius: 3px;
-            font-size: 11px;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{self.title.title()}</h1>
-            {infos_script}
-            <br>
-            {infos_outputs}
-            <br>
-        </div>
-        <table class="output-table">
-            <thead class="table-header">
-                <tr>
-                    <th class="col-index">Id</th>
-                    <th class="col-type">Type</th>
-                    <th class="col-vb-level">Vb</th>
-                    <th class="col-time">Time</th>
-                    <th class="col-content">Content</th>
-                </tr>
-            </thead>
-            <tbody>
-"""
+        head = self.Templates['head'].substitute(
+            title=title,
+            key_width=key_width,
+            infos_script=infos_script,
+            infos_outputs=infos_outputs,
+        )
         return head
 
-    @staticmethod
-    def _html_tail():
+    @classmethod
+    def html_tail(cls) -> str:
         """Generate the html tail , including the end of the html file"""
-        tail = """
-            </tbody>
-        </table>
-        <div class="footer">
-            <p>End of Table</p>
-        </div>
-    </div>
-</body>
-</html>
-"""
-        return tail
+        return cls.Templates['tail'].substitute() 
 
 class MarkdownWriter:
     def __init__(self, md_file: TextIOWrapper, seperating_by: str| None = 'min'):

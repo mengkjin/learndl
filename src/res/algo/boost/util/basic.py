@@ -211,7 +211,7 @@ class BasicBoostModel(ABC):
 def load_xingye_data():
     factor_data = DB.load_df(PATH.miscel.joinpath('CombStdByZXMkt_All_TrainLabel.feather')) # 训练集，带Label
     factor_data['date'] = factor_data['date'].astype(str).str.replace('-','').astype(int)
-    factor_data['secid'] = DB.code_to_secid(factor_data['StockID'])
+    factor_data['secid'] = DB.code2secid(factor_data['StockID'])
 
     index_list = ['date','secid']
     label_list = ['nextRtnM']

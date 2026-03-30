@@ -22,9 +22,7 @@ from .input_creator import (
 
 class OptimizedPortfolioInput:
     def __init__(
-        self , 
-        port_name : str = 'port' ,
-        given_config : dict = {} ,
+        self , port_name : str = 'port' , given_config : dict = {} , **kwargs
     ) -> None:
         
         self.portfolio_name  = port_name
@@ -57,7 +55,8 @@ class OptimizedPortfolioInput:
             self.config[key].update(given)
 
     def to_solver_input(self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
-                        benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None):
+                        benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , * ,
+                        pool_additional : dict | None = None , **kwargs):
 
         self.model_date = model_date
         self.risk_model : Rmodel | Any = RISK_MODEL.get_model(model_date)
@@ -68,6 +67,8 @@ class OptimizedPortfolioInput:
         
         self.initial_port = init_port
         self.secid = self.risk_model.universe
+
+        self.cfg_pool.set_additional(pool_additional)
 
         self.benchmark = benchmark
         self.benchmark_port : Port | Any = None

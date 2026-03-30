@@ -6,6 +6,25 @@ import pandas as pd
 from typing import Any
 from matplotlib.figure import Figure
 
+_palette : dict[int , str] = {
+    30: 'black',
+    31: 'red',
+    32: 'green',
+    33: 'yellow',
+    34: 'blue',
+    35: 'magenta',
+    36: 'cyan',
+    37: 'white',
+    90: '#7f7f7f',      # bright black / gray
+    91: '#ff5555',      # bright red
+    92: '#55ff55',      # bright green
+    93: '#ffff55',      # bright yellow
+    94: '#5555ff',      # bright blue
+    95: '#ff55ff',      # bright magenta
+    96: '#55ffff',      # bright cyan
+    97: '#ffffff',      # bright white
+}
+
 def str_to_html(text: str | Any):
     """capture string to html"""
     
@@ -32,51 +51,8 @@ def replace_ansi_sequences(match):
 def ansi_codes_to_span(codes):
     """convert ANSI codes list to a single span tag"""
     styles = []
-    bg_color = None
-    fg_color = None
-
-    color_map = {
-        # regular foreground colors (30-37)
-        30: 'black',
-        31: 'red',
-        32: 'green',
-        33: 'yellow',
-        34: 'blue',
-        35: 'magenta',  # more standard than 'purple'
-        36: 'cyan',
-        37: 'white',
-        
-        # regular background colors (40-47)
-        40: 'black',
-        41: 'red',
-        42: 'green',
-        43: 'yellow',
-        44: 'blue',
-        45: 'magenta',
-        46: 'cyan',
-        47: 'white',
-        
-        # bright colors (90-97)
-        90: '#7f7f7f',      # bright black / gray
-        91: '#ff5555',      # bright red
-        92: '#55ff55',      # bright green
-        93: '#ffff55',      # bright yellow
-        94: '#5555ff',      # bright blue
-        95: '#ff55ff',      # bright magenta
-        96: '#55ffff',      # bright cyan
-        97: '#ffffff',      # bright white
-        
-        # bright background colors (100-107)
-        100: '#7f7f7f',      # bright black
-        101: '#ff5555',      # bright red
-        102: '#55ff55',      # bright green
-        103: '#ffff55',      # bright yellow
-        104: '#5555ff',      # bright blue
-        105: '#ff55ff',      # bright magenta
-        106: '#55ffff',      # bright cyan
-        107: '#ffffff',      # bright white
-    }
-    
+    has_fg_color = False
+    has_bg_color = False
     for code_str in codes:
         if not code_str:
             continue
@@ -87,18 +63,16 @@ def ansi_codes_to_span(codes):
             styles.append('font-weight: bold')
         elif code == 3:
             styles.append('font-style: italic')
-        elif code in color_map:
-            if 30 <= code <= 37 or 90 <= code <= 97:  # foreground colors
-                fg_color = color_map[code]
-            elif 40 <= code <= 47 or 100 <= code <= 107:  # background colors
-                bg_color = color_map[code]
-            
-    if fg_color:
-        styles.append(f'color: {fg_color}')
-    if bg_color:
-        styles.append(f'background-color: {bg_color}')
-        if not fg_color:
-            styles.append('color: white')
+        elif code in _palette:
+            # foreground colors
+            styles.append(f'color: {_palette[code]}')
+            has_fg_color = True
+        elif code - 10 in _palette:
+            # background colors
+            styles.append(f'background-color: {_palette[code - 10]}')
+            has_bg_color = True
+    if not has_fg_color and has_bg_color:
+        styles.append('color: white')
     
     if styles:
         return f'<span style="{"; ".join(styles)};">'

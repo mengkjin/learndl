@@ -1,278 +1,78 @@
+"""
+Code mapper tools, used to transform between code and secid.
+"""
+
 import pandas as pd
-from typing import Any
-__all__ = ['code_to_secid' , 'code_to_code' , 'secid_to_secid']
+import numpy as np
+from typing import Any , Union , TypeVar , Iterable
 
-_MAPPER_CODE : dict[str , str] = {
-    'T00018.SH' : '600018.SH'
-}
+from src.proj.env import MACHINE
 
-_MAPPER_SECID : dict[int , int] = {
-    839729 : 920729 , 
-    839167 : 920167 , 
-    838163 : 920163 , 
-    837242 : 920242 , 
-    836433 : 920433 , 
-    836263 : 920263 , 
-    836149 : 920149 , 
-    835640 : 920640 , 
-    835508 : 920508 , 
-    835368 : 920368 , 
-    835185 : 920185 , 
-    835184 : 920184 , 
-    834682 : 920682 , 
-    834475 : 920475 , 
-    834415 : 920415 , 
-    834021 : 920021 , 
-    833819 : 920819 , 
-    833266 : 920266 , 
-    832278 : 920278 , 
-    831961 : 920961 , 
-    831445 : 920445 , 
-    831370 : 920370 , 
-    831010 : 920010 , 
-    830964 : 920964 , 
-    830946 : 920946 , 
-    830799 : 920799 , 
-    430489 : 920489 , 
-    430418 : 920418 , 
-    430198 : 920198 , 
-    830839 : 920839 , 
-    871396 : 920396 , 
-    430047 : 920047 , 
-    838030 : 920030 , 
-    835670 : 920670 , 
-    832000 : 920000 , 
-    831856 : 920856 , 
-    836675 : 920675 , 
-    430510 : 920510 , 
-    837344 : 920344 , 
-    833509 : 920509 , 
-    836826 : 920826 , 
-    838275 : 920275 , 
-    833427 : 920427 , 
-    836239 : 920239 , 
-    832735 : 920735 , 
-    834599 : 920599 , 
-    830832 : 920832 , 
-    832225 : 920225 , 
-    831726 : 920726 , 
-    833523 : 920523 , 
-    837212 : 920212 , 
-    831768 : 920768 , 
-    834765 : 920765 , 
-    832885 : 920885 , 
-    839946 : 920146 , 
-    871553 : 920553 , 
-    430090 : 920090 , 
-    832566 : 920566 , 
-    871642 : 920642 , 
-    831039 : 920039 , 
-    835174 : 920174 , 
-    835305 : 920305 , 
-    836077 : 920077 , 
-    872925 : 920925 , 
-    836892 : 920892 , 
-    838924 : 920924 , 
-    831305 : 920405 , 
-    832089 : 920089 , 
-    873833 : 920833 , 
-    873806 : 920806 , 
-    873726 : 920026 , 
-    873706 : 920706 , 
-    873703 : 920703 , 
-    873693 : 920693 , 
-    873690 : 920690 , 
-    873679 : 920679 , 
-    873665 : 920665 , 
-    873593 : 920593 , 
-    873576 : 920576 , 
-    873570 : 920570 , 
-    873527 : 920527 , 
-    873339 : 920339 , 
-    873305 : 920505 , 
-    873223 : 920223 , 
-    873169 : 920169 , 
-    873167 : 920367 , 
-    873152 : 920252 , 
-    873132 : 920132 , 
-    873122 : 920122 , 
-    873001 : 920001 , 
-    872953 : 920953 , 
-    872931 : 920931 , 
-    872895 : 920895 , 
-    872808 : 920808 , 
-    872541 : 920541 , 
-    872392 : 920392 , 
-    872374 : 920374 , 
-    872351 : 920351 , 
-    872190 : 920190 , 
-    871981 : 920981 , 
-    871970 : 920970 , 
-    871857 : 920857 , 
-    871753 : 920753 , 
-    871694 : 920694 , 
-    871634 : 920634 , 
-    871478 : 920578 , 
-    871263 : 920363 , 
-    871245 : 920245 , 
-    870976 : 920976 , 
-    870866 : 920866 , 
-    870726 : 920926 , 
-    870656 : 920656 , 
-    870508 : 920608 , 
-    870436 : 920436 , 
-    870357 : 920357 , 
-    870299 : 920299 , 
-    870204 : 920204 , 
-    870199 : 920199 , 
-    839792 : 920792 , 
-    839790 : 920790 , 
-    839725 : 920725 , 
-    839719 : 920719 , 
-    839680 : 920680 , 
-    839493 : 920493 , 
-    839371 : 920371 , 
-    839273 : 920273 , 
-    838971 : 920971 , 
-    838837 : 920837 , 
-    838810 : 920810 , 
-    838701 : 920701 , 
-    838670 : 920870 , 
-    838402 : 920402 , 
-    838262 : 920262 , 
-    838171 : 920271 , 
-    838227 : 920227 , 
-    837748 : 920748 , 
-    837663 : 920663 , 
-    837592 : 920592 , 
-    837403 : 920403 , 
-    837174 : 920274 , 
-    837092 : 920092 , 
-    837046 : 920046 , 
-    837023 : 920123 , 
-    837006 : 920006 , 
-    836961 : 920061 , 
-    836957 : 920957 , 
-    836942 : 920942 , 
-    836871 : 920871 , 
-    836807 : 920807 ,   
-    836720 : 920720 , 
-    836717 : 920717 , 
-    836699 : 920699 , 
-    836547 : 920547 , 
-    836504 : 920504 , 
-    836422 : 920422 , 
-    836419 : 920519 , 
-    836414 : 920414 , 
-    836395 : 920395 , 
-    836270 : 920270 , 
-    836260 : 920260 , 
-    836247 : 920247 , 
-    836221 : 920221 , 
-    836208 : 920208 , 
-    835985 : 920985 , 
-    835892 : 920992 , 
-    835857 : 920057 , 
-    835579 : 920579 , 
-    835438 : 920438 , 
-    835237 : 920237 , 
-    835207 : 920207 , 
-    835179 : 920179 , 
-    834950 : 920950 , 
-    834770 : 920770 , 
-    834639 : 920639 , 
-    834407 : 920407 , 
-    834261 : 920261 , 
-    834062 : 920062 , 
-    834058 : 920058 , 
-    834033 : 920033 , 
-    834014 : 920014 , 
-    833943 : 920943 , 
-    833914 : 920914 , 
-    833873 : 920873 , 
-    833781 : 920781 , 
-    833751 : 920751 , 
-    833580 : 920580 , 
-    833575 : 920575 , 
-    833533 : 920533 , 
-    833455 : 920455 , 
-    833454 : 920454 , 
-    833429 : 920429 , 
-    833394 : 920394 , 
-    833346 : 920346 , 
-    833284 : 920284 , 
-    833230 : 920230 , 
-    833171 : 920571 , 
-    833075 : 920075 , 
-    833030 : 920130 , 
-    832982 : 920982 , 
-    832978 : 920978 , 
-    832876 : 920876 , 
-    832802 : 920802 , 
-    832786 : 920786 , 
-    832662 : 920662 , 
-    832651 : 920651 , 
-    832522 : 920522 , 
-    832491 : 920491 , 
-    832471 : 920471 , 
-    832469 : 920469 , 
-    832419 : 920419 , 
-    832175 : 920175 , 
-    832171 : 920171 , 
-    832149 : 920249 , 
-    832145 : 920145 , 
-    832110 : 920110 , 
-    832023 : 920023 , 
-    831906 : 920906 , 
-    831855 : 920855 , 
-    831834 : 920834 , 
-    831832 : 920932 , 
-    831689 : 920689 , 
-    831641 : 920641 , 
-    831627 : 920627 , 
-    831526 : 920526 , 
-    831396 : 920496 , 
-    831304 : 920304 , 
-    831278 : 920378 , 
-    831195 : 920195 , 
-    831175 : 920375 , 
-    831167 : 920267 , 
-    831152 : 920152 , 
-    831087 : 920087 , 
-    830974 : 920974 , 
-    830896 : 920896 , 
-    830879 : 920879 , 
-    830809 : 920809 , 
-    830779 : 920779 , 
-    430718 : 920718 , 
-    430685 : 920685 , 
-    430564 : 920564 , 
-    430556 : 920556 , 
-    430478 : 920478 , 
-    430476 : 920476 , 
-    430425 : 920425 , 
-    430300 : 920300 , 
-    430139 : 920139 , 
-    430017 : 920017 , 
-    300114 : 302132 ,
-}
+__all__ = ['code2secid' , 'code2code' , 'secid2secid' , 'secid2code']
 
-def code_to_secid(s : pd.Series | Any , decode_first = False):
-    code = code_to_code(s , decode_first)
-    secid = code.str.replace('[-.@a-zA-Z]','',regex=True)
+CodeType = Union[pd.Series , np.ndarray , list[str | int] , str , int]
+
+T = TypeVar("T")
+
+CODE_MAPPER : dict[str , str] = MACHINE.configs('util' , 'transform' , 'mapper' , 'code')
+SECID_MAPPER : dict[str , int] = MACHINE.configs('util' , 'transform' , 'mapper' , 'secid')
+
+def _to_series(input : Any) -> pd.Series:
+    if isinstance(input , Iterable):
+        output = pd.Series([i for i in input])
+    else:
+        output = pd.Series([input])
+    return output
+
+def _from_series(output : pd.Series , input : T) -> T:
+    if isinstance(input , pd.Series) and type(output) is type(input):
+        output.index = input.index
+        return output
+    elif isinstance(input , Iterable):
+        assert isinstance(input , (np.ndarray , list , tuple))
+        return input.__class__([o for o in output])
+    elif isinstance(input , (int , str)):
+        return output.to_numpy().item()
+    else:
+        raise TypeError(f'Unsupported type of input ({type(input)}) : {input}')
+
+def code2secid(code : T , decode_first = False) -> T:
+    code_s = _to_series(code)
+    code_s = code2code(code_s , decode_first)
+    secid = code_s.str.replace('[-.@a-zA-Z]','',regex=True)
     secid = secid.where(secid.str.isdigit() , '-1').astype(int)
-    secid = secid_to_secid(secid)
+    secid = secid2secid(secid)
+    assert secid.dtype == int , f'{code_s[secid.isna()].tolist()} cannot be converted to secid'
+    secid = _from_series(secid , code)
     return secid
 
-def code_to_code(s : pd.Series | Any , decode_first = False):
+def code2code(code : T , decode_first = False) -> T:
+    new_code = _to_series(code)
     if decode_first: 
-        code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in s])
-    else:
-        code = s
-    code = code.astype(str)
-    code = code.map(_MAPPER_CODE).fillna(code).astype(code.dtype)
+        new_code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in new_code])
+    new_code = new_code.astype(str)
+    new_code = new_code.map(CODE_MAPPER).fillna(new_code).astype(str)
+    new_code = _from_series(new_code , code)
+    return new_code
+
+def secid2secid(secid : T) -> T:
+    new_secid = _to_series(secid)
+    new_secid = new_secid.astype(str).map(SECID_MAPPER).fillna(new_secid).astype(int)
+    new_secid = _from_series(new_secid , secid)
+    return new_secid
+
+def secid2code(secid : T) -> T:
+    new_secid = _to_series(secid).astype(int)
+    suffix = pd.Series([''] * len(new_secid))
+    suffix[(new_secid >= 920000) & (new_secid <= 999999)] = '.BJ'
+    suffix[(new_secid >= 830000) & (new_secid <= 899999)] = '.BJ' # some old codes in BJ
+    suffix[(new_secid >= 430000) & (new_secid <= 439999)] = '.BJ' # some old codes in BJ
+    suffix[(new_secid >=      0) & (new_secid <=  99999)] = '.SZ' # A share in SZSE
+    suffix[(new_secid >= 300000) & (new_secid <= 399999)] = '.SZ' # Chuang Ye Ban
+    suffix[(new_secid >= 200000) & (new_secid <= 299999)] = '.SZ' # B share in SZSE
+    suffix[(new_secid >= 600000) & (new_secid <= 699999)] = '.SH' # A share in SSE
+    suffix[(new_secid >= 900000) & (new_secid <= 919999)] = '.SH' # B share in SSE
+    assert not suffix.eq('').any(), f'{new_secid[suffix.eq('')].tolist()} is not in the supported range'
+    code = new_secid.astype(str).str.zfill(6) + suffix
+    code = _from_series(code , secid)
     return code
-
-def secid_to_secid(s : pd.Series | Any):
-    return s.map(_MAPPER_SECID).fillna(s).astype(s.dtype)
-

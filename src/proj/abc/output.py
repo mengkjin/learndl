@@ -4,54 +4,77 @@ from typing import Any
 
 from .silence import Silence
 
-_ansi_color_mapping = {
-    'black' : '\u001b[30m',
-    'red' : '\u001b[31m',
-    'green' : '\u001b[32m',
-    'yellow' : '\u001b[33m',
-    'blue' : '\u001b[34m',
-    'purple' : '\u001b[35m',
-    'cyan' : '\u001b[36m',
-    'white' : '\u001b[37m',
-    'gray' : '\u001b[90m',
-    'lightred' : '\u001b[91m',
-    'lightgreen' : '\u001b[92m',
-    'lightyellow' : '\u001b[93m',
-    'lightblue' : '\u001b[94m',
-    'lightpurple' : '\u001b[95m',
-    'lightcyan' : '\u001b[96m',
-    'lightwhite' : '\u001b[97m',
+__all__ = ['stdout' , 'stderr' , 'FormatStr']
+
+_palette : dict[str , int] = {
+    'black' : 30 ,
+    'red' : 31 ,
+    'green' : 32 ,
+    'yellow' : 33 ,
+    'blue' : 34 ,
+    'purple' : 35 ,
+    'cyan' : 36 ,
+    'white' : 37 ,
+    'gray' : 90 ,
+    'lightred' : 91 ,
+    'lightgreen' : 92 ,
+    'lightyellow' : 93 ,
+    'lightblue' : 94 ,
+    'lightpurple' : 95 ,
+    'lightcyan' : 96 ,
+    'lightwhite' : 97 ,
 }
 
-_ansi_bg_color_mapping = {
-    'black' : '\u001b[40m',
-    'red' : '\u001b[41m',
-    'green' : '\u001b[42m',
-    'yellow' : '\u001b[43m',
-    'blue' : '\u001b[44m',
-    'purple' : '\u001b[45m',
-    'cyan' : '\u001b[46m',
-    'white' : '\u001b[47m',
-    'gray' : '\u001b[100m',
-    'lightred' : '\u001b[101m',
-    'lightgreen' : '\u001b[102m',
-    'lightyellow' : '\u001b[103m',
-    'lightblue' : '\u001b[104m',
-    'lightpurple' : '\u001b[105m',
-    'lightcyan' : '\u001b[106m',
-    'lightwhite' : '\u001b[107m',
-}
-
+_ansi_fg_colors : dict[str , str] = {f'{color}' : f'\u001b[{_palette[color]}m' for color in _palette}
+_ansi_bg_colors : dict[str , str] = {f'{color}' : f'\u001b[{_palette[color] + 10}m' for color in _palette}
 _ansi_bold = '\u001b[1m'
 _ansi_italic = '\u001b[3m'
 _ansi_reset = '\u001b[0m'
 
+# _ansi_fg_colors = {
+#     'black' : '\u001b[30m',
+#     'red' : '\u001b[31m',
+#     'green' : '\u001b[32m',
+#     'yellow' : '\u001b[33m',
+#     'blue' : '\u001b[34m',
+#     'purple' : '\u001b[35m',
+#     'cyan' : '\u001b[36m',
+#     'white' : '\u001b[37m',
+#     'gray' : '\u001b[90m',
+#     'lightred' : '\u001b[91m',
+#     'lightgreen' : '\u001b[92m',
+#     'lightyellow' : '\u001b[93m',
+#     'lightblue' : '\u001b[94m',
+#     'lightpurple' : '\u001b[95m',
+#     'lightcyan' : '\u001b[96m',
+#     'lightwhite' : '\u001b[97m',
+# }
+
+# _ansi_bg_colors = {
+#     'black' : '\u001b[40m',
+#     'red' : '\u001b[41m',
+#     'green' : '\u001b[42m',
+#     'yellow' : '\u001b[43m',
+#     'blue' : '\u001b[44m',
+#     'purple' : '\u001b[45m',
+#     'cyan' : '\u001b[46m',
+#     'white' : '\u001b[47m',
+#     'gray' : '\u001b[100m',
+#     'lightred' : '\u001b[101m',
+#     'lightgreen' : '\u001b[102m',
+#     'lightyellow' : '\u001b[103m',
+#     'lightblue' : '\u001b[104m',
+#     'lightpurple' : '\u001b[105m',
+#     'lightcyan' : '\u001b[106m',
+#     'lightwhite' : '\u001b[107m',
+# }
+
 def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False) -> str:
     prefix = ''
     if color:
-        prefix += _ansi_color_mapping.get(color , '')
+        prefix += _ansi_fg_colors.get(color , '')
     if bg_color:
-        prefix += _ansi_bg_color_mapping.get(bg_color , '')
+        prefix += _ansi_bg_colors.get(bg_color , '')
     if bold:
         prefix += _ansi_bold
     if italic:

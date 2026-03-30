@@ -4,15 +4,8 @@ import shutil , yaml , sys , json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
+from string import Template
 from .machine import MACHINE
-
-def _initialize_path(obj : object) -> None:
-    """Initialize the all paths under the main path"""
-    for name in dir(obj):
-        member = getattr(obj , name)
-        if isinstance(member , Path) and member.is_relative_to(MACHINE.main_path):
-            member.mkdir(parents=True , exist_ok=True)
 
 class PATH:
     """
@@ -70,6 +63,11 @@ class PATH:
     resource   = main.joinpath('resources')
     bak_data   = resource.joinpath('tushare_bak_data')
     bak_record = resource.joinpath('tushare_bak_data_record')
+
+    template      = main.joinpath('templates')
+    template_html = template.joinpath('html')
+    template_img  = template.joinpath('img')
+    template_font = template.joinpath('font')
 
     # local_resources folder
     local_resources = main.joinpath('.local_resources')
@@ -209,5 +207,34 @@ class PATH:
     def filter_paths(paths : list[Path] , ignore_prefix = ('.' , '~')) -> list[Path]:
         """Filter paths by ignoring certain prefixes"""
         return [p for p in paths if not p.name.startswith(ignore_prefix)]
-            
-_initialize_path(PATH)
+
+    @classmethod
+    def load_template(cls , *args : str) -> Template:
+        """Load template from template folder"""
+        path = cls.template.joinpath(*args)
+        assert path.exists() , f'{path} does not exist'
+        assert path.is_file() , f'{path} is not a file'
+        return Template(path.with_suffix('.template').read_text())
+
+    @classmethod
+    def load_templates(cls , *args : str) -> dict[str, Template]:
+        """Load template from template folder"""
+        path = cls.template.joinpath(*args)
+        assert path.exists() , f'{path} does not exist'
+        assert path.is_dir() , f'{path} is not a directory'
+        templates = {}
+        for file in path.iterdir():
+            if not (file.is_file() and file.suffix == '.template'):
+                continue
+            templates[file.stem] = Template(file.read_text())
+        return templates
+
+    @classmethod
+    def mkdir_path(cls) -> None:
+        """Initialize the all paths under the main path"""
+        for name in dir(cls):
+            member = getattr(cls , name)
+            if isinstance(member , Path) and member.is_relative_to(cls.main):
+                member.mkdir(parents=True , exist_ok=True)
+
+PATH.mkdir_path()

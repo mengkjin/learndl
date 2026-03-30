@@ -12,11 +12,11 @@ from typing import Any , Literal , Generator , Callable
 from src.proj.env import MACHINE , PATH
 from src.proj.log import Logger
 from src.proj.proj import Proj
-from .code_mapper import secid_to_secid
+from .code_mapper import secid2secid
 
 __all__ = [
     'DBPath' ,
-    'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
+    'save' , 'load' , 'loads' , 'rename' , 'path' , 'dates' , 'paths' , 'min_date' , 'max_date' ,
     'file_dates' , 'dir_dates' , 'save_df' , 'save_dfs' , 'append_df' , 'load_df' , 'load_dfs' ,  'load_dfs_seperately' , 
     'load_df_max_date' , 'load_df_min_date' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 
     'pack_files_to_tar' , 'unpack_files_from_tar'
@@ -93,6 +93,8 @@ class FileIOHandler:
     @classmethod
     def save_df(cls , df : pd.DataFrame , path : Path | io.BytesIO):
         """save dataframe to path"""
+        if df.index.names == [None]:
+            df = df.reset_index(drop = True)
         try:
             if DATAFRAME_SUFFIX == 'feather':
                 df.to_feather(path)
@@ -190,7 +192,7 @@ class DFProcessor:
         old_index = [idx for idx in df.index.names if idx]
         df = cls.reset_index(df)
         if 'secid' in df.columns:  
-            df['secid'] = secid_to_secid(df['secid'])
+            df['secid'] = secid2secid(df['secid'])
         if old_index: 
             df = df.set_index(old_index)
         return df
@@ -299,7 +301,7 @@ class DBPath:
         directory = self.parent
         return [int(y.stem) for y in directory.iterdir() if y.is_dir() and any(y.iterdir())] if directory.exists() else []
 
-    def dates(self , start = None , end = None , year = None , * , use_alt = False) -> np.ndarray:
+    def dates(self , start = None , end = None , year = None , * , use_alt = False) -> np.ndarray[int, Any]:
         """get dates from any database data"""
         if use_alt:
             candidates = [self] + self.alternatives()
@@ -307,9 +309,9 @@ class DBPath:
         else:
             directory = self.parent.joinpath(str(year)) if year else self.parent
             dates = dir_dates(directory , start , end)
-        return dates
+        return np.array(dates, dtype=int)
     
-    def min_date(self , * , use_alt = False):
+    def min_date(self , * , use_alt = False) -> int:
         """get minimum date from any database data"""
         if use_alt:
             candidates = [self] + self.alternatives()
@@ -324,7 +326,7 @@ class DBPath:
                 mdate = 99991231
             return int(mdate)
 
-    def max_date(self , * , use_alt = False):
+    def max_date(self , * , use_alt = False) -> int:
         """get maximum date from any database data"""
         if use_alt:
             candidates = [self] + self.alternatives()
@@ -632,12 +634,12 @@ def unpack_files_from_tar(path : Path | str , target : Path | str , * ,
                 Logger.success(f"Unpacked {member.name} to {target}" , indent = indent + 1 , vb_level = sub_vb_level , italic = True)
     Logger.stdout(f"Unpacked {path} to {target}" , indent = indent , vb_level = vb_level , italic = True)
 
-def min_date(db_src , db_key , *, use_alt = False):
+def min_date(db_src : str , db_key : str , *, use_alt = False) -> int:
     """get minimum date from any database data"""
     db_path = DBPath(db_src , db_key)
     return db_path.min_date(use_alt = use_alt)
 
-def max_date(db_src , db_key , *, use_alt = False):
+def max_date(db_src : str , db_key : str , *, use_alt = False) -> int:
     """get maximum date from any database data"""
     db_path = DBPath(db_src , db_key)
     return db_path.max_date(use_alt = use_alt)
@@ -663,7 +665,7 @@ def save(df : pd.DataFrame | None , db_src : str , db_key : str , date = None , 
                    indent = indent , vb_level = vb_level)
     return mark
 
-def load(db_src , db_key , date = None , *, 
+def load(db_src : str , db_key : str , date : int | None = None , *, 
          date_colname = None , use_alt = False , closest = False , 
          raise_if_not_exist = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> pd.DataFrame: 
     '''
@@ -693,7 +695,7 @@ def load(db_src , db_key , date = None , *,
     df = DFProcessor.load_process(df , date , date_colname , df_syntax = f'{db_path}' , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
-def loads(db_src , db_key , dates = None , start = None , end = None , *,
+def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
           date_colname = 'date' , use_alt = False , 
           parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , 
           fill_datavendor = False ,
@@ -714,11 +716,11 @@ def loads(db_src , db_key , dates = None , start = None , end = None , *,
         DATAVENDOR.db_loads_callback(df , db_src , db_key)
     return df
 
-def rename(db_src , db_key , new_db_key):
+def rename(db_src : str , db_key : str , new_db_key : str) -> None:
     """rename database from db_key to new_db_key"""
     return DBPath(db_src , db_key).rename(new_db_key)
 
-def path(db_src , db_key , date = None , * , use_alt = False) -> Path:
+def path(db_src : str , db_key : str , date : int | None = None , * , use_alt = False) -> Path:
     """Get path of database
     Parameters
     ----------
@@ -731,7 +733,17 @@ def path(db_src , db_key , date = None , * , use_alt = False) -> Path:
     """
     return DBPath(db_src , db_key).path(date , use_alt = use_alt)
 
-def dates(db_src , db_key , * , start = None , end = None , year = None , use_alt = False):
+def dates(db_src : str , db_key : str , * , start = None , end = None , year = None , use_alt = False) -> np.ndarray[int, Any]:
     """get dates from any database data"""
     return DBPath(db_src , db_key).dates(start , end , year , use_alt = use_alt)
+
+def paths(db_src : str , db_key : str , * , start = None , end = None , year = None , use_alt = False) -> list[Path]:
+    """get paths from any database data"""
+    db_path = DBPath(db_src , db_key)
+    if db_path.by_name:
+        paths = [db_path.path_exact()]
+    else:
+        dates = db_path.dates(start , end , use_alt = use_alt)
+        paths = [db_path.path(date , use_alt = use_alt) for date in dates]
+    return paths
     

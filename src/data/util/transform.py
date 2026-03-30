@@ -26,7 +26,7 @@ def secid_adjust(df : pd.DataFrame ,
         else: 
             return df
 
-    df[code_col]  = DB.code_to_secid(df[code_col] , decode_first = decode_first)
+    df[code_col]  = DB.code2secid(df[code_col] , decode_first = decode_first)
     if drop_old: 
         df = df.rename(columns={code_col:'secid'})
     else:

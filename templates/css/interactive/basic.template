@@ -1,0 +1,151 @@
+h1 {
+    font-size: 48px !important;
+    font-weight: 900 !important;
+    padding: 10px !important;
+    letter-spacing: 5px !important;
+    padding: 12px 0 0 0 !important;
+    border-bottom: 2px solid #1E90FF !important;
+    margin-bottom: 20px !important;
+}
+h2 {
+    font-size: 36px !important;
+    font-weight: 900 !important;
+    letter-spacing: 3px !important;
+    white-space: nowrap !important;
+    color: darkblue !important;
+    padding: 8px 0 0 0 !important;
+    border-bottom: 2px solid #1E90FF !important;
+    margin-bottom: 10px !important;
+}
+h3 {
+    font-size: 24px !important;
+    font-weight: 900 !important;
+    letter-spacing: 3px !important;
+    white-space: nowrap !important;
+    padding: 6px 0 0 0 !important;
+    border-bottom: 2px solid #1E90FF !important;
+    margin-bottom: 10px !important;
+}
+button {
+    align-items: center;
+    justify-content: center;
+    margin: 0 !important;
+    min-height: 10px !important;
+}
+button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15) !important;
+    background-color: lightblue !important;
+    border: none !important;
+}
+.stMainBlockContainer {
+    padding-top: 40px !important;
+}
+.stCaptionContainer {
+    margin: -10px !important;
+}
+.stSelectbox {
+    width: 100% !important;
+}
+.stSelectbox > div > div {
+    height: 28px;
+    width: 100%;
+}
+.stSelectbox > div > div > div {
+    align-self: center;
+}
+.stTextInput {
+    width: 100%;
+}
+.stTextInput > div {
+    height: 28px;
+}
+.stTextInput > div > div {
+    align-self: center !important;
+}
+.stNumberInput {
+    width: 100%;
+}
+.stNumberInput > div {
+    height: 28px;
+    width: 100%;
+}
+.stNumberInput > div > div {
+    height: inherit;
+    align-self: center !important;
+}
+.stNumberInput button {
+    width: 20px !important;
+    align-self: flex-end !important;
+    margin-top: 0 !important;
+}
+.element-container {
+    margin-bottom: 0;
+    display: flex;
+}
+.stMarkdown {
+    display: flex;
+}
+/* .stMarkdown p {
+    
+} */
+.stMetric div {
+    font-size: 18px !important;
+    /* color: #1E3A8A !important; */
+}
+.stMetric > label > div > div {
+    font-size: 20px !important;
+}
+/* .stMetric > div {
+    
+} */
+.stContainer {
+    padding-top: 0;
+    padding-bottom: 0;
+} 
+.stExpander .stElementContainer {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+.stExpander summary {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    span[data-testid="stExpanderIconCheck"] {
+        color: green !important;
+    }
+    span[data-testid="stExpanderIconError"] {
+        color: red !important;
+    }
+}
+.stCode code {
+    font-size: 12px !important;
+}
+.stAlert > div {
+    min-height: 18px !important;
+    display: flex !important;
+    line-height: 1.0 s!important;
+    align-items: center;
+    justify-content: right;
+    font-size: 14px !important;
+    padding: 0.25rem 0.5rem !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+.stColumn {
+    display: flex;
+}
+.stExpander {
+    summary p {
+        font-size: 16px !important;
+        font-weight: bold !important;
+    }
+}
+label[data-testid="stWidgetLabel"] > div:not([data-testid="stMarkdownContainer"]) {
+    justify-content: flex-start !important;
+    padding-left: 10px !important;
+}
+.stVerticalBlock[class*="task-stats"] .stMarkdown {
+    margin-bottom: 0 !important;
+    margin-top: -10px !important;
+    padding-left: 15px !important;
+}

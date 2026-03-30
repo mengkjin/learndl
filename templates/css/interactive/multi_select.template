@@ -1,0 +1,34 @@
+[data-baseweb="popover"] li {
+    font-size: ${popover_size}px !important;
+    line-height: 1.0 !important;
+    min-height: 10px !important;
+}
+.stRadio label span {
+    font-size: ${label_size}px !important;
+}
+.stMultiSelect {
+    width: 100% !important;
+}
+.stMultiSelect span {
+    font-size: ${label_size}px !important;
+}
+.stMultiSelect > div div  {
+    font-size: ${item_size}px !important;
+    min-height: 20px !important;
+}
+.stMultiSelect > div span  {
+    font-size: ${item_size}px !important;
+}
+.stSelectbox{
+    width: 100% !important;
+}
+.stSelectbox span {
+    font-size: ${label_size}px !important;
+}
+.stSelectbox > div div  {
+    font-size: ${item_size}px !important;
+    min-height: 20px !important;
+}
+.stSelectbox > div span  {
+    font-size: ${item_size}px !important;
+}

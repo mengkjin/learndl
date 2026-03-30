@@ -1,0 +1,7 @@
+<tr class="output-row">
+    <td class="index-cell">${index}</td>
+    <td class="type-cell ${type_fmt}-type">${type_str}</td>
+    <td class="vb-level-cell ${vb_level_fmt}-bg">${vb_level_str}</td>
+    <td class="time-cell ${type_fmt}-bg">${time_str}</td>
+    <td class="content-cell ${type_fmt}-bg ${vb_level_fmt}-content">${text}</td>
+</tr>

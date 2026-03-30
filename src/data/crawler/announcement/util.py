@@ -43,7 +43,7 @@ class Announcement:
     announce_date: int
     detail_path: str
     crawled_at: str
-    secid: str
+    secid: int
     date: int
 
     def __bool__(self) -> bool:
@@ -66,7 +66,7 @@ class Announcement:
         category = str(raw.get("BULLETIN_TYPE_DESC") or "").strip()
         return cls(
             exchange="SSE",
-            sec_code=code,
+            sec_code=f'{code:0>6s}.SH',
             sec_name=name,
             source_id=source_id,
             title=title,
@@ -74,7 +74,7 @@ class Announcement:
             announce_date=date,
             detail_path=cls.to_absolute_url(rel_path , pdf_base_url),
             crawled_at=crawled_iso,
-            secid=f'{code:0>6s}.SH' ,
+            secid= int(code),
             date=date,
         )
 
@@ -92,7 +92,7 @@ class Announcement:
         source_id = str(raw.get("annId") or raw.get("id") or "").strip()
         return cls(
             exchange="SZSE",
-            sec_code=code,
+            sec_code=f'{code:0>6s}.SZ' ,
             sec_name=name,
             title=title,
             category="",
@@ -100,7 +100,7 @@ class Announcement:
             detail_path=cls.to_absolute_url(rel_path , pdf_base_url),
             source_id=source_id,
             crawled_at=crawled_iso,
-            secid=f'{code:0>6s}.SZ' ,
+            secid = int(code),
             date=date,
         )
 
@@ -121,7 +121,7 @@ class Announcement:
         source_id = f'{code}|{date}|{title}'
         return cls(
             exchange="BSE",
-            sec_code=code,
+            sec_code=f'{code:0>6s}.BJ' ,
             sec_name=name,
             title=title,
             category=category,
@@ -129,7 +129,7 @@ class Announcement:
             detail_path=cls.to_absolute_url(rel_path , pdf_base_url),
             source_id=source_id,
             crawled_at=crawled_iso,
-            secid=f'{code:0>6s}.BJ' ,
+            secid = int(code),
             date=date,
         )
 

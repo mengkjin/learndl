@@ -129,7 +129,7 @@ class ReinforcePortfolioCreator(PortCreator):
         stay_ind_count : pd.Series | Any = stay.groupby('indus')['secid'].count()
         stay_ind_count = stay_ind_count.rename('count')
         
-        new_pool = pool.query('secid not in @stay_secid').merge(stay_ind_count , on = 'indus' , how = 'left')
+        new_pool = pool.query('(secid not in @stay_secid) and (secid not in @self.omission)').merge(stay_ind_count , on = 'indus' , how = 'left')
         max_ind_rank = self.conf.indus_slots - new_pool['count'].fillna(0) # noqa
         entry = new_pool.query('ind_rank < @max_ind_rank').sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])
 

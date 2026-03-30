@@ -97,5 +97,9 @@ class InfoDataAccess:
         list_dt_mask = pd.DataFrame(np.where(df_date < list_dt , np.nan , 0) , index = df.index , columns = df.columns)
 
         return df + list_dt_mask
+
+    def secname(self , secid : np.ndarray | list[int]):
+        secid = np.array(secid) if isinstance(secid , list) else secid
+        return self.desc.drop_duplicates('secid').set_index('secid').reindex(secid)['sec_name'].to_numpy()
     
 INFO = InfoDataAccess()

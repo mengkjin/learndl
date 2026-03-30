@@ -29,16 +29,14 @@ class StockBound:
     def __add__(self , other):
         return self.copy().union(other)
         
-    def intersect(self , other : Any):
-        assert isinstance(other , StockBound) , other
+    def intersect(self , other : 'StockBound'):
         if other.lb is not None: 
             self.update_lb(other.lb , type = 'intersect')
         if other.ub is not None: 
             self.update_ub(other.ub , type = 'intersect')
         return self
     
-    def union(self , other : Any):
-        assert isinstance(other , StockBound) , other
+    def union(self , other : 'StockBound'):
         if other.lb is not None: 
             self.update_lb(other.lb , type = 'union')
         if other.ub is not None: 
@@ -114,10 +112,21 @@ class StockPool:
     no_ldev  : list | np.ndarray | None = None # not for under bought
     no_udev  : list | np.ndarray | None = None # not for over bought
     shortable: list | np.ndarray | None = None # shortable stocks
+    additional : dict[str,list | None] | None = None
 
     warning_ub : ClassVar[float] = 0.005
 
     def __bool__(self): return True
+
+    def set_additional(self , additional : dict[str,list | None] | None = None):
+        self.additional = additional
+
+    def get_pool(self , name : str) -> list[int]:
+        raw = getattr(self , name)
+        raw = raw if isinstance(raw , list) else (raw.tolist() if isinstance(raw , np.ndarray) else [])
+        if self.additional and ((add := self.additional.get(name)) is not None):
+            raw = np.union1d(raw , add).tolist()
+        return raw
 
     @classmethod
     def bnd_ub(cls , secid : np.ndarray , pool : np.ndarray | list , 
@@ -138,37 +147,37 @@ class StockPool:
             wb = 0
         if w0 is None: 
             w0 = 0
-        allow = self.allow if self.allow else []
         bound = StockBound(np.full(len(secid) , STOCK_LB) , np.full(len(secid) , STOCK_UB))
+        allow = self.get_pool('allow')
         
-        if self.shortable is not None:
-            bound.intersect(self.bnd_lb(secid , self.shortable , valout=0))
+        if shortable := self.get_pool('shortable'):
+            bound.intersect(self.bnd_lb(secid , shortable , valout=0))
 
-        if self.basic: 
+        if basic := self.get_pool('basic'): 
             # not in basic pool : sell to maximum(lb , 0)
-            bound.intersect(self.bnd_ub(secid , np.union1d(self.basic , allow) , valout=np.maximum(self.bound.lb,0)))
+            bound.intersect(self.bnd_ub(secid , np.union1d(basic , allow) , valout=np.maximum(self.bound.lb,0)))
 
-        if self.no_ldev:
-            bound.intersect(self.bnd_lb(secid , self.no_ldev , wb))
+        if no_ldev := self.get_pool('no_ldev'):
+            bound.intersect(self.bnd_lb(secid , no_ldev , wb))
 
-        if self.no_udev:
-            bound.intersect(self.bnd_ub(secid , self.no_udev , wb))
+        if no_udev := self.get_pool('no_udev'):
+            bound.intersect(self.bnd_ub(secid , no_udev , wb))
 
-        if self.warning:
-            bound.intersect(self.bnd_ub(secid , self.warning , self.warning_ub))
+        if warning := self.get_pool('warning'):
+            bound.intersect(self.bnd_ub(secid , warning , self.warning_ub))
 
-        if self.ignore:
-            bound.intersect(self.bnd_lb(secid , self.ignore , w0))
-            bound.intersect(self.bnd_ub(secid , self.ignore , w0))
+        if ignore := self.get_pool('ignore'):
+            bound.intersect(self.bnd_lb(secid , ignore , w0))
+            bound.intersect(self.bnd_ub(secid , ignore , w0))
 
-        if self.no_sell:
-            bound.intersect(self.bnd_lb(secid , self.no_sell , w0))
+        if no_sell := self.get_pool('no_sell'):
+            bound.intersect(self.bnd_lb(secid , no_sell , w0))
 
-        if self.no_buy:
-            bound.intersect(self.bnd_ub(secid , self.no_buy , w0))
+        if no_buy := self.get_pool('no_buy'):
+            bound.intersect(self.bnd_ub(secid , no_buy , w0))
 
-        if self.prohibit is not None: 
-            bound.intersect(self.bnd_ub(secid , np.setdiff1d(self.prohibit , allow) , 0.))
+        if prohibit := self.get_pool('prohibit'): 
+            bound.intersect(self.bnd_ub(secid , np.setdiff1d(prohibit , allow) , 0.))
 
         self.bound = bound.check()
         return self.bound
@@ -204,8 +213,10 @@ class GeneralBound:
     lb : float | np.ndarray | None = None
     ub : float | np.ndarray | None = None
 
-    def __post_init__(self): assert self.key in ['abs' , 'rel' , 'por'] , self.key
-    def __bool__(self): return self.lb is not None or self.ub is not None
+    def __post_init__(self): 
+        assert self.key in ['abs' , 'rel' , 'por'] , self.key
+    def __bool__(self): 
+        return self.lb is not None or self.ub is not None
     
     def export(self , wb : np.ndarray | Any = None):
         assert wb is None or isinstance(wb , np.ndarray) , f'Only stock weight can be export , risk style/indus cannot'

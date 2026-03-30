@@ -3,7 +3,7 @@ import numpy as np
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , Callable
 
 from src.proj import Duration , Logger , Dates , Proj
 
@@ -66,9 +66,8 @@ class PortfolioBuilder:
     '''
     def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
-                 strategy : str = 'default' , suffixes : list[str] | str = [] , 
-                 build_on : Portfolio | None = None , resume_path : Path | str | None = None , 
-                 indent : int = 0 , vb_level : Any = 1 , **kwargs):
+                 strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
+                 resume_path : Path | str | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         self.category     = category
@@ -177,14 +176,14 @@ class PortfolioBuilder:
             case _:
                 raise ValueError(f'Unknown category: {self.category}')
 
-        self.creator = creator_class(self.full_name).setup(indent = self.indent , vb_level = self.vb_level + 1 , **self.kwargs)
+        self.creator = creator_class(self.full_name , indent = self.indent , vb_level = self.vb_level + 1 , **self.kwargs)
         return self
         
-    def build(self , date : int):
+    def build(self , date : int , * , omission : Callable[[int], list[int]] | list[int] | None = None):
         assert hasattr(self , 'creator') , 'PortfolioBuilder not setup!'
         assert self.alpha.has(date) , f'{self.alpha.name} has no data at {date}'
         init_port = self.portfolio.get(date , latest = True)
-        port_rslt = self.creator.create(date , self.alpha.get(date , lag = self.lag) , self.benchmark , init_port , False)
+        port_rslt = self.creator.create(date , self.alpha.get(date , lag = self.lag) , self.benchmark , init_port , omission = omission)
         self.creations.append(port_rslt)
         self.portfolio.append(port_rslt.port.with_name(self.portfolio.name))
         self.port = port_rslt.port
@@ -373,7 +372,7 @@ class PortfolioGroupBuilder:
             self._port_name_nchar = np.max([len(builder.full_name) for builder in self.builders])
         return self._port_name_nchar
 
-    def build(self):
+    def build(self , * , omission : Callable[[int], list[int]] | list[int] | None = None):
         self.builders_info()
         RISK_MODEL.load_models(self.relevant_dates)
         
@@ -386,7 +385,7 @@ class PortfolioGroupBuilder:
         Logger.stdout(f'{self.class_name}.build start...' , indent = self.indent , vb_level = self.vb_level + 3)
         iter_date_builder = self.iter_date_builder()
         for i , (date , builder) in enumerate(iter_date_builder):
-            builder.build(date)
+            builder.build(date , omission = omission)
             if (opt_count + 1) % 100 == 0 or i == len(iter_date_builder) - 1: 
                 self.print_build_info(date , opt_count , builder)
 

@@ -11,66 +11,6 @@ from typing import Any , ClassVar , Literal , Iterable
 from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
 from src.data.util import secid_adjust , chinese_to_pinyin
 
-# _connections : dict[str , dict[str , Any]] = {
-#     'haitong': {
-#         'dialect':'mssql+pyodbc' , 
-#         'username' : 'JSJJDataReader' ,
-#         'password' : 'JSJJDataReader' ,
-#         'host' : 'rm-uf6777pp2098v0um6hm.sqlserver.rds.aliyuncs.com' ,
-#         'port' : 3433 ,
-#         'database' : 'daily_factor_db' ,
-#         'driver':'FreeTDS' if MACHINE.is_linux else 'SQL Server'} ,
-#     'dongfang': {
-#         'dialect':'mysql+pymysql' , 
-#         'username' : 'hfq_jiashi' ,
-#         'password' : 'LTBi94we' ,
-#         'host' : '139.196.77.199' ,
-#         'port' : 81 ,
-#         'database' : 'model'} ,
-#     'dongfang2': {
-#         'dialect':'mysql+pymysql' , 
-#         'username' : 'score' ,
-#         'password' : 'dfquant' ,
-#         'host' : '139.196.77.199' ,
-#         'port' : 81 ,
-#         'database' : 'score'} ,
-#     'kaiyuan': {
-#         'dialect':'postgresql' , 
-#         'username' : 'harvest_user' ,
-#         'password' : 'harvest' ,
-#         'host' : '1.15.124.26' ,
-#         'port' : 5432 ,
-#         'database' : 'kyfactor'} ,
-#     'guosheng': {
-#         'dialect':'postgresql' , 
-#         'username' : 'jsquant' ,
-#         'password' : '3hkpe89ksq' ,
-#         'host' : 'frp-hub.top' ,
-#         'port' : 43230 ,
-#         'database' : 'gs_alpha'} ,
-#     'huatai': {
-#         'dialect':'mysql+pymysql' ,
-#         'username' : 'client_jinm' ,
-#         'password' : 'password_JINMENG20240304' ,
-#         'host' : 'sh-cynosdbmysql-grp-jf1wgp6a.sql.tencentcdb.com' ,
-#         'port' : 22087 ,
-#         'database' : 'htfe_alpha_factors'} ,
-#     'guojin': {
-#         'dialect':'mysql+pymysql' ,
-#         'username' : 'jsfund' ,
-#         'password' : 'Gjquant_js!' ,
-#         'host' : 'quantstudio.tpddns.cn' ,
-#         'port' : 3306 ,
-#         'database' : 'gjquant'} ,
-#     'huayuan': {
-#         'dialect':'mysql+pymysql' ,
-#         'username' : 'zhengjintao' ,
-#         'password' : 'hyquant' ,
-#         'host' : '47.100.228.38' ,
-#         'port' : 3306 ,
-#         'database' : 'deeplearning'} ,
-# }
-
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     'dongfang.hfq_chars' : (('dongfang' , 'hfq_chars'  , 'tradingdate' , 20050101 , None     , '%Y%m%d') , {}) ,
     'dongfang.l2_chars'  : (('dongfang' , 'l2_chars'   , 'trade_date'  , 20130930 , None     , '%Y%m%d') , {}) ,

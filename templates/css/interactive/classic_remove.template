@@ -1,0 +1,8 @@
+[class*="classic-remove"] button {
+    height: 32px !important;
+    width: 32px !important;
+    background-color: red !important; 
+    fill: white !important; 
+    color: white !important; 
+    margin: 0 !important;
+}

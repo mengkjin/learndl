@@ -279,12 +279,8 @@ class DataVendor:
         value = blk.loc(secid = secid , date = d , feature = 'weight').flatten()
         return value
     
-    def get_cp(self , secid : np.ndarray , d : int):
-        if not CALENDAR.is_trade_date(d): 
-            return None
-        blk = self.get_quotes_block(d)
-        value = blk.loc(secid = secid , date = d , feature = 'close').flatten()
-        return value
+    def get_cp(self , secid : np.ndarray | list[int] , d : int):
+        return self.TRADE.get_trd(self.td(d) , ['secid' , 'close']).set_index('secid').reindex(secid)['close'].to_numpy()
 
     def get_fin_latest(self , expression : str , date : int , new_name : str | None = None , **kwargs) -> pd.Series:
         '''statement@field@fin_type'''

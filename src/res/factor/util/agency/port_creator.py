@@ -1,25 +1,23 @@
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Literal
+from typing import Any , Literal , Callable
 
 from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
 class PortCreator(ABC):
-    def __init__(self , name : str):
+    def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
         self.name = name
-
-    @abstractmethod
-    def setup(self , indent : int = 2 , vb_level : Any = 3 , **kwargs): 
-        return self
+        self.setup(indent = indent , vb_level = vb_level , **kwargs)
     
     def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
                benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , 
-               detail_infos = True) -> 'PortCreateResult': 
+               detail_infos = False , * , omission : Callable[[int], list[int]] | list[int] | None = None) -> 'PortCreateResult': 
         self.model_date = model_date
         self.alpha_model = alpha_model if alpha_model is not None else Amodel.create_random(model_date)
         self.init_port = Port.none_port(model_date , self.name) if init_port is None else init_port
         self.value = self.init_port.value
+        self.omission : list[int] = (omission(model_date) if callable(omission) else omission) or []
         if benchmark is None:
             self.bench_port = Port.none_port(model_date)
         elif isinstance(benchmark , Port):
@@ -43,6 +41,10 @@ class PortCreator(ABC):
             'solve' : (t2 - t1).total_seconds() , 
             'output' : (t3 - t2).total_seconds()})
         return self.create_result
+
+    @abstractmethod
+    def setup(self , indent : int = 2 , vb_level : Any = 3 , **kwargs): 
+        return self
     
     @abstractmethod
     def parse_input(self):

@@ -1,10 +1,10 @@
 import streamlit as st
 
 from src.proj import Proj
-from .style import style
+from src.interactive.frontend.logo import get_logo
+from src.interactive.frontend.style import style
 from .control import SC 
 from .page import intro_pages , script_pages , PAGE_TITLE
-from .logo import get_logo
 
 def page_config():
     st.set_page_config(

@@ -1,7 +1,5 @@
 """
-Calendar tools: 
-CALENDAR for static/class methods 
-Dates for date array view.
+self defined CALENDAR and Dates class, used to manipulate and view dates.
 """
 
 import numpy as np

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            line-height: 1.;
+            margin: 1px;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #2d2d30;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007acc;
+            border-right: 4px solid #007acc;
+        }
+        .footer {
+            color: #888;
+            font-size: 11px;
+            display: flex;
+        }
+        .add-infos {
+            color: #888;
+            font-size: 11px;
+            display: flex;
+        }
+        .add-title {
+            color: #007acc;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .add-key {
+            width: ${key_width}px;     
+            text-align: left;
+            flex-shrink: 0;
+        }
+        .add-seperator {
+            margin: 0 0.5em;
+            padding : 0 10px;
+        }
+        .add-value {
+            text-align: left;
+        }
+        .output-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background-color: #252526;
+            border-radius: 5px;
+            overflow: hidden;
+            border-left: 4px solid gray;
+            border-right: 4px solid gray;
+        }
+        .table-header {
+            background-color: #2d2d30;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .table-header th {
+            padding: 12px 4px;
+            font-weight: bold;
+            border-top: 2px solid #3a3a3a;
+            border-bottom: 2px solid #3a3a3a;
+            color: #ffffff;
+        }
+        .col-index {
+            text-align: center;
+            width: 10px;
+            min-width: 1px;
+        }
+        .col-type {
+            border-left: 0.5px solid #3a3a3a;
+            text-align: center;
+            width: 50px;
+            min-width: 50px;
+        }
+        .col-vb-level {
+            border-left: 0.5px solid #3a3a3a;
+            text-align: center;
+            width: 10px;
+            min-width: 1px;
+        }
+        .col-time {
+            border-left: 0.5px solid #3a3a3a;
+            text-align: center;
+            width: 50px;
+            min-width: 50px;
+        }
+        .col-content {
+            border-left: 0.5px solid #3a3a3a;
+            text-align: left;
+            width: auto;
+        }
+        .output-row td {
+            border-bottom: 0.5px solid #3a3a3a;
+            transition: background-color 0.15s ease;
+            font-weight: bold;
+            vertical-align: top;
+            font-size: 11px;
+            padding: 1px 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        .output-row:last-child td {
+            border-bottom: 2px solid #3a3a3a;
+        }
+        .output-row:hover{
+            outline: 2px solid white;
+            transition: all 0.25s ease;
+        }
+        .output-row:hover td {
+            background-color: #3b3b3b !important;
+        }
+        .index-cell {
+            text-align: center;
+        }
+        .type-cell {
+            border-left: 0.5px solid #3a3a3a;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .vb-level-cell {
+            border-left: 0.5px solid #3a3a3a;
+            text-align: center;
+            color: #9ca3af;
+        }
+        .time-cell {
+            border-left: 0.5px solid #3a3a3a;
+            color: #9ca3af;
+            white-space: nowrap;
+        }
+        .content-cell {
+            border-left: 0.5px solid #3a3a3a;
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+        .stdout-type {
+            color: #4dff8e;
+            border-left: 3px solid #4dff8e;
+            background-color: #00802f;
+        }
+        .stdout-bg {
+            background-color: #031909;
+        }
+        .stdout-content {
+            white-space: pre-wrap;
+        }
+
+        .stderr-type {
+            color: #ff4d4d;
+            border-left: 3px solid #ff4d4d;
+            background-color: #800000;
+        }
+        .stderr-bg {
+            background-color: #190303;
+        }
+        .stderr-content {
+            white-space: pre-wrap;
+        }
+
+        .dataframe-type {
+            color: #4d72ff;
+            border-left: 3px solid #4d72ff;
+            background-color: #001a80;
+        }
+        .dataframe-bg {
+            background-color: #000a33;
+        }
+
+        .image-type {
+            color: #ffb84d;
+            border-left: 3px solid #ffb84d;
+            background-color: #804c00;
+        }
+        .image-bg {
+            background-color: #191103;
+        }
+
+        .other-type {
+            color: #db4dff;
+            border-left: 3px solid #db4dff;
+            background-color: #660080;
+        }
+        .other-bg {
+            background-color: #150319;
+        }
+        .other-content {
+            white-space: pre-wrap;
+        }
+
+        .dataframe table {
+            border-collapse: collapse;
+            width: auto;
+            max-width: 100%;
+            font-size: 11px;
+        }
+        .dataframe th, .dataframe td {
+            border: 1px solid #ddd;
+            padding: 4px 6px;
+            text-align: left;
+        }
+        .dataframe th {
+            font-weight: bold;
+        }
+        .dataframe thead th {
+            background-color: #808080;
+            color: white;
+            font-weight: bold;
+        }
+        .df-text {
+            color: #333;
+            margin: 5px 0;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .df-fallback {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>${title}</h1>
+            ${infos_script}
+            <br>
+            ${infos_outputs}
+            <br>
+        </div>
+        <table class="output-table">
+            <thead class="table-header">
+                <tr>
+                    <th class="col-index">Id</th>
+                    <th class="col-type">Type</th>
+                    <th class="col-vb-level">Vb</th>
+                    <th class="col-time">Time</th>
+                    <th class="col-content">Content</th>
+                </tr>
+            </thead>
+                <tbody>

@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import PATH , Logger , Proj , CALENDAR , Dates
+from src.res.trading.util.trade_suggestion import TradeSuggestion
+
 from .trading_port import TrackingPort
 
 class TrackingPortfolioManager:
@@ -35,11 +37,11 @@ class TrackingPortfolioManager:
                 message = f'Port {port_name} : total {len(new_ports[port_name])} , in {len(in_secids)} , out {len(out_secids)}'
                 Logger.stdout(message , indent = indent + 2 , vb_level = vb_level + 1)
                 if port_name in Proj.Conf.TradingPort.focused_ports:
-                    in_detail = f'include new secids: {in_secids}'
-                    out_detail = f'exclude old secids: {out_secids}'
                     Logger.conclude(message)
-                    Logger.conclude(in_detail)
-                    Logger.conclude(out_detail)
+                    for suggestion in TradeSuggestion.generate(in_secids, date , 'buy'):
+                        Logger.conclude(suggestion.format())
+                    for suggestion in TradeSuggestion.generate(out_secids, date , 'sell'):
+                        Logger.conclude(suggestion.format())
                     
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)

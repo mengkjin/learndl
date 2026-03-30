@@ -47,16 +47,15 @@ class OptimizedPortfolioCreatorConfig:
         return {'turn' : self.opt_turn , 'qobj' : self.opt_qobj , 'qcon' : self.opt_qcon , 'short' : self.opt_short}
 
 class OptimizedPortfolioCreator(PortCreator):
-    def __init__(self , name : str):
-        super().__init__(name)
-
     def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs): 
         self.conf = OptimizedPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         self.opt_input = OptimizedPortfolioInput(self.name , self.conf.opt_config)
         return self
     
     def parse_input(self):
-        self.solver_input = self.opt_input.to_solver_input(self.model_date , self.alpha_model , self.bench_port , self.init_port).rescale()
+        self.pool_additional = {'no_buy' : self.omission} if self.omission else None
+        self.solver_input = self.opt_input.to_solver_input(self.model_date , self.alpha_model , self.bench_port , self.init_port ,
+                                                           pool_additional = self.pool_additional).rescale()
         return self
 
     def solve(self):
@@ -99,5 +98,5 @@ if __name__ == '__main__':
 
     optim = OptimizedPortfolioCreator('test').setup(config_path = config_path , prob_type='socp')
 
-    s = optim.create(20240606)
+    s = optim.create(20240606 , detail_infos = True)
     Logger.stdout(s)

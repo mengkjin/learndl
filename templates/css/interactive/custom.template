@@ -1,0 +1,457 @@
+.stVerticalBlock[class*="queue-header-buttons"] {
+    div {justify-content: center !important;}
+    button {
+        min-width: 60px !important;
+        height: 60px !important;
+        width: 60px !important;
+        span {
+            font-size: 36px !important;
+        }
+    }
+    [class*="-sync"] button {
+        color: #1E88E5 !important;
+        &:hover {
+            background-color: #1E88E5 !important;
+            color: white !important;
+        }
+    } 
+    [class*="-refresh"] button {
+        color: green !important;
+        &:hover {
+            background-color: green !important;
+            color: white !important;
+        }
+    }   
+    [class*="-clean"] button {
+        color: lightblue !important;
+        &:hover {
+            background-color: lightblue !important;
+            color: white !important;
+        }
+    }  
+    [class*="-delist"] button {
+        color: violet !important;
+        &:hover {
+            background-color: violet !important;
+            color: white !important;
+        }
+    }
+    [class*="-remove"] button {
+        color: red !important;
+        &:hover {
+            background-color: red !important;
+            color: white !important;
+        }
+    }
+    [class*="-restore"] button {
+        color: darkgreen !important;
+        &:hover {
+            background-color: darkgreen !important;
+            color: white !important;
+        }
+    }
+}
+.stVerticalBlock[class*="queue-item-container"] {
+    margin-bottom: -10px !important;
+    
+    .stElementContainer[class*="queue-item"] {
+        * {
+            border: none !important;
+            border-radius: 10px !important;
+            line-height: 32px !important;
+            font-weight: bold !important;
+            font-size: 20px !important;
+            justify-content: flex-end !important;
+            align-items: flex-end !important;
+        }     
+        button {
+            justify-content: center !important;
+            padding: 0 !important;
+            width: 32px !important;
+            height: 32px !important;
+        }
+    }
+    .stElementContainer[class*="-remove"] {
+        button:hover {background-color: #ff8080 !important;}
+    } 
+    .stElementContainer[class*="-delist"] {
+        button:hover {background-color: #8080ff !important;}
+    }
+    [class*="click-content"] {
+        button {
+            justify-content: flex-start !important;
+            text-align: left !important;
+            padding-left: 6px !important;
+            p {font-size: 16px !important;}
+        }
+        &[class*="-selected"] button {
+            background-color: #1E88E5 !important;
+            color: white !important;
+        }
+    }
+}
+.stVerticalBlock[class*="developer-info"] {
+    button {
+        border-radius: 10px !important;
+        border: 1px solid lightgray !important;
+        min-width: 100px !important;
+        height: 36px !important; 
+        p {
+            font-weight: 900 !important;
+        }
+    }
+    [class*="-clear"] button {
+        color: red !important;
+        &:hover {
+            background-color: red !important;
+            color: white !important;
+        }
+    }
+}
+.stElementContainer[class*="choose-item-select"] {
+    button {
+        justify-content: flex-start !important;
+        text-align: left !important;
+        padding-left: 12px !important;
+    }
+    &[class*="-selected"] {
+        button {
+            background-color: #1E88E5 !important;
+            color: white !important;
+        }
+        p {
+            font-weight: bold !important;
+        }
+    }
+}
+.stVerticalBlock[class*="choose-item-remove"] {
+    .stTooltipIcon {justify-content: flex-end !important;}
+    .stElementContainer[class*="remove-button"] {
+        * {
+            border: none !important;
+            border-radius: 10px !important;
+            line-height: 32px !important;
+            font-weight: bold !important;
+            font-size: 24px !important;
+        }     
+        button {
+            width: 32px !important;
+            height: 32px !important;
+            color: red !important;
+            &:hover {
+                color: white !important;
+                background-color: red !important;
+            }
+        }
+    }
+}
+.stVerticalBlock[class*="script-structure"] {
+    margin-top: 0 !important;
+    margin-bottom: -10px !important;
+    &[class*="-level-1"] button {margin-left: 45px !important;}
+    &[class*="-level-2"] button {margin-left: 90px !important;}
+    &[class*="-level-3"] button {margin-left: 135px !important;}
+    .stElementContainer[class*="-runner-expand"] {
+        button {
+            min-width: 400px !important;
+            justify-content: flex-start !important;
+            padding-left: 20px !important;
+            color: black !important;
+            background: linear-gradient(to right, #87CEEB -2%, white 1%, #87CEEB 200%) !important;
+            &:hover {
+                background: linear-gradient(to right, #1E88E5 -2%, white 1%, #1E88E5 200%) !important;
+                color: black !important;
+            }
+        }       
+        p {
+            font-size: 16px !important;
+            letter-spacing: 2px !important;
+        }
+        &[class*="-selected"] button {
+            background-color: #1E88E5 !important;
+            color: white !important;
+        }  
+    }
+}
+.stVerticalBlock[class*="control-panel"] {
+    padding-left: 10% !important;
+    padding-right: 10% !important;
+    [data-baseweb*="tab-list"] {
+        button {
+            height: 24px !important;
+            min-width: 10% !important;
+            display: flex;
+            margin: 0 !important;
+            padding: 0 !important;
+            /* background: radial-gradient(circle,white 50%, lightgray 200%) !important; */
+        }
+        p {
+            font-size: 16px !important;
+            font-weight: bold !important;
+        }
+    }
+    [data-baseweb*="tab-panel"]{
+        min-height: 110px !important;
+        margin-bottom: -10px !important;
+        border-bottom: 2px solid lightgray !important;
+        .stElementContainer {
+            justify-content: center !important;
+        }
+        .stVerticalBlock[class*="control-panel-buttons"] {
+            padding: 0 !important;
+            margin-bottom: 0 !important;
+            margin-top: 0 !important;
+            .stTooltipIcon {
+                justify-content: center !important;
+            }
+            
+            button {
+                min-width: 60px !important;
+                min-height: 60px !important;
+                height: 60px !important;
+                width: 60px !important;
+                border-radius: 50%;
+                border: none;
+                display: flex;
+            }
+            .stElementContainer[class*="script-runner-run"] {
+                button {
+                    background-color: green !important;
+                    color: white !important;
+                    &:hover {background-color: darkgreen !important;}
+                }
+            }
+            .stElementContainer[class*="global-script-latest-task"] {
+                button {
+                    background-color: lightblue !important;
+                    color: white !important;
+                    &:hover {background-color: #2196F3 !important;}
+                }
+            }
+            .stElementContainer[class*="current-script-latest-task"] {
+                button {
+                    background-color: lightcyan !important;
+                    color: white !important;
+                    &:hover {background-color: #00BCD4 !important;}
+                }
+            }
+            .stElementContainer[class*="control-refresh-interactive"] {
+                button {
+                    background-color: lightgreen !important;
+                    color: white !important;
+                    &:hover {background-color: #4CAF50 !important;}
+                }
+            }
+            .stElementContainer[class*="git-clear-pull"] {
+                button {
+                    background-color: coral !important;
+                    color: white !important;
+                    &:hover {background-color: #F44336 !important;}
+                }
+            }
+            .stElementContainer[class*="-disabled"] button {
+                background-color: lightgray !important;
+                color: white !important;
+                border: 1px solid lightgray !important;
+                &:hover {
+                    background-color: lightgray !important;
+                }
+            }
+            p {
+                font-size: 40px !important;
+                font-weight: bold !important;
+            }
+        }
+        .stVerticalBlock[class*="control-panel-settings"] {   
+            p {
+                font-size: 16px !important;
+            }
+        }
+    }
+}
+.stElementContainer[class*="exit-file"] {
+    &[class*="open"] button {
+        min-width: 500px !important;
+        justify-content: flex-start !important;
+    }
+    &[class*="-preview"] {
+        &[class*="-select"] button {
+            background: #1E88E5 !important;
+            color: white !important;
+        }
+    }
+}
+div[data-testid*="stSidebarHeader"] {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 60px !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    img[data-testid*="stSidebarLogo"] {
+        margin: 0 !important;
+        position: absolute !important;
+        height: 40px !important;
+        max-width: 1000px !important;
+        z-index: 1 !important;
+        left: 0 !important;
+        top: 10px !important;
+    }
+    div[data-testid*="stSidebarCollapseButton"] {
+        button {
+            background-color: rgb(241 242 246) !important;
+        }
+        display: block !important;
+        position: relative !important;
+        z-index: 10000 !important;
+    }
+}
+img[data-testid*="stHeaderLogo"] {
+    margin: 0 !important;
+    height: 40px !important;
+}
+
+div[data-testid*="stSidebarUserContent"] {
+    .stVerticalBlock[class*="sidebar-intro-links"] {
+        padding-top: 10px !important;
+        .stTooltipIcon {
+            justify-content: center !important;
+        }
+        button {
+            height: 40px !important;
+            width: 40px !important;
+            border-radius: 25% !important;
+            border: none !important;
+            span {
+                font-size: 28px !important;
+                font-weight: bold !important;
+                justify-content: center !important;
+            }
+        }
+        div[class*="-home"] button {
+            background-color: lightgray !important; /* lightgray */
+            color: white !important;
+            &:hover {background-color: gray !important;}
+        }
+        div[class*="-developer"] button {
+            background-color: #87CEEB !important; /* lightblue */
+            color: white !important;
+            &:hover {background-color: #1E88E5 !important;}
+        }
+        div[class*="-config"] button {
+            background-color: #ff8080 !important; /* lightred */
+            color: white !important;
+            &:hover {background-color: #ff4040 !important;} /* darker red */
+        }
+        div[class*="-task"] button {
+            background-color: #90EE90 !important; /* lightgreen */
+            color: white !important;
+            &:hover {background-color: #008000 !important;} /* darkergreen */
+        }
+        div[class*="-script"] button {
+            background-color: #EE82EE !important; /* lightviolet */
+            color: white !important;
+            &:hover {background-color: #8B008B !important;} /* darkerviolet */
+        }
+    } 
+    .stVerticalBlock[class*="sidebar-script-links"] {
+        .stPageLink {
+            margin-top: 0 !important;
+            margin-bottom: -5px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-left: 10px !important;
+        }
+        button {
+            span {
+                font-size: 20px !important;
+                font-weight: bold !important;
+            }
+            height: 24px !important;
+            width: 24px !important;
+            margin-top: 0 !important;
+            margin-bottom: -5px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            border-radius: 50% !important;
+        }
+        div[class*="-enabled"] button {
+            color: white !important;
+            background-color: green !important;
+            &:hover {
+                background-color: darkgreen !important;
+            }
+        }
+    } 
+}
+.stVerticalBlock[class*="home-intro-pages"] {
+    button {
+        height: 60px !important;
+        width: 88% !important;
+        color: white !important;
+        border-radius: 12px !important;
+        p {
+            font-size: 20px !important;
+            font-weight: bold !important;
+        }            
+    }
+    div[class*="-developer"] button {
+        /* background: radial-gradient(ellipse at center, #87CEEB 0%, white 90%) !important; */
+        background: #87CEEB !important;
+        &:hover {background: #1E88E5 !important;}
+    }
+    div[class*="-config"] button {
+        background: #ff8080 !important; /* lightred */
+        &:hover {background: #ff4040 !important;} /* darker red */
+    }
+    div[class*="-task"] button {
+        background: #90EE90 !important; /* lightgreen */
+        &:hover {background: #008000 !important;} /* darkergreen */
+    }
+    div[class*="-script"] button {
+        background: #EE82EE !important; /* lightviolet */
+        &:hover {background: #8B008B !important;} /* darkerviolet */
+    }
+}
+.stVerticalBlock[class*="choose-task-page"] {
+    button {
+        width: 100% !important;
+        min-width: 1px !important;
+    }
+            .stSelectbox {
+        width: 100% !important;
+    }
+}
+.stElementContainer[class*="go-home-button"] {
+    align-self: flex-end !important;
+    button {
+        height: 60px !important;
+        width: 60px !important;
+        border-radius: 25% !important;
+        border: 2px solid lightgray !important;
+        span {
+            font-size: 40px !important;
+            font-weight: bold !important;
+            justify-content: center !important;
+        }
+    }
+}
+.stVerticalBlock[class*="detail-exit-info-container"] {
+    p {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}
+.stElementContainer[class*="param-inputs-form"] {
+    button {
+        height: 20px !important;
+        width: 100% !important;
+        border-radius: 5% !important;
+        span {
+            font-weight: bold !important;
+            justify-content: center !important;
+        }
+        margin-top: -10px !important;
+    }
+}

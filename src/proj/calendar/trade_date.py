@@ -1,5 +1,5 @@
 """
-Trading date transformation.
+Self defined TradeDate class, used to represent a date and its closest trading date.
 """
 import numpy as np
 from typing import Any

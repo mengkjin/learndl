@@ -13,7 +13,7 @@ from .basic import alert_message , DIV_TOL , allna
 def process_factor(value : Tensor | None , * , stream = 'inf_winsor_norm' , dim = 0 , trim_ratio = 7. , **kwargs):
     '''
     ------------------------ process factor value ------------------------
-    处理因子值 , 'inf_trim_winsor_norm_neutral_nan'
+    process factor value , 'inf_trim_winsor_norm_neutral_nan'
     input:
         value:         factor value to be processed
         process_key:   can be any of 'inf_trim/winsor_norm_neutral_nan'

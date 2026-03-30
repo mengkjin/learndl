@@ -4,8 +4,8 @@ import numpy as np
 from src.proj import PATH , CALENDAR , DB , Dates
 from .abc import TS
 
-path_bak_data   = PATH.resource.joinpath('tushare_bak_data')
-path_bak_record = PATH.resource.joinpath('tushare_bak_data_record')
+path_bak_data   = PATH.bak_data
+path_bak_record = PATH.bak_record
 
 class TSBackUpDataTransform():
     """use csv backup data downloaded from tushare to transform to database"""

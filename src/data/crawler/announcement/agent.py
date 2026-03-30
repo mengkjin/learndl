@@ -1,14 +1,14 @@
 from typing import Literal , Any , Iterable
 
 from .fetcher import FetcherTask , EXCHANGE_URLS
-from src.proj import Logger , CALENDAR , Proj , Dates
+from src.proj import Logger , CALENDAR , Proj , Dates , MACHINE
 from src.proj.util.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.proxy.caller import ProxyCallerList
 
 __all__ = ["AnnouncementAgent"]
 
 class AnnouncementAgent:
-    START_DATE = 20200101
+    START_DATE = 20160101 if MACHINE.cuda_server else 20260101
 
     @classmethod
     def update(cls):
@@ -73,7 +73,9 @@ class AnnouncementAgent:
         indent : int = 1 , vb_level : Any = 1
     ) -> ProxyCallerList:
         tasks = FetcherTask.tasks_flat(start, end, step, redownload)
-        Logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {start}~{end} for 3 exchanges" , indent = indent, vb_level = vb_level)
+        min_date = min(task.start for task in tasks)
+        max_date = max(task.end for task in tasks)
+        Logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , indent = indent, vb_level = vb_level)
         unique_urls = set([task.url for task in tasks])
         if use_proxy:
             target_urls = [url for url in unique_urls if sum(task.url == url for task in tasks) > ignore_proxy_threshold]
