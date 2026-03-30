@@ -1,5 +1,16 @@
+"""Streamlit / interactive app metadata (title, version, refresh)."""
+
 from src.__version__ import __version__
+
 class InteractiveAppConfig:
+    """
+    Static UI defaults for the interactive front-end:
+    - version: version of the app
+    - recommended_explorer: recommended explorer of the app
+    - page_title: title of the app
+    - pending_features: pending features of the app
+    - auto_refresh_interval: auto refresh interval of the app
+    """
     @property
     def version(self) -> str:
         """version of the app"""

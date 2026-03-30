@@ -254,7 +254,7 @@ class AnnouncementExporter:
         """If file exists and date is earlier than "today" (Shanghai), skip; ``redownload`` is true never skip."""
         if redownload:
             return False
-        if end >= CALENDAR.update_to():
+        if end >= CALENDAR.cd(CALENDAR.update_to() , -1):
             return False
         end = min(end, CALENDAR.update_to())
         dates = CALENDAR.range(start, end , 'cd')

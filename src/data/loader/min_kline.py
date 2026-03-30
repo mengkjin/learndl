@@ -2,8 +2,7 @@ import polars as pl
 
 from typing import Literal
 
-from src.proj import DB 
-from src.proj.func import singleton
+from src.proj import DB , singleton
 from src.data.util import INFO
 
 from .access import DateDataAccess

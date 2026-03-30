@@ -1,3 +1,5 @@
+"""Core types: ``Proxy``, ``ProxySet``, and statistics helpers for proxy pools."""
+
 import re
 import random
 from typing import Iterable , Literal

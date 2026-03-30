@@ -1,3 +1,5 @@
+"""Matplotlib/seaborn helpers: grouped figures, factor panels, and plottable tables."""
+
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -23,9 +25,13 @@ plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
 def new_figure(size = (16 , 7)):
+    """Create a figure with default research-friendly size."""
     return plt.figure(figsize=size)
 
+
 class PlotMultipleData:
+    """Iterate grouped slices of a DataFrame, each slice tied to a named figure in ``fig_dict``."""
+
     def __init__(self , data : pd.DataFrame , 
                  group_key : str | list[str] | None ,  num_groups_per_iter = 1 , **kwargs):
         self.data = data
@@ -40,6 +46,7 @@ class PlotMultipleData:
         self.num_groups_per_iter   = num_groups_per_iter
     
     def __iter__(self):
+        """Yield ``SubPlotData`` per group (or batched groups when ``num_groups_per_iter`` > 1)."""
         if len(self.group_key) == 0:
             yield SubPlotData(self.group_key , self.data , self.fig_dict , 'all')
             return
@@ -60,10 +67,12 @@ class PlotMultipleData:
                 yield SubPlotData(self.group_key , df , self.fig_dict , self.group_name(g))
 
     def group_name(self , g):
+        """String key for a groupby key (scalar or tuple)."""
         return '.'.join([str(s) for s in (g if isinstance(g , (list | tuple)) else [g])])
 
 @dataclass  
 class SubPlotData:
+    """One subplot batch: subset frame, shared ``fig_dict``, and lazily created figure."""
     group_by : list[str]
     sub_data : pd.DataFrame
     fig_dict : dict[str , Figure]
@@ -75,9 +84,12 @@ class SubPlotData:
             self.fig_dict[self.fig_name] = new_figure()
 
     def get_fig(self):
+        """Figure for ``fig_name`` (created in ``__post_init__`` if needed)."""
         return self.fig_dict[self.fig_name]
 
 class PlotFactorData:
+    """Panel plots for factor/benchmark time series from tidy or multi-index frames."""
+
     def __init__(self , data : pd.DataFrame | SubPlotData , fig : Figure | None = None , 
                  name_key : list[str] | str | None = ['factor_name' , 'benchmark'] ,
                  drop : list[str] | str | None = ['prefix' , 'strategy' , 'factor_name' , 'benchmark' , 'suffix'] , 

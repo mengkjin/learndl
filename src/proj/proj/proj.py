@@ -1,3 +1,5 @@
+"""Non-instantiable project facade: config namespaces, verbosity, logging, and shared instances."""
+
 from typing import Any
 
 from src.proj.env import MACHINE
@@ -12,7 +14,8 @@ from . import conf as Conf
 __all__ = ['Proj']
 
 class ProjMeta(type):
-    """meta class of ProjConfig"""
+    """Metaclass for ``Proj``: blocks direct instantiation and exposes module-level descriptors."""
+
     log_writer = LOG_WRITER
     debug_mode = ProjectSetting('debug_mode')
     show_vb_level = ProjectSetting('show_vb_level')
@@ -20,7 +23,9 @@ class ProjMeta(type):
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')
 
+
 class Proj(metaclass=ProjMeta):
+    """Static entry point: ``Conf``, ``vb``, ``instances``, paths to log writer and file lists."""
     Conf = Conf
     vb = VB
     silence = Silence()
@@ -33,14 +38,15 @@ class Proj(metaclass=ProjMeta):
 
     @classmethod
     def info(cls) -> dict[str, Any]:
-        """return the machine info list"""
+        """Merge ``MACHINE.info()`` with verbosity and log-writer summary."""
         return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
 
     @classmethod
     def print_info(cls , script_level : bool = True , identifier = 'project_initialized'):
         """
-        output project info 
-        for script level or os level (only once for all scripts in one os process)
+        Print project info once per process (script: ``Proj.instances`` flag; OS: env var).
+
+        Warns if this host is marked ``cuda_server`` but CUDA is unavailable.
         """
         import torch , os
         from src.proj.log import Logger
@@ -59,5 +65,6 @@ class Proj(metaclass=ProjMeta):
 
     @classmethod
     def print_disk_info(cls):
-        from src.proj.func.disk_info import print_disk_space_info
+        """Show disk space info in the best way."""
+        from src.proj.util import print_disk_space_info
         print_disk_space_info()

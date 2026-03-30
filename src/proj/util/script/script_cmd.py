@@ -1,3 +1,5 @@
+"""Build cross-platform commands to run Python scripts in a new terminal or subprocess."""
+
 import os , psutil , subprocess , time , shlex , tempfile
 from pathlib import Path
 from typing import Literal
@@ -8,6 +10,8 @@ from src.proj.log import Logger
 __all__ = ['ScriptCmd']
 
 class ScriptCmd:
+    """Compose shell / OS-level invocations (macOS AppleScript, Windows/Linux shell) for a script path."""
+
     macos_terminal_profile_name = 'Basic'
     macos_tempfile_method = False
     def __init__(self , script : str | Path , params : dict | None = None , 

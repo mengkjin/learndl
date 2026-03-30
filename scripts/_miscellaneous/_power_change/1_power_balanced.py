@@ -8,7 +8,7 @@
 # mode: os
 
 from src.proj import PATH
-from src.proj.func import change_power_mode
+from src.proj.util import change_power_mode
 
 def main():
     #running_scripts = get_running_scripts(__file__)

@@ -1,3 +1,5 @@
+"""On-disk numpy/torch array storage via binary payload + JSON metadata."""
+
 import json
 import os
 import numpy as np
@@ -9,22 +11,29 @@ from dataclasses import dataclass
 
 @dataclass
 class ArrayMeta:
+    """Serializable descriptor for a memory-mapped array (dtype, shape, tensor vs ndarray)."""
+
     array_type: Literal['Tensor' , 'ndarray']
     dtype: str
     shape: tuple
 
     @classmethod
     def from_json(cls, json_path: str | Path) -> 'ArrayMeta':
+        """Load metadata written by ``to_json``."""
         with open(json_path, 'r') as f:
             meta = json.load(f)
         return cls(array_type=meta['array_type'], dtype=meta['dtype'], shape=meta['shape'])
 
     def to_json(self, json_path: str | Path):
+        """Persist ``array_type``, ``dtype``, and ``shape`` to JSON."""
         with open(json_path, 'w') as f:
             json.dump(self.__dict__, f, indent=2)
 
 class ArrayMemoryMap:
+    """Read/write a single array as ``data.bin`` + ``meta.json`` under a directory."""
+
     def __init__(self, path: str | Path):
+        """Open or prepare a map directory (created on ``save``)."""
         path = Path(path)
         assert not path.exists() or path.is_dir() , path
         self.path = path
@@ -34,7 +43,11 @@ class ArrayMemoryMap:
 
     @classmethod
     def save(cls, array: np.ndarray | torch.Tensor , path: str | Path):
-        """save arrays to memory map file (.bin) and metadata (.json)"""
+        """Write array bytes and metadata; tensors are copied to CPU numpy first.
+
+        Returns:
+            ``ArrayMemoryMap`` bound to ``path``.
+        """
         mmap = cls(path)
         mmap.path.mkdir(parents=True, exist_ok=True)
         array_type='Tensor' if torch.is_tensor(array) else 'ndarray'
@@ -54,10 +67,10 @@ class ArrayMemoryMap:
         return mmap
 
     def view(self , writable: bool = False) -> torch.Tensor | np.ndarray:
-        """
-        load array from memory map file (.bin) and metadata (.json)
-        if copy is True, return a copy of the array
-        if copy is False, return a view of the array
+        """Memory-map the binary file and return an ndarray or tensor view backed by the mmap.
+
+        Args:
+            writable: If True, open the file in read/write mode.
         """
         mode = 'r+' if writable else 'r'
         file_size = os.path.getsize(self.data_path)
@@ -71,9 +84,7 @@ class ArrayMemoryMap:
 
     @classmethod
     def load(cls, path: str | Path) -> torch.Tensor | np.ndarray:
-        """
-        load array from memory map file (.bin) and metadata (.json)
-        """
+        """Load array into a new in-memory buffer (full read, not mmap)."""
         mmap = cls(path)
         metas = ArrayMeta.from_json(mmap.meta_path)
         
@@ -87,31 +98,30 @@ class ArrayMemoryMap:
 
     @classmethod
     def load_tensor(cls, path: str | Path) -> torch.Tensor:
-        """
-        load tensor from memory map file (.bin) and metadata (.json)
-        """
+        """Like ``load`` but asserts the stored type was ``Tensor``."""
         data = cls.load(path)
         assert isinstance(data, torch.Tensor) , data
         return data
 
     @classmethod
     def load_ndarray(cls, path: str | Path) -> np.ndarray:
-        """
-        load ndarray from memory map file (.bin) and metadata (.json)
-        """
+        """Like ``load`` but asserts the stored type was ``ndarray``."""
         data = cls.load(path)
         assert isinstance(data, np.ndarray) , data
         return data
 
     def close(self):
+        """Drop the mmap view if ``view`` was used."""
         if self._full_mmap is not None:
             del self._full_mmap
             self._full_mmap = None
 
     def __enter__(self):
+        """Context manager entry; returns ``self`` for use with ``view``."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Flush mmap on exit when applicable, then ``close``."""
         if self._full_mmap is not None:
             self._full_mmap.flush()
             self.close()

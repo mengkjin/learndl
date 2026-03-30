@@ -9,7 +9,7 @@
 import subprocess
 from datetime import datetime
 from src.proj import PATH , MACHINE , Logger
-from src.proj.func import get_running_scripts
+from src.proj.util import get_running_scripts
 
 default_log_path = PATH.logs.joinpath('suspend','suspend_check.log')
 

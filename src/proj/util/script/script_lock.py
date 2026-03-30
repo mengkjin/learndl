@@ -1,3 +1,5 @@
+"""File-based locks under ``PATH.runtime/script_lock`` for single-instance scripts."""
+
 import functools , time , random
 import portalocker
 

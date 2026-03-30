@@ -8,9 +8,8 @@ from typing import Any , Generator , Literal
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 
-from src.proj import Logger , Proj , CALENDAR 
-from src.proj.func import parallel    
-from src.proj.util import SingletonMeta
+from src.proj import Logger , Proj , CALENDAR , SingletonMeta
+from src.proj.util import parallel
 from src.data import DATAVENDOR
 
 __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']

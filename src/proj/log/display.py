@@ -1,3 +1,5 @@
+"""IPython-friendly display routing (DataFrame, matplotlib Figure, or fallback)."""
+
 import pandas as pd
 from matplotlib.figure import Figure
 from IPython.display import display as raw_display

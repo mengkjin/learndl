@@ -1,3 +1,5 @@
+"""Scrape public proxy lists (e.g. Zdaye) into ``ProxySet`` instances."""
+
 import time
 import random
 from curl_cffi import requests

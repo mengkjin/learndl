@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import DB , Logger
-from src.proj.func import properties
+from src.proj.util import properties
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 

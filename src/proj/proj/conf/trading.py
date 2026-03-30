@@ -1,3 +1,5 @@
+"""Trading and backtest portfolio lists from ``setting/trading_port``."""
+
 from src.proj.env import MACHINE
 
 __all__ = ['TradingPortConfig' , 'TradingPort']
@@ -5,6 +7,13 @@ __all__ = ['TradingPortConfig' , 'TradingPort']
 _trading_port_settings = MACHINE.configs('setting' , 'trading_port')
 
 class TradingPortConfig:
+    """
+    Thin view over YAML-loaded trading port metadata:
+    - focused_ports [list[str]]: focused ports
+    - tracking_ports [dict[str , dict]]: trading ports
+    - backtest_ports [dict[str , dict]]: backtest ports
+    """
+
     @property
     def focused_ports(self) -> list[str]:
         """focused ports"""

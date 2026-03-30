@@ -1,3 +1,5 @@
+"""Adaptive proxy pool: fetch, verify, refresh, and serve URLs for crawlers."""
+
 import random
 import threading
 import time

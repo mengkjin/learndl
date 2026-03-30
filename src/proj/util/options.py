@@ -1,3 +1,5 @@
+"""Discover models, modules, schedules, ports, and factors; cache lists for Streamlit and CLI."""
+
 import json
 
 from datetime import datetime
@@ -52,6 +54,7 @@ class OptionsCache:
     cache : dict[str , list[str]] = {}
 
     def __init__(self):
+        """Load JSON cache from disk; create empty file if missing."""
         if not self.cache_path.exists():
             json.dump({}, self.cache_path.open('w'))
         self.cache = json.load(self.cache_path.open('r'))

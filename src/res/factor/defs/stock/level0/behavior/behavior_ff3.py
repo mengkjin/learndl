@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Any
 from dataclasses import dataclass
 
-from src.proj.func import singleton
+from src.proj import singleton
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 

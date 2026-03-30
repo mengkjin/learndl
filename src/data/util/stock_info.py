@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
-from src.proj import MACHINE , CALENDAR , TradeDate , DB 
-from src.proj.func import singleton
+from src.proj import MACHINE , CALENDAR , TradeDate , DB , singleton
 
 @singleton
 class InfoDataAccess:

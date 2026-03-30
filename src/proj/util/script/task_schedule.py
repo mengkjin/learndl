@@ -1,3 +1,5 @@
+"""Distributed schedule files on ``PATH.share_folder`` and helpers to register shell command tasks."""
+
 import subprocess , os
 import numpy as np
 

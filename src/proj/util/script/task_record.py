@@ -1,3 +1,4 @@
+"""SQLite-backed history of task runs (status, timing, logs) under ``PATH.app_db``."""
 
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ from src.proj.log import Logger
 from ..sqlite import DBConnHandler
 
 class TaskRecorder:
+    """Persist and query task execution records in ``task_record.db``."""
+
     def __init__(self , type : str , name : str | None = None , key : str | None = None):
         self._type = type
         self._name = name

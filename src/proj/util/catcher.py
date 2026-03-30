@@ -1,3 +1,5 @@
+"""Stdout/stderr capture to memory, logs, HTML, markdown, and warning interception."""
+
 import sys , re , platform , warnings , shutil
 import pandas as pd
 
@@ -116,17 +118,21 @@ class OutputDeflector:
                 raise
 
 class DeflectorGroup:
+    """Pair of ``OutputDeflector``s for stdout and stderr."""
+
     def __init__(self , catcher : 'OutputCatcher' , 
                  keep_original : bool = True):
         self.stdout = OutputDeflector('stdout', catcher, keep_original)
         self.stderr = OutputDeflector('stderr', catcher, keep_original)
 
     def start_catching(self):
+        """Begin redirection for both streams."""
         self.stdout.start_catching()
         self.stderr.start_catching()
         return self
 
     def end_catching(self):
+        """Restore both streams."""
         self.stdout.end_catching()
         self.stderr.end_catching()
 class OutputCatcher(ABC):
@@ -178,7 +184,7 @@ class OutputCatcher(ABC):
 
     @contents.setter
     def contents(self, value : Any) -> None:
-        """Get the contents of the stdout of the output catcher"""
+        """Override cached contents (e.g. after context exit)."""
         self._contents = value
 
     @property
@@ -189,6 +195,7 @@ class OutputCatcher(ABC):
         return self._export_file_list
 
     def set_export_files(self , export_file_list : list[Path | str] | Path | str | None = None):
+        """Replace export targets with normalized ``Path`` list."""
         self.export_file_list.clear()
         if export_file_list is None:
             ...
@@ -704,6 +711,8 @@ class HtmlCatcher(OutputCatcher):
         return cls.Templates['tail'].substitute() 
 
 class MarkdownWriter:
+    """Append timestamped HTML-safe lines to a markdown stream with optional section headers."""
+
     def __init__(self, md_file: TextIOWrapper, seperating_by: str| None = 'min'):
         self.md_file = md_file
         self.seperating_by = seperating_by

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any , Literal
 
 from src.proj import Logger
-from src.proj.func import properties
+from src.proj.util import properties
 from src.func import match_slice , index_merge , intersect_meshgrid , intersect_pos_slice
 
 from .nd import NdData
@@ -104,10 +104,10 @@ class Stock4D:
         return properties.empty(self.values)
     @property
     def max_date(self): 
-        return properties.max_date(self.date)
+        return properties.max_of_date(self.date)
     @property
     def min_date(self): 
-        return properties.min_date(self.date)
+        return properties.min_of_date(self.date)
     @property
     def inday(self) -> np.ndarray: 
         return np.arange(self.shape[2])

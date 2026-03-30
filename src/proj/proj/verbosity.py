@@ -1,10 +1,26 @@
+"""Global verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers."""
+
 from typing import Any , Literal
 from src.proj.abc import stderr
 from .abc import ProjectSetting
 
 __all__ = ['Verbosity']
 
+
 class Verbosity:
+    """
+    Verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers.
+    can be used to convert between symbolic and numeric levels.
+    inputs can be int, Literal['max','min','never','always'], or None.
+    
+    - ``vb``: global verbosity level
+    - ``vb_level``: per-call verbosity level
+    - ``WithVbLevel``: context manager to temporarily set ``vb_level``
+    - ``WithVB``: context manager to temporarily set ``vb``
+    - ``ignore``: check if output at a given level should be suppressed
+    - ``is_max_level``: check if ``vb`` is at or above ``max``
+    
+    """
     max = ProjectSetting('vb_max' , 10)
     min = ProjectSetting('vb_min' , 0)
     never = ProjectSetting('vb_never' , 99)
@@ -12,6 +28,7 @@ class Verbosity:
     callback = ProjectSetting('vb_level_callback' , 10)
 
     def __init__(self):
+        """Load ``vb`` from project settings; thresholds come from the same config."""
         assert self.never > self.max > self.min > self.always , (self.never , self.max , self.min , self.always)
         self._vb : int = ProjectSetting.get('vb' , 1)
         self._vb_level : int | None = None
@@ -20,6 +37,7 @@ class Verbosity:
         return f'{self.vb}'
 
     def __call__(self , value : int | None | Literal['max','min','never','always'] | Any , add_value : int = 0) -> int:
+        """Resolve a symbolic or numeric level to an int, optionally shifted by ``add_value``."""
         if isinstance(value , int):
             if self.always < value < self.never:
                 v = min(max(value , self.min) , self.max)
@@ -35,13 +53,16 @@ class Verbosity:
 
     @property
     def vb(self) -> int:
+        """Current global verbosity (clamped to ``min``..``max`` when set)."""
         return self._vb
 
     @property
     def vb_level(self) -> int | None:
+        """Per-context override set by ``WithVbLevel``; ``None`` means use ``vb`` only."""
         return self._vb_level
 
     def set_vb(self , value : int | None = None):
+        """Persist new global ``vb``; no-op if ``value`` is ``None``."""
         if value is None:
             return
         assert isinstance(value , int) , f'verbosity must be an integer , got {type(value)} : {value}'
@@ -53,9 +74,12 @@ class Verbosity:
         self._vb = value
 
     def set_vb_level(self , value : int | None = None):
+        """Set temporary per-thread logical level used by ``Logger`` wrappers."""
         self._vb_level = value
 
     class WithVbLevel:
+        """Context manager: set ``VB.vb_level`` for the block."""
+
         def __init__(self , vb_level : int | None | Literal['max','min','never','always'] | Any):
             self.vb_level = VB(vb_level)
 
@@ -67,6 +91,8 @@ class Verbosity:
             VB.set_vb_level(None)
 
     class WithVB:
+        """Context manager: temporarily replace global ``vb`` and restore on exit."""
+
         def __init__(self , vb : int | None | Literal['max','min','never','always'] | Any):
             self.vb = VB(vb)
             self.vb_prev : int | None = None
@@ -80,6 +106,7 @@ class Verbosity:
             VB.set_vb(self.vb_prev)
 
     def ignore(self , vb_level : int | Literal['max','min','never','always'] | Any = 1):
+        """Return True if output at ``vb_level`` should be suppressed given current ``vb``."""
         level = VB(vb_level)
         if level is None:
             return False
@@ -88,6 +115,7 @@ class Verbosity:
 
     @property
     def is_max_level(self):
+        """Whether ``vb`` is at or above ``max``."""
         return self.vb >= self.max
 
     def __eq__(self , other : int):

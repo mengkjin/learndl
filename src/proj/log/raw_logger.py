@@ -1,3 +1,5 @@
+"""Build project loggers from machine ``setting/logger`` config (handlers, formatters)."""
+
 import colorlog , logging
 import logging.handlers
 
@@ -40,7 +42,11 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
         return super(_LevelColorFormatter, self).format(record)
 
 def log_config() -> dict[str, Any]:
-    """Initialize the logger"""
+    """Load logger config and rewrite file path under ``PATH.logs/main``.
+
+    Returns:
+        Config dict suitable for ``new_log`` / ``reset_logger``.
+    """
     log_config = MACHINE.configs('setting' , 'logger')
     new_path = PATH.logs.joinpath('main' , log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
@@ -49,14 +55,18 @@ def log_config() -> dict[str, Any]:
     return log_config
 
 def new_log(config : dict[str, Any]) -> logging.Logger:
-    """create a new logger with the config"""
+    """Create (or reconfigure) a named logger from ``config``."""
     log = logging.getLogger(config['name'])
     log.setLevel(getattr(logging , config['level']))
     reset_logger(log , config)
     return log
 
 def reset_logger(log : logging.Logger , config : dict[str, Any]):
-    """reset the log writer"""
+    """Replace all handlers on ``log`` using ``config`` handlers and formatters.
+
+    Returns:
+        The same ``log`` instance after reconfiguration.
+    """
     while log.handlers:
         log.handlers[-1].close()
         log.removeHandler(log.handlers[-1])

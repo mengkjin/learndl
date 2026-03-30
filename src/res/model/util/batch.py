@@ -6,8 +6,7 @@ from dataclasses import dataclass , field
 from typing import Any, Literal
 
 from src.proj import Proj , Logger
-from src.proj.util import Device
-from src.proj.func import properties
+from src.proj.util import Device , properties
 
 def _object_shape(obj : Any) -> Any:
     if obj is None: 

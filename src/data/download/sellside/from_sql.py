@@ -26,11 +26,11 @@ factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     'huayuan.scores_v0'  : (('huayuan'  , 'scores_v0'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v2'  : (('huayuan'  , 'scores_v2'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v3'  : (('huayuan'  , 'scores_v3'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
-    'huayuan.scores_v3_fast'  : (('huayuan' , 'scores_v3_fast'  , 'trade_dt' , 20171229 , None , '%Y-%m-%d') , {}) ,
-    'huayuan.scores_v4_style' : (('huayuan' , 'scores_v4_style' , 'trade_dt' , 20171229 , None , '%Y-%m-%d') , {}) ,
-    'huatai.dl_factors'        : (('huatai' , 'dl_factors'        , 'datetime' , 20170101 , None , '%Y-%m-%d') , {'sub_factors' : ['price_volume_nn','text_fadt_bert']}) ,
-    'huatai.master_combined'   : (('huatai' , 'master_combined'   , 'datetime' , 20170101 , None , '%Y-%m-%d') , {}) ,
-    'huatai.fundamental_value' : (('huatai' , 'fundamental_value' , 'datetime' , 20170101 , None , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v3_fast'   : (('huayuan' , 'scores_v3_fast'   , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v4_style'  : (('huayuan' , 'scores_v4_style'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huatai.dl_factors'        : (('huatai' , 'dl_factors'        , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {'sub_factors' : ['price_volume_nn','text_fadt_bert']}) ,
+    'huatai.master_combined'   : (('huatai' , 'master_combined'   , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huatai.fundamental_value' : (('huatai' , 'fundamental_value' , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,
     # 'haitong.hf_factors' : (('haitong'  , 'hf_factors' , 'trade_dt'    , 20130101 , 99991231 , '%Y%m%d') , {}) ,
     # 'haitong.dl_factors' : (('haitong'  , 'dl_factors' , 'trade_dt'    , 20161230 , 99991231 , '%Y%m%d') , {}) ,
     # 'guosheng.gs_pv_set1': (('guosheng' , 'gs_pv_set1' , 'date'        , 20100129 , 99991231 , '%Y%m%d') , {}) ,
@@ -147,12 +147,7 @@ class SellsideSQLDownloader:
 
     def __post_init__(self):
         assert 19900101 <= self.start_date <= self.end_date <= 99991231 , f'start_date {self.start_date} must be greater than 19900101 and less than end_date {self.end_date} and less than 99991231'
-        assert self.date_fmt is None or len(self.date_fmt) == 8 , f'date_fmt {self.date_fmt} must be 8 characters'
-        assert self.sub_factors is None or all(isinstance(sub_factor , str) for sub_factor in self.sub_factors) , f'sub_factors {self.sub_factors} must be a list of strings'
-        assert self.connection_key is None or isinstance(self.connection_key , str) , f'connection_key {self.connection_key} must be a string'
-        assert self.connection_key is None or self.connection_key in Connection.available_sources() , f'connection_key {self.connection_key} must be a valid connection key'
-        assert self.connection_key is None or self.connection_key in Connection.available_sources() , f'connection_key {self.connection_key} must be a valid connection key'
-
+        
     @property
     def db_key(self) -> str:
         return f'{self.factor_src}.{self.factor_set}'

@@ -1,3 +1,5 @@
+"""Retry decorators and ``ErrorHandler`` wrapper for HTTP and generic exceptions (with logging)."""
+
 import httpx
 import time
 from curl_cffi.requests import exceptions
@@ -8,9 +10,10 @@ T = TypeVar("T")
 TInside = TypeVar('TInside')
 
 class UnattainableException(Exception):
-    ...
+    """Marker for control-flow paths that should be unreachable after retries."""
 
 def get_exception_name(e: Exception) -> str:
+    """Fully qualified class name of ``e`` (``module.qualname``)."""
     exc_type = type(e)
     return f"{exc_type.__module__}.{exc_type.__qualname__}"
 
@@ -39,11 +42,13 @@ def retry_on_exceptions(func: Callable[..., T], error_handler: Callable[[Excepti
     return wrapper
 
 def exception_handler(e : Exception , exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception) -> str | Exception:
+    """Return a string summary if ``e`` matches ``exceptions``; otherwise return ``e`` unchanged."""
     if isinstance(e, exceptions):
         return f"{e!s}"
     return e
 
 def http_handler(e: Exception) -> str | Exception:
+    """Classify httpx/curl_cffi HTTP errors; retryable status codes become short messages."""
     if isinstance(e, (httpx.HTTPStatusError , exceptions.HTTPError , httpx.HTTPError , exceptions.RequestException)):
         if isinstance(e, (httpx.HTTPStatusError , exceptions.HTTPError)) and e.response is not None and e.response.status_code in (429, 502, 503, 504):
             return f"Bad HTTP response status code [{e.response.status_code}]"
@@ -52,6 +57,7 @@ def http_handler(e: Exception) -> str | Exception:
     return e
 
 def all_handler(e: Exception) -> str | Exception:
+    """Fallback handler: always returns a string with exception type name."""
     return f"Unhandled exception [{get_exception_name(e)}]"
 
 def retry_call(
@@ -134,19 +140,24 @@ class ErrorHandler(Generic[T]):
                 raise ValueError(f"Invalid handler type: {handler_type}")
 
     class WrappedResult(Generic[T]): # type: ignore
+        """Result of ``ErrorHandler.__call__``; inspect ``success`` / ``unwrap``."""
+
         def __init__(self, raw_result: 'T | Exception'):
             self.raw_result = raw_result
 
         @property
         def success(self) -> bool:
+            """True if ``raw_result`` is not an ``Exception``."""
             return not isinstance(self.raw_result, Exception)
 
         @property
         def is_http_error(self) -> bool:
+            """True if failure looks like an HTTP client error."""
             return isinstance(self.raw_result, (httpx.HTTPStatusError, exceptions.HTTPError , httpx.HTTPError , exceptions.RequestException))
 
         @property
         def error_type(self) -> str:
+            """``'http'``, exception class name, or empty string on success."""
             if not isinstance(self.raw_result, Exception):
                 return ''
             elif self.is_http_error:
@@ -155,6 +166,7 @@ class ErrorHandler(Generic[T]):
                 return type(self.raw_result).__name__
 
         def unwrap(self , error : Literal['raise' , 'return'] = 'return') -> 'T | Exception':
+            """Return value or exception; ``error='raise'`` re-raises if result is an exception."""
             if isinstance(self.raw_result, Exception) and error == 'raise':
                 raise self.raw_result
             return self.raw_result

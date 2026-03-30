@@ -2,8 +2,7 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import TradeDate , DB
-from src.proj.func import singleton
+from src.proj import TradeDate , DB , singleton
 from src.data.util import INFO
 
 from .access import DateDataAccess

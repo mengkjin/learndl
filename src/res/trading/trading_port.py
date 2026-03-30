@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any , Literal , Type , ClassVar
 
 from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates
-from src.proj.func import dfs_to_excel , figs_to_pdf
+from src.proj.util import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import Benchmark , Portfolio , CompositeAlpha , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc

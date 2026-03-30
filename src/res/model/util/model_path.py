@@ -7,9 +7,8 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , LogFile , DB , Proj
-from src.proj.calendar import CALENDAR
-from src.proj.func import torch_load
+from src.proj import PATH , Logger , LogFile , DB , Proj , CALENDAR
+from src.proj.util import torch_load
 
 from .abc import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 
@@ -257,7 +256,7 @@ class ModelPath:
         return ModelConfig(self.base , stage = 0 , resume = 1)
     def next_model_date(self):
         """next model date to train"""
-        from src.proj.calendar import CALENDAR
+        from src.proj import CALENDAR
         config = self.load_config()
         return CALENDAR.td(self.model_dates[-1] , config.interval).as_int()
     def collect_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:

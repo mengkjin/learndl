@@ -414,14 +414,14 @@ class TrainerHookWrapper:
 
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
-    _instance : 'BaseTrainer | None' = None
+    _trainer : 'BaseTrainer | None' = None
 
     def __new__(cls , *args , **kwargs):
-        if cls._instance is None:
+        if cls._trainer is None:
             obj = super().__new__(cls)
             TrainerHookWrapper.wrap(obj)
-            cls._instance = obj
-        return cls._instance
+            cls._trainer = obj
+        return cls._trainer
     
     @final
     def __init__(self , base_path = None , * , 

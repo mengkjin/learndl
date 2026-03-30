@@ -1,3 +1,5 @@
+"""Low-level helpers: timing, silence, colored terminal I/O, singletons, HTML helpers, ``Once``."""
+
 from .timer import Duration
 from .silence import Silence
 from .output import stdout , stderr , FormatStr

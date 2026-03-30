@@ -1,0 +1,58 @@
+---
+description: Cross-project AI — language, workflow, toolchain, prohibitions
+alwaysApply: true
+---
+
+# AI Assistance — Global (all projects)
+
+Use this block for preferences that should follow you across repositories. For project-specific paths and domain rules, see `project-rules.mdc` in this repo.
+
+## Project Setup
+- When asked to initially setup a project, use uv
+- By default commit as a private repo
+
+## Language
+- Respond in Chinese (Simplified) when possible. When citing searched material, keep original language (Chinese or English) as in the source.
+- Code and comments in English unless strictly necessary otherwise (e.g. localized exception messages).
+
+## Plan and workflow (non-trivial tasks)
+1. Read and understand current state (code, configs, patterns).
+2. Draft a step-by-step plan.
+3. Note risks (regressions, data issues, performance, lookahead bias in quant work, etc.).
+4. Present plan and risks; wait for confirmation when the task is substantial or ambiguous.
+5. After approval, implement following existing conventions.
+
+### When confirmation may be skipped
+- Proceed without waiting for: typo / obvious one-line fixes, pure formatting or comment-only changes, or commands the user already explicitly asked to run.
+
+## Default toolchain
+- **Python:** Use the `requires-python` value from `pyproject.toml` when present. Use `>=3.12` for new projects.
+
+## Prohibitions and cautions
+Standing hard rules (override only when the user explicitly asks in chat).
+- **Secrets:** Do not commit tokens, passwords, or private keys; use environment variables or the project secret store (e.g. `.secret/`) per repo convention.
+- **Paths:** Avoid hard-coding machine-specific absolute paths in shared code; prefer configuration, environment variables, or path keys from project settings.
+- **Dependencies:** Do not bump major versions or add heavy deps without listing options and getting a decision.
+- **Destructive ops:** Do not run `rm -rf`, mass DB migrations, or production deploys.
+
+## Respect the codebase
+- Before large changes, check the project’s dependency/manifest file (e.g. `pyproject.toml`, `package.json`) and skim layout.
+- Unless you are asked to edit in place, prefer new files or parallel modules and validate afterward.
+
+## Coding habits
+- Target Windows, macOS, and Linux where applicable.
+- Match naming, imports, and patterns already present in the repository.
+
+## General coding expectations
+- **Style**: Match project conventions for naming and formatting.
+- **Types**: Add type hints where missing.
+- **Docs**: Module/class/function docstrings (Google or NumPy style, whichever the project uses). For complex APIs, include short examples.
+- **Inline comments**: Concise; English only.
+- **New dependencies**: Propose options with pros/cons; let the human choose.
+- **Logging**: Prefer the project’s standard logger if one exists; avoid raw `print` in library code unless that is the local convention.
+- **Errors**: Prefer explicit handling and logged context.
+- **Tests**: Suggest or add tests (e.g. pytest) when behavior is non-trivial.
+
+## Documentation and communication
+- Update README or relevant docs when usage or setup changes.
+- When proposing changes, state rationale and expected impact briefly.

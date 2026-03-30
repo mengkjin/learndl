@@ -1,7 +1,17 @@
+"""Positive elapsed time from a fixed length or from a past timestamp."""
+
 from datetime import datetime , timedelta
+
+
 class Duration:
-    """Duration class, used to calculate the duration of the input or the start time"""
+    """Non-negative elapsed seconds from either ``duration`` or time since ``since``."""
+
     def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None):
+        """
+        Args:
+            duration: Length of time; ``timedelta`` is converted to seconds.
+            since: Start time as POSIX float or ``datetime``; elapsed time is ``now - since``.
+        """
         assert duration is not None or since is not None , "duration or since must be provided"
         assert duration is None or since is None , f"duration and since cannot be provided at the same time, got duration = {duration} and since = {since}"
         if duration is not None:

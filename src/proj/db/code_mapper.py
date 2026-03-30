@@ -18,6 +18,7 @@ CODE_MAPPER : dict[str , str] = MACHINE.configs('util' , 'transform' , 'mapper' 
 SECID_MAPPER : dict[str , int] = MACHINE.configs('util' , 'transform' , 'mapper' , 'secid')
 
 def _to_series(input : Any) -> pd.Series:
+    """Convert input to a pandas series"""
     if isinstance(input , Iterable):
         output = pd.Series([i for i in input])
     else:
@@ -25,6 +26,7 @@ def _to_series(input : Any) -> pd.Series:
     return output
 
 def _from_series(output : pd.Series , input : T) -> T:
+    """Convert pandas series to the original input type"""
     if isinstance(input , pd.Series) and type(output) is type(input):
         output.index = input.index
         return output
@@ -37,6 +39,15 @@ def _from_series(output : pd.Series , input : T) -> T:
         raise TypeError(f'Unsupported type of input ({type(input)}) : {input}')
 
 def code2secid(code : T , decode_first = False) -> T:
+    """Map tickers to integer security IDs using config mappers and exchange rules.
+
+    Args:
+        code: Scalar or vector of symbols in supported input types.
+        decode_first: If True, decode bytes-like values before mapping.
+
+    Returns:
+        Same container shape/type as ``code`` where possible.
+    """
     code_s = _to_series(code)
     code_s = code2code(code_s , decode_first)
     secid = code_s.str.replace('[-.@a-zA-Z]','',regex=True)
@@ -47,6 +58,15 @@ def code2secid(code : T , decode_first = False) -> T:
     return secid
 
 def code2code(code : T , decode_first = False) -> T:
+    """Normalize symbols via ``CODE_MAPPER`` from machine config.
+
+    Args:
+        code: Scalar or vector of symbols.
+        decode_first: If True, decode bytes-like values before mapping.
+
+    Returns:
+        Same container shape/type as ``code`` where possible.
+    """
     new_code = _to_series(code)
     if decode_first: 
         new_code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in new_code])
@@ -56,12 +76,25 @@ def code2code(code : T , decode_first = False) -> T:
     return new_code
 
 def secid2secid(secid : T) -> T:
+    """Apply ``SECID_MAPPER`` rewrites to integer IDs.
+
+    Returns:
+        Same container shape/type as ``secid`` where possible.
+    """
     new_secid = _to_series(secid)
     new_secid = new_secid.astype(str).map(SECID_MAPPER).fillna(new_secid).astype(int)
     new_secid = _from_series(new_secid , secid)
     return new_secid
 
 def secid2code(secid : T) -> T:
+    """Format secids as zero-padded tickers with ``.SH`` / ``.SZ`` / ``.BJ`` suffixes.
+
+    Returns:
+        Same container shape/type as ``secid`` where possible.
+
+    Raises:
+        AssertionError: If any secid falls outside supported exchange ranges.
+    """
     new_secid = _to_series(secid).astype(int)
     suffix = pd.Series([''] * len(new_secid))
     suffix[(new_secid >= 920000) & (new_secid <= 999999)] = '.BJ'

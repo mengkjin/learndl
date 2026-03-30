@@ -1,7 +1,6 @@
 from typing import Literal
 
-from src.proj import CALENDAR
-from src.proj.func import singleton
+from src.proj import CALENDAR , singleton
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 

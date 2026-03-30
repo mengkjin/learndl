@@ -2,8 +2,7 @@ import pandas as pd
 import numpy as np
 from typing import Any , Literal
 
-from src.proj import CALENDAR , TradeDate , DB 
-from src.proj.func import singleton # , parallel
+from src.proj import CALENDAR , TradeDate , DB , singleton
 from src.data.util import INFO
 
 from .access import DateDataAccess
@@ -35,8 +34,7 @@ class TradeDataAccess(DateDataAccess):
     def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str):
         if dates is None:
             return 
-        elif isinstance(dates , int):
-            dates = [dates]
+        dates = CALENDAR.td_array(dates)
         df = DB.loads(self.DB_SRC , self.DB_KEYS[data_type] , dates , vb_level = 'never')
         self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 

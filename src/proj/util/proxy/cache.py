@@ -1,3 +1,5 @@
+"""Persist discovered proxies under ``PATH.local_machine/proxies`` with TTL-style refresh."""
+
 import threading
 from dataclasses import dataclass
 from datetime import datetime , timedelta

@@ -4,8 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import Logger , CALENDAR , Proj , DB , Dates
-from src.proj.func import singleton
+from src.proj import Logger , CALENDAR , Proj , DB , Dates , singleton
 from src.data.util import DataBlock , INFO
 
 from .financial_data import BS , IS , CF , INDI , FINA , FinData

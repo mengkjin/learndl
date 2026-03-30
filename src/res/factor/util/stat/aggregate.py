@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.proj.calendar import CALENDAR
+from src.proj import CALENDAR
 
 def _get_ret_df(*input : pd.DataFrame | pd.Series | np.ndarray):
     """

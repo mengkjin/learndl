@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import PATH , Logger , Proj
-from src.proj.func import torch_load , properties
+from src.proj.util import torch_load , properties
 
 from .data_block import DataBlock , DataBlockNorm , data_type_abbr
 

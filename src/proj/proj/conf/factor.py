@@ -1,4 +1,5 @@
-# basic variables in factor package
+"""Central factor/risk/benchmark/trade tuning knobs and stock factor taxonomy helpers."""
+
 import numpy as np
 from typing import Any , Literal
 
@@ -7,6 +8,15 @@ from src.proj.env import MACHINE
 __all__ = ['FactorConfig' , 'Factor']
 
 class FactorUpdateConfig:
+    """
+    Default calendar window and step for factor refresh jobs:
+    - start: start date of factor update
+    - end: end date of factor update
+    - step: step of factor update
+    - init_date: uniform init date of factor update
+    - target_dates: target dates of factor update
+    """
+
     @property
     def start(self) -> int:
         """start date of factor update"""
@@ -30,6 +40,14 @@ class FactorUpdateConfig:
         return CALENDAR.slice(CALENDAR.range(self.init_date , None , 'td' , step = self.step) , self.start , self.end)
 
 class RiskModelConfig:
+    """
+    Named risk factor groupings (Barra-style lists):
+    - market: market factors
+    - style: style factors
+    - indus: industry factors
+    - common: common factors
+    """
+
     @property
     def market(self) -> list[str]:
         """market factors"""
@@ -59,6 +77,15 @@ class RiskModelConfig:
         return self.market + self.style + self.indus
 
 class BenchmarksConfig:
+    """
+    Allowed benchmark identifiers and presets for tests vs defaults:
+    - availables: available benchmarks that can be used
+    - defaults: default benchmarks that will be used if not specified
+    - tests: test benchmarks that will be used if not specified
+    - categories: categories of benchmarks that can be used
+    - none: none benchmarks
+    """
+
     @property
     def availables(self) -> list[str]:
         """available benchmarks that can be used"""
@@ -81,6 +108,12 @@ class BenchmarksConfig:
         return ['none' , 'default' , 'market']
 
 class TradeConfig:
+    """Round-trip cost presets for portfolio analytics:
+    - default: default trade cost
+    - harvest: harvest trade cost
+    - yale: yale trade cost
+    """
+
     @property
     def default(self) -> float:
         """default trade cost"""
@@ -95,6 +128,14 @@ class TradeConfig:
         return 0.00035
 
 class RoundingConfig:
+    """Decimal places for reporting weights, exposures, returns, etc.:
+    - weight: weight rounding
+    - exposure: exposure rounding
+    - contribution: contribution rounding
+    - ret: ret rounding
+    - turnover: turnover rounding
+    """
+
     @property
     def weight(self) -> int:
         """weight rounding"""
@@ -117,6 +158,12 @@ class RoundingConfig:
         return 8
 
 class PortfolioOptimizationConfig:
+    """
+    Load default/custom optimizer YAML from machine ``util/factor`` configs:
+    - default: default portfolio optimization config
+    - custom: custom portfolio optimization config
+    """
+
     @property
     def default(self) -> dict[str , Any]:
         """default portfolio optimization config"""
@@ -165,9 +212,19 @@ class _StockFactorDefinitionCat1:
         raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
 
 class CategoryError(Exception): 
-    ...
+    """Invalid factor category0/category1 combination."""
 
 class StockFactorDefinitionConfig:
+    """
+    Hierarchical labels for stock factors and validation helpers:
+    - meta_type: meta type of stock factor
+    - category0: category0 of stock factor
+    - category1: category1 of stock factor
+    - cat0_to_meta: map a category0 label to coarse meta type (stock/market/affiliate/pooling)
+    - cat0_to_cat1: get the possible category1 of the category0 of stock factor
+    - cat1_to_cat0: get the category0 given category1 of stock factor
+    - validate_categories: raise ``CategoryError`` if ``category1`` is not allowed under ``category0``
+    """
     _META = _StockFactorDefinitionMetaType()
     _CAT0 = _StockFactorDefinitionCat0()
     _CAT1 = _StockFactorDefinitionCat1()
@@ -188,6 +245,7 @@ class StockFactorDefinitionConfig:
 
     @classmethod
     def cat0_to_meta(cls , category0 : str) -> Literal['stock' , 'market' , 'affiliate' , 'pooling']:
+        """Map a category0 label to coarse meta type (stock/market/affiliate/pooling)."""
         if category0 not in cls._CAT0:
             raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
         if category0 == 'market':
@@ -232,6 +290,7 @@ class StockFactorDefinitionConfig:
 
     @classmethod
     def validate_categories(cls , category0 : str , category1 : str) -> None:
+        """Raise ``CategoryError`` if ``category1`` is not allowed under ``category0``."""
         if category0 not in cls._CAT0:
             raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
 
@@ -244,7 +303,18 @@ class StockFactorDefinitionConfig:
 
 
 class FactorConfig:
+    """Aggregate accessor for factor-related sub-configs (UPDATE, RISK, BENCH, ...):
+    - UPDATE: factor update config
+    - RISK: risk model config
+    - BENCH: benchmarks config
+    - TRADE: trade cost config
+    - ROUNDING: rounding config
+    - OPTIM: portfolio optimization config
+    - STOCK: stock factor definition config
+    """
+
     def __init__(self):
+        """Wire nested config objects used by the ``Factor`` singleton."""
         self._update = FactorUpdateConfig()
         self._risk = RiskModelConfig()
         self._bench = BenchmarksConfig()

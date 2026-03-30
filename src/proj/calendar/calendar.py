@@ -1,5 +1,8 @@
 """
-self defined CALENDAR and Dates class, used to manipulate and view dates.
+Trading-calendar utilities: natural dates (cd) vs trading dates (td), ranges, diffs, and quarter helpers.
+
+Uses ``BasicCalendar`` (``BC``) for fast ndarray-backed lookups. Prefer ``CALENDAR`` and ``TradeDate``
+from this package for all research code.
 """
 
 import numpy as np
@@ -18,13 +21,17 @@ DateType = Union[int, TradeDate]
 DateTypeWithNone = Union[int, TradeDate, None]
 DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series , torch.Tensor]
 
-def get_cd(date : DateType) -> int:
+def get_cd(date: DateType) -> int:
+    """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
     return int(date.cd if isinstance(date, TradeDate) else date)
 
-def get_td(date : DateType) -> int:
+
+def get_td(date: DateType) -> int:
+    """Trading-aligned day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.td``."""
     return int(date.td if isinstance(date, TradeDate) else date)
 
-def get_cds(dates: DatesType):
+
+def get_cds(dates: DatesType) -> np.ndarray:
     """
     Convert the 'date' parameter of 'td_array' / '*_diff_array' to an integer array index key.
     Single element of this package 'TradeDate' will be expanded to its 'td'; 'pd.Series' will be converted to 'ndarray'.

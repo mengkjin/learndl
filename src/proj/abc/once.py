@@ -1,3 +1,5 @@
+"""Run-once guards for callables keyed by object identity and a user mark."""
+
 import functools
 import threading
 from typing import Any, Callable , Iterable

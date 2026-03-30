@@ -1,3 +1,5 @@
+"""Parallel HEAD/GET checks against target sites; records timings and success rates."""
+
 import time
 import random
 import threading

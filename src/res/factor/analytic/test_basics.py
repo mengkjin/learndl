@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , Logger , DB , Proj
-from src.proj.func import dfs_to_excel , figs_to_pdf , camel_to_snake
+from src.proj.util import dfs_to_excel , figs_to_pdf , camel_to_snake
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 

@@ -4,7 +4,7 @@ from typing import Any , Literal
 from matplotlib.figure import Figure
 
 from src.proj import Logger , DB , Proj
-from src.proj.func import dfs_to_excel , figs_to_pdf
+from src.proj.util import dfs_to_excel , figs_to_pdf
 
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI

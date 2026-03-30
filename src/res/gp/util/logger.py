@@ -7,9 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Sequence , Literal , Any
 
-from src.proj import PATH , Proj
-from src.proj import Logger
-from src.proj.func import torch_load
+from src.proj import PATH , Proj , Logger
+from src.proj.util import torch_load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus

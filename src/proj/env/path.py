@@ -1,4 +1,5 @@
-# please check this path before running the code
+"""Canonical project directory layout and file helpers (YAML/JSON IO, templates, copies)."""
+
 import shutil , yaml , sys , json
 
 from datetime import datetime
@@ -60,31 +61,36 @@ class PATH:
     conf        = main.joinpath('configs')
 
     # resouces folder (for update)
-    resource   = main.joinpath('resources')
-    bak_data   = resource.joinpath('tushare_bak_data')
-    bak_record = resource.joinpath('tushare_bak_data_record')
+    resource      = main.joinpath('resources')
+    backup        = resource.joinpath('backup')
 
-    template      = main.joinpath('templates')
-    template_html = template.joinpath('html')
-    template_img  = template.joinpath('img')
-    template_font = template.joinpath('font')
+    template      = main.joinpath('templates') # html , css , img , font
 
     # local_resources folder
     local_resources = main.joinpath('.local_resources')
-    temp            = local_resources.joinpath('temp')
+    local_share     = local_resources.joinpath('shared')
     local_machine   = local_resources.joinpath(MACHINE.name)
+    temp            = local_resources.joinpath('temp')
+
     app_db          = local_machine.joinpath('app_db')
     runtime         = local_machine.joinpath('runtime')
     optuna          = local_machine.joinpath('optuna')
     tensorboard     = local_machine.joinpath('tensorboard')
 
-    share_folder       = MACHINE.share_folder
-    local_share_folder = local_resources.joinpath('shared')
-    shared_schedule    = local_share_folder.joinpath('schedule_model')
+    share_folder    = MACHINE.share_folder
+    shared_schedule = local_share.joinpath('schedule_model')
 
     @classmethod
     def path_at_machine(cls , path : Path | str , machine_name : str) -> str | Path:
-        """Get the path at another machine"""
+        """Return a path under the selected machine (maybe another machine).
+
+        Args:
+            path: Absolute or project-relative path (str re-entered as Path for recursion).
+            machine_name: Host key in ``MACHINE.secret['machines']``.
+
+        Returns:
+            Equivalent path on the target machine, or the original path if not under ``main``.
+        """
         if isinstance(path , str):
             path = Path(path)
             return str(cls.path_at_machine(Path(path) , machine_name))
@@ -108,8 +114,10 @@ class PATH:
         return d
 
     class IndentedDumper(yaml.Dumper):
-        """add indent for yaml list"""
+        """YAML Dumper that keeps block-style indentation for nested lists."""
+
         def increase_indent(self, flow=False, indentless=False):
+            """Match parent indent behavior but never use ``indentless`` (lists stay indented)."""
             return super().increase_indent(flow, False)
 
     @classmethod

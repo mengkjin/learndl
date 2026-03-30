@@ -5,7 +5,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.proj.func import argparse_dict
+from src.proj.util import argparse_dict
 from .task import TaskItem , TaskDatabase
 
 class BackendTaskRecorder:

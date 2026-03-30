@@ -1,6 +1,6 @@
 import streamlit as st
 from string import Template
-from src.proj.env import PATH
+from src.proj import PATH
 
 class CustomCSS:
     Templates : dict[str, Template] = PATH.load_templates('css' , 'interactive')

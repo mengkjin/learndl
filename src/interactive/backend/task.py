@@ -6,8 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.proj import PATH , Logger , Duration
-from src.proj.func import properties , check_process_status , kill_process
-from src.proj.util import ScriptCmd , DBConnHandler , Email
+from src.proj.util import ScriptCmd , DBConnHandler , Email , properties , check_process_status , kill_process
 
 def timestamp():
     return datetime.now().timestamp()

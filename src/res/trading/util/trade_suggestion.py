@@ -32,6 +32,5 @@ class TradeSuggestion:
         else:
             price = cp * (1 - pcts).round(2)
         
-        pcts = pcts / cp - 1
-        suggestions = [cls(secid[i] , secname[i] , direction , price[i] , pcts[i]) for i in range(len(secid))]
+        suggestions = [cls(secid[i] , secname[i] , direction , price[i] , price[i] / cp[i] - 1) for i in range(len(secid))]
         return suggestions

@@ -1,4 +1,5 @@
-# basic variables in factor package
+"""Mutable training resume options and static model settings from configs."""
+
 from typing import Literal
 from src.proj.abc import stderr 
 from src.proj.env import MACHINE
@@ -6,10 +7,19 @@ from src.proj.env import MACHINE
 __all__ = ['ModelConfig' , 'Model']
 
 def notify_change(title : str , value , prev):
+    """Stderr banner when a train resume field changes."""
     if value != prev:
         stderr(f'Project {title.title()} Changed from {prev} to {value}' , color = 'lightred' , bold = True)
 
 class ModelTrainConfig:
+    """
+    User-tunable resume flags for training and downstream evaluations:
+    - resume_test [Literal['False' , 'last_model_date' , 'last_pred_date']]: resume option of model train: if resume testing , and if so whether to resume from last model date or last pred date
+    - resume_test_fmp [Literal[False] | str]: resume option of model train: if resume test fmp , and if so whether to resume from last pred date or trailing days
+    - resume_test_fmp_account [bool]: resume option of model train: if resume test fmp account
+    - resume_test_factor_perf [bool]: resume option of model train: if resume test factor perf
+    """
+
     def __init__(self):
         self._resume_test : Literal[False , 'last_model_date' , 'last_pred_date'] = 'last_pred_date'
         self._resume_test_fmp : Literal[False] | str = 'trailing_5'
@@ -44,6 +54,7 @@ class ModelTrainConfig:
 
     @property
     def resume_test_fmp_account(self) -> bool:
+        """Whether to resume FMP account backtests when resuming tests."""
         return self._resume_test_fmp_account
 
     @resume_test_fmp_account.setter
@@ -55,6 +66,7 @@ class ModelTrainConfig:
 
     @property
     def resume_test_factor_perf(self) -> bool:
+        """Whether to resume factor performance evaluation when resuming tests."""
         return self._resume_test_factor_perf
 
     @resume_test_factor_perf.setter
@@ -65,6 +77,12 @@ class ModelTrainConfig:
         self._resume_test_factor_perf = value
 
 class ModelConfig:
+    """
+    Expose ``TRAIN`` toggles and ``SETTINGS`` from ``setting/model`` config:
+    - TRAIN: config of model train , include resume options
+    - SETTINGS: settings of model , including prediction models / hidden extraction models
+    """
+
     def __init__(self):
         self._train = ModelTrainConfig()
         self._settings = MACHINE.configs('setting' , 'model')

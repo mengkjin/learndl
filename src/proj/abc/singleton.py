@@ -1,3 +1,5 @@
+"""Thread-safe singleton decorator and metaclasses."""
+
 import threading
 from abc import ABCMeta
 
@@ -15,6 +17,8 @@ def singleton(cls):
     return get_instance
 
 class SingletonMeta(type):
+    """First ``__call__`` constructs the instance; later calls return the same object (not thread-locked)."""
+
     _instances = {}
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
@@ -23,5 +27,7 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 class SingletonABCMeta(SingletonMeta, ABCMeta):
+    """``SingletonMeta`` composed with ``ABCMeta`` for abstract singleton bases."""
+
     def __new__(mcls, name, bases, namespace, **kwargs):
         return super().__new__(mcls, name, bases, namespace)

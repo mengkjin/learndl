@@ -1,3 +1,5 @@
+"""Facade: cached working proxies and shared ``AdaptiveProxyPool`` instances per target URL set."""
+
 from typing import Iterable
 from .finder import FreeProxyFinder as ProxyFinder
 from .verifier import ProxyVerifier
@@ -7,6 +9,8 @@ from .ppool import AdaptiveProxyPool , get_working_proxies
 __all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool']
 
 class ProxyAPI:
+    """Process-wide registry of ``AdaptiveProxyPool`` keyed by sorted target URL tuples."""
+
     proxy_pools : dict[tuple[str, ...], AdaptiveProxyPool] = {}
 
     @classmethod
@@ -20,6 +24,7 @@ class ProxyAPI:
 
     @classmethod
     def get_proxy_pool(cls , target_urls: Iterable[str] | str , go_with_cached_proxies: bool = False, * , refresh_interval: int = 180 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2) -> AdaptiveProxyPool:
+        """Return or create an ``AdaptiveProxyPool`` for the given URL(s)."""
         if isinstance(target_urls, str):
             target_urls = [target_urls]
         else:
@@ -37,4 +42,5 @@ class ProxyAPI:
 
     @classmethod
     def verification_stats(cls):
+        """Aggregate verification stats from ``ProxyVerifier``."""
         return ProxyVerifier.stats()

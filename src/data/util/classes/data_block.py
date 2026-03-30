@@ -7,8 +7,7 @@ from pathlib import Path
 from typing import Any , ClassVar , Literal
 
 from src.proj import PATH , Logger , CALENDAR , DB
-from src.proj.db.memory_map import ArrayMemoryMap
-from src.proj.func import torch_load
+from src.proj.util import torch_load
 from src.func import index_merge , forward_fillna
 
 from . import Stock4D
@@ -408,7 +407,7 @@ class DataBlock(Stock4D):
         if path.exists():
             if path.suffix == '.mmap':
                 assert path.is_dir() , path
-                values = ArrayMemoryMap.load_tensor(path.joinpath('values'))
+                values = DB.ArrayMemoryMap.load_tensor(path.joinpath('values'))
                 index = load_dict(path.joinpath('index.pt'))
                 block = cls(values , index['secid'] , index['date'] , index['feature'])
             elif path.suffix == '.pt':
@@ -438,7 +437,7 @@ class DataBlock(Stock4D):
         elif path.suffix == '.mmap':
             assert not path.exists() or path.is_dir() , path
             path.mkdir(parents=True, exist_ok=True)
-            ArrayMemoryMap.save(self.values , path.joinpath('values'))
+            DB.ArrayMemoryMap.save(self.values , path.joinpath('values'))
             save_dict({'date' : self.date , 'secid' : self.secid , 'feature' : self.feature} , path.joinpath('index.pt'))
         elif path.suffix == '.pt':
             assert not path.exists() or path.is_file() , path

@@ -1,3 +1,5 @@
+"""Long-running scheduled tasks: email/HTML reports, crash protection, and task metadata descriptors."""
+
 import sys
 
 from datetime import datetime

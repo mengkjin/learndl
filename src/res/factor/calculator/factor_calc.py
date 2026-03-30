@@ -9,9 +9,8 @@ from pathlib import Path
 
 from ..util import StockFactor
 
-from src.proj import Logger , PATH , Proj , CALENDAR , DB , Dates
-from src.proj.func import parallel
-from src.proj.util import SingletonABCMeta
+from src.proj import Logger , PATH , Proj , CALENDAR , DB , Dates , SingletonABCMeta
+from src.proj.util import parallel
 from src.data import DATAVENDOR
 
 __all__ = [

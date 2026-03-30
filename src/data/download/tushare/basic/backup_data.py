@@ -4,13 +4,16 @@ import numpy as np
 from src.proj import PATH , CALENDAR , DB , Dates
 from .abc import TS
 
-path_bak_data   = PATH.bak_data
-path_bak_record = PATH.bak_record
+path_bak_data   = PATH.backup.joinpath('tushare' , 'data')
+path_bak_record = PATH.backup.joinpath('tushare' , 'record')
 
 class TSBackUpDataTransform():
     """use csv backup data downloaded from tushare to transform to database"""
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
     DB_KEYS = ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']
+
+    path_bak_data.mkdir(parents=True , exist_ok=True)
+    path_bak_record.mkdir(parents=True , exist_ok=True)
     
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""

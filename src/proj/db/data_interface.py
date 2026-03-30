@@ -1,3 +1,5 @@
+"""Load, save, and path helpers for versioned tables under ``PATH.data`` (feather/parquet, tar, parallel IO)."""
+
 from dask.delayed import delayed
 from dask.base import compute
 import numpy as np
@@ -200,7 +202,7 @@ class DFProcessor:
     @classmethod
     def load_process(cls , df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
                      df_syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'):
-        """process dataframe"""
+        """process dataframe , check empty / all-NA and try reset index"""
         if date_colname and date is not None: 
             df[date_colname] = date
 

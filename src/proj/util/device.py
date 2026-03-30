@@ -1,3 +1,5 @@
+"""Torch device selection, nested ``.to()``, and simple RAM usage string."""
+
 import psutil , torch
 from torch.nn import Module
 from typing import Any
@@ -15,6 +17,7 @@ if torch.backends.mps.is_available() == 'mps':
     torch.mps.set_per_process_memory_fraction(0.7)  # 使用60%的GPU内存
 
 def send_to(x : Any , device = None) -> Any:
+    """Recursively move tensors/modules/containers to ``device``."""
     if isinstance(x , torch.Tensor | Module):
         return x.to(device)
     if isinstance(x , (list,tuple)):
@@ -27,6 +30,7 @@ def send_to(x : Any , device = None) -> Any:
         return x
     
 def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch.device:
+    """Infer ``torch.device`` from tensor, module, or nested structure."""
     if isinstance(obj , torch.Tensor):
         return obj.device
     elif isinstance(obj , Module):
@@ -41,12 +45,17 @@ def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch
         raise ValueError(f'{obj} is not a valid object')
 
 class Device:
-    '''cpu / cuda / mps device , callable'''
+    """Preferred accelerator (MPS > CUDA > CPU) with helpers to move data."""
+
     def __init__(self , try_cuda = True , try_mps = True) -> None:
+        """Pick device via ``use_device`` (MPS checked before CUDA when available)."""
         self.device = self.use_device(try_cuda)
     def __repr__(self): return str(self.device)
-    def __call__(self, obj): return send_to(obj , self.device)
+    def __call__(self, obj):
+        """Move ``obj`` to this device (see ``send_to``)."""
+        return send_to(obj , self.device)
     def __eq__(self , other : Any) -> bool:
+        """True if type and index match another ``Device`` or ``torch.device``."""
         return self.compare_devices(self.device , other)
 
     @staticmethod
@@ -57,6 +66,7 @@ class Device:
 
     @classmethod
     def use_device(cls , try_cuda = True) -> torch.device:
+        """Return ``mps``, ``cuda:0`` if allowed, else ``cpu``."""
         if torch.backends.mps.is_available():
             return torch.device('mps')
         elif try_cuda and torch.cuda.is_available():
@@ -65,17 +75,30 @@ class Device:
             return torch.device('cpu')
 
     @property
-    def is_cuda(self): return self.device.type == 'cuda'
+    def is_cuda(self):
+        """True if using CUDA."""
+        return self.device.type == 'cuda'
     @property
-    def is_mps(self): return self.device.type == 'mps'
+    def is_mps(self):
+        """True if using MPS."""
+        return self.device.type == 'mps'
     @property
-    def is_cpu(self): return self.device.type == 'cpu'
+    def is_cpu(self):
+        """True if using CPU."""
+        return self.device.type == 'cpu'
         
-    def cpu(self , x): return send_to(x , 'cpu')
-    def cuda(self , x): return send_to(x , 'cuda')
-    def mps(self , x): return send_to(x , 'mps')
+    def cpu(self , x):
+        """Move ``x`` to CPU."""
+        return send_to(x , 'cpu')
+    def cuda(self , x):
+        """Move ``x`` to CUDA device 0."""
+        return send_to(x , 'cuda')
+    def mps(self , x):
+        """Move ``x`` to MPS."""
+        return send_to(x , 'mps')
     
     def status(self):
+        """Log allocator stats for CUDA/MPS or a short CPU message."""
         if self.is_cuda:
             Logger.stdout(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
                   f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
@@ -87,13 +110,17 @@ class Device:
 
     @staticmethod
     def send_to(x : Any , device = None) -> Any:
+        """Module-level ``send_to`` bound for convenience."""
         return send_to(x , device)
 
     @staticmethod
     def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch.device:
+        """Module-level ``get_device`` bound for convenience."""
         return get_device(obj)
         
 class MemoryPrinter:
+    """Tiny repr helper for host RAM used/free (via psutil)."""
+
     def __repr__(self) -> str:
         return 'Used: {:.2f}G; Free {:.2f}G'.format(
             float(psutil.virtual_memory().used)/1024**3,

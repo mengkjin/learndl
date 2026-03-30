@@ -1,6 +1,9 @@
-from src.proj.abc.singleton import SingletonMeta , SingletonABCMeta
+"""Shared utilities: HTTP, SQLite, plotting, scripts, proxies, email, and catchers."""
+
+from src.proj.abc.singleton import SingletonABCMeta
 
 from .basic import *
+from .func import *
 
 from .catcher import (
     IOCatcher , LogWriter , WarningCatcher ,

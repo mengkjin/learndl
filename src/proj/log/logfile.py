@@ -1,3 +1,5 @@
+"""Structured log entries and optional rotation for append-only ``.log`` files."""
+
 import portalocker , re
 from dataclasses import dataclass , field
 from datetime import datetime
@@ -7,19 +9,24 @@ from src.proj.env import PATH
 
 @dataclass
 class LogEntry:
+    """One titled log block with optional multi-line body and timestamp."""
+
     title : str = ''
     messages : list[str] = field(default_factory=list)
     timestamp : datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
+        """Normalize title and split ``messages`` into lines."""
         self.title = self.title.strip()
         self.messages = self.split_messages(self.messages)
 
     def __bool__(self) -> bool:
+        """True if a non-empty title is set."""
         return bool(self.title)
 
     @classmethod
     def split_messages(cls , messages : list[str] | str | None) -> list[str]:
+        """Flatten ``messages`` into a list of single-line strings."""
         if messages is None:
             return []
         elif isinstance(messages , str):
@@ -30,18 +37,22 @@ class LogEntry:
             raise ValueError(f'Invalid messages type: {type(messages)}')
 
     def append_message(self , *messages : str):
+        """Append lines parsed from ``messages`` to this entry."""
         new_messages = self.split_messages(list(messages))
         self.messages = self.messages + new_messages
 
     @property
     def content(self) -> str:
+        """All message lines joined with newlines."""
         return '\n'.join(self.content_lines())
 
     @property
     def title_line(self) -> str:
+        """Header line ``timestamp >> title``."""
         return f'{self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} >> {self.title.strip()}'
 
     def content_lines(self , indent : bool = False) -> list[str]:
+        """Body lines, optionally prefixed with two spaces."""
         if self.messages is None:
             return []
         elif indent:
@@ -50,12 +61,14 @@ class LogEntry:
             return self.messages
 
     def to_lines(self) -> list[str]:
+        """Full record as lines: title line plus indented body."""
         if not self:
             return []
         return [self.title_line , *self.content_lines(indent = True)]
 
     @classmethod
     def from_args(cls , *args : str) -> 'LogEntry':
+        """Build an entry from string args; first line is title, rest is body."""
         if len(args) == 0:
             return cls()
         long_message = '\n'.join(args)
@@ -64,6 +77,13 @@ class LogEntry:
     
     @classmethod
     def from_lines(cls , lines : list[str] , from_latest : bool = True , pattern : str | None = None) -> list['LogEntry']:
+        """Parse file lines into ``LogEntry`` list (regex title lines).
+
+        Args:
+            lines: Raw lines from a log file.
+            from_latest: If True, reverse order so newest entries are first.
+            pattern: Optional regex; only entries whose title matches are kept.
+        """
         entries : list['LogEntry'] = []
         current_entry : LogEntry | None = None
         for line in lines:
@@ -144,6 +164,7 @@ class LogFile:
         return self.host_file.name
 
     def check_rotation(self):
+        """Point ``current_file`` at host or a new date-suffixed file when size exceeds limit."""
         if self.rotate:
             self.rotation_files = sorted([path for path in self.parent.glob(f'{self.name}.*')], key=lambda x: x.suffix)
             self.current_file = self.rotation_files[-1] if self.rotation_files else self.host_file
@@ -155,6 +176,7 @@ class LogFile:
             self.current_file = self.host_file
 
     def unlink(self , confirm : bool = True):
+        """Delete host and all rotation files (optional interactive confirm)."""
         if confirm:
             value = input(f'Are you sure you want to delete all {self} log files? (y/n): ')
             if value != 'y':
@@ -172,6 +194,13 @@ class LogFile:
             f.write('\n'.join(entry.to_lines()) + '\n')
 
     def read_entry(self , max_entries : int = -1 , from_latest : bool = True , pattern : str | None = None):
+        """Read parsed ``LogEntry`` objects, scanning rotation files in order.
+
+        Args:
+            max_entries: Max entries to return (>0); ``-1`` means no limit.
+            from_latest: Read newest candidate files first when True.
+            pattern: Optional title filter passed to ``LogEntry.from_lines``.
+        """
         read_files = reversed(self.candidates) if from_latest else self.candidates
         entries : list[LogEntry] = []
         for file in read_files:
@@ -189,9 +218,11 @@ class LogFile:
         self.write_entry(LogEntry.from_args(*args))
 
     def read(self , max_entries : int = -1 , from_latest : bool = True):
+        """Alias for ``read_entry`` without ``pattern``."""
         return self.read_entry(max_entries = max_entries , from_latest = from_latest)
 
     @classmethod
     def initialize(cls , *args : str , rotate : bool = False , rotation_size_mb : int = 10):
+        """Build a ``LogFile`` under ``PATH.logs`` from path parts."""
         log_file = PATH.logs.joinpath(*args).with_suffix('.log')
         return cls(log_file , rotate = rotate , rotation_size_mb = rotation_size_mb)

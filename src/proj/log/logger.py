@@ -1,3 +1,5 @@
+"""Application ``Logger``: verbosity-aware stdout/stderr, log file sink, timers, and profilers."""
+
 import re
 import cProfile
 import traceback
@@ -44,11 +46,9 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
     """
-    custom stdout message
-    kwargs:
-        indent: add prefix '  --> ' before the message
-        color , bg_color , bold: color the message
-        sep , end , file , flush: same as stdout
+    Like ``new_stdout`` but to stderr; always appends unformatted text to ``LOG_FILE``.
+
+    kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
     with VB.WithVbLevel(vb_level):
         args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
@@ -179,11 +179,9 @@ class Logger:
     @classmethod
     def stderr(cls , *args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
         """
-        custom stdout message
-        kwargs:
-            indent: add prefix '  --> ' before the message
-            color , bg_color , bold: color the message
-            sep , end , file , flush: same as stdout
+        Verbosity-aware stderr; message is also written to the rotating log file.
+
+        kwargs: indent, color, bg_color, bold, sep, end, file, flush.
         """
         return new_stderr(*args , indent = indent , color = color , vb_level = vb_level , **kwargs)
 

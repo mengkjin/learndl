@@ -1,3 +1,5 @@
+"""HTTP clients: ``curl_cffi`` session factory, timeout retry helpers, and ``httpx`` with sane TLS defaults."""
+
 import httpx
 import ssl
 import sys
@@ -48,6 +50,7 @@ def http_session(
 
 @contextmanager
 def temporary_timeout_session(session : requests.Session, new_timeout : float | tuple[float, float]):
+    """Temporarily set ``session.timeout``; restore previous value after the block."""
     old_timeout = session.timeout
     session.timeout = new_timeout
     try:
@@ -73,6 +76,7 @@ def timeout_expanding_sessions(session : requests.Session, expansion : float = 2
             yield session
 
 def request_with_timeouterror(session: requests.Session, request_method: Literal['get', 'post'], *args, expansion : float = 2. , max_retry_count: int = 2, **kwargs) -> requests.Response:
+    """GET/POST with exponentially growing timeouts until success or retries exhausted."""
     match request_method:
         case 'get':
             method = session.get
@@ -92,6 +96,7 @@ def request_with_timeouterror(session: requests.Session, request_method: Literal
     raise
 
 def test_connection(target_url: str, proxy: str | None = None, timeout : float = 10. , fast_test: bool = False) -> bool:
+    """Return True if HEAD returns status < 400 (optional proxy, shorter timeout when ``fast_test``)."""
     kwargs = {
         'verify': False if fast_test else True,
         'timeout': timeout / 2 if fast_test else timeout,
@@ -111,6 +116,7 @@ def http_client(
     trust_env: bool | None = None,
     **kwargs: object,
 ) -> httpx.Client:
+    """Configured ``httpx.Client`` (no keep-alive, long read timeout, Chrome-like UA)."""
     # Disable keep-alive to reduce "Server disconnected" type half-open connections
     limits = httpx.Limits(max_keepalive_connections=0, max_connections=20)
     kw: dict = {
@@ -144,6 +150,7 @@ def default_http_verify() -> _SSLVerify:
     return certifi.where()
 
 def iterate_with_interval_control(iterable: Iterable[T], * , interval: float = 1.0) -> Generator[T, None, None]:
+    """Yield items from ``iterable`` spacing iterations by at least ``interval`` seconds."""
     last_time = time.time()
     for i , item in enumerate(iterable):
         if i > 0 and (cost := time.time() - last_time) < interval:

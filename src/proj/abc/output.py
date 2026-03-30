@@ -1,3 +1,5 @@
+"""Colored terminal strings: ``FormatStr``, ``stdout``, ``stderr`` (respect ``Silence``)."""
+
 import sys
 from datetime import datetime
 from typing import Any
@@ -31,45 +33,8 @@ _ansi_bold = '\u001b[1m'
 _ansi_italic = '\u001b[3m'
 _ansi_reset = '\u001b[0m'
 
-# _ansi_fg_colors = {
-#     'black' : '\u001b[30m',
-#     'red' : '\u001b[31m',
-#     'green' : '\u001b[32m',
-#     'yellow' : '\u001b[33m',
-#     'blue' : '\u001b[34m',
-#     'purple' : '\u001b[35m',
-#     'cyan' : '\u001b[36m',
-#     'white' : '\u001b[37m',
-#     'gray' : '\u001b[90m',
-#     'lightred' : '\u001b[91m',
-#     'lightgreen' : '\u001b[92m',
-#     'lightyellow' : '\u001b[93m',
-#     'lightblue' : '\u001b[94m',
-#     'lightpurple' : '\u001b[95m',
-#     'lightcyan' : '\u001b[96m',
-#     'lightwhite' : '\u001b[97m',
-# }
-
-# _ansi_bg_colors = {
-#     'black' : '\u001b[40m',
-#     'red' : '\u001b[41m',
-#     'green' : '\u001b[42m',
-#     'yellow' : '\u001b[43m',
-#     'blue' : '\u001b[44m',
-#     'purple' : '\u001b[45m',
-#     'cyan' : '\u001b[46m',
-#     'white' : '\u001b[47m',
-#     'gray' : '\u001b[100m',
-#     'lightred' : '\u001b[101m',
-#     'lightgreen' : '\u001b[102m',
-#     'lightyellow' : '\u001b[103m',
-#     'lightblue' : '\u001b[104m',
-#     'lightpurple' : '\u001b[105m',
-#     'lightcyan' : '\u001b[106m',
-#     'lightwhite' : '\u001b[107m',
-# }
-
 def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False) -> str:
+    """Wrap ``msg`` with ANSI SGR prefixes/suffix for fg, bg, bold, italic."""
     prefix = ''
     if color:
         prefix += _ansi_fg_colors.get(color , '')
@@ -83,22 +48,27 @@ def _ansi_styler(msg : str , color : str | None = None , bg_color : str | None =
     return prefix + msg + suffix
 
 class FormatStr(str):
+    """String with deferred ANSI formatting and optional timestamp/level prefix."""
+
     def __new__(cls , *args , sep = ' ' , indent : int = 0 , **kwargs):
         msg = cls.indent_str(indent) + sep.join([str(arg) for arg in args])
         self = super().__new__(cls , msg)
         return self
 
     def __init__(self , *args , sep = ' ' , indent : int = 0 , **kwargs):
+        """Store raw message and style kwargs (``color``, ``bg_color``, ``bold``, ``italic``)."""
         self.msg = self.indent_str(indent) + sep.join([str(arg) for arg in args])
         self.kwargs = kwargs
 
     def __str__(self):
+        """ANSI-formatted text (for printing)."""
         return self.formatted()
 
     def __repr__(self):
         return f'{self.__class__.__name__}({repr(self.formatted())})'
 
     def __bool__(self):
+        """False only when the underlying message is empty."""
         return bool(self.msg)
 
     @property
@@ -116,6 +86,7 @@ class FormatStr(str):
         return '' if indent <= 0 else ('  ' * indent + '--> ')
 
     def formatted(self , **kwargs) -> str:
+        """Apply ANSI styles; kwargs override those stored on construction."""
         kwargs = self.kwargs | kwargs
         color = kwargs.get('color' , None)
         bg_color = kwargs.get('bg_color' , None)
@@ -127,18 +98,21 @@ class FormatStr(str):
         return new_msg
 
     def unformatted(self) -> str:
+        """Plain text including optional level prefix, without ANSI codes."""
         new_msg = self.msg
         if self.level_prefix:
             new_msg = f'{self.level_prefix.unformatted()}: {new_msg}'
         return new_msg
 
     def with_level_prefix(self , level: str | None = None , color : str | None = None , bg_color : str | None = None , bold : bool = True):
+        """Prepend ``yy-mm-dd HH:MM:SS|LEVEL|`` as a nested ``FormatStr`` prefix."""
         if level:
             msg = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|{level:10s}|'
             self.level_prefix = FormatStr(msg , color = color , bg_color = bg_color , bold = bold)
         return self
         
     def write(self , stdout = False , stderr = False , file = None , end : str = '\n' , flush = False , **kwargs):
+        """Write formatted text to stdout, stderr, and/or append to a file path."""
         msg = self.formatted(**kwargs) + end
         if file:
             with open(file , 'a') as f:
@@ -157,7 +131,7 @@ empty_fstr = FormatStr()
 
 def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , write = True):
-    """custom stdout message , vb_level can be set to control display (minimum Proj.verbosity level)"""
+    """custom stdout message , vb_level can be set to control display (minimum verbosity level to show the message)"""
     if Silence.silent or not write:
         return empty_fstr
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
@@ -166,7 +140,7 @@ def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str
 
 def stderr(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, write = True):
-    """custom stderr message , vb_level can be set to control display (minimum Proj.verbosity level)"""
+    """Like ``stdout`` but writes to stderr; skipped when ``Silence.silent`` or ``write`` is false."""
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     if level_prefix:
         fstr.with_level_prefix(**level_prefix)

@@ -1,3 +1,5 @@
+"""Nested context manager to suppress most stdout-style output when enabled."""
+
 class _SilenceSilent:
     """Silent silencer, used to silence most of the project's output , nested usage is supported"""
     def __get__(self , instance, owner):
@@ -5,7 +7,10 @@ class _SilenceSilent:
         return bool(instance_list) and instance_list[-1].enable
 
 class Silence:
-    """Silence manager, can be used to silence most of the project's output , nested usage is supported"""
+    """
+    Silence manager, can be used to silence most of the project's output , nested usage is supported
+    if the input is True (default), the output will be suppressed.
+    """
     instance_list = []
     silent = _SilenceSilent()
     def __init__(self , enable = True):

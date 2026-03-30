@@ -1,4 +1,5 @@
-# please check this path before running the code
+"""Machine identity, OS, secrets, and config loading for the current host."""
+
 import sys , socket , platform , os , torch , pytz , yaml , json
 
 from dataclasses import dataclass
@@ -47,6 +48,14 @@ class _MachineSettings:
 
 
 def _get_system_name():
+    """Normalize OS name to ``linux`` | ``windows`` | ``macos``.
+
+    Returns:
+        Short platform tag used for ``MACHINE.system_name``.
+
+    Raises:
+        ValueError: If the platform is not supported.
+    """
     system_name = platform.system()
     if system_name == 'Linux' and os.name == 'posix':
         return 'linux'
@@ -67,7 +76,15 @@ def _get_best_device():
         return 'CPU'
 
 def _get_secret() -> dict:
-    """Get the secret of the project"""
+    """Load all ``.yaml`` / ``.json`` files under ``.secret`` into a stem-keyed dict.
+
+    Returns:
+        Mapping of filename stem to parsed content (dict/list/scalar per file).
+
+    Raises:
+        ValueError: If a non-file entry exists under ``SECRET_PATH``.
+        AssertionError: If a file is not YAML or JSON.
+    """
     secret = {}
     for file in SECRET_PATH.iterdir():
         if file.is_file():

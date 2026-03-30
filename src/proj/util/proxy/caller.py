@@ -1,3 +1,5 @@
+"""Run user callables through a ``AdaptiveProxyPool`` with fallback when proxies are missing."""
+
 import numpy as np
 from typing import Callable , Any , Iterable , Union, Iterator
 

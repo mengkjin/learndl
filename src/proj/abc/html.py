@@ -1,3 +1,5 @@
+"""Convert ANSI-colored text, DataFrames, and matplotlib figures to HTML-safe fragments."""
+
 import re
 import html
 import base64
@@ -35,8 +37,8 @@ def str_to_html(text: str | Any):
     
     return text
 
-def replace_ansi_sequences(match):
-    """replace ANSI sequences to html span tag"""
+def replace_ansi_sequences(match: re.Match[str]) -> str:
+    """Regex callback: turn a run of ANSI SGR codes into ``<span style=...>`` fragments."""
     # match.group(0) contains all continuous ANSI sequences
     sequences = match.group(0)
     all_codes = []
@@ -48,8 +50,8 @@ def replace_ansi_sequences(match):
     
     return ansi_codes_to_span(all_codes)
 
-def ansi_codes_to_span(codes):
-    """convert ANSI codes list to a single span tag"""
+def ansi_codes_to_span(codes: list[str]) -> str:
+    """Map numeric ANSI codes (bold, italic, fg/bg) to inline CSS; ``0`` closes a span."""
     styles = []
     has_fg_color = False
     has_bg_color = False

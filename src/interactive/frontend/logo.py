@@ -8,14 +8,20 @@ import numpy as np
 
 from src.proj import Logger , PATH
 
+PATH_ICON = PATH.template.joinpath("img" , "icon.png")
+PATH_BANNER = PATH.template.joinpath("img" , "banner.png")
+PATH_LOGO = PATH.template.joinpath("img" , "logo.png")
+
+PATH_FONT = PATH.template.joinpath("font")
+
 def get_font() -> Path:
     """
     download desired font from dafont.com
     """
 
     font_file = "animeace2bb_tt/animeace2_bld.ttf"
-    font_path = PATH.template_font / font_file.split("/")[-1]
-    temp_dir = PATH.template_font / "temp"
+    font_path = PATH_FONT.joinpath(font_file.split("/")[-1])
+    temp_dir = PATH_FONT.joinpath("temp")
     
     if font_path.exists(): 
         return font_path
@@ -131,17 +137,17 @@ def draw_rocket():
 def create_icon(recreate = False):
     """create an icon"""
     assert not recreate , "recreate must be False"
-    if not recreate and PATH.template_img.joinpath("icon.png").exists(): 
+    if not recreate and PATH_ICON.exists(): 
         return
     image = draw_rocket()
-    image.save(PATH.template_img / "icon.png")
+    image.save(PATH_ICON)
     return image
 
 def create_banner(recreate = False):
     """
     generate image with font
     """
-    if not recreate and PATH.template_img.joinpath("banner.png").exists(): 
+    if not recreate and PATH_BANNER.exists(): 
         return
 
     # text and font
@@ -196,25 +202,21 @@ def create_banner(recreate = False):
     image.paste(gradient_img, (x_offset, y_offset), mask)
     
     # save image
-    image.save(PATH.template_img / "banner.png")
+    image.save(PATH_BANNER)
 
-def create_logo(icon_path="icon.png", banner_path="banner.png", 
-                output_path="logo.png", spacing=True, alignment='center', recreate=False):
+def create_logo(spacing=True, alignment='center', recreate=False):
     """
-    - icon_path: icon path
-    - banner_path: banner path  
-    - output_path: output logo path
     - spacing: spacing between icon and banner
     - alignment: vertical alignment ('top', 'center', 'bottom')
     """
-    if not recreate and PATH.template_img.joinpath(output_path).exists(): 
+    if not recreate and PATH_LOGO.exists(): 
         return
 
     create_icon(False)
     create_banner(recreate)
 
-    icon = Image.open(PATH.template_img / icon_path)
-    banner = Image.open(PATH.template_img / banner_path)
+    icon = Image.open(PATH_ICON)
+    banner = Image.open(PATH_BANNER)
     
     # convert to RGBA mode
     if icon.mode != 'RGBA':
@@ -264,7 +266,7 @@ def create_logo(icon_path="icon.png", banner_path="banner.png",
     logo.paste(banner, (icon_width + spacing * icon_width, banner_y), banner)
     
     # save image
-    logo.save(PATH.template_img / output_path, 'PNG')
+    logo.save(PATH_LOGO, 'PNG')
 
     return logo
 
@@ -272,8 +274,8 @@ def get_logo() -> dict:
     """get the logo"""
     create_logo()
     return {
-        "image" : PATH.template_img / "logo.png" ,
-        "icon_image" : PATH.template_img / "icon.png"
+        "image" : PATH_LOGO ,
+        "icon_image" : PATH_ICON
     }
 
 if __name__ == "__main__":

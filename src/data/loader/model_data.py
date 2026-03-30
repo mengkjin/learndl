@@ -1,5 +1,4 @@
-from src.proj import TradeDate , DB 
-from src.proj.func import singleton
+from src.proj import TradeDate , DB , singleton
 from .access import DateDataAccess
     
 @singleton
