@@ -43,11 +43,11 @@ class PreProcessorProperty:
         return s.removeprefix('PrePro_').lower()
 
     def category0(self , owner) -> str:
-        assert isinstance(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
+        assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
         return Proj.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def category1(self , owner) -> str:
-        assert isinstance(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
+        assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
         return str(owner.__qualname__).removeprefix('PrePro_').lower()
 
 class PreProcessor(metaclass=PreProcessorMeta):
