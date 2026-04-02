@@ -56,3 +56,26 @@ Standing hard rules (override only when the user explicitly asks in chat).
 ## Documentation and communication
 - Update README or relevant docs when usage or setup changes.
 - When proposing changes, state rationale and expected impact briefly.
+
+## Agent memory and handoff (all projects)
+
+Maintain **two layers** so agents and humans can resume work across machines without rereading long chats or READMEs alone.
+
+### Git-tracked handoff (brief)
+- **Purpose:** Snapshot of current intent, recent decisions, open items, and last-session summary for collaborators and other machines.
+- **Typical path:** `docs/agent/HANDOFF.md` or append-only `docs/agent/LOG.md` — the **exact path** is defined in this repo’s `.cursor/rules/project-rules.mdc`.
+- **When to update:** After non-trivial work completes; when the user asks to wrap up or “update handoff”; before switching machines when practical.
+- **Content (keep short):** One-line project purpose, current focus (1–3 bullets), dated decisions, open items/risks, last session (date/host optional): files touched, tests run, next steps.
+- **Never put here:** Secrets, tokens, private keys, literal absolute home paths, or other sensitive values. Reference environment variable **names** only.
+
+### Local detail log (not in Git)
+- **Purpose:** Longer notes: command transcripts, debug traces, pasted logs, machine-specific paths.
+- **Typical path:** `docs/agent/local/` (must be listed in `.gitignore`) — exact path in `project-rules.mdc`.
+- Optional: per-session files under `docs/agent/local/sessions/YYYY-MM-DD-topic.md`.
+
+### README vs handoff
+- **README:** Install, architecture, long-lived documentation.
+- **Handoff:** Fast-changing “where we are and why.” On a new machine, read **handoff first**, then README sections as needed.
+
+### Requirement
+- Every repository should define concrete paths and any project-specific handoff fields in `.cursor/rules/project-rules.mdc`.
