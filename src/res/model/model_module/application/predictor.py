@@ -48,10 +48,6 @@ class ModelPredictor:
         assert update != overwrite , 'update and overwrite must be different here'
         
         dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start , end)
-        if len(dates) == 0:
-            Logger.stdout(self.reg_model.pred_target_dates[-5:])
-            Logger.stdout(self.reg_model.pred_dates[-5:])
-            Logger.stdout(start , end)
         with Proj.silence:
             self.predict_dates(dates)
         self.save_preds()
@@ -65,6 +61,7 @@ class ModelPredictor:
         use_data0 = 'both' if min(dates) <= CALENDAR.today(-100) else 'predict'
         use_data1 = self.use_data 
         self.data_module  = DataModule(self.config , use_data0 if self.use_data == 'both' else use_data1).load_data() 
+        print(self.data_module.test_full_dates)
         pred_dates = dates[dates <= max(self.data_module.test_full_dates)]
         if pred_dates.size == 0: 
             return self

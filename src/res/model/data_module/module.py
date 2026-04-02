@@ -129,6 +129,7 @@ class DataModule(BaseDataModule):
 
     def set_critical_dates(self):
         '''set critical dates for model date list and test full dates'''
+        print(self.datas.date)
         dates = self.datas.date_within(self.beg_date , self.end_date)
         # check if dates is align with CALENDAR
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
@@ -153,6 +154,8 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.interval]
+
+        print(self.test_full_dates)
 
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''

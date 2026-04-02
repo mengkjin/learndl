@@ -61,10 +61,14 @@ class PreProcessor(metaclass=PreProcessorMeta):
     hist_end      = 20161231
 
     def __init__(self , type : Literal['fit' , 'predict'] = 'fit' , * , mask : dict[str,Any] | None = None , **kwargs):
+        
+        
         self.type : Literal['fit' , 'predict'] = type
         self.mask = mask or {'list_dt': 91}
         self.load_start = self.start_date(type)
         self.load_end   = 99991231
+
+        print(self.key , self.type , self.load_start , self.load_end)
 
     def __repr__(self):
         return f'{self.__class__.__name__}'
