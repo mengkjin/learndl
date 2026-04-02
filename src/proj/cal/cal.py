@@ -248,8 +248,8 @@ class CALENDAR:
     def as_start_date(cls, date: DateTypeWithNone) -> int:
         """clear the start date of input date (None -> 19900101, negative -> relative to today)"""
         date_dt = 19900101 if date is None else get_cd(date)
-        if date_dt < 0:
-            date_dt = cls.today(date_dt)
+        #if date_dt < 0:
+        #    date_dt = cls.today(date_dt)
         return date_dt
 
     @classmethod
