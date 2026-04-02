@@ -61,7 +61,7 @@ class ModelPredictor:
         use_data0 = 'both' if min(dates) <= CALENDAR.today(-100) else 'predict'
         use_data1 = self.use_data 
         self.data_module  = DataModule(self.config , use_data0 if self.use_data == 'both' else use_data1).load_data() 
-        print(self.data_module.test_full_dates)
+        print('here is test_full_dates2' , self.data_module.test_full_dates)
         pred_dates = dates[dates <= max(self.data_module.test_full_dates)]
         if pred_dates.size == 0: 
             return self

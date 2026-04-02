@@ -66,7 +66,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         self.type : Literal['fit' , 'predict'] = type
         self.mask = mask or {'list_dt': 91}
         self.load_start = self.start_date(type)
-        self.load_end   = 99991231
+        self.load_end   = CALENDAR.updated()
 
         print(self.key)
         print(self.type)
@@ -75,6 +75,16 @@ class PreProcessor(metaclass=PreProcessorMeta):
 
     def __repr__(self):
         return f'{self.__class__.__name__}'
+
+    @property
+    def enable_saving(self) -> bool:
+        if not hasattr(self , '_enable_dump_save'):
+            self._enable_dump_save = True
+        return self._enable_dump_save
+
+    @enable_saving.setter
+    def enable_saving(self , value : bool):
+        self._enable_dump_save = value
 
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
@@ -126,7 +136,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return block
 
     def load(self , dates : np.ndarray | list[int], * , secid : np.ndarray | None = None , indent : int = 0 , vb_level : Any = 'max') -> DataBlock:
-        return self.load_with_extension(dates = dates , secid = secid, indent = indent , vb_level = vb_level + 1)[0]
+        return self.load_with_extension(dates_for_query = dates , secid = secid, indent = indent , vb_level = vb_level + 1)
 
     def load_dump(self , indent : int = 0 , vb_level : Any = 'max'):
         if not self.dump_exists():
@@ -136,6 +146,8 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return block
 
     def save_dump(self , block : DataBlock , indent : int = 0 , vb_level : Any = 'max'):
+        if not self.enable_saving:
+            return
         with Logger.Timer(f'[{self.key}] blocks dumping' , indent = indent , vb_level = vb_level):
             block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
 
@@ -143,52 +155,56 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return DataBlock.path_preprocess(self.key , self.type).exists()
 
     def save_norm(self , block : DataBlock , indent : int = 0 , vb_level : Any = 'max'):
-        if self.type != 'fit':
+        if self.type != 'fit' or not self.enable_saving:
             return
         with Logger.Timer(f'[{self.key}] blocks norming' , indent = indent , vb_level = vb_level):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
-    def load_with_extension(self , dates : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None , indent : int = 3 , vb_level : Any = 'max') -> tuple[DataBlock , bool]:
+    def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None , indent : int = 3 , vb_level : Any = 'max') -> DataBlock:
         """
         load data with extension , try dumped data first , then extend to the end date
         Args:
-            end: the end date of the data to try to extend to
+            dates_for_query: the dates to query the data for , if supplied, this is not an update mission so enable_dump_save is set to False
         Returns:
             tuple[DataBlock , bool]: the data block and a boolean indicating if the data is extended
         """
         vb_level = Proj.vb(vb_level)
         
         block = self.load_dump(indent = indent , vb_level = vb_level + 1).align_secid(secid , inplace = True)
-        if dates is None:
-            dates = [self.load_start , CALENDAR.updated()]
-        start , end = min(dates) , max(dates)
+        if dates_for_query is None:
+            dates_for_query = [self.load_start , self.load_end]
+            start , end = self.load_start , self.load_end
+        else:
+            start , end = min(dates_for_query) , max(dates_for_query)
+            self.enable_saving = False
         print(start , end)
-
-        if not block.empty and block.date[-1] >= end and block.date[0] <= start:
-            return block , False
+        block = block.slice_date(start , end)
+        block_start , block_end = block.date[-1] , block.date[0]
+        if not block.empty and block_end >= end and block_start <= start:
+            return block
 
         span_tuples : list[tuple[int,int]] = []
+        block_start , block_end = block.first_valid_date , block.last_valid_date
         if block.empty:
             span_tuples.append((start , end))
-        elif len(dates) > 0:
-            if start < block.first_valid_date:
-                span_tuples.append((start , CALENDAR.td(block.first_valid_date , -1).td))
-            if end > block.last_valid_date:
-                span_tuples.append((CALENDAR.td(block.last_valid_date , -self.EXTENSION_OVERLAY + 1).td , end))
+        elif len(dates_for_query) > 0:
+            if start < block_start:
+                span_tuples.append((start , CALENDAR.td(block_start , -1).td))
+            if end > block_end:
+                span_tuples.append((CALENDAR.td(block_end , -self.EXTENSION_OVERLAY + 1).td , end))
         extentions : list[DataBlock] = []
         for span_start , span_end in span_tuples:
             span_load_start = CALENDAR.td(span_start , -self.CALCULATION_WINDOW + 1).td
-
             ext = self.pre_process(span_load_start , span_end , secid = secid, indent = indent + 1 , vb_level = vb_level + 1).slice_date(span_start , span_end)
             if not ext.empty:
                 extentions.append(ext) 
         if not extentions:
-            return block , False
+            return block 
             
         with Logger.Timer(f'[{self.key}] blocks merging' , indent = indent , vb_level = vb_level + 2):
-            block = block.merge_others(extentions , inplace = True).slice_date(self.load_start , end)
+            block = block.merge_others(extentions , inplace = True).slice_date(start , end)
 
-        return block , True
+        return block
 
     def should_be_skipped(self , force_update : bool = False , indent : int = 1 , vb_level : Any = 2):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
@@ -206,14 +222,14 @@ class PreProcessor(metaclass=PreProcessorMeta):
 
         tt1 = datetime.now()
         Logger.stdout(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , indent = indent , vb_level = vb_level + 2)
-        data_block , is_extended = self.load_with_extension(dates = None , indent = indent + 2 , vb_level = vb_level + 2)
+        data_block = self.load_with_extension(dates_for_query = None , indent = indent + 2 , vb_level = vb_level + 2)
         
-        if is_extended:
-            self.save_dump(data_block , indent = indent + 2 , vb_level = vb_level + 3)
-            self.save_norm(data_block , indent = indent + 2 , vb_level = vb_level + 3)
+        self.save_dump(data_block , indent = indent + 2 , vb_level = vb_level + 3)
+        self.save_norm(data_block , indent = indent + 2 , vb_level = vb_level + 3)
         
         # gc.collect()
-        Logger.success(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  ({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
+        Logger.success(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
+                       f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
                         indent = indent + 1 , vb_level = vb_level + 1)
     
 class FactorPreProcessor(PreProcessor):
