@@ -65,7 +65,6 @@ def load_dict(file_path : str | Path , keys = None) -> dict[str,Any]:
     return data
 
 class DataBlock(Stock4D):
-    DEFAULT_INDEX = ['secid','date','minute','factor_name']
     FREQUENT_DBS = ['trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp']
     FREQUENT_MIN_DATES = 500
     PREFERRED_DUMP_SUFFIXES : list[Literal['.mmap' , '.pt' , '.feather']] = ['.mmap' , '.pt' , '.feather']

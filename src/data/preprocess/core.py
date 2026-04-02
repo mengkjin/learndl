@@ -84,8 +84,9 @@ class PreProcessor(metaclass=PreProcessorMeta):
         loaders = self.block_loaders()
         blocks : dict[str,DataBlock] = {}
         vb_level = Proj.vb(vb_level)
+        date = CALENDAR.range(start , end)
         for src_key , loader in loaders.items():
-            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align_secid(secid , inplace = True)
+            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align_secid_date(secid , date , inplace = True)
             secid = blocks[src_key].secid
         return blocks
     
@@ -155,7 +156,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
             dates = [self.load_start , CALENDAR.updated()]
         start , end = min(dates) , max(dates)
 
-        if not block.empty and block.date[-1] >= end:
+        if not block.empty and block.date[-1] >= end and block.date[0] <= start:
             return block , False
 
         span_tuples : list[tuple[int,int]] = []
@@ -166,7 +167,6 @@ class PreProcessor(metaclass=PreProcessorMeta):
                 span_tuples.append((start , CALENDAR.td(block.first_valid_date , -1).td))
             if end > block.last_valid_date:
                 span_tuples.append((CALENDAR.td(block.last_valid_date , -self.EXTENSION_OVERLAY + 1).td , end))
-
         extentions : list[DataBlock] = []
         for span_start , span_end in span_tuples:
             span_load_start = CALENDAR.td(span_start , -self.CALCULATION_WINDOW + 1).td

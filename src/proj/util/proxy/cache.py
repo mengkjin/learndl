@@ -6,10 +6,10 @@ from datetime import datetime , timedelta
 from typing import Literal , Any , Iterable
 
 from src.proj.env import PATH
-from src.proj.cal import BJTZ
+from src.proj.cal import BJ_TZ
 from .core import Proxy , ProxySet
 
-_default_time = datetime.strptime('1900-01-01 00:00:00', "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJTZ)
+_default_time = datetime.strptime('1900-01-01 00:00:00', "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ_TZ)
 
 @dataclass
 class CachedProxies:
@@ -66,7 +66,7 @@ class ProxyCache:
             if cls._cached_proxies is None:
                 cls.load()
             assert cls._cached_proxies is not None, 'Proxies cache is not loaded'
-            cls._cached_proxies[target_url] = CachedProxies(target_url, datetime.now(tz=BJTZ), ProxySet(verified_proxies))
+            cls._cached_proxies[target_url] = CachedProxies(target_url, datetime.now(tz=BJ_TZ), ProxySet(verified_proxies))
         with cls._locks['file']:
             PATH.dump_json({name: cache.to_dict() for name, cache in cls._cached_proxies.items()}, cls._proxies_file, overwrite=True)
 

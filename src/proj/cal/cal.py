@@ -14,7 +14,7 @@ from typing import Any, Literal, Union , Sequence
 
 import src.proj.db as DB
 
-from .basic import BC, BJTZ
+from .basic import BC, BJ_TZ
 from .trade_date import TradeDate
 
 DateType = Union[int, TradeDate]
@@ -58,11 +58,10 @@ class CALENDAR:
     _update_to = None
 
     @staticmethod
-    def now(bj_tz=True) -> datetime:
+    def now(bj_tz: bool = True) -> datetime:
         """Current time; use 'BJTZ' (Shanghai) if 'bj_tz' is True."""
-        if bj_tz:
-            return datetime.now(BJTZ)
-        return datetime.now()
+        tz = BJ_TZ if bj_tz else None
+        return datetime.now(tz)
 
     @classmethod
     def today(cls, offset=0, bj_tz=True) -> int:
@@ -109,6 +108,20 @@ class CALENDAR:
             date_time = datetime.strptime(str(date), "%Y%m%d")
         return int(date_time.replace(hour=h, minute=m, second=s).strftime("%Y%m%d%H%M%S"))
 
+    @staticmethod
+    def bjtime_to_localtime(bj_time: int | float) -> int:
+        """Convert BJ time to local time , in and out are of format 'YYYYMMDDHHMMSS'"""
+        bj_datetime = datetime.strptime(str(int(bj_time)), "%Y%m%d%H%M%S").replace(tzinfo = BJ_TZ)
+        local_datetime = bj_datetime.astimezone(None)
+        return int(local_datetime.strftime("%Y%m%d%H%M%S"))
+
+    @staticmethod
+    def localtime_to_bjtime(local_time: int | float) -> int:
+        """Convert local time to BJ time , in and out are of format 'YYYYMMDDHHMMSS'"""
+        local_datetime = datetime.strptime(str(int(local_time)), "%Y%m%d%H%M%S").replace(tzinfo = None)
+        bj_datetime = local_datetime.astimezone(BJ_TZ)
+        return int(bj_datetime.strftime("%Y%m%d%H%M%S"))
+
     @classmethod
     def is_updated_today(cls, modified_time: int | float | None, hour=20, minute=0):
         """
@@ -119,9 +132,11 @@ class CALENDAR:
             return False
         if modified_time < 1e8:
             modified_time = modified_time * 1000000
-        current_time = cls.now(bj_tz=True)
-        required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
-        required_time = cls.clock(required_date, hour, minute)
+        modified_time = cls.localtime_to_bjtime(modified_time)
+        bjtime = cls.now(bj_tz=True)
+        if int(bjtime.strftime("%H%M")) < hour * 100 + minute:
+            bjtime = bjtime - timedelta(days=1)
+        required_time = cls.clock(int(bjtime.strftime("%Y%m%d")), hour, minute)
         return modified_time >= required_time
 
     @classmethod

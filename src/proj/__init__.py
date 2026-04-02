@@ -10,4 +10,4 @@ from .log import Logger , LogFile
 
 from . import db as DB
 
-from .cal import CALENDAR , TradeDate , Dates , BJTZ
+from .cal import CALENDAR , TradeDate , Dates , BJ_TZ

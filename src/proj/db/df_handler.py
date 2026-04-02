@@ -51,12 +51,12 @@ class dfHandler:
 
     @classmethod
     def load_process_pandas(
-        cls , df : pd.DataFrame , date = None, key_column = None , check_na_cols = False , 
+        cls , df : pd.DataFrame , date = None, * , reassign_date_col : str | None = None , check_na_cols = False , 
         syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'
     ) -> pd.DataFrame:
         """process dataframe , check empty / all-NA and try reset index"""
-        if key_column and date is not None: 
-            df[key_column] = date
+        if reassign_date_col and date is not None: 
+            df[reassign_date_col] = date
 
         if df.empty:
             Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = Logger.alert1 , indent = indent , vb_level = vb_level)
@@ -75,18 +75,18 @@ class dfHandler:
 
     @classmethod
     def load_process_polars(
-        cls , df : pl.DataFrame , date = None, key_column = None , check_na_cols = False , 
+        cls , df : pl.DataFrame , date = None, * , reassign_date_col : str | None = None , check_na_cols = False , 
         syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'
     ) -> pl.DataFrame:
         """process polars dataframe , check empty / all-NA and try reset index"""
-        if key_column and date is not None: 
+        if reassign_date_col and date is not None: 
             if isinstance(date, (pl.Expr, pl.Series, list, tuple, np.ndarray)):
                 # if date is a list/array, convert it to pl.Series first
                 if not isinstance(date, (pl.Expr, pl.Series)):
-                    date = pl.Series(key_column, date)
-                df = df.with_columns(date.alias(key_column))
+                    date = pl.Series(reassign_date_col, date)
+                df = df.with_columns(date.alias(reassign_date_col))
             else:
-                df = df.with_columns(pl.lit(date).alias(key_column))
+                df = df.with_columns(pl.lit(date).alias(reassign_date_col))
 
         if len(df) == 0:
             Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = Logger.alert1 , indent = indent , vb_level = vb_level)

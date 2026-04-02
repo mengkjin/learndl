@@ -356,7 +356,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = DB.loads(cls.db_src , cls.db_key , dates , indent = indent , vb_level = vb_level)
+        df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , indent = indent , vb_level = vb_level)
         if cls.meta_type == 'stock' and normalize:
             df = StockFactor.normalize_df(df , fill_method = fill_method)
         return df
@@ -706,7 +706,7 @@ class AffiliateFactorCalculator(FactorCalculator):
                       indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
         if len(dates) == 0:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
-        df = DB.loads(src , key , dates , indent = indent , vb_level = vb_level)
+        df = DB.loads(src , key , dates , override_existing_key = True , indent = indent , vb_level = vb_level)
         if df.empty:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         if not col:

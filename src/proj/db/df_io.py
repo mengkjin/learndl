@@ -38,17 +38,10 @@ class dfIOHandler:
         """load dataframe from path"""
         if isinstance(path , PATH_TYPE) and not Path(path).exists() and missing_ok: 
             return pd.DataFrame()
-        try:
-            if DATAFRAME_SUFFIX == 'feather':
-                df = pd.read_feather(path)
-            else:
-                df = pd.read_parquet(path , engine='fastparquet')
-        except FileNotFoundError:
-            Logger.error(f'{path} not found')
-            raise
-        except Exception as e:
-            Logger.error(f'Error loading {path}: {e}')
-            raise
+        if DATAFRAME_SUFFIX == 'feather':
+            df = pd.read_feather(path)
+        else:
+            df = pd.read_parquet(path , engine='fastparquet')
         df = dfHandler.apply_mapper(df , mapper)
         return df
 
@@ -57,17 +50,10 @@ class dfIOHandler:
         """load dataframe from path"""
         if isinstance(path , PATH_TYPE) and not Path(path).exists() and missing_ok: 
             return pl.DataFrame()
-        try:
-            if DATAFRAME_SUFFIX == 'feather':
-                df = pl.read_ipc(path , memory_map = False)
-            else:
-                df = pl.read_parquet(path , memory_map = False)
-        except FileNotFoundError:
-            Logger.error(f'{path} not found')
-            raise
-        except Exception as e:
-            Logger.error(f'Error loading {path}: {e}')
-            raise
+        if DATAFRAME_SUFFIX == 'feather':
+            df = pl.read_ipc(path , memory_map = False)
+        else:
+            df = pl.read_parquet(path , memory_map = False)
         df = dfHandler.apply_mapper(df , mapper)
         return df
     
@@ -77,18 +63,16 @@ class dfIOHandler:
         if isinstance(df , pd.DataFrame) and None in df.index.names:
             df = df.reset_index(None , drop = True)
         try:
-            if isinstance(df , pd.DataFrame):
-                if DATAFRAME_SUFFIX == 'feather':
-                    df.to_feather(path)
-                else:
-                    df.to_parquet(path , engine='fastparquet')
-            elif isinstance(df , pl.DataFrame):
-                if DATAFRAME_SUFFIX == 'feather':
-                    df.write_ipc(path)
-                else:
-                    df.write_parquet(path)
+            if isinstance(df , pd.DataFrame) and DATAFRAME_SUFFIX == 'feather':
+                df.to_feather(path)
+            elif isinstance(df , pd.DataFrame) and DATAFRAME_SUFFIX == 'parquet':
+                df.to_parquet(path , engine='fastparquet')
+            elif isinstance(df , pl.DataFrame) and DATAFRAME_SUFFIX == 'feather':
+                df.write_ipc(path)
+            elif isinstance(df , pl.DataFrame) and DATAFRAME_SUFFIX == 'parquet':
+                df.write_parquet(path)
             else:
-                raise ValueError(f'Unsupported dataframe type: {type(df)}')
+                raise ValueError(f'Unsupported dataframe type {type(df)} with suffix {DATAFRAME_SUFFIX}')
         except Exception as e:
             Logger.error(f'Error saving {path}: {e}')
             Logger.display(df , caption = 'Error saving DataFrame')
@@ -112,7 +96,6 @@ class dfIOHandler:
         mapper : PD_MAPPER_TYPE = None
     ) -> dict[int | Any, pd.DataFrame]:
         """load dataframe from multiple paths in accelerating mode"""
-        
         paths = {d:p for d,p in cls.to_path_dict(paths).items() if p.exists()}
         if not paths:
             return {}
@@ -379,8 +362,9 @@ def load(db_src : str , db_key : str , date : int | None = None , *,
             if True, reset index (no drop index)
     '''
     db_path = DBPath(db_src , db_key)
-    df = load_df(db_path.path(date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level) , missing_ok = missing_ok)
-    df = dfHandler.load_process_pandas(df , date , key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
+    df = load_df(db_path.path(date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level) , 
+                 missing_ok = missing_ok , key_column = None)
+    df = dfHandler.load_process_pandas(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
 def load_pl(db_src : str , db_key : str , date : int | None = None , *, 
@@ -388,46 +372,43 @@ def load_pl(db_src : str , db_key : str , date : int | None = None , *,
             missing_ok = True , indent = 1 , vb_level : Any = 1 , **kwargs) -> pl.DataFrame: 
     """load dataframe from database but use polars to load"""
     db_path = DBPath(db_src , db_key)
-    df = load_df_pl(db_path.path(date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level) , missing_ok = missing_ok)
-    df = dfHandler.load_process_polars(df , date , key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
+    df = load_df_pl(db_path.path(date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level) , 
+                    missing_ok = missing_ok , key_column = None)
+    df = dfHandler.load_process_polars(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
 def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
-          key_column = 'date' , use_alt = False , 
+          key_column = 'date' , override_existing_key = False , use_alt = False , 
           accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
-          fill_datavendor = False , 
-          indent = 1 , vb_level : Any = 1 , **kwargs):
+          fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database"""
-    if DBPath.ByName(db_src):
-        raise ValueError(f'{db_src}.{db_key} is a name database, use load instead')
+    assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load instead'
 
     db_path = DBPath(db_src , db_key)
     if dates is None:
         assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
         dates = db_path.dates(start , end , use_alt = use_alt)
     paths = {int(date):db_path.path(date , use_alt = use_alt) for date in dates}
-    df = load_df(paths , key_column = key_column , accelerator = accelerator)
-    df = dfHandler.load_process_pandas(df , syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
+    df = load_df(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator)
+    df = dfHandler.load_process_pandas(df , syntax = db_path.syntax(dates) , indent = indent , vb_level = vb_level , **kwargs)
     if fill_datavendor:
         from src.data.loader import DATAVENDOR
         DATAVENDOR.db_loads_callback(df , db_src , db_key)
     return df
 
 def loads_pl(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
-             key_column : str | None = 'date' , use_alt = False , 
+             key_column : str | None = 'date' , override_existing_key = False , use_alt = False , 
              accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
-             fill_datavendor = False , 
-             indent = 1 , vb_level : Any = 1 , **kwargs):
+             fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database but use polars to load"""
-    if DBPath.ByName(db_src):
-        raise ValueError(f'{db_src}.{db_key} is a name database, use load_pl instead')
+    assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load_pl instead'
     db_path = DBPath(db_src , db_key)
     if dates is None:
         assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
         dates = db_path.dates(start , end , use_alt = use_alt)
     paths = {int(date):db_path.path(date , use_alt = use_alt) for date in dates}
-    df = load_df_pl(paths , key_column = key_column , accelerator = accelerator)
-    df = dfHandler.load_process_polars(df , syntax = f'{db_src}/{db_key}/multi-dates' , indent = indent , vb_level = vb_level , **kwargs)
+    df = load_df_pl(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator)
+    df = dfHandler.load_process_polars(df , syntax = db_path.syntax(dates) , indent = indent , vb_level = vb_level , **kwargs)
     if fill_datavendor:
         from src.data.loader import DATAVENDOR
         DATAVENDOR.db_loads_callback(df , db_src , db_key)

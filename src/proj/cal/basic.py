@@ -6,12 +6,14 @@ import numpy as np
 import pandas as pd
 
 from zoneinfo import ZoneInfo
+from datetime import datetime
 
 from src.proj.env import MACHINE
 import src.proj.db as DB
 
 #: Shanghai time zone, used by CALENDAR , TradeDate etc.
-BJTZ = ZoneInfo("Asia/Shanghai")
+BJ_TZ = ZoneInfo("Asia/Shanghai")
+LOCAL_TZ = datetime.now().astimezone().tzinfo
 
 class BasicCalendar:
     """The full calendar built from information_ts/calendar and configuration; keep 'full'/'cal'/'trd' DataFrame for reference."""

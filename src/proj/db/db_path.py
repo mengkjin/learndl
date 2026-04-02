@@ -117,12 +117,22 @@ class DBPath:
         """whether the database is by date"""
         return self.ByDate(self.src)
 
-    def syntax(self , date : int | None = None) -> str:
+    def syntax(self , date : int | list[int] | np.ndarray[int, Any] | None = None) -> str:
         """get syntax of database"""
         if self.by_name:
             return f'{self.src}.{self.key}'
         else:
-            return f'{self.src}.{self.key}.{date}'
+            if date is None:
+                date = []
+            elif isinstance(date , int):
+                date = [date]
+            if len(date) == 0:
+                date_str = ''
+            elif len(date) == 1:
+                date_str = str(date[0])
+            else:
+                date_str = f'{min(date)}-{max(date)}'
+            return f'{self.src}.{self.key}.{date_str}'
 
     def years(self) -> list[int]:
         """get years from database"""

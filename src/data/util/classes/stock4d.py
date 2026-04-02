@@ -16,6 +16,8 @@ from src.func import match_slice , index_merge , intersect_meshgrid , intersect_
 
 from .nd import NdData
 
+INDAY_MARK_COLUMNS = ('inday' , 'minute')
+
 @dataclass
 class Stock4D:
     """four-dimensional data, (secid, date, inday, feature)"""
@@ -366,13 +368,17 @@ class Stock4D:
 
         # 1. Define the unique keys (keep these eager for the shape)
         assert 'secid' in df.columns and 'date' in df.columns , f'{df.columns} must contain secid and date'
+        inday_marks = [inday_mark for inday_mark in INDAY_MARK_COLUMNS if inday_mark in df.columns]
+        assert len(inday_marks) <= 1 , f'{df.columns} must contain less than one of {INDAY_MARK_COLUMNS}'
         secid = df['secid'].unique().sort()
         date  = df['date'].unique().sort()
-        if 'inday' not in df.columns:
+        if inday_marks:
+            if inday_marks[0] != 'inday':
+                df = df.with_columns(pl.col(inday_marks[0]).cast(pl.Int64).alias('inday'))
+            inday = df['inday'].unique().sort()
+        else:
             df = df.with_columns(pl.lit(0).alias('inday'))
             inday = pl.Series('inday', [0])
-        else:
-            inday = df['inday'].unique().sort()
         feature = [c for c in df.columns if c not in ['secid','date','inday']]
 
         # 2. Use the Lazy API for the heavy lifting
@@ -396,8 +402,10 @@ class Stock4D:
             return cls()
         try:
             df = df.reset_index().drop(columns = ['index'] , errors = 'ignore').set_index(['secid' , 'date'])
-            if 'inday' in df.columns:
-                df = df.set_index('inday' , append = True)
+            inday_marks = [inday_mark for inday_mark in INDAY_MARK_COLUMNS if inday_mark in df.columns]
+            assert len(inday_marks) <= 1 , f'{df.columns} must contain less than one of {INDAY_MARK_COLUMNS}'
+            if inday_marks:
+                df = df.rename(columns = {inday_marks[0]:'inday'}).set_index('inday' , append = True)
             xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         except Exception as e:
             Logger.error(f'Failed to convert DataFrame to NdData: {e}')
