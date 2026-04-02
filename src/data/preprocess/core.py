@@ -68,7 +68,10 @@ class PreProcessor(metaclass=PreProcessorMeta):
         self.load_start = self.start_date(type)
         self.load_end   = 99991231
 
-        print(self.key , self.type , self.load_start , self.load_end)
+        print(self.key)
+        print(self.type)
+        print(self.load_start)
+        print(self.load_end)
 
     def __repr__(self):
         return f'{self.__class__.__name__}'
@@ -159,6 +162,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         if dates is None:
             dates = [self.load_start , CALENDAR.updated()]
         start , end = min(dates) , max(dates)
+        print(start , end)
 
         if not block.empty and block.date[-1] >= end and block.date[0] <= start:
             return block , False
@@ -188,6 +192,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
 
     def should_be_skipped(self , force_update : bool = False , indent : int = 1 , vb_level : Any = 2):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
+        print(modified_time)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
             Logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level + 1)
@@ -208,7 +213,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
             self.save_norm(data_block , indent = indent + 2 , vb_level = vb_level + 3)
         
         # gc.collect()
-        Logger.success(f'Update Preprocess [{self.key.upper()}] for fitting ({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
+        Logger.success(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  ({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
                         indent = indent + 1 , vb_level = vb_level + 1)
     
 class FactorPreProcessor(PreProcessor):

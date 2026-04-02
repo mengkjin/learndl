@@ -131,6 +131,7 @@ class DataModule(BaseDataModule):
         '''set critical dates for model date list and test full dates'''
         print(self.datas.date)
         dates = self.datas.date_within(self.beg_date , self.end_date)
+        print(dates)
         # check if dates is align with CALENDAR
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
         calendar_dates = CALENDAR.range(min(dates) , max(dates) , 'td')
@@ -143,6 +144,7 @@ class DataModule(BaseDataModule):
             if not MACHINE.platform_coding:
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
+        print(dates)
 
         if self.config.is_null_model:
             # previos month end (use calendar date)
