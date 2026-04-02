@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import numpy as np
 import pandas as pd
@@ -391,7 +393,7 @@ class TrainerHookWrapper:
     max_wrap_count = 1
 
     @classmethod
-    def wrap(cls , trainer : 'BaseTrainer'):
+    def wrap(cls , trainer : BaseTrainer):
         key = id(trainer)
         assert not cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
         for hook in trainer.base_hooks():
@@ -400,7 +402,7 @@ class TrainerHookWrapper:
         cls.wrapped_records[key] = True
 
     @classmethod
-    def wrap_single_hook(cls , trainer : 'BaseTrainer' , hook : str):
+    def wrap_single_hook(cls , trainer : BaseTrainer , hook : str):
         def wrapper(*args , **kwargs) -> None:
             Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.callback)
             trainer.callback.at_enter(hook , Proj.vb.callback)
@@ -414,7 +416,7 @@ class TrainerHookWrapper:
 
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
-    _trainer : 'BaseTrainer | None' = None
+    _trainer : BaseTrainer | None = None
 
     def __new__(cls , *args , **kwargs):
         if cls._trainer is None:
@@ -725,12 +727,25 @@ class BaseTrainer(ModelStreamLine):
         self.metrics.collect_model()
 
     def on_test_batch_start(self):
-        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.batch_date0(self.batch_input)) 
+        self.assert_date_equity()
+
+    def assert_date_equity(self): 
+        date0 = self.batch_dates[self.batch_idx] 
+        date1 = self.data.batch_date0(self.batch_input) 
+        if not date0 == date1:
+            Logger.alert1(f'y_date: {self.data.y_date}')
+            Logger.alert1(f'batch_idx: {self.batch_idx}')
+            Logger.alert1(f'batch_dates: {self.batch_dates}')
+            Logger.alert1(f'early_test_dates: {self.data.early_test_dates}')
+            Logger.alert1(f'model_test_dates: {self.data.model_test_dates}')
+            Logger.alert1(f'batch_input.i: {self.batch_input.i[0]}')
+            Logger.alert1(f'data.batch_date0: {self.data.batch_date0(self.batch_input)}')
+            Logger.error(f'Date equity assertion failed: {date0} != {date1}')
+            raise ValueError(f'Date equity assertion failed: {date0} != {date1}')
 
     @property
     def penalty_kwargs(self): return {}
-    @staticmethod
-    def assert_equity(a , b): assert a == b , (a , b)
+    
     @staticmethod
     def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
         return AlgoModule.available_modules(module_type)
@@ -934,7 +949,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
 
     def save_avg_preds(self , model_date : int):
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
-        df = DB.load_dfs(pred_paths)
+        df = DB.load_df(pred_paths , key_column = None)
         if df.empty:
             return
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
@@ -1138,11 +1153,11 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min()')
                 latest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
                 pred_records = pred_records.query('max_pred_date == @latest_pred_date')
-                df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
+                df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
             else:
                 df = self.empty_preds()
         else:
-            df = DB.load_dfs(pred_records['path'].tolist()).query('date in @pred_dates')
+            df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
         return df
 
     def get_avg_preds(self , pred_dates : np.ndarray , latest : bool = False) -> pd.DataFrame:
@@ -1161,11 +1176,13 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
                 latest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
                 avg_pred_records = avg_pred_records.query('max_pred_date == @latest_avg_pred_date')
-                df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
+                df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
+                df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
             else:
                 df = self.empty_preds()
         else:
-            df = DB.load_dfs(avg_pred_records['path'].tolist()).query('date in @pred_dates')
+            df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
+            df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
         return df
 
     def on_fit_model_end(self):

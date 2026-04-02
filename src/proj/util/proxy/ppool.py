@@ -7,7 +7,7 @@ from datetime import datetime , timedelta
 from typing import Iterable , Literal
 
 from src.proj.log import Logger
-from .abc import Proxy , ProxySet , ProxyStats , ProxyStatsSet
+from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
 from .verifier import ProxyVerifier
 from .finder import FreeProxyFinder as ProxyFinder
 from .cache import ProxyCache

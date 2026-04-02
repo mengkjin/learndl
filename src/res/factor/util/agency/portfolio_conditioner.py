@@ -14,9 +14,9 @@ from typing import Any
 
 from src.proj import Proj
 from src.res.factor.util import Portfolio
+from src.res.factor.util.stats import eval_cum_ret , eval_drawdown , eval_uncovered_max_drawdown
 
 from .portfolio_accountant import PortfolioAccount
-from ..stat import eval_cum_ret , eval_drawdown , eval_uncovered_max_drawdown
 
 def select_conditioner(name : str):
     '''

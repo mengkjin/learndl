@@ -23,7 +23,7 @@ class Omission:
     def collect_announcements(cls , start_date: int , end_date: int): # -> dict[int , list[str]]:
         dates = CALENDAR.range(start_date , end_date , 'cd')
         paths = [path for ex in ['bse','szse','sse'] for path in [DB.path('crawler' , f'announcement_{ex}' , date) for date in dates]]
-        df = DB.load_dfs(paths)
+        df = DB.load_df(paths)
         return df
         
     @classmethod

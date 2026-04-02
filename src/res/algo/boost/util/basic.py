@@ -12,7 +12,7 @@ from typing import Any
 from src.proj import PATH , Logger , DB
 from src.func.metric import ic_2d , rankic_2d
 
-from .io import BoostInput , BoostOutput
+from .boost_io import BoostInput , BoostOutput
 
 __all__ = ['BasicBoostModel' , 'load_xingye_data']
 

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import torch
 import numpy as np
 import pandas as pd
+import polars as pl
 import xarray as xr  
 
 from copy import deepcopy
@@ -87,6 +90,10 @@ class Stock4D:
             return f'{self.__class__.__name__}(values={self.shape},secid={str(self.secid)},date={str(self.date)},feature={self.feature})'
         else:
             return f'{self.__class__.__name__}()'
+
+    def __len__(self):
+        return len(self.values) if self.initiated else 0
+
     @property
     def initiated(self): 
         return self.values is not None
@@ -111,6 +118,20 @@ class Stock4D:
     @property
     def inday(self) -> np.ndarray: 
         return np.arange(self.shape[2])
+    @property
+    def first_valid_date(self):
+        dates = self.valid_dates
+        return dates[0] if len(dates) > 0 else 99991231
+
+    @property
+    def last_valid_date(self):
+        dates = self.valid_dates
+        return dates[-1] if len(dates) > 0 else 19000101
+
+    @property
+    def valid_dates(self):
+        assert self.initiated , self
+        return self.date[self.values.isfinite().any(dim = (0,2,3)).cpu().detach().numpy()] if self.initiated else np.array([],dtype = int)
 
     def set_flags(self , **kwargs):
         if not self.initiated:
@@ -171,7 +192,7 @@ class Stock4D:
         
         for i , blk in enumerate(blocks): 
             tar_grid , src_grid = intersect_meshgrid([secid , date , inday , feature] , [blk.secid , blk.date , blk.inday , blk.feature] , )
-            values[*tar_grid] = blk.values[*src_grid]
+            values[*tar_grid] = blk.values[*src_grid].to(values)
 
         block = blocks[0] if inplace else blocks[0].copy() 
         block.update(values = values , secid = secid , date = date , feature = feature)
@@ -205,6 +226,8 @@ class Stock4D:
         return self.__class__(values , secid , date , feature)
 
     def align_secid(self , secid , inplace = False):
+        if not self.initiated:
+            return self
         secid = None if secid is None else self.as_array(secid)
         if not inplace:
             self = self.copy()
@@ -218,6 +241,8 @@ class Stock4D:
         return self.update(values = values , secid = secid)
        
     def align_date(self , date , inplace = False):
+        if not self.initiated:
+            return self
         date = None if date is None else self.as_array(date)
         if not inplace:
             self = self.copy()
@@ -229,9 +254,21 @@ class Stock4D:
         tar_pos , src_pos = intersect_pos_slice(date , self.date)
         values[:,tar_pos] = self.values[:,src_pos]
         return self.update(values = values , date = date)
+
+    def slice_date(self , start : int | None = None , end : int | None = None):
+        if not self.initiated:
+            return self
+        start = start or self.date[0]
+        end = end or self.date[-1]
+        if start > self.date[0] or end < self.date[-1]:
+            return self.align_date(self.date_within(start , end) , inplace = True)
+        else:
+            return self
     
     def align_secid_date(self , secid = None , date = None , inplace = False):
         # to speed up than .align_secid(secid = secid).align_date(date = date)
+        if not self.initiated:
+            return self
         secid = None if secid is None else self.as_array(secid)
         date = None if date is None else self.as_array(date)
         if not inplace:
@@ -247,11 +284,13 @@ class Stock4D:
         else:
             values = torch.full((len(secid),len(date),*self.shape[2:]) , np.nan).to(self.values)
             tar_grid , src_grid = intersect_meshgrid([secid , date] , [self.secid , self.date])
-            values[*tar_grid] = self.values[*src_grid] 
+            values[*tar_grid] = self.values[*src_grid]
             
             return self.update(values = values , secid = secid , date = date)
     
     def align_feature(self , feature , inplace = False):
+        if not self.initiated:
+            return self
         feature = None if feature is None else self.as_array(feature) 
         if not inplace:
             self = self.copy()
@@ -318,12 +357,47 @@ class Stock4D:
                 new_blk.values  = torch.concatenate([new_blk.values  , blk.values] , dim=-1)
         new_blk.on_change_feature()
         return new_blk
+
+    @classmethod
+    def from_polars(cls , df : pl.DataFrame | None):
+        """convert polars dataframe to stock4d"""
+        if df is None or df.is_empty(): 
+            return cls()
+
+        # 1. Define the unique keys (keep these eager for the shape)
+        assert 'secid' in df.columns and 'date' in df.columns , f'{df.columns} must contain secid and date'
+        secid = df['secid'].unique().sort()
+        date  = df['date'].unique().sort()
+        if 'inday' not in df.columns:
+            df = df.with_columns(pl.lit(0).alias('inday'))
+            inday = pl.Series('inday', [0])
+        else:
+            inday = df['inday'].unique().sort()
+        feature = [c for c in df.columns if c not in ['secid','date','inday']]
+
+        # 2. Use the Lazy API for the heavy lifting
+        # This creates a "Plan" that Polars will optimize before running
+        grid_lazy = secid.to_frame().join(date.to_frame(), how="cross").join(inday.to_frame(), how="cross").lazy()
+        values = (
+            grid_lazy
+            .join(df.lazy(), on=['secid', 'date' , 'inday'], how="left")
+            .sort(['secid', 'date' , 'inday']) 
+            .select(feature)
+            .collect()
+        ).to_numpy()
+        values = torch.from_numpy(values).reshape(secid.len(), date.len(), inday.len(), len(feature))
+        block = cls(values , secid.to_numpy() , date.to_numpy() , feature)
+        return block
+
     
     @classmethod
-    def from_dataframe(cls , df : pd.DataFrame | None):
+    def from_pandas(cls , df : pd.DataFrame | None):
         if df is None or df.empty: 
             return cls()
         try:
+            df = df.reset_index().drop(columns = ['index'] , errors = 'ignore').set_index(['secid' , 'date'])
+            if 'inday' in df.columns:
+                df = df.set_index('inday' , append = True)
             xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         except Exception as e:
             Logger.error(f'Failed to convert DataFrame to NdData: {e}')

@@ -6,7 +6,7 @@ from typing import Callable , Any , Iterable , Union, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.proj.log import Logger
-from src.proj.util.http import iterate_with_interval_control
+from src.proj.util.web import iterate_with_interval_control
 
 ProxyCallerInput = Union[Callable[..., bool | Exception] , tuple[str, Callable[..., bool | Exception]] , tuple[Callable[..., bool | Exception], str] , 'ProxyCaller']
 

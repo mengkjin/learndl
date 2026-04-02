@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from typing import Any , Literal
 
@@ -66,13 +67,14 @@ class DataVendor:
             self.day_secids[date] = self.INFO.get_secid(date)
         return self.day_secids[date]
 
-    def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
-        if df.empty:
+    def db_loads_callback(self , df : pd.DataFrame | pl.DataFrame , db_src : str , db_key : str):
+        if not db_src == 'trade_ts' or len(df) == 0:
             return
-        if db_src == 'trade_ts':
-            for data_type , data_key  in self.TRADE.DB_KEYS.items():
-                if data_key == db_key:
-                    self.TRADE.collections[data_type].add_long_frame(df.set_index(self.TRADE.DATE_KEY))
+        for data_type , data_key  in self.TRADE.DB_KEYS.items():
+            if data_key == db_key:
+                if isinstance(df , pl.DataFrame):
+                    df = df.to_pandas()
+                self.TRADE.collections[data_type].add_long_frame(df.reset_index().drop(columns = ['index'] , errors = 'ignore').set_index(self.TRADE.DATE_KEY))
         
     @classmethod
     def td_within(cls , start : int | None = None , end : int | None = None , step : int = 1 , updated = False , extend = 0):
@@ -100,13 +102,21 @@ class DataVendor:
             names = [names]
         dates = DATAVENDOR.td_within(start , end , step)
 
-        values = [DB.loads(factor_type , name , dates , date_colname = 'date') for name in names]
-        values = [v.set_index(['secid','date']) for v in values if not v.empty]
+        # values = [DB.loads(factor_type , name , dates , key_column = 'date') for name in names]
+        # values = [v.set_index(['secid','date']) for v in values if not v.empty]
+        # if values:
+        #     return DataBlock.from_pandas(pd.concat(values , axis=1).sort_index())
+
+        values = [DB.loads_pl(factor_type , name , dates , key_column = 'date') for name in names]
+        values = [v for v in values if len(v) > 0]
         if values:
-            return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
-        else:
-            Logger.alert1(f'None of {factor_type} {names} found in {start} ~ {end}')
-            return DataBlock()
+            value = values[0]
+            for add in values[1:]:
+                value = value.join(add , on = ['secid' , 'date'] , how = 'full')
+            return DataBlock.from_polars(value)
+        
+        Logger.alert1(f'None of {factor_type} {names} found in {start} ~ {end}')
+        return DataBlock()
 
     @classmethod
     def stock_factor(cls , factor_names : str | list[str] | np.ndarray , start = 20240101 , end = 20240531 , step = 5):

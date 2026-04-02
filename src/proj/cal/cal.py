@@ -145,8 +145,10 @@ class CALENDAR:
         return TradeDate(date).offset(offset)
 
     @classmethod
-    def td_array(cls, dates: DatesType, offset: int = 0, backward=True):
+    def td_array(cls, dates: DatesType | None, offset: int = 0, backward=True):
         """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
+        if dates is None:
+            return np.array([], dtype=np.int64)
         pos = BC.pos_cd_array(get_cds(dates))
         td_arr = (BC._td_col if backward else BC._td_forward)[pos]
         td_arr = np.asarray(td_arr, dtype=np.int64)
@@ -168,8 +170,10 @@ class CALENDAR:
         return int(d.strftime("%Y%m%d"))
 
     @staticmethod
-    def cd_array(dates: DatesType, offset: int = 0):
+    def cd_array(dates: DatesType | None, offset: int = 0):
         """Shift the natural date index of the sequence; the elements must be 'TradeDate' or natural dates that can be 'int'."""
+        if dates is None:
+            return np.array([], dtype=np.int64)
         cd_arr = get_cds(dates)
         if offset != 0:
             cd_arr = np.minimum(cd_arr, CALENDAR.calendar_end())

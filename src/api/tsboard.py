@@ -7,8 +7,8 @@ def call_tensorboard(log_dir : str | Path):
     if isinstance(log_dir , Path):
         log_dir = log_dir.as_posix()
     try:
-        # subprocess.run(cmd, check=True)
-        os.system(f"uv run tensorboard --logdir {log_dir}")
+        cmd = ['uv' , 'run' , 'tensorboard' , '--logdir' , log_dir]
+        subprocess.run(cmd, check=True)
     except KeyboardInterrupt:
         Logger.alert1("TensorBoard stopped.")
     except subprocess.CalledProcessError as e:

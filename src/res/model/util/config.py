@@ -10,7 +10,7 @@ from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
-from .abc import model_module_type, is_null_module_type
+from .core import model_module_type, is_null_module_type
 from .model_path import ModelPath
 from .metrics import Metrics
 from .storage import Checkpoint, Deposition

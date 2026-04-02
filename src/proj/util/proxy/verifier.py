@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from src.proj.log import Logger
-from src.proj.util.http import http_session , test_connection
+from src.proj.util.web import http_session , test_connection
 
-from .abc import Proxy , ProxySet
+from .core import Proxy , ProxySet
 
 @dataclass
 class VerifyRecord:

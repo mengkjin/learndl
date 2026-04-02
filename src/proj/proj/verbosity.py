@@ -1,8 +1,8 @@
 """Global verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers."""
 
 from typing import Any , Literal
-from src.proj.abc import stderr
-from .abc import ProjectSetting
+from src.proj.core import stderr
+from .core import ProjectSetting
 
 __all__ = ['Verbosity']
 

@@ -1,26 +1,72 @@
-import torch , json
+import torch
 import numpy as np
 
 from copy import deepcopy
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from functools import partial
+from typing import Any , Literal
 
-from src.proj import PATH , Logger , Proj
-from src.proj.util import torch_load , properties
+from src.proj import Logger , Proj , CALENDAR , Dates
+from src.proj.util import properties
 
 from .data_block import DataBlock , DataBlockNorm , data_type_abbr
+from .datacache import DataCache
+from .special_dataset import SpecialDataSet
 
 __all__ = ['ModuleData']
 
-@dataclass(slots=True)
 class ModuleData:
     '''load datas / norms / index'''
-    x : dict[str,DataBlock]
-    y : DataBlock
-    norms : dict[str,DataBlockNorm]
-    secid : np.ndarray
-    date  : np.ndarray
+    def __init__(
+        self , data_type_list : list[str] , y_labels : list[str] | None = None , use_data : Literal['fit' , 'predict' , 'both'] = 'fit' , * ,
+        factor_names : list[str] | None = None , factor_start_dt : int | None = None , factor_end_dt : int | None = None , 
+        filter_secid : str | None = None , filter_date : str | None = None ,
+        indent : int = 1 , vb_level : Any = 2 , dtype = torch.float ,**kwargs
+    ):
+        self.data_type_list = sorted([self.abbr(data_type) for data_type in data_type_list])
+        self.y_labels = y_labels
+        self.use_data = use_data
+        self.factor_names = factor_names
+        self.factor_start_dt = factor_start_dt
+        self.factor_end_dt = factor_end_dt
+
+        self.datacache = DataCache(type = 'module_data' , data_type_list = self.data_type_list)
+        
+        self.indent = indent
+        self.vb_level = Proj.vb(vb_level)
+
+        if dtype is None: 
+            dtype = torch.float
+        if isinstance(dtype , str): 
+            dtype = getattr(torch , dtype)
+        self.dtype = dtype
+
+        self.secid_filter = SecidFilter(filter_secid if self.use_data == 'fit' else None)
+        self.date_filter = DateFilter(filter_date if self.use_data == 'fit' else None)
+        self.enable_cache_save = self.enable_cache and filter_secid is None and filter_date is None
+
+        self.kwargs = kwargs
+
+        self.blocks : dict[str,DataBlock] = {}
+        self.norms : dict[str,DataBlockNorm] = {}
+
+    @property
+    def PrePros(self):
+        if not hasattr(self , '_prepros'):
+            from src.data.preprocess import PrePros
+            self._prepros = PrePros
+        return self._prepros
+
+    @property
+    def load_keys(self):
+        return ['y' , *self.data_type_list]
+
+    @property
+    def x(self) -> dict[str,DataBlock]:
+        return {key:value for key,value in self.blocks.items() if key != 'y'}
+
+    @property
+    def y(self) -> DataBlock:
+        return self.blocks['y'].align_feature(self.y_labels)
 
     @property
     def empty_x(self):
@@ -30,21 +76,156 @@ class ModuleData:
     def shape(self):
         return properties.shape(self , ['x' , 'y' , 'secid' , 'date'])
 
+    @property
+    def secid(self):
+        return self.blocks['y'].secid
+
+    @property
+    def date(self):
+        return self.blocks['y'].date
+
+    @property
+    def enable_cache(self):
+        return self.use_data in ['fit' , 'both'] and self.datacache
+
+    @property
+    def loaded(self):
+        if not hasattr(self , '_loaded'):
+            self._loaded = False
+        return self._loaded
+
+    @property
+    def block_title(self):
+        return f'{len(self.load_keys)} DataBlocks' if len(self.load_keys) > 4 else f'DataBlock [{",".join(self.load_keys)}]'
+
+    def __bool__(self):
+        return not self.empty_x
+
     def copy(self):
         return deepcopy(self)
+
+    def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
+        return CALENDAR.slice(self.date , start , end)[::interval]
+
+    def target_start_end(self):
+        start = CALENDAR.td(CALENDAR.updated() , -366).td if self.use_data == 'predict' else 20070101
+        end = DataBlock.last_data_date('y' , 'fit') if self.use_data == 'fit' else CALENDAR.updated()
+        end = end or CALENDAR.updated()
+        return start , end
+
+    def load(self):
+        '''
+        load all relevant data of this module data, should be called before any other operations
+        blocks: ['y' , *data_type_list] DataBlocks
+        norms: ['y' , *data_type_list] DataBlockNorms (if exists)
+        factor: factor_names DataBlock
+        '''
+        self.load_cache()
+        self.load_blocks()
+        self.align_blocks()
+        self.load_norms()
+        self.save_cache()
+        self.load_factor()
+        DataBlock.blocks_ffill(self.blocks , exclude = ['y'])
+        self._loaded = True
+        return self
+
+    def load_cache(self):
+        if not self.enable_cache:
+            return
+        data , _ = self.datacache.load_data(self.vb_level)
+        if data is not None:
+            self.blocks , self.norms = data['blocks'] , data['norms']
+            Logger.success(f'Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}' , vb_level = self.vb_level + 2)
+
+    def load_blocks(self):
+        start , end = self.date_filter.filter_start_end(*self.target_start_end())
+        date = CALENDAR.range(start , end)
+        secid = None
+        with Logger.Timer(f'Load {self.block_title} at {start}~{end}' , indent = self.indent , vb_level = self.vb_level + 1):
+            for i , key in enumerate(self.load_keys):
+                current_dates = self.blocks[key].valid_dates if key in self.blocks else np.array([],dtype = int)
+                target_dates = CALENDAR.diffs(date , current_dates)
+                block = self.load_one(key, dates = target_dates , secid = secid)
+                self.blocks[key] = DataBlock.merge([self.blocks.get(key) , block] , inplace = True)
+                if i == 0:
+                    assert key == 'y' , f'y must be the first key'
+                    secid = self.secid_filter(self.blocks[key].secid)
+                    date = self.date_filter(self.blocks[key].date)
+        #self.secid_filter.filter_blocks(self.blocks)
+        #self.date_filter.filter_blocks(self.blocks)
+        return self
+
+    def load_one(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        if key in self.PrePros.keys():
+            return self.load_preprocess_block(key, dates = dates, secid = secid, vb_level = self.vb_level + 2 , **kwargs)
+        elif key in SpecialDataSet.candidates:
+            return self.load_special_block(key, dates = dates, secid = secid, vb_level = self.vb_level + 2 , **kwargs)
+        else:
+            raise ValueError(f'key [{key}] is not supported')
+
+    def load_preprocess_block(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        type = 'predict' if self.use_data == 'predict' else 'fit'
+        block = self.PrePros.get_processor(key , type = type).load(dates = dates , secid = secid, indent = self.indent + 1 , vb_level = self.vb_level + 2)
+        return block
+
+    def load_special_block(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        block = SpecialDataSet.load(key, dates = dates , secid = secid, dtype = self.dtype , vb_level = self.vb_level + 2)
+        return block
+
+    def align_blocks(self):
+        if len(self.blocks) <= 1:
+            return self
+        with Logger.Timer(f'Align {self.block_title}' , indent = self.indent , vb_level = self.vb_level + 1):
+            DataBlock.blocks_align(self.blocks , vb_level = self.vb_level + 2)
+        index_lens = [block.shape[:2] for block in self.blocks.values()]
+        if index_lens:
+            assert all([lens == index_lens[0] for lens in index_lens]) , f'{[(name,block.shape) for name,block in self.blocks.items()]}'
+        return self
+
+    def load_norms(self):
+        if self.norms:
+            return
+        self.norms.update(DataBlock.load_preprocess_norms(self.data_type_list , dtype = self.dtype))
+
+    def load_factor(self):
+        '''load factor data'''
+        if not self.factor_names:
+            return self
+        factor_title = f'{len(self.factor_names)} Factors' if len(self.factor_names) > 1 else f'Factor [{self.factor_names[0]}]'
+        start = max(self.factor_start_dt or self.date[0] , self.date[0])
+        end = min(self.factor_end_dt or self.date[-1] , self.date[-1])
+        with Logger.Timer(f'Load {factor_title} ({start} - {end})' , indent = self.indent , vb_level = self.vb_level + 2):
+            from src.data.loader import FactorLoader
+            self.blocks['factor'] = FactorLoader(self.factor_names).load(start , end , vb_level = 'never').align_secid_date(self.secid , self.date , inplace = True)
+        return self
+
+    def save_cache(self):
+        if not self.enable_cache_save:
+            return
+        valid_end   = min(block.last_valid_date for block in self.blocks.values())
+        valid_start = max(block.first_valid_date for block in self.blocks.values())
+        old_metadata = self.datacache.load_metadata()
+        old_valid_end   : int = old_metadata.get('valid_end'   , 19000101)
+        old_valid_start : int = old_metadata.get('valid_start' , 99991231)
+        if len(CALENDAR.range(old_valid_start , old_valid_end , 'td')) < len(CALENDAR.range(valid_start , valid_end , 'td')):
+            metadata = {'valid_end' : int(valid_end) , 'valid_start' : int(valid_start)}
+            blocks = {key:value for key,value in self.blocks.items() if key != 'factor'}
+            self.datacache.save_data({'blocks' : blocks , 'norms' : self.norms} , vb_level = self.vb_level + 2 , **metadata)
+            Logger.success(f'Saved DataBlocks to cache {self.datacache.key}' , vb_level = self.vb_level + 2)
+
+    @staticmethod
+    def abbr(data_type : str): 
+        return data_type_abbr(data_type)
 
     def filter_dates(self , start : int | None = None , end : int | None = None , inplace = False):
         if start is None and end is None:
             return self
         if not inplace:
             self = self.copy()
-        if start is not None:
-            self.date = self.date[self.date >= start]
-        if end is not None:
-            self.date = self.date[self.date <= end]
-        for x_key in self.x:
-            self.x[x_key] = self.x[x_key].align_date(self.date , inplace = True)
-        self.y = self.y.align_date(self.date , inplace = True)
+        date = CALENDAR.slice(self.date , start , end)
+        for block in self.blocks.values():
+            block = block.align_date(date , inplace = True)
         return self
 
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
@@ -52,204 +233,93 @@ class ModuleData:
             return self
         if not inplace:
             self = self.copy()
-        if exclude:
-            self.secid = self.secid[~np.isin(self.secid , secid)]
-        else:
-            self.secid = self.secid[np.isin(self.secid , secid)]
-        for x_key in self.x:
-            self.x[x_key] = self.x[x_key].align_secid(self.secid , inplace = True)
-        self.y = self.y.align_secid(self.secid , inplace = True)
+        mask = np.isin(self.secid , secid)
+        secid = self.secid[~mask] if exclude else self.secid[mask]
+        for block in self.blocks.values():
+            block = block.align_secid(secid , inplace = True)
         return self
 
-    def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
-        return self.date[(self.date >= start) & (self.date <= end)][::interval]
-    
-    @classmethod
-    def load(cls , data_type_list : list[str] , 
-             y_labels : list[str] | None = None , 
-             factor_names : list[str] | None = None ,
-             fit : bool = True , predict : bool = False , 
-             factor_start_dt : int | None = None , factor_end_dt : int | None = None ,
-             dtype : str | Any = torch.float , 
-             save_upon_loading : bool = True):
-        
-        assert fit or predict , (fit , predict)
-        if not predict: 
-            data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
-        elif not fit:
-            data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
+class SecidFilter:
+    def __init__(self , value : str | None):
+        if value is None:
+            self.filter = self.none
+        elif value.startswith('random.'):
+            self.filter = partial(self.random , num = int(value.split('.')[1]))
+        elif value.startswith('first.'):
+            self.filter = partial(self.first , num = int(value.split('.')[1]))
+        elif value in ['csi300' , 'csi500' , 'csi1000']:
+            self.filter = partial(self.benchmark , bm = value)
         else:
-            hist_data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
-            pred_data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
+            raise ValueError(f'input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
+        Logger.alert1(f'filtering secid for ModuleData: {value}')
 
-            hist_data.y = hist_data.y.merge_others([pred_data.y] , inplace = True)
-            hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
-            for x_key in hist_data.x:
-                hist_data.x[x_key] = hist_data.x[x_key].merge_others([pred_data.x[x_key]] , inplace = True).align_secid_date(hist_data.secid , hist_data.date , inplace = True)
+    def __call__(self , secid : np.ndarray) -> np.ndarray:
+        return self.filter(secid)
 
-            data = hist_data
-
-        data.load_factor(factor_names , factor_start_dt , factor_end_dt)
-        return data
-
-    @classmethod
-    def load_datas(cls , data_type_list : list[str] , 
-                   y_labels : list[str] | None = None , 
-                   predict : bool = False , dtype : str | Any = torch.float , 
-                   save_upon_loading : bool = True , 
-                   vb_level : Any = 2):
-        '''
-        load all x/y data if input_type is data or factor
-        if predict is True, only load recent data
-        '''
-        vb_level = Proj.vb(vb_level)
-        if dtype is None: 
-            dtype = torch.float
-        if isinstance(dtype , str): 
-            dtype = getattr(torch , dtype)
-
-        if predict: 
-            data = None
-        else:
-            last_date = DataBlock.last_data_date()
-            data = cls.datacache_load(last_date , data_type_list , y_labels , vb_level = vb_level)
-
-        if data is None:
-            block_title = f'{len(data_type_list) + 1} DataBlocks' if len(data_type_list) > 3 else f'DataBlock [{",".join(['y' , *data_type_list])}]'
-            with Logger.Timer(f'Load {block_title} (predict={predict})' , vb_level = vb_level):
-                blocks = {key:DataBlock.load_preprocess(key, predict , dtype = dtype , vb_level = vb_level) for key in ['y' , *data_type_list]}
-            with Logger.Timer(f'Align {block_title} (predict={predict})' , vb_level = vb_level):
-                blocks = DataBlock.blocks_align(blocks , vb_level = vb_level + 1)
-            blocks = DataBlock.blocks_fillna(blocks)
-            norms  = DataBlock.load_preprocess_norms(['y' , *data_type_list], predict , dtype = dtype)
-
-            y : DataBlock = blocks['y']
-            x : dict[str,DataBlock] = {cls.abbr(key):val for key,val in blocks.items() if key != 'y'}
-            norms = {cls.abbr(key):val for key,val in norms.items() if val is not None and key != 'y'}
-            secid = y.secid
-            date = y.date
-
-            assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
-
-            data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
-            if not predict and save_upon_loading: 
-                cls.datacache_save(data , last_date or y.date[-1] , data_type_list)
-            data = cls(**data)
-
-        data.y.align_feature(y_labels , inplace = True)
-        return data
-
-    def load_factor(self , factor_names : list[str] | None , start : int | None = None , end : int | None = None , vb_level : Any = 2):
-        '''load factor data'''
-        if not factor_names:
-            return self
-        factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
-        start = max(start or self.date[0] , self.date[0])
-        end = min(end or self.date[-1] , self.date[-1])
-        with Logger.Timer(f'Load {factor_title} ({start} - {end})' , vb_level = vb_level):
-            from src.data.loader import FactorLoader
-            self.x['factor'] = FactorLoader(factor_names).load(start , end , vb_level = 'never').align_secid_date(self.secid , self.date , inplace = True)
-        return self
+    def filter_blocks(self , blocks : dict[str,DataBlock]) -> dict[str,DataBlock]:
+        if not blocks:
+            return blocks
+        secid = self.filter(blocks['y'].secid)
+        for key,block in blocks.items():
+            blocks[key] = block.align_secid(secid , inplace = True)
+        return blocks
 
     @staticmethod
-    def abbr(data_type : str): 
-        return data_type_abbr(data_type)
+    def none(secid : np.ndarray) -> np.ndarray:
+        return secid
+
+    @staticmethod
+    def random(secid : np.ndarray , num : int) -> np.ndarray:
+        return np.random.choice(secid , num , replace = False)
+
+    @staticmethod
+    def first(secid : np.ndarray , num : int) -> np.ndarray:
+        return secid[:num]
 
     @classmethod
-    def datacache_key(cls , data_type_list : list[str]) -> str:
-        if not data_type_list:
-            return 'ds_y_only'
-        cache_key_json_file = PATH.datacache.joinpath('cache_key.json')
-        cache_key_json_file.touch(exist_ok=True)
-        with open(cache_key_json_file , 'r') as f:
-            try:
-                cache_key_dict = json.load(f)
-            except json.JSONDecodeError as e:
-                Logger.alert1(f'cache_key.json is corrupted, reset it: {e}')
-                cache_key_dict = {}
-        for key , value in cache_key_dict.items():
-            if value['type'] != 'dataset':
-                continue
-            if sorted(value['content']) == sorted(data_type_list):
-                return key
+    def Benchmark(cls):
+        if not hasattr(cls , '_benchmark'):
+            from src.res.factor.util.classes.benchmark import Benchmark
+            cls._benchmark = Benchmark
+        return cls._benchmark
 
-        if len(data_type_list) < 5:
-            new_key = 'ds_' + '+'.join(data_type_list)
+    @classmethod
+    def benchmark(cls , secid : np.ndarray , bm : str , date : int = 20200104) -> np.ndarray:
+        return cls.Benchmark()(bm).get(date,True).secid
+
+class DateFilter:
+    def __init__(self , value : str | None):
+        if value is None:
+            self.filter = self.none
         else:
-            i = 0
-            while True:
-                new_key = f'ds_{len(data_type_list)}datas_{i:02d}'
-                if new_key not in cache_key_dict:
-                    break
-                i += 1
-        cache_key_dict.update({new_key : {'type' : 'dataset' , 'content' : data_type_list}})
-        with open(cache_key_json_file , 'w') as f:
-            json.dump(cache_key_dict , f)
-        return new_key
+            value = value.strip().replace('-', '~').replace(' ', '~')
+            dates = value.split('~')
+            assert len(dates) == 2 , f'input.filter.date {value} is not valid , should be yyyyMMdd~yyyyMMdd'
+            self.filter = partial(self.slice , start = int(dates[0]) if dates[0] else None , end = int(dates[1]) if dates[1] else None)
 
-    @classmethod
-    def datacache_path(cls , date : int , data_type_list : list[str]) -> Path:
-        data_cache_key = cls.datacache_key(data_type_list)
-        return PATH.datacache.joinpath(data_cache_key , f'{date}.pt')
+        Logger.alert1(f'filtering date for ModuleData: {value}')
 
-    @classmethod
-    def datacache_load(cls , date : int | None , data_type_list : list[str] , y_labels : list[str] | None = None , vb_level : Any = 2):
-        if date is None:
-            return None
-        path = cls.datacache_path(date , data_type_list)
-        if path is None or not path.exists():
-            return None
-        try:
-            data = cls(**torch_load(path))
-            if (np.isin(data_type_list , list(data.x.keys())).all() and
-                (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
-                Logger.success(f'Loading Module Data, Try \'{path}\', success!' , vb_level = vb_level)
-            else:
-                Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
-                data = None
-        except ModuleNotFoundError:
-            '''can be caused by different package version'''
-            Logger.alert1(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
-            data = None
-        except Exception as e:
-            Logger.error(f'Failed to load Module Data: {e}')
-            Logger.print_exc(e)
-            raise
+    def __call__(self , date : np.ndarray) -> np.ndarray:
+        return self.filter(date)
 
-        cls.datacache_purge_old(data_type_list)
-        return data
-    
-    @classmethod
-    def datacache_save(cls , data : dict , date : int , data_type_list : list[str]):
-        if not data_type_list:
-            return
-        path = cls.datacache_path(date , data_type_list)
-        path.parent.mkdir(exist_ok=True)
-        torch.save(data , path , pickle_protocol = 5)
+    def filter_blocks(self , blocks : dict[str,DataBlock]) -> dict[str,DataBlock]:
+        if not blocks:
+            return blocks
+        date = self.filter(blocks['y'].date)
+        for key,block in blocks.items():
+            blocks[key] = block.align_date(date , inplace = True)
+        return blocks
 
-    @classmethod
-    def datacache_purge_old(cls , data_type_list : list[str]):
-        data_cache_key = cls.datacache_key(data_type_list)
-        folder = PATH.datacache.joinpath(data_cache_key)
-        dates = [int(path.stem) for path in folder.iterdir()]
-        if len(dates) <= 1:
-            return
-        for path in folder.iterdir():
-            if path.is_file() and int(path.stem) < max(dates):
-                path.unlink()
+    def filter_start_end(self , start : int , end : int) -> tuple[int , int]:
+        dates = self(CALENDAR.range(start , end))
+        if len(dates) == 0:
+            return 99991231 , 20070101
+        return dates[0] , dates[-1]
 
-    @classmethod
-    def purge_all(cls):
-        with open(PATH.datacache.joinpath('cache_key.json') , 'r') as f:
-            cache_key_dict = json.load(f)
-        for key , value in cache_key_dict.items():
-            data_type_list = value['content']
-            data_cache_key = key
-            assert data_cache_key == cls.datacache_key(data_type_list) , (data_cache_key, cls.datacache_key(data_type_list))
-            folder = PATH.datacache.joinpath(data_cache_key)
-            files = list(folder.iterdir())
-            if len(files) <= 1:
-                continue
-            files.sort(key = lambda x: int(x.stem))
-            for file in files[:-1]:
-                file.unlink()
+    @staticmethod
+    def none(date : np.ndarray) -> np.ndarray:
+        return date
+
+    @staticmethod
+    def slice(date : np.ndarray , start : int | None = None , end : int | None = None) -> np.ndarray:
+        return CALENDAR.slice(date , start , end)

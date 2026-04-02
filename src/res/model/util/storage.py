@@ -1,118 +1,102 @@
+from __future__ import annotations
+
 import gc , torch
 import numpy as np
 import pandas as pd
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , TypeVar
 
-from src.proj import Logger
+from src.proj import Logger , PATH
 from src.proj.util import torch_load
 from .model_path import ModelDict , ModelPath
 
+T = TypeVar('T')
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''
     def __init__(self , mem_storage : bool = False):
-        self._mem_storage = mem_storage
-        self.memdisk = {} if mem_storage else None
-        self.records = pd.DataFrame(columns = pd.Index(['path' , 'group']) , dtype = str)
+        self.is_mem = mem_storage
+        self.memdisk : dict[str,Any] = {}
+        self.records = pd.DataFrame(columns = pd.Index(['key' , 'path' , 'group']) , dtype = str)
 
     @property
-    def is_disk(self): return not self.is_disk
-    @property
-    def is_mem(self): return self._mem_storage
+    def keys(self): 
+        return list(self.memdisk.keys())
+
+    def real_path(self , key : str): 
+        return PATH.batch.joinpath(f'{key}.pt')
     
-    def exists(self , path):
-        if isinstance(path , str): 
-            path = Path(path)
-        return path.exists() if self.memdisk is None else (str(path) in self.memdisk.keys())
-
-    def save(self , obj , path , group = 'default'):
-        if isinstance(path , list):
-            [self.save(obj , p , group = group) for p in path]
-        elif isinstance(path , (Path , str)):
-            path = str(path)
-            if self.memdisk is None:
-                torch.save(obj , path)
-            else:
-                self.memdisk[path] = deepcopy(obj)
-            df = pd.DataFrame({'path' : [path] , 'group' : [group]})
-
-            self.records = pd.concat([self.records.query('path != @path') , df] , axis=0)
+    def exists(self , key : str):
+        if self.is_mem:
+            return key in self.memdisk.keys()
         else:
-            raise TypeError(type(path))
+            return self.real_path(key).exists()
 
-    def load(self , path) -> Any:
-        if isinstance(path , list):
-            return [self.load(p) for p in path]
-        elif isinstance(path , (str , Path)):
-            if self.memdisk is None:
-                return torch_load(path) if Path(path).exists() else None
-            else:
-                return self.memdisk.get(str(path))
+    def save(self , obj : Any , key : str , group = 'default'):
+        if self.is_mem:
+            path = key
+            self.memdisk[key] = deepcopy(obj)
         else:
-            raise TypeError(type(path))
-    
-    def is_cuda(self , obj) -> bool:
-        if isinstance(obj , (torch.Tensor , torch.nn.Module)):
-            return bool(obj.is_cuda)
-        elif isinstance(obj , (list , tuple)):
-            for sub in obj:
-                if self.is_cuda(sub): 
-                    return True
-            else:
-                return False
-        elif isinstance(obj , dict):
-            return self.is_cuda(list(obj.values()))
+            path = self.real_path(key)
+            torch.save(obj , path)
+            self.memdisk[key] = 1
+            
+        df = pd.DataFrame({'path' : [str(path)] , 'key' : [key] , 'group' : [group]})
+        self.records = pd.concat([self.records.query('key != @key') , df] , axis=0)
+
+    def load(self , key : str) -> Any:
+        if self.is_mem:
+            return self.memdisk[key]
         else:
-            return False
+            path = self.real_path(key)
+            return torch_load(path) if path.exists() else None
         
-    def save_state_dict(self , obj , path , group = 'default'):
+    def save_state_dict(self , obj : Any , key : str , group = 'default'):
         assert isinstance(obj , (torch.nn.Module , dict)) , obj
         if isinstance(obj , torch.nn.Module):
             obj = deepcopy(obj).cpu().state_dict()
         else:
             obj = deepcopy(obj)
-        self.save(obj , path , group)
+        self.save(obj , key , group)
     
-    def del_path(self , path):
-        if isinstance(path , (Path , str)): 
-            path = [path]
-        if self.memdisk is None:
-            [Path(p).unlink(missing_ok=True) for p in path]
-        else:
-            [self.memdisk.__delitem__(str(p)) for p in path]
-        paths = [str(p) for p in path] # noqa
-        self.records = self.records.query('path not in @paths')
+    def del_one(self , key : str):
+        if not self.is_mem:
+            self.real_path(key).unlink(missing_ok=True)
+        self.memdisk.pop(key)
+        self.records = self.records.query('key != @key')
         
-    def del_group(self , group):
-        if isinstance(group , str): 
-            group = [group]
-        path = self.records.query('group in @group')['path']
-        self.del_path(path)
+    def del_group(self , group : str):
+
+        for key in self.records.query('group != @group')['key']:
+            self.del_one(key)
 
     def del_all(self):
-        self.del_path(self.records['path'])
+        for key in self.records['key']:
+            self.del_one(key)
         gc.collect()
 
 class StoredFileLoader:
     ''''retrieve batch_input from a Storage'''
-    def __init__(self, loader_storage : MemFileStorage , file_list : list , 
-                 shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
-        self.storage  = loader_storage
-        self.shufopt  = shuffle_option
-        self.file_loader   = self.shuf('init' , file_list)
+    def __init__(self, loader_storage : MemFileStorage , keys : list[str] , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
+        self.storage = loader_storage
+        self.shufopt = shuffle_option
+        self.keys   = self.shuf(keys)
 
-    def __len__(self): return len(self.file_loader)
-    def __getitem__(self , i): return self.storage.load(self.file_loader[i])
+    def __len__(self): 
+        return len(self.keys)
+    def __getitem__(self , i): 
+        return self.storage.load(self.keys[i])
     def __iter__(self):
-        for batch_file in self.shuf('epoch' , self.file_loader): 
-            yield self.storage.load(batch_file)
-    def shuf(self , stage : Literal['init' , 'epoch'] , loader):
+        for key in self.shuf(self.keys , 'epoch'): 
+            yield self.storage.load(key)
+    def shuf(self , loader : list[T] , stage : Literal['init' , 'epoch'] = 'init') -> list[T]:
         '''shuffle at init or each epoch'''
+        new_loader : Any = loader
         if stage == self.shufopt: 
-            loader = np.random.permutation(loader)
-        return loader
+            indices = np.random.permutation(np.arange(len(loader)))
+            new_loader = [loader[i] for i in indices]
+        return new_loader
     
 class Checkpoint(MemFileStorage):
     '''model checkpoint for epochs'''
@@ -122,38 +106,41 @@ class Checkpoint(MemFileStorage):
         self.join_record : list[str]  = [] 
         # self.model_module = model_module
 
+    def real_path(self , key : str): 
+        return PATH.checkpoint.joinpath(f'{key}.pt')
+
+    def epoch_key(self , epoch : int) -> str: 
+        return f'ckpt.{self.model_key}.{epoch}'
+
     def new_model(self , model_param : dict , model_date : int):
         path = Path(model_param.get('path' , ''))
-        if self.is_mem:
-            self.dir = f'{path.name}/{model_date}'
-        else:
-            self.dir = path.joinpath(str(model_date))
+        self.model_key = f'{path.name}.{model_date}'
         self.epoch_queue = []
         self.join_record = [] 
         self.del_all()
     
-    def join(self , src : Any , epoch : int , net):
+    def join(self , src : Any , epoch : int , net : Any):
         if epoch < 0: 
             return
         if epoch >= len(self.epoch_queue): 
             self._extend_reliance()
-        record_str = f'JOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
+        record_str = f'JOIN: Epoch {epoch}, from {src.__class__.__name__}({id(src)})'
         if src in self.epoch_queue[epoch]: 
             record_str += ', already exists'
         else:
             self.epoch_queue[epoch].append(src)
             record_str += ', append list'
-        if self.exists(self.epoch_path(epoch)): 
+        if self.exists(self.epoch_key(epoch)): 
             record_str += ', no need to save'
         else:
-            self.save_state_dict(net , self.epoch_path(epoch))
+            self.save_state_dict(net , self.epoch_key(epoch))
             record_str += ', state dict saved'
         self.join_record.append(record_str)
 
-    def disjoin(self , src , epoch : int):
+    def disjoin(self , src : Any , epoch : int):
         if epoch < 0: 
             return
-        record_str = f'DISJOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
+        record_str = f'DISJOIN: Epoch {epoch}, from {src.__class__.__name__}({id(src)})'
         
         if epoch >= len(self.epoch_queue):
             [Logger.stdout(record_str) for record_str in self.join_record]
@@ -163,23 +150,17 @@ class Checkpoint(MemFileStorage):
         if self.epoch_queue[epoch]:
             record_str += f', {len(self.epoch_queue[epoch])} reliance left'
         else:
-            self.del_path(self.epoch_path(epoch))
+            self.del_one(self.epoch_key(epoch))
             record_str += f', delete state dict '
         self.join_record.append(record_str)
 
-    def load_epoch(self , epoch):
+    def load_epoch(self , epoch : int) -> Any:
         assert epoch >= 0 , epoch
         if self.epoch_queue[epoch]:
-            return self.load(self.epoch_path(epoch))
+            return self.load(self.epoch_key(epoch))
         else:
             [Logger.stdout(record_str) for record_str in self.join_record]
             raise Exception(f'no checkpoint of epoch {epoch}')
-    
-    def epoch_path(self , epoch): 
-        if isinstance(self.dir , Path):
-            return self.dir.joinpath(f'checkpoint.{epoch}.pt')
-        else:
-            return f'{self.dir}/checkpoint.{epoch}.pt'
     
     def _extend_reliance(self , n_epochs = 200):
         self.epoch_queue += [[] for _ in range(n_epochs)] # extend epoch list

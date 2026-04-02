@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from src.func.metric import mse , pearson , ccc , spearman
 
-from .abc import align_shape
+from .basic import align_shape
 
 __all__ = ['Accuracy']
 

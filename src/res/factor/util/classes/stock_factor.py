@@ -1,11 +1,25 @@
+"""
+StockFactor class is used to store and manipulate factor data
+factor data can be a pandas DataFrame , a pandas Series , a DataBlock , a StockFactor , or a dictionary of pd.Series
+can include multiple factors
+
+example:
+    factor = StockFactor(factor_data)
+    factor.normalize()
+    factor.analyze()
+    factor.eval_ic()
+    factor.eval_group_perf()
+"""
+
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import warnings
 
-from collections.abc import Iterable
 from copy import deepcopy
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , Iterable
 
 from src.proj import DB , Logger
 from src.proj.util import properties
@@ -441,18 +455,22 @@ class StockFactor:
         cls._factor = factor
         return factor
 
-    def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' = None , * ,
+    def __init__(self , factor : pd.DataFrame | pd.Series | DataBlock | StockFactor | dict[int,pd.Series] | None = None , * ,
                  normalized : bool | None = None , 
                  benchmark : Benchmark | str | None = None , 
                  cache_factor_stats : CacheFactorStats | None = None ,
                  pseudo_date : np.ndarray | None = None ,
-                 factor_names : list[str] | str | None = None):
-        if factor is None:
-            assert factor_names , 'factor_names must be provided if factor input is None'
-            if isinstance(factor_names , str):
-                factor_names = [factor_names]
-            factor = pd.DataFrame(columns=['date' , 'secid' , *factor_names])
-
+                 factor_names : np.ndarray | list[str] | str | None = None):
+        if (
+            factor is None or
+            (isinstance(factor , pd.DataFrame) and factor.empty and factor.columns.difference(['date' , 'secid']).empty) or
+            (isinstance(factor , pd.Series) and factor.empty and factor.name is None) or 
+            (isinstance(factor , DataBlock) and factor.empty) or
+            (isinstance(factor , dict) and len(factor) == 0)
+        ):
+            assert factor_names is not None , f'factor_names must be provided if factor input (of type {type(factor)}) is empty'
+            factor = self.create_empty_df(factor_names)
+        
         self.normalized = False
         self.benchmark = None
         self.cache_alpha_models : dict[str,AlphaModel] = {}
@@ -470,6 +488,12 @@ class StockFactor:
     
     def __call__(self , benchmark):
         return self.within(benchmark)
+
+    @classmethod
+    def create_empty_df(cls , factor_names : np.ndarray | list[str] | str) -> pd.DataFrame:
+        if isinstance(factor_names , str):
+            factor_names = [factor_names]
+        return pd.DataFrame(columns=['date' , 'secid' , *factor_names])
 
     @property
     def empty(self) -> bool:
@@ -574,7 +598,8 @@ class StockFactor:
             normalized = normalized if normalized is not None else self.normalized , 
             benchmark = benchmark if benchmark is not None else self.benchmark , 
             cache_factor_stats = cache_factor_stats if cache_factor_stats is not None else self.cache_factor_stats , 
-            pseudo_date = pseudo_date if pseudo_date is not None else self.pseudo_date)
+            pseudo_date = pseudo_date if pseudo_date is not None else self.pseudo_date , 
+            factor_names = self.factor_names)
         return twin
 
     def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
@@ -673,7 +698,7 @@ class StockFactor:
             return prior_input
         else:
             assert prior_input is not None , 'prior_input cannot be None'
-            self.input_blk = DataBlock.from_dataframe(prior_input)
+            self.input_blk = DataBlock.from_pandas(prior_input)
             return self.input_blk
 
     @property

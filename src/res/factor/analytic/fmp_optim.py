@@ -7,7 +7,7 @@ from src.proj import Logger
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.optim_pf import Plotter
-from src.res.factor.util.stat import optim_pf as Stat
+from src.res.factor.util.stats import optim_pf as Stat
 
 from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
 

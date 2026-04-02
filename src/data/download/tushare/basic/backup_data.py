@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from src.proj import PATH , CALENDAR , DB , Dates
-from .abc import TS
+from .core import TS
 
 path_bak_data   = PATH.backup.joinpath('tushare' , 'data')
 path_bak_record = PATH.backup.joinpath('tushare' , 'record')

@@ -107,7 +107,7 @@ class FactorLoader(BlockLoader):
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
             df = pd.concat([fac for fac in factors if not fac.empty])
             df = df.pivot_table('value' , ['secid','date'] , 'feature')
-            block = DataBlock.from_dataframe(df)
+            block = DataBlock.from_pandas(df)
         return block
 
 class FactorCategory1Loader(BlockLoader):
@@ -148,7 +148,7 @@ class FactorCategory1Loader(BlockLoader):
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
             df = pd.concat([fac for fac in factors if not fac.empty])
             df = df.pivot_table('value' , ['secid','date'] , 'feature')
-            block = DataBlock.from_dataframe(df)
+            block = DataBlock.from_pandas(df)
         return block
 
     @property

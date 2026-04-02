@@ -271,7 +271,6 @@ class PortfolioGroupBuilder:
         
         self.category = category
 
-        assert alpha_models , f'alpha_models must has elements!'
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
         self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([] , dtype=int))
         self.relevant_dates = self.relevant_dates[(self.relevant_dates >= start) & (self.relevant_dates <= end)]
@@ -414,7 +413,7 @@ class PortfolioGroupBuilder:
         return self
     
     def total_account(self):
-        assert self.builders , 'No builders to account!'
+        # assert self.builders , 'No builders to account!'
         if not self.accounted:
             self.accounting()
         df = PortfolioAccount.Total(*[builder.account for builder in self.builders])

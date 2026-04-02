@@ -1,4 +1,5 @@
 """Basic utilities in Project level: Iterable filtering, temp file context, and dot-key nested dict flattening."""
+from __future__ import annotations
 
 from typing import Any, Callable , Iterable
 from pathlib import Path
@@ -55,7 +56,7 @@ class TempFile:
 class FlattenDict:
     """Dot-key flattened view over nested dicts with optional selective nesting."""
 
-    def __init__(self, input: 'FlattenDict | dict[str, Any] | None' = None , * , keep_nested : Callable[[str], bool] | None = None , **kwargs):
+    def __init__(self, input: FlattenDict | dict[str, Any] | None = None , * , keep_nested : Callable[[str], bool] | None = None , **kwargs):
         """Build ``flattened`` from dict or another ``FlattenDict``; ``keep_nested`` preserves subtrees."""
         self.raw = input.raw if isinstance(input, FlattenDict) else input or {}
         self.keep_nested = keep_nested

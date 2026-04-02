@@ -38,7 +38,7 @@ class OptionsDefinition:
     @classmethod
     def available_backtestports(cls) -> list[str]:
         """Get the available backtest ports in the trade_port directory"""
-        return [p.name for p in PATH.trade_port.joinpath('backtest').iterdir() if not p.name.startswith('.')]
+        return [p.name for p in PATH.rslt_trade.joinpath('backtest').iterdir() if not p.name.startswith('.')]
 
     @classmethod
     def available_factors(cls) -> list[str]:

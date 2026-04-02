@@ -14,7 +14,7 @@ from string import Template
 
 from src.proj.env import PATH , MACHINE
 from src.proj.proj import Proj
-from src.proj.abc import Duration , str_to_html , dataframe_to_html , figure_to_html
+from src.proj.core import Duration , str_to_html , dataframe_to_html , figure_to_html
 from src.proj.log import Logger
 
 __all__ = [
@@ -305,11 +305,15 @@ class WarningCatcher:
         with WarningCatcher(['This will raise an exception']):
             raise Exception('This will raise an exception')
     """
-    def __init__(self , catch_warnings : list[str] | None = None):
+    def __init__(self , catch_warnings : list[str] | None = None , * ,
+                 method : Literal['raise' , 'ignore'] = 'raise' ,
+                 highlight_varibles : dict[str, Any] | None = None):
+        self.method = method
         self.warnings_caught = []
         self.original_showwarning = warnings.showwarning
         warnings.filterwarnings('always')
         self.catch_warnings = [] if catch_warnings is None else [c.lower() for c in catch_warnings]
+        self.highlight_varibles = highlight_varibles
     
     def custom_showwarning(self, message, category, filename, lineno, file=None, line=None) -> None:
         """Custom warning show function to catch specific warnings and show call stack"""
@@ -320,8 +324,14 @@ class WarningCatcher:
             Logger.alert1("call stack:")
             Logger.print_traceback_stack(color = 'lightyellow' , bold = True)
             Logger.alert1("-" * 80)
-            
-            raise Exception(message)
+
+            if self.highlight_varibles is not None:
+                for var_name, var_value in self.highlight_varibles.items():
+                    Logger.alert1(f"{var_name}: {var_value}")
+                Logger.alert1("-" * 80)
+                
+            if self.method == 'raise':
+                raise Exception(message)
         
         # call original warning show function
         self.original_showwarning(message, category, filename, lineno, file, line)

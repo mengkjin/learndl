@@ -2,8 +2,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from collections.abc import Iterable , Callable
-from typing import Any
+from typing import Any , Iterable , Callable
 
 from src.proj import Logger , CALENDAR , Dates , Proj
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager

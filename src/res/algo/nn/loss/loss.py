@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from src.func.metric import mse , pearson , ccc
 
-from .abc import align_shape
+from .basic import align_shape
 
 __all__ = ['Loss']
 

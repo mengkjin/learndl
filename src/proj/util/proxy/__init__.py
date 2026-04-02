@@ -5,5 +5,6 @@ from .verifier import ProxyVerifier
 from .cache import ProxyCache
 from .ppool import AdaptiveProxyPool
 from .api import ProxyAPI
+from .caller import ProxyCaller
 
-__all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool']
+__all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool' , 'ProxyCaller']

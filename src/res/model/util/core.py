@@ -6,7 +6,6 @@ from src.proj import PATH , Logger
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
-
 TYPE_MODULE_TYPES = Literal['nn' , 'boost' , 'factor' ,'']
 MODULE_TYPES : list[TYPE_MODULE_TYPES] = ['nn' , 'boost' , 'factor' , '']
 

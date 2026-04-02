@@ -1,10 +1,16 @@
+"""
+DataBlock is a class that represents a block of stored data in tensor format (secid , date , inday , feature).
+"""
+
+from __future__ import annotations
+
 import torch
 import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any , ClassVar , Literal
+from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import PATH , Logger , CALENDAR , DB
 from src.proj.util import torch_load
@@ -93,17 +99,17 @@ class DataBlock(Stock4D):
         return data_type_alias(key)
 
     @classmethod
-    def last_preprocess_date(cls , key , predict):
-        path = cls.path_preprocess(key , predict)
+    def last_preprocess_date(cls , key , type : Literal['fit' , 'predict']):
+        path = cls.path_preprocess(key , type)
         if path.suffix == '.mmap':
             dates = [PATH.file_modified_date(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
             return min(dates) if dates else None
         else:
-            return PATH.file_modified_date(cls.path_preprocess(key , predict))
+            return PATH.file_modified_date(cls.path_preprocess(key , type))
     
     @classmethod
-    def last_preprocess_time(cls , key , predict):
-        path = cls.path_preprocess(key , predict)
+    def last_preprocess_time(cls , key , type : Literal['fit' , 'predict']):
+        path = cls.path_preprocess(key , type)
         if path.suffix == '.mmap':
             times = [PATH.file_modified_time(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
             return min(times) if times else None
@@ -111,9 +117,9 @@ class DataBlock(Stock4D):
             return PATH.file_modified_time(path)
 
     @classmethod
-    def last_data_date(cls , key : str = 'y' , predict = False):
+    def last_data_date(cls , key : str , type : Literal['fit' , 'predict']):
         try:
-            path = cls.path_preprocess(key , predict)
+            path = cls.path_preprocess(key , type)
             if not path.exists():
                 return None
             if path.suffix == '.mmap':
@@ -125,7 +131,7 @@ class DataBlock(Stock4D):
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
-            Logger.error(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'last_data_date({key , type}) error: ModuleNotFoundError: {e}')
             return None
 
     def ffill(self , if_fill : bool = True):
@@ -243,10 +249,10 @@ class DataBlock(Stock4D):
         self.values[mask_pos] = torch.nan
         return self
     
-    def hist_norm(self , key : str , predict = False ,
+    def hist_norm(self , key : str , 
                   start : int | None = None , end : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
-        return DataBlockNorm.calculate(self , key , predict , start , end , step_day , **kwargs)
+        return DataBlockNorm.calculate(self , key , start , end , step_day , **kwargs)
 
     def extend_to(self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * , 
                   dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'):
@@ -261,15 +267,14 @@ class DataBlock(Stock4D):
         return self
 
     @classmethod
-    def path_preprocess(cls , key : str , predict=False, * , 
+    def path_preprocess(cls , key : str , type : Literal['fit' , 'predict'] , * , 
                         dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True) -> Path:
-        preprocess_type = 'predict' if predict else 'fit'
         if key.lower() in ['y' , 'labels']: 
-            path = PATH.block.joinpath(preprocess_type , f'Y{dump_suffix}')
+            path = PATH.block.joinpath(type , f'Y{dump_suffix}')
         else:
             alias_list = data_type_alias(key)
             for new_key in alias_list:
-                path = PATH.block.joinpath(preprocess_type , f'X_{new_key}{dump_suffix}')
+                path = PATH.block.joinpath(type , f'X_{new_key}{dump_suffix}')
                 if path.exists(): 
                     break
         if find_if_not_exists:
@@ -277,8 +282,8 @@ class DataBlock(Stock4D):
         return path
         
     @staticmethod
-    def path_norm(key : str , predict = False):
-        return DataBlockNorm.norm_path(key , predict)
+    def path_norm(key : str , type : Literal['fit'] = 'fit'):
+        return DataBlockNorm.norm_path(key , type)
 
     @classmethod
     def path_raw(cls , src : str , key : str , * , dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True):
@@ -298,15 +303,15 @@ class DataBlock(Stock4D):
         return raw_path
 
     @classmethod
-    def load_preprocess(cls , key : str , predict = False , vb_level : Any = 2 , **kwargs) -> 'DataBlock':
-        block = cls.load_dump(category = 'preprocess' , predict = predict , preprocess_key = key)
-        if predict and key == 'y' and not block.empty:
+    def load_preprocess(cls , key : str , type : Literal['fit' , 'predict'] , **kwargs) -> DataBlock:
+        block = cls.load_dump(category = 'preprocess' , type = type , preprocess_key = key)
+        if type == 'predict' and key == 'y' and not block.empty:
             block = block.align_date(CALENDAR.range(min(block.date) , CALENDAR.updated() , 'td'))
         return block
 
     @classmethod
-    def blocks_align(cls , blocks : dict[str,'DataBlock'] , * , start = None , end = None ,
-                     intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2) -> dict[str,'DataBlock']:
+    def blocks_align(cls , blocks : dict[str,DataBlock] , * , start = None , end = None ,
+                     intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2) -> dict[str,DataBlock]:
         if len(blocks) <= 1:
             return blocks
         
@@ -329,42 +334,56 @@ class DataBlock(Stock4D):
         return blocks
 
     @classmethod
-    def blocks_fillna(cls , blocks : dict[str,'DataBlock'] , * , 
-                      fillna : Literal['guess'] | bool | None = 'guess') -> dict[str,'DataBlock']:
+    def blocks_ffill(cls , blocks : dict[str,DataBlock] , * , 
+                      fillna : Literal['guess'] | bool | None = 'guess' , exclude : Iterable[str] | None = None) -> dict[str,DataBlock]:
+        exclude = exclude or []
         fillnas = {key:cls.guess_fillna(key , fillna) for key in blocks}
         for key , blk in blocks.items():
+            if key in exclude:
+                continue
             blk.ffill(fillnas[key])
         return blocks
 
     @classmethod
-    def load_preprocess_norms(cls , keys : list[str] | str , predict = False , dtype = None) -> dict[str,'DataBlockNorm']:
+    def load_preprocess_norms(cls , keys : list[str] | str , type : Literal['fit'] = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
         if isinstance(keys , str):
             keys = [keys]
-        return DataBlockNorm.load_keys(keys, predict , dtype = dtype)
+        return DataBlockNorm.load_keys(keys, type , dtype = dtype)
 
     @classmethod
     def load_from_db(cls , db_src : str , db_key : str , start = None , end = None , * , 
-                     dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
+                     dates = None , feature = None , use_alt = True , vb_level : Any = 'max') -> DataBlock:
+        #return cls.load_from_db_pandas(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
+        return cls.load_from_db_polars(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
+
+    @classmethod
+    def load_from_db_pandas(
+        cls , db_src : str , db_key : str , start = None , end = None , * , 
+        dates = None , feature = None , use_alt = True , vb_level : Any = 'max'
+    ) -> DataBlock:
 
         if dates is None:
             dates = CALENDAR.range(start , end , 'td')
 
         df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
-
-        if len(df) == 0: 
-            block = cls()
-        else:
-            if len(df.index.names) > 1 or df.index.name: 
-                df = df.reset_index()
-            use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
-            assert 2 <= len(use_index) <= 3 , use_index
-            if feature is not None:  
-                df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
-            block = cls.from_dataframe(df.set_index(use_index))
+        block = cls.from_pandas(df) if len(df) > 0 else cls()
         if feature is None:
             block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
         return block
 
+    @classmethod
+    def load_from_db_polars(
+        cls , db_src : str , db_key : str , start = None , end = None , * , 
+        dates = None , feature = None , use_alt = True , vb_level : Any = 'max'
+    ):
+        if dates is None:
+            dates = CALENDAR.range(start , end , 'td')
+        df = DB.loads_pl(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
+        block = cls.from_polars(df) if df.height > 0 else cls()
+        if feature is None:
+            block.set_flags(category = 'raw' , db_src = db_src , db_key = db_key)
+        return block
+        
     @classmethod
     def load_raw(cls , db_src : str , db_key : str , start = None , end = None , * , 
                  dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
@@ -391,10 +410,10 @@ class DataBlock(Stock4D):
         return block
 
     @classmethod
-    def load_dump(cls , **kwargs) -> 'DataBlock':
+    def load_dump(cls , **kwargs) -> DataBlock:
         flags = kwargs
         if flags.get('category') == 'preprocess':
-            path = cls.path_preprocess(flags['preprocess_key'] , flags['predict'])
+            path = cls.path_preprocess(flags['preprocess_key'] , flags['type'])
         else:
             path = cls.path_raw(flags['db_src'] , flags['db_key'])
         
@@ -413,7 +432,7 @@ class DataBlock(Stock4D):
             elif path.suffix == '.pt':
                 block = cls(**load_dict(path))
             elif path.suffix == '.feather':
-                block = cls.from_dataframe(pd.read_feather(path))
+                block = cls.from_pandas(pd.read_feather(path))
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         else:
@@ -421,14 +440,18 @@ class DataBlock(Stock4D):
         return block.set_flags(**flags)
 
     def save_dump(self):
+        """
+        save the block to PATH.block
+        """
         flags = self.flags
-        assert flags and flags.get('category') in ['preprocess' , 'raw'] , flags
         if flags.get('category') == 'raw':
             assert not self.price_adjusted and not self.volume_adjusted , f'price and volume must not be adjusted before saving!'
-        if flags.get('category') == 'preprocess':
-            path = self.path_preprocess(flags['preprocess_key'] , flags['predict'])
-        else:
+            assert f'{flags["db_src"]}.{flags["db_key"]}' in self.FREQUENT_DBS , f'{flags["db_src"]}.{flags["db_key"]} is not a frequent db!'
             path = self.path_raw(flags['db_src'] , flags['db_key'])
+        elif flags.get('category') == 'preprocess':
+            path = self.path_preprocess(flags['preprocess_key'] , flags['type'])
+        else:
+            raise ValueError(f'Unsupported category: {flags.get("category")} , please set correct category before saving!')
         path.parent.mkdir(exist_ok=True)
         if path.suffix == '.feather':
             assert not path.exists() or path.is_file() , path
@@ -473,12 +496,12 @@ class DataBlockNorm:
         self.std = self.std.to(self.dtype)
 
     @classmethod
-    def calculate(cls , block : DataBlock , key : str , predict = False ,
+    def calculate(cls , block : DataBlock , key : str , 
                   start : int | None = None , end : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
         
         key = data_type_abbr(key)
-        if predict or (key not in cls.HISTNORM): 
+        if (key not in cls.HISTNORM): 
             return None
 
         default_maxday = {'day' : 60 , 'week' : 60}
@@ -529,12 +552,12 @@ class DataBlockNorm:
         save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
 
     @classmethod
-    def load_keys(cls , keys : str | list[str] , predict = False , dtype = None) -> dict[str,'DataBlockNorm']:
+    def load_keys(cls , keys : str | list[str] , type : Literal['fit'] , dtype = None) -> dict[str,DataBlockNorm]:
         if not isinstance(keys , list): 
             keys = [keys]
         norms = {}
         for key in keys:
-            path = cls.norm_path(key , predict)
+            path = cls.norm_path(key , type)
             if not path.exists(): 
                 continue
             data = load_dict(path)
@@ -542,12 +565,12 @@ class DataBlockNorm:
         return norms
     
     @classmethod
-    def norm_path(cls , key : str , predict = False):
+    def norm_path(cls , key : str , type : Literal['fit'] = 'fit'):
         if key.lower() == 'y':
-            return PATH.norm.joinpath('fit' , 'Y.pt')
+            return PATH.norm.joinpath(type , 'Y.pt')
         alias_list = data_type_alias(key)
         for new_key in alias_list:
-            path = PATH.norm.joinpath('fit' , f'X_{new_key}.pt')
+            path = PATH.norm.joinpath(type , f'X_{new_key}.pt')
             if path.exists():
                 break
         return path

@@ -1,4 +1,5 @@
 """Canonical project directory layout and file helpers (YAML/JSON IO, templates, copies)."""
+from __future__ import annotations
 
 import shutil , yaml , sys , json
 
@@ -31,6 +32,7 @@ class PATH:
 
     block       = interim.joinpath('DataBlock')
     batch       = interim.joinpath('MiniBatch')
+    checkpoint  = interim.joinpath('Checkpoint')
     datacache   = interim.joinpath('DataCache')
     norm        = interim.joinpath('HistNorm')
 

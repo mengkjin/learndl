@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 from src.proj import Logger
 from src.proj.util import ProxyAPI
-from src.proj.util.proxy.caller import ProxyCaller
-from src.proj.util.http import http_session , CHROME_UA , request_with_timeouterror
+from src.proj.util.proxy import ProxyCaller
+from src.proj.util.web import http_session , CHROME_UA , request_with_timeouterror
 from src.proj.util.error_handler import ErrorHandler
 from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter
 

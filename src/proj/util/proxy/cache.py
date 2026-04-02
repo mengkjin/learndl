@@ -6,8 +6,8 @@ from datetime import datetime , timedelta
 from typing import Literal , Any , Iterable
 
 from src.proj.env import PATH
-from src.proj.calendar import BJTZ
-from .abc import Proxy , ProxySet
+from src.proj.cal import BJTZ
+from .core import Proxy , ProxySet
 
 _default_time = datetime.strptime('1900-01-01 00:00:00', "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJTZ)
 

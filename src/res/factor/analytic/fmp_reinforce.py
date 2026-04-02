@@ -6,7 +6,7 @@ from src.proj import Logger
 from src.res.factor.util import StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.top_pf import Plotter
-from src.res.factor.util.stat import top_pf as Stat
+from src.res.factor.util.stats import top_pf as Stat
 
 from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
 

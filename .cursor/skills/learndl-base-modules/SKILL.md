@@ -36,9 +36,9 @@ Use this file as a route map only; behavior and APIs live in source and module d
 - **`proj/`**: `Proj` facade, verbosity, `conf/` subpackage.
 - **`env/`**: `MACHINE`, `PATH` (machine and directory conventions).
 - **`log/`**: `Logger`, `LogFile`; prefer `src.proj.Logger` in app code.
-- **`calendar/`**: `CALENDAR`, `TradeDate`, etc.—start here for session/backtest dates.
+- **`cal/`**: `CALENDAR`, `TradeDate`, etc.—start here for session/backtest dates.
 - **`db/`**: low-level access and mappers; not the same as `src/data` vendor loaders.
-- **`abc/`**: `Silence`, `Duration`, `singleton`, small shared abstractions.
+- **`core/`**: `Silence`, `Duration`, `singleton`, small shared abstractions.
 - **`util/`**: general utilities—**not** `src/func`.
 - **`util/func/`**: engineering helpers (parallel, disk, shell)—**not** the math package `src/func`.
 

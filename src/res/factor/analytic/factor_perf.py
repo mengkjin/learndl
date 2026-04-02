@@ -5,7 +5,7 @@ from typing import Any ,Literal , Type
 from src.proj import Proj
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.util.plot.factor import Plotter
-from src.res.factor.util.stat import factor as Stat
+from src.res.factor.util.stats import factor as Stat
 
 from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
 

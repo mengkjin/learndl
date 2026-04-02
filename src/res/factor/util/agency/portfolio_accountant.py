@@ -8,9 +8,9 @@ from typing import Literal , Any
 from src.proj import Proj , Logger , CALENDAR , DB , Dates
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
-from src.res.factor.util.stat.aggregate import eval_period_ret
 
-from ..stat import eval_drawdown
+from src.res.factor.util.stats import eval_drawdown
+from src.res.factor.util.stats.aggregate import eval_period_ret
 
 __all__ = ['PortfolioAccountant' , 'PortfolioAccountManager']
 

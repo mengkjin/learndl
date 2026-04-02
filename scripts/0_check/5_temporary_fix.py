@@ -8,11 +8,15 @@
 # mode: shell
 
 from src.proj.util import ScriptTool 
+from src.api import UpdateAPI
 from src.data.crawler.announcement.agent import AnnouncementAgent
+from src.data.util.classes import DataCache
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    AnnouncementAgent.update()
+    DataCache.purge_all(confirm = True)
+    # AnnouncementAgent.update()
+    UpdateAPI.rollback(rollback_date = 20260327)
         
 if __name__ == '__main__':
     main()

@@ -3,9 +3,9 @@
 from typing import Any
 
 from src.proj.env import MACHINE
-from src.proj.abc import Silence
+from src.proj.core import Silence
 
-from .abc import ProjectSetting
+from .core import ProjectSetting
 from .verbosity import VB
 from .files import LOG_WRITER , EMAIL_ATTACHMENTS , EXIT_FILES
 from .ins import INSTANCES

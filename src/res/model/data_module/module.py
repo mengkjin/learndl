@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import gc , torch
 import numpy as np
 import pandas as pd
@@ -6,11 +8,10 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Callable
 
-from src.proj import PATH , Logger , CALENDAR , MACHINE
+from src.proj import Logger , CALENDAR , MACHINE
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
 from src.func import match_values
 from src.func import tensor as T
-from src.res.factor.util import Benchmark
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , MemFileStorage , StoredFileLoader , HiddenPath
 from .loader import BatchInputLoader
 from .prenorm import PrenormOperator
@@ -95,17 +96,19 @@ class DataModule(BaseDataModule):
 
     @staticmethod
     def prepare_data(data_types : list[str] | None = None):
-        PreProcessorTask.main(predict = False , data_types = data_types)
-        PreProcessorTask.main(predict = True , data_types = data_types)
+        PreProcessorTask.update(predict = False , data_types = data_types)
+        PreProcessorTask.update(predict = True , data_types = data_types)
        
     def load_data(self):
-        self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , 
-                                     self.config.labels , 
-                                     self.config.input_factor_names , 
-                                     fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
-                                     dtype = self.config.precision, 
-                                     factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date)
-        self.filter_datas()
+        self.datas = ModuleData(
+            self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
+            use_data = self.use_data ,
+            factor_names = self.config.input_factor_names , 
+            factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date , 
+            filter_secid = self.config.input_filter_secid , 
+            filter_date = self.config.input_filter_date , 
+            dtype = self.config.precision)
+        self.datas.load()
         Logger.stdout(f'{self.__class__.__name__} : data shape is ' , self.datas.shape , vb_level = 'max')
         
         self.config.update_data_param(self.datas.x)
@@ -118,49 +121,11 @@ class DataModule(BaseDataModule):
         if self.empty_x:
             Logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
             Logger.note(f'{self.input_type} input keys: {self.input_keys}')
-            self.config.queue_of_stages.remove('fit')
-            self.config.queue_of_stages.remove('test')
+            if 'fit' in self.config.queue_of_stages:
+                self.config.queue_of_stages.remove('fit')
+            if 'test' in self.config.queue_of_stages:
+                self.config.queue_of_stages.remove('test')
         return self
-
-    def filter_datas(self):
-        self.filter_datas_date()
-        self.filter_datas_secid()
-
-    def filter_datas_date(self) -> None | tuple[int | None , int | None]:
-        if self.use_data == 'predict':
-            return None
-        value = self.config.input_filter_date
-        if value is None:
-            return None
-        
-        values = value.replace('~' , '-').split('-')
-        if len(values) == 2:
-            start, end = values
-            start, end = int(start) if start else None, int(end) if end else None
-        else:
-            raise ValueError(f'input.filter.date {value} is not valid , should be yyyyMMdd-yyyyMMdd')
-
-        Logger.alert1(f'filtering date for DataModule.datas: {value}')
-        self.datas.filter_dates(start , end , inplace = True)
-
-    def filter_datas_secid(self) -> None | np.ndarray:
-        value = self.config.input_filter_secid
-        if value is None:
-            return None
-        elif value.startswith('random.'):
-            num = int(value.split('.')[1])
-            secid = np.random.choice(self.datas.secid , num , replace = False)
-        elif value.startswith('first.'):
-            num = int(value.split('.')[1])
-            secid = self.datas.secid[:num]
-        elif value in ['csi300' , 'csi500' , 'csi1000']:
-            last_date = self.datas.date.max()
-            secid = Benchmark(value).get(last_date,True).secid
-        else:
-            raise ValueError(f'input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
-
-        Logger.alert1(f'filtering secid for DataModule.datas: {value}')
-        self.datas.filter_secid(secid , inplace = True)
 
     def set_critical_dates(self):
         '''set critical dates for model date list and test full dates'''
@@ -249,7 +214,7 @@ class DataModule(BaseDataModule):
 
             df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
             df.columns = [f'{hidden_key}.{col}' for col in df.columns]
-            self.datas.x[hidden_key] = DataBlock.from_dataframe(df).align_secid_date(self.datas.secid , self.datas.date)
+            self.datas.x[hidden_key] = DataBlock.from_pandas(df).align_secid_date(self.datas.secid , self.datas.date)
 
         assert self.datas.date[self.datas.date < self.next_model_date(self.model_date)][-1] <= hidden_max_date , \
             (self.next_model_date(self.model_date) , hidden_max_date)
@@ -434,22 +399,27 @@ class DataModule(BaseDataModule):
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract'] , set_key
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
-            batch_files = [PATH.batch.joinpath(f'{set_key}.{bnum}.pt') for bnum in range(len(set_samples))]
+            batch_keys : list[str] = []
             for bnum , b_i in enumerate(set_samples):
                 if b_i.numel() == 0:
                     continue
                 assert torch.isin(b_i[:,1] , index1).all() , f'all b_i[:,1] must be in index1'
-                index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
+                index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1) # here
 
                 b_x = self.batch_data_x(x , index0 , xindex1)
                 b_y = self.batch_data_y(y , index0 , yindex1)
                 b_w = self.batch_data_y(w , index0 , yindex1)
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
-                self.storage.save(BatchInput(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
+                batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v)
+                batch_key = f'{set_key}.{bnum}'
+
+                self.storage.save(batch_input , batch_key , group = self.stage)
+                batch_keys.append(batch_key)
                 if set_key in ['predict' , 'test' , 'extract']:
                     self.loader_dates[set_key].append(self.y_date[int(xindex1[0].item())])
-            self.loader_dict[set_key] = StoredFileLoader(self.storage , batch_files , shuf_opt)
+                
+            self.loader_dict[set_key] = StoredFileLoader(self.storage , batch_keys , shuf_opt)
 
     def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
         datas = []

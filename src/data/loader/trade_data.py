@@ -25,16 +25,16 @@ class TradeDataAccess(DateDataAccess):
 
     def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
         """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""
-        if db_src != self.DB_SRC:
+        if df.empty or db_src != self.DB_SRC:
             return
         for data_type , data_key  in self.DB_KEYS.items():
             if data_key == db_key:
                 self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 
     def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str):
-        if dates is None:
-            return 
         dates = CALENDAR.td_array(dates)
+        if len(dates) == 0:
+            return
         df = DB.loads(self.DB_SRC , self.DB_KEYS[data_type] , dates , vb_level = 'never')
         self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 

@@ -11,7 +11,7 @@ from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH
 from src.proj.proj import Proj
-from src.proj.abc import Duration , stdout , stderr , FormatStr , Once
+from src.proj.core import Duration , stdout , stderr , FormatStr , Once
 
 from .display import Display
 from .logfile import LogFile
@@ -548,7 +548,7 @@ class Logger:
                     Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
                     df = self.get_df(sort_on = self.sort_on , highlight = self.highlight)
                     Display(df.loc[:,self.columns].head(self.n_head))
-                return super().__exit__(type , value , trace)
+            return super().__exit__(type , value , trace)
 
         def get_df(self , sort_on = 'cumtime' , highlight = None):
             """Get the profile result as a pandas dataframe"""

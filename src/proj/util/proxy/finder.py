@@ -8,10 +8,10 @@ from typing import Literal
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup , Tag
 
-from src.proj.abc import Silence
+from src.proj.core import Silence
 from src.proj.log import Logger
 from src.proj.env import MACHINE
-from .abc import ProxySet
+from .core import ProxySet
 
 class BaseProxiesFinder(ABC):
     """Auto discover HTTP proxies from public proxy list."""

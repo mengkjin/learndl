@@ -5,7 +5,6 @@ from src.proj.env import MACHINE
 
 _project_settings = MACHINE.configs('setting' , 'project')
 
-
 class ProjectSetting:
     """Descriptor: value from ``_project_settings[key]``, else ``default``."""
 

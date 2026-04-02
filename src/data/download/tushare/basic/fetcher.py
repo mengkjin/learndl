@@ -9,7 +9,7 @@ from typing import Any , Literal , Type , Callable , TypeVar
 
 from src.proj import PATH , Logger , CALENDAR , DB , Dates
 from src.proj.util.error_handler import retry_call
-from .abc import TS
+from .core import TS
 
 T = TypeVar('T')
 

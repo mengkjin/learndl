@@ -227,6 +227,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 factor.universe(load = True)
             with Logger.Timer(f'FactorFMPTest.load_day_quotes' , indent = indent , vb_level = vb_level):
                 factor.day_quotes()
+
             for task in self.fmp_tasks:
                 Logger.divider(vb_level = vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
@@ -266,6 +267,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def on_test_end(self):
         if not self.tasks:
             return
+        assert self.factor_names , 'factor_names is empty'
         self.factor_test()
         self.fmp_test()
         self.display_export()

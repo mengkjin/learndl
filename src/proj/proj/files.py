@@ -4,7 +4,7 @@ import io
 from pathlib import Path
 import threading
 
-from src.proj.abc import stderr
+from src.proj.core import stderr
 
 
 class LogWriterFile:

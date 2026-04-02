@@ -1,73 +1,37 @@
+from __future__ import annotations
+
 import torch
 import numpy as np
+import polars as pl
 
-from abc import ABC , abstractmethod
-from typing import Any
+from typing import Any , Literal
 
-from src.proj import Proj
+from src.proj import Proj , DB , CALENDAR
 from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
-from src.data.loader import BlockLoader , FactorCategory1Loader
+from src.data.loader import BlockLoader
 
-class BaseTypePreProcessor(ABC):
-    TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
+from .core import PreProcessor , FactorPreProcessor , TradePreProcessor , MicellaneousPreProcessor
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}'
+class PrePros:
+    @classmethod
+    def keys(cls) -> list[str]:
+        return [name for name in PreProcessor.registry.keys()]
 
-    @abstractmethod
-    def block_loaders(self) -> dict[str,BlockLoader]: ... 
-    @abstractmethod
-    def final_feat(self) -> list | None: ... 
-    @abstractmethod
-    def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
-        
-    def load_blocks(self , start = None , end = None , secid_align = None , date_align = None , indent = 0 , vb_level : Any = 1 , **kwargs):
-        blocks : dict[str,DataBlock] = {}
-        vb_level = Proj.vb(vb_level)
-        for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align(secid_align , date_align , inplace = True)
-            secid_align = blocks[src_key].secid
-            date_align  = blocks[src_key].date
-        return blocks
-    
-    def process_blocks(self, blocks : dict[str,DataBlock]):
-        np.seterr(invalid = 'ignore' , divide = 'ignore')
-        data_block = self.process(blocks)
-        data_block = data_block.align_feature(self.final_feat() , inplace = True)
-        np.seterr(invalid = 'warn' , divide = 'warn')
-        return data_block
+    @classmethod
+    def start_date(cls , type : Literal['fit' , 'predict'] = 'predict') -> int:
+        return PreProcessor.start_date(type)
 
-class _ClassProperty:
-    def __init__(self , method : str):
-        assert method in dir(self) , f'{method} is not in {dir(self)}'
-        self.method = method
-        self.cache_values = {}
+    @classmethod
+    def get_processor(cls , key : str , type : Literal['fit' , 'predict'] , **kwargs) -> PreProcessor:
+        return PreProcessor.registry[key](type , **kwargs)
 
-    def __get__(self,instance,owner) -> str:
-        if owner not in self.cache_values:
-            self.cache_values[owner] = getattr(self , self.method)(owner)
-        return self.cache_values[owner]
+    @classmethod
+    def iter_processors(cls , type : Literal['fit' , 'predict'] , **kwargs):
+        for key in PreProcessor.registry.keys():
+            yield cls.get_processor(key , type)
 
-    def __set__(self,instance,value):
-        raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
-
-    def category0(self , owner) -> str:
-        return Proj.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
-
-    def category1(self , owner) -> str:
-        return str(owner.__qualname__).removeprefix('PrePro_').lower()
-    
-class BaseFactorPreProcessor(BaseTypePreProcessor):
-    category0 = _ClassProperty('category0')
-    category1 = _ClassProperty('category1')    
-
-    def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'factor' : FactorCategory1Loader(self.category1 , normalize = True , fill_method = 'drop' , preprocess = True)}
-    def final_feat(self): return None
-    def process(self , blocks): return blocks['factor']
-
-class PrePro_y(BaseTypePreProcessor):
+class PrePro_y(TradePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]:
         return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
                 'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Proj.Conf.Factor.RISK.indus, 'size'])}
@@ -93,17 +57,15 @@ class PrePro_y(BaseTypePreProcessor):
 
         return data_block
 
-class PrePro_day(BaseTypePreProcessor):
+class PrePro_day(TradePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.TRADE_FEAT])}
-    def final_feat(self): return self.TRADE_FEAT
+        return {'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.final_feat()])}
     def process(self , blocks): return blocks['day'].adjust_price()
     
-class PrePro_15m(BaseTypePreProcessor):
+class PrePro_15m(TradePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
                 'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
-    def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): 
         data_block = blocks['15m']
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
@@ -115,11 +77,10 @@ class PrePro_15m(BaseTypePreProcessor):
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
     
-class PrePro_30m(BaseTypePreProcessor):
+class PrePro_30m(TradePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
                 'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
-    def final_feat(self): return self.TRADE_FEAT
 
     def process(self , blocks): 
         data_block = blocks['30m']
@@ -132,11 +93,10 @@ class PrePro_30m(BaseTypePreProcessor):
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
     
-class PrePro_60m(BaseTypePreProcessor):
+class PrePro_60m(TradePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
                 'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
-    def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): 
         data_block = blocks['60m']
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
@@ -148,11 +108,10 @@ class PrePro_60m(BaseTypePreProcessor):
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
     
-class PrePro_week(BaseTypePreProcessor):
+class PrePro_week(TradePreProcessor):
     WEEKDAYS = 5
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
-    def final_feat(self): return self.TRADE_FEAT
+        return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.final_feat()])}
     def load_blocks(self , start = None , end = None , secid_align = None , date_align = None , indent = 0 , vb_level : Any = 1 , **kwargs):
         vb_level = Proj.vb(vb_level)
         if start is not None and start < 0: 
@@ -174,50 +133,77 @@ class PrePro_week(BaseTypePreProcessor):
         data_block = data_block.adjust_price(adjfactor = False , divide=data_block.loc(inday = 0,feature = 'preclose'))
         return data_block
     
-class PrePro_style(BaseTypePreProcessor):
+class PrePro_style(PreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'style' : BlockLoader('models', 'tushare_cne5_exp', Proj.Conf.Factor.RISK.style)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
-class PrePro_indus(BaseTypePreProcessor):
+class PrePro_indus(PreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'indus' : BlockLoader('models', 'tushare_cne5_exp', Proj.Conf.Factor.RISK.indus)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
 
-class PrePro_quality(BaseFactorPreProcessor): ...
+class PrePro_quality(FactorPreProcessor): ...
 
-class PrePro_growth(BaseFactorPreProcessor): ...
+class PrePro_growth(FactorPreProcessor): ...
 
-class PrePro_value(BaseFactorPreProcessor): ...
+class PrePro_value(FactorPreProcessor): ...
 
-class PrePro_earning(BaseFactorPreProcessor): ...
+class PrePro_earning(FactorPreProcessor): ...
 
-class PrePro_surprise(BaseFactorPreProcessor): ...
+class PrePro_surprise(FactorPreProcessor): ...
     
-class PrePro_coverage(BaseFactorPreProcessor): ...
+class PrePro_coverage(FactorPreProcessor): ...
 
-class PrePro_forecast(BaseFactorPreProcessor): ...
+class PrePro_forecast(FactorPreProcessor): ...
 
-class PrePro_adjustment(BaseFactorPreProcessor): ...
+class PrePro_adjustment(FactorPreProcessor): ...
 
-class PrePro_hf_momentum(BaseFactorPreProcessor): ...
+class PrePro_hf_momentum(FactorPreProcessor): ...
     
-class PrePro_hf_volatility(BaseFactorPreProcessor): ...
+class PrePro_hf_volatility(FactorPreProcessor): ...
 
-class PrePro_hf_correlation(BaseFactorPreProcessor): ...
+class PrePro_hf_correlation(FactorPreProcessor): ...
 
-class PrePro_hf_liquidity(BaseFactorPreProcessor): ...
+class PrePro_hf_liquidity(FactorPreProcessor): ...
 
-class PrePro_momentum(BaseFactorPreProcessor): ...
+class PrePro_momentum(FactorPreProcessor): ...
 
-class PrePro_volatility(BaseFactorPreProcessor): ...
+class PrePro_volatility(FactorPreProcessor): ...
 
-class PrePro_correlation(BaseFactorPreProcessor): ...
+class PrePro_correlation(FactorPreProcessor): ...
 
-class PrePro_liquidity(BaseFactorPreProcessor): ...
+class PrePro_liquidity(FactorPreProcessor): ...
 
-class PrePro_holding(BaseFactorPreProcessor): ...
+class PrePro_holding(FactorPreProcessor): ...
 
-class PrePro_trading(BaseFactorPreProcessor): ...
+class PrePro_trading(FactorPreProcessor): ...
+
+class PrePro_dfl2(MicellaneousPreProcessor):
+    CALCULATION_WINDOW = 250
+    MIN_SAMPLES = 90
+    FEATURE_CHUNK_SIZE = 20
+    def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+        # 1. load data into pl.DataFrame
+        start = start or self.load_start
+        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None)
+        if secid is not None:
+            df = df.filter(pl.col('secid').is_in(secid))
+        # 2. Identify the columns as features (exclude index columns)
+        feature = [c for c in df.columns if c not in ['secid', 'date']]
+
+        # 3. Apply rolling z-score partitioned over secid
+        df = df.sort(['secid', 'date'])
+        blocks = []
+        for i in range(0, len(feature), self.FEATURE_CHUNK_SIZE):
+            sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
+            sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
+                ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")) / 
+                pl.col(feat).rolling_std(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")).alias(feat)
+                for feat in sub_feature
+            ]).collect()
+            blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
+        del df
+        return DataBlock.merge(blocks , inplace = True)

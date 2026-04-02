@@ -62,9 +62,11 @@ class TsRoller:
     Decorators wrap unary or binary kernels so they receive window tensors with the window axis last
     (``dim=-1`` inside the kernel after unfold).
     """
+    suggested_chunk_size = 8e8
+    pad_first = True # whether to pad before unfold / otherwise after fold
 
-    @staticmethod
-    def unfold(x : Tensor , d : int , * , dim :int | Literal[1] = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
+    @classmethod
+    def unfold(cls , x : Tensor , d : int , * , dim :int | Literal[1] = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
         """Build sliding windows of length ``d`` along ``dim``.
 
         Args:
@@ -77,12 +79,15 @@ class TsRoller:
         Returns:
             Tensor where each position along ``dim`` holds a length-``d`` slice; invalid windows are NaN.
         """
+        if cls.pad_first:
+            pad = tuple([0] * (x.ndim - dim - 1) * 2 + [d-1,0])
+            x = F.pad(x , pad , value = nan)
         unfold = x.unfold(dim,d,1)
         valid = unfold.sum(dim = -1 , keepdim = True).isfinite()
         return unfold.nan_to_num(nan,pinf,ninf).where(valid , torch.nan)
     
-    @staticmethod
-    def fold(z : Tensor , d : int , * , dim : int = 1 , **kwargs):
+    @classmethod
+    def fold(cls ,z : Tensor , d : int , * , dim : int = 1 , **kwargs):
         """Pad and reshape rolling output back to the shape before ``unfold``.
 
         Args:
@@ -94,11 +99,13 @@ class TsRoller:
         Returns:
             Tensor with original-like layout along ``dim``.
         """
-        pad = tuple([0] * (z.ndim - dim - 1) * 2 + [d-1,0])
-        return F.pad(z , pad , value = nan).nan_to_num(nan)
+        if not cls.pad_first:
+            pad = tuple([0] * (z.ndim - dim - 1) * 2 + [d-1,0])
+            z = F.pad(z , pad , value = nan)
+        return z
 
     @staticmethod
-    def unfold_chunk_slice_x(chunk_size = 8e8):
+    def chunk_along_d0_x(chunk_size = suggested_chunk_size):
         """Decorator: run a unary rolling kernel on time chunks to limit memory (assumes ``dim=1`` slicing).
 
         Args:
@@ -112,20 +119,20 @@ class TsRoller:
             def wrapper(x : Tensor , d : int , *args , **kwargs):
                 """Run ``func`` on time chunks of ``x`` and concatenate along dim 1."""
                 chunk_num = (np.prod(x.shape) * d / chunk_size).__ceil__()
-                chunk_len = ((x.shape[1] + (chunk_num - 1) * d) / chunk_num).__ceil__()
+                chunk_len = ((x.shape[0] + (chunk_num - 1) * d) / chunk_num).__ceil__()
                 sub_rets : list[Tensor] = []
                 for i in range(chunk_num):
-                    start = max(i * chunk_len - d , 0)
+                    start = i * chunk_len
                     end   = (i + 1) * chunk_len
-                    sub_rets.append(func(x[:,start:end] , d , *args , **kwargs)[:,d if i > 0 else 0:])
-                ret = torch.concat(sub_rets , dim = 1)
+                    sub_rets.append(func(x[start:end] , d , *args , **kwargs))
+                ret = torch.concat(sub_rets , dim = 0)
                 return ret
             wrapper.__name__ = func.__name__
             return wrapper
         return decorator
 
     @staticmethod
-    def unfold_chunk_slice_xy(chunk_size = 4e8):
+    def chunk_along_d0_xy(chunk_size = suggested_chunk_size):
         """Like ``unfold_chunk_slice_x`` but for ``func(x, y, d, ...)`` (paired time slices).
 
         Args:
@@ -138,14 +145,14 @@ class TsRoller:
             """Wrap a binary rolling ``func`` for chunked time-axis execution."""
             def wrapper(x : Tensor , y : Tensor , d : int , *args , **kwargs):
                 """Run ``func`` on aligned time chunks of ``x`` and ``y``; concat on dim 1."""
-                chunk_num = (np.prod(x.shape) * d / chunk_size).__ceil__()
+                chunk_num = ((np.prod(x.shape) + np.prod(y.shape)) * d / chunk_size).__ceil__()
                 chunk_len = ((x.shape[1] + (chunk_num - 1) * d) / chunk_num).__ceil__()
                 sub_rets : list[Tensor] = []
                 for i in range(chunk_num):
-                    start = max(i * chunk_len - d , 0)
+                    start = i * chunk_len
                     end   = (i + 1) * chunk_len
-                    sub_rets.append(func(x[:,start:end] , y[:,start:end] , d , *args , **kwargs)[:,d if i > 0 else 0:])
-                ret = torch.concat(sub_rets , dim = 1)
+                    sub_rets.append(func(x[start:end] , y[start:end] , d , *args , **kwargs))
+                ret = torch.concat(sub_rets , dim = 0)
                 return ret
             wrapper.__name__ = func.__name__
             return wrapper
@@ -192,7 +199,8 @@ class TsRoller:
                 z = cls.fold(z , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 return z
             wrapper.__name__ = func.__name__
-            return wrapper
+            outer = cls.chunk_along_d0_x()(wrapper)
+            return outer
         return decorator
 
     @classmethod
@@ -216,7 +224,8 @@ class TsRoller:
                 z = cls.fold(z , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 return z
             wrapper.__name__ = func.__name__
-            return wrapper
+            outer = cls.chunk_along_d0_x()(wrapper)
+            return outer
         return decorator
 
 def kthvalue_by_topk(x: Tensor, k: int, * , dim=-1, keepdim=True , largest=False):
@@ -1431,7 +1440,7 @@ def ts_rankcorr(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     """
     return corrwith(rank_pct(x,dim=dim) , rank_pct(y,dim=dim) , dim=dim)
 
-@TsRoller.unfold_chunk_slice_x()
+@TsRoller.decor(1)
 def conditional_x(
     x : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
     dim : Literal[1] = 1, use : Literal['mean' , 'thres'] = 'mean',
@@ -1456,8 +1465,6 @@ def conditional_x(
         ValueError: If neither branch produces a group.
     """
     assert method in ['btm' , 'top' , 'diff'] , method
-    n = min(d, n)
-    x = TsRoller.unfold(x , d , dim = dim)
     groups : list[Tensor | None] = [None , None]
     if method in ['btm' , 'diff']:
         condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False)
@@ -1479,10 +1486,9 @@ def conditional_x(
         z = z[1] - z[0]
     else:
         raise ValueError(f'Invalid number of groups: {len(z)}')
-    z = TsRoller.fold(z , d , dim = dim , nan = nan)
     return z
 
-@TsRoller.unfold_chunk_slice_xy()
+@TsRoller.decor(2)
 def conditional_y_on_x(
     x : Tensor , y : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
     dim : Literal[1] = 1, use : Literal['mean' , 'thres'] = 'mean',
@@ -1508,9 +1514,6 @@ def conditional_y_on_x(
         ValueError: If group list is empty.
     """
     assert method in ['btm' , 'top' , 'diff'] , method
-    n = min(d, n)
-    x = TsRoller.unfold(x , d , dim = dim)
-    y = TsRoller.unfold(y , d , dim = dim)
     groups : list[Tensor | None] = [None , None]
     if method in ['btm' , 'diff']:
         condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False)
@@ -1533,7 +1536,6 @@ def conditional_y_on_x(
         z = z[1] - z[0]
     else:
         raise ValueError(f'Invalid number of groups: {len(z)}')
-    z = TsRoller.fold(z , d , dim = dim , nan = nan)
     return z
 
 def ts_btm_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Literal[1] = 1):

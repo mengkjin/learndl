@@ -84,14 +84,14 @@ class ModelAPI:
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        PreProcessorTask.main(predict=True)
+        PreProcessorTask.update(predict=True)
 
     @staticmethod
     def reconstruct_train_data(): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        PreProcessorTask.main(predict=False , confirm=1)
+        PreProcessorTask.update(predict=False , confirm=1)
 
     @classmethod
     def train_model(cls , module : str | None = None , short_test : bool | None = None , 

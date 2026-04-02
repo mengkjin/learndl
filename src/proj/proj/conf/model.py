@@ -1,7 +1,7 @@
 """Mutable training resume options and static model settings from configs."""
 
 from typing import Literal
-from src.proj.abc import stderr 
+from src.proj.core import stderr 
 from src.proj.env import MACHINE
 
 __all__ = ['ModelConfig' , 'Model']

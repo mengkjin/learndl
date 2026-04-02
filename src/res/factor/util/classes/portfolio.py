@@ -111,7 +111,7 @@ class Portfolio:
         """generate the weight of the portfolio as a DataBlock"""
         if not self.weight_block_completed:
             df = pd.concat([pf.df_with_date for pf in self.ports.values()] , axis = 0)
-            self.weight = DataBlock.from_dataframe(df.set_index(['secid' , 'date']))
+            self.weight = DataBlock.from_pandas(df.set_index(['secid' , 'date']))
             self.weight_block_completed = True
         return self.weight
         

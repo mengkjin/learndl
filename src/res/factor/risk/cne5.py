@@ -4,6 +4,7 @@ import statsmodels.api as sm
 from typing import Any , Literal
 
 from src.proj import Logger , Proj , CALENDAR , DB
+from src.proj.util import WarningCatcher
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
@@ -11,7 +12,7 @@ def parse_ts_input(
     ts : pd.DataFrame , 
     value_cols = ['value'] , 
     date_cols = ['date' , 'end_date'] , 
-    feat_cols = ['secid' , 'factor']
+    feat_cols = ['secid' , 'factor_name']
 ) -> tuple[np.ndarray , np.ndarray]:
     '''parse dataframe input of time series to numpy array and feature names'''
     ts_cols = np.array([*ts.index.names , *ts.columns]).astype(str)
@@ -156,7 +157,13 @@ class TuShareCNE5_Calculator:
         coef = self.coef.get(date)
         if (coef is None or coef.empty) and read: 
             coef = DB.load('models' , 'tushare_cne5_coef' , date)
-            self.coef.add(coef , date)
+            if coef is not None and not coef.empty:
+                if 'factor_name' in coef.index.names:
+                    coef = coef.reset_index(['factor_name'] , drop = False)
+                if 'factor_name' not in coef.columns:
+                    coef[f'factor_name'] = Proj.Conf.Factor.RISK.common
+                    DB.save(coef , 'models' , 'tushare_cne5_coef' , date)
+                self.coef.add(coef , date)
         if coef is None or coef.empty: 
             coef , resid = self.calc_model(date)
         return coef
@@ -403,10 +410,11 @@ class TuShareCNE5_Calculator:
         mkt_model = sm.WLS(ret[['ret']] , mkt , weights = wgt).fit()
         rsk_model = sm.WLS(mkt_model.resid , rsk , weights = wgt).fit()
 
-        coef = pd.concat([
-            pd.concat([mkt_model.params , rsk_model.params]) ,
-            pd.concat([mkt_model.tvalues , rsk_model.tvalues])] , 
-            axis = 1).rename(columns={0:'coef',1:'tvalue'})
+        coef : pd.DataFrame = pd.concat([
+            pd.concat([getattr(mkt_model , 'params' , pd.Series()) , getattr(rsk_model , 'params' , pd.Series())]) ,
+            pd.concat([getattr(mkt_model , 'tvalues' , pd.Series()) , getattr(rsk_model , 'tvalues' , pd.Series())])] , axis = 1)
+        coef.index.name = 'factor_name'
+        coef = coef.rename(columns={0:'coef',1:'tvalue'}).reset_index(drop = False)
         resid = rsk_model.resid.rename('resid').to_frame()
 
         self.coef.add(coef , date)
@@ -419,17 +427,18 @@ class TuShareCNE5_Calculator:
         dates = CALENDAR.td_trailing(date , 504)
         dates = dates[dates >= self.START_DATE]
         if len(dates) < (504 // 4): 
-            factors = self.get_coef(date,True).index.to_numpy()
-            cov = pd.DataFrame(None , index=factors , columns = factors).reset_index().rename(columns={'index':'factor_name'})
+            factors = self.get_coef(date,True)['factor_name'].to_numpy()
+            cov = pd.DataFrame(None , index=factors , columns = factors).reset_index()
             return cov
 
         coefs = pd.concat([self.get_coef(d,True).assign(date = d) for d in dates])
-        coefs = coefs.reset_index().rename(columns={'index':'factor','coef':'value'})
+        coefs = coefs.rename(columns={'coef':'value'})
         ts , feat = parse_ts_input(coefs)
-        corr = ewma_cov(ts , 504 , 180 , 0.33 , True)
-        sd   = ewma_sd(ts , 504 , 90)
+        with WarningCatcher(['invalid value encountered in divide'] , highlight_varibles = {'coefs':coefs}):
+            corr = ewma_cov(ts , 504 , 180 , 0.33 , True)
+            sd   = ewma_sd(ts , 504 , 90)
         cov  = parse_cov_output(sd[:,None].dot(sd[None]) * corr , feat)
-        cov  = cov.reset_index().rename(columns={'index':'factor_name'})
+        cov  = cov.reset_index()
         self.common_risk.add(cov , date)
         return cov
 

@@ -10,7 +10,7 @@ from typing import Any , Literal
 from src.proj import PATH , Logger , LogFile , DB , Proj , CALENDAR
 from src.proj.util import torch_load
 
-from .abc import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
+from .core import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 
 __all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'PredictionModel' , 'HiddenExtractionModel']
 

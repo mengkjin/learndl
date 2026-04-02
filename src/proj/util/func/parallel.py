@@ -1,10 +1,9 @@
 """Run many callables in-process, threaded, or multiprocessed with shared result dict."""
 
-from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from typing import Any , Callable , Literal , Mapping
+from typing import Any , Callable , Literal , Mapping , Iterable
 
-from src.proj import MACHINE , Logger 
+from src.proj import MACHINE , Logger
 
 __all__ = ['parallel' , 'FuncCall']
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 import numpy as np
 from typing import Any , Literal
@@ -53,7 +55,7 @@ def nday_kline(date : int , n_day : int) -> pd.DataFrame:
     price_feat  = ['open','close','high','low','vwap']
     volume_feat = ['amount','volume','turn_tt','turn_fl','turn_fr']
 
-    datas = [DB.load('trade_ts' , 'day' , d , date_colname='date') for d in trailing_dates]
+    datas = [DB.load('trade_ts' , 'day' , d , key_column='date') for d in trailing_dates]
     datas = [d for d in datas if not d.empty]
     if not datas: 
         return pd.DataFrame()

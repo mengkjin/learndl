@@ -9,10 +9,10 @@ from typing import Any , Callable
 from src.proj.env import MACHINE
 from src.proj.proj import Proj
 from src.proj.log import Logger
-from src.proj.calendar import CALENDAR
+from src.proj.cal import CALENDAR
 
 from .task_record import TaskRecorder
-from ..email import Email
+from ..emailer import Email
 from ..catcher import HtmlCatcher , MarkdownCatcher , WarningCatcher , CrashProtectorCatcher
 
 
