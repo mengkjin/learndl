@@ -130,10 +130,6 @@ class DataModule(BaseDataModule):
     def set_critical_dates(self):
         '''set critical dates for model date list and test full dates'''
         dates = self.datas.date_within(self.beg_date , self.end_date)
-        print(f'here is datas.date {self.datas.date}')
-        print(f'here is beg_date {self.beg_date}')
-        print(f'here is end_date {self.end_date}')
-        print(f'here is dates {dates}')
         # check if dates is align with CALENDAR
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
         calendar_dates = CALENDAR.range(min(dates) , max(dates) , 'td')
@@ -146,8 +142,7 @@ class DataModule(BaseDataModule):
             if not MACHINE.platform_coding:
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
-        print(f'here is dates {dates}')
-
+        
         if self.config.is_null_model:
             # previos month end (use calendar date)
             self.test_full_dates = dates
@@ -158,8 +153,6 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.interval]
-
-        print(f'here is test_full_dates1 {self.test_full_dates}')
 
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''

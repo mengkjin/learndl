@@ -68,11 +68,6 @@ class PreProcessor(metaclass=PreProcessorMeta):
         self.load_start = self.start_date(type)
         self.load_end   = CALENDAR.updated()
 
-        print(self.key)
-        print(self.type)
-        print(self.load_start)
-        print(self.load_end)
-
     def __repr__(self):
         return f'{self.__class__.__name__}'
 
@@ -177,7 +172,6 @@ class PreProcessor(metaclass=PreProcessorMeta):
         else:
             start , end = min(dates_for_query) , max(dates_for_query)
             self.enable_saving = False
-        print(start , end)
         block = block.slice_date(start , end)
         block_start , block_end = block.date[-1] , block.date[0]
         if not block.empty and block_end >= end and block_start <= start:
@@ -208,7 +202,6 @@ class PreProcessor(metaclass=PreProcessorMeta):
 
     def should_be_skipped(self , force_update : bool = False , indent : int = 1 , vb_level : Any = 2):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
-        print(modified_time)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
             Logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , indent = indent + 1 , vb_level = vb_level + 1)

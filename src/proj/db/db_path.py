@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from pathlib import Path
-from typing import Any , Generator , Mapping
+from typing import Any , Generator , Mapping , Iterable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
@@ -124,7 +124,7 @@ class DBPath:
         else:
             if date is None:
                 date = []
-            elif isinstance(date , int):
+            elif not isinstance(date , Iterable):
                 date = [date]
             if len(date) == 0:
                 date_str = ''

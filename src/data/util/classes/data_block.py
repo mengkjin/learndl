@@ -111,7 +111,6 @@ class DataBlock(Stock4D):
         path = cls.path_preprocess(key , type)
         if path.suffix == '.mmap':
             times = [PATH.file_modified_time(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
-            print(times)
             return min(times) if times else None
         else:
             return PATH.file_modified_time(path)
