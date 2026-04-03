@@ -103,6 +103,8 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return blocks
     
     def process_blocks(self, blocks : dict[str,DataBlock]):
+        if all([block.empty for block in blocks.values()]):
+            return DataBlock()
         np.seterr(invalid = 'ignore' , divide = 'ignore')
         data_block = self.process(blocks)
         data_block = data_block.align_feature(self.final_feat() , inplace = True)
