@@ -148,7 +148,7 @@ class ModuleData:
                 current_dates = current_block.valid_dates
                 ext_dates = CALENDAR.diffs(date , current_dates)
                 ext_block = self.load_one(key, dates = ext_dates , secid = secid)
-                self.blocks[key] = DataBlock.merge([current_dates , ext_block] , inplace = True)
+                self.blocks[key] = DataBlock.merge([current_block , ext_block] , inplace = True)
                 if i == 0:
                     assert key == 'y' , f'y must be the first key'
                     secid = self.secid_filter(self.blocks[key].secid) # use the y_secid to align all other blocks in next step

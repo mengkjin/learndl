@@ -194,9 +194,9 @@ class PreProcessor(metaclass=PreProcessorMeta):
                 extentions.append(ext) 
         if not extentions:
             return block 
-            
+
         with Logger.Timer(f'[{self.key}] blocks merging' , indent = indent , vb_level = vb_level + 2):
-            block = block.merge_others(extentions , inplace = True).slice_date(start , end)
+            block = block.merge_others(*extentions , inplace = True).slice_date(start , end)
 
         return block
 

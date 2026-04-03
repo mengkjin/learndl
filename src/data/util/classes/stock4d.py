@@ -8,7 +8,7 @@ import xarray as xr
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , Literal
+from typing import Any , Literal , Iterable
 
 from src.proj import Logger
 from src.proj.util import properties
@@ -174,7 +174,7 @@ class Stock4D:
         return date[::interval]
     
     @classmethod
-    def merge(cls , block_list , * , inplace = False , 
+    def merge(cls , block_list : Iterable[Stock4D] , * , inplace = False , 
               secid_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'union' , 
               date_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'union' , 
               inday_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'check' , 
@@ -201,9 +201,7 @@ class Stock4D:
         block.update(values = values , secid = secid , date = date , feature = feature)
         return block
 
-    def merge_others(self , others : list | Any , inplace = False):
-        if not isinstance(others , list): 
-            others = [others]
+    def merge_others(self , *others : Stock4D , inplace = False):
         self = self.merge([self , *others] , inplace = inplace)
         self = self.align_feature(self.feature , inplace = True)
         return self
