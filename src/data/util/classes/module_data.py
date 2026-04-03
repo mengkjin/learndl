@@ -121,7 +121,7 @@ class ModuleData:
         factor: factor_names DataBlock
         '''
         self.load_cache()
-        self.load_blocks()
+        self.extend_blocks()
         self.align_blocks()
         self.load_norms()
         self.save_cache()
@@ -138,22 +138,31 @@ class ModuleData:
             self.blocks , self.norms = data['blocks'] , data['norms']
             Logger.success(f'Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}' , vb_level = self.vb_level + 2)
 
-    def load_blocks(self):
+    def extend_blocks(self):
         start , end = self.date_filter.filter_start_end(*self.target_start_end())
         date = CALENDAR.range(start , end)
         secid = None
         with Logger.Timer(f'Load {self.block_title} at {start}~{end}' , indent = self.indent , vb_level = self.vb_level + 1):
             for i , key in enumerate(self.load_keys):
-                current_dates = self.blocks[key].valid_dates if key in self.blocks else np.array([],dtype = int)
-                target_dates = CALENDAR.diffs(date , current_dates)
-                block = self.load_one(key, dates = target_dates , secid = secid)
-                self.blocks[key] = DataBlock.merge([self.blocks.get(key) , block] , inplace = True)
+                current_block = self.blocks.get(key , DataBlock())
+                current_dates = current_block.valid_dates
+                ext_dates = CALENDAR.diffs(date , current_dates)
+                ext_block = self.load_one(key, dates = ext_dates , secid = secid)
+                self.blocks[key] = DataBlock.merge([current_dates , ext_block] , inplace = True)
                 if i == 0:
                     assert key == 'y' , f'y must be the first key'
-                    secid = self.secid_filter(self.blocks[key].secid)
-                    date = self.date_filter(self.blocks[key].date)
-        #self.secid_filter.filter_blocks(self.blocks)
-        #self.date_filter.filter_blocks(self.blocks)
+                    secid = self.secid_filter(self.blocks[key].secid) # use the y_secid to align all other blocks in next step
+                    date = self.date_filter(self.blocks[key].date) # use the y_date to align all other blocks in next step
+        return self
+
+    def align_blocks(self):
+        if len(self.blocks) <= 1:
+            return self
+        with Logger.Timer(f'Align {self.block_title}' , indent = self.indent , vb_level = self.vb_level + 1):
+            DataBlock.blocks_align(self.blocks , vb_level = self.vb_level + 2)
+        index_lens = [block.shape[:2] for block in self.blocks.values()]
+        if index_lens:
+            assert all([lens == index_lens[0] for lens in index_lens]) , f'{[(name,block.shape) for name,block in self.blocks.items()]}'
         return self
 
     def load_one(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
@@ -172,16 +181,6 @@ class ModuleData:
     def load_special_block(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
         block = SpecialDataSet.load(key, dates = dates , secid = secid, dtype = self.dtype , vb_level = self.vb_level + 2)
         return block
-
-    def align_blocks(self):
-        if len(self.blocks) <= 1:
-            return self
-        with Logger.Timer(f'Align {self.block_title}' , indent = self.indent , vb_level = self.vb_level + 1):
-            DataBlock.blocks_align(self.blocks , vb_level = self.vb_level + 2)
-        index_lens = [block.shape[:2] for block in self.blocks.values()]
-        if index_lens:
-            assert all([lens == index_lens[0] for lens in index_lens]) , f'{[(name,block.shape) for name,block in self.blocks.items()]}'
-        return self
 
     def load_norms(self):
         if self.norms:
@@ -243,16 +242,17 @@ class SecidFilter:
     def __init__(self , value : str | None):
         if value is None:
             self.filter = self.none
-        elif value.startswith('random.'):
-            self.filter = partial(self.random , num = int(value.split('.')[1]))
-        elif value.startswith('first.'):
-            self.filter = partial(self.first , num = int(value.split('.')[1]))
-        elif value in ['csi300' , 'csi500' , 'csi1000']:
-            self.filter = partial(self.benchmark , bm = value)
         else:
-            raise ValueError(f'input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
-        Logger.alert1(f'filtering secid for ModuleData: {value}')
-
+            Logger.alert1(f'filtering secid for ModuleData: {value}')
+            if value.startswith('random.'):
+                self.filter = partial(self.random , num = int(value.split('.')[1]))
+            elif value.startswith('first.'):
+                self.filter = partial(self.first , num = int(value.split('.')[1]))
+            elif value in ['csi300' , 'csi500' , 'csi1000']:
+                self.filter = partial(self.benchmark , bm = value)
+            else:
+                raise ValueError(f'input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
+        
     def __call__(self , secid : np.ndarray) -> np.ndarray:
         return self.filter(secid)
 
@@ -292,13 +292,14 @@ class DateFilter:
         if value is None:
             self.filter = self.none
         else:
+            Logger.alert1(f'filtering date for ModuleData: {value}')
+
             value = value.strip().replace('-', '~').replace(' ', '~')
             dates = value.split('~')
             assert len(dates) == 2 , f'input.filter.date {value} is not valid , should be yyyyMMdd~yyyyMMdd'
             self.filter = partial(self.slice , start = int(dates[0]) if dates[0] else None , end = int(dates[1]) if dates[1] else None)
 
-        Logger.alert1(f'filtering date for ModuleData: {value}')
-
+        
     def __call__(self , date : np.ndarray) -> np.ndarray:
         return self.filter(date)
 

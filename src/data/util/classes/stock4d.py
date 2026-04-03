@@ -132,7 +132,8 @@ class Stock4D:
 
     @property
     def valid_dates(self):
-        assert self.initiated , self
+        if self.empty:
+            return np.array([],dtype = int)
         return self.date[self.values.isfinite().any(dim = (0,2,3)).cpu().detach().numpy()] if self.initiated else np.array([],dtype = int)
 
     def set_flags(self , **kwargs):

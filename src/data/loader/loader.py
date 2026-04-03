@@ -102,7 +102,7 @@ class FactorLoader(BlockLoader):
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         if not [fac for fac in factors if not fac.empty]:
-            Logger.alert1(f'no factors found for {self.names}')
+            Logger.alert1(f'no factors found for {self.names} within {start} - {end}')
             return DataBlock()
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
             df = pd.concat([fac for fac in factors if not fac.empty])
@@ -143,7 +143,7 @@ class FactorCategory1Loader(BlockLoader):
                 factors.append(df)
         factors = [fac for fac in factors if not fac.empty]
         if not factors:
-            Logger.alert1(f'no factors found for {self.category0} , {self.category1}')
+            Logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}')
             return DataBlock()
         with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
             df = pd.concat([fac for fac in factors if not fac.empty])
