@@ -173,9 +173,10 @@ class PreProcessor(metaclass=PreProcessorMeta):
             start , end = min(dates_for_query) , max(dates_for_query)
             self.enable_saving = False
         block = block.slice_date(start , end)
-        block_start , block_end = block.date[-1] , block.date[0]
-        if not block.empty and block_end >= end and block_start <= start:
-            return block
+        if not block.empty:
+            block_start , block_end = block.date[-1] , block.date[0]
+            if block_end >= end and block_start <= start:
+                return block
 
         span_tuples : list[tuple[int,int]] = []
         block_start , block_end = block.first_valid_date , block.last_valid_date
