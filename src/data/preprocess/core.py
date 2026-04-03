@@ -94,11 +94,16 @@ class PreProcessor(metaclass=PreProcessorMeta):
         
     def load_blocks(self , start = None , end = None , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 1 , **kwargs):
         loaders = self.block_loaders()
+        
         blocks : dict[str,DataBlock] = {}
         vb_level = Proj.vb(vb_level)
         date = CALENDAR.range(start , end)
+        print(f'loading {self.key} with dates {date}')
         for src_key , loader in loaders.items():
-            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align_secid_date(secid , date , inplace = True)
+            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs)
+            print(f'loading {self.key} with dates {blocks[src_key].shape}')
+            blocks[src_key] = blocks[src_key].align_secid_date(secid , date , inplace = True)
+            print(f'aligned {self.key} with dates {blocks[src_key].shape}')
             secid = blocks[src_key].secid
         return blocks
     
@@ -179,6 +184,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
             block_start , block_end = block.date[-1] , block.date[0]
             if block_end >= end and block_start <= start:
                 return block
+            print(f'loading {self.key} with dates {block_start} ~ {block_end} <= {start} ~ {end}')
 
         span_tuples : list[tuple[int,int]] = []
         block_start , block_end = block.first_valid_date , block.last_valid_date
@@ -192,6 +198,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         extentions : list[DataBlock] = []
         for span_start , span_end in span_tuples:
             span_load_start = CALENDAR.td(span_start , -self.CALCULATION_WINDOW + 1).td
+            print(f'loading {self.key} with dates {span_load_start} ~ {span_end}')
             ext = self.pre_process(span_load_start , span_end , secid = secid, indent = indent + 1 , vb_level = vb_level + 1).slice_date(span_start , span_end)
             if not ext.empty:
                 extentions.append(ext) 

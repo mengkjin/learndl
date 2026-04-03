@@ -169,6 +169,7 @@ class ModuleData:
         if len(dates) == 0:
             return DataBlock()
         if key in self.PrePros.keys():
+            print(f'loading {key} with dates {dates}')
             return self.load_preprocess_block(key, dates = dates, secid = secid, vb_level = self.vb_level + 2 , **kwargs)
         elif key in SpecialDataSet.candidates:
             return self.load_special_block(key, dates = dates, secid = secid, vb_level = self.vb_level + 2 , **kwargs)
