@@ -110,17 +110,21 @@ class PrePro_60m(TradePreProcessor):
     
 class PrePro_week(TradePreProcessor):
     WEEKDAYS = 5
+    
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.final_feat()])}
-    def load_blocks(self , start = None , end = None , secid_align = None , date_align = None , indent = 0 , vb_level : Any = 1 , **kwargs):
+    
+    def load_blocks(self , start = None , end = None , secid = None , indent = 0 , vb_level : Any = 1 , **kwargs):
         vb_level = Proj.vb(vb_level)
         if start is not None and start < 0: 
             start = 2 * start
+        elif start is not None and start > 0:
+            start = CALENDAR.td(start , -self.WEEKDAYS + 1).td
         blocks : dict[str,DataBlock] = {}
+        date = CALENDAR.range(start , end)
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align(secid_align , date_align , inplace = True)
-            secid_align = blocks[src_key].secid
-            date_align  = blocks[src_key].date
+            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align_secid_date(secid , date , inplace = True)
+            secid = blocks[src_key].secid
         return blocks
     
     def process(self , blocks): 
