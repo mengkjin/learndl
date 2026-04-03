@@ -166,6 +166,8 @@ class ModuleData:
         return self
 
     def load_one(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        if len(dates) == 0:
+            return DataBlock()
         if key in self.PrePros.keys():
             return self.load_preprocess_block(key, dates = dates, secid = secid, vb_level = self.vb_level + 2 , **kwargs)
         elif key in SpecialDataSet.candidates:
