@@ -37,6 +37,7 @@ class PrePro_y(TradePreProcessor):
                 'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Proj.Conf.Factor.RISK.indus, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
+        print(blocks['y'].shape , blocks['risk'].shape)
         data_block , model_exp = blocks['y'] , blocks['risk']
         indus_size = model_exp.values[...,:]
         x = torch.Tensor(indus_size).squeeze(2)
