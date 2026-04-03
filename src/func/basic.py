@@ -275,10 +275,8 @@ def index_stack(idxs , min_value = None , max_value = None) -> np.ndarray:
             new_idx = new_idx if idx is None else idx
         elif np.isin(idx , new_idx).all():
             ...
-        elif not np.isin(new_idx , idx).any():
-            new_idx = np.concatenate([new_idx , idx])
         else:
-            raise ValueError(f'idx {idx} is not a subset of new_idx {new_idx} , index_stack inputs must be identical or completely distinct index')
+            new_idx = np.concatenate([new_idx , [i for i in idx if i not in new_idx]])
     return trim_index(new_idx , min_value , max_value)
 
 def index_check(idxs , min_value = None , max_value = None) -> np.ndarray:

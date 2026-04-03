@@ -134,11 +134,15 @@ class DataBlock(Stock4D):
             return None
 
     def ffill(self , if_fill : bool = True):
+        if self.empty:
+            return self
         if if_fill:
             self.values = forward_fillna(self.values , axis = 1)
         return self
 
     def fillna(self , value : Any = 0):
+        if self.empty:
+            return self
         if isinstance(self.values , torch.Tensor):
             self.values = self.values.nan_to_num(value)
         elif isinstance(self.values , np.ndarray):
@@ -199,7 +203,7 @@ class DataBlock(Stock4D):
     
     def adjust_volume(self , multiply = None , divide = None , 
                       vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr']):
-        if self.volume_adjusted: 
+        if self.volume_adjusted or self.empty: 
             return self
         if multiply is None and divide is None: 
             return self
@@ -219,7 +223,7 @@ class DataBlock(Stock4D):
         return self
     
     def mask_values(self , mask : dict , **kwargs):
-        if not mask: 
+        if not mask or self.empty: 
             return self
         mask_pos = torch.full_like(self.values , fill_value=False , dtype=torch.bool)
         if mask_list_dt := mask.get('list_dt'):
@@ -442,6 +446,8 @@ class DataBlock(Stock4D):
         """
         save the block to PATH.block
         """
+        if self.empty:
+            return
         flags = self.flags
         if flags.get('category') == 'raw':
             assert not self.price_adjusted and not self.volume_adjusted , f'price and volume must not be adjusted before saving!'

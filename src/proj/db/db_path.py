@@ -127,7 +127,7 @@ class DBPath:
             elif not isinstance(date , Iterable):
                 date = [date]
             if len(date) == 0:
-                date_str = ''
+                date_str = 'nodate'
             elif len(date) == 1:
                 date_str = str(date[0])
             else:

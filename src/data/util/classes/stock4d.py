@@ -110,7 +110,7 @@ class Stock4D:
         return None if self.values is None else self.values.ndim
     @property
     def empty(self): 
-        return properties.empty(self.values)
+        return not self.initiated or properties.empty(self.values)
     @property
     def max_date(self): 
         return properties.max_of_date(self.date)
@@ -208,10 +208,13 @@ class Stock4D:
         return self
     
     def to(self , *args , **kwargs):
+        if not self.initiated:
+            return self
         self.values = self.values.to(*args , **kwargs)
         return self
     
-    def copy(self): return deepcopy(self)
+    def copy(self): 
+        return deepcopy(self)
 
     def align(self , secid = None , date = None , feature = None , inplace = False):
         if not self.initiated:
@@ -221,6 +224,8 @@ class Stock4D:
         return blk
 
     def subset(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
+        if not self.initiated:  
+            return self
         values  = self.loc(secid , date , feature , inday , fillna)
         secid = self.secid if secid is None else secid
         date = self.date if date is None else date
@@ -308,6 +313,8 @@ class Stock4D:
         return self
         
     def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
+        if not self.initiated:
+            return self
         assert new_value.shape == self.shape[:-1] , (new_value.shape , self.shape[:-1])
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = torch.concatenate([self.values,torch.Tensor(new_value)],dim=-1)
@@ -316,7 +323,7 @@ class Stock4D:
         return self
     
     def rename_feature(self , rename_dict : dict):
-        if len(rename_dict) == 0: 
+        if not self.initiated or len(rename_dict) == 0: 
             return self
         feature = self.feature.astype(object)
         for k,v in rename_dict.items(): 

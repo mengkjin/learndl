@@ -389,6 +389,8 @@ def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = 
         assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
         dates = db_path.dates(start , end , use_alt = use_alt)
     paths = {int(date):db_path.path(date , use_alt = use_alt) for date in dates}
+    if not paths:
+        return pd.DataFrame()
     df = load_df(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator)
     df = dfHandler.load_process_pandas(df , syntax = db_path.syntax(dates) , indent = indent , vb_level = vb_level , **kwargs)
     if fill_datavendor:
