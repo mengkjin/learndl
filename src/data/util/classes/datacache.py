@@ -1,8 +1,10 @@
 """Data Cache for All Data Types (Must be included in DataCache.possible_types)"""
+from __future__ import annotations
 
 import shutil , threading , torch , json
 
 from typing import Any
+from pathlib import Path
 
 from src.proj import PATH , Logger
 from src.proj.util import torch_load
@@ -55,11 +57,11 @@ class DataCache:
             with self._get_lock(self.key):
                 metadata = self.load_metadata()
                 data = torch_load(self.path.joinpath('data.pt'))
-        except ModuleNotFoundError:
+        except ModuleNotFoundError as e:
             '''can be caused by different package version'''
-            Logger.alert1(f'Loading {self.type.title()} CacheData, Try \'{self.path.joinpath('data.pt')}\', Incompatible!')
-            data = None
-            metadata = {}
+            Logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!')
+            data , metadata = None , {}
+            self._remove_cache_file(self.key)
         except Exception as e:
             Logger.error(f'Failed to load {self.type.title()} CacheData: {e}')
             Logger.print_exc(e)
@@ -148,23 +150,38 @@ class DataCache:
         metadata = cls._all_metadata()
         with cls._get_lock():
             metadata[key].update(kwargs)
-            try:
-                _ = json.dumps(metadata)
-                PATH.dump_json(metadata , cls.metadata_file , overwrite = True)
-            except Exception as e:
-                Logger.error(f'Failed to update metadata: {e}')
-                Logger.print_exc(e)
+            if not cls._try_save_metadata(metadata , cls.metadata_file):
                 return False
             
         with cls._get_lock(key):
-            try:
-                _ = json.dumps(metadata[key])
-                PATH.dump_json(metadata , cls._get_meta_file(key) , overwrite = True)
-            except Exception as e:
-                Logger.error(f'Failed to update metadata: {e}')
-                Logger.print_exc(e)
-                return False
-        return True
+            return cls._try_save_metadata(metadata[key] , cls._get_meta_file(key))
+
+    @classmethod
+    def _try_save_metadata(cls , metadata : dict[str, Any] , path : str | Path) -> bool:
+        """Remove the metadata for a specific key"""
+        try:
+            _ = json.dumps(metadata)
+            PATH.dump_json(metadata , path , overwrite = True)
+            return True
+        except Exception as e:
+            Logger.error(f'Failed to update metadata: {e}')
+            Logger.print_exc(e)
+            return False
+
+
+    @classmethod
+    def _remove_cache_file(cls , key : str | None = None):
+        """Purge the data for a specific key"""
+        if key is None:
+            return
+        if not cls._get_meta_file(key).exists():
+            return
+        PATH.datacache.joinpath(key , 'data.pt').unlink()
+        PATH.datacache.joinpath(key , 'metadata.json').unlink()
+        metadata = cls._all_metadata()
+        with cls._get_lock():
+            metadata.pop(key)
+            cls._try_save_metadata(metadata , cls.metadata_file)
 
     @classmethod
     def purge_all(cls , confirm : bool = False):

@@ -9,11 +9,12 @@ import time
 import subprocess
 from typing import Literal
 
-from terminal_opener.util import process
-import terminal_opener.preference as preference
 
 from .cli import CmuxCli
 from .verify import CmuxVerifier
+from ...util import process
+from ... import preference
+
 
 
 """rename-tab [--workspace <id|ref>] [--tab <id|ref>] [--surface <id|ref>] <title>"""

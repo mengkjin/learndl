@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from terminal_opener.preference import DISCOVER_WAIT_TIMEOUT , DISCOVER_WAIT_INTERVAL
+from ..preference import DISCOVER_WAIT_TIMEOUT , DISCOVER_WAIT_INTERVAL
 
 class ProcessDiscovery:
     """
@@ -154,7 +154,7 @@ class ProcessDiscovery:
         """
         Poll :meth:`find_running_instances` until at least one PID is found or class timeout elapses.
 
-        Use after :meth:`terminal_opener.shell.Shell.run`: the interpreter in the new terminal
+        Use after :meth:`shell_opener.shell.Shell.run`: the interpreter in the new terminal
         usually appears after the call returns.
         """
         deadline = time.monotonic() + DISCOVER_WAIT_TIMEOUT

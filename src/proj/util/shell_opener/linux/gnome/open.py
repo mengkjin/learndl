@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import shlex
 
-from terminal_opener.preference import LINUX_GNOME_NEW
-from terminal_opener.util import process
-
 from .verify import GnomeTerminalVerifier
-
+from ...preference import LINUX_GNOME_NEW
+from ...util import process
 
 class GnomeTerminalOpener:
     @classmethod

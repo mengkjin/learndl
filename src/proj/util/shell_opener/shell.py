@@ -9,8 +9,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Optional , Any
 
-from terminal_opener.util import process , compose_with_pause , format_python_command
+from .util import process , compose_with_pause , format_python_command
 from .preference import PAUSE_WHEN_DONE
+from .macos import open_in_macos
+from .windows import open_for_windows
+from .linux import open_in_linux
 
 class Shell:
     """
@@ -64,22 +67,18 @@ class Shell:
     ) -> None:
         """
         Open a terminal and run ``cmd`` (shell line, e.g. output of
-        :func:`terminal_opener.commands.format_python_command`).
+        :func:`shell_opener.commands.format_python_command`).
 
         ``pause_when_done`` defaults to ``True`` so the window stays open for review.
         """
         workdir = cls._resolve_cwd(cwd, cls.default_cwd)
         line = compose_with_pause(cmd, pause_when_done=pause_when_done)
-        # print(line)
         system = platform.system()
         if system == "Darwin":
-            from terminal_opener.macos import open_in_macos
             open_in_macos(workdir, line , option=option)
         elif system == "Windows":
-            from terminal_opener.windows import open_for_windows
             open_for_windows(workdir, line , option=option)
         elif system == "Linux":
-            from terminal_opener.linux import open_in_linux
             open_in_linux(workdir, line , option=option)
         else:
             raise TypeError(f"Unsupported platform {system}")

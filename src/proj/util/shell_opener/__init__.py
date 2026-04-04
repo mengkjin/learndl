@@ -7,7 +7,7 @@ Public surface for embedding:
 - :func:`format_python_command` — build a shell line to run a ``.py`` file.
 - :class:`ProcessDiscovery` — find / wait for Python PIDs by script or ``TASK_ID`` (requires ``psutil``).
 
-Platform-specific implementations live under ``terminal_opener.macos``, ``.windows``, and ``.linux``.
+Platform-specific implementations live under ``shell_opener.macos``, ``.windows``, and ``.linux``.
 """
 
 from __future__ import annotations

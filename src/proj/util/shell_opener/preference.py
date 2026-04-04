@@ -1,19 +1,5 @@
-from pathlib import Path
-
-import yaml
-
-_base_path_of_terminal = 'learndl'
-
-def get_root_path():
-    path = Path(__file__).resolve()
-    while path.name != _base_path_of_terminal:
-        path = path.parent
-    return path
-
-ROOT = get_root_path()
-
-with ROOT.joinpath("configs" , "preference" , "terminal_opener.yaml").open("r", encoding="utf-8") as f:
-    preference = yaml.safe_load(f)
+from src.proj.env import MACHINE
+preference = MACHINE.configs("preference" , "shell_opener")
 
 PAUSE_WHEN_DONE : bool = preference["PAUSE_WHEN_DONE"]
 

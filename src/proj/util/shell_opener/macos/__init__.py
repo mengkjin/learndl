@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import terminal_opener.preference as preference
+
 from typing import Literal
 
 from .cmux import CmuxOpener
 from .ghostty import GhosttyOpener
 from .terminal_app import TerminalAppOpener
+from ..preference import MACOS_OPTIONS
 
 __all__ = ["open_in_macos"]
 
@@ -20,12 +21,12 @@ def open_in_macos(
     """
     Open ``command`` in a visible terminal.
 
-    Backend is ``terminal_opener.preference.MACOS_OPTIONS`` by order:
+    Backend is ``shell_opener.preference.MACOS_OPTIONS`` by order:
     ``\"cmux\"`` (async IPC + fallbacks), ``\"ghostty\"`` (Ghostty.app), or
     ``None`` / other → Terminal.app.
     """
     if option is None:
-        option = preference.MACOS_OPTIONS[0]
+        option = MACOS_OPTIONS[0] # type: ignore
     match option:
         case "cmux":
             CmuxOpener.run(cwd, command)

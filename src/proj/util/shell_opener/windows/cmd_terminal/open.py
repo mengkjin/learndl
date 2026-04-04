@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from terminal_opener.util.process import popen_detached_shell_windows
+from ...util.process import popen_detached_shell_windows
 from .verify import CmdTerminalVerifier
 
 def _cmd_quoted(s: str) -> str:

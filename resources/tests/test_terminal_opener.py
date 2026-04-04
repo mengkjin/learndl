@@ -13,8 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from terminal_opener import ProcessDiscovery, Shell
-from terminal_opener.preference import ROOT
+from src.proj.util.shell_opener import ProcessDiscovery, Shell
 
 temp_dir = tempfile.mkdtemp()
 

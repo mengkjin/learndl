@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shlex
 
-from terminal_opener.util.process import popen_detached
+from ...util.process import popen_detached
 
 from .verify import GhosttyVerifier
 
