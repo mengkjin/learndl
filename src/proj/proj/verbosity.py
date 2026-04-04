@@ -1,12 +1,42 @@
 """Global verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers."""
+from __future__ import annotations
 
 from typing import Any , Literal
-from src.proj.core import stderr
+from src.proj.core import stderr , singleton
 from .core import ProjectPreference
 
 __all__ = ['Verbosity']
 
+class WithVbLevel:
+    """Context manager: set ``VB.vb_level`` for the block."""
 
+    def __init__(self , vb_level : int | None | Literal['max','min','never','always'] | Any):
+        self.VB = Verbosity()
+        self.vb_level = self.VB(vb_level)
+
+    def __enter__(self):
+        self.VB.set_vb_level(self.vb_level)
+        return self
+
+    def __exit__(self , exc_type , exc_value , exc_traceback):
+        self.VB.set_vb_level(None)
+
+class WithVB:
+    """Context manager: temporarily replace global ``vb`` and restore on exit."""
+
+    def __init__(self , vb : int | None | Literal['max','min','never','always'] | Any):
+        self.VB = Verbosity()
+        self.vb = self.VB(vb)
+        self.vb_prev : int | None = None
+
+    def __enter__(self):
+        self.vb_prev = self.VB.vb
+        self.VB.set_vb(self.vb)
+        return self
+
+    def __exit__(self , exc_type , exc_value , exc_traceback):
+        self.VB.set_vb(self.vb_prev)
+@singleton
 class Verbosity:
     """
     Verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers.
@@ -21,17 +51,16 @@ class Verbosity:
     - ``is_max_level``: check if ``vb`` is at or above ``max``
     
     """
-    max = ProjectPreference('vb_max' , 10)
-    min = ProjectPreference('vb_min' , 0)
-    never = ProjectPreference('vb_never' , 99)
-    always = ProjectPreference('vb_always' , -99)
-    callback = ProjectPreference('vb_level_callback' , 10)
+    max = ProjectPreference.get('vb_max' , 10)
+    min = ProjectPreference.get('vb_min' , 0)
+    never = ProjectPreference.get('vb_never' , 99)
+    always = ProjectPreference.get('vb_always' , -99)
+    callback = ProjectPreference.get('vb_level_callback' , 10)
 
-    def __init__(self):
-        """Load ``vb`` from project settings; thresholds come from the same config."""
-        assert self.never > self.max > self.min > self.always , (self.never , self.max , self.min , self.always)
-        self._vb : int = ProjectPreference.get('vb' , 1)
-        self._vb_level : int | None = None
+    assert never > max > min > always , (never , max , min , always)
+
+    WithVbLevel = WithVbLevel
+    WithVB = WithVB
         
     def __repr__(self):
         return f'{self.vb}'
@@ -54,11 +83,15 @@ class Verbosity:
     @property
     def vb(self) -> int:
         """Current global verbosity (clamped to ``min``..``max`` when set)."""
+        if not hasattr(self , '_vb'):
+            self._vb = ProjectPreference.get('vb' , 1)
         return self._vb
 
     @property
     def vb_level(self) -> int | None:
         """Per-context override set by ``WithVbLevel``; ``None`` means use ``vb`` only."""
+        if not hasattr(self , '_vb_level'):
+            self._vb_level = None
         return self._vb_level
 
     def set_vb(self , value : int | None = None):
@@ -77,37 +110,9 @@ class Verbosity:
         """Set temporary per-thread logical level used by ``Logger`` wrappers."""
         self._vb_level = value
 
-    class WithVbLevel:
-        """Context manager: set ``VB.vb_level`` for the block."""
-
-        def __init__(self , vb_level : int | None | Literal['max','min','never','always'] | Any):
-            self.vb_level = VB(vb_level)
-
-        def __enter__(self):
-            VB.set_vb_level(self.vb_level)
-            return self
-
-        def __exit__(self , exc_type , exc_value , exc_traceback):
-            VB.set_vb_level(None)
-
-    class WithVB:
-        """Context manager: temporarily replace global ``vb`` and restore on exit."""
-
-        def __init__(self , vb : int | None | Literal['max','min','never','always'] | Any):
-            self.vb = VB(vb)
-            self.vb_prev : int | None = None
-
-        def __enter__(self):
-            self.vb_prev = VB.vb
-            VB.set_vb(self.vb)
-            return self
-
-        def __exit__(self , exc_type , exc_value , exc_traceback):
-            VB.set_vb(self.vb_prev)
-
     def ignore(self , vb_level : int | Literal['max','min','never','always'] | Any = 1):
         """Return True if output at ``vb_level`` should be suppressed given current ``vb``."""
-        level = VB(vb_level)
+        level = self(vb_level)
         if level is None:
             return False
         else:
@@ -132,5 +137,3 @@ class Verbosity:
         return self.vb >= other
     def __bool__(self):
         return self.vb is not None
-
-VB = Verbosity()

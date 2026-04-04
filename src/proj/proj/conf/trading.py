@@ -1,11 +1,12 @@
 """Trading and backtest portfolio lists from ``setting/trading_port``."""
 
+from __future__ import annotations
 from src.proj.env import MACHINE
+from src.proj.core import singleton
 
-__all__ = ['TradingPortConfig' , 'TradingPort']
+__all__ = ['TradingPortConfig']
 
-_trading_port_settings = MACHINE.configs('setting' , 'trading_port')
-
+@singleton
 class TradingPortConfig:
     """
     Thin view over YAML-loaded trading port metadata:
@@ -13,18 +14,17 @@ class TradingPortConfig:
     - tracking_ports [dict[str , dict]]: trading ports
     - backtest_ports [dict[str , dict]]: backtest ports
     """
+    _settings = MACHINE.configs('setting' , 'trading_port')
 
     @property
     def focused_ports(self) -> list[str]:
         """focused ports"""
-        return _trading_port_settings['focused_ports']
+        return self._settings['focused_ports']
     @property
     def tracking_ports(self) -> dict[str , dict]:
         """trading ports"""
-        return _trading_port_settings['trading_ports']
+        return self._settings['trading_ports']
     @property
     def backtest_ports(self) -> dict[str , dict]:
         """backtest ports"""
-        return _trading_port_settings['backtest_ports']
-
-TradingPort = TradingPortConfig()
+        return self._settings['backtest_ports']

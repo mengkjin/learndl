@@ -5,6 +5,7 @@ Uses ``BasicCalendar`` (``BC``) for fast ndarray-backed lookups. Prefer ``CALEND
 from this package for all research code.
 """
 
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 import torch
@@ -12,10 +13,15 @@ import torch
 from datetime import datetime, timedelta, time
 from typing import Any, Literal, Union , Sequence
 
+from src.proj.core import NoInstanceMeta
 import src.proj.db as DB
 
-from .basic import BC, BJ_TZ
+from .basic import BasicCalendar , BJ_TZ
 from .trade_date import TradeDate
+
+__all__ = ['CALENDAR', 'Dates']
+
+BC = BasicCalendar()
 
 DateType = Union[int, TradeDate]
 DateTypeWithNone = Union[int, TradeDate, None]
@@ -48,7 +54,7 @@ def get_cds(dates: DatesType) -> np.ndarray:
         dates = dates.cpu().numpy()
     return dates.astype(int)
 
-class CALENDAR:
+class CALENDAR(metaclass=NoInstanceMeta):
     """Static tools for trading date and natural date conversion, interval truncation, quarter end, etc."""
 
     ME = pd.date_range(start="1997-01-01", end="2099-12-31", freq="ME").strftime("%Y%m%d").to_numpy(int)

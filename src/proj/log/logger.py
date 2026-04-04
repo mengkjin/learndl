@@ -380,7 +380,7 @@ class Logger:
                 Proj.print_disk_info()
 
             try:
-                raise Exception('test exception')
+                raise Exception('just for test, no worry')
             except Exception as e:
                 cls.print_exc(e)
                 cls.print_traceback_stack()

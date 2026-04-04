@@ -1,3 +1,9 @@
+"""
+Optimized portfolio creator for factor portfolio optimization.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal , Any
 

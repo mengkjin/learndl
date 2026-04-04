@@ -1,40 +1,33 @@
 """Non-instantiable project facade: config namespaces, verbosity, logging, and shared instances."""
-
+from __future__ import annotations
 from typing import Any
 
 from src.proj.env import MACHINE
-from src.proj.core import Silence
+from src.proj.core import Silence , NoInstanceMeta
 
 from .core import ProjectPreference
-from .verbosity import VB
-from .files import LOG_WRITER , EMAIL_ATTACHMENTS , EXIT_FILES
-from .ins import INSTANCES
-from . import conf as Conf
+from .verbosity import Verbosity
+from .files import LogWriterFile , UniqueFileList
+from .ins import InstanceCollection
+from .conf import Conf
 
 __all__ = ['Proj']
 
-class ProjMeta(type):
+class ProjMeta(NoInstanceMeta):
     """Metaclass for ``Proj``: blocks direct instantiation and exposes module-level descriptors."""
-
-    log_writer = LOG_WRITER
+    log_writer = LogWriterFile()
     debug_mode = ProjectPreference('debug_mode')
     show_vb_level = ProjectPreference('show_vb_level')
-
-    def __call__(cls, *args, **kwargs):
-        raise Exception(f'Class {cls.__name__} should not be called to create instance')
 
 
 class Proj(metaclass=ProjMeta):
     """Static entry point: ``Conf``, ``vb``, ``instances``, paths to log writer and file lists."""
     Conf = Conf
-    vb = VB
+    vb = Verbosity()
     silence = Silence()
-    instances = INSTANCES
-    email_attachments = EMAIL_ATTACHMENTS
-    exit_files = EXIT_FILES
-
-    def __new__(cls , *args , **kwargs):
-        raise Exception(f'{cls.__name__} cannot be instantiated')
+    instances = InstanceCollection()
+    email_attachments = UniqueFileList('email_attachments')
+    exit_files = UniqueFileList('exit_files')
 
     @classmethod
     def info(cls) -> dict[str, Any]:

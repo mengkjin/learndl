@@ -1,20 +1,21 @@
 """
 Basic calendar tools: build and query the underlying calendar table.
 """
-
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 
 from zoneinfo import ZoneInfo
-from datetime import datetime
 
+from src.proj.core import singleton
 from src.proj.env import MACHINE
 import src.proj.db as DB
 
 #: Shanghai time zone, used by CALENDAR , TradeDate etc.
 BJ_TZ = ZoneInfo("Asia/Shanghai")
-LOCAL_TZ = datetime.now().astimezone().tzinfo
+LOCAL_TZ = MACHINE.timezone
 
+@singleton
 class BasicCalendar:
     """The full calendar built from information_ts/calendar and configuration; keep 'full'/'cal'/'trd' DataFrame for reference."""
 
@@ -133,7 +134,3 @@ class BasicCalendar:
             return np.array([], dtype=np.int64)
         start = max(0, last - n + 1)
         return c[start : last + 1].astype(np.int64, copy=False)
-
-
-# Module level singleton BasicCalendar
-BC = BasicCalendar()

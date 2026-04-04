@@ -1,5 +1,9 @@
 """Lazy accessors for optional global objects (trainer, portfolio account, factor engine)."""
 
+from __future__ import annotations
+
+from src.proj.core import singleton
+
 class _Trainer:
     """Descriptor returning ``BaseTrainer._instance``."""
     def __get__(self , instance, owner):
@@ -17,6 +21,7 @@ class _Factor:
         from src.res.factor.util import StockFactor
         return StockFactor._factor
 
+@singleton
 class InstanceCollection:
     """
     Holds optional instances used across research code.
@@ -45,5 +50,3 @@ class InstanceCollection:
             if obj is not None:
                 status[name] = obj
         return status
-
-INSTANCES = InstanceCollection()

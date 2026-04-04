@@ -40,7 +40,7 @@ class Shell:
         return str(Path.cwd().resolve())
 
     @classmethod
-    def native(
+    def run(
         cls,
         cmd: str | Sequence[str],
         *,
@@ -57,7 +57,7 @@ class Shell:
         return process.spawn_native(cmd, cwd=workdir, env=env)
 
     @classmethod
-    def run(
+    def open(
         cls,
         cmd: str,
         *,
@@ -84,12 +84,12 @@ class Shell:
             raise TypeError(f"Unsupported platform {system}")
 
     @classmethod
-    def run_python(
-        cls, script: str | Path, * , 
+    def run_py(
+        cls, py_script: str | Path, * , 
         py_path: str | None = None, args: Sequence[str] | None = None, kwargs : dict | None = None,         
         pause_when_done: bool = PAUSE_WHEN_DONE ,
         cwd: Optional[Path | str] = None ,
         option: Any | None = None
     ) -> None:
-        cmd = format_python_command(script, args=args , kwargs=kwargs , py_path=py_path)
-        cls.run(cmd, pause_when_done = pause_when_done, cwd = cwd, option = option)
+        cmd = format_python_command(py_script, args=args , kwargs=kwargs , py_path=py_path)
+        cls.open(cmd, pause_when_done = pause_when_done, cwd = cwd, option = option)

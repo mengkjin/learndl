@@ -1,7 +1,5 @@
 """Shared utilities: HTTP, SQLite, plotting, scripts, proxies, email, and catchers."""
 
-from src.proj.core.singleton import SingletonABCMeta
-
 from .basic import *
 from .func import *
 

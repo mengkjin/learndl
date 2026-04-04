@@ -3,7 +3,9 @@ Self defined TradeDate class, used to represent a date and its closest trading d
 """
 import numpy as np
 from typing import Any
-from .basic import BC
+from .basic import BasicCalendar
+
+BC = BasicCalendar()
 
 class TradeDate:
     """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""

@@ -1,6 +1,6 @@
 """Root package for project infrastructure: environment, paths, DB, calendar, logging, and ``Proj`` facade."""
 
-from .core import Duration , Silence , singleton , SingletonMeta , SingletonABCMeta , Once
+from .core import Duration , Silence , singleton , SingletonMeta , SingletonABCMeta , NoInstanceMeta , Once
 
 from .env import MACHINE , PATH
 

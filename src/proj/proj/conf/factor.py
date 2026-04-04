@@ -1,12 +1,14 @@
 """Central factor/risk/benchmark/trade tuning knobs and stock factor taxonomy helpers."""
-
+from __future__ import annotations
 import numpy as np
 from typing import Any , Literal
 
 from src.proj.env import MACHINE
+from src.proj.core import singleton
 
 __all__ = ['FactorConfig' , 'Factor']
 
+@singleton
 class FactorUpdateConfig:
     """
     Default calendar window and step for factor refresh jobs:
@@ -38,7 +40,8 @@ class FactorUpdateConfig:
         """target dates of factor update"""
         from src.proj import CALENDAR
         return CALENDAR.slice(CALENDAR.range(self.init_date , None , 'td' , step = self.step) , self.start , self.end)
-
+    
+@singleton
 class RiskModelConfig:
     """
     Named risk factor groupings (Barra-style lists):
@@ -76,6 +79,7 @@ class RiskModelConfig:
         """common factors"""
         return self.market + self.style + self.indus
 
+@singleton
 class BenchmarksConfig:
     """
     Allowed benchmark identifiers and presets for tests vs defaults:
@@ -107,6 +111,7 @@ class BenchmarksConfig:
         """none benchmarks"""
         return ['none' , 'default' , 'market']
 
+@singleton
 class TradeConfig:
     """Round-trip cost presets for portfolio analytics:
     - default: default trade cost
@@ -127,6 +132,7 @@ class TradeConfig:
         """yale trade cost"""
         return 0.00035
 
+@singleton
 class RoundingConfig:
     """Decimal places for reporting weights, exposures, returns, etc.:
     - weight: weight rounding
@@ -157,6 +163,7 @@ class RoundingConfig:
         """turnover rounding"""
         return 8
 
+@singleton
 class PortfolioOptimizationConfig:
     """
     Load default/custom optimizer YAML from machine ``util/factor`` configs:
@@ -167,11 +174,15 @@ class PortfolioOptimizationConfig:
     @property
     def default(self) -> dict[str , Any]:
         """default portfolio optimization config"""
-        return MACHINE.configs('util' , 'factor' , 'default_opt_config')
+        if not hasattr(self, '_default'):
+            self._default = MACHINE.configs('util' , 'factor' , 'default_opt_config')
+        return self._default
     @property
     def custom(self) -> dict[str , Any]:
         """custom portfolio optimization config"""
-        return MACHINE.configs('util' , 'factor' , 'custom_opt_config')
+        if not hasattr(self, '_custom'):
+            self._custom = MACHINE.configs('util' , 'factor' , 'custom_opt_config')
+        return self._custom
 
 class _StockFactorDefinitionMetaType:
     def __get__(self,instance,owner) -> list[str]:
@@ -214,6 +225,7 @@ class _StockFactorDefinitionCat1:
 class CategoryError(Exception): 
     """Invalid factor category0/category1 combination."""
 
+@singleton
 class StockFactorDefinitionConfig:
     """
     Hierarchical labels for stock factors and validation helpers:
@@ -302,6 +314,7 @@ class StockFactorDefinitionConfig:
                 raise CategoryError(f'category1 is should be in {category1_list}, but got {category1}')
 
 
+@singleton
 class FactorConfig:
     """Aggregate accessor for factor-related sub-configs (UPDATE, RISK, BENCH, ...):
     - UPDATE: factor update config
@@ -313,15 +326,13 @@ class FactorConfig:
     - STOCK: stock factor definition config
     """
 
-    def __init__(self):
-        """Wire nested config objects used by the ``Factor`` singleton."""
-        self._update = FactorUpdateConfig()
-        self._risk = RiskModelConfig()
-        self._bench = BenchmarksConfig()
-        self._trade = TradeConfig()
-        self._rounding = RoundingConfig()
-        self._optim = PortfolioOptimizationConfig()
-        self._stock = StockFactorDefinitionConfig()
+    _update = FactorUpdateConfig()
+    _risk = RiskModelConfig()
+    _bench = BenchmarksConfig()
+    _trade = TradeConfig()
+    _rounding = RoundingConfig()
+    _optim = PortfolioOptimizationConfig()
+    _stock = StockFactorDefinitionConfig()
 
     @property
     def UPDATE(self):

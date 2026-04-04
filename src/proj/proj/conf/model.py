@@ -1,16 +1,18 @@
 """Mutable training resume options and static model settings from configs."""
 
-from typing import Literal
-from src.proj.core import stderr 
+from __future__ import annotations
+from typing import Literal , Any
+from src.proj.core import stderr , singleton
 from src.proj.env import MACHINE
 
-__all__ = ['ModelConfig' , 'Model']
+__all__ = ['ModelConfig']
 
 def notify_change(title : str , value , prev):
     """Stderr banner when a train resume field changes."""
     if value != prev:
         stderr(f'Project {title.title()} Changed from {prev} to {value}' , color = 'lightred' , bold = True)
 
+@singleton
 class ModelTrainConfig:
     """
     User-tunable resume flags for training and downstream evaluations:
@@ -20,11 +22,16 @@ class ModelTrainConfig:
     - resume_test_factor_perf [bool]: resume option of model train: if resume test factor perf
     """
 
-    def __init__(self):
-        self._resume_test : Literal[False , 'last_model_date' , 'last_pred_date'] = 'last_pred_date'
-        self._resume_test_fmp : Literal[False] | str = 'trailing_5'
-        self._resume_test_fmp_account : bool = True
-        self._resume_test_factor_perf : bool = True
+    _resume_test : Literal[False , 'last_model_date' , 'last_pred_date'] = 'last_pred_date'
+    _resume_test_fmp : Literal[False] | str = 'trailing_5'
+    _resume_test_fmp_account : bool = True
+    _resume_test_factor_perf : bool = True
+
+    @classmethod
+    def set_class_attrs(cls , name : str , value : Any):
+        assert hasattr(cls , f'_{name}') , f'Attribute {name} not found in {cls}'
+        notify_change(name.replace('_', ' ').title() , value , getattr(cls , f'_{name}'))
+        setattr(cls , f'_{name}' , value)
 
     @property
     def resume_test(self) -> Literal[False , 'last_model_date' , 'last_pred_date']:
@@ -33,12 +40,8 @@ class ModelTrainConfig:
 
     @resume_test.setter
     def resume_test(self , value):
-        if value not in [False , 'False' , 'last_model_date' , 'last_pred_date']:
-            raise ValueError(f'Invalid resuming test option: {value}')
-        if value in ['False']:
-            value = False
-        notify_change('resume test' , value , self._resume_test)
-        self._resume_test = value
+        assert isinstance(value , str) and value in [False , 'False' , 'last_model_date' , 'last_pred_date'] , f'Invalid value: {value}'
+        self.set_class_attrs('resume_test' , value)
 
     @property
     def resume_test_fmp(self) -> Literal[False] | str:
@@ -47,10 +50,8 @@ class ModelTrainConfig:
 
     @resume_test_fmp.setter
     def resume_test_fmp(self , value):
-        if value is not False and not (isinstance(value , str) and value.startswith('trailing_')):
-            raise ValueError(f'Invalid resuming test fmp option: {value}')
-        notify_change('resume test fmp' , value , self._resume_test_fmp)
-        self._resume_test_fmp = value
+        assert value is False or (isinstance(value , str) and value.startswith('trailing_')) , f'Invalid value: {value}'
+        self.set_class_attrs('resume_test_fmp' , value)
 
     @property
     def resume_test_fmp_account(self) -> bool:
@@ -59,10 +60,8 @@ class ModelTrainConfig:
 
     @resume_test_fmp_account.setter
     def resume_test_fmp_account(self , value):
-        if not isinstance(value , bool):
-            raise ValueError(f'Invalid resuming test fmp account option: {value}')
-        notify_change('resume test fmp account' , value , self._resume_test_fmp_account)
-        self._resume_test_fmp_account = value
+        assert isinstance(value , bool) , f'Invalid value: {value}'
+        self.set_class_attrs('resume_test_fmp_account' , value)
 
     @property
     def resume_test_factor_perf(self) -> bool:
@@ -71,11 +70,10 @@ class ModelTrainConfig:
 
     @resume_test_factor_perf.setter
     def resume_test_factor_perf(self , value):
-        if not isinstance(value , bool):
-            raise ValueError(f'Invalid resuming test factor option: {value}')
-        notify_change('resume test factor perf' , value , self._resume_test_factor_perf)
-        self._resume_test_factor_perf = value
+        assert isinstance(value , bool) , f'Invalid value: {value}'
+        self.set_class_attrs('resume_test_factor_perf' , value)
 
+@singleton
 class ModelConfig:
     """
     Expose ``TRAIN`` toggles and ``SETTINGS`` from ``setting/model`` config:
@@ -83,9 +81,8 @@ class ModelConfig:
     - SETTINGS: settings of model , including prediction models / hidden extraction models
     """
 
-    def __init__(self):
-        self._train = ModelTrainConfig()
-        self._settings = MACHINE.configs('setting' , 'model')
+    _train = ModelTrainConfig()
+    _settings = MACHINE.configs('setting' , 'model')
 
     @property
     def TRAIN(self):
@@ -96,5 +93,3 @@ class ModelConfig:
     def SETTINGS(self):
         """settings of model , including prediction models / hidden extraction models"""
         return self._settings
-
-Model = ModelConfig()

@@ -37,7 +37,7 @@ if __name__ == "__main__":
     if platform.system() == "Darwin" and not shutil.which("cmux"):
         print("cmux not installed (optional)")
 
-    Shell.run_python(temp_script , py_path = 'uv run' , option = 'cmux')
+    Shell.run_py(temp_script , py_path = 'uv run' , option = 'cmux')
     hits = ProcessDiscovery.wait_for_running_instances(script=temp_script.resolve())
     if hits:
         print("found PIDs (oldest→newest):", hits)

@@ -1,8 +1,12 @@
 """Streamlit / interactive app metadata (title, version, refresh)."""
 
+from __future__ import annotations
+
+from src.proj.core import singleton
 from src.__version__ import __version__
 
-class InteractiveAppConfig:
+@singleton
+class InteractiveConfig:
     """
     Static UI defaults for the interactive front-end:
     - version: version of the app
@@ -35,5 +39,3 @@ class InteractiveAppConfig:
     def auto_refresh_interval(self) -> int:
         """auto refresh interval of the app"""
         return 0
-
-Interactive = InteractiveAppConfig()

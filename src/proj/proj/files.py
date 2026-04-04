@@ -1,11 +1,11 @@
 """Project-wide log file handle and named, thread-safe file lists (email attachments, exit files)."""
 
+from __future__ import annotations
 import io
 from pathlib import Path
 import threading
 
 from src.proj.core import stderr
-
 
 class LogWriterFile:
     """Descriptor storing the optional main project log stream (``TextIOWrapper``)."""
@@ -112,7 +112,3 @@ class UniqueFileList:
                 if any(pattern in str(file) for pattern in patterns):
                     self.file_list.remove(file)
                     self.alter1(f'Removed file {file} from {self.name} due to banned patterns!' , vb_level = 'max')
-
-LOG_WRITER = LogWriterFile()
-EMAIL_ATTACHMENTS = UniqueFileList('email_attachments')
-EXIT_FILES = UniqueFileList('exit_files')
