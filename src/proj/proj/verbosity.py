@@ -2,7 +2,7 @@
 
 from typing import Any , Literal
 from src.proj.core import stderr
-from .core import ProjectSetting
+from .core import ProjectPreference
 
 __all__ = ['Verbosity']
 
@@ -21,16 +21,16 @@ class Verbosity:
     - ``is_max_level``: check if ``vb`` is at or above ``max``
     
     """
-    max = ProjectSetting('vb_max' , 10)
-    min = ProjectSetting('vb_min' , 0)
-    never = ProjectSetting('vb_never' , 99)
-    always = ProjectSetting('vb_always' , -99)
-    callback = ProjectSetting('vb_level_callback' , 10)
+    max = ProjectPreference('vb_max' , 10)
+    min = ProjectPreference('vb_min' , 0)
+    never = ProjectPreference('vb_never' , 99)
+    always = ProjectPreference('vb_always' , -99)
+    callback = ProjectPreference('vb_level_callback' , 10)
 
     def __init__(self):
         """Load ``vb`` from project settings; thresholds come from the same config."""
         assert self.never > self.max > self.min > self.always , (self.never , self.max , self.min , self.always)
-        self._vb : int = ProjectSetting.get('vb' , 1)
+        self._vb : int = ProjectPreference.get('vb' , 1)
         self._vb_level : int | None = None
         
     def __repr__(self):

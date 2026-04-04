@@ -47,7 +47,7 @@ def log_config() -> dict[str, Any]:
     Returns:
         Config dict suitable for ``new_log`` / ``reset_logger``.
     """
-    log_config = MACHINE.configs('setting' , 'logger')
+    log_config = MACHINE.configs('preference' , 'logger')
     new_path = PATH.logs.joinpath('main' , log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
     new_path.parent.mkdir(exist_ok=True)

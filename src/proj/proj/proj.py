@@ -5,7 +5,7 @@ from typing import Any
 from src.proj.env import MACHINE
 from src.proj.core import Silence
 
-from .core import ProjectSetting
+from .core import ProjectPreference
 from .verbosity import VB
 from .files import LOG_WRITER , EMAIL_ATTACHMENTS , EXIT_FILES
 from .ins import INSTANCES
@@ -17,8 +17,8 @@ class ProjMeta(type):
     """Metaclass for ``Proj``: blocks direct instantiation and exposes module-level descriptors."""
 
     log_writer = LOG_WRITER
-    debug_mode = ProjectSetting('debug_mode')
-    show_vb_level = ProjectSetting('show_vb_level')
+    debug_mode = ProjectPreference('debug_mode')
+    show_vb_level = ProjectPreference('show_vb_level')
 
     def __call__(cls, *args, **kwargs):
         raise Exception(f'Class {cls.__name__} should not be called to create instance')

@@ -3,9 +3,9 @@
 from typing import Any
 from src.proj.env import MACHINE
 
-_project_settings = MACHINE.configs('setting' , 'project')
+_project_preference = MACHINE.configs('preference' , 'project')
 
-class ProjectSetting:
+class ProjectPreference:
     """Descriptor: value from ``_project_settings[key]``, else ``default``."""
 
     def __init__(self , key : str , default : Any = None):
@@ -18,4 +18,4 @@ class ProjectSetting:
     @staticmethod
     def get(key : str , default : Any = None) -> Any:
         """Read a single key from the cached project settings dict."""
-        return _project_settings.get(key , default)
+        return _project_preference.get(key , default)
