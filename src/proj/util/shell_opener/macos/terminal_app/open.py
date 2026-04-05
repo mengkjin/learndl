@@ -12,12 +12,13 @@ def _applescript_escape(s: str) -> str:
 
 class TerminalAppOpener:
     @classmethod
-    def run(cls, cwd: str, command: str) -> None:
+    def run(cls, command: str, * , cwd: str | None = None, **kwargs) -> None:
         """Open a new Terminal.app tab/window running ``cd`` + ``command``."""
         if not TerminalAppVerifier.available():
             raise RuntimeError("Terminal.app is not available")
-        inner = f"cd {shlex.quote(cwd)} && {command}"
-        apple_script_cmd = _applescript_escape(inner)
+        if cwd:
+            command = f"cd {shlex.quote(cwd)} && {command}"
+        apple_script_cmd = _applescript_escape(command)
         script = f'''
     tell application "Terminal"
         -- Create a new terminal window

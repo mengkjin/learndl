@@ -313,7 +313,7 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-        item.run_script()
+        item.run_script(from_workspace='Interactive Tasks')
 
     # @ActionLogger.log_action()
     def click_file_preview(self , path : Path):

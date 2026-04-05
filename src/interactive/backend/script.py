@@ -4,7 +4,7 @@ from typing import Literal , Any , ClassVar
 from dataclasses import dataclass , asdict , field
 
 from src.proj import PATH , Logger , MACHINE  # noqa
-from src.proj.util import ScriptCmd , Options # noqa
+from src.proj.util import Options # noqa
 from .task import TaskItem , TaskQueue
     
 @dataclass
@@ -302,8 +302,7 @@ class ScriptRunner:
 
         item = TaskItem.create(self.script , source = 'app' , queue=queue)
         params = kwargs | {'task_id': item.id , 'source': item.source}
-        cmd = ScriptCmd(self.script, params, mode)
-        item.set_script_cmd(cmd)
+        item.set_script_cmd(self.script, params, mode)
         return item
     
     def preview_cmd(self , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> str:

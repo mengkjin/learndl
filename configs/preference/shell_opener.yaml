@@ -9,14 +9,14 @@ MACOS_OPTIONS:
   - terminal.app
 
 MACOS_TERMINAL_PROFILE_NAME : Basic
-MACOS_CMUX_NEW : surface # workspace, window, surface
-MACOS_CMUX_COLD_START_DEADLINE : 45.0
+MACOS_CMUX_NEW : tab # window, workspace, tab (as surface)
+MACOS_CMUX_COLD_START_DEADLINE : 15.0
 MACOS_CMUX_PING_INTERVAL : 0.25
 MACOS_CMUX_CMD_TIMEOUT : 120.0
 
 LINUX_OPTIONS:
   - gnome
-LINUX_GNOME_NEW : tab # window , tab
+LINUX_GNOME_NEW : tab # window , workspace(as window), tab
 
 WINDOWS_OPTIONS:
   - cmd

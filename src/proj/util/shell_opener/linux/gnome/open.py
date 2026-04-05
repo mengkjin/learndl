@@ -10,15 +10,21 @@ from ...util import process
 
 class GnomeTerminalOpener:
     @classmethod
-    def run(cls, cwd: str, command: str) -> None:
+    def run(cls, command: str, * , cwd: str | None = None, title: str | None = None, new_on: str | None = None) -> None:
         if not GnomeTerminalVerifier.available():
             raise RuntimeError("gnome-terminal is not available (not on PATH)")
-        inner = f"cd {shlex.quote(cwd)} && {command}; exec bash"
-        if LINUX_GNOME_NEW == "window":
-            process.popen_detached(["gnome-terminal", "--", "bash", "-lc", inner])
-        elif LINUX_GNOME_NEW == "tab":
-            process.popen_detached(["gnome-terminal", "--tab", "--", "bash", "-lc", inner])
-        else:
-            raise ValueError(
-                f"Invalid LINUX_GNOME_NEW {LINUX_GNOME_NEW!r}; expected 'window' or 'tab'"
-            )
+        command = f'{command}; exec bash'
+        if cwd:
+            command = f"cd {shlex.quote(cwd)} && {command}"
+        if title is not None:
+            command = f'echo -ne "\\033]0;{title}\\a"; {command}'
+        if new_on is None:
+            new_on = LINUX_GNOME_NEW
+        match new_on:
+            case "window" | "workspace":
+                flag = "--window"
+            case "tab":
+                flag = "--tab"
+            case _:
+                raise ValueError(f"Invalid new_on: {new_on}")
+        process.popen_detached(["gnome-terminal", flag, "--" , "bash", "-lc", command])

@@ -4,11 +4,15 @@ from .cmd_terminal import CmdTerminalOpener
 
 __all__ = ["open_for_windows"]
 
-def open_for_windows(cwd: str, command: str , * , option : Literal["cmd"] | None = None) -> None:
+def open_for_windows(
+    command: str , * , 
+    cwd: str | None = None, option : str | None = None, 
+    title: str | None = None, new_on: str | None = None , **kwargs) -> None:
     if option is None:
-        option = WINDOWS_OPTIONS[0] # type: ignore
+        option = WINDOWS_OPTIONS[0]
     match option:
         case "cmd":
-            CmdTerminalOpener.run(cwd, command)
+            Opener = CmdTerminalOpener
         case _:
-            raise ValueError(f"Invalid Windows opener: {option}")
+            Opener = CmdTerminalOpener
+    Opener.run(command, cwd=cwd, title=title, new_on=new_on)

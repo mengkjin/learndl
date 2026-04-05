@@ -15,6 +15,9 @@ import subprocess ,  socket
 from datetime import datetime
 from src.interactive.backend import BackendTaskRecorder
 
+def run_command(command: str):
+    subprocess.run(command, shell=True, check=True)
+
 @BackendTaskRecorder()
 def main(additional_message : str | list[str] = '' , **kwargs):
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
@@ -22,10 +25,10 @@ def main(additional_message : str | list[str] = '' , **kwargs):
         additional_message = [additional_message]
     commit_message = ','.join([msg for msg in prefixes + additional_message if msg])
 
-    subprocess.run("git add .", shell=True, check=True)
-    subprocess.run(f"git commit -m '{commit_message}'", shell=True, check=True)
-    subprocess.run("git pull --rebase", shell=True, check=True)
-    subprocess.run("git push", shell=True, check=True)
+    run_command("git add .")
+    run_command(f"git commit -m '{commit_message}'")
+    run_command("git pull --rebase")
+    run_command("git push")
 
     return f'Finish commit and sync: {commit_message}'
 

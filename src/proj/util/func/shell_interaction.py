@@ -78,6 +78,7 @@ def kill_process(pid):
     except Exception:
         pass
     return False
+    
 def argparse_dict(**kwargs):
     """Parse known args plus ``--key value`` pairs into a flat dict merged with ``kwargs``."""
     parser = argparse.ArgumentParser(description='Run daily update script.')

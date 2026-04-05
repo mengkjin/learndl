@@ -11,7 +11,7 @@ from .verify import GhosttyVerifier
 
 class GhosttyOpener:
     @classmethod
-    def run(cls, cwd: str, command: str) -> None:
+    def run(cls, command: str, * , cwd: str | None = None, **kwargs) -> None:
         """
         Open a new Ghostty window running ``cd`` + ``command`` via ``/bin/sh -c``.
 
@@ -20,7 +20,8 @@ class GhosttyOpener:
         """
         if not GhosttyVerifier.available():
             raise RuntimeError("Ghostty.app is not installed")
-        inner = f"cd {shlex.quote(cwd)} && {command}"
+        if cwd:
+            command = f"cd {shlex.quote(cwd)} && {command}"
         popen_detached(
             [
                 "open",
@@ -30,6 +31,6 @@ class GhosttyOpener:
                 "-e",
                 "/bin/sh",
                 "-c",
-                inner,
+                f'{command}\n',
             ]
         )

@@ -563,7 +563,8 @@ class TaskItem:
             self._task_db = TaskDatabase()
         return self
     
-    def set_script_cmd(self , script_cmd : ScriptCmd):
+    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs):
+        script_cmd = ScriptCmd(script, params, mode, **kwargs)
         self._script_cmd = script_cmd
         self.update({'cmd': str(script_cmd)} , write_to_db = True)
         return self
@@ -956,12 +957,11 @@ class TaskItem:
         df = pd.DataFrame(data_list , columns = pd.Index(['Item', 'Value']))
         return df
     
-    def run_script(self):
-        cmd = self._script_cmd
-        assert cmd is not None , 'script cmd is not set'
+    def run_script(self , as_workspace: str | None = None , from_workspace: str | None = None):
+        assert self._script_cmd is not None , 'script cmd is not set'
         try:
             start_time = timestamp()
-            process = cmd.run()
+            process = self._script_cmd.run(as_workspace=as_workspace, from_workspace=from_workspace)
             self.update({'pid': process.real_pid, 'status': 'running', 'start_time': start_time} , write_to_db = True)
         except Exception as e:
             self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , write_to_db = True)

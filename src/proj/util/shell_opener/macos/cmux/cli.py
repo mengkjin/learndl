@@ -7,6 +7,8 @@ import json
 
 from typing import Any
 
+# from src.proj.util.shell_opener.util.commands import to_shell_string
+
 __all__ = ["CmuxCli"]
 
 def _parse_cmux_json(raw: str) -> Any:
@@ -32,16 +34,17 @@ class CmuxCli:
     @classmethod
     def cmux(cls , *args: str , timeout: float | None = None , capture_output = True , text = True , 
              stdin = subprocess.DEVNULL):
-        cmux_bin = cls.get_cmux_bin()
+        # cmux = cls.get_cmux_bin()
+        # to_shell_string(['cmux', *args])
         r = subprocess.run(
-            [cmux_bin, *args],
+            ['cmux', *args],# [cmux_bin, *args],
             capture_output=capture_output,
             text=text,
             timeout=timeout,
             stdin=stdin,
         )
         if r.returncode != 0:
-            raise RuntimeError(f"cmux failed: {r.stderr.strip()}")
+            raise RuntimeError(f"cmux failed: {r}")
         return r
         
     @classmethod

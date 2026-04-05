@@ -2,28 +2,68 @@
 
 from __future__ import annotations
 
-import re
 import shlex
 import threading
 import time
 import subprocess
-from typing import Literal
 
+from typing import Literal
+from dataclasses import dataclass
 
 from .cli import CmuxCli
 from .verify import CmuxVerifier
 from ...util import process
 from ... import preference
 
+_workspace_refs: dict[str, str] = {
+    
+}
 
+@dataclass
+class CmuxRefs:
+    window_id: str
+    workspace_ref: str
+    surface_ref: str
 
-"""rename-tab [--workspace <id|ref>] [--tab <id|ref>] [--surface <id|ref>] <title>"""
+    def focus(self , window : bool = False , surface : bool = True) -> None:
+        if window:
+            CmuxCli.cmux('focus-window', '--window', self.window_id)
+        if surface:
+            CmuxCli.cmux('select-workspace', '--workspace', self.workspace_ref)
+            CmuxCli.cmux('focus-panel', '--panel', self.surface_ref , '--workspace', self.workspace_ref)
+
+    def cwd(self, cwd: str | None = None) -> None:
+        if cwd:
+            CmuxCli.cmux('send', '--workspace', self.workspace_ref , '--surface', self.surface_ref, f'cd {shlex.quote(cwd)}\n')
+
+    def send(self, command: str , * , cwd: str | None = None) -> None:
+        self.cwd(cwd)
+        CmuxCli.cmux("send", "--workspace", self.workspace_ref , "--surface", self.surface_ref, f'{command}\n')
+
+    def rename(self , title: str | None = None , where: Literal["window", "workspace", "surface", "all"] = "surface") -> None:
+        if not title:
+            return
+        match where:
+            case "window":
+                CmuxCli.cmux('rename-window', '--window', self.window_id, title)
+            case "workspace":
+                CmuxCli.cmux('rename-workspace', '--workspace', self.workspace_ref, title)
+            case "surface":
+                CmuxCli.cmux('rename-tab', '--surface', self.surface_ref, '--workspace', self.workspace_ref, title)
+            case "all":
+                self.rename(title=title, where="window")
+                self.rename(title=title, where="workspace")
+                self.rename(title=title, where="surface")
+
 def popup_cmux() -> None:
+    """
+    Activate the cmux application to the foreground.
+    """
     subprocess.run(["osascript", "-e", 'tell application "cmux" to activate'],check=False)
 
 def start_cmux():
-    """Start cmux and return the window id."""
-    ping_ok , _= CmuxCli.cmux_ping()
+    """Start cmux if ping failed. But even if ping passed, likely no window is opened."""
+    ping_ok , detail = CmuxCli.cmux_ping()
     if ping_ok:
         return
 
@@ -46,128 +86,146 @@ def start_cmux():
         )
     raise RuntimeError('\n'.join(error_messages))
 
-def cmux_get_workspaces() -> set[str]:
-    ret = CmuxCli.cmux_json("list-workspaces")
-    return set([info['ref'] for info in ret['workspaces']])
+def cmux_current_window_id() -> str:
+    return CmuxCli.cmux("current-window").stdout.strip()
 
-def cmux_get_surfaces() -> set[str]:
-    ret = CmuxCli.cmux_json("list-panels")
-    return set([info['ref'] for info in ret['surfaces']])
+def cmux_new_window_id() -> str:
+    return CmuxCli.cmux("new-window").stdout.strip().removeprefix('OK ')
 
-def cmux_new_window(title: str | None = None , cwd: str | None = None , focus: bool = True) -> str:
-    win = CmuxCli.cmux_json("new-window").removeprefix('OK ')
-    if focus:
-        CmuxCli.cmux("focus-window", "--window" , win)
-    ref = CmuxCli.cmux_json('current-workspace')['workspace_id']
-    if title:
-        CmuxCli.cmux('rename-workspace', '--workspace', ref, title)
-    if cwd:
-        CmuxCli.cmux('send', '--workspace', ref, f"cd {cwd}\n")
-    return ref
+def cmux_current_refs(window_id: str | None = None , workspace_ref: str | None = None) -> CmuxRefs:
+    """Get the current surface reference."""
+    assert window_id is None or workspace_ref is None, "window_id and workspace_ref must not be set at the same time"
+    if window_id:
+        CmuxCli.cmux_json("focus-window" , "--window" , window_id)
+    else:
+        window_id = cmux_current_window_id()
 
-def cmux_new_workspace(title: str | None = None, cwd: str | None = None , focus: bool = True):
+    if workspace_ref:
+        ret = CmuxCli.cmux_json("list-panels" , "--workspace" , workspace_ref)
+    else:
+        ret = CmuxCli.cmux_json("list-panels")
+        workspace_ref = ret['workspace_ref']
+    if [x for x in ret['surfaces'] if x['focused']]:
+        surface_ref = [x['ref'] for x in ret['surfaces'] if x['focused']][-1]
+    else:
+        surface_ref = ret['surfaces'][-1]['ref']
+    assert workspace_ref 
+    return CmuxRefs(window_id=window_id, workspace_ref=workspace_ref, surface_ref=surface_ref)
+
+def cmux_new_window(title: str | None = None , focus: bool = True , as_workspace: str | None = None) -> CmuxRefs:
+    """Create a new window and return the workspace reference."""
+    win_id = CmuxCli.cmux_json("new-window").removeprefix('OK ')
+
+    time.sleep(0.1)
+    refs = cmux_current_refs(window_id=win_id)
+    refs.rename(title=title or as_workspace, where="all")
+    
+    if as_workspace:
+        assert as_workspace not in _workspace_refs, f"Workspace {as_workspace} already exists : {_workspace_refs[as_workspace]}"
+        _workspace_refs[as_workspace] = refs.workspace_ref
+    return refs
+
+def cmux_new_workspace(title: str | None = None, focus: bool = True , as_workspace: str | None = None) -> CmuxRefs:
+    """Create a new workspace and return the workspace reference."""
     new_args = []
     if title:
         new_args.extend(['--name', title])
-    if cwd:
-        new_args.extend(['--cwd', cwd])
-    ref = CmuxCli.cmux_json('new-workspace', *new_args).removeprefix('OK ')
-    if title:
-        CmuxCli.cmux('rename-tab', '--workspace', ref, title)
-    if focus:
-        CmuxCli.cmux('select-workspace', '--workspace', ref)
-    return ref
-
-def cmux_new_surface(title: str | None = None, cwd: str | None = None , focus: bool = True) -> str:
-    ref = CmuxCli.cmux_json("new-surface")['surface_ref']
-    if focus:
-        CmuxCli.cmux("focus-panel", "--panel" , ref)
-    if title:
-        CmuxCli.cmux("rename-tab", "--surface" , ref, title)
-    if cwd:
-        CmuxCli.cmux('send', '--surface', ref, f"cd {cwd}\n")
-    return ref
-
-def run_in_new_window(cwd: str, command: str , * , title : str | None = None):
-    ref = cmux_new_window(title = title)
-    line = f"cd {shlex.quote(cwd)} && {command}\n"
-    CmuxCli.cmux("send", "--workspace", ref , line)
+    workspace_ref = CmuxCli.cmux_json('new-workspace', *new_args).removeprefix('OK ')
     
-def run_in_new_workspace(cwd: str, command: str , * , title : str | None = None):
-    ref = cmux_new_workspace(title = title)
-    line = f"cd {shlex.quote(cwd)} && {command}\n"
-    CmuxCli.cmux('send', '--workspace', ref, line)
+    time.sleep(0.1)
+    refs = cmux_current_refs(workspace_ref=workspace_ref)
+    refs.rename(title=title or as_workspace, where="surface")
+    refs.focus(surface=focus, window=False)
+    if as_workspace:
+        assert as_workspace not in _workspace_refs, f"Workspace {as_workspace} already exists : {_workspace_refs[as_workspace]}"
+        _workspace_refs[as_workspace] = refs.workspace_ref
+    return refs
 
-def run_in_new_surface(cwd: str, command: str , * , title : str | None = None):
-    surface = cmux_new_surface(title=title)
-    line = f"cd {shlex.quote(cwd)} && {command}\n"
-    CmuxCli.cmux("send", "--surface", surface, line)
+def cmux_new_surface(title: str | None = None, focus: bool = True , from_workspace: str | None = None) -> CmuxRefs:
+    """Create a new surface and return the surface reference."""
+    refs = None
+    if from_workspace and from_workspace in _workspace_refs:
+        try:
+            workspace_ref = _workspace_refs[from_workspace]
+            ret = CmuxCli.cmux_json("new-surface" , "--workspace" , workspace_ref)
+
+            time.sleep(0.1)
+            refs = CmuxRefs(window_id=cmux_current_window_id(), workspace_ref=ret['workspace_ref'], surface_ref=ret['surface_ref'])
+        except Exception:
+            _workspace_refs.pop(from_workspace)
+    if not refs:
+        if not from_workspace:
+            ret = CmuxCli.cmux_json("new-surface")
+
+            time.sleep(0.1)
+            refs = CmuxRefs(window_id=cmux_current_window_id(), workspace_ref=ret['workspace_ref'], surface_ref=ret['surface_ref'])
+        else:
+            refs = cmux_new_workspace(title=from_workspace , as_workspace=from_workspace)
+    
+    refs.rename(title=title, where="surface")
+    refs.focus(surface=focus, window=True)
+    return refs
+
+def run_in_new_window(command: str , * , cwd: str | None = None, title : str | None = None, 
+                      as_workspace: str | None = None):
+    cmux_new_window(title = title , as_workspace=as_workspace).send(command , cwd=cwd)
+
+def run_in_new_workspace(command: str , * , cwd: str | None = None, title : str | None = None , 
+                         as_workspace: str | None = None):
+    cmux_new_workspace(title = title, as_workspace=as_workspace).send(command , cwd=cwd)
+
+def run_in_new_surface(command: str , * , cwd: str | None = None, title : str | None = None , 
+                       from_workspace: str | None = None):
+    cmux_new_surface(title=title, from_workspace=from_workspace).send(command , cwd=cwd)
 
 def cmux_run(
-    cwd: str, command: str, * , 
-    target: Literal["workspace", "window", "surface"] | None = None, 
-    title: str | None = None
+    command: str, * , 
+    cwd: str | None = None, 
+    new_on: str | None = None, 
+    title: str | None = None,
+    as_workspace: str | None = None,
+    from_workspace: str | None = None,
 ) -> None:
-    if target is None:
-        if preference.MACOS_CMUX_NEW in ["workspace", "window", "surface"]:
-            target = preference.MACOS_CMUX_NEW # type: ignore
-        else:
-            raise ValueError(f"Invalid target: {preference.MACOS_CMUX_NEW}")
+    
     kwargs = {'cwd': cwd,'command': command,'title': title,}
     start_cmux()
+    if new_on is None:
+        new_on = preference.MACOS_CMUX_NEW
     if not CmuxCli.cmux_json("list-windows"):
-        target = "window" 
-    
-    if target == "window":
-        run_in_new_window(**kwargs)
-    elif target == "workspace":
-        run_in_new_workspace(**kwargs)
-    elif target == "surface":
-        run_in_new_surface(**kwargs)
-    else:
-        raise ValueError(f"Invalid target: {target}")
+        new_on = "window" 
+    match new_on:
+        case "window":
+            run_in_new_window(**kwargs , as_workspace=as_workspace)
+        case "workspace":
+            run_in_new_workspace(**kwargs, as_workspace=as_workspace)
+        case "tab":
+            run_in_new_surface(**kwargs, from_workspace=from_workspace)
+        case _:
+            raise ValueError(f"Invalid new_on: {new_on}")
     popup_cmux()
 
-def guess_command_title(command: str) -> str | None:
-    """
-    extract .py filename from command:
-        python3 any/path/name.py
-        python.exe any/path/name.py
-        uv run any/path/name.py
-        python C:\\my folder\\app.py   #support space in path
-    return filename (e.g. name.py), return None if not matched
-    """
-    pattern = re.compile(
-        r'(?:python[\d.]*(?:\.exe)?|uv\s+run)\s+(.*?\.py)(?=[\s;]|$)',
-        re.IGNORECASE
-    )
-    match = pattern.search(command)
-    if not match:
-        return None
-    
-    full_path = match.group(1)
-    normalized = full_path.replace('\\', '/')
-    filename = normalized.split('/')[-1]
-    return filename
-
 class CmuxOpener:
+    workspace_refs: dict[str, str] = {
 
+    }
     @classmethod
     def run(cls ,
-        cwd: str,
         command: str,
-        *,
-        target: Literal["workspace", "window", "surface"] | None = None,
+        * ,
+        cwd: str | None = None,
+        new_on: str | None = None,
+        title: str | None = None,
+        as_workspace: str | None = None,
+        from_workspace: str | None = None,
+        **kwargs
     ) -> None:
         """Run cmux IPC in a non-daemon thread (survives short-lived parent processes)."""
         if not CmuxVerifier.available():
             raise RuntimeError("cmux is not available")
-        
-        title = guess_command_title(command)
         t = threading.Thread(
             target=cmux_run,
-            args=(cwd, command),
-            kwargs={'title': title, 'target': target},
+            args=(command,),
+            kwargs={'cwd': cwd, 'title': title, 'new_on': new_on , 'as_workspace': as_workspace, 'from_workspace': from_workspace},
             name="cmux-opener",
             daemon=False,
         )

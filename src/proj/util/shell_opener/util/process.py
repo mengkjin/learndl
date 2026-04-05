@@ -15,7 +15,7 @@ def popen_detached(
     args: list[str],
     *,
     env: Optional[dict[str, str]] = None,
-) -> subprocess.Popen[bytes]:
+) -> subprocess.Popen:
     kwargs: dict = {
         "args": args,
         "stdin": subprocess.DEVNULL,
@@ -31,10 +31,10 @@ def popen_detached(
         kwargs["start_new_session"] = True
     if env is not None:
         kwargs["env"] = env
-    return subprocess.Popen(**kwargs) # type: ignore
+    return subprocess.Popen(**kwargs)
 
 
-def popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]] = None) -> subprocess.Popen[bytes]:
+def popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]] = None) -> subprocess.Popen:
     """
     Windows: ``Popen(cmd_line, shell=True, …)`` like example.py — used for
     ``start cmd /c "…"`` so ``start`` opens a real console (not a bare ``CREATE_NEW_CONSOLE`` child).
@@ -51,7 +51,7 @@ def popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]]
     }
     if env is not None:
         kwargs["env"] = env
-    return subprocess.Popen(**kwargs) # type: ignore
+    return subprocess.Popen(**kwargs)
 
 
 def spawn_native(
@@ -59,7 +59,7 @@ def spawn_native(
     *,
     cwd: Optional[Union[str, Path]] = None,
     env: Optional[Mapping[str, str]] = None,
-) -> subprocess.Popen[bytes]:
+) -> subprocess.Popen:
     """
     Run ``cmd`` in the background without opening a terminal window.
     Pass a argv sequence for predictable parsing; a string uses ``cmd.exe /c`` on Windows
@@ -69,33 +69,7 @@ def spawn_native(
     if env:
         use_env.update(env)
     cwd_s = str(Path(cwd).resolve()) if cwd is not None else None
-
-    if isinstance(cmd, str):
-        if sys.platform == "win32":
-            return subprocess.Popen(
-                cmd,
-                shell=True,
-                cwd=cwd_s,
-                env=use_env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
-                | getattr(subprocess, "DETACHED_PROCESS", 0x00000008),
-            )
-        return subprocess.Popen(
-            ["/bin/sh", "-c", cmd],
-            cwd=cwd_s,
-            env=use_env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-
-    argv = [str(x) for x in cmd]
     kwargs: dict = {
-        "args": argv,
         "cwd": cwd_s,
         "env": use_env,
         "stdin": subprocess.DEVNULL,
@@ -103,10 +77,17 @@ def spawn_native(
         "stderr": subprocess.DEVNULL,
     }
     if sys.platform == "win32":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
-            subprocess, "DETACHED_PROCESS", 0x00000008
-        )
-        kwargs["close_fds"] = True
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
     else:
         kwargs["start_new_session"] = True
-    return subprocess.Popen(**kwargs) # type: ignore
+
+    if isinstance(cmd, str):
+        if sys.platform == "win32":
+            return subprocess.Popen(cmd, shell=True , **kwargs)
+        else:
+            return subprocess.Popen(["/bin/sh", "-c", cmd], **kwargs)
+    else:
+        kwargs['args'] = [str(x) for x in cmd]
+        if sys.platform == "win32":
+            kwargs["close_fds"] = True
+        return subprocess.Popen(**kwargs)

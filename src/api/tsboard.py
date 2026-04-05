@@ -1,20 +1,18 @@
-import os , subprocess , shutil
+import os , shutil , subprocess
 from pathlib import Path
 from src.proj import PATH , Logger
 
 def call_tensorboard(log_dir : str | Path):
-    # cmd = ["uv", "run", "tensorboard", "--logdir", log_dir]
     if isinstance(log_dir , Path):
         log_dir = log_dir.as_posix()
     try:
-        cmd = ['uv' , 'run' , 'tensorboard' , '--logdir' , log_dir]
-        subprocess.run(cmd, check=True)
+        subprocess.run(['uv' , 'run' , 'tensorboard' , '--logdir' , log_dir]) 
     except KeyboardInterrupt:
         Logger.alert1("TensorBoard stopped.")
-    except subprocess.CalledProcessError as e:
-        Logger.error(f"Failed to launch: {e}")
+    except Exception as e:
+        Logger.error(f"Failed to launch TensorBoard: {e}")
         Logger.print_exc(e)
-        raise
+        raise e
 
 def run_local_tensorboard():
     log_dir = PATH.tensorboard.joinpath('run')

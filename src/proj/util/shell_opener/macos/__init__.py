@@ -13,10 +13,15 @@ from ..preference import MACOS_OPTIONS
 __all__ = ["open_in_macos"]
 
 def open_in_macos(
-    cwd: str,
     command: str,
     * , 
-    option : Literal["cmux", "ghostty", "terminal.app"] | None = None,
+    cwd: str | None = None,
+    option : str | None = None,
+    title: str | None = None,
+    new_on: str | None = None,
+    as_workspace: str | None = None,
+    from_workspace: str | None = None,
+    **kwargs
 ) -> None:
     """
     Open ``command`` in a visible terminal.
@@ -26,14 +31,15 @@ def open_in_macos(
     ``None`` / other → Terminal.app.
     """
     if option is None:
-        option = MACOS_OPTIONS[0] # type: ignore
+        option = MACOS_OPTIONS[0]
     match option:
         case "cmux":
-            CmuxOpener.run(cwd, command)
+            Opener = CmuxOpener
         case "ghostty":
-            GhosttyOpener.run(cwd, command)
+            Opener = GhosttyOpener
         case "terminal.app":
-            TerminalAppOpener.run(cwd, command)
+            Opener = TerminalAppOpener
         case _:
-            raise ValueError(f"Unsupported macOS opener: {option}")
+            Opener = CmuxOpener
 
+    Opener.run(command, cwd=cwd, title=title, new_on=new_on , as_workspace=as_workspace, from_workspace=from_workspace, **kwargs)

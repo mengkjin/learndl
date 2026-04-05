@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 import sys
+import subprocess
 from pathlib import Path
 from typing import Sequence, Any
 
-__all__ = ["format_python_command"]
+__all__ = ["format_python_command" , "to_shell_string" , "guess_command_title"]
 
 def _win_cmd_quote(s: str) -> str:
     """Quote a token for ``cmd.exe`` (double quotes; internal ``\"\"``)."""
@@ -32,6 +34,14 @@ def _win_cmd_token(s: str) -> str:
     if any(ch in s for ch in _WIN_CMD_NEED_QUOTE):
         return _win_cmd_quote(s)
     return s
+
+def to_shell_string(cmd_list : Sequence[Any] | str) -> str:
+    if isinstance(cmd_list, str):
+        return cmd_list
+    if sys.platform == "win32":
+        return subprocess.list2cmdline([str(x) for x in cmd_list])
+    else:
+        return ' '.join(shlex.quote(str(x)) for x in cmd_list)
 
 def format_python_command(
     script: str | Path,
@@ -59,3 +69,25 @@ def format_python_command(
     if kwargs:
         parts.extend(f"--{k} {str(v).replace(' ', '')}" for k, v in kwargs.items() if str(v).strip())
     return " ".join(parts)
+
+def guess_command_title(command: str) -> str | None:
+    """
+    extract .py filename from command:
+        python3 any/path/name.py
+        python.exe any/path/name.py
+        uv run any/path/name.py
+        python C:\\my folder\\app.py   #support space in path
+    return filename (e.g. name.py), return None if not matched
+    """
+    pattern = re.compile(
+        r'(?:python[\d.]*(?:\.exe)?|uv\s+run)\s+(.*?\.py)(?=[\s;]|$)',
+        re.IGNORECASE
+    )
+    match = pattern.search(command)
+    if not match:
+        return None
+    
+    full_path = match.group(1)
+    normalized = full_path.replace('\\', '/')
+    filename = normalized.split('/')[-1]
+    return filename

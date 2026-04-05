@@ -280,7 +280,7 @@ class ControlGitClearPullButton(ControlPanelButton):
 
             subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
             subprocess.run(['git', 'clean', '-fd'], check=True)
-            subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
+            subprocess.run(['git', 'pull'], check=True)
             
             for folder in [*PATH.main.joinpath('src').rglob('*/') , *PATH.main.joinpath('configs').rglob('*/')][::-1]:
                 if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
