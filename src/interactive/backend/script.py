@@ -89,6 +89,7 @@ class ScriptHeader:
     todo: str = ''
     email: bool = False
     mode: Literal['shell', 'os'] = 'shell'
+    blacklist: dict[str, list[str]] = field(default_factory=dict)
     parameters: dict[str, Any] = field(default_factory=dict)
     file_editor: dict[str, Any] = field(default_factory=dict)
     file_previewer: dict[str, Any] = field(default_factory=dict)
@@ -144,9 +145,23 @@ class ScriptHeader:
         return cls(**kwargs)
 
     @property
-    def ready(self):
-        """check if the script is ready to run"""
-        return not self.disabled and not self.parameters
+    def ready(self) -> Literal[0, 1, 2 , 3]:
+        """
+        check if the script is ready to run
+        0: disabled or blacklisted
+        1: at least one parameter is required
+        2: ready to run with all parameters not required
+        3: ready to run with no parameter
+        """
+        if self.disabled or MACHINE.name in self.blacklist.get('machine', []):
+            return 0
+        if not self.parameters:
+            return 3
+        elif not any(param.get('required' , False) for param in self.parameters.values()):
+            return 2
+        else:
+            return 1
+
 
 @dataclass
 class ScriptParamInput:

@@ -1,22 +1,22 @@
-PAUSE_WHEN_DONE : true
+pause_when_done : true
 
-DISCOVER_WAIT_TIMEOUT : 15.0
-DISCOVER_WAIT_INTERVAL : 0.25
+discover_wait_timeout : 15.0
+discover_wait_interval : 0.25
 
-MACOS_OPTIONS:
+macos_options:
   - cmux
   - ghostty
   - terminal.app
 
-MACOS_TERMINAL_PROFILE_NAME : Basic
-MACOS_CMUX_NEW : tab # window, workspace, tab (as surface)
-MACOS_CMUX_COLD_START_DEADLINE : 15.0
-MACOS_CMUX_PING_INTERVAL : 0.25
-MACOS_CMUX_CMD_TIMEOUT : 120.0
+macos_terminal_profile_name : Basic
+macos_cmux_new : tab # window, workspace, tab (as surface)
+macos_cmux_cold_start_deadline : 15.0
+macos_cmux_ping_interval : 0.25
+macos_cmux_cmd_timeout : 120.0
 
-LINUX_OPTIONS:
+linux_options:
   - gnome
-LINUX_GNOME_NEW : tab # window , workspace(as window), tab
+linux_gnome_new : tab # window , workspace(as window), tab
 
-WINDOWS_OPTIONS:
+windows_options:
   - cmd

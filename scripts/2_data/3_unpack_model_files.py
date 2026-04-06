@@ -4,6 +4,8 @@
 # date: 2026-01-18
 # description: Unpack Model Files
 # content: 解包模型文件
+# blacklist:
+#   machine: ['mengkjin-server']
 # email: True
 # mode: shell
 

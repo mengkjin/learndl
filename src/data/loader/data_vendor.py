@@ -5,7 +5,7 @@ import polars as pl
 
 from typing import Any , Literal
 
-from src.proj import Logger , CALENDAR , Proj , DB , Dates , singleton
+from src.proj import Logger , CALENDAR , Proj , DB , Dates , singleton , CONST
 from src.data.util import DataBlock , INFO
 
 from .financial_data import BS , IS , CF , INDI , FINA , FinData
@@ -274,11 +274,11 @@ class DataVendor:
         return blk
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , Proj.Conf.Factor.RISK.style)
+        blk = self.get_risk_exp(date).align(secid , date , CONST.Conf.Factor.RISK.style)
         return blk
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
-        blk = self.get_risk_exp(date).align(secid , date , Proj.Conf.Factor.RISK.indus)
+        blk = self.get_risk_exp(date).align(secid , date , CONST.Conf.Factor.RISK.indus)
         return blk
     
     def get_ffmv(self , secid : np.ndarray , d : int):

@@ -4,7 +4,7 @@ from typing import Literal
 import re , subprocess
 from abc import abstractmethod , ABC
 
-from src.proj import Proj , MACHINE 
+from src.proj import Proj , MACHINE , CONST
 from src.proj.util import Options
 from src.interactive.backend import PathItem
 from src.interactive.backend import ScriptRunner
@@ -16,7 +16,7 @@ assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 
 INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
-PAGE_TITLE = f":rainbow[:material/rocket_launch: {Proj.Conf.Interactive.page_title} (_v{Proj.Conf.Interactive.version}_)]"
+PAGE_TITLE = f":red[:material/rocket_launch:] :rainbow[{CONST.Pref.get('interactive' , 'page_title' , 'Learndl')} (_v{Proj.version}_)]"
 
 PAGE_ICONS = {
     'home' : ':material/home:' ,
@@ -310,11 +310,13 @@ class ControlPanel:
     
     def show(self , script_key : str | None = None):
         with st.container(key = self.control_panel_key):
-            buttons , settings = st.tabs(['**Global Control**' , '**Global Settings**'])
+            columns = st.columns([1,10,1] , gap = 'small' , vertical_alignment = 'center')
+            _ , buttons , settings = columns
             with buttons:
                 self.show_buttons(script_key = script_key)
             with settings:
-                self.show_settings(script_key = script_key)
+                with st.container(key = f"{self.control_panel_key}-settings" ):
+                    self.show_settings(script_key = script_key)
 
     def show_buttons(self , script_key : str | None = None):
         with st.container(key = f"{self.control_panel_key}-buttons"):
@@ -324,29 +326,14 @@ class ControlPanel:
                     button.show(script_key = script_key)
 
     def show_settings(self , script_key : str | None = None):
-        with st.container(key = f"{self.control_panel_key}-settings"):
-            verbosity , email , mode = st.columns(3 , gap = 'small' , vertical_alignment = 'center')
-            with verbosity:
-                # max verbosity, yes for 10 , no for 0 , None for default (2 if not set), passed to script params
-                st.segmented_control("**:blue[Max Verbosity]**" , ['yes' , 'no'] , default = None , 
-                                     key = 'global-settings-maxvb'  , 
-                                     help="""Should use max verbosity or min? Not selected will use default.""")
-
-            with email:
-                # email notification, yes , no , None for default, passed to script params
-                st.segmented_control("**:blue[Send Email]**" , ['yes' , 'no'] , default = None , 
-                                     key = 'global-settings-email'  , 
-                                     help="""If email after the script is complete? Not selected will use script header value.""")
-
-            with mode:    
-                # run mode, shell , os , or default , used in SessionControl.click_script_runner_run()
-                st.segmented_control("**:blue[Run Mode]**" , ['shell' , 'os'] , default = None , 
-                                     key = 'global-settings-mode'  , 
-                                     help="""Which mode should the script be running in?
-                                     :blue[**shell**] will start a commend terminal to run;
-                                     :blue[**os**] will run in backend.
-                                     Not selected will use script header value.""")
-          
+        with st.popover('**:material/settings:**'):
+            st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
+                    help="""Should use max verbosity or min? Not selected will use default.""")
+            st.toggle('**:blue[Disable Email]**', value=False , key = 'global-settings-disable-email'  , 
+                    help="""If email after the script is complete? Not selected will use script header value.""")
+            st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 
+                    help="""Should the script run silently? Not selected will use script header value.""")
+        
           
 def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro'):
     set_current_page(page_name)
@@ -364,7 +351,7 @@ def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'in
         raise ValueError(f"type {type} should be 'intro' or 'script'")
     
     # st.title(PAGE_TITLE)
-    st.header(f"*_:rainbow[{self_page['icon']} {self_page['head']}]_*" , help = self_page['help'])
+    st.header(f"*_:red[{self_page['icon']}] :rainbow[{self_page['head']}]_*" , help = self_page['help'])
     if 'control-panel' not in st.session_state:
         st.session_state['control-panel'] = ControlPanel()
     st.session_state['control-panel'].show(script_key = script_key)

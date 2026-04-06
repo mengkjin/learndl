@@ -4,6 +4,8 @@
 # date: 2026-01-18
 # description: Pack Model Files
 # content: 打包模型文件
+# blacklist:
+#   machine: ['Mathews-Mac' , 'HST-jinmeng']
 # email: True
 # mode: shell
 # parameters:

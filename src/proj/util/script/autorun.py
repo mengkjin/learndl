@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any , Callable
 
 from src.proj.env import MACHINE
-from src.proj.proj import Proj
+from src.proj.env import Proj
 from src.proj.log import Logger
 from src.proj.cal import CALENDAR
 
@@ -289,8 +289,8 @@ class AutoRunTask:
 
     def set_verbosity(self):
         """set the verbosity of the task"""
-        if 'max_vb' in self.kwargs:
-            self.verbosity = 10 * int(self.kwargs['max_vb'])
+        if self.kwargs.get('max_vb' , False):
+            self.verbosity = Proj.vb.max
         Proj.vb.set_vb(self.verbosity)
 
     def send_email(self):

@@ -2,3 +2,5 @@
 
 from .machine import MACHINE
 from .path import PATH
+from .constant import CONST
+from .variable import Proj

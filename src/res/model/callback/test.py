@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Logger , DB , Proj
+from src.proj import Logger , DB , Proj , CONST
 from src.proj.util import dfs_to_excel , figs_to_pdf
 
 from src.res.factor.util import StockFactor
@@ -171,7 +171,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def get_factor_for_factor_test(self):
         test_dates = self.test_dates[::5]
-        if Proj.Conf.Model.TRAIN.resume_test_factor_perf is False:
+        if CONST.Conf.Model.TRAIN.resume_test_factor_perf is False:
             return self.get_factor(test_dates)
         else:
             saved_dates = FactorTestAPI.factor_stats_saved_dates(self.snap_folder)
@@ -181,10 +181,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
             return self.get_factor(target_dates).set_pseudo_date(test_dates)
 
     def get_factor_for_fmp_test(self):
-        if Proj.Conf.Model.TRAIN.resume_test_fmp is False:
+        if CONST.Conf.Model.TRAIN.resume_test_fmp is False:
             return self.get_factor(self.test_dates)
-        elif Proj.Conf.Model.TRAIN.resume_test_fmp.startswith('trailing_'):
-            trailing_days = int(Proj.Conf.Model.TRAIN.resume_test_fmp.removeprefix('trailing_'))
+        elif CONST.Conf.Model.TRAIN.resume_test_fmp.startswith('trailing_'):
+            trailing_days = int(CONST.Conf.Model.TRAIN.resume_test_fmp.removeprefix('trailing_'))
             assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
             pred_last_date = self.trainer.record.resumed_last_pred_date
             port_last_date = FactorTestAPI.last_portfolio_date(self.snap_folder , self.fmp_tasks)
@@ -192,7 +192,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
             test_date_num = sum(self.test_dates > last_date) + trailing_days
             return self.get_factor(self.test_dates[-test_date_num:])
         else:
-            raise ValueError(f'Invalid resuming test fmp option: {Proj.Conf.Model.TRAIN.resume_test_fmp}')
+            raise ValueError(f'Invalid resuming test fmp option: {CONST.Conf.Model.TRAIN.resume_test_fmp}')
 
 
     def factor_test(self , indent : int = 0 , vb_level : Any = 2):

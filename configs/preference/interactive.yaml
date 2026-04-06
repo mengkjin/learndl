@@ -1,0 +1,6 @@
+recommended_explorer: "chrome"
+page_title: "Learndl"
+pending_features: []
+auto_refresh_interval: 0 # seconds
+
+navigation_position: "both" # "sidebar", "both"

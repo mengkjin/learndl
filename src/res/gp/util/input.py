@@ -6,7 +6,7 @@ import torch
 from dataclasses import dataclass
 from typing import Any
 
-from src.proj import Logger , Proj , CALENDAR
+from src.proj import Logger , Proj , CALENDAR , CONST
 from src.proj.util import torch_load
 from src.func import tensor as T
 from src.data import DATAVENDOR
@@ -183,7 +183,7 @@ def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device 
     dates = CALENDAR.range(start , end , 'td')
     block = BlockLoader('models' , 'tushare_cne5_exp').load(start , end , vb_level = 'never').\
         align_secid_date(secid , dates , inplace = True)
-    values = block.loc(feature = Proj.Conf.Factor.RISK.indus + ['size']).squeeze().to(device)
+    values = block.loc(feature = CONST.Conf.Factor.RISK.indus + ['size']).squeeze().to(device)
     return values
 
 def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 

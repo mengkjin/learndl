@@ -4,6 +4,8 @@
 # date: 2025-08-18
 # description: Run Rollback Update
 # content: 回滚Tushare更新数据和因子，不重新更新其他数据(当做已经发生)
+# blacklist:
+#   machine: ['Mathews-Mac']
 # email: True
 # mode: shell
 # parameters:

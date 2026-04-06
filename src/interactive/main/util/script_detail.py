@@ -83,12 +83,12 @@ def show_script_task_selector(runner : ScriptRunner):
 
         cols = st.columns(2)
         with cols[0].container(key = f"task-stats-unfiltered-container"):
-            st.info(f"**:material/bar_chart: Stats: All Tasks of This Script**")
+            st.info(f"**:blue[:material/bar_chart:] Stats: All Tasks of This Script**")
             st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message(script_queue)}")
             st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message(script_queue)}")
             
         with cols[1].container(key = f"task-stats-filtered-stats-container"):
-            st.info(f"**:material/bar_chart: Stats: Filtered Tasks**")
+            st.info(f"**:blue[:material/bar_chart:] Stats: Filtered Tasks**")
             st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message(queue)}")
             st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message(queue)}")
         
@@ -254,7 +254,7 @@ def show_report_main(runner : ScriptRunner):
                 return
             
             start_as_unfinished = item.is_running
-            with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):
+            with st.expander(":material/build: **Command Details**", expanded=False):
                 st.code(item.cmd , wrap_lines=True)
 
             st.success(f'{item.running_str} Started!' , icon = ":material/add_task:")
@@ -264,11 +264,11 @@ def show_report_main(runner : ScriptRunner):
                 'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
                 'Value': st.column_config.TextColumn(width="large", help='Value of the item')
             }
-            with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
+            with df_placeholder.expander(":material/data_table: **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
             item.wait_until_completion()
-            with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
+            with df_placeholder.expander(":material/data_table: **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
             if item.is_error:
@@ -279,7 +279,7 @@ def show_report_main(runner : ScriptRunner):
                 st.success(f'{item.running_str} Completed!' , icon = ":material/trophy:")
 
             exit_info_list = item.info_list(info_type = 'exit' , sep_exit_files = False)
-            with st.expander(f":rainbow[:material/fact_check:] **Exit Information**", expanded=True).container(key = 'detail-exit-info-container'):
+            with st.expander(f":material/fact_check: **Exit Information**", expanded=True).container(key = 'detail-exit-info-container'):
                 for name , value in exit_info_list:
                     if name.lower() == 'exit files':
                         continue
@@ -293,7 +293,7 @@ def show_report_main(runner : ScriptRunner):
                 #if SC.running_report_init and len(item.exit_files) == 1:
                 #    SC.running_report_file_previewer = Path(item.exit_files[0]).absolute()
 
-                with st.expander(f":rainbow[:material/preview:] **Exit Files**", expanded=True):
+                with st.expander(f":material/preview: **Exit Files**", expanded=True):
                     for i, file in enumerate(item.exit_files):
                         path = Path(file).absolute()
                         col0 , col1, col2 = st.columns([4 , 5.5 , 0.5] , vertical_alignment = "center")

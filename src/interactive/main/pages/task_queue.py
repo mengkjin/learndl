@@ -102,8 +102,8 @@ def show_queue_header():
         st.warning("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
         return
 
-    st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message()}")
-    st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.source_message()}")
+    st.caption(f":blue[:material/bar_chart:] {SC.task_queue.status_message()}")
+    st.caption(f":blue[:material/bar_chart:] {SC.task_queue.source_message()}")
         
 def show_task_filters():
     with st.container(key="task-filter-container").expander("Task Filters" , expanded = True , icon = ":material/filter_list:"):
@@ -135,12 +135,12 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
         st.info(f"Showing latest {len(queue)} tasks" , icon = ":material/info:")
     cols = st.columns(2)
     with cols[0].container(key = f"task-stats-unfiltered-container"):
-        st.info(f"**:material/bar_chart: Stats: All Tasks**")
+        st.info(f"**:blue[:material/bar_chart:] Stats: All Tasks**")
         st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message()}")
         st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message()}")
         
     with cols[1].container(key = f"task-stats-filtered-stats-container"):
-        st.info(f"**:material/bar_chart: Stats: Filtered Tasks**")
+        st.info(f"**:blue[:material/bar_chart:] Stats: Filtered Tasks**")
         st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message(queue)}")
         st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message(queue)}")
 

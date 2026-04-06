@@ -5,7 +5,7 @@ import logging.handlers
 
 from typing import Any , Type
 
-from src.proj.env import MACHINE , PATH
+from src.proj import PATH , CONST
 
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""
@@ -47,7 +47,7 @@ def log_config() -> dict[str, Any]:
     Returns:
         Config dict suitable for ``new_log`` / ``reset_logger``.
     """
-    log_config = MACHINE.configs('preference' , 'logger')
+    log_config = CONST.Pref.load_preference('logger')
     new_path = PATH.logs.joinpath('main' , log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
     new_path.parent.mkdir(exist_ok=True)

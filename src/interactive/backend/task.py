@@ -26,7 +26,7 @@ class TaskDatabase:
 
     @staticmethod
     def get_db_path():
-        return PATH.app_db / 'task_manager.db'
+        return PATH.app_db / 'interactive_tasks.db'
 
     def initialize_database(self):
         """Initialize database and tables"""
@@ -551,7 +551,8 @@ class TaskItem:
         else:
             assert self.id.endswith(self.task_id) , f'task_id must be the same as id, but got {self.task_id} and {self.id}'
         self._task_db = None
-        self._script_cmd = None
+        self.script_cmd = None
+        self._updates_to_sync : dict[str, Any] = {}
 
     def __eq__(self, other):
         if isinstance(other, TaskItem):
@@ -568,9 +569,8 @@ class TaskItem:
         return self
     
     def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs):
-        script_cmd = ScriptCmd(script, params, mode, **kwargs)
-        self._script_cmd = script_cmd
-        self.update({'cmd': str(script_cmd)} , write_to_db = True)
+        self.script_cmd = ScriptCmd(script, params, mode, **kwargs)
+        self.update({'cmd': str(self.script_cmd)} , sync = True)
         return self
 
     @property
@@ -683,15 +683,13 @@ class TaskItem:
                 if self.check_killed():
                     changed['status'] = 'killed'
                 else:
-                    self.update({'status': 'complete'} , write_to_db = True)
+                    self.update({'status': 'complete'} , sync = True)
                     changed['status'] = 'complete'
                 
             elif status != 'running':
-                self.update({'status': 'running'} , write_to_db = False)
+                self.update({'status': 'running'} , sync = False)
 
-        if self.task_db.is_backend_updated(self.id):
-            changed = changed | self.reload()
-            self.task_db.del_backend_updated_task(self.id)  
+        changed = changed | self.reload()
 
         if changed and 'status' in changed:
             new_status = changed['status']
@@ -712,7 +710,7 @@ class TaskItem:
                 'exit_error': f'CRITICAL: Process {self.pid} is killed , please check the crash_protector files',
                 'exit_files': crash_protector_paths,
             }
-            self.update(updates , write_to_db = True)
+            self.update(updates , sync = True)
             title = f'Process Killed Unexpectedly'
             body = f"""Process {self.id} killed , information includes:
             - Task ID: {self.id}
@@ -733,6 +731,24 @@ class TaskItem:
         else:
             return False
 
+    def wait_until_running(self , starting_timeout : int = 20):
+        """wait for running"""
+        if not self.is_running:
+            return True
+        while not self.is_running:
+            self.refresh()
+            if self.status == 'starting':
+                starting_timeout = starting_timeout - 1
+            if starting_timeout <= 0:
+                Logger.error(f'Script {self.script} running timeout! Still starting')
+                self.update({
+                    'status': 'error' , 'end_time': datetime.now().timestamp() ,
+                    'exit_code': 1 ,
+                    'exit_error': f'Script {self.script} running timeout! Still starting'} , sync = True)
+                return False
+            time.sleep(1)
+        return True
+
     def wait_until_completion(self , starting_timeout : int = 20):
         """wait for complete"""
         if not self.is_running:
@@ -746,7 +762,7 @@ class TaskItem:
                 self.update({
                     'status': 'error' , 'end_time': datetime.now().timestamp() ,
                     'exit_code': 1 ,
-                    'exit_error': f'Script {self.script} running timeout! Still starting'} , write_to_db = True)
+                    'exit_error': f'Script {self.script} running timeout! Still starting'} , sync = True)
                 return False
             time.sleep(1)
         return True
@@ -766,25 +782,35 @@ class TaskItem:
     
     def reload(self) -> dict[str, Any]:
         """reload task item status from database, return changed items"""
+        if not self.task_db.is_backend_updated(self.id):
+            return {}
+
         new_task = self.task_db.get_task(self.id)
         assert new_task is not None , f'Task {self.id} not found'
-        changed_items = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k) and v is not None}
-        if changed_items:
-            self.update(changed_items)
-            if 'status' in changed_items:
-                changed_items = {'status' : changed_items['status']} | {k: v for k, v in changed_items.items() if k != 'status'}
-            for k, v in changed_items.items():
+        changed = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k) and v is not None}
+        if changed:
+            self.update(changed)
+            if 'status' in changed:
+                changed = {'status' : changed['status']} | {k: v for k, v in changed.items() if k != 'status'}
+            for k, v in changed.items():
                 if k.endswith('_time'):
                     assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
-                    changed_items[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
-        return changed_items
-    
-    def update(self, updates : dict[str, Any] | None = None , write_to_db : bool = False):
+                    changed[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
+        self.task_db.del_backend_updated_task(self.id)
+        return changed
+
+    def sync(self):
+        if self._updates_to_sync:
+            self.task_db.update_task(self.id , **self._updates_to_sync)
+            self._updates_to_sync = {}
+        
+    def update(self, updates : dict[str, Any] | None = None , sync : bool = False):
         if updates is None: 
             return
         [setattr(self, k, v) for k, v in updates.items()]
-        if write_to_db:
-            self.task_db.update_task(self.id , **updates)
+        self._updates_to_sync = self._updates_to_sync | updates
+        if sync:
+            self.sync()
 
     def kill(self):
         if self.pid and self.is_running:
@@ -972,13 +998,14 @@ class TaskItem:
         return df
     
     def run_script(self , as_workspace: str | None = None , from_workspace: str | None = None):
-        assert self._script_cmd is not None , 'script cmd is not set'
+        assert self.script_cmd is not None , 'script cmd is not set'
         try:
             start_time = timestamp()
-            process = self._script_cmd.run(as_workspace=as_workspace, from_workspace=from_workspace)
-            self.update({'pid': process.real_pid, 'status': 'running', 'start_time': start_time} , write_to_db = True)
+            self.script_cmd.run(as_workspace=as_workspace, from_workspace=from_workspace)
+            pid = self.script_cmd.get_real_pid()
+            self.update({'pid': pid, 'status': 'running', 'start_time': start_time} , sync = True)
         except Exception as e:
-            self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , write_to_db = True)
+            self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , sync = True)
             Logger.print_exc(e)
             raise
         return self

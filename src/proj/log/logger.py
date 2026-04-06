@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH
-from src.proj.proj import Proj
+from src.proj.env import Proj
 from src.proj.core import Duration , stdout , stderr , FormatStr , Once
 
 from .display import Display

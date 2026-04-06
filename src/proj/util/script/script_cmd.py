@@ -29,9 +29,8 @@ class ScriptCmd:
     def __str__(self):
         return Shell.py_cmd(self.script, py_path=self.py_path, kwargs=self.params)
     
-    @property
-    def real_pid(self):
-        pids = ProcessDiscovery.find_running_instances(script=self.script, task_id=self.params.get('task_id',None))
+    def get_real_pid(self):
+        pids = ProcessDiscovery.wait_for_running_instances(script=self.script, task_id=self.params.get('task_id',None))
         return pids[-1] if pids else None
 
     def run(self , as_workspace: str | None = None , from_workspace: str | None = None):

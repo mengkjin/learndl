@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any , Literal
 from src.proj.core import stderr , singleton
-from .core import ProjectPreference
+from src.proj.env.constant import CONST
 
 __all__ = ['Verbosity']
 
@@ -51,11 +51,11 @@ class Verbosity:
     - ``is_max_level``: check if ``vb`` is at or above ``max``
     
     """
-    max = ProjectPreference.get('vb_max' , 10)
-    min = ProjectPreference.get('vb_min' , 0)
-    never = ProjectPreference.get('vb_never' , 99)
-    always = ProjectPreference.get('vb_always' , -99)
-    callback = ProjectPreference.get('vb_level_callback' , 10)
+    max = CONST.Pref.get('project' , 'vb_max' , 10)
+    min = CONST.Pref.get('project' , 'vb_min' , 0)
+    never = CONST.Pref.get('project' , 'vb_never' , 99)
+    always = CONST.Pref.get('project' , 'vb_always' , -99)
+    callback = CONST.Pref.get('project' , 'vb_level_callback' , 10)
 
     assert never > max > min > always , (never , max , min , always)
 
@@ -84,7 +84,7 @@ class Verbosity:
     def vb(self) -> int:
         """Current global verbosity (clamped to ``min``..``max`` when set)."""
         if not hasattr(self , '_vb'):
-            self._vb = ProjectPreference.get('vb' , 1)
+            self._vb = CONST.Pref.get('project' , 'vb' , 1)
         return self._vb
 
     @property

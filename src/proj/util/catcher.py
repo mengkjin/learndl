@@ -13,7 +13,7 @@ from matplotlib.figure import Figure
 from string import Template
 
 from src.proj.env import PATH , MACHINE
-from src.proj.proj import Proj
+from src.proj.env import Proj
 from src.proj.core import Duration , str_to_html , dataframe_to_html , figure_to_html
 from src.proj.log import Logger
 

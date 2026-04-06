@@ -6,7 +6,7 @@ from abc import abstractmethod , ABCMeta
 from datetime import datetime
 from typing import Any , Type , Literal
 
-from src.proj import Proj , Logger , CALENDAR , Dates , Duration
+from src.proj import Proj , Logger , CALENDAR , Dates , Duration , CONST
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -44,7 +44,7 @@ class PreProcessorProperty:
 
     def category0(self , owner) -> str:
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
-        return Proj.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
+        return CONST.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def category1(self , owner) -> str:
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'

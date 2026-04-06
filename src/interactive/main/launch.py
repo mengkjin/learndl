@@ -4,7 +4,7 @@ import pathlib , os
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from src.proj import Proj
+from src.proj import Proj , CONST
 from util.navigation import page_setup
 
 file_path = str(pathlib.Path(__file__).absolute())
@@ -15,12 +15,12 @@ assert os.getcwd().lower() == path , \
 
 st.set_option('client.showSidebarNavigation', False)
 
-if Proj.Conf.Interactive.auto_refresh_interval > 0:
-    st_autorefresh.st_autorefresh(interval = Proj.Conf.Interactive.auto_refresh_interval * 1000)
+if CONST.Pref.get('interactive' , 'auto_refresh_interval' , 0) > 0:
+    st_autorefresh.st_autorefresh(interval = CONST.Pref.get('interactive' , 'auto_refresh_interval' , 0) * 1000)
   
 def main():
     Proj.print_info(script_level = False)
-    pg = page_setup()
+    pg = page_setup(navigation_position = 'both')
     pg.run()
     
 if __name__ == '__main__':

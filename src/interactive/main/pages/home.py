@@ -2,7 +2,7 @@ import platform, torch , sys , re
 import streamlit as st
 import psutil
 
-from src.proj import Proj
+from src.proj import CONST
 from src.interactive.frontend.frontend import expander_subheader
 from src.interactive.backend import ScriptRunner
 from util import SC , get_script_page , print_page_header , intro_pages
@@ -24,9 +24,9 @@ def show_tutorial():
     with expander_subheader('home-tutorial' , 'Tutorial' , ':material/school:' , True ,
                             help = 'Basic Tutorial for the Project.'):
         st.markdown("""
-        1. :blue[:material/settings:] Click the script button to expand the parameter settings
+        1. :material/settings: Click the script button to expand the parameter settings
         2. :green[:material/mode_off_on:] Fill in the necessary parameters and click Run
-        3. :rainbow[:material/bar_chart:] View the running report and generated files
+        3. :blue[:material/bar_chart:] View the running report and generated files
         4. :gray[:material/file_present:] Preview the generated HTML/PDF files
         """)
 
@@ -68,10 +68,10 @@ def show_system_info():
             cols[1].markdown(f":blue-badge[*{value}*]")
         
 def show_pending_features():
-    if not Proj.Conf.Interactive.pending_features: 
+    if not CONST.Pref.get('interactive' , 'pending_features' , []): 
         return
     with expander_subheader('home-pending-features' , 'Pending Features' , ':material/pending_actions:' , True):
-        for feature in Proj.Conf.Interactive.pending_features:
+        for feature in CONST.Pref.get('interactive' , 'pending_features' , []):
             st.warning(feature , icon = ":material/schedule:")
 
 def show_intro_pages():

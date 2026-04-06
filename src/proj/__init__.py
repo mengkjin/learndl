@@ -2,9 +2,7 @@
 
 from .core import Duration , Silence , singleton , SingletonMeta , SingletonABCMeta , NoInstanceMeta , Once
 
-from .env import MACHINE , PATH
-
-from .proj import Proj
+from .env import MACHINE , PATH , CONST , Proj
 
 from .log import Logger , LogFile
 

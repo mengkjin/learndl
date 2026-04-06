@@ -10,7 +10,7 @@ from typing import Any , TypeVar
 
 from src.proj.env import PATH
 from src.proj.log import Logger
-from src.proj.proj import Proj
+from src.proj.env import Proj
 
 from .core import PATH_TYPE , PD_MAPPER_TYPE
 from .df_handler import dfHandler

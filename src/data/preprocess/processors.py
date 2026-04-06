@@ -6,7 +6,7 @@ import polars as pl
 
 from typing import Any , Literal
 
-from src.proj import Proj , DB , CALENDAR
+from src.proj import Proj , DB , CALENDAR , CONST
 from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
@@ -34,7 +34,7 @@ class PrePros:
 class PrePro_y(TradePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]:
         return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Proj.Conf.Factor.RISK.indus, 'size'])}
+                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONST.Conf.Factor.RISK.indus, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
         if any([block.empty for block in blocks.values()]):
@@ -141,13 +141,13 @@ class PrePro_week(TradePreProcessor):
     
 class PrePro_style(PreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'style' : BlockLoader('models', 'tushare_cne5_exp', Proj.Conf.Factor.RISK.style)}
+        return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONST.Conf.Factor.RISK.style)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
 class PrePro_indus(PreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', Proj.Conf.Factor.RISK.indus)}
+        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONST.Conf.Factor.RISK.indus)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
 
@@ -188,6 +188,9 @@ class PrePro_holding(FactorPreProcessor): ...
 class PrePro_trading(FactorPreProcessor): ...
 
 class PrePro_dfl2(MicellaneousPreProcessor):
+    """
+    Calculate the rolling z-score of the features partitioned over secid
+    """
     CALCULATION_WINDOW = 250
     MIN_SAMPLES = 90
     FEATURE_CHUNK_SIZE = 20
@@ -207,8 +210,36 @@ class PrePro_dfl2(MicellaneousPreProcessor):
             sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
             sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
                 ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")) / 
-                pl.col(feat).rolling_std(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")).alias(feat)
+                (pl.col(feat).rolling_std(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")).alias(feat) + 1e-6)
                 for feat in sub_feature
+            ]).collect()
+            blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
+        del df
+        return DataBlock.merge(blocks , inplace = True)
+
+class PrePro_dfl2cs(MicellaneousPreProcessor):
+    """
+    Calculate the cross-sectional z-score of the features partitioned over secid
+    """
+    CALCULATION_WINDOW = 250
+    MIN_SAMPLES = 90
+    FEATURE_CHUNK_SIZE = 20
+    def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+        # 1. load data into pl.DataFrame
+        start = start or self.load_start
+        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None)
+        if secid is not None:
+            df = df.filter(pl.col('secid').is_in(secid))
+        # 2. Identify the columns as features (exclude index columns)
+        feature = [c for c in df.columns if c not in ['secid', 'date']]
+
+        # 3. Apply rolling z-score partitioned over secid
+        df = df.sort(['secid', 'date'])
+        blocks = []
+        for i in range(0, len(feature), self.FEATURE_CHUNK_SIZE):
+            sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
+            sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
+                ((pl.col(feat) - pl.col(feat).mean().over("date")) / (pl.col(feat).std().over("date")).alias(feat) + 1e-6) for feat in sub_feature
             ]).collect()
             blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
         del df

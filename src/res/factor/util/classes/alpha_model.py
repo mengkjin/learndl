@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , Literal , Callable
 
-from src.proj import Proj
+from src.proj import CONST
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 
@@ -272,7 +272,7 @@ class CompositeAlphaComponent:
     _cache_unnormalized : dict[str , AlphaModel] = {}
 
     def __init__(self , name : str):
-        if name in Proj.Conf.Model.SETTINGS['prediction']:
+        if name in CONST.Conf.Model.SETTINGS['prediction']:
             alpha_type , alpha_name , alpha_column = 'pred' , name , None
         elif '@' in name:
             exprs = name.split('@')

@@ -5,7 +5,7 @@ from matplotlib.figure import Figure
 from IPython.display import display as raw_display
 from typing import Any , Callable
 
-from src.proj.proj import Proj
+from src.proj.env import Proj
 
 __all__ = ['Display']
 

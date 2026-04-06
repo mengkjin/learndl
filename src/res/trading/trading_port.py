@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , Literal , Type , ClassVar
 
-from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates
+from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates , CONST
 from src.proj.util import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import Benchmark , Portfolio , CompositeAlpha , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
@@ -248,7 +248,7 @@ class TradingPort:
         return self
 
 class TrackingPort(TradingPort):
-    candidate_ports : ClassVar[dict[str , dict]] = Proj.Conf.TradingPort.tracking_ports
+    candidate_ports : ClassVar[dict[str , dict]] = CONST.Conf.TradingPort.tracking_ports
     @classmethod
     def load(cls , name : str) -> 'TrackingPort':
         if name in cls.candidate_ports:
@@ -304,7 +304,7 @@ class TrackingPort(TradingPort):
         return pf.assign(name = self.name , date = date)
     
 class BacktestPort(TradingPort):
-    candidate_ports : ClassVar[dict[str , dict]] = Proj.Conf.TradingPort.backtest_ports
+    candidate_ports : ClassVar[dict[str , dict]] = CONST.Conf.TradingPort.backtest_ports
     @classmethod
     def load(cls , name : str) -> 'BacktestPort':
         if name in cls.candidate_ports:

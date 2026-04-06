@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.proj import DB , Proj
+from src.proj import DB , CONST
 from src.data import DataBlock , DATAVENDOR
 
 from .portfolio import Port , Portfolio
@@ -16,11 +16,11 @@ class Benchmark(Portfolio):
     '''
     _instance_dict = {}
     
-    AVAILABLES = Proj.Conf.Factor.BENCH.availables
-    DEFAULTS   = Proj.Conf.Factor.BENCH.defaults
-    TESTS      = Proj.Conf.Factor.BENCH.tests
-    CATEGORIES = Proj.Conf.Factor.BENCH.categories
-    NONE       = Proj.Conf.Factor.BENCH.none
+    AVAILABLES = CONST.Conf.Factor.BENCH.availables
+    DEFAULTS   = CONST.Conf.Factor.BENCH.defaults
+    TESTS      = CONST.Conf.Factor.BENCH.tests
+    CATEGORIES = CONST.Conf.Factor.BENCH.categories
+    NONE       = CONST.Conf.Factor.BENCH.none
     
     def __new__(cls , name : str | Any | None , *args , **kwargs):
         name = cls.get_object_name(name)

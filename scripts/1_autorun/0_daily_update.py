@@ -4,6 +4,8 @@
 # date: 2024-11-27
 # description: Run Daily Update
 # content: 每日更新数据,因子,模型隐变量,模型推理,运行定时任务
+# blacklist:
+#   machine: ['Mathews-Mac']
 # email: True
 # mode: shell
 

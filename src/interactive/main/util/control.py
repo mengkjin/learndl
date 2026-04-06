@@ -110,37 +110,24 @@ class SessionControl:
     def get_latest_queue(self , num : int = 10):
         return self.task_queue.latest_n(num)
     
-    def get_global_settings(self):
-        setting = {}
-        max_vb = str(st.session_state.get('global-settings-maxvb' , 'none')).lower()
-        if max_vb != 'none': 
-            setting['max_vb'] = 1 if max_vb.startswith('y') else 0
-
-        email = str(st.session_state.get('global-settings-email' , 'none')).lower()
-        if email != 'none': 
-            setting['email'] = 1 if email.startswith('y') else 0
-
-        mode = str(st.session_state.get('global-settings-mode' , 'none')).lower()
-        if mode != 'none': 
-            setting['mode'] = 'shell' if mode == 'shell' else 'os'
-        
-        return setting
+    def add_global_settings(self , params : dict[str, Any] | None = None) -> dict[str, Any]:
+        params = {**params} if params else {}
+        params['max_vb'] = st.session_state.get('global-settings-max-vb' , False)
+        if st.session_state.get('global-settings-disable-email' , False):
+            params['email'] = False
+        if st.session_state.get('global-settings-silent-run' , False):
+            params['mode'] = 'os'
+        return params
 
     def get_script_runner_cmd(self , runner : ScriptRunner | None , params : dict[str, Any] | None , 
                               operation_txt = True):
         """preview runner cmd"""
         if runner is None: 
             return None
-        run_params = self.get_global_settings()
-        if 'email' not in run_params: 
-            run_params['email'] = runner.header.email
-        if 'mode'  not in run_params: 
-            run_params['mode']  = runner.header.mode
-        if params: 
-            run_params.update(params)
-        cmd = runner.preview_cmd(**run_params)
+        params = self.add_global_settings(params)
+        cmd = runner.preview_cmd(**params)
         if operation_txt:
-            run_text = 'run' if 'mode' not in run_params else f'{run_params["mode"]} run'
+            run_text = 'run' if 'mode' not in params else f'{params["mode"]} run'
             cmd = f":blue[**{run_text.title()}**]: {cmd}"
         return cmd
     
@@ -297,15 +284,8 @@ class SessionControl:
     @universal_action
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
-        run_params = self.get_global_settings()
-        if 'email' not in run_params: 
-            run_params['email'] = runner.header.email
-        if 'mode'  not in run_params: 
-            run_params['mode']  = runner.header.mode
-        if params: 
-            run_params.update(params)
-        
-        item = runner.build_task(self.task_queue , **run_params)
+        params = self.add_global_settings(params)
+        item = runner.build_task(self.task_queue , **params)
 
         self.queue_last_action = f"Add to Queue: {item.id}" , True
         self.current_task_item = item.id

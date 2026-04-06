@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH , Logger , Proj , CALENDAR , Dates
+from src.proj import PATH , Logger , Proj , CALENDAR , Dates , CONST
 from src.res.trading.util.trade_suggestion import TradeSuggestion
 
 from .trading_port import TrackingPort
@@ -36,7 +36,7 @@ class TrackingPortfolioManager:
                 out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
                 message = f'Port {port_name} : total {len(new_ports[port_name])} , in {len(in_secids)} , out {len(out_secids)}'
                 Logger.stdout(message , indent = indent + 2 , vb_level = vb_level + 1)
-                if port_name in Proj.Conf.TradingPort.focused_ports:
+                if port_name in CONST.Conf.TradingPort.focused_ports:
                     Logger.conclude(message)
                     for suggestion in TradeSuggestion.generate(in_secids, date , 'buy'):
                         Logger.conclude(suggestion.format())

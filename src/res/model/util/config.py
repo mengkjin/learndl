@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Type
 
-from src.proj import PATH, MACHINE, Logger, Proj
+from src.proj import PATH, MACHINE, Logger , CONST
 from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
@@ -1125,10 +1125,10 @@ class ModelConfig(BaseModelConfig):
         info_strs.append((0, "Stage Queue", f"{self.queue_of_stages}"))
         info_strs.append((0, "Resuming", f"{self.is_resuming}"))
         if self.is_resuming:
-            info_strs.append((1, "Resume Test", f"{Proj.Conf.Model.TRAIN.resume_test}"))
-            info_strs.append((1, "Resume Perf", f"{Proj.Conf.Model.TRAIN.resume_test_factor_perf}"))
-            info_strs.append((1, "Resume FMP", f"{Proj.Conf.Model.TRAIN.resume_test_fmp}"))
-            info_strs.append((1, "Resume Account", f"{Proj.Conf.Model.TRAIN.resume_test_fmp_account}"))
+            info_strs.append((1, "Resume Test", f"{CONST.Conf.Model.TRAIN.resume_test}"))
+            info_strs.append((1, "Resume Perf", f"{CONST.Conf.Model.TRAIN.resume_test_factor_perf}"))
+            info_strs.append((1, "Resume FMP", f"{CONST.Conf.Model.TRAIN.resume_test_fmp}"))
+            info_strs.append((1, "Resume Account", f"{CONST.Conf.Model.TRAIN.resume_test_fmp_account}"))
 
         Logger.stdout_pairs(
             info_strs,

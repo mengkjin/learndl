@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj.env import MACHINE
-from src.proj.proj import Proj
+from src.proj.env import Proj
 from src.proj.log import Logger
 
 class EmailSetting:
