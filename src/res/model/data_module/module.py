@@ -65,7 +65,7 @@ class DataModule(BaseDataModule):
     """
     DataModule for model fitting / testing / predicting
     """
-    _config_instance_for_batch_data : dict[ModelConfig,'DataModule'] = {}
+    _config_instance_for_batch_data : dict[ModelConfig,DataModule] = {}
     def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , 
                  info : bool = False , min_key_len : int = -1 , **kwargs):
         '''

@@ -296,6 +296,7 @@ class ControlGitClearPullButton(ControlPanelButton):
                             Logger.error(f"Error removing folder: {folder}:")
                             Logger.error(f"Subfiles: {subfiles}")
             Logger.success("Git Pull Finished")
+
 class ControlPanel:
     """control panel"""
     control_panel_key = "page-control-panel"

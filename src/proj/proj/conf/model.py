@@ -5,7 +5,7 @@ from typing import Literal , Any
 from src.proj.core import stderr , singleton
 from src.proj.env import MACHINE
 
-__all__ = ['ModelConfig']
+__all__ = ['ModelSettingConfig']
 
 def notify_change(title : str , value , prev):
     """Stderr banner when a train resume field changes."""
@@ -13,7 +13,7 @@ def notify_change(title : str , value , prev):
         stderr(f'Project {title.title()} Changed from {prev} to {value}' , color = 'lightred' , bold = True)
 
 @singleton
-class ModelTrainConfig:
+class ModelTrainSettings:
     """
     User-tunable resume flags for training and downstream evaluations:
     - resume_test [Literal['False' , 'last_model_date' , 'last_pred_date']]: resume option of model train: if resume testing , and if so whether to resume from last model date or last pred date
@@ -74,14 +74,14 @@ class ModelTrainConfig:
         self.set_class_attrs('resume_test_factor_perf' , value)
 
 @singleton
-class ModelConfig:
+class ModelSettingConfig:
     """
-    Expose ``TRAIN`` toggles and ``SETTINGS`` from ``setting/model`` config:
+    Expose ``train`` toggles and ``settings`` from ``setting/model`` settings:
     - TRAIN: config of model train , include resume options
     - SETTINGS: settings of model , including prediction models / hidden extraction models
     """
 
-    _train = ModelTrainConfig()
+    _train = ModelTrainSettings()
     _settings = MACHINE.configs('setting' , 'model')
 
     @property

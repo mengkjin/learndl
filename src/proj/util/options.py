@@ -33,7 +33,7 @@ class OptionsDefinition:
     @classmethod
     def available_trackingports(cls) -> list[str]:
         """Get the available tracking ports in the trade_port directory"""
-        return [p.name for p in PATH.trade_port.joinpath('tracking').iterdir() if not p.name.startswith('.')]
+        return [p.name for p in PATH.trade_port.iterdir() if not p.name.startswith('.')]
 
     @classmethod
     def available_backtestports(cls) -> list[str]:

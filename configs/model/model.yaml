@@ -1,5 +1,5 @@
 # main model configs ----------------------------------------------------------------
-name          : gru_l2  # any name or null
+name          : gru_dfl2  # any name or null
 module        : gru
 # nn : can be nn / nn@{gru} ... / {gru} ...
 # boost : can be boost / boost@{lgbm} ... / {lgbm} ...
