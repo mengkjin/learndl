@@ -1,5 +1,5 @@
 """Application ``Logger``: verbosity-aware stdout/stderr, log file sink, timers, and profilers."""
-
+from __future__ import annotations
 import re
 import cProfile
 import traceback
@@ -144,8 +144,8 @@ class Logger:
 
     @classmethod
     def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
-                     title : str | None = None , 
-                     title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
+                     title : str | None = None , title_printer : Callable | None = None ,
+                     title_kwargs : dict[str , Any] | None = {'bold' : True , 'color' : 'lightgreen'} , 
                      indent = 0 , vb_level : Any = 1 , italic = True , min_key_len : int = -1 , **kwargs):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
@@ -158,7 +158,11 @@ class Logger:
             return (None if indent <= 1 else 'gray') if color is None or color == 'auto' else color
 
         if title:
-            new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)
+            title_kwargs = title_kwargs or {}
+            if title_printer is None:
+                new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)
+            else:
+                title_printer(title , **(title_kwargs | {'vb_level' : vb_level}))
             add_indent = 1
         else:
             add_indent = 0

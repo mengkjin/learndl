@@ -1,3 +1,8 @@
+"""
+TaskDatabase is a class that manages the task database, including task records, task exit files, task backend updated records, queue records, and task queues.
+"""
+
+from __future__ import annotations
 import os , sys , re , time
 import pandas as pd
 from typing import Any , Literal , Sequence
@@ -206,8 +211,7 @@ class TaskDatabase:
                     if k.endswith('_time'):
                         assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
                         new_kwargs[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
-
-                Logger.stdout_pairs(new_kwargs , title = f"Task {task_id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
+                Logger.info(f"Task {task_id} status [{new_status.upper()}]")
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
         """Check task status"""
@@ -667,25 +671,35 @@ class TaskItem:
         item.set_task_db(task_db)
         return item
     
-    def refresh(self) -> bool:
+    def refresh(self) -> dict[str, Any]:
         '''refresh task item status , return True if status changed'''
-        changed = False
-        if self.task_db.is_backend_updated(self.id):
-            self.reload()
-            self.task_db.del_backend_updated_task(self.id)  
-            changed = True
+        changed = {}
 
         if self.pid and self.is_running:
             status = check_process_status(self.pid)
             if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
                 raise ValueError(f"Process {self.pid} is {status}")
             if status in ['complete' , 'zombie']:
-                if not self.check_killed():
+                if self.check_killed():
+                    changed['status'] = 'killed'
+                else:
                     self.update({'status': 'complete'} , write_to_db = True)
-                    return True
+                    changed['status'] = 'complete'
+                
             elif status != 'running':
                 self.update({'status': 'running'} , write_to_db = False)
-                return True
+
+        if self.task_db.is_backend_updated(self.id):
+            changed = changed | self.reload()
+            self.task_db.del_backend_updated_task(self.id)  
+
+        if changed and 'status' in changed:
+            new_status = changed['status']
+            Logger.info(f"Task {self.id} status [{new_status.upper()}]")
+            if new_status == 'error' and 'exit_error' in changed:
+                Logger.stdout(f"exit_error : {changed['exit_error']}" , color = 'lightred' , indent = 1)
+            if 'exit_files' in changed:
+                Logger.stdout(f"exit_files : {changed["exit_files"]}" , indent = 1)
         return changed
 
     def check_killed(self) -> bool:
@@ -750,7 +764,8 @@ class TaskItem:
     def dump(self):
         self.task_db.new_task(self , overwrite=True)
     
-    def reload(self):
+    def reload(self) -> dict[str, Any]:
+        """reload task item status from database, return changed items"""
         new_task = self.task_db.get_task(self.id)
         assert new_task is not None , f'Task {self.id} not found'
         changed_items = {k : v for k, v in new_task.to_dict().items() if v != getattr(self, k) and v is not None}
@@ -762,8 +777,7 @@ class TaskItem:
                 if k.endswith('_time'):
                     assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
                     changed_items[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
-            Logger.stdout_pairs(changed_items , title = f"Task {self.id} status updated:" , title_kwargs = {'color' : None , 'bold' : True})
-        return self
+        return changed_items
     
     def update(self, updates : dict[str, Any] | None = None , write_to_db : bool = False):
         if updates is None: 
@@ -968,42 +982,3 @@ class TaskItem:
             Logger.print_exc(e)
             raise
         return self
-
-if __name__ == '__main__':
-    db = TaskDatabase()
-
-    task = TaskItem(
-        script = "/scripts/0_check/0_test_streamlit.py",
-        cmd = "/scripts/0_check/0_test_streamlit.py --email 1 --port_name a --module_name bbb --short_test None --forget True --start None --end None --seed 42.0 --task_id 0_check/0_test_streamlit.py@1752898666; exit\"' ",
-        create_time = 1752898666.1410549,
-        status = "error",
-        pid = 10210,
-        source = "test",
-        start_time = 1752898666.737761,
-        end_time = 1752898671.069558,
-        exit_code = 1,
-        exit_message = "INFO : info:Bye, World!\nERROR : error:Bye, World!\nWARNING : warning:Bye, World!\nDEBUG : debug:Bye, World!\nCRITICAL : critical:Bye, World!",
-        exit_files = ["logs/autorun/message_catcher/test_streamlit.20250719001751.html"],
-        exit_error = "error:Bye, World!"
-    )
-
-    db.new_task(task)
-
-    # 更新任务为运行中
-    db.update_task(
-        task_id="0_check/0_test_streamlit.py@1752898666",
-        status="running",
-        pid=12345,
-        start_time=timestamp()
-    )
-
-    # 更新任务为已完成
-    db.update_task(
-        task_id="0_check/0_test_streamlit.py@1752898666",
-        status="completed",
-        end_time=timestamp(),
-        exit_code=0
-    )
-
-
-
