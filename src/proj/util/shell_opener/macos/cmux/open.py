@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from .cli import CmuxCli
 from .verify import CmuxVerifier
-from ...util import process
+from ...util import process , BasicOpener
 from ... import preference
 
 _workspace_refs: dict[str, str] = {
@@ -204,12 +204,11 @@ def cmux_run(
             raise ValueError(f"Invalid new_on: {new_on}")
     popup_cmux()
 
-class CmuxOpener:
-    workspace_refs: dict[str, str] = {
+class CmuxOpener(BasicOpener):
+    def available(self) -> bool:
+        return CmuxVerifier.available()
 
-    }
-    @classmethod
-    def run(cls ,
+    def run(self ,
         command: str,
         * ,
         cwd: str | None = None,
@@ -220,8 +219,7 @@ class CmuxOpener:
         **kwargs
     ) -> None:
         """Run cmux IPC in a non-daemon thread (survives short-lived parent processes)."""
-        if not CmuxVerifier.available():
-            raise RuntimeError("cmux is not available")
+        assert self._available , f"{self.__class__.__name__} is not available"
         t = threading.Thread(
             target=cmux_run,
             args=(command,),

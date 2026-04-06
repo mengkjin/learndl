@@ -12,6 +12,20 @@ from ..preference import MACOS_OPTIONS
 
 __all__ = ["open_in_macos"]
 
+def get_opener(option: str):
+    """Get the opener for the given option"""
+    if option not in MACOS_OPTIONS:
+        option = MACOS_OPTIONS[0]
+    match option:
+        case "ghostty":
+            return GhosttyOpener()
+        case "terminal.app":
+            return TerminalAppOpener()
+        case 'cmux':
+            return CmuxOpener()
+        case _:
+            raise ValueError(f"Invalid option: {option}")
+
 def open_in_macos(
     command: str,
     * , 
@@ -30,16 +44,10 @@ def open_in_macos(
     ``\"cmux\"`` (async IPC + fallbacks), ``\"ghostty\"`` (Ghostty.app), or
     ``None`` / other → Terminal.app.
     """
-    if option is None:
-        option = MACOS_OPTIONS[0]
-    match option:
-        case "cmux":
-            Opener = CmuxOpener
-        case "ghostty":
-            Opener = GhosttyOpener
-        case "terminal.app":
-            Opener = TerminalAppOpener
-        case _:
-            Opener = CmuxOpener
+    options = [option] + MACOS_OPTIONS if option else MACOS_OPTIONS
+    for opt in options:
+        opener = get_opener(opt)
+        if opener:
+            break
 
-    Opener.run(command, cwd=cwd, title=title, new_on=new_on , as_workspace=as_workspace, from_workspace=from_workspace, **kwargs)
+    opener.run(command, cwd=cwd, title=title, new_on=new_on , as_workspace=as_workspace, from_workspace=from_workspace, **kwargs)

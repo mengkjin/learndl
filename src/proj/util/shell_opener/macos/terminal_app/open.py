@@ -5,17 +5,19 @@ from __future__ import annotations
 import shlex
 
 from ...util.process import popen_detached
+from ...util.basic import BasicOpener
 from .verify import TerminalAppVerifier
 
 def _applescript_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
-class TerminalAppOpener:
-    @classmethod
-    def run(cls, command: str, * , cwd: str | None = None, **kwargs) -> None:
+class TerminalAppOpener(BasicOpener):
+    def available(self) -> bool:
+        return TerminalAppVerifier.available()
+
+    def run(self, command: str, * , cwd: str | None = None, **kwargs) -> None:
         """Open a new Terminal.app tab/window running ``cd`` + ``command``."""
-        if not TerminalAppVerifier.available():
-            raise RuntimeError("Terminal.app is not available")
+        assert self._available , f"{self.__class__.__name__} is not available"
         if cwd:
             command = f"cd {shlex.quote(cwd)} && {command}"
         apple_script_cmd = _applescript_escape(command)

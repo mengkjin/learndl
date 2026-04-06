@@ -5,14 +5,16 @@ from __future__ import annotations
 import shlex
 
 from .verify import GnomeTerminalVerifier
+from ...util.basic import BasicOpener
 from ...preference import LINUX_GNOME_NEW
 from ...util import process
 
-class GnomeTerminalOpener:
-    @classmethod
-    def run(cls, command: str, * , cwd: str | None = None, title: str | None = None, new_on: str | None = None) -> None:
-        if not GnomeTerminalVerifier.available():
-            raise RuntimeError("gnome-terminal is not available (not on PATH)")
+class GnomeTerminalOpener(BasicOpener):
+    def available(self) -> bool:
+        return GnomeTerminalVerifier.available()
+
+    def run(self, command: str, * , cwd: str | None = None, title: str | None = None, new_on: str | None = None) -> None:
+        assert self._available , f"{self.__class__.__name__} is not available"
         command = f'{command}; exec bash'
         if cwd:
             command = f"cd {shlex.quote(cwd)} && {command}"
