@@ -228,6 +228,8 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
         # 1. load data into pl.DataFrame
         start = start or self.load_start
         df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None)
+        print(df.head())
+        print(start , end , CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td)
         if secid is not None:
             df = df.filter(pl.col('secid').is_in(secid))
         # 2. Identify the columns as features (exclude index columns)
