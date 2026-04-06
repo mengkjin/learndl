@@ -197,7 +197,9 @@ class PrePro_dfl2(MicellaneousPreProcessor):
     def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
         # 1. load data into pl.DataFrame
         start = start or self.load_start
-        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None)
+        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None , vb_level = vb_level)
+        if len(df) == 0:
+            return DataBlock()
         if secid is not None:
             df = df.filter(pl.col('secid').is_in(secid))
         # 2. Identify the columns as features (exclude index columns)
@@ -221,15 +223,13 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
     """
     Calculate the cross-sectional z-score of the features partitioned over secid
     """
-    CALCULATION_WINDOW = 250
-    MIN_SAMPLES = 90
     FEATURE_CHUNK_SIZE = 20
     def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
         # 1. load data into pl.DataFrame
         start = start or self.load_start
-        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None)
-        print(df.head())
-        print(start , end , CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td)
+        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None , vb_level = vb_level)
+        if len(df) == 0:
+            return DataBlock()
         if secid is not None:
             df = df.filter(pl.col('secid').is_in(secid))
         # 2. Identify the columns as features (exclude index columns)
