@@ -59,9 +59,7 @@ class OptimizedPortfolioCreator(PortCreator):
         return self
     
     def parse_input(self):
-        self.pool_additional = {'no_buy' : self.omission} if self.omission else None
-        self.solver_input = self.opt_input.to_solver_input(self.model_date , self.alpha_model , self.bench_port , self.init_port ,
-                                                           pool_additional = self.pool_additional).rescale()
+        self.solver_input = self.opt_input.to_solver_input(self.model_date , self.alpha_model , self.bench_port , self.init_port).rescale()
         return self
 
     def solve(self):

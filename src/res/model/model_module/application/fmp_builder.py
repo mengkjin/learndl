@@ -2,7 +2,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from typing import Any , Iterable , Callable
+from typing import Any , Iterable
 
 from src.proj import Logger , CALENDAR , Dates , Proj
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
@@ -87,17 +87,17 @@ class ModelPortfolioBuilder:
         self.build_fmps(dates , deploy = True , indent = indent , vb_level = vb_level)
         return dates
     
-    def build_fmps(self , dates : list[int] | np.ndarray , * , omission : Callable[[int], list[int]] | list[int] | None = None , deploy = True , indent = 1 , vb_level : Any = 2):
+    def build_fmps(self , dates : list[int] | np.ndarray , deploy = True , indent = 1 , vb_level : Any = 2):
         vb_level = Proj.vb(vb_level)
         for date in dates:
-            self.fmp_tables[date] = self.build_day(date , omission = omission , indent = indent + 1 , vb_level = vb_level + 2) 
+            self.fmp_tables[date] = self.build_day(date , indent = indent + 1 , vb_level = vb_level + 2) 
             Logger.stdout(f'Finished build fmps for {self.reg_model} at {date}' , indent = indent + 1 , vb_level = vb_level + 1)
             if deploy:
                 self.reg_model.save_fmp(self.fmp_tables[date] , date , False , indent = indent + 1 , vb_level = vb_level + 2)
             self._update_fmps_record.append(date)
         
-    def build_day(self , date : int , * , omission : Callable[[int], list[int]] | list[int] | None = None , indent : int = 1 , vb_level : Any = 1):
-        ports = [builder.build(date , omission = omission).port.to_dataframe() for builder in self.iter_builders(date , indent = indent , vb_level = vb_level)]
+    def build_day(self , date : int , indent : int = 1 , vb_level : Any = 1):
+        ports = [builder.build(date).port.to_dataframe() for builder in self.iter_builders(date , indent = indent , vb_level = vb_level)]
         df = pd.concat(ports).reset_index(drop=True)
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'

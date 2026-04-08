@@ -12,7 +12,7 @@ focused_ports:
 #   test_start (for backtest): int , default is 20190101
 #   test_end (for backtest): int , default is -1
 #   benchmark: str , default is 'csi500'
-#   exclusion: str , default is 'st_bse_lowprice_loser'
+#   exclusion: str , default is 'st_bse_lowprice_loser_warnst'
 #   sorting_alpha: tuple[str , str , str | None] , default is ('pred' , 'gru_day_V1' , None)
 #   screen_ratio: float , default is 0.5
 #   buffer_zone: float , default is 0.8

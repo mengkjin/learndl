@@ -51,7 +51,7 @@ class TrackingPortfolioManager:
             tp = TrackingPort.load(name)
             tp.analyze(key_fig = '' , indent = indent + 1 , vb_level = vb_level + 2)
 
-        Logger.success(f'{len(updated_ports)} Tracking Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
+        Logger.success(f'{len(TrackingPort.candidate_ports)} Tracking Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
                     
     @classmethod
     def attachment_path(cls , date : int) -> Path:

@@ -42,4 +42,4 @@ class BacktestPortfolioManager:
         for name in BacktestPort.candidate_ports:
             tp = BacktestPort.load(name)
             tp.analyze(key_fig = '' , indent = indent + 1 , vb_level = vb_level + 2)
-        Logger.success(f'{len(updated_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
+        Logger.success(f'{len(BacktestPort.candidate_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)

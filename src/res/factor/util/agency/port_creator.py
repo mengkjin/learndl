@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Literal , Callable
+from typing import Any , Literal
 
 from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
@@ -14,12 +14,11 @@ class PortCreator(ABC):
     
     def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
                benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , 
-               detail_infos = False , * , omission : Callable[[int], list[int]] | list[int] | None = None) -> PortCreateResult: 
+               detail_infos = False) -> PortCreateResult: 
         self.model_date = model_date
         self.alpha_model = alpha_model if alpha_model is not None else Amodel.create_random(model_date)
         self.init_port = Port.none_port(model_date , self.name) if init_port is None else init_port
         self.value = self.init_port.value
-        self.omission : list[int] = (omission(model_date) if callable(omission) else omission) or []
         if benchmark is None:
             self.bench_port = Port.none_port(model_date)
         elif isinstance(benchmark , Port):

@@ -13,8 +13,6 @@ from src.res.factor.util import Benchmark , Portfolio , CompositeAlpha , Univers
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
 
-from src.res.trading.util.omission import Omission
-
 TASK_LIST : list[Type[TopCalc]] = [
     FrontFace , 
     Perf_Curve ,
@@ -38,8 +36,7 @@ class TradingPort:
     test_start  : int = 20190101 # -1 for no backtest
     test_end    : int = -1
     benchmark   : str = 'csi500'
-    exclusion   : str = 'st_bse_lowprice_loser'
-    omission    : str = 'warnst'
+    exclusion   : str = 'st_bse_lowprice_loser_warnst'
     sorting_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
     screen_ratio  : float = 0.5
     buffer_zone   : float = 0.8
@@ -291,7 +288,7 @@ class TrackingPort(TradingPort):
                                    indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
                                    screen_ratio = self.screen_ratio , indent = indent + 1 , vb_level = vb_level + 1).setup()
 
-        pf = builder.build(date , omission = Omission(self.omission)).port.to_dataframe()
+        pf = builder.build(date).port.to_dataframe()
         if pf.empty: 
             return pf
 
