@@ -1,5 +1,5 @@
 """Stdout/stderr capture to memory, logs, HTML, markdown, and warning interception."""
-
+from __future__ import annotations
 import sys , re , platform , warnings , shutil
 import pandas as pd
 
@@ -498,7 +498,7 @@ class HtmlCatcher(OutputCatcher):
     export_dir = PATH.logs.joinpath('catcher' , 'html')
     export_suffix : str = '.html'
 
-    PrimaryInstance : 'HtmlCatcher | None' = None
+    PrimaryInstance : HtmlCatcher | None = None
     Capturing : bool = True
     Templates : dict[str, Template] = PATH.load_templates('html' , 'html_catcher')
 

@@ -47,7 +47,7 @@ class DBPath:
     export_by_name = EXPORT_BY_NAME
     export_by_date = EXPORT_BY_DATE
 
-    instance_cache : dict[str , 'DBPath'] = {}
+    instance_cache : dict[str , DBPath] = {}
 
     def __new__(cls , db_src : str , db_key : str):
         if f'{db_src}/{db_key}' not in cls.instance_cache:
@@ -190,7 +190,7 @@ class DBPath:
                 return max(dates)
         return None
 
-    def alternatives(self) -> list['DBPath']:
+    def alternatives(self) -> list[DBPath]:
         """get alternatives of database"""
         if self.src in self.src_alternatives:
             return [DBPath(alt_src , self.key) for alt_src in self.src_alternatives[self.src]]

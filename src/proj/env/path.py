@@ -61,6 +61,7 @@ class PATH:
     
     # configs folder and subfolders
     conf        = main.joinpath('configs')
+    schedule    = conf.joinpath('model' , 'schedule')
 
     # resouces folder (for update)
     resource      = main.joinpath('resources')

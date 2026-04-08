@@ -129,7 +129,7 @@ class TaskDatabase:
             cursor.execute('DELETE FROM sqlite_sequence')
         self.initialize_database()
     
-    def new_task(self, task: 'TaskItem' , overwrite: bool = False):
+    def new_task(self, task: TaskItem , overwrite: bool = False):
         """Insert new task record"""
         with self.conn_handler as (conn, cursor):
             if overwrite:
@@ -255,7 +255,7 @@ class TaskDatabase:
         with self.conn_handler as (conn, cursor):
             cursor.execute("DELETE FROM task_queues WHERE queue_id = ?", (queue_id,))
     
-    def get_task(self, task_id: str) -> 'TaskItem | None':
+    def get_task(self, task_id: str) -> TaskItem | None:
         """Get task information"""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT * FROM task_records WHERE task_id = ?', (task_id,))
@@ -270,7 +270,7 @@ class TaskDatabase:
             item = TaskItem(**task)
         return item
     
-    def get_tasks(self, task_ids: list[str]) -> list['TaskItem']:
+    def get_tasks(self, task_ids: list[str]) -> list[TaskItem]:
         """Get tasks information"""
         tasks = []
         with self.conn_handler as (conn, cursor):
@@ -299,7 +299,7 @@ class TaskDatabase:
         with self.conn_handler as (conn, cursor):
             cursor.execute('DELETE FROM task_queues WHERE queue_id = ? AND task_id = ?', (queue_id, task_id))
 
-    def get_queue_tasks(self, queue_id: str , max_queue_size: int | None = None) -> list['TaskItem']:
+    def get_queue_tasks(self, queue_id: str , max_queue_size: int | None = None) -> list[TaskItem]:
         """Get queue information"""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT task_id FROM task_queues WHERE queue_id = ?', (queue_id,))
@@ -372,7 +372,7 @@ class TaskQueue:
     def __repr__(self):
         return f"TaskQueue(queue_id={self.queue_id},max_queue_size={self.max_queue_size},length={len(self)})"
     
-    def __contains__(self, item : 'TaskItem'):
+    def __contains__(self, item : TaskItem):
         return item in self.queue.values()
     
     def get(self, task_id : str | None = None):
@@ -401,7 +401,7 @@ class TaskQueue:
         self.refresh()
         return {task.id: task.to_dict() for task in self.queue.values()}
 
-    def add(self, item : 'TaskItem'):
+    def add(self, item : TaskItem):
         assert item.id not in self.queue , f'TaskItem {item.id} already exists'
         self.queue[item.id] = item
         
@@ -415,12 +415,12 @@ class TaskQueue:
         self.add(item)
         return item
     
-    def delist(self, item : 'TaskItem'):
+    def delist(self, item : TaskItem):
         if item.id in self.queue:
             self.queue.pop(item.id)
         self.task_db.del_queue_task(self.queue_id, item.id)
         
-    def remove(self, item : 'TaskItem' , force : bool = False):
+    def remove(self, item : TaskItem , force : bool = False):
         if item.id in self.queue:
             self.queue.pop(item.id)
         self.task_db.del_queue_task(self.queue_id, item.id)
@@ -451,7 +451,7 @@ class TaskQueue:
         self.task_db.sync_queue(self.queue_id)
         self.reload()
             
-    def status_message(self , queue : dict[str, 'TaskItem'] | None = None):
+    def status_message(self , queue : dict[str, TaskItem] | None = None):
         if queue is None: 
             queue = self.queue
         status = [item.status for item in queue.values()]
@@ -464,7 +464,7 @@ class TaskQueue:
         msg = ' | '.join([f"{k.title()}: {v}" for k, v in counts.items()])
         return msg
     
-    def source_message(self , queue : dict[str, 'TaskItem'] | None = None):
+    def source_message(self , queue : dict[str, TaskItem] | None = None):
         if queue is None: 
             queue = self.queue
         source = [item.source for item in queue.values()]
@@ -482,7 +482,7 @@ class TaskQueue:
                source : str | None = None,
                folder : list[Path] | None = None,
                file : list[Path] | None = None , 
-               queue : dict[str, 'TaskItem'] | None = None):
+               queue : dict[str, TaskItem] | None = None):
         if queue is None: 
             queue = self.queue.copy()
         else:
@@ -517,7 +517,7 @@ class TaskQueue:
             return None
     
     @classmethod
-    def sort(cls , task_items : dict[str, 'TaskItem'] | list['TaskItem'] | Sequence['TaskItem'], key : str = 'create_time' , reverse : bool = True):
+    def sort(cls , task_items : dict[str, TaskItem] | list[TaskItem] | Sequence[TaskItem], key : str = 'create_time' , reverse : bool = True):
         if isinstance(task_items, dict):
             task_items = list(task_items.values())
         return sorted(task_items, key=lambda x: getattr(x, key), reverse=reverse)

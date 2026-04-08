@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 import numpy as np
 import shutil
@@ -76,7 +78,7 @@ class TradingPort:
         self.last_ports : dict[int , pd.DataFrame] = {}
     
     @classmethod
-    def load(cls , name : str) -> 'TradingPort':
+    def load(cls , name : str) -> TradingPort:
         if name in TrackingPort.candidate_ports and name in BacktestPort.candidate_ports:
             raise ValueError(f'{name} is both tracking and backtest port, please use distinct name for tracking and backtest ports')
         elif name in TrackingPort.candidate_ports:
@@ -94,10 +96,10 @@ class TradingPort:
     def portfolio_dir(self) -> Path:
         raise NotImplementedError(f'{self.__class__.__name__} must implement portfolio_dir in subclass')
 
-    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : Any = 2) -> 'TradingPort':
+    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : Any = 2) -> TradingPort:
         raise NotImplementedError(f'{self.__class__.__name__} must implement build in subclass')
 
-    def rebuild(self , date : int | None = None , export = True , indent : int = 1 , vb_level : Any = 2) -> 'TradingPort':
+    def rebuild(self , date : int | None = None , export = True , indent : int = 1 , vb_level : Any = 2) -> TradingPort:
         raise NotImplementedError(f'{self.__class__.__name__} must implement rebuild in subclass')
         
     def export_path(self , date : int) -> Path:
@@ -250,7 +252,7 @@ class TradingPort:
 class TrackingPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = CONST.Conf.TradingPort.tracking_ports
     @classmethod
-    def load(cls , name : str) -> 'TrackingPort':
+    def load(cls , name : str) -> TrackingPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
             return cls(**kwargs)
@@ -306,7 +308,7 @@ class TrackingPort(TradingPort):
 class BacktestPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = CONST.Conf.TradingPort.backtest_ports
     @classmethod
-    def load(cls , name : str) -> 'BacktestPort':
+    def load(cls , name : str) -> BacktestPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : True}
             return cls(**kwargs)

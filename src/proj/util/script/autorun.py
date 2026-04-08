@@ -1,5 +1,5 @@
 """Long-running scheduled tasks: email/HTML reports, crash protection, and task metadata descriptors."""
-
+from __future__ import annotations
 import sys
 
 from datetime import datetime
@@ -36,7 +36,7 @@ class TaskKey:
     def __bool__(self):
         return self._key is not None
 
-    def __get__(self , instance : 'AutoRunTask', owner = None):
+    def __get__(self , instance : AutoRunTask, owner = None):
         if self._key is None:
             return None
         elif isinstance(self._key , str) and self._key.startswith('@'):

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 from curl_cffi import requests
 from datetime import datetime
@@ -101,7 +103,7 @@ class FetcherTask:
         return result
 
     @classmethod
-    def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False) -> list['FetcherTask']:
+    def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False) -> list[FetcherTask]:
         tasks = []
         for start, end in range_dates(start, end, step):
             for exchange in EXCHANGES:

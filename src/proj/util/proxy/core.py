@@ -1,5 +1,5 @@
 """Core types: ``Proxy``, ``ProxySet``, and statistics helpers for proxy pools."""
-
+from __future__ import annotations
 import re
 import random
 from typing import Iterable , Literal
@@ -9,7 +9,7 @@ MAX_CONCURRENT = 2
 
 class Proxy:
     """A basic proxy class"""
-    def __new__(cls, url: 'str | Proxy', source: str = 'unknown'):
+    def __new__(cls, url: str | Proxy, source: str = 'unknown'):
         proxy = super().__new__(cls)
         proxy.set_url(url)
         proxy.set_source(source)
@@ -27,7 +27,7 @@ class Proxy:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.url})"
 
-    def __eq__(self, other: 'Proxy') -> bool:
+    def __eq__(self, other: Proxy) -> bool:
         return self.url == other.url
 
     def __hash__(self) -> int:
@@ -36,7 +36,7 @@ class Proxy:
     def __bool__(self) -> bool:
         return bool(self.url)
 
-    def set_url(self, url: 'str | Proxy') -> 'Proxy':
+    def set_url(self, url: str | Proxy) -> Proxy:
         if isinstance(url, Proxy):
             self.set_source(url.source)
             url_addr = url.url
@@ -46,7 +46,7 @@ class Proxy:
         self.url : str = url_addr
         return self
 
-    def set_source(self, source: str) -> 'Proxy':
+    def set_source(self, source: str) -> Proxy:
         if not hasattr(self, 'source') or self.source == 'unknown':
             self.source = source
         return self
@@ -61,7 +61,7 @@ class Proxy:
         return protocal, host, int(port)
 
     @classmethod
-    def unique(cls, proxies: Iterable['Proxy']) -> list['Proxy']:
+    def unique(cls, proxies: Iterable[Proxy]) -> list[Proxy]:
         return list(set(proxies))
 
 class ProxySet:
@@ -95,7 +95,7 @@ class ProxySet:
     def to_urls(self) -> list[str]:
         return [proxy.url for proxy in self.proxies]
 
-    def set_source(self , source: str) -> 'ProxySet':
+    def set_source(self , source: str) -> ProxySet:
         [proxy.set_source(source) for proxy in self.proxies]
         return self
 
@@ -107,7 +107,7 @@ class ProxySet:
 
 class ProxyStats(Proxy):
     """A stated proxy, can be used to track the state of a proxy"""
-    _instances : dict[str, 'ProxyStats'] = {}
+    _instances : dict[str, ProxyStats] = {}
 
     def __new__(cls, url: str | Proxy, source: str = 'unknown'):
         if str(url) not in cls._instances:
@@ -161,7 +161,7 @@ class ProxyStats(Proxy):
             self.stats['error'] += 1
 
     @classmethod
-    def unique(cls, proxies: Iterable['ProxyStats']) -> list['ProxyStats']:
+    def unique(cls, proxies: Iterable[ProxyStats]) -> list[ProxyStats]:
         return list(set(proxies))
 
 class ProxyStatsSet(ProxySet):

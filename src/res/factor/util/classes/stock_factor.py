@@ -290,7 +290,7 @@ class FactorStats:
         self.stats : dict[str,pd.DataFrame] = {}
     
     def __repr__(self):
-        return f'FactorStats(name={self.name}, stats={list(self.stats.keys())})'
+        return f'{self.__class__.__name__}(name={self.name}, stats={list(self.stats.keys())})'
     
     def __str__(self):
         return self.__repr__()
@@ -371,7 +371,7 @@ class FactorStats:
         return len(self.stats)
 
     @classmethod
-    def create_cache_factor_stats(cls) -> dict[str,'FactorStats']:
+    def create_cache_factor_stats(cls) -> dict[str,FactorStats]:
         return {name:FactorStats(name) for name in cls.available_stats}
 
 class CacheFactorStats:
@@ -500,7 +500,7 @@ class StockFactor:
         """return True if the factor is empty"""
         return properties.empty(self.prior_input)
 
-    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None' = None , 
+    def update(self , factor : pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None = None , 
                normalized : bool | None = None , benchmark : Benchmark | str | None = None ,
                cache_factor_stats : CacheFactorStats | None = None , 
                pseudo_date : np.ndarray | None = None):
@@ -586,7 +586,7 @@ class StockFactor:
         return deepcopy(self)
 
     def twin(self , 
-             factor : 'pd.DataFrame | pd.Series | DataBlock | StockFactor | dict[int,pd.Series] | None' = None , 
+             factor : pd.DataFrame | pd.Series | DataBlock | StockFactor | dict[int,pd.Series] | None = None , 
              normalized : bool | None = None , 
              benchmark : Benchmark | str | None = None , 
              cache_factor_stats : CacheFactorStats | None = None , 
@@ -658,7 +658,7 @@ class StockFactor:
             self.input_blk.rename_feature(mapping)
         return self
 
-    def join(self , *others : 'StockFactor'):
+    def join(self , *others : StockFactor):
         """
         join the factor with other factors
         """
@@ -784,7 +784,7 @@ class StockFactor:
             return self.input_blk
 
     @classmethod
-    def random(cls) -> 'StockFactor':
+    def random(cls) -> StockFactor:
         """
         return a random factor
         """
@@ -828,7 +828,7 @@ class StockFactor:
         else:
             return self.twin(factor = prior_input.align(secid , date , factor_name))
 
-    def within(self , benchmark : Benchmark | str | None , use_cache = True) -> 'StockFactor':
+    def within(self , benchmark : Benchmark | str | None , use_cache = True) -> StockFactor:
         """
         use benchmark to mask factor , only keep the factors that are in the benchmark
         """

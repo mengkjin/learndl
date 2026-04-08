@@ -1,4 +1,4 @@
-
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 
@@ -121,7 +121,7 @@ class Amodel:
             return cls.from_dataframe(date , data , secid , filter_date=True)
         
     @classmethod
-    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray | None = None , 
+    def combine(cls , alphas : list[Amodel] , weights : list[float] | np.ndarray | None = None , 
                 date : int | None = None , name : str = 'combined_alpha' , normalize = True):
         assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
         if weights is None:
@@ -143,7 +143,7 @@ class Amodel:
         return cls(date , alpha , secid , name)
 
     @classmethod
-    def empty_model(cls , date : int , name : str = 'empty_alpha') -> 'Amodel':
+    def empty_model(cls , date : int , name : str = 'empty_alpha') -> Amodel:
         return cls(date , np.array([]) , np.array([]) , name)
 
 class AlphaModel(GeneralModel):
@@ -179,7 +179,7 @@ class AlphaModel(GeneralModel):
             name = models[0].name
         return cls(name , models)
 
-    def append(self , model : 'Amodel | list[Amodel] | dict[int,Amodel] | AlphaModel | None' , override = True):
+    def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] | AlphaModel | None , override = True):
         if model is None:
             ...
         elif isinstance(model , Amodel):
@@ -250,7 +250,7 @@ class CompositeAlpha:
             raise ValueError(f'weights must be a list of floats or "equal": {weights}')
 
     @property
-    def composite_components(self) -> list['CompositeAlphaComponent']:
+    def composite_components(self) -> list[CompositeAlphaComponent]:
         return [CompositeAlphaComponent(component) for component in self.components]
 
     def __repr__(self) -> str:

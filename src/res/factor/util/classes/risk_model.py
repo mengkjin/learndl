@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -186,19 +188,19 @@ class RiskModel(GeneralModel):
         return Rmodel(date , F , C , S)
 
     @staticmethod
-    def Analytics_to_dfs(analytics : dict[Any,'RiskAnalytic|None']) -> dict[str,pd.DataFrame]:
+    def Analytics_to_dfs(analytics : dict[Any,RiskAnalytic|None]) -> dict[str,pd.DataFrame]:
         return RiskAnalytic.to_dfs_multi(analytics)
 
     @staticmethod
-    def Attributions_to_dfs(attributions : dict[Any,'Attribution|None']) -> dict[str,pd.DataFrame]:
+    def Attributions_to_dfs(attributions : dict[Any,Attribution|None]) -> dict[str,pd.DataFrame]:
         return Attribution.to_dfs_multi(attributions)
 
     @staticmethod
-    def Analytics_from_dfs(dfs : dict[str,pd.DataFrame]) -> dict[int,'RiskAnalytic']:
+    def Analytics_from_dfs(dfs : dict[str,pd.DataFrame]) -> dict[int,RiskAnalytic]:
         return RiskAnalytic.from_dfs_multi(dfs)
 
     @staticmethod
-    def Attributions_from_dfs(dfs : dict[str,pd.DataFrame]) -> dict[int,'Attribution']:
+    def Attributions_from_dfs(dfs : dict[str,pd.DataFrame]) -> dict[int,Attribution]:
         return Attribution.from_dfs_multi(dfs)
 
 @dataclass
@@ -306,7 +308,7 @@ class RiskAnalytic:
         return dfs
 
     @classmethod
-    def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'date']) -> 'RiskAnalytic':
+    def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'date']) -> RiskAnalytic:
         date = get_unique_date(dfs , 'date')
         if 'analytic_industry' in dfs:
             industry = dfs['analytic_industry'].drop(columns=drop_columns , errors='ignore').set_index('industry')
@@ -323,7 +325,7 @@ class RiskAnalytic:
         return cls(date , industry , style , risk)
 
     @classmethod
-    def to_dfs_multi(cls , analytics : dict[Any,'RiskAnalytic|None']) -> dict[str,pd.DataFrame]:
+    def to_dfs_multi(cls , analytics : dict[Any,RiskAnalytic|None]) -> dict[str,pd.DataFrame]:
         dfs_multi : dict[str,list[pd.DataFrame]] = {}
         for key , value in analytics.items():
             if value is None:
@@ -465,7 +467,7 @@ class Attribution:
         return dfs
 
     @classmethod
-    def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'start' , 'end']) -> 'Attribution':
+    def from_dfs(cls , dfs : dict[str,pd.DataFrame] , drop_columns = ['model_date' , 'start' , 'end']) -> Attribution:
         start = get_unique_date(dfs , 'start')
         end = get_unique_date(dfs , 'end')
         if 'attribution_specific' in dfs:
@@ -480,7 +482,7 @@ class Attribution:
         return cls(start , end , source , industry , style , specific , aggregated)
 
     @classmethod
-    def to_dfs_multi(cls , attributions : dict[Any,'Attribution|None']) -> dict[str,pd.DataFrame]:
+    def to_dfs_multi(cls , attributions : dict[Any,Attribution|None]) -> dict[str,pd.DataFrame]:
         dfs_multi : dict[str,list[pd.DataFrame]] = {}
         for key , value in attributions.items():
             if value is None:

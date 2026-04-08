@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 
 from dataclasses import dataclass
@@ -49,7 +51,7 @@ class LinearConstraint:
         return self
     
     @classmethod
-    def stack(cls , lin_cons : list['LinearConstraint'] , clear_after = False):
+    def stack(cls , lin_cons : list[LinearConstraint] , clear_after = False):
         if len(lin_cons) <= 1: 
             return lin_cons[0]
         new_con = cls(

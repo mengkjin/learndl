@@ -1,5 +1,5 @@
 """Adaptive proxy pool: fetch, verify, refresh, and serve URLs for crawlers."""
-
+from __future__ import annotations
 import random
 import threading
 import time
@@ -63,7 +63,7 @@ def get_working_proxies(
 
 
 class ProxyStatsSetURL(ProxyStatsSet):
-    _instances : dict[str, 'ProxyStatsSetURL'] = {}
+    _instances : dict[str, ProxyStatsSetURL] = {}
     def __new__(cls, *args, **kwargs):
         url = str(kwargs['url'])
         assert url , "not empty url is required"

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 import numpy as np
 import pandas as pd
@@ -129,7 +131,7 @@ class ModelHiddenExtractor:
         hidden_path.save_hidden_df(hidden_df , model_date , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def SelectModel(cls , model_name : str) -> 'ModelHiddenExtractor':
+    def SelectModel(cls , model_name : str) -> ModelHiddenExtractor:
         return cls(HiddenExtractionModel(model_name))
 
     @classmethod

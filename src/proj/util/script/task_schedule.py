@@ -1,5 +1,5 @@
 """Distributed schedule files on ``PATH.share_folder`` and helpers to register shell command tasks."""
-
+from __future__ import annotations
 import subprocess , os
 import numpy as np
 
@@ -19,7 +19,7 @@ else:
 
 class ScheduledTask:
     """a task that is scheduled to run at a specific time"""
-    _instances : dict[str , dict[str , 'ScheduledTask']] = {}
+    _instances : dict[str , dict[str , ScheduledTask]] = {}
 
     def __init__(self, operator_machine : str, cmdline : str, distribution_time : int, time_index : int):
         self.operator_machine = operator_machine
@@ -137,7 +137,7 @@ class TaskScheduler:
         return PATH.share_folder is not None
 
     @staticmethod
-    def get_machine_tasks() -> dict[str , 'ScheduledTask']:
+    def get_machine_tasks() -> dict[str , ScheduledTask]:
         """get all the tasks"""
         SharedSync.sync()
         return ScheduledTask.get_all_tasks().get(MACHINE.name , {})

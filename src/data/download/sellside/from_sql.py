@@ -1,3 +1,4 @@
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
@@ -356,7 +357,7 @@ class SellsideSQLDownloader:
             keys = cls.available_factors()
         elif isinstance(keys , str):
             keys = [keys]
-        downloaders : dict[str,'SellsideSQLDownloader'] = {}
+        downloaders : dict[str,SellsideSQLDownloader] = {}
         for key in keys:
             args , kwargs = factor_settings[key]
             downloaders[key] = cls(*args , **kwargs)

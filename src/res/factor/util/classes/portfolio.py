@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 
@@ -207,7 +209,7 @@ class Portfolio:
             return df
 
     @classmethod
-    def load(cls , path : Path | str) -> 'Portfolio':
+    def load(cls , path : Path | str) -> Portfolio:
         """load a portfolio from a path (dataframe)"""
         path = Path(path)
         if path.exists():

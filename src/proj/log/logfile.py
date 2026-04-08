@@ -1,5 +1,5 @@
 """Structured log entries and optional rotation for append-only ``.log`` files."""
-
+from __future__ import annotations
 import portalocker , re
 from dataclasses import dataclass , field
 from datetime import datetime
@@ -67,7 +67,7 @@ class LogEntry:
         return [self.title_line , *self.content_lines(indent = True)]
 
     @classmethod
-    def from_args(cls , *args : str) -> 'LogEntry':
+    def from_args(cls , *args : str) -> LogEntry:
         """Build an entry from string args; first line is title, rest is body."""
         if len(args) == 0:
             return cls()
@@ -76,7 +76,7 @@ class LogEntry:
         return cls(title , list(messages))
     
     @classmethod
-    def from_lines(cls , lines : list[str] , from_latest : bool = True , pattern : str | None = None) -> list['LogEntry']:
+    def from_lines(cls , lines : list[str] , from_latest : bool = True , pattern : str | None = None) -> list[LogEntry]:
         """Parse file lines into ``LogEntry`` list (regex title lines).
 
         Args:
@@ -84,7 +84,7 @@ class LogEntry:
             from_latest: If True, reverse order so newest entries are first.
             pattern: Optional regex; only entries whose title matches are kept.
         """
-        entries : list['LogEntry'] = []
+        entries : list[LogEntry] = []
         current_entry : LogEntry | None = None
         for line in lines:
             match = re.search(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) >> (.*)$', line)
@@ -226,3 +226,10 @@ class LogFile:
         """Build a ``LogFile`` under ``PATH.logs`` from path parts."""
         log_file = PATH.logs.joinpath(*args).with_suffix('.log')
         return cls(log_file , rotate = rotate , rotation_size_mb = rotation_size_mb)
+
+    def rename(self , new_name : str):
+        """rename log file"""
+        assert not self.rotate , 'cannot rename log file when rotate is enabled'
+        new_host_file = self.host_file.with_stem(new_name)
+        self.host_file.rename(new_host_file)
+        return self

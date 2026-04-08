@@ -1,5 +1,5 @@
 """Persist discovered proxies under ``PATH.local_machine/proxies`` with TTL-style refresh."""
-
+from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from datetime import datetime , timedelta
@@ -18,7 +18,7 @@ class CachedProxies:
     candidates: ProxySet
 
     @classmethod
-    def from_input(cls, name: str, input: Any) -> 'CachedProxies':
+    def from_input(cls, name: str, input: Any) -> CachedProxies:
         if isinstance(input, dict):
             return cls(name, datetime.fromisoformat(input.get('update_time', _default_time.isoformat())), ProxySet(input.get('candidates', []) , source='cache'))
         elif isinstance(input, list):

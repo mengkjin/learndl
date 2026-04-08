@@ -1,5 +1,5 @@
 """On-disk numpy/torch array storage via binary payload + JSON metadata."""
-
+from __future__ import annotations
 import json
 import os
 import numpy as np
@@ -18,7 +18,7 @@ class ArrayMeta:
     shape: tuple
 
     @classmethod
-    def from_json(cls, json_path: str | Path) -> 'ArrayMeta':
+    def from_json(cls, json_path: str | Path) -> ArrayMeta:
         """Load metadata written by ``to_json``."""
         with open(json_path, 'r') as f:
             meta = json.load(f)

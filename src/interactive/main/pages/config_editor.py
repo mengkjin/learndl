@@ -11,7 +11,7 @@ PAGE_NAME = 'config_editor'
 def show_config_editor():
     """show config yaml editor"""
     with st.container(key="special-expander-editor"):
-        files = [f for sub in ["model" , "algo" , "schedule"] for f in PATH.conf.joinpath(sub).rglob("*.yaml")]
+        files = [f for sub in ["model" , "algo"] for f in PATH.conf.joinpath(sub).rglob("*.yaml")]
         default_file = PATH.conf.joinpath("model" , "model.yaml")
         config_editor = YAMLFileEditor('config-editor', file_root=PATH.conf)
         SC.config_editor_state = config_editor.state

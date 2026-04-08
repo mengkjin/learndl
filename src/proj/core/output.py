@@ -1,4 +1,5 @@
 """Colored terminal strings: ``FormatStr``, ``stdout``, ``stderr`` (respect ``Silence``)."""
+from __future__ import annotations
 
 import sys
 from datetime import datetime
@@ -71,14 +72,20 @@ class FormatStr(str):
         """False only when the underlying message is empty."""
         return bool(self.msg)
 
+    @classmethod
+    def empty(cls) -> FormatStr:
+        if not hasattr(cls , '_empty'):
+            cls._empty = cls()
+        return cls._empty
+
     @property
-    def level_prefix(self) -> 'FormatStr | None':
+    def level_prefix(self) -> FormatStr | None:
         if not hasattr(self , '_level_prefix') or self._level_prefix is None:
             return None
         return self._level_prefix
 
     @level_prefix.setter
-    def level_prefix(self , value : 'FormatStr | None'):
+    def level_prefix(self , value : FormatStr | None):
         self._level_prefix = value
 
     @classmethod
@@ -127,13 +134,11 @@ class FormatStr(str):
             if flush:
                 io.flush()
 
-empty_fstr = FormatStr()
-
 def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , write = True):
     """custom stdout message , vb_level can be set to control display (minimum verbosity level to show the message)"""
     if Silence.silent or not write:
-        return empty_fstr
+        return FormatStr.empty()
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     fstr.write(stdout = True , file = file , end = end , flush = flush)
     return fstr

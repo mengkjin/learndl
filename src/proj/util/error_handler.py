@@ -1,5 +1,5 @@
 """Retry decorators and ``ErrorHandler`` wrapper for HTTP and generic exceptions (with logging)."""
-
+from __future__ import annotations
 import httpx
 import time
 from curl_cffi.requests import exceptions
@@ -126,7 +126,7 @@ class ErrorHandler(Generic[T]):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.wrapped_func})"
 
-    def __call__(self, *args, **kwargs) -> 'WrappedResult':
+    def __call__(self, *args, **kwargs) -> WrappedResult:
         raw_result = self.wrapped_func(*args, **kwargs)
         return self.WrappedResult(raw_result)
 
@@ -142,7 +142,7 @@ class ErrorHandler(Generic[T]):
     class WrappedResult(Generic[T]): # type: ignore
         """Result of ``ErrorHandler.__call__``; inspect ``success`` / ``unwrap``."""
 
-        def __init__(self, raw_result: 'T | Exception'):
+        def __init__(self, raw_result: T | Exception):
             self.raw_result = raw_result
 
         @property
@@ -165,7 +165,7 @@ class ErrorHandler(Generic[T]):
             else:
                 return type(self.raw_result).__name__
 
-        def unwrap(self , error : Literal['raise' , 'return'] = 'return') -> 'T | Exception':
+        def unwrap(self , error : Literal['raise' , 'return'] = 'return') -> T | Exception:
             """Return value or exception; ``error='raise'`` re-raises if result is an exception."""
             if isinstance(self.raw_result, Exception) and error == 'raise':
                 raise self.raw_result

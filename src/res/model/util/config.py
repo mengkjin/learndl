@@ -1,3 +1,12 @@
+"""
+ModelConfg: The all-in-one config class for model training and inference.
+It includes:
+1. model config
+2. algo config
+3. schedule config
+"""
+
+from __future__ import annotations
 import os, random, torch
 import numpy as np
 
@@ -30,11 +39,14 @@ def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> Fla
         return FlattenDict.from_input(input , keep_nested = keep_nested)
 
 class ScheduleConfig:
+    """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
     def __init__(self, base_path: ModelPath | None = None, schedule_name: str | None = None, model_name: Any | None = None):
         self.base_path = base_path
         self.schedule_name = schedule_name
-        self.model_name = model_name if isinstance(model_name, str) else None
-        self.Param = self.get_config_dict(self.base_path, self.schedule_name , self.model_name)
+        if model_name:
+            assert model_name == schedule_name or not ScheduleConfig.check_name_exist(model_name), \
+                f"model_name [{model_name}] is not the same as schedule_name [{schedule_name}]"
+        self.Param = self.get_config_dict(self.base_path, self.schedule_name)
 
     def __getitem__(self, key: str) -> Any:
         return self.Param[key]
@@ -46,17 +58,16 @@ class ScheduleConfig:
         return self.Param.get(key, default)
 
     @classmethod
-    def get_config_dict(cls , base_path: ModelPath | None, schedule_name: str | None, model_name: str | None) -> FlattenDict:
-        use_name = schedule_name or model_name
-        config_path = cls.find_path(base_path, use_name)
+    def get_config_dict(cls , base_path: ModelPath | None, schedule_name: str | None) -> FlattenDict:
+        config_path = cls.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
-            Logger.alert1(f'Using schedule name "{use_name}" to load config')
-        if use_name and config:
+            Logger.alert1(f'Using schedule name "{schedule_name}" to load config')
+        if schedule_name and config:
             if 'model.name' in config:
-                assert config['model.name'] == use_name, f"model.name {config['model.name']} is not the same as model_name {use_name}"
+                assert config['model.name'] == schedule_name, f"model.name {config['model.name']} is not the same as model_name {schedule_name}"
             else:
-                config.update({'model.name': use_name} , relevant_only = False)
+                config.update({'model.name': schedule_name} , relevant_only = False)
         return config
 
     @classmethod
@@ -67,15 +78,23 @@ class ScheduleConfig:
         elif not name:
             return None
         else:
-            schedule_path_0 = PATH.conf.joinpath("schedule").joinpath(f"{name}.yaml")
+            schedule_path_0 = PATH.schedule.joinpath(f"{name}.yaml")
             schedule_path_1 = PATH.shared_schedule.joinpath(f"{name}.yaml")
-            assert not (schedule_path_0.exists() and schedule_path_1.exists()), f"{name} exists in both config/schedule and .local_resources/shared/schedule_model/schedule"
+            assert not (schedule_path_0.exists() and schedule_path_1.exists()), \
+                f"{name} exists in both config/model/schedule and .local_resources/shared/schedule_model/schedule"
             if schedule_path_0.exists():
                 return schedule_path_0
             elif schedule_path_1.exists():
                 return schedule_path_1
             else:
                 return None
+
+    @classmethod
+    def check_name_exist(cls , model_name: str | None = None) -> bool:
+        if not model_name:
+            return False
+        path = cls.find_path(None, model_name)
+        return True if path else False
 
 class BaseModelConfig:
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
@@ -118,13 +137,46 @@ class BaseModelConfig:
     def Param(self, value: FlattenDict):
         self._model_param = value
 
-    def load_params(self):
-        if (self.base_path and not self.base_path.is_null_model and not self.short_test) and (conf_file := self.base_path.conf_file("model")).exists():
-            self.Param = get_config_dict(conf_file)
+    def resumed_config_param(self) -> FlattenDict | None:
+        if (self.base_path and not self.base_path.is_null_model and not self.short_test):
+            conf_file = self.base_path.conf_file("model")
+            return get_config_dict(conf_file) if conf_file.exists() else None
         else:
-            self.Param = get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
-        model_name = ('' if self.force_module else self.Param['model.name']) or ''
-        self.schedule_config = ScheduleConfig(self.base_path, self.schedule_name , model_name)
+            return None
+
+    def default_config_param(self) -> FlattenDict:
+        return self.REQUIRED_CONFIG_PARAM.combine_with(self.OPTIONAL_CONFIG_PARAM)
+
+    def current_config_param(self) -> FlattenDict:
+        return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
+
+    def optional_load_params(self , option : Literal["current", "default"] , resumed_first: bool = True):
+        Param = self.resumed_config_param() if resumed_first else None
+        if Param is None:
+            Param = self.current_config_param() if option == "current" else self.default_config_param()
+        return Param
+
+    def load_params(self):
+        if self.force_module:
+            assert not self.schedule_name, \
+                f"force_module [{self.force_module}] is provided, but schedule_name [{self.schedule_name}] is also provided"
+            assert not self.base_path.full_module_name, \
+                f"force_module [{self.force_module}] is provided, but base_path.full_module_name [{self.base_path.full_module_name}] is also provided"
+
+        if self.schedule_name:
+            # case 1: with schedule name, load schedule config first, then resume or load default config
+            assert ScheduleConfig.check_name_exist(self.schedule_name), f"schedule_name [{self.schedule_name}] does not exist"
+            self.Param = self.optional_load_params("default")
+        else:
+            # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
+            self.Param = self.optional_load_params("current")
+            if self.force_module:
+                Logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config")
+                self['model.module'] = self.force_module
+                self['model.name'] = ''
+            assert not ScheduleConfig.check_name_exist(self['model.name']), \
+                f"model.name [{self['model.name']}] is owned by a schedule model, and must not be used as a model name"
+        self.schedule_config = ScheduleConfig(self.base_path, self.schedule_name)
         return self
 
     def override_params(self):
@@ -133,7 +185,7 @@ class BaseModelConfig:
             "force_module": str(self.force_module).lower().replace(" ", "").replace("/", "@") if self.force_module else None,
             "schedule": self.schedule_name and self.schedule_config.get("model.module", None),
         }
-        assert sum(bool(v) for v in model_module_candidate.values()) <= 1, (
+        assert np.unique([v for v in model_module_candidate.values() if v]).shape[0] <= 1, (
             f"only one of base_path , force_module , schedule can be provided, but got {model_module_candidate}"
         )
         model_modules = [v for v in model_module_candidate.values() if v]
@@ -213,24 +265,26 @@ class BaseModelConfig:
         return self
 
     def generate_model_full_name(self):
-        mod_str = self.model_module.removeprefix(f"{self.module_type}@")
         if is_null_module_type(self.module_type):
             full_name = self.full_module_name
         else:
-            if self["model.name"]:
-                model_name = str(self["model.name"])
-            else:
-                mod_str = self.model_module
-                head_str = "boost" if self.boost_head else None
-                if self.input_type == "data":
-                    data_str = "_".join(self.input_data_types)
-                else:
-                    data_str = self.input_type
-                model_name = "_".join([s for s in [mod_str, head_str, data_str] if s])
+            model_name = str(self["model.name"]) if self["model.name"] else self.generate_valid_model_name()
             full_name = f"{self.full_module_name}@{model_name}"
         if self.short_test:
             full_name = f"st@{full_name}"
         return full_name
+
+    def generate_valid_model_name(self):
+        mod_str = self.model_module.removeprefix(f"{self.module_type}@")
+        head_str = "boost" if self.boost_head else None
+        if self.input_type == "data":
+            data_str = "_".join(self.input_data_types)
+        else:
+            data_str = self.input_type
+        model_name = "_".join([s for s in [mod_str, head_str, data_str] if s])
+        if ScheduleConfig.check_name_exist(model_name):
+            model_name = f'{model_name}.{random.randint(1, 99):02d}'
+        return model_name
 
     def generate_algo_config(self):
         model_param = AlgoConfig(
@@ -304,7 +358,7 @@ class BaseModelConfig:
     def resumable(self) -> bool:
         if not self.base_path:
             return False
-        return all([self.base_path.conf(cfg).exists() for cfg in self.CONFIG_LIST])
+        return self.base_path.conf_file('model').exists()
 
     @property
     def short_test(self) -> bool:

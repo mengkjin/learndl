@@ -9,7 +9,8 @@ env.allow_tf32: true
 env.detect_anomaly: false
 env.precision: float
 
-model.module: db@scores_v0
+model.name: null
+model.module: null
 model.labels:
   - std_lag1_10
   - rtn_lag1_10

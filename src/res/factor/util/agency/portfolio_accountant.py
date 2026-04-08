@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 import numpy as np
 
@@ -37,7 +39,7 @@ class AccountConfig:
         return bool(self.name)
     
     @staticmethod
-    def get_benchmark(benchmark : 'AccountConfig | Portfolio | Benchmark | str | None' = None) -> Portfolio: 
+    def get_benchmark(benchmark : AccountConfig | Portfolio | Benchmark | str | None = None) -> Portfolio: 
         if benchmark is None:
             benchmark = Portfolio()
         elif isinstance(benchmark , AccountConfig):
@@ -49,7 +51,7 @@ class AccountConfig:
         return benchmark
 
     @staticmethod
-    def get_benchmark_name(benchmark : 'AccountConfig | Portfolio | Benchmark | str | None' = None) -> str:
+    def get_benchmark_name(benchmark : AccountConfig | Portfolio | Benchmark | str | None = None) -> str:
         if benchmark is None:
             return 'default'
         elif isinstance(benchmark , AccountConfig):
@@ -83,7 +85,7 @@ class AccountConfig:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
 class PortfolioAccount:
-    _instance : 'PortfolioAccount | None' = None
+    _instance : PortfolioAccount | None = None
     columns_basic = ['model_date' , 'start' , 'end' , 'pf' , 'bm' , 'turn' , 'excess' , 'overnight' , 'pf_close' , 'pf_open' , 'pf_vwap']
     columns_all = columns_basic + ['analytic' , 'attribution']
 
@@ -92,7 +94,7 @@ class PortfolioAccount:
         cls._account = instance 
         return instance
 
-    def __init__(self , input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None , 
+    def __init__(self , input : Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None = None , 
                  config : AccountConfig | None = None , index : dict[Any,Any] | None = None):
         if isinstance(input , Portfolio):
             config = input.account.config
@@ -114,7 +116,7 @@ class PortfolioAccount:
         return self._input
     
     @input.setter
-    def input(self , value : 'pd.DataFrame|pd.Series|np.ndarray|list[float]|None' = None):
+    def input(self , value : pd.DataFrame|pd.Series|np.ndarray|list[float]|None = None):
         if value is None or isinstance(value , pd.DataFrame):
             df = value
         else:
@@ -189,7 +191,7 @@ class PortfolioAccount:
         return df
 
     @classmethod
-    def Concat(cls , *accounts : 'PortfolioAccount | None'):
+    def Concat(cls , *accounts : PortfolioAccount | None):
         accs = [acc for acc in accounts if acc is not None]
         if not accs:
             return cls()
@@ -202,7 +204,7 @@ class PortfolioAccount:
             return cls(df , config = config , index = index)
     
     @staticmethod
-    def Total(*accounts : 'PortfolioAccount | None') -> pd.DataFrame:
+    def Total(*accounts : PortfolioAccount | None) -> pd.DataFrame:
         accs = [acc for acc in accounts if acc is not None]
         if not accs: 
             return pd.DataFrame()
@@ -266,7 +268,7 @@ class PortfolioAccount:
         return self
 
     @classmethod
-    def load(cls , path : Path | str | None = None) -> 'PortfolioAccount':
+    def load(cls , path : Path | str | None = None) -> PortfolioAccount:
         """load portfolio account from a path (a tar file or a pickle file)"""
         if path is None:
             return cls()

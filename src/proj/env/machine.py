@@ -190,7 +190,6 @@ class MACHINE:
     def configs(cls , *args , raise_if_not_exist = True , **kwargs) -> dict:
         """
         Get the configs of the machine
-        possible conf_type: proj , factor , boost , nn , train , trade , schedule
         possible suffixes: .json , .yaml , prefer json over yaml
         additional kwargs: e.g. encoding
         """

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re , yaml
 from pathlib import Path
 from typing import Literal , Any , ClassVar
@@ -38,7 +40,7 @@ class PathItem:
     def iter_folder(cls, folder_path: Path | str = PATH.scpt, level: int = 0 , 
                     min_level: int = 0 , max_level: int = 2):
         '''get all valid items from folder recursively'''
-        items : list['PathItem'] = []
+        items : list[PathItem] = []
         if level < min_level or level > max_level: 
             return items
         folder_path = Path(folder_path)
@@ -312,7 +314,7 @@ class ScriptRunner:
 '''
         return infos
         
-    def build_task(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
+    def build_task(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> TaskItem:
         '''run script and return exit code (0: error, 1: success)'''
 
         item = TaskItem.create(self.script , source = 'app' , queue=queue)

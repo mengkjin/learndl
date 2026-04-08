@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import re
@@ -117,13 +119,13 @@ class BaseIndividual(gp.PrimitiveTree):
     def pure_syntax(self) -> str:
         return self.trim_syntax(self.syntax)
 
-    def to_record(self) -> 'SyntaxRecord':
+    def to_record(self) -> SyntaxRecord:
         self.purify()
         return SyntaxRecord(self.syntax , self.raw_syntax , self.metrics , self.if_valid , self.fit_value)
 
     @classmethod
     def from_syntax(cls , syntax : str , raw_syntax : str | None = None , 
-                    metrics : np.ndarray | None = None , fit_value : tuple | None = None) -> 'BaseIndividual':
+                    metrics : np.ndarray | None = None , fit_value : tuple | None = None) -> BaseIndividual:
         if raw_syntax:
             syntax = raw_syntax
         try:
@@ -138,7 +140,7 @@ class BaseIndividual(gp.PrimitiveTree):
         return ind
 
     @classmethod
-    def get_class(cls) -> type['BaseIndividual']:
+    def get_class(cls) -> type[BaseIndividual]:
         return getattr(creator , 'Individual' , BaseIndividual)
 
     @property
@@ -155,7 +157,7 @@ class BaseIndividual(gp.PrimitiveTree):
         self._metrics = value
 
     @classmethod
-    def from_object(cls , syntax : 'BaseIndividual | str | SyntaxRecord' , **kwargs) -> 'BaseIndividual':
+    def from_object(cls , syntax : BaseIndividual | str | SyntaxRecord , **kwargs) -> BaseIndividual:
         if isinstance(syntax , str):
             return cls.get_class().from_syntax(syntax , **kwargs)
         elif isinstance(syntax , BaseIndividual):
@@ -180,7 +182,7 @@ class SyntaxRecord:
         return BaseIndividual.get_class().from_syntax(self.syntax , raw_syntax = self.raw_syntax , metrics = self.metrics , fit_value = self.fit_value if self.if_valid else None)
 
     @classmethod
-    def create(cls , input : 'BaseIndividual | str | SyntaxRecord') -> 'SyntaxRecord':
+    def create(cls , input : BaseIndividual | str | SyntaxRecord) -> SyntaxRecord:
         if isinstance(input , SyntaxRecord):
             return input
         elif isinstance(input , BaseIndividual):
@@ -222,37 +224,37 @@ class Population(Sequence):
         return [ind.to_record() for ind in self.pop]
 
     @classmethod
-    def from_list(cls , population : 'Sequence[BaseIndividual | str | SyntaxRecord] | tools.HallOfFame | Population') -> 'Population':
+    def from_list(cls , population : Sequence[BaseIndividual | str | SyntaxRecord] | tools.HallOfFame | Population) -> Population:
         if isinstance(population , Population):
             return population
         return cls([BaseIndividual.from_object(ind) for ind in population])
 
-    def valid_pop(self) -> 'Population':
+    def valid_pop(self) -> Population:
         return self.from_list([ind for ind in self.pop if ind.if_valid])
 
-    def invalid_pop(self , forbidden_lambda : Callable | None = None) -> 'Population':
+    def invalid_pop(self , forbidden_lambda : Callable | None = None) -> Population:
         return self.from_list([ind for ind in self.pop if not ind.if_valid or (False if forbidden_lambda is None else forbidden_lambda(ind.fit_value))])
 
-    def deduplicate(self , forbidden : Sequence[Any] | None = []) -> 'Population':
+    def deduplicate(self , forbidden : Sequence[Any] | None = []) -> Population:
         ori = [ind.pure_syntax for ind in self.pop]
         fbd = [str(ind) for ind in forbidden] if forbidden is not None else []
         allowed = [ind not in fbd for ind in ori]
         self.pop = [ind for ind , allowed in zip(self.pop , allowed) if allowed]
         return self
 
-    def purify(self) -> 'Population':
+    def purify(self) -> Population:
         [ind.purify() for ind in self.pop]
         return self
 
-    def revert(self) -> 'Population':
+    def revert(self) -> Population:
         [ind.revert() for ind in self.pop]
         return self
 
-    def prune(self) -> 'Population':
+    def prune(self) -> Population:
         [ind.prune() for ind in self.pop]
         return self
 
-    def selection(self , method : Literal['nsga2' , 'best' , 'Tour' , '2Tour'] , selection_size : int) -> 'Population':
+    def selection(self , method : Literal['nsga2' , 'best' , 'Tour' , '2Tour'] , selection_size : int) -> Population:
         # Selection of population to pass to next generation, consider surv_rate
         k = len(self) if method in ['Tour' , '2Tour'] else min(selection_size, len(self))
         if method == 'nsga2':
@@ -267,7 +269,7 @@ class Population(Sequence):
             raise ValueError(f'Invalid method: {method}')
         return self.from_list(offspring)
 
-    def variation(self , toolbox : base.Toolbox , cxpb : float , mutpb : float) -> 'Population':
+    def variation(self , toolbox : base.Toolbox , cxpb : float , mutpb : float) -> Population:
         """variation part (crossover and mutation)"""
         assert all([not ind.purified for ind in self.pop]) , 'Variation must be raw individuals , please use revert first'
         population = varAnd(self.pop, toolbox, cxpb , mutpb)
@@ -284,11 +286,11 @@ class Population(Sequence):
     def pure_str_list(self) -> list[str]:
         return [ind.pure_syntax for ind in self.pop]
 
-    def extend(self , population : 'Population'):
+    def extend(self , population : Population):
         self.pop.extend(population.pop)
         return self
 
-    def slice(self , start : int , end : int) -> 'Population':
+    def slice(self , start : int , end : int) -> Population:
         return self.from_list(self.pop[start:end])
 
     def log_df(self , metrics_keys : list[str] | None = None) -> pd.DataFrame:

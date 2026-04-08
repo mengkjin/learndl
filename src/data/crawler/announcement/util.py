@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import re
 import threading
@@ -55,7 +57,7 @@ class Announcement:
         return (self.exchange, self.source_id, self.title, self.announce_date)
  
     @classmethod
-    def from_sse(cls , raw : dict[str, Any]) -> 'Announcement':
+    def from_sse(cls , raw : dict[str, Any]) -> Announcement:
         crawled_iso = datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
         pdf_base_url = "https://static.sse.com.cn/disclosure"
         rel_path = str(raw.get("URL") or "").strip()
@@ -80,7 +82,7 @@ class Announcement:
         )
 
     @classmethod
-    def from_szse(cls, raw: dict[str, Any]) -> 'Announcement':
+    def from_szse(cls, raw: dict[str, Any]) -> Announcement:
         crawled_iso = datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
         pdf_base_url = "https://disc.static.szse.cn/download"
         codes = raw.get("secCode") or []
@@ -106,7 +108,7 @@ class Announcement:
         )
 
     @classmethod
-    def from_bse(cls, raw: dict[str, Any]) -> 'Announcement':
+    def from_bse(cls, raw: dict[str, Any]) -> Announcement:
         crawled_iso = datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
         pdf_base_url = "https://www.bse.cn"
         title = (str(raw.get("disclosureTitle") or "") + str(raw.get("disclosurePostTitle") or "")).strip()
@@ -206,7 +208,7 @@ class PathLock:
 
 class AnnouncementExporter:
     DEDUPE_SUBSET = ["exchange", "source_id", "announce_date", "title"]
-    _instances : dict[str, 'AnnouncementExporter'] = {}
+    _instances : dict[str, AnnouncementExporter] = {}
 
     def __new__(cls, exchange: str):
         assert exchange.lower() in ['sse' , 'szse' , 'bse'] , f'{exchange} is not in [sse, szse, bse]'

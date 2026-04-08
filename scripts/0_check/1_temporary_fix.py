@@ -16,23 +16,18 @@ from src.res.factor.risk import TuShareCNE5_Calculator
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    if MACHINE.is_windows:
-        DataCache.purge_all(confirm = True)
     # AnnouncementAgent.update()
     calculator = TuShareCNE5_Calculator()
-    paths = DB.paths('models' , 'tushare_cne5_coef' , start = 0)
+    paths = DB.paths('models' , 'tushare_cne5_cov' , start = 0)
     for path in paths:
         df = DB.load_df(path)
         if 'factor_name' in df.columns:
-            ...
-        if df.index.name == 'factor_name':
-            df = df.reset_index(drop = False)
-        elif df.index.name is None and df.index.get_level_values(None)[0] == 'market': # type: ignore
-            df.index.name = 'factor_name'
-            df = df.reset_index(drop = False)
+            continue
+        if df.columns.to_list()[0] == 'index':
+            df = df.rename(columns={'index':'factor_name'})
         else:
             date = DB.path_date(path)
-            df = calculator.get_coef(date , read = False)
+            df = calculator.calc_common_risk(date)
         DB.save_df(df , path)
         
 if __name__ == '__main__':

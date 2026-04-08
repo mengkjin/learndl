@@ -438,7 +438,7 @@ class TuShareCNE5_Calculator:
             corr = ewma_cov(ts , 504 , 180 , 0.33 , True)
             sd   = ewma_sd(ts , 504 , 90)
         cov  = parse_cov_output(sd[:,None].dot(sd[None]) * corr , feat)
-        cov  = cov.reset_index()
+        cov  = cov.reset_index().rename(columns={'index':'factor_name'})
         self.common_risk.add(cov , date)
         return cov
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Callable , Sequence
 import itertools
@@ -11,7 +13,7 @@ class Raw(torch.Tensor):
     pass
 class int1(int): 
     @classmethod
-    def range(cls) -> list['int1']:
+    def range(cls) -> list[int1]:
         return [cls(i) for i in [1,2]]
 
     def __repr__(self):
@@ -19,21 +21,21 @@ class int1(int):
 
 class int2(int): 
     @classmethod
-    def range(cls) -> list['int2']:
+    def range(cls) -> list[int2]:
         return [cls(i) for i in [2,10]]
 
     def __repr__(self):
         return f'{self.__class__.__name__}#{super().__repr__()}#'
 class int3(int): 
     @classmethod
-    def range(cls) -> list['int3']:
+    def range(cls) -> list[int3]:
         return [cls(i) for i in [10,15,20,30,40]]
 
     def __repr__(self):
         return f'{self.__class__.__name__}#{super().__repr__()}#'
 class float1(float): 
     @classmethod
-    def range(cls) -> list['float1']:
+    def range(cls) -> list[float1]:
         flts = (np.arange(0,101)*0.02).round(2)
         return [cls(i) for i in flts]
 
@@ -86,7 +88,7 @@ class Primative:
         return x
     
     @classmethod
-    def primatives_identity(cls) -> list['Primative']:
+    def primatives_identity(cls) -> list[Primative]:  
         return [
             cls(cls.I,[Fac]    , Fac   , '_I_0_'),
             cls(cls.I,[Raw]    , Raw   , '_I_1_'),
@@ -97,7 +99,7 @@ class Primative:
         ]
     
     @classmethod
-    def primatives_1d(cls) -> list['Primative']:
+    def primatives_1d(cls) -> list[Primative]:
         # (primative , in_types , out_type , name)
         return [
             cls(primas.log,        [(Fac,Raw)], Fac) ,
@@ -109,7 +111,7 @@ class Primative:
             cls(primas.sign,       [(Fac,Raw)], Fac) ,
         ]
     @classmethod
-    def primatives_2d(cls) -> list['Primative']:
+    def primatives_2d(cls) -> list[Primative]:
         # (primative , in_types , out_type , name)
         return [
             cls(primas.add,        [Fac, Fac], Fac) ,
@@ -135,7 +137,7 @@ class Primative:
             cls(primas.ts_rank,    [(Fac,Raw), int2], Fac) ,
         ]
     @classmethod
-    def primatives_3d(cls) -> list['Primative']:
+    def primatives_3d(cls) -> list[Primative]:
         # (primative , in_types , out_type , name)
         return [
             cls(primas.ts_rankcorr,        [(Fac,Raw), (Fac,Raw), int2], Fac) ,
@@ -148,7 +150,7 @@ class Primative:
             cls(primas.ts_dif_x,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
         ]
     @classmethod
-    def primatives_4d(cls) -> list['Primative']:
+    def primatives_4d(cls) -> list[Primative]:
         # (primative , in_types , out_type , name)
         return [
             cls(primas.ts_btm_y_on_x, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
@@ -159,7 +161,7 @@ class Primative:
             #Primative(MF.ts_xrng_ydif, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xdif_long') ,
         ]
     @classmethod
-    def all_primatives(cls) -> list['Primative']:
+    def all_primatives(cls) -> list[Primative]:
         # all primatives
         prims = [prima for plist in [getattr(cls , f'primatives_{m}')() for m in ['1d','2d','3d','4d']] for prima in plist]
         prims += cls.primatives_identity()

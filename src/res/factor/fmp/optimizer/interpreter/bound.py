@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
@@ -83,7 +84,7 @@ class StockBound:
             self.ub = np.maximum(self.ub , self.lb)
 
     @classmethod
-    def intersect_bounds(cls , bounds : list['StockBound'] , clear_after = False) :
+    def intersect_bounds(cls , bounds : list[StockBound] , clear_after = False) :
         assert bounds , 'must be no less than 1 bound'
         new_bound = bounds[0].copy()
         [new_bound.intersect(bnd) for bnd in bounds[1:]]
@@ -92,7 +93,7 @@ class StockBound:
         return new_bound
     
     @classmethod
-    def union_bounds(cls , bounds : list['StockBound'] , clear_after = False) :
+    def union_bounds(cls , bounds : list[StockBound] , clear_after = False) :
         assert bounds , 'must be no less than 1 bound'
         new_bound = bounds[0].copy()
         [new_bound.union(bnd) for bnd in bounds[1:]]
@@ -237,7 +238,7 @@ class GeneralBound:
         return StockBound(lb , ub)
     
     def export_lin(self , A : np.ndarray , wb : np.ndarray | Any = None , 
-                   others : list['GeneralBound'] | None = None) -> tuple:
+                   others : list[GeneralBound] | None = None) -> tuple:
         others = others or []
         if np.isnan(A).any():
             Logger.warning(f'GeneralBound {self.key} when export_lin has nan of A : {np.isnan(A).sum()} / {np.size(A)}')

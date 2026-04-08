@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 from typing import Literal , Any , Callable , Sequence
 import streamlit as st
@@ -231,7 +232,7 @@ class YAMLFileEditorState:
         ...
     
     @classmethod
-    def get_state(cls , key : str , root : Path | str | None = None) -> 'YAMLFileEditorState':
+    def get_state(cls , key : str , root : Path | str | None = None) -> YAMLFileEditorState:
         if f'yaml_file_editor_states' not in st.session_state:
             st.session_state.yaml_file_editor_states = {}
         if key not in st.session_state.yaml_file_editor_states:

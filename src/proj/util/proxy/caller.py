@@ -1,5 +1,5 @@
 """Run user callables through a ``AdaptiveProxyPool`` with fallback when proxies are missing."""
-
+from __future__ import annotations
 import numpy as np
 from typing import Callable , Any , Iterable , Union, Iterator
 
@@ -34,7 +34,7 @@ class ProxyCaller:
         else:
             return self.fallback(*args, **kwargs)
 
-    def set_pool(self , pool = None) -> 'ProxyCaller':
+    def set_pool(self , pool = None) -> ProxyCaller:
         if pool is None and hasattr(self, 'pool'):
             return self
         from src.proj.util.proxy.api import ProxyAPI
@@ -43,7 +43,7 @@ class ProxyCaller:
         self.pool = pool
         return self
 
-    def set_title(self , title: Any) -> 'ProxyCaller':
+    def set_title(self , title: Any) -> ProxyCaller:
         self.title = str(title)
         return self
 
@@ -68,7 +68,7 @@ class ProxyCaller:
         return self.result
 
     @classmethod
-    def from_input(cls , input: ProxyCallerInput, pool = None) -> 'ProxyCaller':
+    def from_input(cls , input: ProxyCallerInput, pool = None) -> ProxyCaller:
         if isinstance(input , ProxyCaller):
             if pool is not None:
                 input.set_pool(pool)
@@ -91,7 +91,7 @@ class ProxyCallerList:
     """A list of proxy callers"""
     fallback_interval = 1.0
     
-    def __init__(self, callers: list['ProxyCaller'] | dict[str, 'ProxyCaller'] , * , pool = None):
+    def __init__(self, callers: list[ProxyCaller] | dict[str, ProxyCaller] , * , pool = None):
         if isinstance(callers , dict):
             self.callers = [caller.set_title(title) for title, caller in callers.items()]
         else:
@@ -104,10 +104,10 @@ class ProxyCallerList:
     def __bool__(self) -> bool:
         return bool(self.callers)
 
-    def __iter__(self) -> Iterator['ProxyCaller']:
+    def __iter__(self) -> Iterator[ProxyCaller]:
         return iter(self.callers)
 
-    def set_pool(self , pool = None) -> 'ProxyCallerList':
+    def set_pool(self , pool = None) -> ProxyCallerList:
         if pool is None and hasattr(self, 'pool'):
             return self
         from src.proj.util.proxy.api import ProxyAPI
@@ -126,7 +126,7 @@ class ProxyCallerList:
         self.check_shutdown()
         return len(self) == 0 or all(caller.finished or caller.banned for caller in self.callers)
     
-    def unfinished_callers(self) -> list['ProxyCaller']:
+    def unfinished_callers(self) -> list[ProxyCaller]:
         return [caller for caller in self.callers if not caller.finished]
 
     def print_status(self):
@@ -141,7 +141,7 @@ class ProxyCallerList:
     def results(self) -> list[bool | Exception]:
         return [caller.result for caller in self.callers]
 
-    def realigned_callers(self , unfinished = True) -> list['ProxyCaller']:
+    def realigned_callers(self , unfinished = True) -> list[ProxyCaller]:
         """Realign callers to the make iteration more diverse"""
         callers = self.unfinished_callers() if unfinished else self.callers
         step_size = int(np.round(np.sqrt(len(callers))))
@@ -159,7 +159,7 @@ class ProxyCallerList:
             caller.fallback()
 
     @classmethod
-    def from_inputs(cls , inputs : Iterable[ProxyCallerInput] | dict[str, ProxyCallerInput] , pool = None) -> 'ProxyCallerList':
+    def from_inputs(cls , inputs : Iterable[ProxyCallerInput] | dict[str, ProxyCallerInput] , pool = None) -> ProxyCallerList:
         """Create a ProxyCallerList from inputs of Iterable[func: Callable[..., bool]] | Iterable[tuple[url: str, func: Callable[..., bool]]]"""
         if isinstance(inputs , ProxyCallerList):
             return inputs.set_pool(pool)
@@ -171,7 +171,7 @@ class ProxyCallerList:
         self = cls(callers , pool = pool)
         return self
 
-    def partition(self , grouping_num : int = 100) -> list['ProxyCallerList']:
+    def partition(self , grouping_num : int = 100) -> list[ProxyCallerList]:
         """Partition the callers into groups"""
         if not self.callers:
             return []

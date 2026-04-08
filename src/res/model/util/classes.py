@@ -521,7 +521,7 @@ class BaseTrainer(ModelStreamLine):
             status = 'fitting'
         else:
             status = 'unknown'
-        return self.config.base_path.rslt(f'{self.config.model_name}_{status}.html')
+        return self.config.base_path.rslt(f'{status}_output.html')
     @property
     def model_tensorboad_dir(self):
         return self.config.base_path.snapshot('tensorboard' , f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}')

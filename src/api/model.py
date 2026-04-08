@@ -134,7 +134,7 @@ class ModelAPI:
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , resume : int = 1 , 
                        start : int | None = None , end : int | None = None , **kwargs):
         '''
-        Train a schedule model in config/schedule or .local_resources/shared/schedule_model folder
+        Train a schedule model in config/model/schedule or .local_resources/shared/schedule_model folder
         '''
         return cls.Trainer.schedule(schedule_name , short_test , start = start , end = end , resume = resume , **kwargs)
     
@@ -153,3 +153,11 @@ class ModelAPI:
         Get available models in model folder
         '''
         return cls.Trainer.available_models(include_short_test = include_short_test , include_factors = include_factors)
+
+    @classmethod
+    def rename_model(cls , old_full_name : str , new_clean_name : str):
+        '''
+        Rename a model
+        '''
+        model_path = ModelPath(old_full_name)
+        return model_path.rename(new_clean_name)

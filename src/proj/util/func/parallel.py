@@ -1,5 +1,5 @@
 """Run many callables in-process, threaded, or multiprocessed with shared result dict."""
-
+from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from typing import Any , Callable , Literal , Mapping , Iterable
 
@@ -130,7 +130,7 @@ class FuncCall:
         return pool.submit(self.go)
 
     @classmethod
-    def from_func_calls(cls , inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , ignore_error : bool = False , **kwargs) -> tuple[dict[Any , Any] , list['FuncCall']]:
+    def from_func_calls(cls , inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , ignore_error : bool = False , **kwargs) -> tuple[dict[Any , Any] , list[FuncCall]]:
         """Build result dict and ``FuncCall`` list from a mapping or iterable."""
         iterance = inputs.items() if isinstance(inputs , dict) else enumerate(inputs)
         result : dict[Any , Any] = {}

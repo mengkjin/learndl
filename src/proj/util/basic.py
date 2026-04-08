@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Callable , Iterable
 from pathlib import Path
 from pprint import pformat
+from copy import deepcopy
 import os
 
 from src.proj.log import Logger
@@ -104,12 +105,23 @@ class FlattenDict:
         assert key in self.flattened , f'{key} not found in {self.keys()} , cannot set value , use update with relevant_only = False instead'
         self.flattened[key] = value
 
-    def update(self, d : 'dict[str, Any] | FlattenDict' , relevant_only: bool = True):
+    def copy(self) -> FlattenDict:
+        """Return a deep copy of the flattened dict."""
+        copied : Any = deepcopy(self.flattened)
+        return copied
+
+    def update(self, d : dict[str, Any] | FlattenDict , relevant_only: bool = True) -> FlattenDict:
         """Merge flattened keys from ``d``; unknown keys skipped when ``relevant_only``."""
         flattened_input = self.flatten_dict(d , keep_nested = self.keep_nested)
         for k, v in flattened_input.items():
             if k in self.flattened or not relevant_only:
                 self.flattened[k] = v  
+        return self
+
+    def combine_with(self, d : dict[str, Any] | FlattenDict) -> FlattenDict:
+        """Merge flattened keys from ``d``; unknown keys skipped when ``relevant_only``."""
+        self = self.copy()
+        self.update(d , relevant_only = False)
         return self
 
     def get(self, key: str, default: Any = None):
@@ -130,7 +142,7 @@ class FlattenDict:
         return cls.nested_dict({k.removeprefix(f'{key}.'): v for k, v in d.items() if k.startswith(f'{key}.')})
 
     @classmethod
-    def flatten_dict(cls , d: 'dict | FlattenDict' , prefix: str = '' , * , keep_nested: Callable[[str], bool] | None = None):
+    def flatten_dict(cls , d: dict[str, Any] | FlattenDict , prefix: str = '' , * , keep_nested: Callable[[str], bool] | None = None) -> dict[str, Any]:
         """Recursively flatten dicts to dot keys unless ``keep_nested`` keeps a prefix."""
         if isinstance(d, FlattenDict):
             d = d.raw
@@ -171,7 +183,7 @@ class FlattenDict:
         PATH.dump_yaml(self.flattened, path)
 
     @classmethod
-    def from_input(cls, input: 'dict | Path | list[Path] | FlattenDict | None' , * , keep_nested: Callable[[str], bool] | None = None):
+    def from_input(cls, input: dict | Path | list[Path] | FlattenDict | None , * , keep_nested: Callable[[str], bool] | None = None):
         """Factory: dict/FlattenDict, single YAML path, or list of YAMLs keyed by stem."""
         if input is None or isinstance(input, (FlattenDict, dict)):
             return cls(input , keep_nested = keep_nested)

@@ -1,6 +1,6 @@
 # main model configs ----------------------------------------------------------------
-name          : gru_dfl2  # any name or null
-module        : gru
+name          : null  # any name or null
+module        : gru_resnet
 # nn : can be nn / nn@{gru} ... / {gru} ...
 # boost : can be boost / boost@{lgbm} ... / {lgbm} ...
 # factor : can be factor / factor@{factor_name} ... / {factor_name}

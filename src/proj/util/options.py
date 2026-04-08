@@ -27,8 +27,8 @@ class OptionsDefinition:
 
     @classmethod
     def available_schedules(cls) -> list[str]:
-        """Get the available schedules in the config/schedule directory"""
-        return [p.stem for p in PATH.conf.joinpath('schedule').glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
+        """Get the available schedules in the config/model/schedule directory"""
+        return [p.stem for p in PATH.schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
 
     @classmethod
     def available_trackingports(cls) -> list[str]:

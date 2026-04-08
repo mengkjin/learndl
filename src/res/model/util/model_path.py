@@ -1,7 +1,11 @@
+"""
+ModelPath: The all-in-one model path class for model training and inference.
+"""
+
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
-
 import shutil
 from datetime import datetime , timedelta
 from pathlib import Path
@@ -31,7 +35,7 @@ class ModelPath:
     
     """
 
-    def __new__(cls , model_input : 'ModelPath |Path | str | None' , *args , **kwargs) -> 'ModelPath':
+    def __new__(cls , model_input : ModelPath | Path | str | None , *args , **kwargs) -> ModelPath:
         if isinstance(model_input , ModelPath):
             return model_input
         else:
@@ -45,7 +49,7 @@ class ModelPath:
         return bool(self.full_name)
     def __repr__(self) -> str:  
         return f'{self.__class__.__name__}(full_name={self.full_name})'
-    def __eq__(self , other : 'ModelPath'):
+    def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
     def parse_input(self , model_input : Path | str | None):
@@ -109,7 +113,9 @@ class ModelPath:
 
     @property
     def log_file(self) -> LogFile:
-        return LogFile.initialize('model' , 'operation' , f'{self.full_name}')
+        if not hasattr(self , '_log_file'):
+            self._log_file = LogFile.initialize('model' , 'operation' , f'{self.full_name}')
+        return self._log_file
 
     @property
     def is_resumable(self) -> bool:
@@ -139,7 +145,7 @@ class ModelPath:
         self.parse_input(full_name)
         return self
 
-    def replace_by(self , other : 'ModelPath'):
+    def replace_by(self , other : ModelPath):
         self.parse_input(other.full_name)
         return self
 
@@ -158,14 +164,11 @@ class ModelPath:
         return self('archive' , *args)
     def conf(self , *args) -> Path:  
         """model configs path"""
-        if self:
-            return self('configs' , *args)
-        else:
-            return PATH.conf.joinpath(*args)
-    def conf_file(self , *args) -> Path:
+        return self('configs' , *args)
+    def conf_file(self , key : str) -> Path:
         """model config file"""
-        path = self.conf(*args)
-        return path.with_name(f'{path.name}.yaml')
+        assert self , 'empty model path cannot have config files'
+        return self('configs').joinpath(key).with_suffix('.yaml')
     def rslt(self , *args) -> Path:     
         """model results path"""
         return self('results' , *args)
@@ -175,7 +178,7 @@ class ModelPath:
     def full_path(self , model_num , model_date , submodel) -> Path:
         """full model path of a given model date / num / submodel"""
         return self('archive', model_num , model_date , submodel)
-    def model_file(self , model_num , model_date , submodel) -> 'ModelFile':
+    def model_file(self , model_num , model_date , submodel) -> ModelFile:
         """model file of a given model date / num / submodel"""
         return ModelFile(self('archive', model_num , model_date , submodel))
     def exists(self , model_num , model_date , submodel) -> bool:
@@ -193,6 +196,36 @@ class ModelPath:
         self.conf().mkdir(exist_ok=exist_ok)
         self.rslt().mkdir(exist_ok=True)
         self.snapshot().mkdir(exist_ok=True)
+
+    def rename(self , new_clean_name : str):
+        """rename model directory"""
+        # get new full name
+        if new_clean_name == self.model_clean_name:
+            return self
+        old_full_name = self.full_name
+        new_full_name = combine_full_name(**self.full_name_kwargs | {'model_clean_name' : new_clean_name})
+        assert not ModelPath(new_full_name).base.exists() , f'{new_full_name} already exists , cannot rename to it!'
+        
+        config_file = PATH.read_yaml(self.conf_file('model'))
+        config_file['model.name'] = new_clean_name
+        PATH.dump_yaml(config_file , self.conf_file('model'))
+
+        if self.log_file.host_file.exists():
+            self.log_file.rename(new_full_name)
+
+        
+        if self.base.exists():
+            
+            config_file = PATH.read_yaml(self.conf_file('model'))
+            config_file['model.name'] = new_clean_name
+            PATH.dump_yaml(config_file , self.conf_file('model'))
+
+            old_base_path = self.base
+            self.full_name_kwargs['model_clean_name'] = new_clean_name
+            self.full_name = new_full_name
+            old_base_path.rename(self.base)
+            self.log_operation(f'rename_model_path from {old_full_name} to {new_full_name}')
+        return self
 
     def clear_model_path(self):
         """clear model directory , but archive directory will protected , log directory will be remained"""
@@ -215,7 +248,7 @@ class ModelPath:
         if self.is_null_model:
             assert self.model_module == self.model_name , f'{self} is a null model, {self.model_module} and {self.model_name} do not match'
 
-    def find_resumable_candidates(self , sort = True) -> list['ModelPath']:
+    def find_resumable_candidates(self , sort = True) -> list[ModelPath]:
         if self.is_null_model and self.model_module == self.model_name:
             return []
         else:
@@ -290,9 +323,6 @@ class ModelPath:
         skip = time_elapsed.total_seconds() / 3600  < interval_hours
         return last_time , time_elapsed , skip
 
-    def guess_module(self) -> str:
-        return str(PATH.read_yaml(self.conf_file('train', 'model'))['module']).lower().replace(' ' , '').replace('/', '@')
-
 class HiddenPath:
     """hidden factor path for nn models , used for extracting hidden states"""
     def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
@@ -303,7 +333,7 @@ class HiddenPath:
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
 
     @classmethod
-    def from_key(cls , hidden_key : str) -> 'HiddenPath':
+    def from_key(cls , hidden_key : str) -> HiddenPath:
         """
         create hidden path from hidden key
         example:
@@ -444,7 +474,7 @@ class PredictionModel(ModelPath):
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = CONST.Conf.Model.SETTINGS['prediction']
 
-    def __new__(cls , *args , **kwargs) -> 'PredictionModel | Any':
+    def __new__(cls , *args , **kwargs) -> PredictionModel | Any:
         return super().__new__(cls , *args , **kwargs)
 
     def __init__(self, pred_name : str , name: str | Any = None , 
@@ -471,7 +501,7 @@ class PredictionModel(ModelPath):
         return f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},submodel={self.submodel},num={str(self.num)})'
     
     @classmethod
-    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list['PredictionModel']:
+    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictionModel]:
         """select prediction models"""
         if pred_names is None: 
             pred_names = list(cls.MODEL_DICT.keys())
@@ -566,7 +596,7 @@ class HiddenExtractionModel(ModelPath):
     model dict stored in configs/proj/model_settings.yaml file under hidden_extraction section
     '''
     MODEL_DICT : dict[str,dict[str,Any]] = CONST.Conf.Model.SETTINGS['hidden_extraction']
-    def __new__(cls , *args , **kwargs) -> 'HiddenExtractionModel | Any':
+    def __new__(cls , *args , **kwargs) -> HiddenExtractionModel | Any:
         return super().__new__(cls , *args , **kwargs)
 
     def __init__(self , hidden_name : str , name: str | Any = None ,    
@@ -590,7 +620,7 @@ class HiddenExtractionModel(ModelPath):
         return f'{self.__class__.__name__}(hidden_name={self.hidden_name},full_name={self.full_name},submodels={self.submodels},nums={str(self.nums)})'
 
     @classmethod
-    def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list['HiddenExtractionModel']:   
+    def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list[HiddenExtractionModel]:   
         """select hidden models"""
         if hidden_names is None: 
             hidden_names = list(cls.MODEL_DICT.keys())

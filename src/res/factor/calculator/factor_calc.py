@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 import re
@@ -134,7 +135,7 @@ class _FactorStoredDates:
     def __get__(self,instance,owner) -> int:
         return getattr(owner , f'get_{self.method}_date')()
 
-def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Series | pd.DataFrame]) -> Callable[['FactorCalculator',int], pd.DataFrame]:
+def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series | pd.DataFrame]) -> Callable[[FactorCalculator,int], pd.DataFrame]:
     """
     check and modify before and after factor value calculation
     before:
@@ -146,7 +147,7 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
         4. remove duplicate secid
         5. reindex to secid(date)
     """
-    def wrapper(instance : 'FactorCalculator' , date : int):
+    def wrapper(instance : FactorCalculator , date : int):
         date = int(date)
         
         if date < instance.init_date: 
@@ -183,7 +184,7 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
 class _FactorCalculatorMeta(SingletonABCMeta):
     """meta class of StockFactorCalculator"""
 
-    registry : dict[str,Type['FactorCalculator'] | Any] = {}
+    registry : dict[str,Type[FactorCalculator] | Any] = {}
     definition_imported : bool = False
 
     def __new__(cls, name, bases, dct):
@@ -577,7 +578,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return target_dates
 
     @classmethod
-    def iter(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator['FactorCalculator' , None , None]:
+    def iter(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
         """
         iterate over calculators
         return a list of factor instances with given attributes
