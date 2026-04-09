@@ -8,6 +8,7 @@ from src.proj import MACHINE , Logger
 __all__ = ['parallel' , 'FuncCall']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
+INPUT_TYPE = Callable | tuple[Callable , Iterable | None] | tuple[Callable , list | tuple | None , dict | None]
 
 def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:
     """get parallel method index
@@ -26,8 +27,6 @@ def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] ,
         return ['forloop' , 'thread' , 'process'].index(method)
     else:
         raise ValueError(f'method should be int or str , but got {type(method)}')
-
-INPUT_TYPE = Callable | tuple[Callable , Iterable | None] | tuple[Callable , list | tuple | None , dict | None]
 
 def parallel(
     inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , 

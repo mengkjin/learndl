@@ -1,7 +1,8 @@
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-import multiprocessing as mp  
+import threading
+import sqlalchemy
 
 from string import Template
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
+from src.proj.util.func import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
@@ -41,6 +43,7 @@ factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     #                         {'sub_factors' : ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error']}) ,
 }
 
+MAX_MAX_WORKERS: int = 3
 @dataclass
 class Connection:
     """a connection to a sellside sql database"""
@@ -53,8 +56,17 @@ class Connection:
     driver      : str | None = None
     stay_connect: bool = True
 
+    mysql_timeout_connect : ClassVar[float] = 10.
+    mysql_timeout_read  : ClassVar[float] = 300.
+
     def __post_init__(self):
-        self.conn = None
+        self.lock = threading.Lock()
+
+    @property
+    def conn(self) -> sqlalchemy.engine.base.Connection:
+        if not hasattr(self , '_conn'):
+            self._conn = self.engine().connect()
+        return self._conn
 
     @property
     def url(self) -> str:
@@ -70,25 +82,22 @@ class Connection:
             connect_url += f'?driver={self.driver}'
         return connect_url
 
-    def engine(self):
-        return create_engine(self.url)
-    
-    def connect(self , reconnect = False):
-        if self.stay_connect and reconnect:
-            self.close()
-        if self.conn is None:
-            engine = self.engine()
-            conn = engine.connect()
-            if self.stay_connect: 
-                self.conn = conn
+    def engine(self) -> sqlalchemy.engine.base.Engine:
+        if self.dialect.startswith('mysql'):
+            connect_args = {'connect_timeout' : self.mysql_timeout_connect , 'read_timeout' : self.mysql_timeout_read}
         else:
-            conn = self.conn
-        return conn
+            connect_args = {}
+        return create_engine(self.url , connect_args = connect_args , pool_pre_ping = True , pool_recycle = 1800)
+
+    def reconnect(self) -> Connection:
+        with self.lock:
+            self.close()
+            self._conn = self.engine().connect()
+        return self
     
-    def close(self):
-        if self.conn is not None:
-            self.conn.close()
-            self.conn = None
+    def close(self) -> Connection:
+        if hasattr(self , '_conn'):
+            self._conn.close()
         return self
 
     @classmethod
@@ -124,7 +133,7 @@ class Connection:
         for key in cls.available_sources():
             try:
                 connection = cls.connection(key)
-                connection.connect()
+                connection.conn
                 connection.close()
                 Logger.success(f'{key} connection test passed')
             except Exception as e:
@@ -144,7 +153,7 @@ class SellsideSQLDownloader:
     connection_key  : str = ''
 
     DB_SRC : ClassVar[str] = 'sellside'
-    MAX_WORKERS: ClassVar[int] = 1
+    MAX_WORKERS: ClassVar[int] = min(1 , MAX_MAX_WORKERS)
 
     def __post_init__(self):
         assert 19900101 <= self.start_date <= self.end_date <= 99991231 , f'start_date {self.start_date} must be greater than 19900101 and less than end_date {self.end_date} and less than 99991231'
@@ -154,8 +163,18 @@ class SellsideSQLDownloader:
         return f'{self.factor_src}.{self.factor_set}'
 
     @property
-    def use_connection(self) -> str:
+    def use_connection_key(self) -> str:
         return self.connection_key if self.connection_key else self.factor_src
+
+    @property
+    def connection(self) -> Connection:
+        if not hasattr(self , '_connection'):
+            self._connection = Connection.connection(self.use_connection_key)
+        return self._connection
+
+    @property
+    def conn(self) -> sqlalchemy.engine.base.Connection:
+        return self.connection.conn
 
     def sqlline_start_dt(self) -> str:
         if self.factor_src == 'haitong':
@@ -198,11 +217,10 @@ class SellsideSQLDownloader:
         return sqlline
 
     def get_connection(self):
-        return Connection.connection(self.use_connection)
+        return Connection.connection(self.use_connection_key)
     
     def download(self , option : Literal['since' , 'dates' , 'all'] ,
-                 dates : Iterable[int] = () , trace = 1 , start = 20000101, end = 99991231 , 
-                 connection : Connection | None = None):
+                 dates : Iterable[int] = () , trace = 1 , start = 20000101, end = 99991231):
         if option == 'dates':
             date_intervals = [(d,d) for d in dates]
         else:
@@ -220,31 +238,24 @@ class SellsideSQLDownloader:
             date_intervals = CALENDAR.range_segments(start , end , 'td' , 60)
         if not date_intervals: 
             return 
-
-        if connection is None:
-            connection = self.get_connection()
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
         Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
 
-        if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
-            connection.stay_connect = True
+        if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang': 
             for inter in date_intervals:
-                self.download_period(*inter , connection)
+                self.download_period(*inter , True)
         else:
-            connection.stay_connect = False
-            with mp.Pool(processes=self.MAX_WORKERS) as pool:  
-                pool.starmap(self.download_period, [(*inter , connection) for inter in date_intervals])
+            parallel([(self.download_period, (*inter , True)) for inter in date_intervals], max_workers = self.MAX_WORKERS)
  
-    def download_period(self , start : int , end : int , connection : Connection | None = None):
-        if connection is None:
-            connection = self.get_connection()
+    def download_period(self , start : int , end : int , reconnect = False):
         t0 = datetime.now()
         try:
-            df = self.query_factor_values(start , end , connection)
+            df = self.query_factor_values(start , end , reconnect = reconnect)
         except Exception as e:
             Logger.error(f'In {self.__class__.__name__} : Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
             Logger.print_exc(e)
+            self.connection.reconnect()
             return False
         if (num_dates := self.save_data(df)) > 0:
             Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1 , vb_level = 1)
@@ -252,33 +263,27 @@ class SellsideSQLDownloader:
             Logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , indent = 1)
         return True
 
-    def query_start_dt(self , connection : Connection | None = None):
-        if connection is None:
-            connection = self.get_connection()
-        conn = connection.connect()
-        return pd.read_sql_query(self.sqlline_start_dt() , conn)
+    def query_start_dt(self):
+        return pd.read_sql_query(self.sqlline_start_dt() , self.conn)
     
-    def query_factor_values(self , start : int = 20230101 , end : int = 20230131 , connection : Connection | None = None , retry = 1):
-        if connection is None:
-            connection = self.get_connection()
-        conn = connection.connect()
+    def query_factor_values(self , start : int = 20230101 , end : int = 20230131 ,  reconnect = False, attempts : int = 1):
+        if reconnect:
+            self.connection.reconnect()
         start_str = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         end_str   = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
         df_input = None
         i = 0
-        while i <= retry:
+        while i <= attempts:
             try:
                 if self.sub_factors is None:
-                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_str , end_str) , conn)
+                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_str , end_str) , self.conn)
                 else:
-                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_str , end_str , sub_factor) , conn) for sub_factor in self.sub_factors}
+                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_str , end_str , sub_factor) , self.conn) for sub_factor in self.sub_factors}
             except exc.ResourceClosedError:
                 Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
-                conn = connection.connect(reconnect = True)
+                self.connection.reconnect()
             i += 1
-        if not connection.stay_connect: 
-            conn.close()
         df = self.df_process(df_input)
         return df
 
@@ -352,7 +357,7 @@ class SellsideSQLDownloader:
         return status
 
     @classmethod
-    def default_factors(cls , keys : list[str] | str | None = None):
+    def default_factors(cls , keys : list[str] | str | None = None) -> dict[str,SellsideSQLDownloader]:
         if keys is None:
             keys = cls.available_factors()
         elif isinstance(keys , str):
@@ -369,23 +374,21 @@ class SellsideSQLDownloader:
 
     @classmethod
     def test_all_factors(cls) -> None:
-        for factor , connection in cls.factors_and_conns():
+        for key , downloader in cls.factors_downloaders().items():
             try:
-                factor.query_start_dt(connection = connection)
-                Logger.success(f'{factor.factor_src}.{factor.factor_set} start dt query passed')
+                downloader.query_start_dt()
+                Logger.success(f'{downloader.factor_src}.{downloader.factor_set} start dt query passed')
             except Exception as e:
-                Logger.error(f'{factor.factor_src}.{factor.factor_set} start dt query failed: {e}')
+                Logger.error(f'{downloader.factor_src}.{downloader.factor_set} start dt query failed: {e}')
 
     @classmethod
-    def factors_and_conns(cls , keys = None):
-        factors = cls.default_factors(keys)
-        conns   = Connection.default_connections()
-        return [(factor , conns[factor.use_connection]) for factor in factors.values()]
-
+    def factors_downloaders(cls , keys = None) -> dict[str,SellsideSQLDownloader]:
+        return cls.default_factors(keys)
+        
     @classmethod
     def update_since(cls , trace = 0 , keys = None):
-        for factor , connection in cls.factors_and_conns(keys):  
-            factor.download('since' , trace = trace , connection = connection)
+        for key , downloader in cls.factors_downloaders(keys).items():  
+            downloader.download('since' , trace = trace)
 
     @classmethod
     def update_dates(cls , start , end , keys = None):
@@ -393,8 +396,8 @@ class SellsideSQLDownloader:
         if len(dates) == 0: 
             return NotImplemented
 
-        for factor , connection in cls.factors_and_conns(keys):  
-            factor.download('dates' , dates=dates , connection = connection)
+        for key , downloader in cls.factors_downloaders(keys).items():  
+            downloader.download('dates' , dates=dates)
 
     @classmethod
     def update_allaround(cls , keys = None):
@@ -404,8 +407,8 @@ class SellsideSQLDownloader:
         assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
         Logger.note(prompt)
 
-        for factor , connection in cls.factors_and_conns(keys):  
-            factor.download('all' , connection = connection)
+        for key , downloader in cls.factors_downloaders(keys).items():  
+            downloader.download('all')
 
     @classmethod
     def update(cls):
@@ -419,6 +422,5 @@ if __name__ == '__main__':
     end   = 20100915
     dates = CALENDAR.range(start , end , 'td')
 
-    factors_set = SellsideSQLDownloader.factors_and_conns('dongfang.hfq_chars')
-    factor , connection = factors_set[0]
-    df = factor.query_factor_values(start , end , connection)
+    downloader = SellsideSQLDownloader.factors_downloaders('dongfang.hfq_chars')['dongfang.hfq_chars']
+    df = downloader.query_factor_values(start , end)

@@ -59,7 +59,7 @@ class Amodel:
         if name is not None: 
             self.name = name
         return self
-    def preprocess(self , inplace = False):
+    def pre_process(self , inplace = False):
         # nan_as_num , winsor , normal
         new = self if inplace else self.copy()
         new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))

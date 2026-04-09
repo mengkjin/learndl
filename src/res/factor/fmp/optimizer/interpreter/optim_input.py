@@ -63,7 +63,7 @@ class OptimizedPortfolioInput:
         self.alpha_model : Amodel | Any = alpha_model.get_model(model_date)
         assert self.risk_model is not None , f'risk_model is None at {model_date}'
         assert self.alpha_model is not None , f'alpha_model is None at {model_date}'
-        self.alpha_model = self.alpha_model.preprocess()
+        self.alpha_model = self.alpha_model.pre_process()
         
         self.initial_port = init_port
         self.secid = self.risk_model.universe
