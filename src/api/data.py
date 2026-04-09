@@ -1,5 +1,6 @@
 from src.proj import Logger , CALENDAR
 from src.data import CoreDataUpdater , SellsideDataUpdater , CustomDataUpdater , PreProcessorTask
+from src.data.crawler import AnnouncementAgent
 # from src.data import JSDataUpdater
 from src.res.factor.api import RiskModelUpdater
 
@@ -27,6 +28,9 @@ class DataAPI:
 
         # update other datas , include labels , so must be after RiskModelUpdater
         wrap_update(CustomDataUpdater.update , 'update affiliated data' , skip = not affiliated)
+
+        # update announcement data
+        wrap_update(AnnouncementAgent.update , 'update announcement data')
 
 
     @classmethod
