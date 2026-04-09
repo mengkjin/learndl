@@ -168,7 +168,7 @@ class ModelPath:
     def conf_file(self , key : str) -> Path:
         """model config file"""
         assert self , 'empty model path cannot have config files'
-        return self('configs').joinpath(key).with_suffix('.yaml')
+        return self('configs').joinpath(f"{key}.yaml")
     def rslt(self , *args) -> Path:     
         """model results path"""
         return self('results' , *args)

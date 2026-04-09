@@ -664,13 +664,6 @@ class AlgoConfig:
     def __repr__(self):
         return f"{self.__class__.__name__}(model_name={self.model_name})"
 
-    def source_conf_file(self) -> Path:
-        path = PATH.conf.joinpath("algo", self.module_type, f"{self.model_module}.yaml")
-        default_path = path.with_stem(f"default")
-        if not path.exists() and not default_path.exists():
-            Logger.error(f"{path} does not exist, and default.yaml does not exist either.")
-        return path if path.exists() else default_path
-
     def load_params(self):
         if self.base_path.is_null_model:
             self.model_param = get_config_dict(None)
@@ -679,6 +672,13 @@ class AlgoConfig:
         else:
             self.model_param = get_config_dict(self.source_conf_file())
         return self
+
+    def source_conf_file(self) -> Path:
+        path = PATH.conf.joinpath("algo", self.module_type, f"{self.model_module}.yaml")
+        default_path = path.with_stem(f"default")
+        if not path.exists() and not default_path.exists():
+            Logger.error(f"{path} does not exist, and default.yaml does not exist either.")
+        return path if path.exists() else default_path
 
     def override_params(self):
         self.model_param.update(self.schedule_config.get(f"algo.{self.model_module}", {}))
