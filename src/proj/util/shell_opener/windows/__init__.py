@@ -1,6 +1,7 @@
 
 from ..preference import WINDOWS_OPTIONS
 from .cmd_terminal import CmdTerminalOpener
+from .wezterm import WezTermOpener
 
 __all__ = ["open_for_windows"]
 
@@ -11,13 +12,20 @@ def get_opener(option: str):
     match option:
         case "cmd":
             return CmdTerminalOpener()
+        case "wezterm":
+            return WezTermOpener()
         case _:
             raise ValueError(f"Invalid option: {option}")
 
 def open_for_windows(
-    command: str , * , 
-    cwd: str | None = None, option : str | None = None, 
-    title: str | None = None, new_on: str | None = None , **kwargs) -> None:
+    command: str,
+    *,
+    cwd: str | None = None,
+    option: str | None = None,
+    title: str | None = None,
+    new_on: str | None = None,
+    **kwargs,
+) -> None:
     options = [option] + WINDOWS_OPTIONS if option else WINDOWS_OPTIONS
     for opt in options:
         opener = get_opener(opt)

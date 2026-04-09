@@ -11,10 +11,10 @@ _DEFAULT_PAUSE_UNIX = (
     "(read -k 1 2>/dev/null) || read -r -n 1 -s; exit"
 )
 
-# cmd.exe: ``timeout /t -1`` waits for a key then returns; with ``cmd /c`` the window closes.
-# (``pause`` leaves an interactive shell when combined with ``/k`` / nested ``start``.)
+# cmd.exe: ``timeout /t -1`` waits for a key then returns. With ``cmd /k`` you must ``exit``
+# afterward or the pane stays open; ``& exit`` is harmless on a ``cmd /c`` line (already exiting).
 _DEFAULT_PAUSE_WIN = (
-    "echo. & echo Task complete. Press any key to exit... & timeout /t -1 >nul"
+    "echo. & echo Task complete. Press any key to exit... & timeout /t -1 >nul & exit"
 )
 
 def compose_with_pause(command: str, *, pause_when_done: bool) -> str:

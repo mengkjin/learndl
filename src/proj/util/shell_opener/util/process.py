@@ -15,7 +15,16 @@ def popen_detached(
     args: list[str],
     *,
     env: Optional[dict[str, str]] = None,
+    windows_detached_process: bool = True,
+    windows_create_no_window: bool = True,
 ) -> subprocess.Popen:
+    """
+    Launch ``args`` in the background.
+
+    On Windows, ``DETACHED_PROCESS`` (default) avoids tying the child to the parent's console,
+    but it can prevent ``wezterm start`` from attaching to an already-running GUI; pass
+    ``windows_detached_process=False`` (and often ``windows_create_no_window=False``) for that.
+    """
     kwargs: dict = {
         "args": args,
         "stdin": subprocess.DEVNULL,
@@ -23,9 +32,13 @@ def popen_detached(
         "stderr": subprocess.DEVNULL,
     }
     if sys.platform == "win32":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
-            subprocess, "DETACHED_PROCESS", 0x00000008
-        )
+        flags = 0
+        if windows_create_no_window:
+            flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if windows_detached_process:
+            flags |= getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        if flags:
+            kwargs["creationflags"] = flags
         kwargs["close_fds"] = True
     else:
         kwargs["start_new_session"] = True

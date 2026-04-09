@@ -5,19 +5,25 @@ discover_wait_interval : 0.25
 
 macos_options:
   - cmux
+  - wezterm
   - ghostty
   - terminal.app
 
 macos_terminal_profile_name : Basic
+macos_wezterm_new : tab # window, workspace (as new window), tab
 macos_cmux_new : tab # window, workspace, tab (as surface)
 macos_cmux_cold_start_deadline : 15.0
 macos_cmux_ping_interval : 0.25
 macos_cmux_cmd_timeout : 120.0
 
 linux_options:
+  - wezterm
   - gnome
+linux_wezterm_new : tab # window , workspace(as window), tab
 linux_gnome_new : tab # window , workspace(as window), tab
 
 windows_options:
+  - wezterm
   - cmd
 windows_cmd_new : tab # window , workspace(as window), tab
+windows_wezterm_new : tab # window, workspace (as new window), tab

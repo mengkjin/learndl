@@ -81,12 +81,17 @@ class Shell:
             title = guess_command_title(line)
         system = platform.system()
         kwargs = {
-            'cwd': workdir, 'option': option, 'title': title, 'new_on': new_on, 
-            'as_workspace': as_workspace, 'from_workspace': from_workspace}
+            "cwd": workdir,
+            "option": option,
+            "title": title,
+            "new_on": new_on,
+            "as_workspace": as_workspace,
+            "from_workspace": from_workspace,
+        }
         if system == "Darwin":
             open_in_macos(line , **kwargs)
         elif system == "Windows":
-            open_for_windows(line , **kwargs)
+            open_for_windows(line, **kwargs)
         elif system == "Linux":
             open_in_linux(line , **kwargs)
         else:

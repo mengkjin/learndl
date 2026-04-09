@@ -58,14 +58,20 @@ def format_python_command(
     exe = py_path or sys.executable
     script_s = str(Path(script).resolve())
     if sys.platform == "win32":
-        parts = [_win_cmd_token(exe), _win_cmd_token(script_s)]
+        if exe == "uv run":
+            parts = ["uv", "run", _win_cmd_token(script_s)]
+        else:
+            parts = [_win_cmd_token(exe), _win_cmd_token(script_s)]
     else:
-        if exe == 'uv run':
+        if exe == "uv run":
             parts = [exe, shlex.quote(script_s)]
         else:
             parts = [shlex.quote(exe), shlex.quote(script_s)]
     if args:
-        parts.extend(shlex.quote(a) for a in args)
+        if sys.platform == "win32":
+            parts.extend(_win_cmd_token(a) for a in args)
+        else:
+            parts.extend(shlex.quote(a) for a in args)
     if kwargs:
         parts.extend(f"--{k} {str(v).replace(' ', '')}" for k, v in kwargs.items() if str(v).strip())
     return " ".join(parts)

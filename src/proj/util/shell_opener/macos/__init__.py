@@ -1,13 +1,11 @@
-"""macOS terminal backends: cmux (preferred), Ghostty, or Terminal.app."""
+"""macOS terminal backends: cmux, Ghostty, WezTerm, or Terminal.app."""
 
 from __future__ import annotations
-
-
-from typing import Literal
 
 from .cmux import CmuxOpener
 from .ghostty import GhosttyOpener
 from .terminal_app import TerminalAppOpener
+from .wezterm import WezTermOpener
 from ..preference import MACOS_OPTIONS
 
 __all__ = ["open_in_macos"]
@@ -21,8 +19,10 @@ def get_opener(option: str):
             return GhosttyOpener()
         case "terminal.app":
             return TerminalAppOpener()
-        case 'cmux':
+        case "cmux":
             return CmuxOpener()
+        case "wezterm":
+            return WezTermOpener()
         case _:
             raise ValueError(f"Invalid option: {option}")
 
@@ -41,8 +41,8 @@ def open_in_macos(
     Open ``command`` in a visible terminal.
 
     Backend is ``shell_opener.preference.MACOS_OPTIONS`` by order:
-    ``\"cmux\"`` (async IPC + fallbacks), ``\"ghostty\"`` (Ghostty.app), or
-    ``None`` / other → Terminal.app.
+    ``\"cmux\"`` (async IPC + fallbacks), ``\"ghostty\"`` (Ghostty.app),
+    ``\"wezterm\"`` (``wezterm cli spawn``), or ``\"terminal.app\"``.
     """
     options = [option] + MACOS_OPTIONS if option else MACOS_OPTIONS
     for opt in options:

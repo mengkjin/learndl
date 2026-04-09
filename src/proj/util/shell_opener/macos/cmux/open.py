@@ -81,7 +81,8 @@ class CmuxTree:
 
     def get_workspace(self , workspace_ref: str | None = None , from_workspace: str | None = None) -> CmuxWorkspace | None:
         assert workspace_ref is None or from_workspace is None, "workspace_ref and from_workspace must not be set at the same time"
-        assert workspace_ref or from_workspace, "workspace_ref or from_workspace must be set"
+        if not workspace_ref and not from_workspace:
+            workspace_ref = self.current_workspace.ref
         if workspace_ref:
             workspaces = [workspace for window in self.windows for workspace in window.workspaces if workspace.ref == workspace_ref]
         else:

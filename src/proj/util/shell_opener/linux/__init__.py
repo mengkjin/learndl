@@ -1,6 +1,5 @@
-from typing import Literal
-
 from .gnome import GnomeTerminalOpener
+from .wezterm import WezTermOpener
 from ..preference import LINUX_OPTIONS
 
 __all__ = ["open_in_linux"]
@@ -10,6 +9,8 @@ def get_opener(option: str):
     if option not in LINUX_OPTIONS:
         option = LINUX_OPTIONS[0]
     match option:
+        case "wezterm":
+            return WezTermOpener()
         case "gnome":
             return GnomeTerminalOpener()
         case _:
@@ -24,4 +25,4 @@ def open_in_linux(
         opener = get_opener(opt)
         if opener:
             break
-    opener.run(command, cwd=cwd, title=title, new_on=new_on)
+    opener.run(command, cwd=cwd, title=title, new_on=new_on, **kwargs)
