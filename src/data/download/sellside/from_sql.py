@@ -111,7 +111,7 @@ class Connection:
 
     @classmethod
     def connection(cls , key : str):
-        kwargs : dict[str,Any] = MACHINE.secret['accounts']['sellside'][key]
+        kwargs : dict[str,Any] = {**MACHINE.secret['accounts']['sellside'][key]}
         type : str = kwargs.pop('type')
         assert type.startswith('sql') , f'{key} is not a valid sql source'
         if type.endswith('.disabled'):
