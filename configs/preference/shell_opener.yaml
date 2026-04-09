@@ -20,3 +20,4 @@ linux_gnome_new : tab # window , workspace(as window), tab
 
 windows_options:
   - cmd
+windows_cmd_new : tab # window , workspace(as window), tab

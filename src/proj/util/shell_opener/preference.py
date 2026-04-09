@@ -20,3 +20,4 @@ LINUX_OPTIONS : list[LiteralOption] = CONST.Pref.get("shell_opener" , "linux_opt
 LINUX_GNOME_NEW : LiteralNewOn = CONST.Pref.get("shell_opener" , "linux_gnome_new" , "tab")
 
 WINDOWS_OPTIONS : list[LiteralOption] = CONST.Pref.get("shell_opener" , "windows_options" , ["cmd"])
+WINDOWS_CMD_NEW : LiteralNewOn = CONST.Pref.get("shell_opener" , "windows_cmd_new" , "tab")

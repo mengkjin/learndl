@@ -57,3 +57,26 @@ backtest_ports:
   event_factor_momentum.backtest:
     alpha: factor@event_factor_momentum
     # category: screen
+
+  add_model.gru_week:
+    alpha: 
+      - gru_week
+
+  add_model.gru_30m:
+    alpha: 
+      - gru_30m
+
+  add_model.gru_dfl2:
+    alpha: 
+      - gru_dfl2
+
+  add_model.gru_dfl2cs:
+    alpha: 
+      - gru_dfl2cs
+
+  add_model.all:
+    alpha: 
+      - gru_week
+      - gru_30m
+      - gru_dfl2
+      - gru_dfl2cs

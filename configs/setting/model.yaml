@@ -19,6 +19,26 @@ prediction:
     submodel: swalast
     num: all
 
+  gru_week:
+    name: resnet_gru@gru_week
+    submodel: best
+    num: all
+
+  gru_30m:
+    name: resnet_gru@gru_30m
+    submodel: best
+    num: all
+
+  gru_dfl2:
+    name: gru@gru_dfl2
+    submodel: best
+    num: all
+
+  gru_dfl2cs:
+    name: gru@gru_dfl2cs
+    submodel: best
+    num: all
+
 # For hidden extraction : 
 # hidden name
 #   name: module_name
