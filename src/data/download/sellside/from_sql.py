@@ -1,7 +1,9 @@
+"""
+A downloader for sellside sql data
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-import threading
 import sqlalchemy
 
 from string import Template
@@ -58,15 +60,36 @@ class Connection:
 
     mysql_timeout_connect : ClassVar[float] = 10.
     mysql_timeout_read  : ClassVar[float] = 300.
-
-    def __post_init__(self):
-        self.lock = threading.Lock()
+    max_connections : ClassVar[int] = 3
+    stored_connections : ClassVar[dict[str,Connection]] = {}
 
     @property
-    def conn(self) -> sqlalchemy.engine.base.Connection:
-        if not hasattr(self , '_conn'):
-            self._conn = self.engine().connect()
-        return self._conn
+    def engine(self) -> sqlalchemy.engine.base.Engine:
+        """Return a process-wide singleton Engine per Connection instance.
+
+        Previously each call created a new Engine; ``reconnect()`` then left
+        orphaned pools holding live MySQL sessions until GC, exhausting
+        ``max_user_connections`` (often 5) for the DB user.
+        """
+        if hasattr(self , '_engine'):
+            return self._engine
+        engine_kwargs = {
+            'pool_pre_ping' : True ,
+            'pool_recycle' : 1800 ,
+            'pool_size' : self.max_connections ,
+            'max_overflow' : 1 ,
+        }
+        if self.dialect.startswith('mysql'):
+            engine_kwargs['connect_args'] = {'connect_timeout' : self.mysql_timeout_connect , 'read_timeout' : self.mysql_timeout_read}
+        self._engine = create_engine(self.url , **engine_kwargs)
+        return self._engine
+
+    def reconnect(self) -> Connection:
+        _ = self.close().engine
+        return self
+
+    def get_connection(self) -> sqlalchemy.engine.base.Connection:
+        return self.engine.connect()
 
     @property
     def url(self) -> str:
@@ -81,59 +104,39 @@ class Connection:
         if self.driver : 
             connect_url += f'?driver={self.driver}'
         return connect_url
-
-    def engine(self) -> sqlalchemy.engine.base.Engine:
-        if self.dialect.startswith('mysql'):
-            connect_args = {'connect_timeout' : self.mysql_timeout_connect , 'read_timeout' : self.mysql_timeout_read}
-        else:
-            connect_args = {}
-        return create_engine(self.url , connect_args = connect_args , pool_pre_ping = True , pool_recycle = 1800)
-
-    def reconnect(self) -> Connection:
-        with self.lock:
-            self.close()
-            self._conn = self.engine().connect()
-        return self
     
     def close(self) -> Connection:
-        if hasattr(self , '_conn'):
-            self._conn.close()
+        if hasattr(self , '_engine'):
+            self._engine.dispose()
+            delattr(self , '_engine')
         return self
-
-    @classmethod
-    def default_connections(cls , keys : list[str] | str | None = None):
-        if keys is None:
-            keys = cls.available_sources()
-        elif isinstance(keys , str): 
-            keys = [keys]
-        connections = {key:cls.connection(key) for key in keys}
-        return connections
 
     @classmethod
     def connection(cls , key : str):
-        kwargs : dict[str,Any] = {**MACHINE.secret['accounts']['sellside'][key]}
-        type : str = kwargs.pop('type')
-        assert type.startswith('sql') , f'{key} is not a valid sql source'
-        if type.endswith('.disabled'):
-            Logger.alert1(f'{key} is disabled')
-        
-        for system in ['linux' , 'windows' , 'macos']:
-            driver : str | None = kwargs.pop(f'driver.{system}' , None)
-            if driver and system == MACHINE.system_name:
-                kwargs['driver'] = driver
-        
-        return Connection(**kwargs)
+        if key not in cls.stored_connections:
+            kwargs : dict[str,Any] = {**MACHINE.secret['accounts']['sellside'][key]}
+            type : str = kwargs.pop('type')
+            assert type.startswith('sql') , f'{key} is not a valid sql source'
+            if type.endswith('.disabled'):
+                Logger.alert1(f'{key} is disabled')
+            
+            for system in ['linux' , 'windows' , 'macos']:
+                driver : str | None = kwargs.pop(f'driver.{system}' , None)
+                if driver and system == MACHINE.system_name:
+                    kwargs['driver'] = driver
+            cls.stored_connections[key] = Connection(**kwargs)
+        return cls.stored_connections[key]
 
     @classmethod
-    def available_sources(cls) -> list[str]:
+    def available_keys(cls) -> list[str]:
         return [key for key , value in MACHINE.secret['accounts']['sellside'].items() if value['type'] == 'sql']
 
     @classmethod
     def test_all_connections(cls) -> None:
-        for key in cls.available_sources():
+        for key in cls.available_keys():
             try:
                 connection = cls.connection(key)
-                connection.conn
+                connection.get_connection
                 connection.close()
                 Logger.success(f'{key} connection test passed')
             except Exception as e:
@@ -171,10 +174,6 @@ class SellsideSQLDownloader:
         if not hasattr(self , '_connection'):
             self._connection = Connection.connection(self.use_connection_key)
         return self._connection
-
-    @property
-    def conn(self) -> sqlalchemy.engine.base.Connection:
-        return self.connection.conn
 
     def sqlline_start_dt(self) -> str:
         if self.factor_src == 'haitong':
@@ -242,20 +241,16 @@ class SellsideSQLDownloader:
         start , end = date_intervals[0][0] , date_intervals[-1][1]
         Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
 
-        if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang': 
-            for inter in date_intervals:
-                self.download_period(*inter , True)
-        else:
-            parallel([(self.download_period, (*inter , True)) for inter in date_intervals], max_workers = self.MAX_WORKERS)
+        method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
+        parallel([(self.download_period, inter) for inter in date_intervals], method = method, max_workers = self.MAX_WORKERS)
  
-    def download_period(self , start : int , end : int , reconnect = False):
+    def download_period(self , start : int , end : int):
         t0 = datetime.now()
         try:
-            df = self.query_factor_values(start , end , reconnect = reconnect)
+            df = self.query_factor_values(start , end)
         except Exception as e:
             Logger.error(f'In {self.__class__.__name__} : Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
             Logger.print_exc(e)
-            self.connection.reconnect()
             return False
         if (num_dates := self.save_data(df)) > 0:
             Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1 , vb_level = 1)
@@ -264,11 +259,13 @@ class SellsideSQLDownloader:
         return True
 
     def query_start_dt(self):
-        return pd.read_sql_query(self.sqlline_start_dt() , self.conn)
+        conn = self.connection.get_connection()
+        try:
+            return pd.read_sql_query(self.sqlline_start_dt() , conn)
+        finally:
+            conn.close()
     
-    def query_factor_values(self , start : int = 20230101 , end : int = 20230131 ,  reconnect = False, attempts : int = 1):
-        if reconnect:
-            self.connection.reconnect()
+    def query_factor_values(self , start : int = 20230101 , end : int = 20230131 ,  attempts : int = 2):
         start_str = CALENDAR.reformat(start , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         end_str   = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
@@ -276,13 +273,17 @@ class SellsideSQLDownloader:
         i = 0
         while i <= attempts:
             try:
+                conn = self.connection.get_connection()
                 if self.sub_factors is None:
-                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_str , end_str) , self.conn)
+                    df_input = pd.read_sql_query(self.sqlline_factor_values(start_str , end_str) , conn)
                 else:
-                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_str , end_str , sub_factor) , self.conn) for sub_factor in self.sub_factors}
-            except exc.ResourceClosedError:
-                Logger.alert1(f'{self.factor_src} Connection is closed, re-connect')
+                    df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_str , end_str , sub_factor) , conn) for sub_factor in self.sub_factors}
+                break
+            except (exc.ResourceClosedError , exc.OperationalError) as e:
+                Logger.alert1(f'{self.factor_src} Connection is encountered an error ({e!s}), re-connect')
                 self.connection.reconnect()
+            finally:
+                conn.close()
             i += 1
         df = self.df_process(df_input)
         return df
