@@ -212,6 +212,8 @@ class WezTermOpener(BasicOpener):
         inner = command
         if title is not None:
             title = title.replace('"', "'")
+            if ' ' in title:
+                title = f"'{title}'"
             inner = f"wezterm cli set-tab-title {title} & {inner}"
         tail = ["--", "cmd.exe", "/k", inner]
         spawn_env: dict[str, str] | None = None

@@ -63,10 +63,12 @@ class WezTermOpener(BasicOpener):
             new_on = LINUX_WEZTERM_NEW
         match new_on:
             case "window" | "workspace":
-                args: list[str] = ["wezterm", "cli", "spawn", "--new-window"]
+                args: list[str] = ["wezterm", "start", "--new-window"]
             case "tab":
-                activate_wezterm()
-                args = ["wezterm", "cli", "spawn"]
+                if activate_wezterm():
+                    args = ["wezterm", "cli", "spawn"]
+                else:
+                    args = ["wezterm", "start", "--new-window"]
             case _:
                 raise ValueError(f"Invalid new_on: {new_on}")
         if cwd:
