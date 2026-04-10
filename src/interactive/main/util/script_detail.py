@@ -14,8 +14,8 @@ from src.interactive.frontend import (
 
 from src.proj import PATH , MACHINE
 
-from util.control import SC
-from util.page import get_script_page , print_page_header , ControlPanel
+from .control import SC
+from .page import get_script_page , print_page_header
 
 def on_first_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: 
@@ -43,7 +43,7 @@ def show_script_detail(script_key : str):
     runner = SC.get_script_runner(script_key)
     show_script_task_selector(runner)
     show_param_settings(runner)
-    ControlPanel.buttons['script-runner-run'].refresh(runner)
+    SC.get_control_panel().buttons['script-runner-run'].refresh(runner)
     show_report_main(runner)
     
 def clear_and_show(show_func : Callable):
@@ -190,10 +190,11 @@ def show_param_settings(runner : ScriptRunner):
     with subheader:
         param_controls = st.empty()
         SC.param_inputs_form = ParamInputsForm(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
+        
         if empty_param: 
             return
 
-        cols = param_controls.columns(4)
+        cols = param_controls.columns(6)
         with cols[0]:
             if st.button(":blue-badge[:material/refresh: **Reset Parameters**]", key = f"param-inputs-form-reset-param-button" , help = "Reset Parameters to Default" , type = 'tertiary'):
                 SC.script_params_cache.clear_script_cache(runner.script_key)

@@ -509,25 +509,23 @@ def estimate_text_width(text, font_size=24):
     chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
     english_chars = len(text) - chinese_chars
     
-    char_width = font_size * 0.66
-    chinese_width = font_size * 1.32
+    char_width = font_size * 0.7
+    chinese_width = font_size * 1.44
     
     estimated_width = chinese_chars * chinese_width + english_chars * char_width
     return int(estimated_width)
 
 def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , 
-                       height : int | None = None , help : str | None = None , status = False , color = 'blue'):
+                       height : int | Literal['content' , 'stretch'] = 'content' , help : str | None = None , status = False , color = 'blue'):
     
     container_key = f'{key.replace(" " , "-").lower()}-special-expander-' + ('status' if status else 'expander')
     with st.container():
         if help is not None:
             help_icon = '<span role="img" aria-label="mode_off_on icon" translate="no" style="display: inline-block;' + \
                 'font-family: &quot;Material Symbols Rounded&quot;;user-select: none;vertical-align: bottom;overflow-wrap: normal;">help</span>'
-            margin_left = 10
+            margin_left = 24
             if icon is not None: 
-                margin_left += 34
-            if status:           
-                margin_left += 28
+                margin_left += 32
             margin_left += estimate_text_width(label.upper())
             st.markdown(f"""
             <div class="expander-help-container">

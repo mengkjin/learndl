@@ -15,6 +15,11 @@ from src.proj.util import ScriptCmd , DBConnHandler , Email , properties , check
 
 def timestamp():
     return datetime.now().timestamp()
+
+def runs_page_url(script_key : str):
+    """get runs page url"""
+    return "pages/_" + re.sub(r'[/\\]', '_', script_key)
+
 class TaskDatabase:
     def __init__(self , db_name: str | Path | None = None):
         self.db_path = self.get_db_path()
@@ -629,6 +634,10 @@ class TaskItem:
     @property
     def script_key(self):
         return str(self.relative)
+
+    @property
+    def page_url(self):
+        return runs_page_url(self.script_key)
     
     @classmethod
     def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None , 

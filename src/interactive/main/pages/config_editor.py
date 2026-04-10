@@ -4,7 +4,7 @@ import streamlit as st
 from src.proj import PATH
 from src.interactive.frontend.frontend import YAMLFileEditor
 
-from util import SC , print_page_header
+from src.interactive.main.util import SC , print_page_header
     
 PAGE_NAME = 'config_editor'
 

@@ -64,7 +64,7 @@ def script_links(show_dir = False):
             if show_dir and page['group'] != group:
                 subsubheader(page['group'].upper() + ' Scripts')
             parts : list[str] = page['label'].split(' > ')
-            cols = st.columns([1,19] , gap = 'small' , vertical_alignment = 'center')
+            cols = st.columns([1,19] , gap = 'xxsmall' , vertical_alignment = 'center')
             runner : ScriptRunner = page['runner']
             with cols[0].container(key = f"direct-script-run-{name}"):
                 if runner.ready == 3:

@@ -79,6 +79,9 @@
     }
     [class*="click-content"] {
         button {
+            div {
+                justify-content: flex-start !important;
+            }
             justify-content: flex-start !important;
             text-align: left !important;
             padding-left: 6px !important;
@@ -90,7 +93,7 @@
         }
     }
 }
-.stVerticalBlock[class*="developer-info"] {
+.stVerticalBlock[class*="developer-info-special"] {
     button {
         border-radius: 10px !important;
         border: 1px solid lightgray !important;
@@ -100,13 +103,21 @@
             font-weight: 900 !important;
         }
     }
-    [class*="-clear"] button {
-        color: red !important;
-        &:hover {
-            background-color: red !important;
-            color: white !important;
+    .stVerticalBlock[class*="developer-info-buttons"] {
+        span[data-testid*='stTooltipHoverTarget'] {
+            display: contents !important;
         }
     }
+    [class*="-clear"]{
+        button {
+            align-self: center !important;
+            color: red !important;
+            &:hover {
+                background-color: red !important;
+                color: white !important;
+            }
+        }
+    } 
 }
 .stElementContainer[class*="choose-item-select"] {
     button {
@@ -196,6 +207,7 @@
             display: flex;
         }
         .stElementContainer[class*="script-runner-run"] {
+            align-self: center !important;
             button {
                 background-color: green !important;
                 color: white !important;
@@ -203,6 +215,7 @@
             }
         }
         .stElementContainer[class*="global-script-latest-task"] {
+            align-self: center !important;
             button {
                 background-color: lightblue !important;
                 color: white !important;
@@ -210,6 +223,7 @@
             }
         }
         .stElementContainer[class*="current-script-latest-task"] {
+            align-self: center !important;
             button {
                 background-color: lightcyan !important;
                 color: white !important;
@@ -217,6 +231,7 @@
             }
         }
         .stElementContainer[class*="control-refresh-interactive"] {
+            align-self: center !important;
             button {
                 background-color: lightgreen !important;
                 color: white !important;
@@ -224,6 +239,7 @@
             }
         }
         .stElementContainer[class*="git-clear-pull"] {
+            align-self: center !important;
             button {
                 background-color: coral !important;
                 color: white !important;
@@ -231,6 +247,7 @@
             }
         }
         .stElementContainer[class*="-disabled"] button {
+            align-self: center !important;
             background-color: lightgray !important;
             color: white !important;
             border: 1px solid lightgray !important;
@@ -241,6 +258,7 @@
         p {
             font-size: 40px !important;
             font-weight: bold !important;
+            align-self: center !important;
         }
     }
     .stVerticalBlock[class*="control-panel-settings"] {   
@@ -351,6 +369,8 @@ div[data-testid*="stSidebarUserContent"] {
             }
             height: 24px !important;
             width: 24px !important;
+            min-width: 24px !important;
+            min-height: 24px !important;
             margin-top: 0 !important;
             margin-bottom: -5px !important;
             padding-top: 0 !important;

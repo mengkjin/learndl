@@ -3,7 +3,7 @@ from typing import Literal , Callable
 
 from src.proj import PATH
 
-from util import SC , runs_page_url , print_page_header
+from src.interactive.main.util import SC , runs_page_url , print_page_header
 
 PAGE_NAME = 'task_queue'
 
@@ -128,10 +128,10 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
         container_height = 500
     elif queue_type == 'filter':
         queue = SC.get_filtered_queue()
-        container_height = None
+        container_height = 'content'
     elif queue_type == 'latest':
         queue = SC.get_latest_queue()
-        container_height = None
+        container_height = 'content'
         st.info(f"Showing latest {len(queue)} tasks" , icon = ":material/info:")
     cols = st.columns(2)
     with cols[0].container(key = f"task-stats-unfiltered-container"):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import os
+import sys
 import shlex
 import stat
 import subprocess
@@ -18,7 +19,8 @@ from .verify import WezTermVerifier
 
 def _debug_wezterm_socket(msg: str) -> None:
     if os.environ.get("SHELL_OPENER_DEBUG_WEZTERM"):
-        print(msg, flush=True)
+        sys.stdout.write(msg + '\n')
+        sys.stdout.flush()
 
 
 def _wezterm_runtime_dir() -> str:

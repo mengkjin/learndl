@@ -1,8 +1,8 @@
 import streamlit as st
 import re
 
-from util import SC , get_script_page , print_page_header
 from src.interactive.backend import ScriptRunner
+from src.interactive.main.util import SC , get_script_page , print_page_header
 
 PAGE_NAME = 'script_structure'
 

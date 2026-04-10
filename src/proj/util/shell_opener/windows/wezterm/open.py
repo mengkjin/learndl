@@ -88,7 +88,8 @@ def _socket_targets_live_wezterm(path: str) -> bool:
 
 def _debug_wezterm_socket(msg: str) -> None:
     if os.environ.get("SHELL_OPENER_DEBUG_WEZTERM"):
-        print(msg, flush=True)
+        sys.stdout.write(msg + '\n')
+        sys.stdout.flush()
 
 
 def discover_wezterm_gui_socket() -> str | None:

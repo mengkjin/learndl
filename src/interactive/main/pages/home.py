@@ -1,11 +1,10 @@
-import platform, torch , sys , re
+import platform, torch , sys
 import streamlit as st
 import psutil
 
 from src.proj import CONST
 from src.interactive.frontend.frontend import expander_subheader
-from src.interactive.backend import ScriptRunner
-from util import SC , get_script_page , print_page_header , intro_pages
+from src.interactive.main.util import print_page_header
 
 PAGE_NAME = 'home'
 
@@ -74,69 +73,11 @@ def show_pending_features():
         for feature in CONST.Pref.get('interactive' , 'pending_features' , []):
             st.warning(feature , icon = ":material/schedule:")
 
-def show_intro_pages():
-    with expander_subheader('home-intro-pages' , 'Other Intro Pages' , ':material/outdoor_garden:' , True , 
-                            help = 'Click to Switch to Other Intro Pages.'):
-        pages = {k:v for k,v in intro_pages().items() if k != PAGE_NAME}
-        cols = st.columns(len(pages))
-        for col , (name , page) in zip(cols , pages.items()):
-            button = col.button(page['label'] , icon = page['icon'] , key = f"intro-page-{name}")
-            if button: 
-                st.switch_page(page['page'])
-
-
-def show_script_structure():
-    """show folder content recursively"""  
-    with expander_subheader('home-script-structure' , 'Script Structure' , ':material/account_tree:' , True , 
-                            help = 'Script Structure of the Project, Click to Switch to Detailed Script Page.'):
-        items = SC.path_items
-        for item in items:
-            if item.is_dir:
-                folder_name = re.sub(r'^\d+_', '', item.name).replace('_', ' ').title()
-                body = f"""
-                <div style="
-                    font-size: 18px;
-                    font-weight: 600;
-                    margin-top: 5px;
-                    margin-bottom: 5px;
-                    letter-spacing: 3px;
-                    margin-left: {(item.level)*45}px;
-                ">📂 {folder_name.upper()}</div>
-                """       
-                st.markdown(body , unsafe_allow_html=True)
-
-            elif item.level > 0:
-                show_script_runner(item.script_runner())
-
-def show_script_runner(runner: ScriptRunner):
-    """show single script runner"""
-    if runner.script_key not in SC.script_runners: 
-        SC.script_runners[runner.script_key] = runner
-    
-    page = get_script_page(runner.script_key)
-    if page is None: 
-        return
-    
-    with st.container(key = f"script-structure-level-{runner.level}-{runner.script_key}"):
-        cols = st.columns([1, 1] , gap = "small" , vertical_alignment = "center")
-        
-        with cols[0]:
-            button_text = ':no_entry:' if runner.header.disabled else ':snake:' + ' ' + runner.desc
-            widget_key = f"script-runner-expand-{runner.script_key}"
-            if st.button(f"**{button_text}**" , key=widget_key , 
-                        help = f"*{str(runner.script)}*"):
-                st.switch_page(page['page'])
-        with cols[1]:
-            st.info(f"**{runner.content}**" , icon = ":material/info:")
-
-
 def main():
     print_page_header(PAGE_NAME)
     show_tutorial()
     show_system_info()
     show_pending_features()
-    #show_intro_pages()
-    #show_script_structure()
     
 if __name__ == '__main__':
     main() 

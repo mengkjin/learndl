@@ -7,7 +7,7 @@ from dataclasses import dataclass , asdict , field
 
 from src.proj import PATH , Logger , MACHINE  # noqa
 from src.proj.util import Options # noqa
-from .task import TaskItem , TaskQueue
+from .task import TaskItem , TaskQueue , runs_page_url
     
 @dataclass
 class PathItem:
@@ -272,6 +272,11 @@ class ScriptRunner:
     @property
     def script_key(self):
         return str(self.path.relative)
+
+    @property
+    def page_url(self):
+        """get runs page url"""
+        return runs_page_url(self.script_key)
     
     @property
     def script_group(self):

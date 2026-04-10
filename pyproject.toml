@@ -41,7 +41,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "shap>=0.48.0",
     "statsmodels>=0.14.5",
-    "streamlit==1.46.0",
+    "streamlit==1.56.0",
     "streamlit-ace>=0.1.1",
     "streamlit-autorefresh>=1.0.1",
     "tensorboard>=2.20.0",

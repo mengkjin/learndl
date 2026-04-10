@@ -1,11 +1,14 @@
 import streamlit as st
+import subprocess
 
+from abc import abstractmethod , ABC
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Callable
 from pathlib import Path
 from datetime import datetime
 
-from src.proj import PATH , Logger
+from src.proj import PATH , Logger , Proj , MACHINE
+from src.proj.util import Options
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache # , ActionLogger
 
@@ -75,6 +78,11 @@ class SessionControl:
         if runner is None:
             raise ValueError(f"Script {script_key} not found in SC.script_runners")
         return runner
+
+    def get_control_panel(self):
+        if not hasattr(self, '_control_panel'):
+            self._control_panel = ControlPanel()
+        return self._control_panel
     
     def get_task_item(self , task_id : str | None = None) -> TaskItem | None:
         if self.task_queue is None or task_id is None:
@@ -351,5 +359,207 @@ class SessionControl:
     def wait_until_completion(item : TaskItem , starting_timeout : int = 20):
         """wait for complete"""
         return item.wait_until_completion(starting_timeout)
+
+
+class ControlPanelButton(ABC):
+    """control panel button"""
+    key : str = ''
+    icon : str = ''
+    title : str = ''
+
+    @abstractmethod
+    def button(self , script_key : str | None = None):
+        ...
+
+    def refresh(self , *args , **kwargs):
+        pass
+
+    def show(self , script_key : str | None = None):
+        if self.key not in st.session_state:
+            st.session_state[self.key] = st.empty()
+        with st.session_state[self.key]:
+            with st.container():
+                self.button(script_key = script_key)
+                self.print_title()
+
+    def print_title(self):
+        body = f"""
+        <div style="
+            margin-bottom: 0px;
+            margin-top: -10px;
+            padding: 0 0 20px 0;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        ">{self.title.upper()}</div>
+        """       
+        st.markdown(body , unsafe_allow_html = True)
+
+class ScriptRunnerRunButton(ControlPanelButton):
+    key = f"script-runner-run"
+    icon = f":material/mode_off_on:"
+    title = f"Run Script"
+
+    def button(self , script_key : str | None = None):
+        help = f"Please Choose a Script to Run First" if script_key is None else f"Please Fill Required Parameters"
+        st.button(self.icon, key=f'{self.key}-disabled' , help = help)
+
+    def refresh(self , runner : ScriptRunner):
+        with st.session_state[self.key]:
+            if SC.param_inputs_form is None:
+                raise ValueError("ParamInputsForm is not initiated")
+            params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
+            
+            if SC.get_script_runner_validity(params):
+                disabled = False
+                preview_cmd = SC.get_script_runner_cmd(runner , params)
+                if preview_cmd: 
+                    help_text = preview_cmd
+                else:
+                    help_text = f"Parameters valid, run {runner.script_key}"
+                button_key = f"{self.key}-enabled-{runner.script_key}"
+            else:
+                disabled = True
+                help_text = f"Parameters invalid, please check required ones"
+                button_key = f"{self.key}-disabled-{runner.script_key}"
+
+            with st.container():
+                st.button(self.icon, key=button_key , 
+                        help = help_text , disabled = disabled , 
+                        on_click = SC.click_script_runner_run , args = (runner, params)) 
+                self.print_title()
+
+class GlobalScriptLatestTaskButton(ControlPanelButton):
+    key = f"global-script-latest-task"
+    icon = f":material/reply_all:"
+    title = f"Latest for All"
+
+    def button(self , script_key : str | None = None):
+        item = SC.get_latest_task_item()
+        if item is None:
+            st.button(self.icon, key=f"{self.key}-disabled" , 
+                    help = "Please Run a Task First" , disabled = True)
+        else:
+            if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
+                        help = f":blue[**Show Latest Task**]: {item.id}" , 
+                        on_click = SC.click_show_complete_report , args = (item,) ,
+                        disabled = False):
+                if SC.current_page_name != repr(item.script_key):
+                    st.switch_page(item.page_url)
+                else:
+                    #from .script_detail import show_report_main
+                    #show_report_main(SC.get_script_runner(item.script_key))
+                    st.rerun()
+
+class CurrentScriptLatestTaskButton(ControlPanelButton):
+    key = f"current-script-latest-task"
+    icon = f":material/reply:"
+    title = f"Current Latest"
+
+    def button(self , script_key : str | None = None):
+        item = SC.get_latest_task_item(script_key) if script_key is not None else None
+        if item is None:
+            st.button(self.icon, key=f"{self.key}-disabled" , 
+                        help = "Please Run a Task of This Script First" if script_key is not None else "Please Choose a Script First" , disabled = True)
+        else:
+            if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
+                        help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
+                        on_click = SC.click_show_complete_report , args = (item,) ,
+                        disabled = False):
+                #from .script_detail import show_report_main
+                #show_report_main(SC.get_script_runner(item.script_key))
+                st.rerun()
+
+class ControlRefreshInteractiveButton(ControlPanelButton):
+    key = f"control-refresh-interactive"
+    icon = f":material/refresh:"
+    title = f"Refresh All"
+
+    def button(self , script_key : str | None = None):
+        st.button(self.icon, key=f"{self.key}-enabled" , help = "Refresh Task Queue / Options / Scripts" , 
+                  on_click = self.refresh_all , disabled = False)
+ 
+    def refresh_all(self):
+        from src.interactive.main.util.page import remake_all_script_detail_files
+        with st.spinner("Refreshing..."):
+            with Proj.silence:
+                Options.update()
+                remake_all_script_detail_files()
+        SC.rerun()
+        st.rerun()
+
+class ControlGitClearPullButton(ControlPanelButton):
+    key = f"control-git-clear-pull"
+    icon = f":material/cloud_download:"
+    title = f"Git Pull"
+
+    def button(self , script_key : str | None = None):
+        if MACHINE.platform_coding:
+            st.button(self.icon, key=f"{self.key}-disabled" , help = f"Git Pull is not available on coding platform {MACHINE.name}" , disabled = True)
+        else:
+            st.button(self.icon, key=f"{self.key}-enabled" , help = "Clear Local Changes and Pull Latest Code" , disabled = False, on_click = self.clear_git_pull)
+        
+    def clear_git_pull(self):
+        if MACHINE.platform_coding:
+            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
+        else:
+            import shutil
+            from src.proj import PATH , Logger
+
+            subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
+            subprocess.run(['git', 'clean', '-fd'], check=True)
+            subprocess.run(['git', 'pull'], check=True)
+            
+            for folder in [*PATH.main.joinpath('src').rglob('*/') , *PATH.main.joinpath('configs').rglob('*/')][::-1]:
+                if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
+                    subfiles = [x for x in folder.rglob('*') if x.is_file()]
+                    if not len(subfiles):
+                        Logger.stdout(f"Removing empty folder: {folder}")
+                        folder.rmdir()
+                    else:
+                        if all([x.suffix == '.pyc' for x in subfiles]):
+                            Logger.stdout(f"Removing folder with only pyc files: {folder}")
+                            shutil.rmtree(folder)
+                        else:
+                            Logger.error(f"Error removing folder: {folder}:")
+                            Logger.error(f"Subfiles: {subfiles}")
+            Logger.success("Git Pull Finished")
+
+class ControlPanel:
+    """control panel"""
+    control_panel_key = "page-control-panel"
+    buttons : dict[str, ControlPanelButton] = {
+        'script-runner-run' : ScriptRunnerRunButton(),
+        'global-script-latest-task' : GlobalScriptLatestTaskButton(),
+        'current-script-latest-task' : CurrentScriptLatestTaskButton(),
+        'control-refresh-interactive' : ControlRefreshInteractiveButton(),
+        'control-git-clear-pull' : ControlGitClearPullButton(),
+    }
+    
+    def show(self , script_key : str | None = None):
+        with st.container(key = self.control_panel_key):
+            columns = st.columns([1,10,1] , gap = 'small' , vertical_alignment = 'center')
+            _ , buttons , settings = columns
+            with buttons.container(key = f"{self.control_panel_key}-buttons"):
+                self.show_buttons(script_key = script_key)
+            with settings.container(key = f"{self.control_panel_key}-settings"):
+                self.show_settings()
+
+    def show_buttons(self , script_key : str | None = None):
+        cols = st.columns(len(self.buttons) , gap = 'small' , vertical_alignment = 'center')
+        for col , button in zip(cols, self.buttons.values()):
+            with col:
+                button.show(script_key = script_key)
+
+    def show_settings(self):
+        with st.popover('**:material/settings:**'):
+            st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
+                    help="""Should use max verbosity or min? Not selected will use default.""")
+            st.toggle('**:blue[Disable Email]**', value=False , key = 'global-settings-disable-email'  , 
+                    help="""If email after the script is complete? Not selected will use script header value.""")
+            st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 
+                    help="""Should the script run silently? Not selected will use script header value.""")
+        
+          
    
 SC = SessionControl()

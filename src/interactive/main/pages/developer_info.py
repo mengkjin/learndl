@@ -2,7 +2,7 @@ import streamlit as st
 
 from src.interactive.frontend.frontend import expander_subheader # , ActionLogger
 
-from util import SC , print_page_header
+from src.interactive.main.util import SC , print_page_header
 
 PAGE_NAME = 'developer_info'
 
@@ -51,10 +51,11 @@ def show_developer_info(H = 500):
         
         col_name , col_widget = st.columns([1,3])
         col_name.info('Developer Level Operations')
-        cols = col_widget.columns(7)
-        cols[0].button("Log" , icon = ":material/delete_forever:" , key = "developer-log-clear" , 
-                      help = "Clear Both Action and Error Logs" ,
-                      on_click = SC.click_log_clear_confirmation)
+        with col_widget.container(key = "developer-info-buttons"):
+            cols = st.columns(5)
+            cols[0].button("Log" , icon = ":material/delete_forever:" , key = "developer-log-clear" , 
+                        help = "Clear Both Action and Error Logs" ,
+                        on_click = SC.click_log_clear_confirmation)
         
         for seg , content in segments.items():
             if seg not in st.session_state['developer-info-selected']: 
