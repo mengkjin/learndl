@@ -110,6 +110,8 @@ class FetcherTask:
                 task = FetcherTask(exchange, start, end , redownload)
                 if not task.should_be_skipped:
                     tasks.append(task)
+        if (len(tasks) >= 100):
+            raise ValueError("Too many tasks, something is wrong")
         return tasks
 
 class AnnoucementFetcher(ABC):
