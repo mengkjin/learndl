@@ -262,6 +262,6 @@ class AnnouncementExporter:
         if not all(path.exists() for path in paths):
             return False
 
-        if not CALENDAR.is_updated_recently(paths , hours = 4.):
+        if end >= CALENDAR.cd(CALENDAR.update_to() , -1) and not CALENDAR.is_updated_recently(paths , hours = 4.):
             return False
         return True
