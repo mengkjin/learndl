@@ -257,9 +257,11 @@ class AnnouncementExporter:
         """If file exists and date is earlier than "today" (Shanghai), skip; ``redownload`` is true never skip."""
         if redownload:
             return False
-        if end >= CALENDAR.cd(CALENDAR.update_to() , -1):
+
+        paths = [self.export_path(date) for date in CALENDAR.range(start, end , 'cd')]
+        if not all(path.exists() for path in paths):
             return False
-        end = min(end, CALENDAR.update_to())
-        dates = CALENDAR.range(start, end , 'cd')
-        exists = [path.exists() for path in [self.export_path(date) for date in dates]]
-        return all(exists)
+
+        if not CALENDAR.is_updated_recently(paths , hours = 4.):
+            return False
+        return True

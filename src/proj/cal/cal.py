@@ -11,9 +11,11 @@ import pandas as pd
 import torch
 
 from datetime import datetime, timedelta, time
-from typing import Any, Literal, Union , Sequence
+from pathlib import Path
+from typing import Any, Literal, Union , Sequence , Iterable
 
 from src.proj.core import NoInstanceMeta
+from src.proj.env import PATH
 import src.proj.db as DB
 
 from .basic import BasicCalendar , BJ_TZ
@@ -129,21 +131,45 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return int(bj_datetime.strftime("%Y%m%d%H%M%S"))
 
     @classmethod
-    def is_updated_today(cls, modified_time: int | float | None, hour=20, minute=0):
+    def get_modified_time(cls, file_or_modified_time: Iterable[Path] | Path | int | float | None , * , bj_tz: bool = True) -> int:
+        if isinstance(file_or_modified_time, Iterable):
+            mtime = min([PATH.file_modified_time(path) for path in file_or_modified_time])
+        elif isinstance(file_or_modified_time, Path):
+            mtime = PATH.file_modified_time(file_or_modified_time)
+        elif isinstance(file_or_modified_time, int | float):
+            mtime = int(file_or_modified_time)
+        else:
+            mtime = 19970101000000
+        if mtime < 1e8:
+            mtime = mtime * 1000000
+        if bj_tz:
+            mtime = cls.localtime_to_bjtime(mtime)
+        return mtime
+
+    @classmethod
+    def is_updated_today(cls, file_or_modified_time: Iterable[Path] | Path | int | float | None, hour=20, minute=0 , * , bj_tz: bool = True):
         """
         Check if 'modified_time' is not earlier than the corresponding time of "required_date + hour:minute".
         modified_time can be 'YYYYMMDD' or 'YYYYMMDDHHMMSS' or 'YYYYMMDDHHMMSS.MS'.
         """
-        if modified_time is None:
-            return False
-        if modified_time < 1e8:
-            modified_time = modified_time * 1000000
-        modified_time = cls.localtime_to_bjtime(modified_time)
-        bjtime = cls.now(bj_tz=True)
+        modified_time = cls.get_modified_time(file_or_modified_time , bj_tz=bj_tz)
+        bjtime = cls.now(bj_tz=bj_tz)
         if int(bjtime.strftime("%H%M")) < hour * 100 + minute:
             bjtime = bjtime - timedelta(days=1)
         required_time = cls.clock(int(bjtime.strftime("%Y%m%d")), hour, minute)
         return modified_time >= required_time
+
+    @classmethod
+    def is_updated_recently(cls, file_or_modified_time: Iterable[Path] | Path | int | float | None, hours : float = 1. , * , bj_tz: bool = True):
+        """
+        Check if 'modified_time' is not earlier than the corresponding time of "required_date + hour:minute".
+        modified_time can be 'YYYYMMDD' or 'YYYYMMDDHHMMSS' or 'YYYYMMDDHHMMSS.MS'.
+        """
+        modified_time = cls.get_modified_time(file_or_modified_time , bj_tz=bj_tz)
+        bjtime = cls.now(bj_tz=bj_tz)
+        shift_time = bjtime - timedelta(hours=hours)
+        shift_time = int(shift_time.strftime("%Y%m%d%H%M%S"))
+        return modified_time >= shift_time
 
     @classmethod
     def update_to(cls):
