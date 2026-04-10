@@ -174,8 +174,8 @@ class BaseModelConfig:
                 Logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config")
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
-            assert not ScheduleConfig.check_name_exist(self['model.name']), \
-                f"model.name [{self['model.name']}] is owned by a schedule model, and must not be used as a model name"
+            assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
+                f"base_path is not provided, but model.name [{self['model.name']}] is owned by a schedule model, and must not be used as a model name"
         self.schedule_config = ScheduleConfig(self.base_path, self.schedule_name)
         return self
 

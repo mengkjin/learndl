@@ -44,11 +44,11 @@ class AnnouncementAgent:
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         
-        success =cls.run_with_proxy(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = True, indent = indent, vb_level = vb_level, **kwargs)
+        success = cls.run_with_proxy(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = True, indent = indent, vb_level = vb_level, **kwargs)
         if success:
-            Logger.success(f'{cls.__name__} Update at {Dates(start, end)}' , indent = indent , vb_level = vb_level)
+            Logger.success(f'{cls.__name__} Update at {Dates(end)}' , indent = indent , vb_level = vb_level)
         else:
-            Logger.alert1(f'{cls.__name__} Update at {Dates(start, end)} failed')
+            Logger.alert1(f'{cls.__name__} Update at {Dates(end)} failed')
 
     @classmethod
     def prepare_proxies(cls , vb_level : Any = 1):
