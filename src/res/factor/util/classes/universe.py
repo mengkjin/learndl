@@ -60,30 +60,29 @@ class Universe:
     def get_universe_df(self , date : int) -> pd.DataFrame:
         path = DB.path('universe' , self.name , date)
         if path.exists():
-            return DB.load_df(path)
-        
-        desc = DATAVENDOR.INFO.get_desc()
-        secid = desc.index
-
-        if self.name == 'all':
-            df = pd.DataFrame({'date' : date , 'secid' : secid})
-        elif self.name.startswith('top'):
-            top_num = int(self.name.split('.')[0].removeprefix('top'))
-            df = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.latest_date('val' , date)).sort_values('circ_mv' , ascending=False)
-            df = df.query('secid in @secid').iloc[:top_num].loc[:,['secid']].\
-                reset_index().assign(date = date).loc[:,['date' , 'secid']]
-        elif self.name in Benchmark.AVAILABLES:
-            df = Benchmark(self.name).get(date).to_dataframe().loc[:,['date' , 'secid']]
-        elif '+' in self.name:
-            dfs = [Benchmark(univ).get(date).to_dataframe().loc[:,['date' , 'secid']] for univ in self.name.split('+')]
-            df = pd.concat(dfs)
+            df = DB.load_df(path)
         else:
-            raise Exception(f'{self.name} is not a valid benchmark')
- 
-        for exclusion in UniverseExclusions.get_possible_exclusions():
-            df[exclusion] = df['secid'].isin(UniverseExclusions.get_exclusion_list(exclusion , date))
+            desc = DATAVENDOR.INFO.get_desc()
+            secid = desc.index
 
-        DB.save_df(df , path)
+            if self.name == 'all':
+                df = pd.DataFrame({'date' : date , 'secid' : secid})
+            elif self.name.startswith('top'):
+                top_num = int(self.name.split('.')[0].removeprefix('top'))
+                df = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.latest_date('val' , date)).sort_values('circ_mv' , ascending=False)
+                df = df.query('secid in @secid').iloc[:top_num].loc[:,['secid']].\
+                    reset_index().assign(date = date).loc[:,['date' , 'secid']]
+            elif self.name in Benchmark.AVAILABLES:
+                df = Benchmark(self.name).get(date).to_dataframe().loc[:,['date' , 'secid']]
+            elif '+' in self.name:
+                dfs = [Benchmark(univ).get(date).to_dataframe().loc[:,['date' , 'secid']] for univ in self.name.split('+')]
+                df = pd.concat(dfs)
+            else:
+                raise Exception(f'{self.name} is not a valid benchmark')
+ 
+        df_new = UniverseExclusions.append_exclusions(df , date)
+        if len(df.columns) != len(df_new.columns):
+            DB.save_df(df_new , path)
         return df
     
     def get(self , date : Literal['all'] | int | list[int] | np.ndarray | None = None , exclusions : str = 'st_lowprice_bse_loser_warnst') -> Portfolio:
@@ -118,6 +117,17 @@ class UniverseExclusions:
         Get the possible exclusions
         """
         return cls._possible_exclusions
+
+    @classmethod
+    def append_exclusions(cls , df : pd.DataFrame , date : int):
+        """
+        Get the exclusion list for the given exclusion and date
+        """
+        assert 'secid' in df.columns or df.empty , f'secid column is required : {df.columns}'
+        for exclusion in UniverseExclusions.get_possible_exclusions():
+            if exclusion not in df.columns:
+                df[exclusion] = df['secid'].isin(UniverseExclusions.get_exclusion_list(exclusion , date))
+        return df
 
     @classmethod
     def get_exclusion_list(cls , exclusion : str , date : int):

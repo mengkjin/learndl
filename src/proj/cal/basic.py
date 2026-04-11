@@ -24,8 +24,8 @@ class BasicCalendar:
         calendar = DB.load("information_ts", "calendar", missing_ok=False).loc[:, ["calendar", "trade"]]
         reserved = pd.DataFrame(MACHINE.configs("util", "calendar", "calendar"))
         if not reserved.empty:
-            calendar = pd.concat([calendar, reserved.loc[:, ["calendar", "trade"]]]).\
-                drop_duplicates(subset="calendar", keep="first").sort_values("calendar")
+            calendar = pd.concat([calendar, reserved.loc[:, ["calendar", "trade"]]])
+        calendar = calendar.drop_duplicates(subset="calendar", keep="first").sort_values("calendar")
 
         trd = calendar.query("trade == 1").reset_index(drop=True)
         trd["td"] = trd["calendar"]

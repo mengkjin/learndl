@@ -9,10 +9,10 @@ def singleton(cls):
     lock = threading.Lock()
 
     def get_instance(*args, **kwargs):
-        if cls not in instances:
-            with lock:
+        with lock:
+            if cls not in instances:
                 instances[cls] = cls(*args, **kwargs)
-        return instances[cls]
+            return instances[cls]
 
     return get_instance
 
@@ -30,12 +30,11 @@ class SingletonMeta(type):
     _lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            with cls._lock:
-                if cls not in cls._instances:
-                    instance = super().__call__(*args, **kwargs)
-                    cls._instances[cls] = instance
-        return cls._instances[cls]
+        with cls._lock:
+            if cls not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[cls] = instance
+            return cls._instances[cls]
 
 class SingletonABCMeta(SingletonMeta, ABCMeta):
     """``SingletonMeta`` composed with ``ABCMeta`` for abstract singleton bases."""

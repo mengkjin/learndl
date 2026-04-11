@@ -235,7 +235,7 @@ class FactorPreProcessor(PreProcessor):
     category1 = PreProcessorProperty('category1')    
 
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'factor' : FactorCategory1Loader(self.category1 , normalize = True , fill_method = 'drop' , preprocess = True)}
+        return {'factor' : FactorCategory1Loader(self.category1 , normalize = True , fill_method = 'drop' , notice_empty = False)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['factor']
 
