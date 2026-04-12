@@ -211,9 +211,9 @@ class ProxyCallerList:
                 break
         else:
             Logger.alert2(f"After 10 Rounds, the proxy pool is still able to proceed, WHY?")
-            
             Logger.alert1(self.unfinished_callers())
         if fallback_to_raw_ip and not self.all_finished:
+            Logger.alert1(f"Fallback to raw ip for {len(self.unfinished_callers())} callers" , indent = 1 , vb_level = 'max')
             self.fallback()
         return self.results()
 
