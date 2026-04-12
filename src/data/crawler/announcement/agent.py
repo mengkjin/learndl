@@ -44,7 +44,7 @@ class AnnouncementAgent:
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         
-        success = cls.run_with_proxy(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = True, indent = indent, vb_level = vb_level, **kwargs)
+        success = cls.run_with_proxy(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
         if success:
             Logger.success(f'{cls.__name__} Update at {Dates(end)}' , indent = indent , vb_level = vb_level)
         else:
@@ -69,7 +69,7 @@ class AnnouncementAgent:
     @classmethod
     def get_proxy_caller_list(
         cls , start: int, end: int, step: int = 1, redownload: bool = False , * ,
-        use_proxy = True , go_with_cached_proxies = False, ignore_proxy_threshold : int = 2 , 
+        use_proxy = True , go_with_cached_proxies = False, ignore_proxy_threshold : int = 0 , 
         indent : int = 1 , vb_level : Any = 1
     ) -> ProxyCallerList:
         tasks = FetcherTask.tasks_flat(start, end, step, redownload)
@@ -87,7 +87,7 @@ class AnnouncementAgent:
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, fallback_to_raw_ip : bool = True, indent : int = 0 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, fallback_to_raw_ip : bool = False , indent : int = 0 , vb_level : Any = 1) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb(vb_level)
         caller_list = cls.get_proxy_caller_list(

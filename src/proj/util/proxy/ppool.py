@@ -75,7 +75,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
         self , 
         proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown' , * , 
         url: str , adaptive: bool = False,
-        refresh_interval: int = 180 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2,
+        refresh_interval: int = 30 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2,
         go_with_cached_proxies: bool = False,
         **kwargs
     ):
@@ -95,7 +95,10 @@ class ProxyStatsSetURL(ProxyStatsSet):
     def __bool__(self) -> bool:
         return not self.shutdown
 
-    def init_refresh_stats(self , refresh_interval: int = 180 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2):
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.url},{'adaptive' if self.adaptive else 'static'},refresh_attempt={self.refresh_attempt}/{self.refresh_max_attempts})"
+
+    def init_refresh_stats(self , refresh_interval: int = 30 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2):
         self.refresh_enabled = self.adaptive
         self.refresh_time = datetime.now()
         self.refresh_attempt = 0
@@ -266,7 +269,7 @@ class AdaptiveProxyPool(ProxyPool):
     def __init__(
         self, target_urls: list[str] | str , * , 
         go_with_cached_proxies: bool = False,
-        refresh_interval: int = 180 ,
+        refresh_interval: int = 30 ,
         refresh_max_attempts: int = 10 ,
         refresh_threshold: float = 0.2 ,
     ):
