@@ -1,5 +1,5 @@
 """Weighted and rank-based correlation / loss helpers on torch tensors (optional ``dim`` reduction)."""
-
+from __future__ import annotations
 import torch
 import numpy as np
 

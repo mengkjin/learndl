@@ -1,5 +1,5 @@
 """Symmetric orthogonalization (Gram / whitening style) for 2-D matrices in torch and NumPy."""
-
+from __future__ import annotations
 import torch
 import numpy as np
 

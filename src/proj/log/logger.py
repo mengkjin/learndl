@@ -31,7 +31,7 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 VB = Proj.vb
 
-def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
+def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_file : bool = False , **kwargs):
     """
     custom stdout message
     kwargs:
@@ -42,12 +42,14 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs
     with VB.WithVbLevel(vb_level):
         args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
         fstr = stdout(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
+    if to_log_file:
+        LOG_FILE.write(fstr.unformatted())
     return fstr
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
     """
     Like ``new_stdout`` but to stderr; always appends unformatted text to ``LOG_FILE``.
-
+    Use ``vb_level`` to control the verbosity of the message.
     kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
     with VB.WithVbLevel(vb_level):
@@ -202,7 +204,7 @@ class Logger:
     @classmethod
     def success(cls , *args , **kwargs):
         """custom green stdout message for success"""
-        new_stdout('Success :' , *args , color = 'lightgreen' , **kwargs)
+        new_stdout('Success :' , *args , color = 'lightgreen' , to_log_file = True , **kwargs)
     
     @classmethod
     def skipping(cls , *args , **kwargs):
@@ -215,7 +217,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('Caution :' , *args , color = color , vb_level = vb_level , **kwargs)
+        new_stdout('Caution :' , *args , color = color , vb_level = vb_level , to_log_file = True , **kwargs)
 
     @classmethod
     def alert2(cls , *args , color = 'lightred' , vb_level : Any = 0 , **kwargs):
@@ -223,7 +225,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('RedAlert:' , *args , color = color , vb_level = vb_level , **kwargs)
+        new_stdout('RedAlert:' , *args , color = color , vb_level = vb_level , to_log_file = True , **kwargs)
 
     @classmethod
     def alert3(cls , *args , color = 'purple' , vb_level : Any = 0 , **kwargs):
@@ -231,7 +233,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('Emergent:' , *args , color = color , vb_level = vb_level , **kwargs)
+        new_stdout('Emergent:' , *args , color = color , vb_level = vb_level , to_log_file = True , **kwargs)
 
     @classmethod
     def note(cls , *args , color = 'lightblue' , vb_level : Any = 1 , **kwargs):

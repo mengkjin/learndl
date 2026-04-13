@@ -1,5 +1,5 @@
 """Pandas/NumPy/statsmodels helpers: ranking, z-score, winsorization, regression, and label utilities."""
-
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm

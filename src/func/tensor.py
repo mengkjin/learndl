@@ -6,6 +6,7 @@ for time rolling, ``TsRoller`` defaults to ``dim=1`` (time). ``dim`` is the axis
 statistics are taken, depending on the function.
 """
 
+from __future__ import annotations
 import torch
 import torch.nn.functional as F
 from torch import Tensor , nan

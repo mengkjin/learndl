@@ -1,0 +1,73 @@
+# Module-to-doc ownership map.
+# Used by scripts/update_context.py to determine which docs need refreshing
+# when source files change.
+#
+# Usage:
+#   python scripts/update_context.py --changed src/data/handler.py
+# → finds all docs whose sources: list covers src/data/, regenerates only those.
+
+- doc: context/overview.md
+  sources:
+    - src/api/
+    - src/proj/
+    - configs/
+
+- doc: context/modules/project_infra.md
+  sources:
+    - src/proj/
+    - src/func/
+
+- doc: context/modules/data_pipeline.md
+  sources:
+    - src/data/
+    - src/api/data.py
+
+- doc: context/modules/factor_engine.md
+  sources:
+    - src/res/factor/
+    - src/api/factor.py
+    - configs/util/factor/
+
+- doc: context/modules/nn_models.md
+  sources:
+    - src/res/algo/nn/
+    - src/res/model/
+    - src/api/model.py
+    - configs/algo/nn/
+    - configs/model/
+
+- doc: context/modules/boost_models.md
+  sources:
+    - src/res/algo/boost/
+    - configs/algo/boost/
+
+- doc: context/modules/gp_strategy.md
+  sources:
+    - src/res/gp/
+    - configs/algo/gp/
+
+- doc: context/modules/trading.md
+  sources:
+    - src/res/trading/
+    - src/api/trading.py
+    - src/api/summary.py
+    - configs/setting/trading_port.yaml
+
+- doc: context/modules/interactive_app.md
+  sources:
+    - src/app/
+    - src/api/
+
+- doc: context/workflows/daily_update.md
+  sources:
+    - scripts/1_data/
+    - scripts/2_factor/
+
+- doc: context/workflows/training_run.md
+  sources:
+    - scripts/3_train/
+
+- doc: context/workflows/strategy_dev.md
+  sources:
+    - scripts/
+    - src/api/

@@ -1,58 +1,157 @@
 ---
-description: learndl quant — layout, data/factors, backtest, data policy, post-edit checks
+description: learndl quant — layout, key modules, conventions, data policy, post-edit checks
 alwaysApply: true
 ---
 
 # learndl — Project-specific rules
 
 ## Project overview
-Quantitative research and trading strategy development for equities: data acquisition, factor research, backtesting, risk analysis, and simulation trading.
+Chinese A-share equity quantitative research system: data acquisition, factor research, NN/boost/GP model training, backtesting, and simulation trading.
 
-## Typical layout (confirm by browsing)
+## Repository layout
 ```
-├── pyproject.toml        # metadata & dependencies
-├── .gitignore
-├── configs/              # settings, defaults, model params
-├── src/                  # application / library source
-├── scripts/              # purpose-specific Python scripts
-├── runs/                 # .bat / .sh helpers
-├── resources/            # shared code resources
-├── templates/            # html / css / img / font
-├── data/                 # raw & processed (usually not synced)
-├── models/               # exported models (usually not synced)
-├── results/              # exports (usually not synced)
-├── logs/                 # logs (usually not synced)
-├── .local_resources/     # local-only assets (not synced)
-└── .secret/              # secrets (not synced)
+learndl/
+├── pyproject.toml          # metadata & dependencies (uv-managed)
+├── launch.py               # start Streamlit interactive app
+├── configs/                # all YAML configuration (see below)
+├── src/                    # source code (see below)
+├── scripts/                # numbered pipeline scripts (0–7)
+├── context/                # living documentation vault (Obsidian-compatible)
+├── runs/                   # .bat / .sh shell helpers
+├── resources/              # shared code resources
+├── templates/              # html / css / img / font
+├── data/                   # raw & processed data (not synced)
+├── models/                 # trained model checkpoints (not synced)
+├── results/                # exports & analysis output (not synced)
+├── logs/                   # log files (not synced)
+├── .local_resources/       # local-only assets (not synced)
+└── .secret/                # secrets (not synced)
 ```
 
-## Default toolchain
-- **Primary table library:** Prefer **pandas** unless performance requires **polars**.
-- **HTTP / async:** For new network clients, prefer **curl_cffi**.
+## Source layout (`src/`)
+```
+src/
+├── proj/         # infrastructure: env/, cal/, db/, log/, util/, core/
+├── func/         # numerical utils: basic.py, tensor.py, transform.py, metric.py
+├── data/         # data pipeline: crawler/, download/, loader/, preprocess/, update/, util/
+├── res/
+│   ├── factor/   # factor engine: calculator/, defs/, analytic/, fmp/, loader/, risk/, util/
+│   ├── algo/     # algo modules: nn/ (architectures), boost/ (LightGBM/XGBoost/CatBoost)
+│   ├── model/    # training framework: callback/, data_module/, model_module/, util/
+│   ├── gp/       # genetic programming: func/, param/, util/
+│   └── trading/  # portfolio construction & trading: util/
+├── api/          # stable public facade: data, factor, model, trading, update, summary
+└── interactive/  # Streamlit app: backend/, frontend/, main/
+```
+
+## Config layout (`configs/`)
+```
+configs/
+├── algo/
+│   ├── nn/           # per-architecture hyperparams (gru.yaml, tra.yaml, patch_tst.yaml, …)
+│   ├── boost/        # boost params (lgbm.yaml, xgboost.yaml, catboost.yaml, ada.yaml)
+│   └── gp/           # GP evolution params (params.yaml)
+├── model/
+│   ├── schedule/     # training schedules — primary entry point for model training
+│   ├── default/      # default field values (required.yaml, optional.yaml)
+│   ├── model.yaml    # model architecture config
+│   ├── train.yaml    # training loop config
+│   ├── callbacks.yaml
+│   ├── input.yaml
+│   ├── env.yaml
+│   └── conditional.yaml
+├── setting/
+│   ├── model.yaml         # project model settings
+│   └── trading_port.yaml  # portfolio specifications (NOT configs/trading/)
+├── preference/       # app preferences (project, interactive, logger, shell_opener)
+└── util/
+    ├── factor/       # factor opt configs, risk_factors.yaml
+    ├── industry/     # industry classification (tushare.yaml)
+    ├── transform/    # preprocessing params
+    └── calendar/     # trading day overrides
+```
+
+## Key classes and entry points
+| Purpose | Class / Object | Import path |
+|---------|----------------|-------------|
+| Paths | `PATH` | `src.proj.env` |
+| Machine config | `MACHINE` | `src.proj.env` |
+| Trading calendar | `CALENDAR` | `src.proj.cal` |
+| DB I/O | `df_io`, `DBPath` | `src.proj.db` |
+| Logging | `Logger` | `src.proj.log` |
+| Constants | `CONST` | `src.proj.env` |
+| Data access | `TRADE`, `BS`, `IS`, `CF`, `MKLINE`, … | `src.data` |
+| Data API | `DataAPI` | `src.api.data` |
+| Factor calc | `FactorCalculator` (base) | `src.res.factor.calculator` |
+| Factor API | `FactorAPI` | `src.api.factor` |
+| Model API | `ModelAPI` | `src.api.model` |
+| Trading API | `TradingAPI` | `src.api.trading` |
+| Script tools | `ScriptTool`, `Options` | `src.proj.util` |
 
 ## Logging
-Use the project logger: `src.proj.Logger`.
+Always use `src.proj.log.Logger` — never `print()` or stdlib `logging` directly.
+
+## Path conventions
+- **Never hardcode paths.** Use `PATH.xxx` from `src.proj.env.path`.
+- All paths derive from `MACHINE.data_root` (set in machine config).
 
 ## Data and factors
 - Correctness first; re-verify when changing data paths or transforms.
-- Prefer vectorization, threading, or heavier libs (e.g. torch, polars) when it clearly pays off.
-- Raw/processed data: use existing pipelines — `src.proj.DB` for raw, `src.data.DATAVENDOR` (and related loaders) for processed data as documented in code.
-- Factors: follow patterns under `src.res.factor` (e.g. `util/classes`, vectorized calculators).
-- Respect existing cleaning choices (e.g. forward-fill, winsorization, neutralization).
+- Prefer vectorization and torch/polars when it clearly pays off; otherwise pandas.
+- Data access: use `DateDataAccess` singletons (`TRADE`, `BS`, `MKLINE`, …) or `DataAPI`.
+- Raw data I/O: `src.proj.db` (`df_io.save`, `df_io.load`) — feather/parquet format.
+- Factors: follow patterns under `src.res.factor` — subclass `FactorCalculator`, implement `calculate(data: DataBlock) -> DataBlock`. Auto-registered by metaclass.
+- Respect existing cleaning choices: forward-fill → winsorize → industry neutralize → z-score.
+- Point-in-time discipline for fundamental data: use `BS.qtr()` / `BS.ttm()`, never period-end raw values.
+
+## Model training
+- Entry: `ModelAPI.schedule_model(schedule_name)` — schedule configs live in `configs/model/schedule/`.
+- Do not instantiate NN/boost classes directly; go through `AlgoModule` / `ModelAPI`.
+- New architectures: subclass `BaseNNModel` in `src/res/algo/nn/`, implement `forward(batch: BatchInput)` — auto-registered by class name.
 
 ## Backtesting and strategies
-- Model costs and rules like existing strategies: commission, slippage, stamp duty, limits, suspensions.
+- Model all trading costs: commission, slippage, stamp duty, suspension limits.
 - No lookahead: only information available at decision time.
 
-## Docs
-- Update README or operator docs when behavior or setup changes for users of this repo.
+## Script conventions
+Every file in `scripts/` must have a YAML header block (lines starting with `#`, terminated by a blank line) that is parseable by `ScriptHeader.read_from_file()`:
+```python
+# coding: utf-8
+# author: ...
+# date: YYYY-MM-DD
+# description: Short title
+# content: Longer description
+# email: True | False
+# mode: shell | os
+# parameters:
+#   param_name:
+#       type: str | int | float | bool | [opt1, opt2] | Options.available_xxx()
+#       desc: explanation
+#       required: True | False
+#       default: value
+```
+Wrap `main()` with `@ScriptTool(task_name)` for task tracking, locking, and email.
+
+## Interactive app
+- Start: `uv run launch.py`
+- Scripts visible to the app: numbered folders only (files/dirs starting with `.` or `_` are hidden).
+- `Options.available_xxx()` methods provide dynamic dropdowns from the `options_cache.json`.
+
+## Context library
+Full module documentation is in `context/`. See `context/CLAUDE.md` for the index.
+When a doc is found to be wrong, add `<!-- STALE: reason -->` inline and run:
+```bash
+uv run scripts/0_check/2_update_context.py --mode stale
+```
 
 ## Data fetching policy
-- Ask the human before any new external scrape or new data provider.
+Ask the human before any new external scrape or introducing a new data provider.
 
 ## Repository hygiene
-- Do not suggest committing paths under `.local_resources/` or `.secret/` to git.
+Do not suggest committing paths under `.local_resources/` or `.secret/` to git.
 
 ## Post-edit checks (substantive code changes)
-- `ruff check src scripts`
-- `pyright src scripts`
+```bash
+ruff check src scripts
+pyright src scripts
+```

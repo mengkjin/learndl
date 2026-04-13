@@ -2,7 +2,7 @@
 
 Module attribute ``DIV_TOL`` is a small denominator tolerance shared with ``func.tensor`` and ``func.metric``.
 """
-
+from __future__ import annotations
 import torch , sys
 import numpy as np
 from typing import Any , Literal
