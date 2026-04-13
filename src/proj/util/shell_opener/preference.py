@@ -1,7 +1,10 @@
+"""User-configurable defaults for shell_opener, loaded from ``CONST.Pref`` under the ``shell_opener`` section."""
+
 from typing import Literal , Any
 from src.proj.env import CONST
 
 def perf_getter(key: str , default: Any) -> Any:
+    """Read a ``shell_opener`` preference key, returning ``default`` if absent."""
     return CONST.Pref.get('shell_opener', key, default)
 
 LiteralOption = Literal["cmux", "ghostty", "terminal.app", "wezterm", "gnome", "cmd"]

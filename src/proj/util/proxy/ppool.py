@@ -63,7 +63,15 @@ def get_working_proxies(
 
 
 class ProxyStatsSetURL(ProxyStatsSet):
+    """
+    Per-URL singleton :class:`ProxyStatsSet` with optional adaptive refresh.
+
+    One instance is kept per target URL (singleton via ``__new__``). It tracks proxy health
+    for that URL and can trigger background re-discovery when valid proxies run low.
+    """
+
     _instances : dict[str, ProxyStatsSetURL] = {}
+
     def __new__(cls, *args, **kwargs):
         url = str(kwargs['url'])
         assert url , "not empty url is required"
@@ -99,6 +107,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
         return f"{self.__class__.__name__}({self.url},{'adaptive' if self.adaptive else 'static'},refresh_attempt={self.refresh_attempt}/{self.refresh_max_attempts})"
 
     def init_refresh_stats(self , refresh_interval: int = 30 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2):
+        """Initialise adaptive-refresh counters and thresholds."""
         self.refresh_enabled = self.adaptive
         self.refresh_time = datetime.now()
         self.refresh_attempt = 0
@@ -107,12 +116,14 @@ class ProxyStatsSetURL(ProxyStatsSet):
         self.refresh_threshold = refresh_threshold
 
     def set_url(self, url: str):
+        """Store the target URL for this proxy set (immutable after first assignment)."""
         assert not hasattr(self, '_url') , "url is already set"
         self._url = url
         return self
 
     @property
     def url(self) -> str:
+        """The target URL this proxy set was created for."""
         return self._url
 
     @property
@@ -121,13 +132,14 @@ class ProxyStatsSetURL(ProxyStatsSet):
         return self.valid_count == 0 and not (self.adaptive and self.refresh_enabled)
 
     def check_validity(self) -> bool:
+        """Return True if at least one valid proxy exists; log a one-time shutdown notice otherwise."""
         if self.shutdown:
             Logger.only_once(f"ProxySet for URL {self.url} shutdown , all proxies are invalid and refresh is disabled" , object = self , mark = 'shutdown_info' , printer = Logger.alert2)
             return False
         return self.valid_count > 0
 
     def refresh_proxies(self , go_with_cached_proxies: bool = False , detail_level: Literal['all','none','simple'] = 'all'):
-        """Get the working proxies from the pool's proxy API"""
+        """Discover new working proxies and replace the invalid ones in the pool."""
         old_proxies = [proxy for proxy in self.proxies if proxy.invalid]
         new_proxies = [ProxyStats(proxy) for proxy in get_working_proxies(self.url, go_with_cached_proxies = go_with_cached_proxies , detail_level = detail_level)]
         self.proxies = list(set(old_proxies + new_proxies))
@@ -169,11 +181,13 @@ class ProxyStatsSetURL(ProxyStatsSet):
             Logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
 
 class ProxyPool:
-    """Proxy pool, can be used to acquire and release proxies in a thread-safe manner"""
+    """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""
+
     def __init__(self, target_urls: list[str] | str , * , go_with_cached_proxies: bool = False):
         self.initiate(target_urls, go_with_cached_proxies = go_with_cached_proxies , adaptive=False)
 
     def initiate(self , target_urls: list[str] | str , **kwargs):
+        """Initialise the pool's lock, condition, and per-URL proxy sets."""
         if target_urls == 'test':
             Logger.alert1("Using test mode and pseudo proxies")
         self.lock = threading.Lock()
@@ -189,6 +203,7 @@ class ProxyPool:
 
     @property
     def num_proxies(self) -> dict[str, int]:
+        """Mapping of target URL → total proxy count (valid + invalid)."""
         return {url: len(self.proxies[url]) for url in self.target_urls}
 
     @property
@@ -225,6 +240,7 @@ class ProxyPool:
             self.condition.notify_all()
 
     def execute(self , caller_inputs : Iterable[ProxyCallerInput] , * , max_workers : int = 3 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+        """Execute caller_inputs through this pool, partitioned into groups; return all results."""
         callers = ProxyCallerList.from_inputs(caller_inputs , self)
         groups = callers.partition(grouping_num)
         for group in groups:
@@ -239,7 +255,7 @@ class ProxyPool:
         return cls('test')
 
     def test_workers(self , max_workers : int = 3):
-        """test a number of workers"""
+        """Smoke-test the pool by running N synthetic workers with random success/failure."""
         def test_worker(proxy: str, worker_id: int | None = None) -> bool:
             """A test worker thread"""
             # simulate work: random success or failure
@@ -281,9 +297,14 @@ class AdaptiveProxyPool(ProxyPool):
         for proxy_set in self.proxies.values():
             proxy_set.adaptive_refresh()
                 
-    def execute(self , caller_inputs : Iterable[ProxyCallerInput] , * , 
+    def execute(self , caller_inputs : Iterable[ProxyCallerInput] , * ,
                 fallback_to_raw_ip: bool = False,
                 max_workers : int = 3 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+        """
+        Execute callers with adaptive refresh: retry each group up to 10× and refresh after each attempt.
+
+        Falls back to direct calls for still-unfinished callers when ``fallback_to_raw_ip=True``.
+        """
         callers = ProxyCallerList.from_inputs(caller_inputs , self)
         groups = callers.partition(grouping_num)
         for group in groups:
@@ -302,6 +323,7 @@ class AdaptiveProxyPool(ProxyPool):
 
     @classmethod
     def test(cls , * , refresh_interval: int = 1 , refresh_max_attempts: int = 1 , refresh_threshold: float = 0.1):
+        """Return an AdaptiveProxyPool pointing at the 'test' URL (uses synthetic fake proxies)."""
         return cls('test' , refresh_interval=refresh_interval , refresh_max_attempts=refresh_max_attempts , refresh_threshold=refresh_threshold)
 
     

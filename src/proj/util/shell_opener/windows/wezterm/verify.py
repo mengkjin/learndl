@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 def _windows_wezterm_exe() -> str | None:
+    """Search common Windows install directories (Program Files, LOCALAPPDATA) for ``wezterm.exe``."""
     bases: list[Path] = []
     pf = os.environ.get("ProgramFiles")
     if pf:
@@ -27,8 +28,11 @@ def _windows_wezterm_exe() -> str | None:
 
 
 class WezTermVerifier:
+    """Locate ``wezterm`` on Windows via PATH or well-known install directories."""
+
     @classmethod
     def executable(cls) -> str | None:
+        """Return the absolute path to the WezTerm executable, or None if not found (result cached)."""
         if not hasattr(cls, "_executable"):
             found = shutil.which("wezterm")
             if not found and sys.platform == "win32":
@@ -38,4 +42,5 @@ class WezTermVerifier:
 
     @classmethod
     def available(cls) -> bool:
+        """Return True if a WezTerm executable can be located."""
         return cls.executable() is not None

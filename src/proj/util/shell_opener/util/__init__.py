@@ -1,3 +1,5 @@
+"""Utility helpers re-exported for the shell_opener package (pause, commands, discovery, process)."""
+
 from .pausing import compose_with_pause
 from .commands import format_python_command , to_shell_string , guess_command_title
 from .discovery import ProcessDiscovery

@@ -8,16 +8,20 @@ from pathlib import Path
 
 
 class GhosttyVerifier:
+    """Check whether Ghostty.app is installed (searches standard app directories and Spotlight)."""
+
     _bundle_id = "com.mitchellh.ghostty"
 
     @classmethod
     def available(cls) -> bool:
+        """Return True if a Ghostty.app bundle is found on this machine (result cached after first call)."""
         if not hasattr(cls, "_available"):
             cls._available = cls._ghostty_app_bundle() is not None
         return cls._available
 
     @classmethod
     def _ghostty_app_bundle(cls) -> str | None:
+        """Return the path to Ghostty.app, or None if not found via standard paths or Spotlight."""
         if shutil.which("open") is None:
             return None
         for base in (Path("/Applications"), Path.home() / "Applications"):

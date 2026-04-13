@@ -1,3 +1,4 @@
+"""Windows terminal backends: WezTerm and cmd.exe, selected by ``WINDOWS_OPTIONS`` preference."""
 
 from ..preference import WINDOWS_OPTIONS
 from .cmd_terminal import CmdTerminalOpener
@@ -26,6 +27,12 @@ def open_for_windows(
     new_on: str | None = None,
     **kwargs,
 ) -> None:
+    """
+    Open ``command`` in a visible terminal on Windows.
+
+    Backend is ``WINDOWS_OPTIONS`` by order: ``"wezterm"``, ``"cmd"``.
+    An explicit ``option`` is tried first, then the ordered list.
+    """
     options = [option] + WINDOWS_OPTIONS if option else WINDOWS_OPTIONS
     for opt in options:
         opener = get_opener(opt)

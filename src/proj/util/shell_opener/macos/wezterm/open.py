@@ -37,7 +37,10 @@ def activate_wezterm() -> bool:
 
 
 class WezTermOpener(BasicOpener):
+    """Open commands in a WezTerm tab or window on macOS via ``wezterm cli spawn``."""
+
     def available(self) -> bool:
+        """Return True if ``wezterm`` is found on ``PATH``."""
         return WezTermVerifier.available()
 
     def run(
@@ -49,6 +52,13 @@ class WezTermOpener(BasicOpener):
         new_on: str | None = None,
         **kwargs,
     ) -> None:
+        """
+        Launch ``command`` in WezTerm on macOS.
+
+        ``new_on="tab"`` spawns in the current window (activating WezTerm first);
+        ``"window"`` / ``"workspace"`` opens a new WezTerm window.
+        The shell line is wrapped as ``bash -lc`` so login-profile variables are available.
+        """
         assert self._available, f"{self.__class__.__name__} is not available"
         command = f"{command}; exec bash"
         if cwd:

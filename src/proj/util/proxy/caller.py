@@ -35,6 +35,7 @@ class ProxyCaller:
             return self.fallback(*args, **kwargs)
 
     def set_pool(self , pool = None) -> ProxyCaller:
+        """Attach a proxy pool; no-op if one is already set and ``pool`` is None."""
         if pool is None and hasattr(self, 'pool'):
             return self
         from src.proj.util.proxy.api import ProxyAPI
@@ -44,6 +45,7 @@ class ProxyCaller:
         return self
 
     def set_title(self , title: Any) -> ProxyCaller:
+        """Set a human-readable label for logging and status display."""
         self.title = str(title)
         return self
 
@@ -69,6 +71,10 @@ class ProxyCaller:
 
     @classmethod
     def from_input(cls , input: ProxyCallerInput, pool = None) -> ProxyCaller:
+        """
+        Construct a ProxyCaller from a flexible input: a bare callable, a (url, func) tuple,
+        or an existing ProxyCaller. ``pool`` is required when ``input`` is not already a ProxyCaller.
+        """
         if isinstance(input , ProxyCaller):
             if pool is not None:
                 input.set_pool(pool)
@@ -108,6 +114,7 @@ class ProxyCallerList:
         return iter(self.callers)
 
     def set_pool(self , pool = None) -> ProxyCallerList:
+        """Attach a proxy pool to this list and propagate it to all caller members."""
         if pool is None and hasattr(self, 'pool'):
             return self
         from src.proj.util.proxy.api import ProxyAPI
@@ -119,6 +126,7 @@ class ProxyCallerList:
 
     @property
     def all_finished(self) -> bool:
+        """True when every caller has completed (either successfully or via fallback)."""
         return len(self) == 0 or all(caller.finished for caller in self.callers)
 
     def is_unable_to_proceed(self) -> bool:
@@ -127,6 +135,7 @@ class ProxyCallerList:
         return len(self) == 0 or all(caller.finished or caller.banned for caller in self.callers)
     
     def unfinished_callers(self) -> list[ProxyCaller]:
+        """Return all callers that have not yet finished."""
         return [caller for caller in self.callers if not caller.finished]
 
     def print_status(self):
@@ -139,10 +148,15 @@ class ProxyCallerList:
         [caller.ban() for caller in self.callers if caller.url in shutdown_urls]
 
     def results(self) -> list[bool | Exception]:
+        """Return the result of each caller (True on success, False on failure, or an Exception)."""
         return [caller.result for caller in self.callers]
 
     def realigned_callers(self , unfinished = True) -> list[ProxyCaller]:
-        """Realign callers to the make iteration more diverse"""
+        """
+        Re-interleave callers by URL so that consecutive calls hit different targets.
+
+        Uses a stride-based shuffle (step ≈ sqrt(n)) to spread work across URLs more evenly.
+        """
         callers = self.unfinished_callers() if unfinished else self.callers
         step_size = int(np.round(np.sqrt(len(callers))))
         sor = sorted(callers , key = lambda x: x.url)
@@ -197,6 +211,14 @@ class ProxyCallerList:
 
     def execute_with_partition(
         self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , **kwargs) -> list[bool | Exception]:
+        """
+        Execute all callers in multiple rounds with adaptive partitioning.
+
+        Partitions callers into sqrt-sized groups, executes each group, triggers an adaptive
+        proxy-pool refresh between groups, and repeats for up to 10 rounds until all are done.
+        Falls back to direct (no-proxy) calls for any remaining unfinished callers when
+        ``fallback_to_raw_ip=True``.
+        """
         grouping_num = max(int(np.round(np.sqrt(len(self.callers)))) , 2 * max_workers)
         for i_iter in range(10):
             groups = self.partition(grouping_num)
@@ -219,6 +241,7 @@ class ProxyCallerList:
 
     def execute_with_partition_old(
         self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+        """Legacy partitioned execution; kept for reference. Prefer :meth:`execute_with_partition`."""
         groups = self.partition(grouping_num)
         for group in groups:
             for i in range(10):

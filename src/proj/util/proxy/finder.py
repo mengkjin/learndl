@@ -128,6 +128,7 @@ class FreeProxyListNetFinder(BaseProxiesFinder):
 
     @classmethod
     def _parse_proxy_table(cls , html: str , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+        """Parse the HTML proxy table from free-proxy-list.net and return a list of ``http://ip:port`` strings."""
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if not isinstance(table, Tag):
@@ -164,6 +165,7 @@ class FreeProxyListCCFinder(BaseProxiesFinder):
 
     @classmethod
     def _parse_proxy_table(cls , html: str , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
+        """Parse the HTML proxy table from freeproxylist.cc and return a list of ``http://ip:port`` strings."""
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if not isinstance(table, Tag):
@@ -201,6 +203,7 @@ class FreeProxyWorldFinder(BaseProxiesFinder):
 
     @classmethod
     def _parse_proxy_table(cls , html: str , protocol: Literal["http" , "socks4" , "socks5" , "https"] | str = "https") -> list[str]:
+        """Parse the HTML proxy table from freeproxy.world and return a list of ``<protocol>://ip:port`` strings."""
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if not isinstance(table, Tag):
@@ -239,6 +242,8 @@ class ProxiflyFinder(BaseProxiesFinder):
         return ProxySet(candidates)
 
 class FreeProxyFinder:
+    """Aggregate proxy finder that queries all registered :class:`BaseProxiesFinder` implementations."""
+
     FINDERS_TYPE = {
         'zdaye': ZDAYEFinder,
         'fplcc':  FreeProxyListCCFinder,
@@ -257,7 +262,7 @@ class FreeProxyFinder:
         return f"{self.__class__.__name__}({len(self)} finders)"
 
     def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
-        """Get free proxies from Zdaye API"""
+        """Collect proxies from all registered finders and return the deduplicated union."""
         proxies = ProxySet()
         for finder in self.finders.values():
             proxies.extend(finder.find(level_type=level_type))

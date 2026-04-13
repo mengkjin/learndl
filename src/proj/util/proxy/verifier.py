@@ -16,6 +16,8 @@ from .core import Proxy , ProxySet
 
 @dataclass
 class VerifyRecord:
+    """Timing and outcome record for one proxy-vs-target-URL verification attempt."""
+
     target_url: str
     proxy_url: str
     status: bool = False
@@ -23,24 +25,30 @@ class VerifyRecord:
     end_time: float = 0
 
     def __enter__(self):
+        """Start timing the verification."""
         self.start_time = time.time()
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Stop timing the verification."""
         self.end_time = time.time()
 
     def set_status(self, status: bool):
+        """Record the pass/fail outcome of this verification."""
         self.status = status
 
     @property
     def duration(self) -> float:
+        """Wall-clock seconds taken by this verification attempt."""
         return self.end_time - self.start_time
 
     @property
     def info(self) -> str:
+        """One-line human-readable summary: target url, proxy url, status, duration."""
         return f'{self.target_url} {self.proxy_url} {self.status} {self.duration}'
 
     def to_dict(self) -> dict:
+        """Serialise to a dict suitable for DataFrame construction."""
         return {
             'target_url': self.target_url,
             'proxy_url': self.proxy_url,
@@ -49,11 +57,19 @@ class VerifyRecord:
         }
 
 class VerificationRecords:
+    """Thread-safe registry of all proxy verification attempts, keyed by (target_url, proxy_url)."""
+
     def __init__(self):
         self.records : dict[tuple[str, str], VerifyRecord] = {}
         self.lock = threading.Lock()
 
     def get_record(self, target_url: str, proxy_url: str) -> VerifyRecord | bool:
+        """
+        Return an existing boolean result if already verified, or create a new VerifyRecord.
+
+        Returns a bool when the outcome is already known; returns a VerifyRecord context-manager
+        when this is the first attempt for the (target_url, proxy_url) pair.
+        """
         status = self.get_status(target_url, proxy_url)
         if status is not None:
             return status
@@ -63,16 +79,19 @@ class VerificationRecords:
         return record
 
     def get_status(self, target_url: str, proxy_url: str) -> bool | None:
+        """Return the cached pass/fail result for a pair, or None if not yet verified."""
         with self.lock:
             if (target_url, proxy_url) in self.records:
                 return self.records[(target_url, proxy_url)].status
             return None
 
     def unverified_proxies(self, target_url: str , proxies: Iterable[Proxy | str]) -> ProxySet:
+        """Filter ``proxies`` to those not yet attempted for ``target_url``."""
         with self.lock:
             return ProxySet([proxy for proxy in proxies if (target_url, str(proxy)) not in self.records])
 
     def stats(self) -> pd.DataFrame:
+        """Return a DataFrame summarising verification counts and timings grouped by target and status."""
         if not self.records:
             return pd.DataFrame()
         df = pd.DataFrame([record.to_dict() for record in self.records.values()])
@@ -102,10 +121,12 @@ class ProxyVerifier:
 
     @classmethod
     def unverified_proxies(cls, target_url: str , proxies: Iterable[Proxy | str]) -> ProxySet:
+        """Return the subset of ``proxies`` that have not yet been tested against ``target_url``."""
         return cls.VERIFICATION_RECORDS.unverified_proxies(target_url, proxies)
 
     @classmethod
     def dummy_single(cls , proxy: Proxy | str, target_url: str , *args , timeout: float = 10.0 , **kwargs) -> bool:
+        """Simulate a verification with random pass/fail after a random sleep — used for testing."""
         record = cls.VERIFICATION_RECORDS.get_record(target_url, str(proxy))
         if isinstance(record, bool):
             return record
@@ -120,11 +141,13 @@ class ProxyVerifier:
 
     @classmethod
     def stats(cls) -> pd.DataFrame:
+        """Delegate to :meth:`VerificationRecords.stats` for the process-wide verification summary."""
         return cls.VERIFICATION_RECORDS.stats()
 
     @classmethod
-    def parallel_verification(cls , proxies: Iterable[Proxy | str] , target_url : str , timeout : float = 10.0 , * , 
+    def parallel_verification(cls , proxies: Iterable[Proxy | str] , target_url : str , timeout : float = 10.0 , * ,
                               fast_test: bool = False, workers : int = 50 , dummy: bool = False) -> ProxySet:
+        """Verify all proxies against ``target_url`` concurrently; return only those that passed."""
         cands = dict.fromkeys(proxies , False)
         if not cands:
             return ProxySet()
@@ -191,6 +214,7 @@ class ProxyVerifier:
 
     @classmethod
     def filter_proxies_by_anonymity(cls, proxies: Iterable[Proxy | str]) -> ProxySet:
+        """Remove transparent proxies: fetch the real public IP, then drop any proxy that leaks it."""
         real_ip = cls.get_real_ip()
         if not real_ip:
             Logger.alert2("Failed to get real public IP, cannot check proxy anonymity")

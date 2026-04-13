@@ -18,6 +18,7 @@ _DEFAULT_PAUSE_WIN = (
 )
 
 def compose_with_pause(command: str, *, pause_when_done: bool) -> str:
+    """Append a platform-appropriate 'press any key to exit' snippet to ``command`` when requested."""
     if not pause_when_done:
         return command
     if sys.platform == "win32":

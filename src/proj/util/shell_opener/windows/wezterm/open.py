@@ -61,6 +61,7 @@ def _windows_process_exe_path(pid: int) -> str | None:
 
 
 def _pid_from_gui_sock_basename(name: str) -> int | None:
+    """Extract the PID integer from a ``gui-sock-<pid>`` filename, or return None."""
     if name.startswith("gui-sock-"):
         tail = name[len("gui-sock-") :]
         if tail.isdigit():
@@ -87,6 +88,7 @@ def _socket_targets_live_wezterm(path: str) -> bool:
 
 
 def _debug_wezterm_socket(msg: str) -> None:
+    """Write socket-discovery debug messages to stdout when ``SHELL_OPENER_DEBUG_WEZTERM`` is set."""
     if os.environ.get("SHELL_OPENER_DEBUG_WEZTERM"):
         sys.stdout.write(msg + '\n')
         sys.stdout.flush()
@@ -195,7 +197,10 @@ def bring_wezterm_to_foreground_soon(*, delay_s: float = 0.25) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 class WezTermOpener(BasicOpener):
+    """Open commands in WezTerm on Windows via ``cli spawn`` (GUI running) or ``wezterm start`` (cold)."""
+
     def available(self) -> bool:
+        """Return True if a WezTerm executable can be located on this Windows system."""
         return WezTermVerifier.available()
 
     def run(
@@ -207,6 +212,14 @@ class WezTermOpener(BasicOpener):
         new_on: str | None = None,
         **kwargs,
     ) -> None:
+        """
+        Launch ``command`` in WezTerm on Windows.
+
+        For ``new_on="tab"``: uses ``wezterm cli spawn`` when a GUI socket exists (or when inside
+        a pane), else falls back to ``wezterm start``. For ``"window"``/``"workspace"``: always
+        calls ``wezterm start --always-new-process``.
+        The inner shell is ``cmd.exe /k`` so the window stays open after the command exits.
+        """
         assert self._available, f"{self.__class__.__name__} is not available"
         if new_on is None:
             new_on = WINDOWS_WEZTERM_NEW

@@ -18,12 +18,14 @@ from .verify import WezTermVerifier
 
 
 def _debug_wezterm_socket(msg: str) -> None:
+    """Write socket-discovery debug messages to stdout when ``SHELL_OPENER_DEBUG_WEZTERM`` is set."""
     if os.environ.get("SHELL_OPENER_DEBUG_WEZTERM"):
         sys.stdout.write(msg + '\n')
         sys.stdout.flush()
 
 
 def _wezterm_runtime_dir() -> str:
+    """Return the WezTerm runtime directory (``$XDG_RUNTIME_DIR/wezterm`` or ``/run/user/<uid>/wezterm``)."""
     base = os.environ.get("XDG_RUNTIME_DIR")
     if not base:
         base = f"/run/user/{os.getuid()}"
@@ -31,6 +33,7 @@ def _wezterm_runtime_dir() -> str:
 
 
 def _pid_from_gui_sock_basename(name: str) -> int | None:
+    """Extract the PID integer from a ``gui-sock-<pid>`` filename, or return None."""
     if name.startswith("gui-sock-"):
         tail = name[len("gui-sock-") :]
         if tail.isdigit():
@@ -141,7 +144,10 @@ def bring_wezterm_to_foreground_soon(*, delay_s: float = 0.35) -> None:
 
 
 class WezTermOpener(BasicOpener):
+    """Open commands in WezTerm on Linux, using ``cli spawn`` when a GUI socket exists or cold-starting otherwise."""
+
     def available(self) -> bool:
+        """Return True if ``wezterm`` is found on ``PATH``."""
         return WezTermVerifier.available()
 
     def run(
@@ -153,6 +159,13 @@ class WezTermOpener(BasicOpener):
         new_on: str | None = None,
         **kwargs,
     ) -> None:
+        """
+        Launch ``command`` in WezTerm on Linux.
+
+        Discovers the live GUI socket via ``discover_wezterm_gui_socket``; uses ``wezterm start``
+        for a cold start when no socket is found. ``new_on="tab"`` spawns in the current window;
+        ``"window"`` / ``"workspace"`` opens a new WezTerm window.
+        """
         assert self._available, f"{self.__class__.__name__} is not available"
         command = f"{command}; exec bash"
         if cwd:

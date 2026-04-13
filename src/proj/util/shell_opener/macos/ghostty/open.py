@@ -10,7 +10,10 @@ from .verify import GhosttyVerifier
 
 
 class GhosttyOpener(BasicOpener):
+    """Open commands in a new Ghostty window on macOS via ``open -na Ghostty.app``."""
+
     def available(self) -> bool:
+        """Return True if Ghostty.app is installed on this machine."""
         return GhosttyVerifier.available()
 
     def run(self, command: str, * , cwd: str | None = None, **kwargs) -> None:

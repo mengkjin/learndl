@@ -12,9 +12,9 @@ import subprocess
 
 def raise_recent_terminal() -> bool:
     """
-    Finds the most recently active gnome-terminal window, 
-    raises it to the top, and returns True. 
-    Returns False if no terminal window is found.
+    Bring the most recently used GNOME Terminal window to the foreground via ``wmctrl``.
+
+    Returns True on success; False if ``wmctrl`` is unavailable or no gnome-terminal window exists.
     """
     try:
         # -l: list windows, -x: include the WM_CLASS (useful for filtering)
@@ -42,10 +42,19 @@ def raise_recent_terminal() -> bool:
 
 
 class GnomeTerminalOpener(BasicOpener):
+    """Open commands in a new GNOME Terminal window or tab on Linux."""
+
     def available(self) -> bool:
+        """Return True if ``gnome-terminal`` is found on ``PATH``."""
         return GnomeTerminalVerifier.available()
 
     def run(self, command: str, * , cwd: str | None = None, title: str | None = None, new_on: str | None = None) -> None:
+        """
+        Launch ``command`` in gnome-terminal.
+
+        ``new_on="tab"`` reuses the most recently active window (via ``wmctrl``);
+        ``"window"`` / ``"workspace"`` always opens a new window.
+        """
         assert self._available , f"{self.__class__.__name__} is not available"
         command = f'{command}; exec bash'
         

@@ -9,10 +9,14 @@ from ...util.basic import BasicOpener
 from .verify import TerminalAppVerifier
 
 def _applescript_escape(s: str) -> str:
+    """Escape backslashes and double-quotes for embedding in an AppleScript string literal."""
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 class TerminalAppOpener(BasicOpener):
+    """Open commands in a new Terminal.app window via AppleScript (``osascript``)."""
+
     def available(self) -> bool:
+        """Return True if ``osascript`` is available (Terminal.app automation is enabled)."""
         return TerminalAppVerifier.available()
 
     def run(self, command: str, * , cwd: str | None = None, **kwargs) -> None:

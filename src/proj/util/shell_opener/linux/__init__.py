@@ -1,3 +1,5 @@
+"""Linux terminal backends: WezTerm and GNOME Terminal, selected by ``LINUX_OPTIONS`` preference."""
+
 from .gnome import GnomeTerminalOpener
 from .wezterm import WezTermOpener
 from ..preference import LINUX_OPTIONS
@@ -17,9 +19,15 @@ def get_opener(option: str):
             raise ValueError(f"Invalid option: {option}")
 
 def open_in_linux(
-    command: str, * , 
-    cwd: str | None = None,  option: str | None = None, 
+    command: str, * ,
+    cwd: str | None = None,  option: str | None = None,
     title: str | None = None, new_on: str | None = None , **kwargs) -> None:
+    """
+    Open ``command`` in a visible terminal on Linux.
+
+    Backend is ``LINUX_OPTIONS`` by order: ``"wezterm"``, ``"gnome"``.
+    An explicit ``option`` is tried first, then the ordered list.
+    """
     options = [option] + LINUX_OPTIONS if option else LINUX_OPTIONS
     for opt in options:
         opener = get_opener(opt)

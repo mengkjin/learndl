@@ -8,7 +8,7 @@ INVALID_THRESHOLD = 3
 MAX_CONCURRENT = 2
 
 class Proxy:
-    """A basic proxy class"""
+    """Single proxy address (``protocol://host:port``) with source tracking and verification history."""
     def __new__(cls, url: str | Proxy, source: str = 'unknown'):
         proxy = super().__new__(cls)
         proxy.set_url(url)
@@ -17,6 +17,7 @@ class Proxy:
 
     @property
     def verified(self) -> list[str]:
+        """URLs for which this proxy has been successfully verified."""
         if not hasattr(self, '_verified'):
             self._verified: list[str] = []
         return self._verified
@@ -37,6 +38,7 @@ class Proxy:
         return bool(self.url)
 
     def set_url(self, url: str | Proxy) -> Proxy:
+        """Parse and store the proxy URL, copying source from another Proxy when given."""
         if isinstance(url, Proxy):
             self.set_source(url.source)
             url_addr = url.url
@@ -47,6 +49,7 @@ class Proxy:
         return self
 
     def set_source(self, source: str) -> Proxy:
+        """Set the origin label only if it has not been set yet (or is still 'unknown')."""
         if not hasattr(self, 'source') or self.source == 'unknown':
             self.source = source
         return self
@@ -62,9 +65,12 @@ class Proxy:
 
     @classmethod
     def unique(cls, proxies: Iterable[Proxy]) -> list[Proxy]:
+        """Deduplicate proxies by URL identity."""
         return list(set(proxies))
 
 class ProxySet:
+    """Unordered, deduplicated collection of :class:`Proxy` objects."""
+
     def __init__(self , proxies: Iterable[Proxy | str] | None = None , source: str = 'unknown'):
         if proxies is None:
             proxies = []
@@ -90,12 +96,15 @@ class ProxySet:
         return bool(self.proxies)
 
     def extend(self , proxies: Iterable[Proxy | str]):
+        """Append proxies and deduplicate in place."""
         self.proxies = Proxy.unique(self.proxies + [Proxy(proxy) for proxy in proxies])
 
     def to_urls(self) -> list[str]:
+        """Return a plain list of URL strings for serialisation."""
         return [proxy.url for proxy in self.proxies]
 
     def set_source(self , source: str) -> ProxySet:
+        """Propagate an origin label to every proxy in the set."""
         [proxy.set_source(source) for proxy in self.proxies]
         return self
 
@@ -119,6 +128,7 @@ class ProxyStats(Proxy):
 
     @property
     def stats(self) -> dict[Literal['occupied', 'error', 'success'], int]:
+        """Lazy-initialised usage counters: occupied (in-flight), error, and success counts."""
         if not hasattr(self, '_stats'):
             self._stats : dict[Literal['occupied', 'error', 'success'], int] = {
                 'occupied': 0,
@@ -162,9 +172,12 @@ class ProxyStats(Proxy):
 
     @classmethod
     def unique(cls, proxies: Iterable[ProxyStats]) -> list[ProxyStats]:
+        """Deduplicate ProxyStats instances (same URL → same singleton)."""
         return list(set(proxies))
 
 class ProxyStatsSet(ProxySet):
+    """A :class:`ProxySet` whose members are :class:`ProxyStats` singletons with live usage tracking."""
+
     def __init__(self , proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown'):
         if proxies is None:
             proxies = []
@@ -177,6 +190,7 @@ class ProxyStatsSet(ProxySet):
         return self.valid_count > 0
 
     def extend(self , proxies: Iterable[ProxyStats | Proxy | str]):
+        """Append proxies (auto-converting to ProxyStats singletons) and deduplicate in place."""
         self.proxies = ProxyStats.unique(self.proxies + [ProxyStats(proxy) for proxy in proxies])
 
     @property
@@ -186,6 +200,7 @@ class ProxyStatsSet(ProxySet):
 
     @property
     def valid_count(self) -> int:
+        """Number of proxies whose error count has not yet reached INVALID_THRESHOLD."""
         return sum(proxy.valid for proxy in self.proxies)
 
     def pick_one(self) -> ProxyStats | None:

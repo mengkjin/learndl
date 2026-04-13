@@ -36,6 +36,7 @@ def _win_cmd_token(s: str) -> str:
     return s
 
 def to_shell_string(cmd_list : Sequence[Any] | str) -> str:
+    """Convert an argv sequence to a properly-quoted shell string, or pass a string through unchanged."""
     if isinstance(cmd_list, str):
         return cmd_list
     if sys.platform == "win32":
