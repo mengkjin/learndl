@@ -1,3 +1,4 @@
+"""Tushare fetchers for futures data: contract list and daily OHLCV."""
 # do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 import pandas as pd

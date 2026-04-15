@@ -1,3 +1,13 @@
+"""
+Multi-period OHLCV aggregation updater.
+
+Computes 5-day, 10-day, and 20-day OHLCV bars from daily data with proper
+adjfactor treatment and stores them in ``trade_ts/{N}day``.
+
+The aggregation uses OHLCV rules: open=first, high=max, low=min, close=last,
+amount/volume/turnover=sum, pctchange=product.  VWAP is recomputed from
+total amount and volume.
+"""
 from __future__ import annotations
 
 import pandas as pd
@@ -8,6 +18,7 @@ from src.proj import CALENDAR , DB , Logger , Dates , Proj
 from src.data.update.custom.basic import BasicCustomUpdater
 
 class MultiKlineUpdater(BasicCustomUpdater):
+    """Registered updater for 5/10/20-day aggregated OHLCV bars."""
     START_DATE = 20050101
     DB_SRC = 'trade_ts'
 
@@ -15,6 +26,7 @@ class MultiKlineUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        """Update multi-day OHLCV aggregations for all (n_day, missing_dates) combinations."""
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all nday klines is not supported yet for {cls.__name__}')
@@ -42,11 +54,18 @@ class MultiKlineUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_one(cls , date : int , n_day : int , label_name : str , indent : int = 2 , vb_level : Any = 2):
+        """Compute and save the n-day OHLCV bar for a single ``date``."""
         DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , indent = indent , vb_level = vb_level)
 
 
 def nday_kline(date : int , n_day : int) -> pd.DataFrame:
-    '''from day to n_day'''
+    """
+    Aggregate trailing ``n_day`` daily bars into a single OHLCV row per secid.
+
+    Prices are adjusted by ``adjfactor`` before aggregation.  VWAP is
+    recomputed as ``sum(amount) / sum(volume)``, falling back to close
+    when volume is zero.  Returns an empty DataFrame if no data is available.
+    """
     # read calendar
     assert n_day in [5 , 10 , 20] , f'n_day should be in [5 , 10 , 20]'
     trailing_dates = CALENDAR.td_trailing(date , n_day)

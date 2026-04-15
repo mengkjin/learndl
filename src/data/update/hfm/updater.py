@@ -1,3 +1,14 @@
+"""
+JinMeng (JS) quantitative terminal data update pipeline.
+
+Bridges data from a Windows-based JinMeng R terminal to the Linux server:
+- Terminal side: ``JSFetcher`` reads R-format data files and packs them into
+  a ``.tar`` updater archive.
+- Server side: ``JSDataUpdater.unpack_exist_updaters`` extracts the archive;
+  ``transform_datas`` converts raw minute-bar zip files into the standard DB format.
+
+The pipeline runs incrementally; each archive is deleted after successful extraction.
+"""
 import tarfile
 import numpy as np
 import pandas as pd
@@ -9,7 +20,7 @@ from pathlib import Path
 from src.proj import PATH , MACHINE , Logger , Duration , DB
 
 from .jsfetcher import JSFetcher , JSDownloader
-from .minute_transform import main as minute_transform    
+from .minute_transform import main as minute_transform
 
 class JSDataUpdater():
     '''
@@ -21,12 +32,14 @@ class JSDataUpdater():
     UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MACHINE.platform_server else [PATH.updater]
 
     def __init__(self) -> None:
+        """Create a new timestamped tar archive path and initialise result tracking lists."""
         self.Updater = self.get_new_updater()
         self.Success = []
         self.Failed  = []
-        
+
     @classmethod
     def get_updater_paths(cls):
+        """Return sorted paths of all existing updater tar files across search directories."""
         # order matters!
 
         paths : list[Path] = []
@@ -37,6 +50,12 @@ class JSDataUpdater():
     
     @classmethod
     def unpack_exist_updaters(cls , del_after_dumping = True):
+        """
+        Extract all ``.tar`` updater archives found in the search directories.
+
+        Must be run on the platform server (``MACHINE.platform_server``).
+        Archives are deleted after extraction when ``del_after_dumping=True``.
+        """
         assert MACHINE.platform_server , f'must on platform server , but got {MACHINE.name}'
 
         paths : list[Path] = []
@@ -58,14 +77,22 @@ class JSDataUpdater():
 
     @classmethod
     def transform_datas(cls):
+        """Run the minute-bar transformation pipeline on all pending zip files."""
         minute_transform()
 
     @classmethod
     def get_new_updater(cls):
+        """Return a timestamped path for a new tar updater archive."""
         stime = datetime.now().strftime('%y%m%d%H%M%S')
         return PATH.updater.joinpath(f'{cls.UPDATER_TITLE}.{stime}.tar')
 
     def get_db_params(self , db_src):
+        """
+        Return the list of ``JSFetcher`` configurations for the given database source.
+
+        Maps each ``db_src`` to the set of ``(db_key, [extra_args])`` tuples used
+        to construct ``JSFetcher`` objects.
+        """
         # db_update_parameters
         if db_src == 'information_js':
             param_args : list[list] = [
@@ -118,6 +145,13 @@ class JSDataUpdater():
         return params
     
     def handle_result(self , result , target_path : Path , result_dict = None):
+        """
+        Persist a fetcher result and add it to the current tar archive.
+
+        Supports ``pd.DataFrame`` (saves to DB format), ``Path`` (adds raw file),
+        and ``None`` (no-op).  Appends to ``self.Success`` or ``self.Failed``
+        accordingly.
+        """
         abs_path = str(target_path.absolute())
         rel_path = str(target_path.relative_to(self.UPDATER_BASE))
         if isinstance(result , pd.DataFrame):

@@ -1,3 +1,15 @@
+"""
+Weekly-rank loser stock screener updater.
+
+Identifies stocks that have consistently underperformed: in the trailing 50 weeks
+they never appeared in the top 5% by weekly return but appeared in the bottom 5%
+at least twice (> 2% of weeks).
+
+Stores a boolean ``loser`` flag plus supporting statistics in ``exposure/week_rank_loser``.
+
+Note: loads the full return history since 2007 on every call (see TODO_data.md item E8
+for the proposed windowed optimisation).
+"""
 import pandas as pd
 import numpy as np
 import torch
@@ -10,12 +22,14 @@ from src.data.loader import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
 class WeekRankLoserUpdater(BasicCustomUpdater):
+    """Registered updater for the weekly-rank loser stock screener."""
     START_DATE = max(20100101 , DB.min_date('trade_ts' , 'day' , use_alt=True))
     DB_SRC = 'exposure'
     DB_KEY = 'week_rank_loser'
 
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        """Update loser flags for all missing dates."""
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
@@ -41,6 +55,7 @@ class WeekRankLoserUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
+        """Compute and save loser flags for a single ``date``."""
         DB.save(calc_week_rank_loser(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
 
 def calc_week_rank_loser(date : int) -> pd.DataFrame:

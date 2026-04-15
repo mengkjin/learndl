@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "1ca4d1aa590a3d25",
+        "id": "e041a15bf08a1267",
         "type": "tabs",
         "children": [
           {
-            "id": "7bde70d9193e16fd",
+            "id": "f07c52ddec9cee3a",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "overview.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "overview"
+              "title": "New tab"
             }
           }
         ]
@@ -156,13 +152,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "overview.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of overview"
+              "title": "Outline"
             }
           }
         ],
@@ -178,7 +173,6 @@
             "state": {
               "type": "localgraph",
               "state": {
-                "file": "overview.md",
                 "options": {
                   "collapse-filter": true,
                   "search": "",
@@ -206,7 +200,7 @@
                 }
               },
               "icon": "lucide-git-fork",
-              "title": "Graph of overview"
+              "title": "Graph view"
             }
           }
         ]
@@ -226,10 +220,10 @@
       "bases:Create new base": false
     }
   },
-  "active": "7bde70d9193e16fd",
+  "active": "f07c52ddec9cee3a",
   "lastOpenFiles": [
-    "CLAUDE.md",
     "overview.md",
+    "CLAUDE.md",
     "modules/project_infra.md",
     "modules/nn_models.md",
     "modules/interactive_app.md",

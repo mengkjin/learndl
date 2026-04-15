@@ -1,3 +1,19 @@
+"""
+Abstract base class for all date-keyed data access singletons.
+
+Each concrete subclass wraps a particular database source and presents a
+unified date-driven interface with in-memory caching via ``DFCollection``
+(pandas) or ``PLDFCollection`` (Polars).
+
+Concrete singletons in this package
+------------------------------------
+- ``TRADE`` (TradeDataAccess)
+- ``RISK``  (RiskModelAccess)
+- ``BS / IS / CF / INDI / FINA``  (FDataAccess subclasses)
+- ``ANALYST`` (AnalystDataAccess)
+- ``MKLINE`` (MinKLineAccess)
+- ``EXPO``  (ExposureAccess)
+"""
 import numpy as np
 import pandas as pd
 
@@ -8,6 +24,22 @@ from src.proj import CALENDAR , TradeDate
 from src.data.util import INFO , DFCollection , PLDFCollection
 
 class DateDataAccess(ABC):
+    """
+    Abstract date-keyed data accessor.
+
+    Class Attributes
+    ----------------
+    MAX_LEN : int
+        Maximum number of dates to keep in each ``DFCollection`` (``-1`` = unlimited).
+    DATE_KEY : str
+        Column / index name used to store the date.
+    DB_SRC : str
+        Database source identifier.
+    DB_KEYS : dict[str, str]
+        Mapping from internal ``data_type`` name to database key.
+    LOAD_AS_PL : list[str]
+        Data types to be cached as Polars frames (``PLDFCollection``) instead of pandas.
+    """
     MAX_LEN = -1
     DATE_KEY = 'date'
     DB_SRC = ''
@@ -15,6 +47,7 @@ class DateDataAccess(ABC):
     LOAD_AS_PL : list[str] = []
 
     def __init__(self) -> None:
+        """Initialise one DFCollection (or PLDFCollection) per DB_KEYS entry."""
         self.collections : dict[str , DFCollection] = {
             data_type : DFCollection(self.MAX_LEN , self.DATE_KEY) 
             for data_type in self.DB_KEYS.keys() if data_type not in self.LOAD_AS_PL}
@@ -34,6 +67,7 @@ class DateDataAccess(ABC):
         """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""
 
     def truncate(self , data_type : str | None = None):
+        """Truncate the cache for ``data_type`` (or all types when None) to ``MAX_LEN``."""
         data_type_list = [data_type] if isinstance(data_type , str) else list(self.DB_KEYS.keys())
         for data_type in data_type_list:
             if data_type in self.collections: 
@@ -42,6 +76,7 @@ class DateDataAccess(ABC):
                 self.pl_collections[data_type].truncate()
 
     def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str , rename_date_key = None):
+        """Bulk-load ``data_type`` for all dates that are not yet cached."""
         if dates is None:
             return pd.DataFrame()
         if isinstance(dates , int):
@@ -50,30 +85,59 @@ class DateDataAccess(ABC):
             self.collections[data_type].add(date , self.data_loader(date , data_type))
 
     def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
+        """Return the cached DataFrame for a single ``date``, loading from DB if missing."""
         if overwrite or int(date) not in self.collections[data_type]:
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
     def gets(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+        """Return a multi-date DataFrame for ``data_type``, loading any missing dates from DB."""
         dates = np.array([int(d) for d in dates])
         for date in self.collections[data_type].date_diffs(dates , overwrite):
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
     
     def get_pl(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
+        """Polars equivalent of ``get`` — returns a ``pl.DataFrame`` from ``PLDFCollection``."""
         if overwrite or int(date) not in self.pl_collections[data_type]:
             self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
         return self.pl_collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
     def gets_pl(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+        """Polars equivalent of ``gets`` — returns a multi-date ``pl.DataFrame``."""
         dates = np.array([int(d) for d in dates])
         for date in self.pl_collections[data_type].date_diffs(dates , overwrite):
             self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
         return self.pl_collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
     
-    def get_specific_data(self , start : int | TradeDate , end : int | TradeDate , 
-                          data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True , 
+    def get_specific_data(self , start : int | TradeDate , end : int | TradeDate ,
+                          data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True ,
                           date_step = 1):
+        """
+        High-level accessor that handles the standard point-in-time query pattern.
+
+        1. Generates a trading-day range from ``start`` to ``end``.
+        2. Optionally shifts each date back by one trading day (``prev=True``)
+           to load the data that was *available* on each date (point-in-time).
+        3. Loads all dates via ``gets`` and shifts the index forward to restore
+           the original dates.
+        4. Optionally applies listing-date masking, pivots to wide format,
+           and truncates the underlying cache.
+
+        Parameters
+        ----------
+        prev : bool
+            If True (default), load data from the previous trading day and
+            re-label dates back to the query date (classic PIT pattern).
+        mask : bool
+            Apply ``INFO.mask_list_dt`` to blank pre-listing observations.
+        pivot : bool
+            Pivot the result to a (date × secid) wide frame.
+        drop_old : bool
+            Truncate the cache after retrieval to free memory.
+        date_step : int
+            Stride for the trading-day range (1 = every day).
+        """
         dates = CALENDAR.td_array(CALENDAR.range(start , end , 'td' , step = date_step) , -1 if prev else 0)
         if field is not None:
             remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
@@ -98,6 +162,13 @@ class DateDataAccess(ABC):
     
     @staticmethod
     def mask_min_finite(df : pd.DataFrame | Any , min_finite_ratio = 0.25):
+        """
+        Add NaN to columns (or rows in long-format) whose finite-value ratio
+        falls below ``min_finite_ratio``.
+
+        Supports both pivoted (date index × secid columns) and long-format
+        (MultiIndex ``[date, secid]``) DataFrames.
+        """
         if min_finite_ratio <= 0: 
             return df
         assert min_finite_ratio <= 1 , f'min_finite_ratio must be less than or equal to 1 , got {min_finite_ratio}'

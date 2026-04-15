@@ -1,3 +1,20 @@
+"""
+Thread-safe, date-keyed in-memory cache for pandas and Polars DataFrames.
+
+Classes
+-------
+DFCollection
+    Pandas-backed cache.  Internally stores per-date frames in
+    ``data_frames`` and lazily merges them into ``long_frame`` on
+    multi-date queries.
+PLDFCollection
+    Polars-backed cache.  Each date is stored as a separate
+    ``pl.DataFrame``; multi-date access via ``pl.concat``.
+
+Both classes inherit the thread-safe ``add`` / ``get`` / ``gets`` /
+``truncate`` interface from the abstract base ``_df_collection``.
+All public methods acquire a module-level ``threading.Lock``.
+"""
 import threading
 import warnings
 import numpy as np
@@ -13,6 +30,20 @@ from src.proj import TradeDate
 lock = threading.Lock()
 
 class _df_collection(ABC):
+    """
+    Abstract base for thread-safe date-keyed DataFrame caches.
+
+    Subclasses implement ``add_one_day``, ``get_one_day``, and
+    ``get_multiple_days`` for their specific backend (pandas or Polars).
+
+    Parameters
+    ----------
+    max_len : int
+        Maximum number of dates to retain.  ``-1`` means unlimited.
+    date_key : str | None
+        Column / index name used to store the date.  Defaults to
+        ``'inner_date_key'`` when not provided.
+    """
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
         self.max_len = max_len
         self.dates : list[int] = []
@@ -37,17 +68,21 @@ class _df_collection(ABC):
         '''get a DataFrame with given (many) dates , fields and set_index'''
 
     def __repr__(self):
+        """Show class name, max_len, and the number of cached dates."""
         return f'{self.__class__.__name__}(max_len={self.max_len} , dates num={len(self.dates)})'
 
     def __bool__(self):
+        """True if at least one date has been added."""
         return bool(self.dates)
-    
+
     def __len__(self):
+        """Number of dates currently cached."""
         return len(self.dates)
-    
+
     def __contains__(self , date : int | TradeDate):
+        """Support ``date in collection`` membership test."""
         return int(date) in self.dates
-    
+
     @property
     def last_added_data(self):
         '''return the last added df'''
@@ -55,7 +90,16 @@ class _df_collection(ABC):
             return self.get(self.last_added_date)
     
     def date_diffs(self , dates : list[int | TradeDate] | np.ndarray , overwrite = False):
-        '''return the difference between given dates and self.dates'''
+        """
+        Return dates that are not yet cached.
+
+        Parameters
+        ----------
+        dates : array-like
+            Candidate dates.
+        overwrite : bool
+            If True, return ``dates`` unchanged (treat all as missing).
+        """
         dates = np.array([int(d) for d in dates])
         return dates if overwrite else np.setdiff1d(dates , self.dates)
     
@@ -129,6 +173,15 @@ class _df_collection(ABC):
             return columns if isinstance(columns , list) else columns.tolist()
 
 class DFCollection(_df_collection):
+    """
+    Pandas-backed date-keyed DataFrame cache.
+
+    Incoming frames are stored individually in ``data_frames`` keyed by date.
+    On the first multi-date read, all buffered frames are merged into
+    ``long_frame`` (a single sorted pandas DataFrame indexed by ``date_key``)
+    and ``data_frames`` is cleared.  Subsequent single-date reads check
+    ``long_frame`` first for O(1) slice access.
+    """
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
         super().__init__(max_len , date_key)
         self.data_frames : dict[int , pd.DataFrame] = {}
@@ -163,6 +216,12 @@ class DFCollection(_df_collection):
         return df
 
     def add_long_frame(self , long_frame : pd.DataFrame):
+        """
+        Bulk-insert a pre-built long-format DataFrame into the cache.
+
+        Existing rows for dates already present in ``long_frame`` are
+        replaced; new dates are appended and the result is kept sorted.
+        """
         if long_frame.empty:
             return
         long_frame = long_frame.reset_index([i for i in long_frame.index.names if i] , drop = False).dropna(how = 'all').set_index(self.date_key)
@@ -174,6 +233,16 @@ class DFCollection(_df_collection):
         self.long_frame = self.long_frame.sort_index()
 
     def to_long_frame(self):
+        """
+        Flush the per-date ``data_frames`` dict into ``long_frame``.
+
+        Merges all buffered per-date frames with any existing ``long_frame``
+        content, sorts by the date index, and clears ``data_frames``.
+        No-op if there are no buffered frames.
+
+        Note: called automatically by ``get_multiple_days``; callers do not
+        normally need to invoke this directly.
+        """
         # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
         dates_to_do = list(self.data_frames.keys())
         if len(dates_to_do) == 0: 
@@ -186,6 +255,15 @@ class DFCollection(_df_collection):
         self.data_frames.clear()
 
 class PLDFCollection(_df_collection):
+    """
+    Polars-backed date-keyed DataFrame cache.
+
+    Each date's data is stored as an independent ``pl.DataFrame`` in
+    ``data_frames``.  Multi-date reads use ``pl.concat`` (vertical) over
+    the requested dates.  Input DataFrames are expected to be pandas
+    ``pd.DataFrame`` objects; they are converted to Polars via
+    ``pl.from_pandas`` inside ``add_one_day``.
+    """
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
         super().__init__(max_len , date_key)
         self.data_frames : dict[int , pl.DataFrame] = {}

@@ -1,12 +1,13 @@
 """Application ``Logger``: verbosity-aware stdout/stderr, log file sink, timers, and profilers."""
 from __future__ import annotations
-import re
+import inspect , re , sys
 import cProfile
 import traceback
 
 import pandas as pd
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH
@@ -31,6 +32,22 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 VB = Proj.vb
 
+ENTRY_POINT = Path(sys.argv[0]).stem
+
+def find_calling_module():
+    """Find the calling module"""
+    ignore_modules = ['inspect' , 'src.proj.log.logger']
+    stack = inspect.stack()
+    for caller_frame in stack:
+        module = inspect.getmodule(caller_frame[0])
+        if module and module.__name__ not in ignore_modules:
+            break
+    return (module.__name__ if module else "__main__").removeprefix('src.')
+
+def add_to_log_file(message : str):
+    """Add the message to the log file"""
+    LOG_FILE.write(f'{ENTRY_POINT} >> {find_calling_module()} >> {message}')
+
 def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_file : bool = False , **kwargs):
     """
     custom stdout message
@@ -43,7 +60,7 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_f
         args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
         fstr = stdout(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
     if to_log_file:
-        LOG_FILE.write(fstr.unformatted())
+        add_to_log_file(fstr.unformatted())
     return fstr
 
 def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
@@ -55,7 +72,7 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs
     with VB.WithVbLevel(vb_level):
         args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
         fstr = stderr(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
-    LOG_FILE.write(fstr.unformatted())
+    add_to_log_file(fstr.unformatted())
     return fstr
 
 def new_print_exc(e : Exception , color : str = 'lightred' , bold : bool = True) -> str:

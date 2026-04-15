@@ -1,3 +1,4 @@
+"""Tushare fetchers for static reference data: stock list, calendar, industry, dividends."""
 # do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 import pandas as pd

@@ -1,3 +1,10 @@
+"""
+Tushare API utilities: token management, rate-limiting lock, and code normalisation.
+
+The module-level ``TS`` singleton is the sole interface to the Tushare API.
+All Tushare fetchers should call ``TS.api`` for the Tushare Pro API handle and
+use ``TS.lock`` (via ``TS.locked()``) to serialise API calls.
+"""
 import threading
 import functools
 
@@ -13,6 +20,14 @@ _server_down = False
 T = TypeVar('T')
 
 class TushareUtils:
+    """
+    Singleton utility class for the Tushare Pro API.
+
+    Provides lazy-loaded API handle, thread-safe lock, and helper methods:
+    - ``updatable(last_date, freq)``  — check whether an update is due
+    - ``dates_to_update(last_date, freq)`` — list of dates needing an update
+    - ``code_to_secid(df)``           — normalise ts_code → integer secid
+    """
     """
     parameters for tushare
         token: token for tushare

@@ -1,3 +1,10 @@
+"""
+Orchestrator for crawling exchange disclosure announcements.
+
+Uses rotating proxies to fetch announcement metadata from the Shanghai and
+Shenzhen stock exchange websites.  Only active on CUDA servers
+(``MACHINE.cuda_server``); disabled on other machines.
+"""
 from typing import Literal , Any , Iterable
 
 from .fetcher import FetcherTask , EXCHANGE_URLS
@@ -8,6 +15,12 @@ from src.proj.util.proxy.caller import ProxyCallerList
 __all__ = ["AnnouncementAgent"]
 
 class AnnouncementAgent:
+    """
+    Crawl and incrementally update exchange announcement metadata.
+
+    Uses ``FetcherTask`` for per-date HTTP fetches and ``ProxyCallerList``
+    for rotating proxy management.
+    """
     START_DATE = 20160101 if MACHINE.cuda_server else 20260101
 
     @classmethod

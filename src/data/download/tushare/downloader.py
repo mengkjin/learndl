@@ -1,9 +1,20 @@
+"""
+Top-level orchestrator for all Tushare data fetchers.
+
+``TushareDataDownloader`` iterates over all registered ``TushareFetcher``
+subclasses (discovered via dynamic module import in ``TushareFetcher.load_tasks()``)
+and calls their ``update()`` or ``rollback()`` methods.
+
+``TSBackUpDataTransform.clear/update/rollback`` manages the manually-downloaded
+CSV backup data that supplements the live Tushare pipeline.
+"""
 from typing import Generator , Type
 
 from src.proj import Logger
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
 
 class TushareDataDownloader:
+    """Orchestrate incremental updates for all registered Tushare fetchers."""
     @classmethod
     def iter_fetchers(cls) -> Generator[Type[TushareFetcher] , None , None]:
         """iterate over all tushare fetchers"""

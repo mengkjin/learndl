@@ -1,3 +1,9 @@
+"""
+Utility classes for the announcement crawler: storage management and metadata I/O.
+
+Provides helpers for reading/writing per-date announcement JSON files and
+tracking which dates have already been crawled.
+"""
 from __future__ import annotations
 
 import json

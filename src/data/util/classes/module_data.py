@@ -1,3 +1,25 @@
+"""
+Multi-block data loader and cache manager for model training and prediction.
+
+``ModuleData`` orchestrates loading a set of named ``DataBlock`` objects
+(``'y'``, ``'day'``, ``'15m'``, custom factor blocks, etc.) for a given
+training or prediction session.  It handles:
+
+- Incremental extension: only missing dates are loaded from preprocessed dumps.
+- Alignment: all blocks are brought to a common (secid, date) grid.
+- Caching: fully-aligned blocks are saved to disk via ``DataCache`` and
+  reloaded on subsequent calls (only if the cache is up-to-date).
+- Normalisation: ``DataBlockNorm`` objects are loaded alongside the data.
+- Filtering: optional ``SecidFilter`` and ``DateFilter`` can restrict the
+  universe and date range during training.
+
+Helper classes
+--------------
+SecidFilter
+    Restricts the security universe (random sample, head-N, or benchmark).
+DateFilter
+    Restricts the date range via a ``'yyyyMMdd~yyyyMMdd'`` string.
+"""
 import torch
 import numpy as np
 
@@ -15,7 +37,30 @@ from .special_dataset import SpecialDataSet
 __all__ = ['ModuleData']
 
 class ModuleData:
-    '''load datas / norms / index'''
+    """
+    Orchestrator for multi-block model input data.
+
+    Parameters
+    ----------
+    data_type_list : list[str]
+        Block keys to load in addition to ``'y'`` (e.g. ``['day', '15m']``).
+    y_labels : list[str] | None
+        Sub-set of features to expose via the ``y`` property.
+    use_data : 'fit' | 'predict' | 'both'
+        Controls the date range and whether the disk cache is used.
+    factor_names : list[str] | None
+        Optional list of named factors to load via ``FactorLoader``.
+    factor_start_dt / factor_end_dt : int | None
+        Date range to apply when loading factor data.
+    filter_secid : str | None
+        SecidFilter specification string (e.g. ``'random.200'``, ``'csi300'``).
+    filter_date : str | None
+        DateFilter specification string (e.g. ``'20100101~20201231'``).
+    indent / vb_level : int
+        Verbosity / indentation for the Logger.Timer messages.
+    dtype : torch dtype
+        Dtype to cast loaded blocks to (default: ``torch.float``).
+    """
     def __init__(
         self , data_type_list : list[str] , y_labels : list[str] | None = None , use_data : Literal['fit' , 'predict' , 'both'] = 'fit' , * ,
         factor_names : list[str] | None = None , factor_start_dt : int | None = None , factor_end_dt : int | None = None , 
@@ -51,6 +96,7 @@ class ModuleData:
 
     @property
     def PrePros(self):
+        """Lazy accessor for the ``PrePros`` registry (avoids circular imports at module load)."""
         if not hasattr(self , '_prepros'):
             from src.data.preprocess import PrePros
             self._prepros = PrePros
@@ -58,56 +104,75 @@ class ModuleData:
 
     @property
     def load_keys(self):
+        """All block keys to be loaded: ``['y', *data_type_list]``."""
         return ['y' , *self.data_type_list]
 
     @property
     def x(self) -> dict[str,DataBlock]:
+        """All blocks except ``'y'`` (the feature/input blocks)."""
         return {key:value for key,value in self.blocks.items() if key != 'y'}
 
     @property
     def y(self) -> DataBlock:
+        """The label block, feature-aligned to ``y_labels``."""
         return self.blocks['y'].align_feature(self.y_labels)
 
     @property
     def empty_x(self):
+        """True if no feature blocks are loaded or all are empty."""
         return len(self.x) == 0 or all([x.empty for x in self.x.values()])
 
     @property
     def shape(self):
+        """Shape summary across x, y, secid, and date."""
         return properties.shape(self , ['x' , 'y' , 'secid' , 'date'])
 
     @property
     def secid(self):
+        """Security universe from the ``'y'`` block."""
         return self.blocks['y'].secid
 
     @property
     def date(self):
+        """Date range from the ``'y'`` block."""
         return self.blocks['y'].date
 
     @property
     def enable_cache(self):
+        """True when disk caching is active (``use_data`` is ``'fit'``/``'both'`` and cache key exists)."""
         return self.use_data in ['fit' , 'both'] and self.datacache
 
     @property
     def loaded(self):
+        """True after ``load()`` has been called successfully."""
         if not hasattr(self , '_loaded'):
             self._loaded = False
         return self._loaded
 
     @property
     def block_title(self):
+        """Human-readable summary of the block set for log messages."""
         return f'{len(self.load_keys)} DataBlocks' if len(self.load_keys) > 4 else f'DataBlock [{",".join(self.load_keys)}]'
 
     def __bool__(self):
+        """True when at least one non-empty feature block is loaded."""
         return not self.empty_x
 
     def copy(self):
+        """Return a deep copy of this ModuleData instance."""
         return deepcopy(self)
 
     def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
+        """Return the loaded date array sliced to [start, end] with optional stride."""
         return CALENDAR.slice(self.date , start , end)[::interval]
 
     def target_start_end(self):
+        """
+        Compute the (start, end) date range to load data for.
+
+        - ``'predict'`` mode: loads the last 366 calendar days up to today.
+        - ``'fit'`` mode: loads from 20070101 up to the last available ``'y'`` dump date.
+        """
         start = CALENDAR.td(CALENDAR.updated() , -366).td if self.use_data == 'predict' else 20070101
         end = DataBlock.last_data_date('y' , 'fit') if self.use_data == 'fit' else CALENDAR.updated()
         end = end or CALENDAR.updated()
@@ -139,6 +204,13 @@ class ModuleData:
             Logger.success(f'Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}' , vb_level = self.vb_level + 2)
 
     def extend_blocks(self):
+        """
+        Extend all blocks with missing dates from preprocessed dumps.
+
+        Iterates over ``load_keys`` (``'y'`` first, then X blocks).
+        The ``'y'`` block drives the secid and date grids that all X blocks
+        are aligned to in the subsequent ``align_blocks()`` call.
+        """
         start , end = self.date_filter.filter_start_end(*self.target_start_end())
         date = CALENDAR.range(start , end)
         secid = None
@@ -156,6 +228,7 @@ class ModuleData:
         return self
 
     def align_blocks(self):
+        """Align all loaded blocks to a common (secid, date) grid via ``DataBlock.blocks_align``."""
         if len(self.blocks) <= 1:
             return self
         with Logger.Timer(f'Align {self.block_title}' , indent = self.indent , vb_level = self.vb_level + 1):
@@ -166,6 +239,13 @@ class ModuleData:
         return self
 
     def load_one(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        """
+        Load a single block for the given key and date array.
+
+        Dispatches to ``load_preprocess_block`` for registered preprocessors
+        or ``load_special_block`` for special dataset candidates.
+        Returns an empty ``DataBlock`` when ``dates`` is empty.
+        """
         if len(dates) == 0:
             return DataBlock()
         if key in self.PrePros.keys():
@@ -176,15 +256,18 @@ class ModuleData:
             raise ValueError(f'key [{key}] is not supported')
 
     def load_preprocess_block(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        """Load a block via the registered ``PreProcessor`` for ``key``."""
         type = 'predict' if self.use_data == 'predict' else 'fit'
         block = self.PrePros.get_processor(key , type = type).load(dates = dates , secid = secid, indent = self.indent + 1 , vb_level = self.vb_level + 2)
         return block
 
     def load_special_block(self , key : str , * , dates : np.ndarray , secid : np.ndarray | None = None , **kwargs):
+        """Load a block via ``SpecialDataSet`` for non-standard dataset keys."""
         block = SpecialDataSet.load(key, dates = dates , secid = secid, dtype = self.dtype , vb_level = self.vb_level + 2)
         return block
 
     def load_norms(self):
+        """Load ``DataBlockNorm`` objects for all X block types from disk (no-op if already loaded)."""
         if self.norms:
             return
         self.norms.update(DataBlock.load_preprocess_norms(self.data_type_list , dtype = self.dtype))
@@ -202,6 +285,12 @@ class ModuleData:
         return self
 
     def save_cache(self):
+        """
+        Persist aligned blocks and norms to ``DataCache`` if the valid date range has grown.
+
+        Only saves when ``enable_cache_save`` is True (no secid/date filter active)
+        and the new valid date range is wider than what was previously cached.
+        """
         if not self.enable_cache_save:
             return
         valid_end   = min(block.last_valid_date for block in self.blocks.values())
@@ -216,10 +305,12 @@ class ModuleData:
             Logger.success(f'Saved DataBlocks to cache {self.datacache.key}' , vb_level = self.vb_level + 2)
 
     @staticmethod
-    def abbr(data_type : str): 
+    def abbr(data_type : str):
+        """Normalise a data-type key via ``data_type_abbr``."""
         return data_type_abbr(data_type)
 
     def filter_dates(self , start : int | None = None , end : int | None = None , inplace = False):
+        """Restrict all blocks to dates in [start, end]; returns self (optionally a copy)."""
         if start is None and end is None:
             return self
         if not inplace:
@@ -230,6 +321,18 @@ class ModuleData:
         return self
 
     def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
+        """
+        Keep (or exclude) specific secids from all blocks.
+
+        Parameters
+        ----------
+        secid : array-like | None
+            secids to keep or exclude.
+        exclude : bool
+            If True, remove the listed secids instead of keeping them.
+        inplace : bool
+            Modify in-place; otherwise return a copy.
+        """
         if secid is None:
             return self
         if not inplace:
@@ -241,6 +344,20 @@ class ModuleData:
         return self
 
 class SecidFilter:
+    """
+    Callable filter that subsets a security universe array.
+
+    Supported ``value`` strings
+    ---------------------------
+    None
+        No filtering; pass-through.
+    ``'random.N'``
+        Draw N secids uniformly at random.
+    ``'first.N'``
+        Keep the first N secids (deterministic, by ascending secid order).
+    ``'csi300'`` / ``'csi500'`` / ``'csi1000'``
+        Return the benchmark constituent list as of a fixed reference date (20200104).
+    """
     def __init__(self , value : str | None):
         if value is None:
             self.filter = self.none
@@ -256,9 +373,11 @@ class SecidFilter:
                 raise ValueError(f'input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000')
         
     def __call__(self , secid : np.ndarray) -> np.ndarray:
+        """Apply the configured filter to ``secid`` and return the filtered array."""
         return self.filter(secid)
 
     def filter_blocks(self , blocks : dict[str,DataBlock]) -> dict[str,DataBlock]:
+        """Apply the filter to all blocks in the dict (aligns secid axis of each block)."""
         if not blocks:
             return blocks
         secid = self.filter(blocks['y'].secid)
@@ -268,18 +387,22 @@ class SecidFilter:
 
     @staticmethod
     def none(secid : np.ndarray) -> np.ndarray:
+        """Pass-through filter; returns ``secid`` unchanged."""
         return secid
 
     @staticmethod
     def random(secid : np.ndarray , num : int) -> np.ndarray:
+        """Return a random sample of ``num`` secids without replacement."""
         return np.random.choice(secid , num , replace = False)
 
     @staticmethod
     def first(secid : np.ndarray , num : int) -> np.ndarray:
+        """Return the first ``num`` secids in the input array."""
         return secid[:num]
 
     @classmethod
     def Benchmark(cls):
+        """Lazy accessor for the ``Benchmark`` class (avoids circular import)."""
         if not hasattr(cls , '_benchmark'):
             from src.res.factor.util.classes.benchmark import Benchmark
             cls._benchmark = Benchmark
@@ -287,9 +410,17 @@ class SecidFilter:
 
     @classmethod
     def benchmark(cls , secid : np.ndarray , bm : str , date : int = 20200104) -> np.ndarray:
+        """Return the constituent secids of benchmark ``bm`` as of ``date``."""
         return cls.Benchmark()(bm).get(date,True).secid
 
 class DateFilter:
+    """
+    Callable filter that subsets a date array.
+
+    Parses a ``'yyyyMMdd~yyyyMMdd'`` specification string and uses
+    ``CALENDAR.slice`` to restrict dates to the given range.
+    Pass ``None`` for no filtering.
+    """
     def __init__(self , value : str | None):
         if value is None:
             self.filter = self.none
@@ -303,9 +434,11 @@ class DateFilter:
 
         
     def __call__(self , date : np.ndarray) -> np.ndarray:
+        """Apply the date filter to ``date`` and return the filtered array."""
         return self.filter(date)
 
     def filter_blocks(self , blocks : dict[str,DataBlock]) -> dict[str,DataBlock]:
+        """Apply the date filter to all blocks' date axis."""
         if not blocks:
             return blocks
         date = self.filter(blocks['y'].date)
@@ -314,6 +447,13 @@ class DateFilter:
         return blocks
 
     def filter_start_end(self , start : int , end : int) -> tuple[int , int]:
+        """
+        Return the filtered (start, end) date endpoints.
+
+        Applies ``self.filter`` to the full date range ``[start, end]`` and
+        returns ``(first_date, last_date)`` after filtering.  Returns
+        ``(99991231, 20070101)`` if no dates remain (empty range).
+        """
         dates = self(CALENDAR.range(start , end))
         if len(dates) == 0:
             return 99991231 , 20070101
@@ -321,8 +461,10 @@ class DateFilter:
 
     @staticmethod
     def none(date : np.ndarray) -> np.ndarray:
+        """Pass-through filter; returns ``date`` unchanged."""
         return date
 
     @staticmethod
     def slice(date : np.ndarray , start : int | None = None , end : int | None = None) -> np.ndarray:
+        """Return ``date`` restricted to ``[start, end]`` via ``CALENDAR.slice``."""
         return CALENDAR.slice(date , start , end)

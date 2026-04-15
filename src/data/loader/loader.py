@@ -1,3 +1,18 @@
+"""
+High-level DataBlock and DataFrame loaders that bridge the database layer with
+the DataBlock / factor pipeline.
+
+Classes
+-------
+BlockLoader
+    Loads one or multiple DB keys from a single ``db_src`` into a merged ``DataBlock``.
+FrameLoader
+    Loads a single DB key as a raw ``pd.DataFrame``.
+FactorLoader
+    Loads named factors via ``FactorCalculator`` and builds a ``DataBlock``.
+FactorCategory1Loader
+    Loads all factors in a given ``category1`` group via ``FactorCalculator``.
+"""
 import pandas as pd
 
 from dataclasses import dataclass
@@ -26,10 +41,11 @@ class BlockLoader:
 
     @property
     def src_path(self):
+        """Filesystem path to the ``db_src`` database directory."""
         return DB.DBPath.Parent(self.db_src)
 
     def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
-        """Load block data , alias for load"""
+        """Load all configured DB keys and merge them into a single DataBlock."""
         sub_blocks = []
         vb_level = Proj.vb(vb_level)
         with Logger.Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level , enter_vb_level=vb_level+1):
@@ -42,6 +58,7 @@ class BlockLoader:
         return block
 
     def iter_keys(self) -> list[str]:
+        """Return the list of DB keys to iterate over during loading."""
         if self.db_key is None:
             return []
         elif isinstance(self.db_key , list):

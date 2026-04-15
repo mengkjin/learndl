@@ -1,3 +1,4 @@
+"""Tushare fetchers for minute-bar data: 1-minute and 5-minute intraday bars."""
 # do not use relative import in this file because it will be running in top-level directory
 import tushare as ts
 

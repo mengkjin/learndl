@@ -8,7 +8,7 @@ Covers data ingestion, factor engineering, NN/boost/GP models, and portfolio tra
 | Layer | Source Path | Entry API |
 |-------|-------------|-----------|
 | Infrastructure | `src/proj/`, `src/func/` | `MACHINE`, `PATH`, `CALENDAR`, `DataAPI` |
-| Data Pipeline | `src/data/` | `DataAPI`, `DateDataAccess` singletons |
+| Data Pipeline | `src/data/` | `DATAVENDOR` (facade), `DateDataAccess` singletons, `ModuleData` (model inputs) |
 | Factor Engine | `src/factor/` | `FactorAPI`, `FactorCalculator` |
 | NN Models | `src/res/algo/nn/` | `ModelAPI` |
 | Boost Models | `src/res/algo/boost/` | `ModelAPI` (same interface) |
@@ -25,4 +25,3 @@ When answering questions or writing code for this project, read the relevant doc
 2. **Use the API layer** — `DataAPI`, `FactorAPI`, `ModelAPI`, `TradingAPI` are the stable interfaces; don't reach into internals directly
 3. **Config-driven** — model architectures, factor params, portfolio specs all live in `configs/`; don't hardcode hyperparameters in code
 4. **Numbered scripts** — pipeline scripts in `scripts/` are numbered (e.g. `1_data/`, `2_factor/`, `3_train/`); run in order
-5. **4D DataBlock** — core data container is `(N_secid × N_date × N_inday × N_feature)`; understand this before writing data-manipulation code

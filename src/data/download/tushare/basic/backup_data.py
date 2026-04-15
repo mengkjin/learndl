@@ -1,3 +1,14 @@
+"""
+Tushare CSV backup data transformer.
+
+Converts manually downloaded CSV backup files (adj_factor, daily, daily_basic,
+moneyflow, stk_limit) into the same per-date database format used by the live
+Tushare pipeline.
+
+This is a fallback path for periods when the live Tushare API was unavailable.
+Backup CSVs must be placed in ``PATH.backup/tushare/data/`` following the naming
+convention ``{key}_{Dates(date)}.csv``.
+"""
 import pandas as pd
 import numpy as np
 
@@ -8,7 +19,12 @@ path_bak_data   = PATH.backup.joinpath('tushare' , 'data')
 path_bak_record = PATH.backup.joinpath('tushare' , 'record')
 
 class TSBackUpDataTransform():
-    """use csv backup data downloaded from tushare to transform to database"""
+    """
+    Transformer that reads backup CSVs and writes them to the live database format.
+
+    Required backup CSV keys: ``adj_factor``, ``daily``, ``daily_basic``,
+    ``moneyflow``, ``stk_limit``.
+    """
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
     DB_KEYS = ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']
 

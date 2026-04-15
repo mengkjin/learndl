@@ -1,3 +1,11 @@
+"""
+HTTP fetch tasks for exchange disclosure announcements.
+
+Defines ``FetcherTask`` (abstract base) and concrete subclasses for the
+Shanghai (SSE) and Shenzhen (SZSE) stock exchanges.  Each task builds the
+HTTP request URL and parses the response JSON into a list of announcement
+metadata records.
+"""
 from __future__ import annotations
 
 import random

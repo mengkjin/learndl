@@ -1,3 +1,12 @@
+"""
+Forward return label updater for model training.
+
+Computes 5/10/20-day raw return (``rtn_lag0/1_N``) and risk-model residual return
+(``res_lag0/1_N``) labels.  Labels with ``lag1=True`` include a 1-day lag to
+avoid execution-day look-ahead bias.
+
+Stored in the ``labels_ts`` database under keys like ``ret5``, ``ret10_lag``, etc.
+"""
 import pandas as pd
 
 import numpy as np
@@ -9,6 +18,12 @@ from src.data.loader import TRADE , RISK
 from src.data.update.custom.basic import BasicCustomUpdater
 
 class ClassicLabelsUpdater(BasicCustomUpdater):
+    """
+    Registered updater for forward return labels.
+
+    Computes labels for all combinations of ``DAYS × LAGS`` and stores them
+    incrementally in ``labels_ts``.
+    """
     START_DATE = 20050101
     DB_SRC = 'labels_ts'
 
@@ -17,6 +32,7 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        """Iterate over all (days, lag) combinations and update any missing dates."""
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all classic labels is not supported yet for {cls.__name__}')
@@ -44,9 +60,30 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_one(cls , date : int , days : int , lag1 : bool , label_name : str , indent : int = 2 , vb_level : Any = 2):
+        """Compute and save labels for a single ``date``."""
         DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , indent = indent , vb_level = vb_level)
 
 def calc_classic_labels(date : int , days : int , lag1 : bool) -> pd.DataFrame | None:
+    """
+    Compute forward return labels for a single date.
+
+    Parameters
+    ----------
+    date : int
+        The label date (yyyyMMdd).  The forward return period starts from
+        ``date + lag1`` trading days and ends at ``date + lag1 + days``.
+    days : int
+        Holding period in trading days (5, 10, or 20).
+    lag1 : bool
+        If True, adds a 1-day lag between the label date and the start of the
+        return period (avoids execution-day look-ahead).
+
+    Returns
+    -------
+    pd.DataFrame | None
+        DataFrame with columns ``secid``, ``rtn_lag{lag1}_{days}``,
+        ``res_lag{lag1}_{days}``.  Returns None if data is unavailable.
+    """
     d0 = CALENDAR.td(date) + lag1
     d1 = CALENDAR.td(d0 , days)
 

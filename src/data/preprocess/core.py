@@ -1,3 +1,17 @@
+"""
+Preprocessing pipeline base classes for the data pipeline.
+
+``PreProcessor`` subclasses (named ``PrePro_<key>``) are auto-registered in
+``PreProcessorMeta.registry`` via the metaclass.  Each subclass transforms raw
+database blocks into a normalised ``DataBlock`` for model training or prediction.
+
+Hierarchy
+---------
+PreProcessor               — abstract base; handles incremental extension/caching
+  FactorPreProcessor       — delegates to FactorCategory1Loader (auto factor loading)
+  TradePreProcessor        — OHLCV-specific; sets final_feat to TRADE_FEAT
+  MicellaneousPreProcessor — fully custom; overrides pre_process entirely
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -13,8 +27,19 @@ from src.data.loader import BlockLoader , FactorCategory1Loader
 TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
 
 class PreProcessorMeta(ABCMeta):
+    """
+    Metaclass for ``PreProcessor`` that auto-registers concrete subclasses.
+
+    A class is registered when:
+    - It has no abstract methods remaining (it is concrete).
+    - Its name starts with ``'PrePro_'``.
+
+    The registration key is derived from the class name by stripping the
+    ``'PrePro_'`` prefix and lowercasing (via ``PreProcessorProperty('key')``).
+    """
     registry : dict[str,Type['PreProcessor'] | Any] = {}
     def __new__(cls , name , bases , dct):
+        """Create the class and register it if it satisfies the PrePro_ conditions."""
         new_cls = super().__new__(cls , name , bases , dct)
         abstract_methods = getattr(new_cls , '__abstractmethods__' , None)
         if not abstract_methods and name.startswith('PrePro_'):
@@ -23,34 +48,72 @@ class PreProcessorMeta(ABCMeta):
         return new_cls
 
 class PreProcessorProperty:
+    """
+    Read-only class-level descriptor that computes and caches a derived property
+    for each ``PreProcessor`` subclass.
+
+    Used to lazily derive ``key``, ``category0``, and ``category1`` from the
+    class name or CONST config, caching the result per owner class so that
+    repeated accesses are O(1).
+    """
     def __init__(self , method : str):
+        """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
         assert method in dir(self) , f'{method} is not in {dir(self)}'
         self.method = method
         self.cache_values = {}
 
-    def __get__(self,instance,owner) -> str:
+    def __get__(self , instance , owner) -> str:
+        """Return the cached value, computing it on first access per owner class."""
         if owner not in self.cache_values:
             self.cache_values[owner] = getattr(self , self.method)(owner)
         return self.cache_values[owner]
 
-    def __set__(self,instance,value):
+    def __set__(self , instance , value):
+        """Prevent assignment — these properties are read-only."""
         raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
 
     def key(self , owner) -> str:
+        """Derive the registration key: strip ``'PrePro_'`` prefix and lowercase."""
         s = str(owner.__qualname__)
         if not s.startswith('PrePro_'):
             return s
         return s.removeprefix('PrePro_').lower()
 
     def category0(self , owner) -> str:
+        """Look up the category0 for a FactorPreProcessor via CONST config."""
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
         return CONST.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def category1(self , owner) -> str:
+        """Derive category1 by stripping ``'PrePro_'`` prefix from the class name."""
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
         return str(owner.__qualname__).removeprefix('PrePro_').lower()
 
 class PreProcessor(metaclass=PreProcessorMeta):
+    """
+    Abstract base class for all data preprocessors.
+
+    Subclasses must implement:
+    - ``process(blocks)``         — transforms raw DataBlocks into the output DataBlock.
+    - ``block_loaders()``         — returns a dict of ``BlockLoader`` instances.
+    - ``final_feat()``            — returns the feature list to retain (or None to keep all).
+
+    Concrete subclasses named ``PrePro_<key>`` are auto-registered at class creation.
+
+    Class Attributes
+    ----------------
+    EXTENSION_OVERLAY : int
+        Number of trading days to overlap when extending an existing dump to prevent
+        edge-discontinuities from rolling-window calculations.
+    CALCULATION_WINDOW : int
+        Extra trading days to load *before* the requested start date so that
+        rolling calculations have sufficient history.
+    predict_start : int
+        Offset from today (in trading days, negative) used as the start date in
+        ``'predict'`` mode.
+    fit_start / hist_start / hist_end : int
+        Date range used for ``'fit'`` mode and historical normalisation.
+    """
     EXTENSION_OVERLAY  : int = 10
     CALCULATION_WINDOW : int = 1  # can be set slightly larger than the calculation window of the factor
     key = PreProcessorProperty('key')
@@ -61,24 +124,34 @@ class PreProcessor(metaclass=PreProcessorMeta):
     hist_end      = 20161231
 
     def __init__(self , type : Literal['fit' , 'predict'] = 'fit' , * , mask : dict[str,Any] | None = None , **kwargs):
-        
-        
+        """
+        Parameters
+        ----------
+        type : 'fit' | 'predict'
+            Controls the start date and whether dump saving is allowed.
+        mask : dict | None
+            Masking rules forwarded to ``DataBlock.mask_values``.
+            Defaults to ``{'list_dt': 91}`` (blank first 91 days post-IPO).
+        """
         self.type : Literal['fit' , 'predict'] = type
         self.mask = mask or {'list_dt': 91}
         self.load_start = self.start_date(type)
         self.load_end   = CALENDAR.updated()
 
     def __repr__(self):
+        """Return the class name as the string representation."""
         return f'{self.__class__.__name__}'
 
     @property
     def enable_saving(self) -> bool:
+        """Whether this instance is allowed to write dump/norm files to disk."""
         if not hasattr(self , '_enable_dump_save'):
             self._enable_dump_save = True
         return self._enable_dump_save
 
     @enable_saving.setter
     def enable_saving(self , value : bool):
+        """Disable dump saving (set automatically when loading for a query rather than a full update)."""
         self._enable_dump_save = value
 
     @abstractmethod
@@ -90,9 +163,16 @@ class PreProcessor(metaclass=PreProcessorMeta):
 
     @classmethod
     def start_date(cls , type : Literal['fit' , 'predict'] = 'predict') -> int:
+        """Return the absolute start date (yyyyMMdd int) for the given ``type``."""
         return CALENDAR.td(CALENDAR.updated() , cls.predict_start).td if type == 'predict' else cls.fit_start
-        
+
     def load_blocks(self , start = None , end = None , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 1 , **kwargs):
+        """
+        Load raw DataBlocks from all registered ``block_loaders``.
+
+        Aligns each block to (secid, date) before returning.  The secid from the
+        first block is used to constrain all subsequent blocks.
+        """
         loaders = self.block_loaders()
         
         blocks : dict[str,DataBlock] = {}
@@ -105,6 +185,11 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return blocks
     
     def process_blocks(self, blocks : dict[str,DataBlock]):
+        """
+        Call ``process(blocks)`` with numpy error suppression and apply final feature alignment.
+
+        Returns an empty DataBlock if any input block is empty.
+        """
         if any([block.empty for block in blocks.values()]):
             return DataBlock()
         np.seterr(invalid = 'ignore' , divide = 'ignore')
@@ -114,6 +199,12 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return data_block
 
     def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+        """
+        Load raw blocks, apply the transformation, slice to [start, end], and apply masking.
+
+        This is the core compute path.  Called by ``load_with_extension`` for each
+        missing date span.  Does not touch the disk.
+        """
         if start is None:
             start = self.fit_start if self.type == 'fit' else self.predict_start
         if end is None:
@@ -135,9 +226,11 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return block
 
     def load(self , dates : np.ndarray | list[int], * , secid : np.ndarray | None = None , indent : int = 0 , vb_level : Any = 'max') -> DataBlock:
+        """Load data for the given dates, disabling dump saving (query mode)."""
         return self.load_with_extension(dates_for_query = dates , secid = secid, indent = indent , vb_level = vb_level + 1)
 
     def load_dump(self , indent : int = 0 , vb_level : Any = 'max'):
+        """Load the preprocessed dump from disk; returns empty DataBlock if not found."""
         if not self.dump_exists():
             return DataBlock()
         with Logger.Timer(f'[{self.key}] dumped loading' , indent = indent , vb_level = vb_level):
@@ -145,15 +238,18 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return block
 
     def save_dump(self , block : DataBlock , indent : int = 0 , vb_level : Any = 'max'):
+        """Save the block as a preprocessed dump if ``enable_saving`` is True."""
         if not self.enable_saving:
             return
         with Logger.Timer(f'[{self.key}] blocks dumping' , indent = indent , vb_level = vb_level):
             block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
 
     def dump_exists(self) -> bool:
+        """Return True if a preprocessed dump file already exists on disk."""
         return DataBlock.path_preprocess(self.key , self.type).exists()
 
     def save_norm(self , block : DataBlock , indent : int = 0 , vb_level : Any = 'max'):
+        """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.type != 'fit' or not self.enable_saving:
             return
         with Logger.Timer(f'[{self.key}] blocks norming' , indent = indent , vb_level = vb_level):
@@ -206,6 +302,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return block
 
     def should_be_skipped(self , force_update : bool = False , indent : int = 1 , vb_level : Any = 2):
+        """Return True if the dump was already updated today and ``force_update`` is False."""
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
@@ -214,6 +311,13 @@ class PreProcessor(metaclass=PreProcessorMeta):
         return False
 
     def update(self , force_update : bool = False , indent : int = 1 , vb_level : Any = 2):
+        """
+        Run the full incremental update: extend dump, save dump, save norms.
+
+        Skips if the dump was already updated today (unless ``force_update=True``).
+        Calls ``load_with_extension(dates_for_query=None)`` which triggers a full
+        date-range update from ``load_start`` to ``load_end``.
+        """
         vb_level = Proj.vb(vb_level)
         if self.should_be_skipped(force_update , indent + 1 , vb_level + 1):
             return
@@ -231,16 +335,38 @@ class PreProcessor(metaclass=PreProcessorMeta):
                         indent = indent + 1 , vb_level = vb_level + 1)
     
 class FactorPreProcessor(PreProcessor):
-    category0 = PreProcessorProperty('category0')
-    category1 = PreProcessorProperty('category1')    
+    """
+    Preprocessor that delegates entirely to ``FactorCategory1Loader``.
 
-    def block_loaders(self) -> dict[str,BlockLoader]: 
+    Subclasses only need to be named ``PrePro_<category1>``; the category1 is
+    derived automatically from the class name.  No ``process`` or ``block_loaders``
+    implementation is required.
+    """
+    category0 = PreProcessorProperty('category0')
+    category1 = PreProcessorProperty('category1')
+
+    def block_loaders(self) -> dict[str,BlockLoader]:
+        """Return a loader for all factors in ``category1`` using normalised values."""
         return {'factor' : FactorCategory1Loader(self.category1 , normalize = True , fill_method = 'drop' , notice_empty = False)}
-    def final_feat(self): return None
-    def process(self , blocks): return blocks['factor']
+
+    def final_feat(self):
+        """No feature filtering — return all factors from the loader."""
+        return None
+
+    def process(self , blocks):
+        """Pass the factor block through unchanged."""
+        return blocks['factor']
 
 class TradePreProcessor(PreProcessor):
-    def final_feat(self): return TRADE_FEAT
+    """
+    Preprocessor for daily OHLCV data.
+
+    Restricts output features to ``TRADE_FEAT`` (open/close/high/low/vwap/turn_fl).
+    Subclasses must implement ``process`` and ``block_loaders``.
+    """
+    def final_feat(self):
+        """Return the standard OHLCV feature list."""
+        return TRADE_FEAT
 
 class MicellaneousPreProcessor(PreProcessor):
     """

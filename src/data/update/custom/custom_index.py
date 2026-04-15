@@ -1,3 +1,14 @@
+"""
+Custom benchmark index framework and updater.
+
+Provides an abstract ``CustomIndex`` base class for building custom equal- or
+cap-weighted portfolio benchmarks, plus a ``CustomIndexUpdater`` that incrementally
+computes and stores daily portfolio weights.
+
+Currently registered indices
+----------------------------
+- ``MicroCap_400``: equal-weight portfolio of the 400 smallest non-ST A-share stocks.
+"""
 import pandas as pd
 import numpy as np
 
@@ -11,6 +22,7 @@ START_DATE = 20100101
 DB_SRC = 'index_daily_custom'
 
 class CustomIndexMeta(ABCMeta):
+    """Metaclass that auto-registers concrete ``CustomIndex`` subclasses."""
     registry : dict[str , Type['CustomIndex'] | Any] = {}
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
@@ -21,17 +33,31 @@ class CustomIndexMeta(ABCMeta):
         return new_cls
 
 class CustomIndexName:
+    """Descriptor that returns the lowercased class name as the index identifier."""
     def __get__(self , instance , owner):
+        """Return ``owner.__name__.lower()`` as the index name."""
         return owner.__name__.lower()
 
 class CustomIndexPortClass:
+    """Descriptor that lazily imports and caches the ``Port`` class."""
     def __get__(self , instance , owner):
+        """Return the ``Port`` class (lazy import to avoid circular dependencies)."""
         if not hasattr(self , '_Port'):
             from src.res.factor.util.classes.port import Port
             self._Port = Port
         return self._Port
 
 class CustomIndex(metaclass=CustomIndexMeta):
+    """
+    Abstract base class for custom benchmark indices.
+
+    Subclasses must implement:
+    - ``rebalance_dates()`` → array of rebalance dates
+    - ``rebalance_portfolio(date)`` → DataFrame of weights at ``date``
+
+    ``index_portfolio(date)`` lazily evolves the portfolio forward from the most
+    recent rebalance date, using price returns via ``Port.evolve_to_date``.
+    """
     START_DATE : int = START_DATE
     index_name = CustomIndexName()
     PortClass = CustomIndexPortClass()
@@ -46,16 +72,19 @@ class CustomIndex(metaclass=CustomIndexMeta):
 
     @property
     def reb_dates(self) -> np.ndarray:
+        """Cached rebalance date array (computed on first access)."""
         if not hasattr(self , '_reb_dates'):
             self._reb_dates = self.rebalance_dates()
         return self._reb_dates
 
     @property
     def target_path(self):
+        """Filesystem path for this index's daily weight storage."""
         return DB.path(DB_SRC , self.index_name)
 
     @property
     def current_portfolio(self):
+        """The most recently evolved portfolio object, or None if not yet computed."""
         if not hasattr(self , '_current_portfolio'):
             return None
         else:

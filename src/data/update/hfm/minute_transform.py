@@ -1,3 +1,13 @@
+"""
+JinMeng minute-bar zip extraction and transformation pipeline.
+
+Reads raw equity minute-bar zip archives produced by the JinMeng terminal,
+classifies securities by type (A/B/ETF/bond/convertible/fund/index), and
+incrementally updates the ``trade_ts/min`` (equity + ETF) and
+``trade_ts/cb_min`` (convertible bond) databases.
+
+Futures minute bars (from ``JSFutMinute/``) are handled separately.
+"""
 import zipfile
 import numpy as np
 import pandas as pd
@@ -11,6 +21,13 @@ sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')
 
 def get_js_min(date : int):
+    """
+    Extract and normalise the minute-bar DataFrame from the JinMeng zip archive for ``date``.
+
+    Renames columns to the standard schema (secid, minute, open, high, low, close,
+    amount, volume, vwap) and converts the ``secoffset`` (seconds since midnight) to
+    a 0-based minute bar index (0 = first bar).
+    """
     renamer = {
         'ticker'    : 'secid'  ,
         'secoffset' : 'minute' ,

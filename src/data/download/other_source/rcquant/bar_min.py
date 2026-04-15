@@ -1,3 +1,13 @@
+"""
+RiceQuant (rqdatac) minute-bar downloader.
+
+Downloads 1-minute OHLCV bars for equities (CS), ETFs, futures, and convertible
+bonds via the ``rqdatac`` Python API.  Handles quota errors with retry logic.
+
+Start date behaviour:
+- Equity bars: enabled from 2024-11-01 on non-HFM machines; disabled on HFM machines.
+- ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
+"""
 import rqdatac , re
 import pandas as pd
 import numpy as np

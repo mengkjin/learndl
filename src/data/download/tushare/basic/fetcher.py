@@ -1,3 +1,25 @@
+"""
+Tushare data fetcher base classes and paginated iterator.
+
+``TushareFetcher`` is the abstract base for all concrete data fetcher classes.
+Subclasses set ``DB_TYPE``, ``DB_SRC``, ``DB_KEY``, and ``UPDATE_FREQ`` and
+implement ``get_data(date)``; they are auto-registered by ``TushareFetcherMeta``.
+
+``TushareIterateFetcher`` handles paginated API calls with breakpoint/resume
+support: partial results are saved as ``.feather`` files so that interrupted
+fetches can be resumed rather than restarted.
+
+Concrete fetcher base classes
+------------------------------
+``InfoFetcher``        — static info tables (no date dimension)
+``TimeSeriesFetcher``  — date-series tables (one row per date)
+``TradeDataFetcher``   — daily market data
+``DayFetcher``         — per-date incremental updates
+``WeekFetcher``        — weekly updates
+``MonthFetcher``       — monthly updates
+``FinaFetcher``        — financial statement tables
+``RollingFetcher``     — range-fetch with per-date splitting
+"""
 import time
 import numpy as np
 import pandas as pd
@@ -42,12 +64,37 @@ class TushareFetcherMeta(ABCMeta):
         return new_cls
 
 class TushareIterateFetcher:
+    """
+    Paginated Tushare API fetcher with breakpoint/resume support.
+
+    Fetches pages of ``limit`` rows at a time, accumulating results into
+    ``.feather`` files.  On the next invocation the breakpoint metadata is
+    checked: if the saved data is not older than ``survival_time`` hours,
+    the offset picks up where it left off rather than re-fetching from page 1.
+
+    Typical use: pass as a helper inside a ``TushareFetcher.get_data(date)``
+    implementation to handle large paginated tables (e.g. analyst reports).
+    """
     base_path : Path = PATH.temp.joinpath('tushare_fetcher_breakpoint')
     base_path.mkdir(parents=True, exist_ok=True)
     survival_time : int = 4 # in hours
 
-    def __init__(self , fetcher_name : str , tushare_api : Callable[..., T] , limit : int = 2000 , * , 
+    def __init__(self , fetcher_name : str , tushare_api : Callable[..., T] , limit : int = 2000 , * ,
                  max_fetch_times : int = -1 , breakpoint : bool = True , **kwargs):
+        """
+        Parameters
+        ----------
+        fetcher_name : str
+            Used to namespace the breakpoint directory.
+        tushare_api : Callable
+            The Tushare API function to call (e.g. ``TS.api.stk_holdertrade``).
+        limit : int
+            Page size for each paginated API call.
+        max_fetch_times : int
+            Cap on the total number of pages (``-1`` = unlimited).
+        breakpoint : bool
+            Enable breakpoint/resume (default True).
+        """
         self.fetcher_name = fetcher_name
         self.tushare_api = tushare_api
 

@@ -1,6 +1,16 @@
+"""
+BaoStock 5-minute bar downloader.
+
+Downloads intraday 5-minute OHLCV bars from the ``baostock`` Python API for
+Chinese A-share equities.  Also derives 10/15/30/60-minute bars by resampling
+the 5-minute source.
+
+Note: ``START_DATE = 20401231`` is a far-future sentinel that effectively
+disables this source on most machines.  Override to activate.
+"""
 import baostock as bs
 import numpy as np
-import pandas as pd  
+import pandas as pd
 
 from typing import Any , Literal
 

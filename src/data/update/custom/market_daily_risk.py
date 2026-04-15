@@ -1,3 +1,13 @@
+"""
+Market-level aggregation of daily microstructure risk features.
+
+Aggregates the same 8 risk features from ``daily_risk.py`` across all stocks
+using float market cap weights (``circ_mv``), producing a single market-level
+time series stored as a long-form CSV in ``market_daily/risk``.
+
+Unlike ``DailyRiskUpdater``, results are appended to a single CSV file rather
+than stored per date, using ``append_result`` to merge and deduplicate.
+"""
 import pandas as pd
 import numpy as np
 
@@ -7,12 +17,14 @@ from src.proj import Logger , CALENDAR , DB , Dates , Proj
 from src.data.update.custom.basic import BasicCustomUpdater
 
 class MarketDailyRiskUpdater(BasicCustomUpdater):
+    """Registered updater for cap-weighted market-level daily risk features."""
     START_DATE = max(20100101 , DB.min_date('trade_ts' , '5min' , use_alt=True))
     DB_SRC = 'market_daily'
     DB_KEY = 'risk'
     
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+        """Update market-level risk features for all missing dates and append to the CSV."""
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
@@ -45,10 +57,16 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
 
     @classmethod
     def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
+        """Compute and append market risk features for a single ``date``."""
         cls.append_result(calc_market_daily_risk(date) , indent = indent , vb_level = vb_level)
 
     @classmethod
     def append_result(cls , new_df : pd.DataFrame , indent : int = 1 , vb_level : Any = 1):
+        """
+        Merge ``new_df`` with the existing CSV, deduplicate by date, and overwrite.
+
+        Keeps the ``last`` value when duplicate dates exist (allows reprocessing).
+        """
         old_df = DB.load(cls.DB_SRC , cls.DB_KEY)
         df = pd.concat([old_df , new_df])
         if not df.empty:

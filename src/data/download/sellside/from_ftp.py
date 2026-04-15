@@ -1,3 +1,10 @@
+"""
+Sell-side FTP downloader for file-transfer-based data delivery.
+
+Note: ``SellsideFTPDownloader.update()`` is currently a no-op (dead code after
+an early ``return`` statement).  The FTP infrastructure is in place but the
+actual update logic is not yet implemented.  See TODO_data.md item C1.
+"""
 import os , tempfile
 import pandas as pd
 
@@ -7,6 +14,13 @@ from typing import Any
 from src.proj import Logger , MACHINE
 
 class SellsideFTPDownloader(object):
+    """
+    FTP client for downloading sell-side data delivered via file transfer.
+
+    Connects to the FTP server using credentials from ``MACHINE.secret``.
+    Provides ``dir()``, ``download_file()``, and ``open_file()`` for listing
+    and downloading remote CSV files.
+    """
     def __init__(self, source='msjg'):
         assert source in MACHINE.secret['accounts']['sellside'] , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
         self.ftp_param : dict[str , Any] = MACHINE.secret['accounts']['sellside'][source]

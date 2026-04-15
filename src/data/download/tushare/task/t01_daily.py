@@ -1,3 +1,4 @@
+"""Tushare fetchers for daily market data: quotes, valuation, money flow, limit prices."""
 # do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 

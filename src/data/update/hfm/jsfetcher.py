@@ -1,3 +1,16 @@
+"""
+JinMeng terminal data fetchers: read R-format files and convert to standard DB format.
+
+``JSFetcher`` dispatches to specialised reader methods for each ``(db_src, db_key)``
+combination, using ``pyreadr.read_r()`` to parse ``.Rdata`` files produced by the
+JinMeng R terminal.
+
+``JSDownloader`` downloads raw zip files from an AWS S3 bucket using ``boto3``
+with a thread-pool for parallel downloads.
+
+Note: Windows R paths are hard-coded as ``D:/Coding/ChinaShareModel/...``.
+See TODO_data.md item A3 for the proposed externalisation.
+"""
 import pyreadr , re
 import pandas as pd
 import numpy as np
@@ -11,6 +24,7 @@ from src.data.util import secid_adjust , col_reform , row_filter , adjust_precis
 
 @dataclass
 class FailedData:
+    """Container for a failed fetch operation, holding the type and optional date."""
     type: str
     date: int | None = None
     def add_attr(self , key , value): 
@@ -19,20 +33,31 @@ class FailedData:
     
 @dataclass
 class JSFetcher:
+    """
+    Callable fetcher for a single ``(db_src, db_key)`` combination.
+
+    On construction, ``fetcher`` is resolved via ``default_fetcher`` to the
+    appropriate reader classmethod.  Calling ``jsfetcher(date)`` returns
+    ``(result, target_path)`` where ``result`` is a DataFrame (or None on failure)
+    and ``target_path`` is the canonical DB path for that date.
+    """
     db_src      : str
     db_key      : str
     args        : list = field(default_factory=list)
     fetcher     : Callable | str = 'default'
 
     def __post_init__(self):
+        """Resolve the ``'default'`` fetcher string to the actual reader classmethod."""
         if self.fetcher == 'default':
             self.fetcher = self.default_fetcher(self.db_src , self.db_key)
 
     def __call__(self , date = None , **kwargs) -> Any:
+        """Evaluate the fetcher for ``date`` and return ``(result, target_path)``."""
         return self.eval(date , **kwargs) , self.target_path(date)
-    
+
     @classmethod
     def default_fetcher(cls , db_src , db_key):
+        """Map ``(db_src, db_key)`` to the appropriate reader classmethod."""
         if db_src == 'information_js': 
             return cls.basic_info
         elif db_src == 'models':

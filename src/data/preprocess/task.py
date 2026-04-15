@@ -1,3 +1,11 @@
+"""
+CLI entry point for batch preprocessing of all registered ``PrePro_*`` processors.
+
+Usage (from project root)::
+
+    python -m src.data.preprocess.task               # fit mode
+    python -m src.data.preprocess.task --predict 1   # predict mode
+"""
 import argparse
 
 from typing import Any
@@ -12,9 +20,31 @@ DATASET_FIT = [*PrePros.keys()]
 DATASET_PREDICT = DATASET_FIT
 
 class PreProcessorTask:
+    """
+    Batch runner that iterates over all registered preprocessors and calls
+    ``PreProcessor.update()``.
+
+    Called from scripts or the CLI; uses argparse for the ``--confirm`` flag.
+    """
     @classmethod
-    def update(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : Any = 1 , 
+    def update(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : Any = 1 ,
                force_update : bool = False):
+        """
+        Run the preprocessing update for all (or selected) registered processors.
+
+        Parameters
+        ----------
+        predict : bool
+            If True, use ``'predict'`` mode; otherwise use ``'fit'`` mode.
+        confirm : int
+            Non-zero value skips the interactive confirmation prompt.
+        parser : argparse.ArgumentParser | None
+            Pre-built parser (used when called from a parent script).
+        data_types : list[str] | None
+            Explicit list of processor keys to update.  Defaults to all.
+        force_update : bool
+            If True, skip the "already updated today" check.
+        """
         vb_level = Proj.vb(vb_level)
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
