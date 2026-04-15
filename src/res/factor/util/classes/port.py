@@ -60,10 +60,12 @@ class Port:
     @property
     def size(self): return len(self.port)
 
+    @property
+    def emtpy(self): 
+        return not self.exists or self.port.empty
+
     def sorted(self , by : Literal['secid' , 'weight'] = 'weight' , ascending=False) -> pd.DataFrame:
         return self.port.sort_values(by , ascending=ascending).reset_index(drop=True)
-
-    def is_emtpy(self): return not self.exists or self.port.empty
 
     def forward(self , n : int = 1 , inplace = True):
         if n == 0: 
@@ -163,7 +165,7 @@ class Port:
             return pd.DataFrame(columns=pd.Index(['date','secid','weight'])).astype({'date':int,'secid':int,'weight':float})
         
     def to_dataframe(self):
-        if self.is_emtpy():
+        if self.emtpy:
             return pd.DataFrame(columns=['name','date','secid','weight','value']).astype({'name':str,'date':int,'secid':int,'weight':float,'value':float})
         else:
             df = self.port
@@ -207,9 +209,9 @@ class Port:
         new = self if inplace else self.copy()
         if name is not None: 
             new.with_name(name)
-        if not new.is_emtpy() and not another.is_emtpy():
+        if not new.emtpy and not another.emtpy:
             combined : pd.DataFrame | Any= pd.concat([new.port, another.port], ignore_index=True).groupby('secid', as_index=False)['weight'].sum()
-        elif new.is_emtpy():
+        elif new.emtpy:
             combined = another.port.copy()
         else:
             combined = new.port

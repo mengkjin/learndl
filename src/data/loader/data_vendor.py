@@ -280,11 +280,6 @@ class DataVendor:
         q = pd.DataFrame({'secid' : blk.secid , 'ret' : p1 / np.where(p0 == 0 , np.nan , p0) - 1}).set_index('secid')
         if secid is not None:
             q = q.reindex(secid).fillna(0)
-        # q1 = self.get_quote_ret_old(date0 , date1 , price0 , price1 , secid)
-        # q2 = q1.merge(q , on = 'secid' , how = 'left').query('abs(ret_x - ret_y) > 1e-5')
-        # if len(q2) > 0:
-        #     Logger.stdout(q2)
-        #     raise Exception('stop')
         return q
 
     def get_miscel_ret(self , df : pd.DataFrame , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:

@@ -60,11 +60,11 @@ class DailyRiskUpdater(BasicCustomUpdater):
         """Compute and save daily risk features for a single ``date``."""
         DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
 
-def fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
+def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     """Replace non-finite values (NaN, Inf) in a Series with ``fill_value``."""
     return series.where(np.isfinite(series) , fill_value)
 
-def get_inputs(date : int) -> dict[str , pd.DataFrame]:
+def _get_inputs(date : int) -> dict[str , pd.DataFrame]:
     """
     Load the three data sources needed for daily risk calculation on ``date``.
 
@@ -87,7 +87,7 @@ def calc_daily_risk(date : int):
 
     Returns a DataFrame with one row per secid, aligned to the quote universe.
     """
-    inputs = get_inputs(date)
+    inputs = _get_inputs(date)
     funcs : list[Callable[[pd.DataFrame,] , pd.Series]] = [
         day_true_range , 
         day_turnover ,
@@ -105,7 +105,7 @@ def calc_daily_risk(date : int):
 def day_true_range(quote : pd.DataFrame , **kwargs) -> pd.Series:
     """Normalised true range: max(high-low, |high-preclose|, |low-preclose|) / preclose."""
     tr = pd.concat([quote['high'] - quote['low'] , (quote['high'] - quote['preclose']).abs() , (quote['low'] - quote['preclose']).abs()] , axis = 1).max(axis = 1)
-    tr = fillinf((tr / quote['preclose']).rename('true_range') , 0)
+    tr = _fillinf((tr / quote['preclose']).rename('true_range') , 0)
     return tr
 
 def day_turnover(quote : pd.DataFrame , **kwargs) -> pd.Series:
@@ -117,13 +117,13 @@ def day_largebuy_price_deviation(quote : pd.DataFrame , moneyflow : pd.DataFrame
     """Absolute deviation of large-buy VWAP from stock VWAP, normalised by VWAP."""
     q = quote.join(moneyflow.loc[:,['buy_elg_amount' , 'buy_elg_vol' , 'buy_lg_amount' , 'buy_lg_vol']])
     q['lbp'] = (q['buy_elg_amount'] + q['buy_lg_amount']) / (q['buy_elg_vol'] + q['buy_lg_vol']) * 100
-    q['large_buy_pdev'] = fillinf(abs(q['lbp'] - q['vwap']) / q['vwap'] , np.nan)
+    q['large_buy_pdev'] = _fillinf(abs(q['lbp'] - q['vwap']) / q['vwap'] , np.nan)
     return q['large_buy_pdev']
 
 def day_smallbuy_percentage(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
     """Small-buy amount as a fraction of total daily amount, scaled by 10."""
     q = quote.join(moneyflow.loc[:,['buy_sm_amount']])
-    q['small_buy_pct'] = fillinf((q['buy_sm_amount']) / q['amount'] * 10 , 0)
+    q['small_buy_pct'] = _fillinf((q['buy_sm_amount']) / q['amount'] * 10 , 0)
     return q['small_buy_pct']
 
 def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
@@ -142,14 +142,14 @@ def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd
         num_trades = num_trades.rename('num_trades')
 
     q = quote.join(num_trades)
-    q['sqrt_avg_size'] = fillinf((q['amount'] / q['num_trades']).pow(0.5) , np.nan)
+    q['sqrt_avg_size'] = _fillinf((q['amount'] / q['num_trades']).pow(0.5) , np.nan)
     return q['sqrt_avg_size']
 
 def day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
     """Fraction of daily amount traded in the opening and closing auction periods (÷1000)."""
     ocamount = min.query('minute <= 5 or minute >= 42').groupby('secid')['amount'].sum().rename('open_close_amount')
     q = quote.join(ocamount)
-    q['open_close_pct'] = fillinf(q['open_close_amount'] / q['amount'] / 1000 , 0)
+    q['open_close_pct'] = _fillinf(q['open_close_amount'] / q['amount'] / 1000 , 0)
     return q['open_close_pct']
 
 def day_5min_ret_volatility(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:

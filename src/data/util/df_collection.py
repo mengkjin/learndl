@@ -58,12 +58,12 @@ class _df_collection(ABC):
         '''add a DataFrame with given (1) date'''
 
     @abstractmethod
-    def get_one_day(self , date : int , field = None , 
+    def get_one_day(self , date : int , field = None ,
                     rename_date_key : str | None = 'date') -> pd.DataFrame | pl.DataFrame:
         '''get a DataFrame with given (1) date , fields and set_index'''
 
     @abstractmethod
-    def get_multiple_days(self , dates : list[int] | np.ndarray , field = None , 
+    def get_multiple_days(self , dates : list[int] | np.ndarray , field = None ,
                           rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | pl.DataFrame:
         '''get a DataFrame with given (many) dates , fields and set_index'''
 
@@ -88,7 +88,7 @@ class _df_collection(ABC):
         '''return the last added df'''
         with lock:
             return self.get(self.last_added_date)
-    
+
     def date_diffs(self , dates : list[int | TradeDate] | np.ndarray , overwrite = False):
         """
         Return dates that are not yet cached.
@@ -102,7 +102,7 @@ class _df_collection(ABC):
         """
         dates = np.array([int(d) for d in dates])
         return dates if overwrite else np.setdiff1d(dates , self.dates)
-    
+
     def get(self , date : int | TradeDate , field = None , rename_date_key : str | None = 'date'):
         '''get a DataFrame with given (1) date , fields and set_index'''
         with lock:
@@ -114,16 +114,16 @@ class _df_collection(ABC):
     def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False):
         '''get a DataFrame with given (many) dates , fields and set_index'''
         with lock:
-            assert len(dates) <= self.max_len , f'No more than {self.max_len} dates , got {len(dates)}'
+            assert self.max_len <= -1 or len(dates) <= self.max_len , f'No more than {self.max_len} dates , got {len(dates)}'
             df = self.get_multiple_days(dates)
             df = self.reform_df(df , field , rename_date_key = rename_date_key)
-            if copy: 
+            if copy:
                 df = deepcopy(df)
         return df
-    
+
     def add(self , date : int | TradeDate , df : pd.DataFrame | None):
         with lock:
-            if df is not None and date not in self.dates and df is not None:
+            if df is not None and date not in self.dates:
                 date = int(date)
                 self.dates.append(date)
                 self.last_added_date = date
@@ -137,20 +137,20 @@ class _df_collection(ABC):
                 [self.data_frames.pop(key) for key in self.data_frames if key not in self.dates]
                 if isinstance(self.long_frame , pd.DataFrame) and self.date_key in self.long_frame.columns:
                     self.long_frame = self.long_frame[self.long_frame[self.date_key].isin(self.dates)].copy()
-    
+
     def reform_df(self , df : pd.DataFrame | pl.DataFrame , field = None , rename_date_key = None):
         '''
         reform a DataFrame with given fields and set_index
         rename_date_key : if not None , rename the date_key column to the given name
         '''
-        if len(df) > 0 and field is not None: 
-            if isinstance(field , str): 
+        if len(df) > 0 and field is not None:
+            if isinstance(field , str):
                 field = [field]
             assert np.isin(field , df.columns).all() , f'{field} should be in df.columns : {df.columns}'
             if isinstance(df , pd.DataFrame):
                 df = pd.DataFrame(columns = pd.Index([self.date_key , *field])).set_index(self.date_key) if df.empty else df.loc[:,field]
             elif isinstance(df , pl.DataFrame):
-                if self.date_key not in field: 
+                if self.date_key not in field:
                     field.append(self.date_key)
                 df = df.select(field)
 
@@ -164,11 +164,11 @@ class _df_collection(ABC):
         return df
 
     def columns(self):
-        if not self: 
+        if not self:
             return []
-        elif isinstance(self.long_frame , pd.DataFrame) and not self.long_frame.empty: 
+        elif isinstance(self.long_frame , pd.DataFrame) and not self.long_frame.empty:
             return self.long_frame.columns.tolist()
-        else: 
+        else:
             columns = self.data_frames[self.dates[0]].columns
             return columns if isinstance(columns , list) else columns.tolist()
 
@@ -186,7 +186,7 @@ class DFCollection(_df_collection):
         super().__init__(max_len , date_key)
         self.data_frames : dict[int , pd.DataFrame] = {}
         self.long_frame : pd.DataFrame = pd.DataFrame()
-        
+
     def get(self , date : int | TradeDate , field = None , rename_date_key : str | None = 'date') -> pd.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
@@ -198,17 +198,17 @@ class DFCollection(_df_collection):
         df = df.reset_index([i for i in df.index.names if i] , drop = False).\
             assign(**{self.date_key:date}).set_index(self.date_key).dropna(how = 'all')
         self.data_frames[date] = df
-    
+
     def get_one_day(self , date : int | TradeDate) -> pd.DataFrame:
         '''get a DataFrame with given (1) date , fields and set_index'''
-        if date not in self.dates: 
+        if date not in self.dates:
             return pd.DataFrame()
-        if date in self.data_frames: 
+        if date in self.data_frames:
             df = self.data_frames[int(date)]
-        else: 
+        else:
             df = self.long_frame.loc[date:date]
         return df
-    
+
     def get_multiple_days(self , dates : list[int] | np.ndarray):
         '''get a DataFrame with given (many) dates , fields and set_index'''
         self.to_long_frame()
@@ -245,7 +245,7 @@ class DFCollection(_df_collection):
         """
         # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
         dates_to_do = list(self.data_frames.keys())
-        if len(dates_to_do) == 0: 
+        if len(dates_to_do) == 0:
             return
         df0 = self.long_frame.loc[~self.long_frame.index.isin(dates_to_do)]
         dfs = [df for df in self.data_frames.values()if df is not None and not df.empty]
@@ -273,19 +273,19 @@ class PLDFCollection(_df_collection):
 
     def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False) -> pl.DataFrame | Any:
         return super().gets(dates , field , rename_date_key , copy)
-    
+
     def get_one_day(self , date : int) -> pl.DataFrame:
         '''get a DataFrame with given (1) date , fields and set_index'''
-        if date not in self.dates: 
+        if date not in self.dates:
             return pl.DataFrame()
         pldf = self.data_frames[date]
         return pldf
-    
+
     def get_multiple_days(self , dates : list[int] | np.ndarray):
         '''get a DataFrame with given (many) dates , fields and set_index'''
         pldf = pl.concat([self.data_frames[date] for date in dates] , how = 'vertical')
         return pldf
-    
+
     def add_one_day(self , date : int , df : pd.DataFrame):
         pldf = pl.from_pandas(df , include_index = bool([i for i in df.index.names if i]))
         pldf = pldf.with_columns(pl.lit(date).alias(self.date_key))

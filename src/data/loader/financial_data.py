@@ -113,10 +113,9 @@ class FDataAccess(DateDataAccess):
         ann_dt = self.get_ann_dt(date , 0 , within_days).reset_index('end_date' , drop=True).assign(count = 1)
         v = ann_dt.pivot_table(index = 'ann_date' , columns = 'secid' , values = 'count').reindex(dates).fillna(0)
 
-        ann_calendar = 0
+        ann_calendar = pd.DataFrame(0, index=v.index, columns=v.columns)
         for i in range(after_days):
             ann_calendar += v.shift(i).fillna(0)
-        assert isinstance(ann_calendar , pd.DataFrame) , 'ann_calendar must be a DataFrame'
         ann_calendar = ann_calendar.melt(ignore_index=False).reset_index().rename(columns = {'ann_date':'date','value':'anndt'})
         return ann_calendar[ann_calendar['anndt'] > 0].set_index(['secid','date']).sort_index().astype(bool)
 

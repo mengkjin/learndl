@@ -117,7 +117,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
         """get index return"""
         prev_date = CALENDAR.td(date , -1).td
         prev_port = self.index_portfolio(prev_date)
-        if prev_port.is_emtpy():
+        if prev_port.emtpy:
             return 0.
         return prev_port.fut_ret(date)
 
@@ -179,7 +179,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
                 continue
             custom_index.update_dates(target_dates , indent = indent + 1 , vb_level = vb_level + 2)
             total_dates.extend(target_dates.tolist())
-        if total_dates == 0:
+        if len(total_dates) == 0:
             Logger.skipping(f'All custom indices are up to date' , indent = indent , vb_level = vb_level)
         else:
             Logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , indent = indent , vb_level = vb_level)

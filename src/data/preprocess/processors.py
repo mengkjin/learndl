@@ -322,7 +322,7 @@ class PrePro_dfl2(MicellaneousPreProcessor):
             sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
             sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
                 ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")) /
-                (pl.col(feat).rolling_std(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")).alias(feat) + 1e-6)
+                (pl.col(feat).rolling_std(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid") + 1e-6)).alias(feat)
                 for feat in sub_feature
             ]).collect()
             blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
@@ -362,7 +362,7 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
         for i in range(0, len(feature), self.FEATURE_CHUNK_SIZE):
             sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
             sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
-                ((pl.col(feat) - pl.col(feat).mean().over("date")) / (pl.col(feat).std().over("date")).alias(feat) + 1e-6) for feat in sub_feature
+                ((pl.col(feat) - pl.col(feat).mean().over("date")) / (pl.col(feat).std().over("date") + 1e-6)).alias(feat) for feat in sub_feature
             ]).collect()
             blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
         del df

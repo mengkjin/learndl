@@ -73,7 +73,7 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
             df = df.drop_duplicates('date' , keep = 'last').reset_index(drop = True).sort_values('date')
             DB.save(df , cls.DB_SRC , cls.DB_KEY , indent = indent , vb_level = vb_level)
 
-def get_inputs(date : int) -> dict[str , pd.DataFrame]:
+def _get_inputs(date : int) -> dict[str , pd.DataFrame]:
     inputs : dict[str , pd.DataFrame] = {
         'quote' : DB.load('trade_ts' , 'day' , date) ,
         'val' : DB.load('trade_ts' , 'day_val' , date) ,
@@ -85,11 +85,11 @@ def get_inputs(date : int) -> dict[str , pd.DataFrame]:
             inputs[name] = df.set_index('secid')
     return inputs
 
-def fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
+def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     return series.where(np.isfinite(series) , fill_value)
 
 def calc_market_daily_risk(date : int):
-    inputs = get_inputs(date)
+    inputs = _get_inputs(date)
     funcs = [
         market_day_true_range , 
         market_day_turnover ,
@@ -105,7 +105,7 @@ def calc_market_daily_risk(date : int):
 
 def market_day_true_range(quote : pd.DataFrame , val : pd.DataFrame , **kwargs) -> float:
     tr = pd.concat([quote['high'] - quote['low'] , (quote['high'] - quote['preclose']).abs() , (quote['low'] - quote['preclose']).abs()] , axis = 1).max(axis = 1)
-    tr = fillinf((tr / quote['preclose']).rename('true_range') , 0)
+    tr = _fillinf((tr / quote['preclose']).rename('true_range') , 0)
     weight = (val['float_share'] * quote['preclose']).fillna(0)
     return tr.fillna(0).mul(weight).sum() / weight.sum()
 
@@ -117,13 +117,13 @@ def market_day_turnover(quote : pd.DataFrame , val : pd.DataFrame , **kwargs) ->
 def market_day_largebuy_price_deviation(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> float:
     q = quote.join(moneyflow.loc[:,['buy_elg_amount' , 'buy_elg_vol' , 'buy_lg_amount' , 'buy_lg_vol']])
     q['lbp'] = (q['buy_elg_amount'] + q['buy_lg_amount']) / (q['buy_elg_vol'] + q['buy_lg_vol']) * 100
-    q['large_buy_pdev'] = fillinf(abs(q['lbp'] - q['vwap']) / q['vwap'] , np.nan)
+    q['large_buy_pdev'] = _fillinf(abs(q['lbp'] - q['vwap']) / q['vwap'] , np.nan)
     weight = quote['amount'].fillna(0)
     return q['large_buy_pdev'].fillna(0).mul(weight).sum() / weight.sum()
 
 def market_day_smallbuy_percentage(quote : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> float:
     q = quote.join(moneyflow.loc[:,['buy_sm_amount']])
-    q['small_buy_pct'] = fillinf((q['buy_sm_amount']) / q['amount'] * 10 , 0)
+    q['small_buy_pct'] = _fillinf((q['buy_sm_amount']) / q['amount'] * 10 , 0)
     weight = quote['amount'].fillna(0)
     return q['small_buy_pct'].fillna(0).mul(weight).sum() / weight.sum()
 
@@ -142,12 +142,12 @@ def market_day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyfl
         num_trades = num_trades.rename('num_trades')
 
     q = quote.join(num_trades)
-    return (fillinf(q['amount'] , 0).sum() / fillinf(q['num_trades'] , 0).sum()) ** 0.5
+    return (_fillinf(q['amount'] , 0).sum() / _fillinf(q['num_trades'] , 0).sum()) ** 0.5
 
 def market_day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> float:
     ocamount = min.query('minute <= 5 or minute >= 42').groupby('secid')['amount'].sum().rename('open_close_amount')
     q = quote.join(ocamount)
-    q['open_close_pct'] = fillinf(q['open_close_amount'] / q['amount'] / 1000 , 0)
+    q['open_close_pct'] = _fillinf(q['open_close_amount'] / q['amount'] / 1000 , 0)
     weight = quote['amount'].fillna(0)
     return q['open_close_pct'].fillna(0).mul(weight).sum() / weight.sum()
 

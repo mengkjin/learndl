@@ -107,7 +107,7 @@ class ReinforcePortfolioCreator(PortCreator):
 
         screening_pool = self.conf.get_screen_alpha(self.model_date , indus = True)
         if not screening_pool.empty:
-            if not self.bench_port.is_emtpy(): 
+            if not self.bench_port.emtpy: 
                 screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
             screening_pool.loc[:, 'rankpct'] = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
             screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')

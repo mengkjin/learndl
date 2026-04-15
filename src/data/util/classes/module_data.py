@@ -216,11 +216,11 @@ class ModuleData:
         secid = None
         with Logger.Timer(f'Load {self.block_title} at {start}~{end}' , indent = self.indent , vb_level = self.vb_level + 1):
             for i , key in enumerate(self.load_keys):
-                current_block = self.blocks.get(key , DataBlock())
-                current_dates = current_block.valid_dates
-                ext_dates = CALENDAR.diffs(date , current_dates)
+                if key not in self.blocks:
+                    self.blocks[key] = DataBlock()
+                ext_dates = CALENDAR.diffs(date , self.blocks[key].valid_dates)
                 ext_block = self.load_one(key, dates = ext_dates , secid = secid)
-                self.blocks[key] = DataBlock.merge([current_block , ext_block] , inplace = True)
+                self.blocks[key].merge_others(ext_block , inplace = True)
                 if i == 0:
                     assert key == 'y' , f'y must be the first key'
                     secid = self.secid_filter(self.blocks[key].secid) # use the y_secid to align all other blocks in next step

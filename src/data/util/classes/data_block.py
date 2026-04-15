@@ -85,8 +85,6 @@ def load_dict(file_path : str | Path , keys = None) -> dict[str,Any]:
     """
     file_path = Path(file_path)
     assert file_path.exists() and file_path.is_file() , file_path
-    if not file_path.exists():
-        return {}
     if file_path.suffix in ['.npz' , '.npy' , '.np']:
         file = np.load(file_path)
     elif file_path.suffix in ['.pt' , '.pth']:
@@ -115,11 +113,11 @@ class DataBlock:
 
     Construction
     ------------
-    - ``DataBlock(values, secid, date, feature)``   – direct
-    - ``DataBlock.from_pandas(df)``                 – from long-format MultiIndex DataFrame
-    - ``DataBlock.from_polars(df)``                 – from Polars DataFrame
-    - ``DataBlock.load_raw(db_src, db_key, ...)``   – from database with optional caching
-    - ``DataBlock.load_dump(...)``                  – from pre-saved ``.mmap`` / ``.pt`` / ``.feather``
+    - ``DataBlock(values, secid, date, feature)``   , direct
+    - ``DataBlock.from_pandas(df)``                 , from long-format MultiIndex DataFrame
+    - ``DataBlock.from_polars(df)``                 , from Polars DataFrame
+    - ``DataBlock.load_raw(db_src, db_key, ...)``   , from database with optional caching
+    - ``DataBlock.load_dump(...)``                  , from pre-saved ``.mmap`` / ``.pt`` / ``.feather``
 
     Key operations
     --------------
@@ -571,7 +569,7 @@ class DataBlock:
 
     @classmethod
     def from_polars(cls , df : pl.DataFrame | None):
-        """convert polars dataframe to stock4d"""
+        """convert polars dataframe to DataBlock"""
         if df is None or df.is_empty(): 
             return cls()
 
@@ -607,6 +605,7 @@ class DataBlock:
     
     @classmethod
     def from_pandas(cls , df : pd.DataFrame | None):
+        """convert pandas dataframe to DataBlock"""
         if df is None or df.empty: 
             return cls()
         try:
@@ -659,6 +658,7 @@ class DataBlock:
 
     @property
     def price_adjusted(self): 
+        """Return flag of if the price is adjusted by adjfactor"""
         if not hasattr(self , '_price_adjusted'):
             self._price_adjusted = False
         return self._price_adjusted
@@ -669,6 +669,7 @@ class DataBlock:
 
     @property
     def volume_adjusted(self): 
+        """Return flag of if the volume is adjusted by adjfactor"""
         if not hasattr(self , '_volume_adjusted'):
             self._volume_adjusted = False
         return self._volume_adjusted
@@ -679,10 +680,12 @@ class DataBlock:
 
     @staticmethod
     def data_type_abbr(key : str): 
+        """Return the abbreviation of the data type"""
         return data_type_abbr(key)
 
     @staticmethod
     def data_type_alias(key : str): 
+        """Return the alias of the data type"""
         return data_type_alias(key)
 
     @classmethod
@@ -882,6 +885,7 @@ class DataBlock:
     def hist_norm(self , key : str , 
                   start : int | None = None , end : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
+        """Calculate the historical normalisation stats for the data block"""
         return DataBlockNorm.calculate(self , key , start , end , step_day , **kwargs)
 
     def extend_to(self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * ,
@@ -926,10 +930,12 @@ class DataBlock:
         
     @staticmethod
     def path_norm(key : str , type : Literal['fit'] = 'fit'):
+        """Return the path to the normalisation stats for ``key`` / ``type``."""
         return DataBlockNorm.norm_path(key , type)
 
     @classmethod
     def path_raw(cls , src : str , key : str , * , dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True):
+        """Return the path to the raw data for ``src`` / ``key``."""
         raw_path = PATH.block.joinpath('raw' , f'{src}.{key}{dump_suffix}')
         if find_if_not_exists:
             return cls.find_existing_dump_path(raw_path)
@@ -937,6 +943,7 @@ class DataBlock:
 
     @classmethod
     def find_existing_dump_path(cls , raw_path : Path) -> Path:
+        """Find the existing dump path for the raw data"""
         if raw_path.exists():
             return raw_path
         for suffix in PREFERRED_DUMP_SUFFIXES:
@@ -999,6 +1006,7 @@ class DataBlock:
 
     @classmethod
     def load_preprocess_norms(cls , keys : list[str] | str , type : Literal['fit'] = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
+        """Load the normalisation stats for the data block"""
         if isinstance(keys , str):
             keys = [keys]
         return DataBlockNorm.load_keys(keys, type , dtype = dtype)
@@ -1006,7 +1014,7 @@ class DataBlock:
     @classmethod
     def load_from_db(cls , db_src : str , db_key : str , start = None , end = None , * , 
                      dates = None , feature = None , use_alt = True , vb_level : Any = 'max') -> DataBlock:
-        #return cls.load_from_db_pandas(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
+        """Load the data block from the database"""
         return cls.load_from_db_polars(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
 
     @classmethod
@@ -1014,7 +1022,7 @@ class DataBlock:
         cls , db_src : str , db_key : str , start = None , end = None , * , 
         dates = None , feature = None , use_alt = True , vb_level : Any = 'max'
     ) -> DataBlock:
-
+        """Load the data block from the database using pandas dataframe , usually slower than polars"""
         if dates is None:
             dates = CALENDAR.range(start , end , 'td')
 
@@ -1029,6 +1037,7 @@ class DataBlock:
         cls , db_src : str , db_key : str , start = None , end = None , * , 
         dates = None , feature = None , use_alt = True , vb_level : Any = 'max'
     ):
+        """Load the data block from the database using polars dataframe , usually faster than pandas"""
         if dates is None:
             dates = CALENDAR.range(start , end , 'td')
         df = DB.loads_pl(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
@@ -1142,6 +1151,7 @@ class DataBlock:
 
     @classmethod
     def fix_dumps(cls):
+        """Fix the dump of the data block to the preferred dump suffix"""
         category_path = PATH.block.joinpath('raw')
         category = 'raw'
     
@@ -1266,6 +1276,7 @@ class DataBlockNorm:
     
     @classmethod
     def norm_path(cls , key : str , type : Literal['fit'] = 'fit'):
+        """Return the path to the normalisation stats for ``key`` / ``type``."""
         if key.lower() == 'y':
             return PATH.norm.joinpath(type , 'Y.pt')
         alias_list = data_type_alias(key)

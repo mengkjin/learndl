@@ -27,12 +27,12 @@ def create_input_eq(opt_input : Any) -> float | Any:
 def create_input_benchmark(opt_input : Any) -> np.ndarray | Any:
     bm_port = Benchmark.day_port(opt_input.benchmark  , opt_input.model_date , opt_input.cfg_benchmark['benchmark'])
     opt_input.benchmark_port = bm_port
-    wb = bm_port.weight_align(opt_input.secid) * opt_input.eq if not bm_port.is_emtpy() else None
+    wb = bm_port.weight_align(opt_input.secid) * opt_input.eq if not bm_port.emtpy else None
     return wb
 
 def create_input_initial(opt_input : Any):
     pf : Port | Any = opt_input.initial_port
-    w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) and not pf.is_emtpy() else np.zeros(len(opt_input.secid))
+    w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) and not pf.emtpy else np.zeros(len(opt_input.secid))
     if (w0 == 0).all(): 
         w0 = None
     return w0
