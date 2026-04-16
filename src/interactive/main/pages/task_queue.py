@@ -1,3 +1,4 @@
+"""Task queue page: full task list with filter controls, pagination, and inline reports."""
 import streamlit as st
 from typing import Literal , Callable
 
@@ -7,32 +8,55 @@ from src.interactive.main.util import SC , runs_page_url , print_page_header
 
 PAGE_NAME = 'task_queue'
 
-def on_first_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: 
+def on_first_page(max_page : int) -> None:
+    """Callback: jump to page 1 of the task queue list."""
+    if st.session_state.get('choose-task-page') == 1:
         return
     st.session_state['choose-task-page'] = 1
-def on_last_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: 
+
+def on_last_page(max_page : int) -> None:
+    """Callback: jump to the last page of the task queue list."""
+    if st.session_state.get('choose-task-page') == max_page:
         return
     st.session_state['choose-task-page'] = max_page
-def on_prev_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: 
+
+def on_prev_page(max_page : int) -> None:
+    """Callback: move to the previous page, clamped at 1."""
+    if st.session_state.get('choose-task-page') == 1:
         return
     st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
-def on_next_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: 
+
+def on_next_page(max_page : int) -> None:
+    """Callback: move to the next page, clamped at *max_page*."""
+    if st.session_state.get('choose-task-page') == max_page:
         return
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
 
-def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
+def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter') -> None:
+    """Render the complete task-queue page content.
+
+    Args:
+        queue_type: ``'full'`` shows all tasks in a fixed-height container;
+            ``'filter'`` applies the sidebar filter widgets; ``'latest'``
+            shows the N most recent tasks.
+    """
     with st.container(key="task-queue-special-expander"):
         show_queue_header()
         if queue_type == 'filter': 
             show_task_filters()
         show_queue_item_list(queue_type)
 
-def show_task_queue_header_button(name : str, click_on : Callable, icon : str, help : str , title : str):
+def show_task_queue_header_button(name : str, click_on : Callable, icon : str, help : str , title : str) -> None:
+    """Render a single icon-button with a small capitalised label below it.
+
+    Args:
+        name: Unique suffix appended to the Streamlit widget key.
+        click_on: Callback invoked when the button is clicked.
+        icon: Material icon string for the button face.
+        help: Tooltip text shown on hover.
+        title: Short label displayed beneath the button.
+    """
     with st.container():
         st.button(icon, key=f"task-queue-{name}",  help = help , on_click=click_on)
         body = f"""
@@ -47,7 +71,8 @@ def show_task_queue_header_button(name : str, click_on : Callable, icon : str, h
         """       
         st.markdown(body , unsafe_allow_html = True)
 
-def show_queue_header():
+def show_queue_header() -> None:
+    """Render the action buttons row and the last-action status banner."""
     with st.container(key = "queue-header-buttons"):
         buttons = {
             'sync' : {
@@ -105,7 +130,8 @@ def show_queue_header():
     st.caption(f":blue[:material/bar_chart:] {SC.task_queue.status_message()}")
     st.caption(f":blue[:material/bar_chart:] {SC.task_queue.source_message()}")
         
-def show_task_filters():
+def show_task_filters() -> None:
+    """Render the task-filter expander (status, source, folder, file multi-selects)."""
     with st.container(key="task-filter-container").expander("Task Filters" , expanded = True , icon = ":material/filter_list:"):
         status_options = ["All" , "Running" , "Complete" , "Error"]
         source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
@@ -122,7 +148,13 @@ def show_task_filters():
                         format_func = lambda x: x.name ,
                         on_change = SC.change_queue_filter_path_file)    
         
-def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
+def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter') -> None:
+    """Render the paginated task-item list with per-item action buttons.
+
+    Args:
+        queue_type: Determines which slice of the queue is displayed — same
+            semantics as :func:`show_task_queue`.
+    """
     if queue_type == 'full':
         queue = SC.task_queue.queue
         container_height = 500
@@ -217,7 +249,8 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
                     elif item.status == 'error':
                         st.error(f'Script Failed' , icon = ":material/error:")
             
-def main():
+def main() -> None:
+    """Entry point for the task queue page."""
     print_page_header(PAGE_NAME)
     show_task_queue()
 

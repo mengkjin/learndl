@@ -1,3 +1,24 @@
+"""
+Streamlit frontend utilities for the interactive application.
+
+Classes
+-------
+ActionLogger
+    Singleton that records user interactions and errors to log files.
+FilePreviewer
+    Multi-format file viewer supporting text, HTML, PDF, and Excel.
+YAMLFileEditorState / YAMLFileEditor
+    Interactive YAML file editor with load/validate/save and a streamlit-ace widget.
+ColoredText
+    String subclass that auto-applies Streamlit badge colours based on log level.
+
+Module-level helpers
+--------------------
+expander_subheader
+    Render a custom expandable section header with optional help tooltip.
+action_confirmation
+    ``st.dialog``-based confirmation dialogue for destructive actions.
+"""
 from __future__ import annotations
 from pathlib import Path
 from typing import Literal , Any , Callable , Sequence
@@ -12,8 +33,14 @@ from dataclasses import dataclass
 from src.proj import PATH , Logger
 
 class ActionLogger:
+    """Singleton logger that records UI action events and errors to flat log files.
+
+    Log files are stored in ``PATH.app_db``.  Use :meth:`log_action` as a
+    decorator on action handlers to capture timing and arguments automatically.
+    """
     @staticmethod
-    def get_log_path(log_type : Literal['action' , 'error']):
+    def get_log_path(log_type : Literal['action' , 'error']) -> Path:
+        """Return the path to the action or error log file, creating it if absent."""
         file_path = PATH.app_db / f'page_{log_type}.log'
         file_path.touch(exist_ok=True)
         return file_path
@@ -29,7 +56,8 @@ class ActionLogger:
         return cls._instance
     
     @classmethod
-    def register_ignore(cls , ignore : str | list[str] | None = None):
+    def register_ignore(cls , ignore : str | list[str] | None = None) -> None:
+        """Register argument names/types to exclude from all subsequent log entries."""
         if ignore is None:
             ignore = []
         elif isinstance(ignore , str):
@@ -40,7 +68,14 @@ class ActionLogger:
         cls._ignores.extend(ignore)
     
     @classmethod
-    def log_action(cls , ignore : str | list[str] | None = None):
+    def log_action(cls , ignore : str | list[str] | None = None) -> Callable:
+        """Decorator that wraps a function to log its invocation and any exceptions.
+
+        Parameters
+        ----------
+        ignore:
+            Argument names or class names to omit from the logged output.
+        """
         if isinstance(ignore , str):
             ignore = [ignore]
         assert not ignore or isinstance(ignore , list) , f'ignore must be None or a string or a list of strings'
@@ -59,7 +94,8 @@ class ActionLogger:
         return wrapper
 
     @classmethod
-    def record_action(cls , start_time : datetime , action : str , *args ,  ignore : list[str] | None = None , **kwargs):
+    def record_action(cls , start_time : datetime , action : str , *args , ignore : list[str] | None = None , **kwargs) -> None:
+        """Append a structured action record to the action log file."""
         args_str , kwargs_str = cls.get_args_str(args , kwargs , ignore)
         export_str = '\n'.join([
             f'Action: [{action}]', 
@@ -71,7 +107,8 @@ class ActionLogger:
             f.write(export_str + '\n')
 
     @classmethod
-    def get_args_str(cls , args : list[Any] | tuple[Any, ...] , kwargs : dict[str, Any] , ignore : list[str] | None = None):
+    def get_args_str(cls , args : list[Any] | tuple[Any, ...] , kwargs : dict[str, Any] , ignore : list[str] | None = None) -> tuple[str, str]:
+        """Format positional and keyword arguments as loggable strings, applying ignores."""
         if ignore is None: 
             ignore = []
         if cls._ignores: 
@@ -83,7 +120,8 @@ class ActionLogger:
         return args_str , kwargs_str
     
     @classmethod
-    def ignore_arg(cls , obj : Any , ignore : list[str] | None = None , key : str | None = None):
+    def ignore_arg(cls , obj : Any , ignore : list[str] | None = None , key : str | None = None) -> bool:
+        """Return True if *obj* or *key* matches any entry in the *ignore* list."""
         if ignore is None: 
             ignore = []
         arg_in = (
@@ -94,7 +132,8 @@ class ActionLogger:
         return arg_in or key_in
 
     @classmethod
-    def record_error(cls , start_time : datetime , action : str , error : str ):
+    def record_error(cls , start_time : datetime , action : str , error : str) -> None:
+        """Append a structured error record to the error log file."""
         export_str = '\n'.join([
             f'Action: [{action}]', 
             f'    Start:  [{start_time.strftime("%Y-%m-%d %H:%M:%S")}]', 
@@ -104,7 +143,14 @@ class ActionLogger:
             f.write(export_str + '\n')
 
     @classmethod
-    def clear_log(cls , suffix : str | None = None):
+    def clear_log(cls , suffix : str | None = None) -> None:
+        """Rotate and archive both log files, then recreate empty ones.
+
+        Parameters
+        ----------
+        suffix:
+            Timestamp suffix used for the backup filenames; defaults to now.
+        """
         if suffix is None: 
             suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -117,23 +163,31 @@ class ActionLogger:
             log.touch()
 
     @classmethod
-    def get_action_log(cls):
+    def get_action_log(cls) -> str:
+        """Return the full text content of the action log, creating the file if absent."""
         if not cls.action_log.exists():
             cls.action_log.touch()
         return cls.action_log.read_text()
 
     @classmethod
-    def get_error_log(cls):
+    def get_error_log(cls) -> str:
+        """Return the full text content of the error log, creating the file if absent."""
         if not cls.error_log.exists():
             cls.error_log.touch()
         return cls.error_log.read_text()
     
 class FilePreviewer:
-    def __init__(self , path : Path | str | None = None , height : int | None = 600):
+    """Multi-format file viewer that renders file content inside a Streamlit container.
+
+    Supported formats: ``.txt``, ``.csv``, ``.json``, ``.log``, ``.py`` (code blocks),
+    ``.html`` (iframe), ``.pdf`` (base64 iframe), ``.xlsx`` / ``.xls`` (dataframe).
+    """
+    def __init__(self , path : Path | str | None = None , height : int | None = 600) -> None:
         self.path = Path(path) if path is not None else None
         self.height = height or 600
 
-    def preview(self):
+    def preview(self) -> None:
+        """Render the file contents into the current Streamlit page."""
         if self.path is None: 
             return
         elif not self.path.exists():
@@ -220,6 +274,19 @@ class FilePreviewer:
 
 @dataclass
 class YAMLFileEditorState:
+    """Persistent state for a :class:`YAMLFileEditor` instance, stored in ``st.session_state``.
+
+    Attributes
+    ----------
+    key:
+        Unique identifier for this editor instance.
+    root:
+        Base directory for resolving relative file paths.
+    path:
+        Current relative file path (as a string).
+    path_status, content_status, load_status, save_status:
+        Status strings; ``'success'`` means OK, anything else is an error message.
+    """
     key  : str
     root : Path = Path('')
     path : str = ""
@@ -227,12 +294,22 @@ class YAMLFileEditorState:
     content_status : str = 'success'
     load_status : str = 'success'
     save_status : str = 'success'
-    
-    def __post_init__(self):
+
+    def __post_init__(self) -> None:
+        """Post-init hook (currently a no-op placeholder)."""
         ...
-    
+
     @classmethod
-    def get_state(cls , key : str , root : Path | str | None = None) -> YAMLFileEditorState:
+    def get_state(cls , key : str , root : Path | str | None = None) -> 'YAMLFileEditorState':
+        """Retrieve or create a :class:`YAMLFileEditorState` from ``st.session_state``.
+
+        Parameters
+        ----------
+        key:
+            Unique editor key.
+        root:
+            If provided, update the state's root directory.
+        """
         if f'yaml_file_editor_states' not in st.session_state:
             st.session_state.yaml_file_editor_states = {}
         if key not in st.session_state.yaml_file_editor_states:
@@ -242,23 +319,43 @@ class YAMLFileEditorState:
         return st.session_state.yaml_file_editor_states[key]
 
     @property
-    def editor_key(self):
+    def editor_key(self) -> str:
+        """Unique Streamlit session-state key for this editor's ace widget."""
         return f"file-editor-{self.key}-{self.path}"
-    
+
     @property
-    def load_content(self):
+    def load_content(self) -> str:
+        """The last content loaded from disk (stored in session state)."""
         return getattr(st.session_state , f'{self.editor_key}-load' , '')
 
     @load_content.setter
-    def load_content(self , value):
+    def load_content(self , value : str) -> None:
+        """Persist newly loaded content into session state."""
         st.session_state[f'{self.editor_key}-load'] = value
 
     @property
-    def edit_content(self):
+    def edit_content(self) -> str:
+        """The live content currently in the ace editor widget (from session state)."""
         return getattr(st.session_state , f'{self.editor_key}'  , '')
 
 class YAMLFileEditor:
-    _instances = {}
+    """Interactive YAML file editor with load / validate / save controls.
+
+    Implemented as a per-key singleton so the same editor instance is reused
+    across Streamlit reruns.  Uses ``streamlit_ace`` for the editor widget.
+
+    Parameters
+    ----------
+    key:
+        Unique identifier for this editor instance.
+    file_root:
+        Root directory (or exact file path when ``file_input=False``).
+    file_input:
+        If True, show a path input/selectbox widget so users can choose the file.
+    height:
+        Pixel height of the ace editor widget.
+    """
+    _instances : dict = {}
     def __new__(cls , key : str = 'yaml_file_editor' , *args , **kwargs):
         if key not in cls._instances:
             cls._instances[key] = super().__new__(cls)
@@ -278,20 +375,25 @@ class YAMLFileEditor:
             assert self.file_root.is_dir() , f"File root is not a directory: {self.file_root}"
         self.init_session_state()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Return a debug string showing the key and root directory."""
         return f"YAMLFileEditor(key={self.key},root={self.file_root})"
-        
-    def init_session_state(self):
+
+    def init_session_state(self) -> 'YAMLFileEditor':
+        """Sync the editor state from ``st.session_state`` and return self."""
         self.state = YAMLFileEditorState.get_state(key = self.key , root = self.file_root)
         return self
 
-    def get_file_root(self):
+    def get_file_root(self) -> Path:
+        """Return the current root directory from the editor state."""
         return self.state.root
 
-    def set_file_path(self , file_path : Path | str):
+    def set_file_path(self , file_path : Path | str) -> None:
+        """Update the relative file path in the editor state."""
         self.state.path = str(file_path)
 
     def get_file_path(self , file_path : Path | str | None = None) -> Path:
+        """Resolve the absolute target path from root + relative path (or explicit override)."""
         root = self.get_file_root()
         if root.is_file():
             file_path = root
@@ -301,7 +403,8 @@ class YAMLFileEditor:
             file_path = root.joinpath(file_path)
         return file_path
     
-    def validate_file(self , file_path : Path | str | None = None):
+    def validate_file(self , file_path : Path | str | None = None) -> None:
+        """Check that the resolved path exists and has a ``.yaml`` extension; update ``state.path_status``."""
         file_path = self.get_file_path(file_path)
         if file_path.suffix != '.yaml':
             self.state.path_status = f'File is not YAML: {file_path}'
@@ -310,7 +413,8 @@ class YAMLFileEditor:
         else:
             self.state.path_status = 'success'
     
-    def validate_file_content(self , file_content : str | None = None):
+    def validate_file_content(self , file_content : str | None = None) -> None:
+        """Parse the YAML content and update ``state.content_status`` accordingly."""
         if file_content is None:
             file_content = self.state.edit_content
         if file_content is None:
@@ -322,7 +426,8 @@ class YAMLFileEditor:
             except yaml.YAMLError as e:
                 self.state.content_status = f'YAML syntax error: {e}'
 
-    def load_file(self , file_path : Path | str | None = None):
+    def load_file(self , file_path : Path | str | None = None) -> str:
+        """Load the target file into ``state.load_content`` and return its text (or '' on error)."""
         self.validate_file(file_path)
         if self.state.path_status != 'success':
             st.error(self.state.path_status , icon = ":material/error:")
@@ -337,7 +442,8 @@ class YAMLFileEditor:
             self.state.load_status = f'Load file failed: {e}'
         return self.state.load_content
 
-    def save_file(self , file_path : Path | str | None = None):
+    def save_file(self , file_path : Path | str | None = None) -> None:
+        """Validate YAML syntax then write ``state.edit_content`` to disk."""
         file_path = self.get_file_path(file_path)
         try:
             if self.state.edit_content is None:
@@ -352,7 +458,8 @@ class YAMLFileEditor:
         except Exception as e:
             self.state.save_status = f'Save file failed: {e}'
 
-    def init_path_input(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
+    def init_path_input(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None) -> None:
+        """Render a text input or selectbox for choosing the YAML file path."""
         if file_path is None and default_file is not None:
             file_path = default_file
         if file_path is None or isinstance(file_path , (Path , str)):
@@ -384,7 +491,11 @@ class YAMLFileEditor:
             raise ValueError(f"Invalid file path: {file_path}")
 
     @st.fragment
-    def show_yaml_editor(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
+    def show_yaml_editor(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None) -> None:
+        """Render the full YAML editor widget (path input, ace editor, Reload/Validate/Save buttons).
+
+        Decorated with ``@st.fragment`` so it re-runs independently of the page.
+        """
         from streamlit_ace import st_ace
         self.init_session_state()
         if self.file_input: 
@@ -441,34 +552,47 @@ class YAMLFileEditor:
             except Exception as e:
                 st.warning(f"Cannot parse YAML: {e}")
 
-    def path_input_on_change(self , st_widget_key : str | None = None):
+    def path_input_on_change(self , st_widget_key : str | None = None) -> None:
+        """Update the state path when the file path widget changes."""
         if st_widget_key is None:
             st_widget_key = f"{self.key}-file-{self.input_type}"
         self.set_file_path(st.session_state[st_widget_key])
         # self.load_file()
-        
-    def text_input_on_change(self):
+
+    def text_input_on_change(self) -> None:
+        """Callback for the text-input path widget."""
         self.path_input_on_change(f"{self.key}-file-input")
 
-    def selectbox_on_change(self):
+    def selectbox_on_change(self) -> None:
+        """Callback for the selectbox path widget."""
         self.path_input_on_change(f"{self.key}-file-select")
 
-    def on_reload_file(self):
+    def on_reload_file(self) -> None:
+        """Button callback: reload the file from disk."""
         self.load_file()
 
-    def on_validate_content(self):
+    def on_validate_content(self) -> None:
+        """Button callback: validate the current editor content."""
         self.validate_file_content()
-    
-    def on_save_file(self):
+
+    def on_save_file(self) -> None:
+        """Button callback: save the current editor content to disk."""
         self.save_file()
 
 
 class ColoredText(str):
-    def __init__(self , text : str):
+    """String subclass that wraps text in a Streamlit colour badge based on log-level prefix.
+
+    Supports: ``error`` → red, ``warning`` → orange, ``info`` → green,
+    ``debug`` → gray, ``critical`` → violet.  Unrecognised messages are returned unchanged.
+    """
+    def __init__(self , text : str) -> None:
+        """Initialise and auto-detect the colour for *text*."""
         self.text = text
         self.color = self.auto_color(self.text)
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return the text wrapped in a Streamlit colour badge, or plain text if no colour applies."""
         if self.color is None:
             return self.text
         else:
@@ -478,7 +602,8 @@ class ColoredText(str):
                 return f":{self.color}[{self.text}]"
 
     @staticmethod
-    def auto_color(message : str):
+    def auto_color(message : str) -> str | None:
+        """Return the Streamlit colour name for *message*'s log-level prefix, or None."""
         if message.lower().startswith('error'):
             return 'red'
         elif message.lower().startswith('warning'):
@@ -493,8 +618,19 @@ class ColoredText(str):
             return None
         
 @st.dialog("Please Confirm Your Action")
-def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[], None] | None = None , 
-                        title : str = "Are You Sure about This?"):
+def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[], None] | None = None ,
+                        title : str = "Are You Sure about This?") -> None:
+    """``st.dialog``-based confirmation dialogue with Confirm / Abort buttons.
+
+    Parameters
+    ----------
+    on_confirm:
+        Zero-argument callable executed when the user clicks Confirm.
+    on_abort:
+        Optional zero-argument callable executed when the user clicks Abort.
+    title:
+        Warning message shown inside the dialogue.
+    """
     st.error(f":material/warning:**{title}**")
     col1 , col2 = st.columns(2 , gap = 'small')
     if col1.button("**Confirm**" , icon = ":material/check_circle:" , type = "primary"):
@@ -505,7 +641,11 @@ def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[]
             on_abort()
         st.rerun()
 
-def estimate_text_width(text, font_size=24):
+def estimate_text_width(text : str, font_size : int = 24) -> int:
+    """Estimate the rendered pixel width of *text* given *font_size*.
+
+    Uses approximate character widths: ~0.7× font_size for ASCII, ~1.44× for CJK.
+    """
     chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
     english_chars = len(text) - chinese_chars
     
@@ -515,9 +655,34 @@ def estimate_text_width(text, font_size=24):
     estimated_width = chinese_chars * chinese_width + english_chars * char_width
     return int(estimated_width)
 
-def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , 
-                       height : int | Literal['content' , 'stretch'] = 'content' , help : str | None = None , status = False , color = 'blue'):
-    
+def expander_subheader(key : str , label : str , icon : str | None = None , expanded : bool = False ,
+                       height : int | Literal['content' , 'stretch'] = 'content' , help : str | None = None , status : bool = False , color : str = 'blue') -> Any:
+    """Render a custom collapsible section header with an optional help tooltip.
+
+    Parameters
+    ----------
+    key:
+        Unique key used to build the Streamlit container key.
+    label:
+        Header text displayed in the expander button.
+    icon:
+        Optional Material icon string prepended to *label*.
+    expanded:
+        Whether the section starts in the open state.
+    height:
+        Inner container height (px, ``'content'``, or ``'stretch'``).
+    help:
+        If provided, a floating help tooltip is rendered beside the label.
+    status:
+        If True, use ``st.status`` instead of ``st.expander``.
+    color:
+        Streamlit badge colour for the label.
+
+    Returns
+    -------
+    Streamlit container
+        The inner container that callers should use as a context manager.
+    """
     container_key = f'{key.replace(" " , "-").lower()}-special-expander-' + ('status' if status else 'expander')
     with st.container():
         if help is not None:

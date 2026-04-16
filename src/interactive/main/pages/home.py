@@ -1,3 +1,4 @@
+"""Home page: tutorial, system info, and pending-features banner."""
 import platform, torch , sys
 import streamlit as st
 import psutil
@@ -8,7 +9,19 @@ from src.interactive.main.util import print_page_header
 
 PAGE_NAME = 'home'
 
-def estimate_text_width(text, font_size=24):
+def estimate_text_width(text: str, font_size: int = 24) -> int:
+    """Estimate the rendered pixel width of *text* at *font_size*.
+
+    Counts Chinese characters (CJK Unified block) at 1.32× font_size and
+    remaining characters at 0.66× font_size.
+
+    Args:
+        text: The string to measure.
+        font_size: Font size in pixels (default 24).
+
+    Returns:
+        Estimated width in pixels.
+    """
     chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
     english_chars = len(text) - chinese_chars
     
@@ -19,7 +32,8 @@ def estimate_text_width(text, font_size=24):
     return int(estimated_width)
 
 
-def show_tutorial():
+def show_tutorial() -> None:
+    """Render the tutorial expander with numbered step instructions."""
     with expander_subheader('home-tutorial' , 'Tutorial' , ':material/school:' , True ,
                             help = 'Basic Tutorial for the Project.'):
         st.markdown("""
@@ -29,7 +43,8 @@ def show_tutorial():
         4. :gray[:material/file_present:] Preview the generated HTML/PDF files
         """)
 
-def show_system_info():
+def show_system_info() -> None:
+    """Render the system info expander (OS, memory, GPU, CPU, Python, Streamlit)."""
     options : dict[str, str] = {}
     # os
     options[':material/keyboard_command_key: OS'] = f"{platform.system()} {platform.release()} ({platform.machine()})"
@@ -66,14 +81,16 @@ def show_system_info():
             cols[0].markdown(f"***{label}***")
             cols[1].markdown(f":blue-badge[*{value}*]")
         
-def show_pending_features():
-    if not CONST.Pref.get('interactive' , 'pending_features' , []): 
+def show_pending_features() -> None:
+    """Render warning badges for any pending features configured in preferences."""
+    if not CONST.Pref.get('interactive' , 'pending_features' , []):
         return
     with expander_subheader('home-pending-features' , 'Pending Features' , ':material/pending_actions:' , True):
         for feature in CONST.Pref.get('interactive' , 'pending_features' , []):
             st.warning(feature , icon = ":material/schedule:")
 
-def main():
+def main() -> None:
+    """Entry point for the home page."""
     print_page_header(PAGE_NAME)
     show_tutorial()
     show_system_info()

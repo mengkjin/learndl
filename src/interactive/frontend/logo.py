@@ -1,3 +1,10 @@
+"""
+Dynamic logo and banner generation for the interactive Streamlit application.
+
+Generates a rocket icon (:func:`draw_rocket`), a rainbow-gradient banner
+(:func:`create_banner`), and a combined logo (:func:`create_logo`) using Pillow.
+Fonts are downloaded on demand from dafont.com if not already cached locally.
+"""
 import requests
 import zipfile
 import shutil
@@ -60,8 +67,8 @@ def get_font() -> Path:
     
     return font_path
 
-def draw_rocket():
-    """draw a realistic rocket"""
+def draw_rocket() -> Image.Image:
+    """Draw a stylised rocket on a transparent RGBA canvas and return the image."""
     
     # create transparent background
     width, height = 200, 300
@@ -134,8 +141,14 @@ def draw_rocket():
     
     return image
 
-def create_icon(recreate = False):
-    """create an icon"""
+def create_icon(recreate : bool = False) -> Image.Image | None:
+    """Generate and save the rocket icon to disk, unless it already exists.
+
+    Parameters
+    ----------
+    recreate:
+        Must be False (guard against accidental regeneration).
+    """
     assert not recreate , "recreate must be False"
     if not recreate and PATH_ICON.exists(): 
         return
@@ -143,9 +156,14 @@ def create_icon(recreate = False):
     image.save(PATH_ICON)
     return image
 
-def create_banner(recreate = False):
-    """
-    generate image with font
+def create_banner(recreate : bool = False) -> None:
+    """Generate and save the "Learn Deep Learning" rainbow-gradient banner image.
+
+    Parameters
+    ----------
+    recreate:
+        If False (default), skip generation when the file already exists.
+        Set to True to force regeneration.
     """
     if not recreate and PATH_BANNER.exists(): 
         return
@@ -204,10 +222,22 @@ def create_banner(recreate = False):
     # save image
     image.save(PATH_BANNER)
 
-def create_logo(spacing=True, alignment='center', recreate=False):
-    """
-    - spacing: spacing between icon and banner
-    - alignment: vertical alignment ('top', 'center', 'bottom')
+def create_logo(spacing : bool = True, alignment : str = 'center', recreate : bool = False) -> Image.Image | None:
+    """Combine the rocket icon and banner into a single logo image.
+
+    Parameters
+    ----------
+    spacing:
+        If True, add horizontal spacing equal to the icon width between icon and banner.
+    alignment:
+        Vertical alignment of the two components: ``'top'``, ``'center'``, or ``'bottom'``.
+    recreate:
+        If False (default), skip if the logo file already exists.
+
+    Returns
+    -------
+    Image.Image or None
+        The composited logo, or None if the file already existed and was not recreated.
     """
     if not recreate and PATH_LOGO.exists(): 
         return
@@ -271,7 +301,7 @@ def create_logo(spacing=True, alignment='center', recreate=False):
     return logo
 
 def get_logo() -> dict:
-    """get the logo"""
+    """Return a dict with paths to the logo and icon images, creating them if needed."""
     create_logo()
     return {
         "image" : PATH_LOGO ,

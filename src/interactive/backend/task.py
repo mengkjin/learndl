@@ -1,5 +1,23 @@
 """
-TaskDatabase is a class that manages the task database, including task records, task exit files, task backend updated records, queue records, and task queues.
+Task lifecycle management for the interactive Streamlit application.
+
+Classes
+-------
+TaskDatabase
+    SQLite-backed persistence layer for all task, queue, and exit-file records.
+TaskQueue
+    In-memory ordered collection of :class:`TaskItem` objects backed by
+    :class:`TaskDatabase`, with filtering, pagination, and refresh logic.
+TaskItem
+    Dataclass representing a single pipeline script execution, including its
+    process PID, status transitions, timing, and output metadata.
+
+Module-level helpers
+--------------------
+timestamp()
+    Current POSIX timestamp as a float.
+runs_page_url(script_key)
+    Derive the Streamlit page URL for a given script key.
 """
 
 from __future__ import annotations
@@ -13,7 +31,8 @@ from pathlib import Path
 from src.proj import PATH , Logger , Duration
 from src.proj.util import ScriptCmd , DBConnHandler , Email , properties , check_process_status , kill_process
 
-def timestamp():
+def timestamp() -> float:
+    """Return the current UTC time as a POSIX timestamp (seconds since epoch)."""
     return datetime.now().timestamp()
 
 def runs_page_url(script_key : str):
@@ -21,7 +40,31 @@ def runs_page_url(script_key : str):
     return "pages/_" + re.sub(r'[/\\]', '_', script_key)
 
 class TaskDatabase:
-    def __init__(self , db_name: str | Path | None = None):
+    """SQLite-backed persistence layer for task and queue records.
+
+    Tables managed
+    --------------
+    task_records
+        One row per task with status, timing, PID, and exit metadata.
+    task_exit_files
+        Zero-or-more output file paths per task.
+    task_backend_updated
+        Tracks tasks that have been updated by the backend process and need a
+        frontend refresh.
+    queue_records
+        Registry of named queues; the most-recently created is the active queue.
+    task_queues
+        Many-to-many mapping of queues to task IDs.
+    """
+    def __init__(self , db_name: str | Path | None = None) -> None:
+        """Initialise the database connection and create tables if they don't exist.
+
+        Parameters
+        ----------
+        db_name:
+            Override the default database file stem. Useful for tests or
+            isolated sessions.
+        """
         self.db_path = self.get_db_path()
         if db_name is not None:
             self.db_path = self.db_path.with_name(f'{db_name}.db')
@@ -30,11 +73,12 @@ class TaskDatabase:
         self.initialize_database()
 
     @staticmethod
-    def get_db_path():
+    def get_db_path() -> Path:
+        """Return the default path to the SQLite database file."""
         return PATH.app_db / 'interactive_tasks.db'
 
-    def initialize_database(self):
-        """Initialize database and tables"""
+    def initialize_database(self) -> None:
+        """Initialize database and tables, creating them if they do not already exist."""
         # create 5 main tables : 
         # task_records : task records
         # task_exit_files : task exit files
@@ -97,8 +141,8 @@ class TaskDatabase:
                 ''')
             
     @property
-    def empty(self):
-        """Check if database is empty"""
+    def empty(self) -> bool:
+        """True if the task_records table contains no rows."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT * FROM task_records')
             return cursor.fetchone() is None
@@ -116,14 +160,14 @@ class TaskDatabase:
                 'queue_count': queue_count,
             }
 
-    def task_count(self):
-        """Get task count"""
+    def task_count(self) -> int:
+        """Return the total number of task records in the database."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT COUNT(*) FROM task_records')
             return cursor.fetchone()[0]
             
-    def clear_database(self):
-        """Clear database , will backup the database before clearing"""
+    def clear_database(self) -> None:
+        """Clear all records from the database, backing up first to prevent data loss."""
         self.conn_handler.backup()
         with self.conn_handler as (conn, cursor):
             cursor.execute('DELETE FROM task_records')
@@ -134,8 +178,16 @@ class TaskDatabase:
             cursor.execute('DELETE FROM sqlite_sequence')
         self.initialize_database()
     
-    def new_task(self, task: TaskItem , overwrite: bool = False):
-        """Insert new task record"""
+    def new_task(self, task: TaskItem , overwrite: bool = False) -> None:
+        """Insert a new task record (and its exit-file rows) into the database.
+
+        Parameters
+        ----------
+        task:
+            The :class:`TaskItem` to persist.
+        overwrite:
+            If True, delete any existing record with the same ``task_id`` first.
+        """
         with self.conn_handler as (conn, cursor):
             if overwrite:
                 cursor.execute('DELETE FROM task_records WHERE task_id = ?', (task.id,))
@@ -167,8 +219,16 @@ class TaskDatabase:
                 VALUES (?, ?)
                 ''', (task.id, file_path))
 
-    def new_queue(self, queue_id: str , exist_ok: bool = False):
-        """Insert new queue record"""
+    def new_queue(self, queue_id: str , exist_ok: bool = False) -> None:
+        """Register a new queue in queue_records.
+
+        Parameters
+        ----------
+        queue_id:
+            Unique identifier for the queue.
+        exist_ok:
+            If True, silently skip insertion when the queue already exists.
+        """
         with self.conn_handler as (conn, cursor):
             if exist_ok:
                 cursor.execute('SELECT * FROM queue_records WHERE queue_id = ?', (queue_id,))
@@ -179,8 +239,19 @@ class TaskDatabase:
                 VALUES (?, ?)
                 ''', (queue_id, timestamp()))
     
-    def update_task(self, task_id: str, backend_updated: bool = False, **kwargs):
-        """Update task status and related information"""
+    def update_task(self, task_id: str, backend_updated: bool = False, **kwargs) -> None:
+        """Update one or more columns of an existing task record.
+
+        Parameters
+        ----------
+        task_id:
+            The task to update.
+        backend_updated:
+            If True, insert a row into ``task_backend_updated`` so the frontend
+            knows to refresh this task on the next poll.
+        **kwargs:
+            Column-value pairs to write; ``exit_files`` is handled separately.
+        """
         if not kwargs or task_id == '': 
             return
         with self.conn_handler as (conn, cursor):
@@ -230,8 +301,8 @@ class TaskDatabase:
             cursor.execute('SELECT task_id FROM task_backend_updated')
             return [row['task_id'] for row in cursor.fetchall()]
         
-    def clear_backend_updated_tasks(self):
-        """Clear backend updated tasks"""
+    def clear_backend_updated_tasks(self) -> None:
+        """Remove all entries from the task_backend_updated tracking table."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('DELETE FROM task_backend_updated')
 
@@ -241,13 +312,13 @@ class TaskDatabase:
             cursor.execute('SELECT * FROM task_backend_updated WHERE task_id = ?', (task_id,))
             return cursor.fetchone() is not None
         
-    def del_backend_updated_task(self, task_id: str):
-        """Delete backend updated task"""
+    def del_backend_updated_task(self, task_id: str) -> None:
+        """Remove the backend-updated marker for a single task."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('DELETE FROM task_backend_updated WHERE task_id = ?', (task_id,))
 
-    def sync_queue(self, queue_id: str):
-        """Sync historical tasks into current queue"""
+    def sync_queue(self, queue_id: str) -> None:
+        """Rebuild the task_queues entries for *queue_id* from all task_records."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT task_id FROM task_records')
             task_ids = [row['task_id'] for row in cursor.fetchall()]
@@ -255,8 +326,8 @@ class TaskDatabase:
             for task_id in task_ids:
                 cursor.execute('INSERT INTO task_queues (queue_id, task_id) VALUES (?, ?)', (queue_id, task_id))
 
-    def clear_queue(self, queue_id: str):
-        """Update queue status and related information"""
+    def clear_queue(self, queue_id: str) -> None:
+        """Remove all task associations for the given queue (task records are kept)."""
         with self.conn_handler as (conn, cursor):
             cursor.execute("DELETE FROM task_queues WHERE queue_id = ?", (queue_id,))
     
@@ -296,11 +367,13 @@ class TaskDatabase:
 
         return list(tasks.values())
     
-    def add_queue_task(self, queue_id: str , task_id: str):
+    def add_queue_task(self, queue_id: str , task_id: str) -> None:
+        """Associate a task with a queue in task_queues."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('INSERT INTO task_queues (queue_id, task_id) VALUES (?, ?)', (queue_id, task_id))
     
-    def del_queue_task(self, queue_id: str , task_id: str):
+    def del_queue_task(self, queue_id: str , task_id: str) -> None:
+        """Remove a task association from a queue."""
         with self.conn_handler as (conn, cursor):
             cursor.execute('DELETE FROM task_queues WHERE queue_id = ? AND task_id = ?', (queue_id, task_id))
 
@@ -352,15 +425,37 @@ class TaskDatabase:
             else:
                 Logger.success(f"Queue ID {queue_id} successfully deleted")
     
-    def get_backup_paths(self):
+    def get_backup_paths(self) -> list[Path]:
+        """Return a list of all backup database file paths."""
         return self.conn_handler.all_backup_paths()
-    
-    def restore_backup(self , backup_path : Path | str):
+
+    def restore_backup(self , backup_path : Path | str) -> None:
+        """Clear the live database and restore from a backup file.
+
+        Parameters
+        ----------
+        backup_path:
+            Path to the SQLite backup file to restore from.
+        """
         self.clear_database()
         self.conn_handler.restore(backup_path , delete_backup = True)
 
 class TaskQueue:
-    def __init__(self , queue_id : str | None = None , max_queue_size : int | None = 100 , task_db : TaskDatabase | None = None):
+    """Ordered, in-memory collection of :class:`TaskItem` objects backed by :class:`TaskDatabase`.
+
+    Maintains at most *max_queue_size* items (oldest evicted first).  Supports
+    filtered views, batch refresh from the database, and task status counts.
+
+    Parameters
+    ----------
+    queue_id:
+        Name of the queue to load; defaults to the most recently created queue.
+    max_queue_size:
+        Maximum number of items to keep in memory (None = unlimited).
+    task_db:
+        Shared database instance; a new one is created if not supplied.
+    """
+    def __init__(self , queue_id : str | None = None , max_queue_size : int | None = 100 , task_db : TaskDatabase | None = None) -> None:
         assert max_queue_size is None or max_queue_size > 0 , 'max_queue_size must be None or greater than 0'
         self.task_db = task_db or TaskDatabase()
         self.queue_id = queue_id or self.task_db.active_queue()
@@ -369,95 +464,134 @@ class TaskQueue:
         self.reload()
     
     def __iter__(self):
+        """Iterate over task IDs in queue insertion order."""
         return iter(self.queue.keys())
-    
-    def __len__(self):
+
+    def __len__(self) -> int:
+        """Return the number of tasks currently held in the queue."""
         return len(self.queue)
-    
-    def __repr__(self):
+
+    def __repr__(self) -> str:
+        """Return a debug string showing queue_id, size limit, and current length."""
         return f"TaskQueue(queue_id={self.queue_id},max_queue_size={self.max_queue_size},length={len(self)})"
-    
-    def __contains__(self, item : TaskItem):
+
+    def __contains__(self, item : TaskItem) -> bool:
+        """Return True if *item* is present in the queue."""
         return item in self.queue.values()
-    
-    def get(self, task_id : str | None = None):
-        if task_id is None: 
+
+    def get(self, task_id : str | None = None) -> 'TaskItem | None':
+        """Return the :class:`TaskItem` with the given *task_id*, or None."""
+        if task_id is None:
             return None
         return self.queue.get(task_id)
 
     def keys(self):
+        """Return task-ID keys from the underlying queue dict."""
         return self.queue.keys()
-    
+
     def values(self):
+        """Return :class:`TaskItem` values from the underlying queue dict."""
         return self.queue.values()
-    
+
     def items(self):
+        """Return ``(task_id, TaskItem)`` pairs from the underlying queue dict."""
         return self.queue.items()
-    
+
     @property
-    def empty(self):
+    def empty(self) -> bool:
+        """True if the queue contains no task items."""
         return properties.empty(self.queue)
 
-    def reload(self):
+    def reload(self) -> None:
+        """Re-fetch all queue tasks from the database and do an initial refresh."""
         self.queue = {task.id: task.set_task_db(self.task_db) for task in self.task_db.get_queue_tasks(self.queue_id, self.max_queue_size)}
         self.refresh()
 
-    def queue_content(self):
+    def queue_content(self) -> dict[str, dict]:
+        """Return a snapshot dict of ``{task_id: task_dict}`` after refreshing."""
         self.refresh()
         return {task.id: task.to_dict() for task in self.queue.values()}
 
-    def add(self, item : TaskItem):
+    def add(self, item : TaskItem) -> None:
+        """Append *item* to the queue, evicting the oldest entry if over the size limit.
+
+        Also persists the association in the database.
+        """
         assert item.id not in self.queue , f'TaskItem {item.id} already exists'
         self.queue[item.id] = item
-        
+
         self.task_db.del_queue_task(self.queue_id, item.id)
         self.task_db.add_queue_task(self.queue_id, item.id)
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : Path | str | None , source : str | None = None):
+    def create_item(self , script : Path | str | None , source : str | None = None) -> 'TaskItem':
+        """Create a new :class:`TaskItem`, persist it, and add it to this queue."""
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
         return item
-    
-    def delist(self, item : TaskItem):
+
+    def delist(self, item : TaskItem) -> None:
+        """Remove *item* from the in-memory queue and its database queue association.
+
+        The underlying task record is NOT deleted.
+        """
         if item.id in self.queue:
             self.queue.pop(item.id)
         self.task_db.del_queue_task(self.queue_id, item.id)
-        
-    def remove(self, item : TaskItem , force : bool = False):
+
+    def remove(self, item : TaskItem , force : bool = False) -> None:
+        """Remove *item* from the queue and permanently delete its task record.
+
+        Parameters
+        ----------
+        force:
+            If True, delete even tasks not in an error/killed state.
+        """
         if item.id in self.queue:
             self.queue.pop(item.id)
         self.task_db.del_queue_task(self.queue_id, item.id)
         self.task_db.del_task(item.id , check = True , force = force)
 
-    def clear_queue_only(self):
+    def clear_queue_only(self) -> None:
+        """Remove all items from the in-memory queue and its database associations without deleting task records."""
         for key in list(self.queue.keys()):
             self.queue.pop(key)
         self.task_db.clear_queue(self.queue_id)
 
-    def clear(self):
+    def clear(self) -> None:
+        """Remove all items from the queue and wipe the entire database (with backup)."""
         for key in list(self.queue.keys()):
             self.queue.pop(key)
         self.task_db.clear_database()
 
-    def count(self, status : Literal['starting', 'running', 'complete', 'error' , 'killed']):
+    def count(self, status : Literal['starting', 'running', 'complete', 'error' , 'killed']) -> int:
+        """Return the number of tasks with the given *status*."""
         return [item.status for item in self.queue.values()].count(status)
-    
-    def refresh(self):
+
+    def refresh(self) -> list | bool:
+        """Pull updates for running and backend-updated tasks from the database.
+
+        Returns True (or a non-empty list) if any task changed status, False (or
+        an empty list) otherwise.
+        """
         backend_updated_item_ids = self.task_db.get_backend_updated_tasks()
         running_item_ids = [item.id for item in self.queue.values() if item.is_running]
         item_ids = list(set(backend_updated_item_ids + running_item_ids))
         changed = [self.queue[item_id].refresh() for item_id in item_ids if item_id in self.queue]
         return changed and any(changed)
     
-    def sync(self):
+    def sync(self) -> None:
         '''sync tasks in record into current queue'''
         self.task_db.sync_queue(self.queue_id)
         self.reload()
             
-    def status_message(self , queue : dict[str, TaskItem] | None = None):
-        if queue is None: 
+    def status_message(self , queue : dict[str, 'TaskItem'] | None = None) -> str:
+        """Return a pipe-separated summary string of task status counts.
+
+        Example: ``"Total: 5 | Running: 1 | Complete: 3 | Error: 1"``
+        """
+        if queue is None:
             queue = self.queue
         status = [item.status for item in queue.values()]
         counts = {
@@ -468,9 +602,10 @@ class TaskQueue:
         }
         msg = ' | '.join([f"{k.title()}: {v}" for k, v in counts.items()])
         return msg
-    
-    def source_message(self , queue : dict[str, TaskItem] | None = None):
-        if queue is None: 
+
+    def source_message(self , queue : dict[str, 'TaskItem'] | None = None) -> str:
+        """Return a pipe-separated summary string of task source counts (py/app/bash/other)."""
+        if queue is None:
             queue = self.queue
         source = [item.source for item in queue.values()]
         counts = {
@@ -486,8 +621,23 @@ class TaskQueue:
     def filter(self, status : str | None = None,
                source : str | None = None,
                folder : list[Path] | None = None,
-               file : list[Path] | None = None , 
-               queue : dict[str, TaskItem] | None = None):
+               file : list[Path] | None = None ,
+               queue : dict[str, 'TaskItem'] | None = None) -> dict[str, 'TaskItem']:
+        """Return a filtered, sorted copy of the queue.
+
+        Parameters
+        ----------
+        status:
+            Filter by status string (e.g. ``'running'``); ``'all'`` or None skips.
+        source:
+            Filter by source (``'py'``, ``'app'``, ``'bash'``, ``'other'``).
+        folder:
+            Keep only tasks whose script resides inside one of these folders.
+        file:
+            Keep only tasks whose script path is in this exact list.
+        queue:
+            Alternative queue dict to filter; defaults to ``self.queue``.
+        """
         if queue is None: 
             queue = self.queue.copy()
         else:
@@ -507,14 +657,16 @@ class TaskQueue:
             queue = {k: v for k, v in queue.items() if v.path in file}
         return {item.id: item for item in self.sort(queue)}   
     
-    def latest_n(self , num : int = 10 , script_key : str | None = None):
+    def latest_n(self , num : int = 10 , script_key : str | None = None) -> dict[str, 'TaskItem']:
+        """Return the *num* most-recently created tasks, optionally filtered by *script_key*."""
         if script_key is None:
             d = self.queue.copy()
         else:
             d = {k:v for k,v in self.queue.items() if v.script_key == script_key}
         return {item.id: item for item in self.sort(d)[:num]}
     
-    def latest(self , script_key : str | None = None):
+    def latest(self , script_key : str | None = None) -> 'TaskItem | None':
+        """Return the single most-recently created task, or None if the queue is empty."""
         d = self.latest_n(1 , script_key)
         if d:
             return list(d.values())[0]
@@ -522,14 +674,45 @@ class TaskQueue:
             return None
     
     @classmethod
-    def sort(cls , task_items : dict[str, TaskItem] | list[TaskItem] | Sequence[TaskItem], key : str = 'create_time' , reverse : bool = True):
+    def sort(cls , task_items : dict[str, 'TaskItem'] | list['TaskItem'] | Sequence['TaskItem'], key : str = 'create_time' , reverse : bool = True) -> list['TaskItem']:
+        """Sort *task_items* by the given attribute *key*, newest first by default."""
         if isinstance(task_items, dict):
             task_items = list(task_items.values())
         return sorted(task_items, key=lambda x: getattr(x, key), reverse=reverse)
     
 @dataclass
 class TaskItem:
-    '''TaskItem is a class that represents a task item in the Task Queue'''
+    """Dataclass representing a single pipeline script execution.
+
+    Attributes
+    ----------
+    script:
+        Absolute path to the script file as a string (no spaces, no ``@``).
+    cmd:
+        The full command string used to launch the script.
+    create_time:
+        POSIX timestamp when the task was created.
+    status:
+        Current lifecycle state: ``'starting'``, ``'running'``, ``'complete'``,
+        ``'error'``, or ``'killed'``.
+    source:
+        How the task was launched: ``'py'`` (direct Python), ``'app'``
+        (Streamlit UI), or ``'bash'`` (shell).
+    pid:
+        OS process ID once the subprocess has started.
+    start_time, end_time:
+        POSIX timestamps for process start and end.
+    exit_code:
+        Numeric exit code returned by :class:`BackendTaskRecorder`.
+    exit_message:
+        Human-readable summary from :class:`BackendTaskRecorder`.
+    exit_files:
+        List of output file paths returned by the script.
+    exit_error:
+        Traceback or error description on failure.
+    task_id:
+        Auto-computed on ``__post_init__``; equals ``id``.
+    """
     script : str
     cmd : str = ''
     create_time : float = field(default_factory=timestamp)
@@ -545,7 +728,8 @@ class TaskItem:
 
     task_id : str | None = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Validate fields, normalise ``source``, and initialise transient attributes."""
         assert isinstance(self.script, str) , f'script must be a string, but got {type(self.script)}'
         if self.script:
             assert ' ' not in self.script , f'script must not contain space, but got {self.script}'
@@ -559,40 +743,47 @@ class TaskItem:
         self.script_cmd = None
         self._updates_to_sync : dict[str, Any] = {}
 
-    def __eq__(self, other):
+    def __eq__(self, other : object) -> bool:
+        """Compare by ``id``; also accepts a plain string."""
         if isinstance(other, TaskItem):
             return self.id == other.id
         elif isinstance(other, str):
             return self.id == other
         return False
     
-    def set_task_db(self , task_db : TaskDatabase | None = None):
+    def set_task_db(self , task_db : TaskDatabase | None = None) -> 'TaskItem':
+        """Attach a :class:`TaskDatabase` to this item (creates one if not provided). Returns self."""
         if task_db is not None:
             self._task_db = task_db
         elif self._task_db is None:
             self._task_db = TaskDatabase()
         return self
     
-    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs):
+    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
+        """Build and attach the :class:`ScriptCmd`, persisting the resulting ``cmd`` string. Returns self."""
         self.script_cmd = ScriptCmd(script, params, mode, **kwargs)
         self.update({'cmd': str(self.script_cmd)} , sync = True)
         return self
 
     @property
-    def task_db(self):
+    def task_db(self) -> TaskDatabase:
+        """The attached :class:`TaskDatabase`; raises if not yet set."""
         assert self._task_db is not None , 'task_db is not set'
         return self._task_db
 
     @property
-    def path(self):
+    def path(self) -> Path:
+        """The script path as a :class:`~pathlib.Path` object."""
         return Path(self.script)
 
     @property
-    def relative(self):
+    def relative(self) -> Path:
+        """Script path relative to the project scripts root (``PATH.scpt``)."""
         return self.absolute.relative_to(PATH.scpt)
-    
+
     @property
-    def absolute(self):
+    def absolute(self) -> Path:
+        """Absolute path, resolving cross-machine path differences via the ``scripts`` segment."""
         abs_path = self.path.absolute()
         if abs_path.is_relative_to(PATH.scpt):
             return abs_path
@@ -600,26 +791,35 @@ class TaskItem:
             return PATH.scpt.joinpath(str(abs_path).split('scripts' , 1)[-1].replace('\\', '/').removeprefix('/'))
 
     @property
-    def stem(self):
+    def stem(self) -> str:
+        """Human-readable script name: underscores replaced with spaces, Title Case."""
         return self.path.stem.replace('_', ' ').title()
-    
+
     @property
-    def time_id(self):
+    def time_id(self) -> int:
+        """Integer POSIX timestamp used as the unique time component of ``id``."""
         return int(self.create_time)
 
     @property
-    def id(self):
+    def id(self) -> str:
+        """Unique task identifier: ``'<relative_script>@<time_id>'``, or ``''`` for anonymous tasks."""
         return f"{str(self.relative)}@{self.time_id}" if self.script else ''
-    
+
     @property
-    def format_path(self):
-        return ' > '.join(re.sub(r'^\d+ ', '', p).title() 
+    def format_path(self) -> str:
+        """Human-readable breadcrumb path, e.g. ``'Data > Train Data'``."""
+        return ' > '.join(re.sub(r'^\d+ ', '', p).title()
                           for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
 
-    def belong_to(self , script_runner):
+    def belong_to(self , script_runner : Any) -> bool:
+        """Return True if this task was launched from *script_runner*'s script."""
         return self.script == str(script_runner.script)
-    
-    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y-%m-%d %H:%M:%S'):
+
+    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y-%m-%d %H:%M:%S') -> str:
+        """Return a formatted datetime string for the given time type.
+
+        Returns ``'N/A'`` on conversion failure.
+        """
         try:
             if time_type == 'create':
                 return datetime.fromtimestamp(self.create_time).strftime(format)
@@ -632,16 +832,33 @@ class TaskItem:
             return 'N/A'
 
     @property
-    def script_key(self):
+    def script_key(self) -> str:
+        """Unique string key matching :attr:`ScriptRunner.script_key`."""
         return str(self.relative)
 
     @property
-    def page_url(self):
+    def page_url(self) -> str:
+        """Streamlit page URL for this task's script detail page."""
         return runs_page_url(self.script_key)
     
     @classmethod
-    def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None , 
-               queue : TaskQueue | bool | None = None):
+    def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
+               queue : TaskQueue | bool | None = None) -> 'TaskItem':
+        """Factory: create and persist a new :class:`TaskItem`.
+
+        Parameters
+        ----------
+        script:
+            Path to the script file.  If None, the running ``__main__`` file is
+            used (useful when called from inside a backend script).
+        task_db:
+            Shared database; a new one is created if omitted.
+        source:
+            Launch origin (``'py'``, ``'bash'``, or ``'app'``).
+        queue:
+            A :class:`TaskQueue` to register the item with, True to use the
+            active queue, or None to skip queue registration.
+        """
         if script is None:
             try:
                 script = sys.modules['__main__'].__file__
@@ -663,17 +880,19 @@ class TaskItem:
         return item
     
     @classmethod
-    def preview_cmd(cls , script : Path | str | None , 
-                    source : Literal['py', 'bash','app'] | str | None = None , 
-                    mode: Literal['shell', 'os'] = 'shell' , 
-                    **kwargs):
+    def preview_cmd(cls , script : Path | str | None ,
+                    source : Literal['py', 'bash','app'] | str | None = None ,
+                    mode: Literal['shell', 'os'] = 'shell' ,
+                    **kwargs) -> str:
+        """Return the command string that would run *script* without actually executing it."""
         item = cls(str(script) , source = source)
         params = kwargs | {'task_id': item.id , 'source': item.source}
         cmd = ScriptCmd(item.script, params, mode)
         return str(cmd)
     
     @classmethod
-    def load(cls , task_id: str , task_db : TaskDatabase | None = None):
+    def load(cls , task_id: str , task_db : TaskDatabase | None = None) -> 'TaskItem':
+        """Load a persisted :class:`TaskItem` from the database by *task_id*."""
         task_db = task_db or TaskDatabase()
         item = task_db.get_task(task_id)
         assert item is not None , f'Task {task_id} not found'
@@ -710,6 +929,11 @@ class TaskItem:
         return changed
 
     def check_killed(self) -> bool:
+        """Check for crash-protector files indicating the process was killed.
+
+        If found, updates the task status to ``'killed'``, records exit metadata,
+        sends an email notification, and returns True; otherwise returns False.
+        """
         crash_protector_paths = self.get_crash_protector()
         if crash_protector_paths:
             updates = {
@@ -777,16 +1001,19 @@ class TaskItem:
         return True
 
     def get_crash_protector(self) -> list[str]:
+        """Return paths of crash-protector marker files matching this task's ID."""
         if self.task_id is None:
             return []
         long_suffix = '.' + self.task_id.replace('/', '_') + '.'
         crashed_paths = [str(path) for path in PATH.runtime.joinpath('crash_protector').glob('*.md')]
         return [path for path in crashed_paths if long_suffix in path]
     
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise this item to a dict, omitting None fields."""
         return {k: v for k, v in asdict(self).items() if v is not None}
-    
-    def dump(self):
+
+    def dump(self) -> None:
+        """Persist (or overwrite) this item in the attached :class:`TaskDatabase`."""
         self.task_db.new_task(self , overwrite=True)
     
     def reload(self) -> dict[str, Any]:
@@ -808,12 +1035,22 @@ class TaskItem:
         self.task_db.del_backend_updated_task(self.id)
         return changed
 
-    def sync(self):
+    def sync(self) -> None:
+        """Flush any pending in-memory updates to the database."""
         if self._updates_to_sync:
             self.task_db.update_task(self.id , **self._updates_to_sync)
             self._updates_to_sync = {}
         
-    def update(self, updates : dict[str, Any] | None = None , sync : bool = False):
+    def update(self, updates : dict[str, Any] | None = None , sync : bool = False) -> None:
+        """Apply *updates* to this item's attributes and optionally persist to the database.
+
+        Parameters
+        ----------
+        updates:
+            Dict of attribute-name → new-value pairs.
+        sync:
+            If True, immediately flush to the database via :meth:`sync`.
+        """
         if updates is None: 
             return
         [setattr(self, k, v) for k, v in updates.items()]
@@ -821,7 +1058,11 @@ class TaskItem:
         if sync:
             self.sync()
 
-    def kill(self):
+    def kill(self) -> bool:
+        """Send a kill signal to the process if it is running.
+
+        Returns True on success or if the process is not running, False on failure.
+        """
         if self.pid and self.is_running:
             if kill_process(self.pid):
                 self.check_killed()
@@ -831,8 +1072,9 @@ class TaskItem:
         return True
 
     @classmethod
-    def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error' , 'killed'] , tag : bool = False):
-        if status in ['running', 'starting']: 
+    def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error' , 'killed'] , tag : bool = False) -> str:
+        """Return a Material icon string for *status*, optionally wrapped in a colour badge."""
+        if status in ['running', 'starting']:
             icon , color = ':material/arrow_forward_ios:' , 'blue'
         elif status == 'complete': 
             icon , color = ':material/check:' , 'green'
@@ -856,71 +1098,81 @@ class TaskItem:
             raise ValueError(f"Invalid status: {self.status}")
 
     @property
-    def status_title(self):
-        if self.is_running: 
+    def status_title(self) -> str:
+        """Human-readable title for the current status (e.g. ``'Running'``, ``'Complete'``)."""
+        if self.is_running:
             return 'Running'
-        elif self.is_complete:  
+        elif self.is_complete:
             return 'Complete'
-        elif self.is_error: 
+        elif self.is_error:
             return 'Error'
         elif self.is_killed:
             return 'Killed'
-        else: 
+        else:
             raise ValueError(f"Invalid status: {self.status}")
 
     @property
-    def status_color(self):
-        if self.is_running: 
+    def status_color(self) -> str:
+        """Streamlit badge colour name for the current status."""
+        if self.is_running:
             return 'blue'
-        elif self.is_complete:  
+        elif self.is_complete:
             return 'green'
-        elif self.is_error: 
+        elif self.is_error:
             return 'red'
         elif self.is_killed:
             return 'violet'
-        else: 
+        else:
             raise ValueError(f"Invalid status: {self.status}")
 
     @property
-    def is_complete(self):
+    def is_complete(self) -> bool:
+        """True when status is ``'complete'``."""
         return self.status == 'complete'
 
     @property
-    def is_error(self):
+    def is_error(self) -> bool:
+        """True when status is ``'error'``."""
         return self.status == 'error'
 
     @property
-    def is_killed(self):
+    def is_killed(self) -> bool:
+        """True when status is ``'killed'``."""
         return self.status == 'killed'
-    
+
     @property
-    def is_running(self):
+    def is_running(self) -> bool:
+        """True when status is ``'running'`` or ``'starting'``."""
         return self.status in ['running', 'starting']
 
     @property
-    def plain_icon(self):
-        if self.is_running: 
+    def plain_icon(self) -> str:
+        """Unicode emoji icon for the current status (suitable for plain-text output)."""
+        if self.is_running:
             icon = '🔵'
-        elif self.is_complete: 
+        elif self.is_complete:
             icon = '✅'
-        elif self.is_error: 
+        elif self.is_error:
             icon = '❌'
         elif self.is_killed:
             icon = '💀'
-        else: 
+        else:
             raise ValueError(f"Invalid status: {self.status}")
         return icon
-        
+
     @property
-    def icon(self):
+    def icon(self) -> str:
+        """Material icon string for the current status (without badge)."""
         return self.status_icon(self.status)
-    
+
     @property
-    def tag_icon(self):
+    def tag_icon(self) -> str:
+        """Material icon string wrapped in a colour badge for the current status."""
         return self.status_icon(self.status , tag = True)
 
     @property
-    def duration(self):
+    def duration(self) -> float:
+        """Elapsed seconds between start (or create) time and end (or now)."""
         start_time = self.start_time or self.create_time
         end_time = self.end_time or timestamp()
         try:
@@ -928,19 +1180,31 @@ class TaskItem:
         except (ValueError , TypeError):
             Logger.error(f'duration is not a number: {end_time} - {start_time}')
             return 0
-    
+
     @property
-    def duration_str(self):
+    def duration_str(self) -> str:
+        """Human-readable duration string (e.g. ``'1m 23s'``)."""
         return Duration(self.duration).fmtstr
-        
+
     @property
-    def running_str(self):
+    def running_str(self) -> str:
+        """Streamlit-flavoured markdown summary line for display while the task is running."""
         return f"Script ***{self.format_path} @{self.time_id}*** :gray-badge[Create {self.time_str()}] :orange-badge[Source {self.source.title()}] :violet-badge[PID {self.pid}]"
-    
-    def button_str_short(self):
+
+    def button_str_short(self) -> str:
+        """Short label used for task selector buttons (path + HH:MM:SS)."""
         return f"{self.format_path} ({self.time_str(format = '%H:%M:%S')})"
-    
-    def button_str_long(self , index : int | None = None , plain_text : bool = False):
+
+    def button_str_long(self , index : int | None = None , plain_text : bool = False) -> str:
+        """Full label used for task history expanders, with status badge and source tag.
+
+        Parameters
+        ----------
+        index:
+            Optional 1-based index prepended to the label.
+        plain_text:
+            If True, return ASCII-only text (no Streamlit markdown).
+        """
         if plain_text:
             if index is not None:
                 s = [f"{index}." , self.plain_icon, "."]
@@ -960,7 +1224,8 @@ class TaskItem:
             s.append(f":orange-badge[Source {self.source.title()}]")
         return " ".join(s)
     
-    def button_help_text(self):
+    def button_help_text(self) -> str:
+        """Return a single-line tooltip string with full task metadata."""
         return ' | '.join([f"ID: {self.id}" , 
                            f"PID: {self.pid}" , 
                            f"Beg: {self.time_str('start')}" , 
@@ -970,6 +1235,16 @@ class TaskItem:
 
     def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all' ,
                   sep_exit_files : bool = True) -> list[tuple[str, str]]:
+        """Return a list of ``(label, value)`` pairs describing this task.
+
+        Parameters
+        ----------
+        info_type:
+            Which group of fields to include: ``'enter'`` (ID, script, PID,
+            timing), ``'exit'`` (exit code/message/files), or ``'all'`` (both).
+        sep_exit_files:
+            If True, each exit file gets its own row; otherwise they are joined.
+        """
         self.refresh()
         enter_info : list[tuple[str, str]] = []
         if info_type in ['all' , 'enter']:
@@ -1001,12 +1276,22 @@ class TaskItem:
                     exit_info.append(('Exit Files', '\n'.join(self.exit_files)))
         return enter_info + exit_info
         
-    def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):
+    def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all') -> 'pd.DataFrame':
+        """Return task metadata as a two-column DataFrame (Item / Value)."""
         data_list = self.info_list(info_type = info_type)
         df = pd.DataFrame(data_list , columns = pd.Index(['Item', 'Value']))
         return df
     
-    def run_script(self , as_workspace: str | None = None , from_workspace: str | None = None):
+    def run_script(self , as_workspace: str | None = None , from_workspace: str | None = None) -> 'TaskItem':
+        """Launch the script subprocess, capture the PID, and update status to ``'running'``.
+
+        Parameters
+        ----------
+        as_workspace, from_workspace:
+            Forwarded to :meth:`ScriptCmd.run` for workspace-switching support.
+
+        Returns self.
+        """
         assert self.script_cmd is not None , 'script cmd is not set'
         try:
             start_time = timestamp()

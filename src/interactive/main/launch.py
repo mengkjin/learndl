@@ -1,4 +1,13 @@
+"""Application entry point for the Learndl interactive pipeline manager.
 
+Validates that the process is launched from the project root, applies optional
+auto-refresh, and delegates to :func:`page_setup` which assembles navigation
+and renders each page.
+
+Run with::
+
+    uv run streamlit run src/interactive/main/launch.py
+"""
 
 import pathlib , os
 import streamlit as st
@@ -18,7 +27,11 @@ st.set_option('client.showSidebarNavigation', False)
 if CONST.Pref.get('interactive' , 'auto_refresh_interval' , 0) > 0:
     st_autorefresh.st_autorefresh(interval = CONST.Pref.get('interactive' , 'auto_refresh_interval' , 0) * 1000)
   
-def main():
+def main() -> None:
+    """Bootstrap and run the Streamlit app.
+
+    Prints project info, builds the multi-page navigation object, and runs it.
+    """
     Proj.print_info(script_level = False)
     pg = page_setup(navigation_position = 'both')
     pg.run()

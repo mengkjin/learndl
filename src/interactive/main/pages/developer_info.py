@@ -1,3 +1,4 @@
+"""Developer info page: session state, task queue JSON, and log management."""
 import streamlit as st
 
 from src.interactive.frontend.frontend import expander_subheader # , ActionLogger
@@ -6,7 +7,8 @@ from src.interactive.main.util import SC , print_page_header
 
 PAGE_NAME = 'developer_info'
 
-def developer_info_selected_change():
+def developer_info_selected_change() -> None:
+    """Callback: handle ``'All'`` / ``'None'`` shortcuts in the multi-select control."""
     selected = getattr(st.session_state , 'developer-info-selected' , [])
     if 'All' in selected:
         st.session_state['developer-info-selected'] = ['Session Control' , 'Session States' , 'Task Queue'] # , 'Action Logs' , 'Error Logs']
@@ -63,9 +65,10 @@ def show_developer_info(H = 500):
             with expander_subheader(f'developer-info-{seg}' , seg , content['icon'] , height = H):
                 content['operation']()
         
-def main():
+def main() -> None:
+    """Entry point for the developer info page."""
     print_page_header(PAGE_NAME)
     show_developer_info()
-        
+
 if __name__ == '__main__':
-    main() 
+    main()

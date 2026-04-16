@@ -1,3 +1,11 @@
+"""Page registry, page-file generation, and page-header rendering.
+
+Maintains the static lists of intro pages and dynamically discovered script
+pages, auto-generates a thin Streamlit page file for each script under
+``main/pages/``, and provides :func:`print_page_header` which every page
+calls at the top of its ``main()`` to register the active page and render the
+shared header row and control panel.
+"""
 import streamlit as st
 from pathlib import Path
 from typing import Literal
@@ -41,10 +49,22 @@ SCRIPT_ICONS = {
     'trading' : ':material/payments:',
 }
 
-def intro_pages():
+def intro_pages() -> dict[str, dict]:
+    """Return a dict mapping intro page name → page metadata for all intro pages."""
     return {page:get_intro_page(page) for page in INTRO_PAGES}
 
-def get_intro_page(page_name : str):
+def get_intro_page(page_name : str) -> dict:
+    """Return (and cache) the metadata dict for a single intro page.
+
+    The result is stored in ``st.session_state['app_intro_pages']`` so that
+    the ``st.Page`` object is only created once per session.
+
+    Args:
+        page_name: Must be one of :data:`INTRO_PAGES`.
+
+    Returns:
+        Dict with keys ``page``, ``label``, ``head``, ``icon``, ``help``.
+    """
     assert page_name in INTRO_PAGES , f"Page {page_name} not a valid intro page"
     if 'app_intro_pages' not in st.session_state: 
         st.session_state['app_intro_pages'] = {}
@@ -61,7 +81,12 @@ def get_intro_page(page_name : str):
         }
     return st.session_state['app_intro_pages'][page_name]
 
-def script_pages():
+def script_pages() -> dict[str, dict]:
+    """Return a dict mapping script key → page metadata for all enabled scripts.
+
+    Iterates discovered :class:`PathItem` file entries, auto-generates the
+    per-script detail file if missing, and caches each page in session state.
+    """
     pages = {}
     items = [item for item in SC.path_items if item.is_file and item.level > 0]
     for item in items:
@@ -70,7 +95,19 @@ def script_pages():
         pages[item.script_key] = get_script_page(item.script_key)
     return pages
 
-def get_script_page(script_key: str):
+def get_script_page(script_key: str) -> dict:
+    """Return (and cache) the metadata dict for a script page.
+
+    Creates a ``st.Page`` for the script's auto-generated detail file and
+    stores the result in ``st.session_state['app_script_pages']``.
+
+    Args:
+        script_key: Relative path key such as ``'4_train/1_train_model.py'``.
+
+    Returns:
+        Dict with keys ``page``, ``group``, ``label``, ``head``, ``icon``,
+        ``help``, ``runner``.
+    """
     runner = SC.get_script_runner(script_key)
     if runner.header.disabled: 
         st.error(f"Script {script_key} is disabled!")
@@ -102,7 +139,8 @@ def runs_page_path(script_key : str):
     """get runs page path"""
     return PAGE_DIR.parent.joinpath(runs_page_url(script_key))
 
-def all_runs_page_paths():
+def all_runs_page_paths() -> list[Path]:
+    """Return all auto-generated script detail page files under the pages directory."""
     return [path for path in PAGE_DIR.iterdir() if path.is_file and path.name.startswith('_')]
 
 def make_script_detail_file(item : PathItem | Path):
@@ -122,11 +160,23 @@ if __name__ == '__main__':
     main()
 """)
 
-def remake_all_script_detail_files():
+def remake_all_script_detail_files() -> None:
+    """Delete and regenerate every auto-generated script detail page file."""
     [path.unlink() for path in all_runs_page_paths()]
     [make_script_detail_file(path) for path in PathItem.iter_folder()]
 
-def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro'):
+def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro') -> None:
+    """Register the active page and render the shared header and control panel.
+
+    Called at the top of every page's ``main()`` function.  Sets the current
+    page in session state, notifies :class:`SessionControl`, then renders the
+    coloured icon + rainbow title header followed by the control panel row.
+
+    Args:
+        page_name: The intro page name (e.g. ``'home'``) or script key
+            (e.g. ``'4_train/1_train_model.py'``).
+        type: ``'intro'`` for intro pages, ``'script'`` for script pages.
+    """
     set_current_page(page_name)
     SC.switch_page(page_name)
     if type == 'intro':

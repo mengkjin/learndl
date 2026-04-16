@@ -1,3 +1,11 @@
+"""
+Streamlit widget layer for script parameter input.
+
+Provides :class:`WidgetParamInput` (a Streamlit-aware extension of
+:class:`~src.interactive.backend.ScriptParamInput`) and :class:`ParamInputsForm`,
+which renders a complete parameter form for a given script and manages the
+option ↔ value transformation pipeline.
+"""
 from typing import Literal , Any , Callable
 import streamlit as st
 
@@ -6,8 +14,22 @@ from src.interactive.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 from .param_cache import ParamCache
 
+
 class WidgetParamInput(ScriptParamInput):
-    def __init__(self , runner : ScriptRunner , param : ScriptParamInput):
+    """Streamlit-aware extension of :class:`ScriptParamInput`.
+
+    Adds widget-key management, option ↔ value transformers, and
+    cache read/write for a single script parameter.
+
+    Parameters
+    ----------
+    runner:
+        The :class:`ScriptRunner` that owns this parameter.
+    param:
+        The base :class:`ScriptParamInput` descriptor to extend.
+    """
+    def __init__(self , runner : ScriptRunner , param : ScriptParamInput) -> None:
+        """Initialise by copying *param* fields and building the option ↔ value transformers."""
         super().__init__(**param.as_dict())
         self._runner = runner
         self._param = param
@@ -15,29 +37,36 @@ class WidgetParamInput(ScriptParamInput):
         self.value_to_option = self.value_to_option_transformer(param)
 
     @property
-    def script_key(self):
+    def script_key(self) -> str:
+        """Script key from the owning :class:`ScriptRunner`."""
         return self._runner.script_key
 
     @property
     def option(self) -> Any:
+        """Current raw widget option from ``st.session_state`` (may be None)."""
         return st.session_state.get(self.widget_key, None)
-    
+
     @property
-    def param_value(self):
+    def param_value(self) -> Any:
+        """The typed Python value derived from the current widget option."""
         return self.option_to_value(self.option)
 
     @property
-    def widget_key(self):
+    def widget_key(self) -> str:
+        """Unique Streamlit session-state key for this widget."""
         return f"script-param-{self.script_key}-{self.name}"
-    
-    def is_valid(self):
+
+    def is_valid(self) -> bool:
+        """Return True if the current ``param_value`` passes validation."""
         return self._param.is_valid(self.param_value)
-    
-    def error_message(self):
+
+    def error_message(self) -> str | None:
+        """Return a user-facing error string if ``param_value`` is invalid, else None."""
         return self._param.error_message(self.param_value)
     
     @classmethod
-    def option_to_value_transformer(cls , param : ScriptParamInput):
+    def option_to_value_transformer(cls , param : ScriptParamInput) -> Callable:
+        """Build a callable that converts a raw widget option to its typed Python value."""
         ptype = param.ptype
         if isinstance(ptype, list):
             options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
@@ -64,7 +93,8 @@ class WidgetParamInput(ScriptParamInput):
             raise ValueError(f"Unsupported param type: {ptype}")
 
     @classmethod
-    def value_to_option_transformer(cls , param : ScriptParamInput):
+    def value_to_option_transformer(cls , param : ScriptParamInput) -> Callable:
+        """Build a callable that converts a typed Python value back to its widget option string."""
         ptype = param.ptype
         if isinstance(ptype, list):
             options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
@@ -91,7 +121,8 @@ class WidgetParamInput(ScriptParamInput):
             raise ValueError(f"Unsupported param type: {ptype}")
 
     @classmethod
-    def remove_extra_prefix_regex(cls , s : Any, prefix : str , remain_prefix : bool = True):
+    def remove_extra_prefix_regex(cls , s : Any, prefix : str , remain_prefix : bool = True) -> str:
+        """Strip repeated occurrences of *prefix* from *s*, optionally re-adding it once."""
         s = str(s)
         if not prefix:
             return s
@@ -102,12 +133,14 @@ class WidgetParamInput(ScriptParamInput):
         else:    
             return s
     
-    def on_change(self , cache : ParamCache):
+    def on_change(self , cache : ParamCache) -> None:
+        """Persist current option, value, and validity into *cache* when the widget changes."""
         cache.set(self.option, self.script_key, 'option', self.name)
         cache.set(self.param_value, self.script_key, 'value', self.name)
         cache.set(self.is_valid(), self.script_key, 'valid', self.name)
 
-    def default_option(self , cache : ParamCache, value : Any | None = None):
+    def default_option(self , cache : ParamCache, value : Any | None = None) -> Any:
+        """Resolve the default widget option from an explicit *value*, the cache, or the param default."""
         if value is not None:
             default_option = self.value_to_option(value)
         else:
@@ -123,14 +156,41 @@ class WidgetParamInput(ScriptParamInput):
         return default_option
 
 class ParamInputsForm:
-    def __init__(self , runner : ScriptRunner , cache : ParamCache , item : TaskItem | None = None):
+    """Complete parameter form for a script, managing widget creation and validation.
+
+    Wraps all :class:`WidgetParamInput` objects for a runner, handles form
+    layout (``customized`` or ``form``), parses previous command strings to
+    pre-fill values, and validates before submission.
+
+    Parameters
+    ----------
+    runner:
+        The script whose parameters this form represents.
+    cache:
+        Session-scoped :class:`ParamCache` used to persist widget state.
+    item:
+        Optional previous :class:`~src.interactive.backend.TaskItem` used to
+        pre-fill values from its command string.
+    """
+    def __init__(self , runner : ScriptRunner , cache : ParamCache , item : TaskItem | None = None) -> None:
         self.runner = runner
         self.param_dict = {p.name:WidgetParamInput(runner, p) for p in runner.header.get_param_inputs()}
         self.errors = []
         self.trigger_item = item
         self.cache = cache
 
-    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , cmd : str | None = None):
+    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , cmd : str | None = None) -> 'ParamInputsForm':
+        """Render the parameter form widgets.
+
+        Parameters
+        ----------
+        type:
+            ``'customized'`` renders widgets in a multi-column layout;
+            ``'form'`` uses a ``st.form`` submit button.
+        cmd:
+            Optional previous command string; values are parsed and used to
+            pre-fill widgets.  Defaults to the trigger item's ``cmd`` if set.
+        """
         self.type = type
         if cmd is None:
             cmd = self.trigger_item.cmd if self.trigger_item is not None else ''
@@ -144,7 +204,8 @@ class ParamInputsForm:
             raise ValueError(f"Invalid param inputs type: {type}")
         return self
 
-    def cmd_to_param_values(self , cmd : str = ''):
+    def cmd_to_param_values(self , cmd : str = '') -> dict[str, Any]:
+        """Parse a command string and extract ``{param_name: value}`` pairs for this script."""
         param_values = {}
         if not cmd or str(self.runner.path.path) not in cmd: 
             return param_values
@@ -172,7 +233,8 @@ class ParamInputsForm:
             param_values[param_name] = value
         return param_values
 
-    def init_customized_container(self , cmd : str = '' , num_cols : int = 4):
+    def init_customized_container(self , cmd : str = '' , num_cols : int = 4) -> 'ParamInputsForm':
+        """Render widgets in a responsive multi-column grid layout. Returns self."""
         num_cols = min(num_cols, len(self.param_dict))
         cmd_param_values = self.cmd_to_param_values(cmd)
         for i, wp in enumerate[WidgetParamInput](self.param_dict.values()):
@@ -188,7 +250,8 @@ class ParamInputsForm:
                     st.error(err_msg , icon = ":material/error:")
         return self
     
-    def init_form(self , cmd : str):
+    def init_form(self , cmd : str) -> 'ParamInputsForm':
+        """Render all widgets inside a ``st.form`` container with a Submit button. Returns self."""
         cmd_param_values = self.cmd_to_param_values(cmd)
         with st.form(f"ParamInputsForm-{self.runner.script_key}" , clear_on_submit = False):
             for param in self.param_dict.values():
@@ -203,32 +266,51 @@ class ParamInputsForm:
         return self
 
     @property
-    def param_values(self):
+    def param_values(self) -> dict[str, Any]:
+        """Return the current ``{param_name: typed_value}`` dict for all parameters."""
         return {wp.name: wp.param_value for wp in self.param_dict.values()}
 
-    def validate(self):
+    def validate(self) -> bool:
+        """Validate all widgets; populate ``self.errors`` and return True if all pass."""
         self.errors = []
         for wp in self.param_dict.values():
             if err_msg := wp.error_message():
                 self.errors.append(err_msg)
-                
+
         return len(self.errors) == 0
 
-    def submit(self):
-        for wp in self.param_dict.values(): 
+    def submit(self) -> None:
+        """Persist all widget values to cache and display any validation errors."""
+        for wp in self.param_dict.values():
             wp.on_change(self.cache)
-            
+
         if not self.validate():
             for err_msg in self.errors:
                 st.error(err_msg , icon = ":material/error:")
-    
-    def process(self):
+
+    def process(self) -> None:
+        """Placeholder for post-submit processing logic (not yet implemented)."""
         ...
 
     @classmethod
     def get_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache,
                    value : Any | None = None ,
-                   on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+                   on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None) -> Any:
+        """Dispatch to the correct widget factory based on ``param.ptype``.
+
+        Parameters
+        ----------
+        runner:
+            The owning script runner.
+        param:
+            The parameter descriptor.
+        cache:
+            Session-scoped parameter cache.
+        value:
+            Optional explicit value to pre-fill (overrides cache).
+        on_change, args, kwargs:
+            Forwarded to the underlying Streamlit widget callback.
+        """
         ptype = param.ptype
         
         if isinstance(ptype, list):
@@ -247,11 +329,13 @@ class ParamInputsForm:
         return func(runner, param, cache, value, on_change = on_change, args = args, kwargs = kwargs)
     
     @classmethod
-    def get_title(cls , param : WidgetParamInput):
+    def get_title(cls , param : WidgetParamInput) -> str:
+        """Return a Streamlit markdown label; required params are styled in red with an asterisk."""
         return f':red[:material/asterisk: **{param.title}**]' if param.required else f'**{param.title}**'
-    
+
     @classmethod
-    def get_help(cls , param : WidgetParamInput):
+    def get_help(cls , param : WidgetParamInput) -> str:
+        """Build the hover-help string, combining required notice and description."""
         help_texts = []
         if param.required: 
             help_texts.append(f':red[**Required Parameter!**]')
@@ -260,7 +344,8 @@ class ParamInputsForm:
         return '\t'.join(help_texts)
 
     @classmethod
-    def list_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs):
+    def list_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs) -> Any:
+        """Render a ``st.selectbox`` (or ``st.text_input`` for unknown options) for list/enum params."""
         assert isinstance(param.ptype, list) , f"Param {param.name} is not a list"
         
         default_option = param.default_option(cache, value)
@@ -287,7 +372,8 @@ class ParamInputsForm:
             )
     
     @classmethod
-    def text_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs):
+    def text_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs) -> Any:
+        """Render a ``st.text_input`` for string params."""
         assert param.ptype is str , f"Param {param.name} is not a string"
         default_option = param.default_option(cache, value)
         title = cls.get_title(param)
@@ -302,7 +388,8 @@ class ParamInputsForm:
         )
     
     @classmethod
-    def bool_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs):
+    def bool_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs) -> Any:
+        """Render a ``st.selectbox`` with True / False / 'Choose an option' for bool params."""
         assert param.ptype is bool , f"Param {param.name} is not a boolean"
         title = cls.get_title(param)
         default_option = param.default_option(cache, value)
@@ -317,7 +404,8 @@ class ParamInputsForm:
         )
     
     @classmethod
-    def int_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs):
+    def int_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs) -> Any:
+        """Render a ``st.number_input`` (integer) for int params."""
         assert param.ptype is int , f"Param {param.name} is not an integer"
         title = cls.get_title(param)
         default_option = param.default_option(cache, value)
@@ -334,7 +422,8 @@ class ParamInputsForm:
         )
     
     @classmethod
-    def float_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs):
+    def float_widget(cls , runner : ScriptRunner , param : WidgetParamInput , cache : ParamCache, value : Any | None = None , **kwargs) -> Any:
+        """Render a ``st.number_input`` (float, step 0.1) for float params."""
         assert param.ptype is float , f"Param {param.name} is not a float"
         title = cls.get_title(param)
         default_option = param.default_option(cache, value)
@@ -352,9 +441,11 @@ class ParamInputsForm:
         )
 
     @classmethod
-    def get_form_errors(cls):
+    def get_form_errors(cls) -> Any:
+        """Return the current form errors from ``st.session_state``."""
         return st.session_state.form_errors
-    
+
     @classmethod
-    def on_widget_change(cls , wp : WidgetParamInput , cache : ParamCache):
+    def on_widget_change(cls , wp : WidgetParamInput , cache : ParamCache) -> None:
+        """Callback wired to widget ``on_change``; delegates to :meth:`WidgetParamInput.on_change`."""
         wp.on_change(cache)

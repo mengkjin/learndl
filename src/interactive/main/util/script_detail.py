@@ -1,3 +1,19 @@
+"""Per-script detail page: task selector, parameter form, and report viewer.
+
+This module is the main content of every auto-generated script wrapper page.
+:func:`show_script_detail` is the single entry point: it renders the page
+header, historical-task selector, parameter-settings form, and the running /
+completed task report in sequence.
+
+Key helpers:
+
+* :func:`clear_and_show` — decorator that wraps show functions so they render
+  into a persistent ``st.empty()`` placeholder, enabling clean reruns.
+* :func:`conditional_path` — resolves a format string to a file path,
+  trying alternatives separated by ``|`` until one exists.
+* :func:`direclty_open_file` — opens a file in the host OS file viewer
+  (typo preserved from original).
+"""
 import streamlit as st
 import os , subprocess
 
@@ -17,20 +33,43 @@ from src.proj import PATH , MACHINE
 from .control import SC
 from .page import get_script_page , print_page_header
 
-def on_first_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: 
+def on_first_page(max_page : int) -> None:
+    """Callback: jump to the first page of the task list.
+
+    Args:
+        max_page: Total number of pages (unused but required by Streamlit callback).
+    """
+    if st.session_state.get('choose-task-page') == 1:
         return
     st.session_state['choose-task-page'] = 1
-def on_last_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: 
+
+def on_last_page(max_page : int) -> None:
+    """Callback: jump to the last page of the task list.
+
+    Args:
+        max_page: Total number of pages.
+    """
+    if st.session_state.get('choose-task-page') == max_page:
         return
     st.session_state['choose-task-page'] = max_page
-def on_prev_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: 
+
+def on_prev_page(max_page : int) -> None:
+    """Callback: move to the previous page, clamped at 1.
+
+    Args:
+        max_page: Total number of pages (unused but required by Streamlit callback).
+    """
+    if st.session_state.get('choose-task-page') == 1:
         return
     st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
-def on_next_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: 
+
+def on_next_page(max_page : int) -> None:
+    """Callback: move to the next page, clamped at *max_page*.
+
+    Args:
+        max_page: Total number of pages.
+    """
+    if st.session_state.get('choose-task-page') == max_page:
         return
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
@@ -46,7 +85,19 @@ def show_script_detail(script_key : str):
     SC.get_control_panel().buttons['script-runner-run'].refresh(runner)
     show_report_main(runner)
     
-def clear_and_show(show_func : Callable):
+def clear_and_show(show_func : Callable) -> Callable:
+    """Decorator: render *show_func* into a persistent ``st.empty()`` placeholder.
+
+    On each rerun the placeholder is blanked first, so stale content is
+    replaced rather than appended.  The placeholder is stored in session state
+    under the key ``'<func-name>-placeholder'``.
+
+    Args:
+        show_func: The show function to wrap.
+
+    Returns:
+        Wrapped function that clears then re-renders into the placeholder.
+    """
     name = show_func.__name__.removeprefix('show_').replace('_', '-')
     placeholder_key = f'{name}-placeholder'
     def wrapper(*args , **kwargs):
@@ -171,7 +222,16 @@ def show_queue_item_list(runner : ScriptRunner , queue : dict[str, TaskItem] , o
         raise ValueError(f"Invalid type: {type}")
 
 @clear_and_show
-def show_param_settings(runner : ScriptRunner):
+def show_param_settings(runner : ScriptRunner) -> None:
+    """Render the parameter-settings expander for *runner*.
+
+    Builds a :class:`ParamInputsForm` from the script header, provides
+    reset/restore buttons, and optionally embeds a YAML file editor or file
+    previewer when configured in the script header.
+
+    Args:
+        runner: The :class:`ScriptRunner` for the currently displayed script.
+    """
     if runner.disabled:
         st.error(f":material/disabled_by_default: This script is disabled")
         return
@@ -223,7 +283,23 @@ def show_param_settings(runner : ScriptRunner):
                 file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
                 file_previewer.preview()
 
-def conditional_path(format_str : str , params : dict[str, Any] , root = PATH.main):
+def conditional_path(format_str : str , params : dict[str, Any] , root: Path = PATH.main) -> str:
+    """Resolve a format string to a file path, with fallback alternatives.
+
+    If *format_str* contains ``|``-separated alternatives, each is formatted
+    and the first that exists on disk (absolute or relative to *root*) is
+    returned.  ``PATH`` and ``MACHINE`` are automatically injected into the
+    format namespace.
+
+    Args:
+        format_str: Path template, e.g. ``'{PATH.data}/file.csv'``, or
+            ``'alt1|alt2'`` for fallback resolution.
+        params: Current script parameter values (merged with PATH/MACHINE).
+        root: Base path used for relative existence checks.
+
+    Returns:
+        The resolved path string.
+    """
     params = params | {'PATH' : PATH , 'MACHINE' : MACHINE}
     if '|' in format_str:
         format_strs = [s.strip() for s in format_str.split('|')]
@@ -346,7 +422,20 @@ def show_report_main(runner : ScriptRunner):
     else:
         SC.running_report_init = False
 
-def direclty_open_file(path : Path | None = None):
+def direclty_open_file(path : Path | None = None) -> None:
+    """Open *path* in the host OS default file viewer.
+
+    Uses ``os.startfile`` on Windows and ``subprocess.run(['open', ...])`` on
+    macOS/Linux.  Displays a Streamlit error if the file is not found or the
+    platform is unsupported.
+
+    Note:
+        The function name contains a typo (``direclty``) preserved intentionally
+        for backwards compatibility with existing call sites.
+
+    Args:
+        path: Absolute path to open; ``None`` is a no-op.
+    """
     if path is None:
         return
     path = path.absolute()

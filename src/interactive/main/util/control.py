@@ -1,3 +1,15 @@
+"""Session state, action callbacks, and the control panel for the interactive app.
+
+Key objects:
+
+* :class:`SessionControl` (``SC``) — dataclass-based singleton that owns the
+  task queue, script runners, param cache, and all button click handlers.
+  Instantiated once at module import as the module-level ``SC``.
+* :func:`universal_action` — decorator that refreshes the task queue after
+  every callback so the UI always reflects the latest state.
+* :class:`ControlPanelButton` / :class:`ControlPanel` — the shared action
+  bar rendered at the top of every page via :meth:`SessionControl.get_control_panel`.
+"""
 import streamlit as st
 import subprocess
 
@@ -13,6 +25,7 @@ from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , Script
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache # , ActionLogger
 
 def set_current_page(key: str) -> None:
+    """Store ``key`` as the active page name in Streamlit session state."""
     st.session_state["current_page"] = key
 
 @st.cache_resource
@@ -20,7 +33,13 @@ def get_cached_task_db() -> TaskDatabase:
     """get cached task database manager"""
     return TaskDatabase()
 
-def universal_action(func : Callable):
+def universal_action(func : Callable) -> Callable:
+    """Decorator: refresh the task queue after every UI callback.
+
+    Wraps ``func`` so that :meth:`TaskQueue.refresh` is called on the active
+    :class:`SessionControl` instance after each invocation, keeping the
+    displayed queue in sync with the underlying database.
+    """
     def wrapper(*args , **kwargs):
         ret = func(*args , **kwargs)
         if SessionControl._instance is not None:
@@ -30,7 +49,32 @@ def universal_action(func : Callable):
 
 @dataclass
 class SessionControl:
-    """session control"""
+    """Per-session singleton that wires together the backend and the UI.
+
+    Owns the :class:`TaskDatabase`, :class:`TaskQueue`, per-script
+    :class:`ScriptRunner` cache, parameter cache, and all Streamlit button
+    click handlers.  The module-level ``SC`` instance is created at import
+    time and is shared across every page in the same Streamlit session.
+
+    Attributes:
+        script_runners: Cache of :class:`ScriptRunner` objects keyed by script key.
+        task_queue: The live task queue bound to the shared task database.
+        current_task_item: ID of the task currently shown in the detail panel.
+        queue_last_action: ``(message, success)`` tuple describing the last
+            queue action, used to show success/error banners.
+        running_report_queue: ID of the task whose inline report is expanded
+            in the task-queue page.
+        running_report_init: ``True`` on first render of a report so callers
+            can trigger auto-scroll or other one-shot setup.
+        running_report_file_previewer: Path of the exit file currently
+            previewed, or ``None``.
+        param_inputs_form: The active :class:`ParamInputsForm` for the current
+            script page.
+        script_params_cache: :class:`ParamCache` for persisting widget values
+            across reruns.
+        config_editor_state: :class:`YAMLFileEditorState` for the config editor
+            page.
+    """
     # universal
     script_runners : dict[str, ScriptRunner] = field(default_factory=dict)
     task_queue : TaskQueue | Any = None
@@ -51,13 +95,19 @@ class SessionControl:
 
     _instance : 'ClassVar[SessionControl | None]' = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialize the instance and register it as the active singleton."""
         self.rerun()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"SessionControl()"
 
-    def rerun(self):
+    def rerun(self) -> None:
+        """Re-initialize mutable state: register singleton, reload queue and path items.
+
+        Called in ``__post_init__`` and by :class:`ControlRefreshInteractiveButton`
+        when the user explicitly refreshes the app.
+        """
         self.__class__._instance = self
         self.task_db = get_cached_task_db()
         self.task_queue = TaskQueue(task_db = self.task_db)
@@ -68,36 +118,53 @@ class SessionControl:
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
 
     @universal_action
-    def switch_page(self , page_name : str):
-        self.current_page_name = page_name 
+    def switch_page(self , page_name : str) -> None:
+        """Record the active page name and refresh the queue (via ``universal_action``)."""
+        self.current_page_name = page_name
     
     def get_script_runner(self , script_key : str) -> ScriptRunner:
-        if script_key not in self.script_runners: 
+        """Return the :class:`ScriptRunner` for *script_key*, creating it on first access.
+
+        Args:
+            script_key: Relative script path, e.g. ``'4_train/1_train_model.py'``.
+
+        Returns:
+            The cached :class:`ScriptRunner` instance.
+
+        Raises:
+            ValueError: If the runner cannot be found.
+        """
+        if script_key not in self.script_runners:
             self.script_runners[script_key] = ScriptRunner.from_key(script_key)
         runner = self.script_runners[script_key]
         if runner is None:
             raise ValueError(f"Script {script_key} not found in SC.script_runners")
         return runner
 
-    def get_control_panel(self):
+    def get_control_panel(self) -> 'ControlPanel':
+        """Return the shared :class:`ControlPanel`, creating it once per session."""
         if not hasattr(self, '_control_panel'):
             self._control_panel = ControlPanel()
         return self._control_panel
     
     def get_task_item(self , task_id : str | None = None) -> TaskItem | None:
+        """Look up *task_id* in the queue; returns ``None`` if not found."""
         if self.task_queue is None or task_id is None:
             return None
         return self.task_queue.get(task_id)
     
     def get_latest_task_item(self , script_key : str | None = None) -> TaskItem | None:
+        """Return the most-recently created task, optionally filtered by *script_key*."""
         return self.task_queue.latest(script_key)
         
-    def clear_report_placeholder(self):
+    def clear_report_placeholder(self) -> None:
+        """Blank out the task-report placeholder widget if it exists."""
         if 'task_report_placeholder' in st.session_state:
             with st.session_state['task_report_placeholder']:
                 st.write('')
 
-    def call_report_placeholder(self):
+    def call_report_placeholder(self) -> Any:
+        """Create (or reuse) the report placeholder and return it."""
         placeholder = st.empty()
         if 'task_report_placeholder' not in st.session_state:
             st.session_state['task_report_placeholder'] = placeholder
@@ -115,10 +182,19 @@ class SessionControl:
                                                 file = file_filter)
         return filtered_queue
     
-    def get_latest_queue(self , num : int = 10):
+    def get_latest_queue(self , num : int = 10) -> dict[str, TaskItem]:
+        """Return the most-recent *num* tasks from the queue."""
         return self.task_queue.latest_n(num)
     
     def add_global_settings(self , params : dict[str, Any] | None = None) -> dict[str, Any]:
+        """Merge global sidebar toggles (verbosity, email, silent mode) into *params*.
+
+        Args:
+            params: Existing parameter dict; ``None`` is treated as ``{}``.
+
+        Returns:
+            New dict with global settings applied.
+        """
         params = {**params} if params else {}
         params['max_vb'] = st.session_state.get('global-settings-max-vb' , False)
         if st.session_state.get('global-settings-disable-email' , False):
@@ -139,7 +215,12 @@ class SessionControl:
             cmd = f":blue[**{run_text.title()}**]: {cmd}"
         return cmd
     
-    def get_script_runner_validity(self , params : dict[str, Any] | None):
+    def get_script_runner_validity(self , params : dict[str, Any] | None) -> bool:
+        """Return ``True`` if all required parameters in the current form have values.
+
+        Args:
+            params: Current param dict from :attr:`param_inputs_form`.
+        """
         params = params or {}
         for pname , pvalue in self.param_inputs_form.param_dict.items():
             if pvalue.required and params.get(pname) is None:
@@ -362,19 +443,31 @@ class SessionControl:
 
 
 class ControlPanelButton(ABC):
-    """control panel button"""
+    """Abstract base for a single button in the :class:`ControlPanel` action bar.
+
+    Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class
+    variables and implement :meth:`button` to render the Streamlit widget.
+    """
     key : str = ''
     icon : str = ''
     title : str = ''
 
     @abstractmethod
-    def button(self , script_key : str | None = None):
+    def button(self , script_key : str | None = None) -> None:
+        """Render the Streamlit button widget for this action.
+
+        Args:
+            script_key: The currently active script key, or ``None`` when on
+                an intro page.
+        """
         ...
 
-    def refresh(self , *args , **kwargs):
+    def refresh(self , *args , **kwargs) -> None:
+        """Redraw the button with updated state (override in subclasses as needed)."""
         pass
 
-    def show(self , script_key : str | None = None):
+    def show(self , script_key : str | None = None) -> None:
+        """Render the button + label into the persistent panel placeholder slot."""
         if self.key not in st.session_state:
             st.session_state[self.key] = st.empty()
         with st.session_state[self.key]:
@@ -382,7 +475,8 @@ class ControlPanelButton(ABC):
                 self.button(script_key = script_key)
                 self.print_title()
 
-    def print_title(self):
+    def print_title(self) -> None:
+        """Render the small capitalised label below the button icon."""
         body = f"""
         <div style="
             margin-bottom: 0px;
@@ -396,6 +490,11 @@ class ControlPanelButton(ABC):
         st.markdown(body , unsafe_allow_html = True)
 
 class ScriptRunnerRunButton(ControlPanelButton):
+    """Button that submits the current script to the task queue.
+
+    Rendered as disabled (greyed) when no script is selected or required
+    parameters are missing; enabled (green) otherwise.
+    """
     key = f"script-runner-run"
     icon = f":material/mode_off_on:"
     title = f"Run Script"
@@ -430,6 +529,7 @@ class ScriptRunnerRunButton(ControlPanelButton):
                 self.print_title()
 
 class GlobalScriptLatestTaskButton(ControlPanelButton):
+    """Button that navigates to the latest task across all scripts."""
     key = f"global-script-latest-task"
     icon = f":material/reply_all:"
     title = f"Latest for All"
@@ -452,6 +552,7 @@ class GlobalScriptLatestTaskButton(ControlPanelButton):
                     st.rerun()
 
 class CurrentScriptLatestTaskButton(ControlPanelButton):
+    """Button that shows the latest task for the currently displayed script."""
     key = f"current-script-latest-task"
     icon = f":material/reply:"
     title = f"Current Latest"
@@ -471,6 +572,7 @@ class CurrentScriptLatestTaskButton(ControlPanelButton):
                 st.rerun()
 
 class ControlRefreshInteractiveButton(ControlPanelButton):
+    """Button that regenerates all script-detail pages and reinitialises the session."""
     key = f"control-refresh-interactive"
     icon = f":material/refresh:"
     title = f"Refresh All"
@@ -489,6 +591,10 @@ class ControlRefreshInteractiveButton(ControlPanelButton):
         st.rerun()
 
 class ControlGitClearPullButton(ControlPanelButton):
+    """Button that resets local changes and pulls the latest code from remote.
+
+    Disabled automatically on coding platforms (``MACHINE.platform_coding``).
+    """
     key = f"control-git-clear-pull"
     icon = f":material/cloud_download:"
     title = f"Git Pull"
@@ -526,7 +632,11 @@ class ControlGitClearPullButton(ControlPanelButton):
             Logger.success("Git Pull Finished")
 
 class ControlPanel:
-    """control panel"""
+    """Horizontal action bar rendered at the top of every app page.
+
+    Contains a fixed set of :class:`ControlPanelButton` instances plus a
+    settings popover for global run toggles (verbosity, email, silent mode).
+    """
     control_panel_key = "page-control-panel"
     buttons : dict[str, ControlPanelButton] = {
         'script-runner-run' : ScriptRunnerRunButton(),
@@ -536,7 +646,13 @@ class ControlPanel:
         'control-git-clear-pull' : ControlGitClearPullButton(),
     }
     
-    def show(self , script_key : str | None = None):
+    def show(self , script_key : str | None = None) -> None:
+        """Render the full control panel (buttons + settings popover).
+
+        Args:
+            script_key: Passed through to each button so they can
+                enable/disable themselves based on whether a script is active.
+        """
         with st.container(key = self.control_panel_key):
             columns = st.columns([1,10,1] , gap = 'small' , vertical_alignment = 'center')
             _ , buttons , settings = columns
@@ -545,13 +661,15 @@ class ControlPanel:
             with settings.container(key = f"{self.control_panel_key}-settings"):
                 self.show_settings()
 
-    def show_buttons(self , script_key : str | None = None):
+    def show_buttons(self , script_key : str | None = None) -> None:
+        """Lay out one column per button and call each button's :meth:`show`."""
         cols = st.columns(len(self.buttons) , gap = 'small' , vertical_alignment = 'center')
         for col , button in zip(cols, self.buttons.values()):
             with col:
                 button.show(script_key = script_key)
 
-    def show_settings(self):
+    def show_settings(self) -> None:
+        """Render the settings gear popover with global run toggles."""
         with st.popover('**:material/settings:**'):
             st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
                     help="""Should use max verbosity or min? Not selected will use default.""")

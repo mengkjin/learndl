@@ -1,3 +1,10 @@
+"""
+Backend task recorder for the interactive Streamlit application.
+
+Provides :class:`BackendTaskRecorder`, a decorator / context-manager that wraps
+a script's ``main`` function so it reports lifecycle events (start, PID, exit
+code, output files, errors) back to :class:`~src.interactive.backend.task.TaskDatabase`.
+"""
 import os  , traceback
 
 from typing import Any , Callable
@@ -31,7 +38,7 @@ class BackendTaskRecorder:
     return:
         will be used as exit message of the task
         - None
-        - ExitMessage 
+        - ExitMessage
         - str
         - Path
         - tuple of 2 elements (message , list of files)
@@ -41,7 +48,8 @@ class BackendTaskRecorder:
         - AutoRunTask object
         - any other type (converted to str)
     '''
-    def __init__(self , **kwargs):
+    def __init__(self , **kwargs) -> None:
+        """Initialise recorder, resolve or auto-create the task_id, and capture PID."""
         parsed_kwargs = self.parse_kwargs(kwargs)
         task_id : str | None = parsed_kwargs.pop('task_id' , None)
         if task_id:
@@ -52,14 +60,16 @@ class BackendTaskRecorder:
         self.update_msg : dict[str , Any] = {'pid': os.getpid()}
         self.params = parsed_kwargs
         if 'email' in self.params:
-            if isinstance(self.params['email'] , str): 
+            if isinstance(self.params['email'] , str):
                 self.params['email'] = eval(self.params['email'])
             self.params['email'] = bool(self.params['email'])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Return a human-readable representation of the recorder."""
         return f'BackendTaskRecorder(task_id = {self.task_id})'
-    
-    def __call__(self , func : Callable):
+
+    def __call__(self , func : Callable) -> Callable:
+        """Decorate *func* so it runs inside this recorder's context manager."""
         def wrapper(*args , **kwargs):
             with self:
                 ret = func(*args , **kwargs , **self.params)
@@ -67,15 +77,17 @@ class BackendTaskRecorder:
             return ret
         return wrapper
 
-    def __getitem__(self , key : str):
+    def __getitem__(self , key : str) -> Any:
+        """Get a recorded value by key (task_id, update_msg fields, or params)."""
         if key == 'task_id':
             return self.task_id
         elif key in self.update_msg:
             return self.update_msg[key]
         else:
             return self.params.get(key , None)
-        
-    def __setitem__(self , key : str , value : Any):
+
+    def __setitem__(self , key : str , value : Any) -> None:
+        """Set a recorded value by key (update_msg fields or params; task_id is read-only)."""
         if key == 'task_id':
             raise ValueError('task_id is read only')
         elif key in self.update_msg:
@@ -85,7 +97,7 @@ class BackendTaskRecorder:
 
     @staticmethod
     def parse_kwargs(kwargs : dict[str , Any]) -> dict[str , Any]:
-        
+        """Coerce CLI-style string values ('True', 'None', '42') to their Python equivalents."""
         kwargs = argparse_dict(**kwargs)
         for key, value in kwargs.items():
             if not isinstance(value , str):
@@ -101,14 +113,16 @@ class BackendTaskRecorder:
         return kwargs
 
     @property
-    def task_id(self):
+    def task_id(self) -> str:
         '''task_id : script_name@time_id'''
         return self._task_id
 
-    def __enter__(self):
+    def __enter__(self) -> 'BackendTaskRecorder':
+        """Enter the recording context; returns self."""
         return self
 
-    def __exit__(self , exc_type , exc_value , exc_traceback):
+    def __exit__(self , exc_type : type[BaseException] | None , exc_value : BaseException | None , exc_traceback : Any) -> None:
+        """Persist final task status and exit metadata to the database on context exit."""
         self.update_msg['end_time'] = datetime.now().timestamp()
         if exc_type is None:
             self.update_msg['status'] = 'error' if self.exit_msg.code else 'complete'
@@ -131,7 +145,12 @@ class BackendTaskRecorder:
         error : str | None = None
 
         @classmethod
-        def from_return(cls , ret : Any | None = None):
+        def from_return(cls , ret : Any | None = None) -> 'BackendTaskRecorder.ExitMessage':
+            """Convert a raw function return value to a normalised ExitMessage.
+
+            Handles: None, str, Path, 2-tuple ``(message, files-list)``, n-tuple,
+            list, dict, AutoRunTask, and arbitrary objects (via ``str()``).
+            """
             if ret is None:
                 return cls()
             elif isinstance(ret , cls):
@@ -162,22 +181,22 @@ class BackendTaskRecorder:
             elif isinstance(ret , dict):
                 return cls(**{k:v for k,v in ret.items() if k in cls.__slots__})
             elif ret.__class__.__name__ == 'AutoRunTask':
-                return cls(message = ret.exit_message , files = ret.exit_files , 
+                return cls(message = ret.exit_message , files = ret.exit_files ,
                            code = len(ret.error_messages) , error = '\n'.join(ret.error_messages))
             else:
                 return cls(message = str(ret))
 
-    def _func_return(self , func_return : Any | None = None):
-        if not self.task_id: 
+    def _func_return(self , func_return : Any | None = None) -> None:
+        """Extract exit metadata from the wrapped function's return value into update_msg."""
+        if not self.task_id:
             return
         exit_msg = self.ExitMessage.from_return(func_return)
         self.exit_msg = exit_msg
-        if exit_msg.message: 
+        if exit_msg.message:
             self.update_msg['exit_message'] = exit_msg.message
-        if exit_msg.files:   
+        if exit_msg.files:
             self.update_msg['exit_files'] = [str(f) for f in exit_msg.files]
-        if exit_msg.code:    
+        if exit_msg.code:
             self.update_msg['exit_code'] = exit_msg.code
-        if exit_msg.error:   
+        if exit_msg.error:
             self.update_msg['exit_error'] = exit_msg.error
-
