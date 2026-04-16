@@ -66,9 +66,6 @@ class VariableSelectionNetwork(nn.Module):
     each, then produces softmax importance weights via another GRN.  The final
     output is a weighted sum of per-variable representations.
 
-    NOTE: Assumes ``input_dim % num_vars == 0``; silently truncates if not.
-    See ``TODO_res_algo.md``.
-
     Args:
         input_dim:  Total input dimension (split equally into ``num_vars``).
         num_vars:   Number of variables to select from.
@@ -81,6 +78,8 @@ class VariableSelectionNetwork(nn.Module):
     """
     def __init__(self, input_dim: int, num_vars: int, hidden_dim: int, dropout: float = 0.1):
         super().__init__()
+
+        assert input_dim % num_vars == 0, f"input_dim {input_dim} must be divisible by num_vars {num_vars}"
         self.input_dim = input_dim
         self.num_vars = num_vars
         self.hidden_dim = hidden_dim

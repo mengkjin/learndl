@@ -180,10 +180,6 @@ class SSAMF(SAM):
                      Mask is updated at the first batch of each epoch that is
                      a multiple of ``update_freq``.
 
-    NOTE: ``update_mask`` uses ``CrossEntropyLoss`` internally, which is only
-    appropriate for classification tasks.  For regression tasks this is
-    incorrect; see ``TODO_res_algo.md``.
-
     Reference: Liu et al. (2022) "Sparse and Imperceptible Adversarial Attack
     via a Hessian-based Method."
     """
@@ -196,6 +192,7 @@ class SSAMF(SAM):
         sparsity=0.5,
         num_samples=64,
         update_freq=1,
+        fisher_criterion=None,
         **kwargs
     ) -> None:
         assert isinstance(base_optimizer, torch.optim.Optimizer), \
@@ -219,6 +216,7 @@ class SSAMF(SAM):
             group["sparsity"] = sparsity
             group["num_samples"] = num_samples
             group["update_freq"] = update_freq
+        self.fisher_criterion = fisher_criterion
 
         self.init_mask()
 
@@ -255,7 +253,13 @@ class SSAMF(SAM):
         )
 
         # cal fisher value
-        criterion = torch.nn.CrossEntropyLoss()
+        match self.fisher_criterion:
+            case 'mse' | None:
+                criterion = torch.nn.MSELoss()
+            case 'cross_entropy':
+                criterion = torch.nn.CrossEntropyLoss()
+            case _:
+                raise ValueError(f'Unsupported fisher criterion: {self.fisher_criterion}')
         with torch.enable_grad():
             for idx, sample_idx in enumerate(sampled_idxs):
                 if idx % (self.num_samples // 10) == 0:

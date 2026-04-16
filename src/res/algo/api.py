@@ -4,17 +4,11 @@ Classes:
     AlgoModule — class-method registry that can instantiate any model by name,
                  resolve its type (``'nn'`` or ``'boost'``), and export the full
                  module list to a text file.
-
-.. warning::
-    ``AlgoModule.export_available_modules()`` is called at module import time,
-    writing a file to ``PATH.temp``.  This is a side-effect that should be
-    made opt-in (see ``TODO_res_algo.md``).
 """
 import torch
 
 from typing import Any , Literal
 
-from src.proj import PATH
 from .nn.api import get_nn_module , get_nn_category , get_nn_datatype , AVAILABLE_NNS
 from .boost.api import AVAILABLE_BOOSTS , OptunaBoostModel , GeneralBoostModel
 
@@ -48,13 +42,6 @@ class AlgoModule:
             return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('boost')])
         else:
             return '\n'.join([f'{module_type}/{module}' for module in cls._availables[module_type].keys()])
-        
-    @classmethod
-    def export_available_modules(cls):
-        path = PATH.temp.joinpath('available_modules.txt')
-        path.parent.mkdir(parents = True , exist_ok = True)
-        with open(path , 'w') as f:
-            f.write(cls.available_modules_str())
         
     @classmethod
     def is_valid(cls , model_module : str , module_type : Literal['nn' , 'boost' , 'all'] = 'all'): 
@@ -106,5 +93,3 @@ class AlgoModule:
         if model_dict is not None: 
             boost.load_dict(model_dict , cuda = bool(cuda) , seed = seed)
         return boost
-
-AlgoModule.export_available_modules()
