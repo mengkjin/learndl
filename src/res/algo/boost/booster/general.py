@@ -1,3 +1,10 @@
+"""Unified front-end for all gradient-boost back-ends.
+
+Classes:
+    GeneralBoostModel — thin wrapper that dispatches to one of the
+                        ``AVAILABLE_BOOSTS`` back-ends and manages parameter
+                        splitting between train/weight/verbosity namespaces.
+"""
 import torch
 
 from typing import Any , Literal
@@ -13,6 +20,16 @@ AVAILABLE_BOOSTS = {
 }
 
 class GeneralBoostModel:
+    """Unified wrapper around LGBM / XGBoost / CatBoost / AdaBoost back-ends.
+
+    Parameter splitting:
+        * Keys present in :attr:`BoostWeightMethod.__slots__` go to
+          ``weight_param`` and are forwarded to :class:`BoostWeightMethod`.
+        * The key ``'verbosity'`` controls :attr:`fit_verbosity` (log frequency).
+        * Everything else goes to ``train_param`` for the underlying booster.
+
+    Calling the instance (``model(x)``) is equivalent to :meth:`forward`.
+    """
     def __init__(self , 
                  boost_type : Literal['ada' , 'lgbm' , 'xgboost' , 'catboost'] | str = 'lgbm' ,
                  params : dict[str,Any] = {} ,

@@ -115,30 +115,89 @@ All model `forward(batch: BatchInput)` methods follow this interface.
 
 ---
 
-## 18 NN Architectures
+## NN Architectures
 
-All registered in `src/res/algo/nn/arch/`. Instantiated by name via `ModelConfig.model.arch`.
+All registered in `AVAILABLE_NNS` in `src/res/algo/nn/api.py`.  Instantiate via
+`AlgoModule.get_nn(model_module, model_param)` or directly via
+`get_nn_module(name)(**params)`.
 
-| Architecture | Key | Type |
-|-------------|-----|------|
-| GRU | `GRU` | Gated recurrent unit |
-| LSTM | `LSTM` | Long short-term memory |
-| Transformer | `Transformer` | Self-attention encoder |
-| TCN | `TCN` | Temporal convolutional network |
-| MLP | `MLP` | Multi-layer perceptron |
-| ResNet | `ResNet` | Residual MLP |
-| ALSTM | `ALSTM` | Attention-augmented LSTM |
-| TRA | `TRA` | Temporal Routing Adaptor |
-| HIST | `HIST` | Hierarchical stock transformer |
-| TabNet | `TabNet` | Attention-based tabular model |
-| DHEN | `DHEN` | Dual-head encoder network |
-| SFM | `SFM` | State frequency memory |
-| Localformer | `Localformer` | Local attention transformer |
-| TimesNet | `TimesNet` | 2D time-series representation |
-| PatchTST | `PatchTST` | Patch-based time series transformer |
-| iTransformer | `iTransformer` | Inverted transformer for TS |
-| Crossformer | `Crossformer` | Cross-dimension transformer |
-| DLinear | `DLinear` | Decomposition linear model |
+| Key | File | Type |
+|-----|------|------|
+| `simple_lstm` | `model/RNN.py` | Single-layer LSTM |
+| `gru` | `model/RNN.py` | Single-layer GRU |
+| `lstm` | `model/RNN.py` | Multi-layer LSTM |
+| `resnet_lstm` | `model/RNN.py` | ResNet encoder + LSTM |
+| `resnet_gru` | `model/RNN.py` | ResNet encoder + GRU |
+| `transformer` | `model/Attention.py` | Self-attention encoder |
+| `tcn` | `model/CNN.py` | Temporal convolutional network |
+| `rnn_ntask` | `model/RNN.py` | Multi-task RNN |
+| `rnn_general` | `model/RNN.py` | Configurable RNN |
+| `gru_dsize` | `model/RNN.py` | GRU with dynamic hidden size |
+| `patch_tst` | `model/PatchTST.py` | Patch-based time-series transformer |
+| `modern_tcn` | `model/ModernTCN.py` | ModernTCN with patch embedding |
+| `ts_mixer` | `model/TSMixer.py` | TSMixer (patch + feature mixing) |
+| `tra` | `model/TRA.py` | Temporal Routing Adaptor (Sinkhorn OT) |
+| `factor_vae` | `model/FactorVAE.py` | VAE-based factor decomposition |
+| `risk_att_gru` | `model/RiskAttGRU.py` | Risk-attention GRU |
+| `ple_gru` | `model/PLE.py` | Progressive Layered Extraction + GRU |
+| `tft` | `model/TFT.py` | Temporal Fusion Transformer |
+| `abcm` | `model/ABCM.py` | Adaptive Behavior Clustering (Astgnn) |
+
+`_default_category` — some models have a non-`'base'` default category (e.g.
+`'tra'` for TRA, `'vae'` for FactorVAE) that affects how predictions are
+post-processed by the training framework.
+
+`_default_data_type` — some models require a specific input layout (e.g.
+`'ts'` for time-series, `'cs'` for cross-sectional).  Used by
+`get_nn_datatype()` to tell the data loader which preprocessing path to take.
+
+---
+
+---
+
+## Layer Modules (`src/res/algo/nn/layer/`)
+
+| Module | Key class/function | Notes |
+|--------|-------------------|-------|
+| `basic.py` | `Pass`, `Transpose`, `EwLinear`, `Parallel` | `EwLinear` computes a temporal mean, not a linear projection |
+| `Act.py` | `get_activation_fn(name)` | Returns an activation callable or `nn.Module` by string key |
+| `Attention.py` | `MultiheadAttention` | Supports `lsa` (local-shift attention) and `res_attention` |
+| `Lin.py` | `HardLinearRegression` | OLS residualization via `torch.linalg.lstsq` |
+| `MLP.py` | `MLP` | `hidden_size` as int or list; **list path has no inter-layer activations** (see TODO) |
+| `PE.py` | `positional_encoding(pe_type, ...)` | Supports `'zeros'`, `'sincos'`, `'learnable'` etc. |
+| `RevIN.py` | `RevIN` | Reversible instance normalisation; `mode='norm'`/`'denorm'` |
+
+---
+
+## Loss Registry (`src/res/algo/nn/loss/`)
+
+| File | Key class | Notes |
+|------|-----------|-------|
+| `loss.py` | `Loss` | Factory; maps string names to loss classes |
+| `loss.py` | `PearsonLoss`, `SpearmanLoss`, `MSELoss`, `ABCMLoss` | Standard regression losses + ABCM combined loss |
+| `accuracy.py` | `PearsonAcc`, `SpearmanAcc`, ... | Matching accuracy metrics (same registry pattern as loss) |
+| `multiloss.py` | `MultiHeadLosses`, `DWA`, `RUW`, `GLS`, `RWS` | Multi-head loss balancing strategies |
+| `basic.py` | `align_shape()` | Truncates pred/label for multi-horizon mismatch |
+
+**Known bug:** `GLS.multi_losses()` uses the wrong method name and never
+overrides the base class — GLS silently falls back to equal weighting.
+
+---
+
+## Optimizer (`src/res/algo/nn/optimizer/`)
+
+All SAM-family optimizers in `optimizer/sam.py`:
+
+| Class | Description |
+|-------|-------------|
+| `SAM` | Sharpness-Aware Minimisation (base) |
+| `SSAMF` | Sparse SAM with Fisher mask; uses `CrossEntropyLoss` for mask — **wrong for regression** (see TODO) |
+| `ASAM` | Adaptive SAM with per-parameter scale |
+| `GSAM` | Gradient-decomposed SAM |
+| `GAM` | Gradient Alignment Minimisation |
+| `FriendlySAM` | SAM with a surrogate-loss friendliness term |
+
+Helper functions: `disable_running_stats(model)` / `enable_running_stats(model)` — used during the SAM ascent step to prevent BatchNorm stats from being updated twice.
 
 ---
 
@@ -251,4 +310,4 @@ factor = ModelAPI.Calculator.as_factor(
 - Walk-forward CV folds are non-overlapping in time — `cv.val_years=1` means each fold uses 1 year of validation data
 - Predictions are stored per-date — use `DataAPI.build_block()` to reassemble into a DataBlock for portfolio construction
 - `AlgoModule` in `src/res/algo/api.py` is the unified dispatcher — it reads `model.module` and imports the correct submodule; don't instantiate NN classes directly
-- To add a new architecture: create a class in `src/res/algo/nn/arch/`, inherit from `BaseNNModel`, implement `forward(batch: BatchInput)`; it auto-registers by class name
+- To add a new architecture: create a class in `src/res/algo/nn/model/`, define a module-level entry-point function registered in `AVAILABLE_NNS` in `src/res/algo/nn/api.py`; inherit from `torch.nn.Module` and implement `forward(batch: BatchInput)`

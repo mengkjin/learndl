@@ -530,7 +530,11 @@ class GlobalScriptLatestTaskButton(ControlPanelButton):
                         on_click = SC.click_show_complete_report , args = (item,) ,
                         disabled = False):
                 if SC.current_page_name != repr(item.script_key):
-                    st.switch_page(item.page_url)
+                    from src.interactive.main.util.page import get_script_page
+
+                    meta = get_script_page(item.script_key)
+                    if meta:
+                        st.switch_page(meta['page'])
                 else:
                     #from .script_detail import show_report_main
                     #show_report_main(SC.get_script_runner(item.script_key))
@@ -567,11 +571,9 @@ class ControlRefreshInteractiveButton(ControlPanelButton):
                   on_click = self.refresh_all , disabled = False)
  
     def refresh_all(self):
-        from src.interactive.main.util.page import remake_all_script_detail_files
         with st.spinner("Refreshing..."):
             with Proj.silence:
                 Options.update()
-                remake_all_script_detail_files()
         SC.rerun()
         st.rerun()
 

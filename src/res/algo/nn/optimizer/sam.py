@@ -1,10 +1,3 @@
-#!/usr/bin/env python
-# -*- encoding: utf-8 -*-
-'''
-# File    :   sharpness_aware_minimization.py
-# Time    :   2023/07/04 14:37:18
-# Author  :   Pu Yanheng
-'''
 """SAM-family sharpness-aware minimizers.
 
 All optimizers in this module wrap a base optimizer and add an extra forward-
@@ -16,7 +9,7 @@ Helper utilities:
     disable_running_stats / enable_running_stats — freeze BatchNorm momentum
     during the second forward pass to avoid polluting running statistics.
 """
-# here put the import lib
+
 import contextlib
 from collections import defaultdict
 

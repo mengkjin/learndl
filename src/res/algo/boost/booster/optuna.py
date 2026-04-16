@@ -1,3 +1,11 @@
+"""Optuna-driven hyper-parameter search on top of :class:`GeneralBoostModel`.
+
+Classes:
+    OptunaSilent    — context manager that suppresses Optuna log output.
+    OptunaBoostModel — sub-class of :class:`GeneralBoostModel` that wraps
+                       the full ``fit()`` call in an Optuna study; the best
+                       trial params are applied before the final fit.
+"""
 import optuna , random , string
 
 from contextlib import nullcontext
@@ -8,6 +16,7 @@ from src.proj import PATH , MACHINE
 from .general import GeneralBoostModel
 
 class OptunaSilent:
+    """Context manager that sets Optuna log level to ERROR on entry and restores it on exit."""
     def __enter__(self):
         self.old_level = optuna.logging.get_verbosity()
         optuna.logging.set_verbosity(optuna.logging.ERROR)
@@ -15,6 +24,18 @@ class OptunaSilent:
         optuna.logging.set_verbosity(self.old_level)
 
 class OptunaBoostModel(GeneralBoostModel):
+    """Optuna-powered hyper-parameter search over :class:`GeneralBoostModel`.
+
+    Fit workflow:
+        1. :meth:`study_create` — create a named Optuna study (persisted to
+           SQLite when ``DEFAULT_SAVE_STUDIES`` is ``True``).
+        2. :meth:`study_optimize` — run ``n_trials`` trials where each trial
+           calls :meth:`study_objective`, which fits the model and returns mean
+           RankIC on the validation set.
+        3. Apply ``best_params`` and do a final fit.
+
+    Per-booster search spaces are defined in :meth:`trial_suggest_params`.
+    """
     DEFAULT_SILENT_CREATION = True
     DEFAULT_SILENT_STUDY = True
     DEFAULT_N_TRIALS = 50 if MACHINE.platform_server else 20

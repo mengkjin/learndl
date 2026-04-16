@@ -1,3 +1,10 @@
+"""XGBoost booster wrapper.
+
+Classes:
+    XgBoost — :class:`BasicBoostModel` sub-class wrapping ``xgboost.train``.
+              Serialisation round-trips through a temporary JSON file because
+              ``xgboost.Booster`` has no native ``to_string`` API.
+"""
 import json , tempfile , xgboost
 
 from pathlib import Path
@@ -8,6 +15,13 @@ from ..util import BasicBoostModel , BoostInput
 PLOT_PATH : Path | None = None
 
 class XgBoost(BasicBoostModel):
+    """XGBoost wrapper conforming to the :class:`BasicBoostModel` interface.
+
+    Serialisation:
+        :meth:`to_dict` / :meth:`load_dict` use :meth:`boost_to_dict` /
+        :meth:`boost_from_dict` which save/load via a temporary JSON file to
+        work around the lack of a ``model_to_string`` equivalent in XGBoost.
+    """
     DEFAULT_TRAIN_PARAM = {
         'booster' : 'gbtree' , # 'dart' , 'gbtree' , 
         'objective': 'reg:squarederror', # 'reg:squarederror', 'reg:absoluteerror' , multi:softmax

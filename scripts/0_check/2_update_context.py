@@ -57,6 +57,7 @@ from typing import Any
 
 import yaml
 
+from src.proj import Logger
 from src.proj.util import ScriptTool
 
 ROOT = Path(__file__).resolve().parents[2]      # project root
@@ -101,22 +102,22 @@ def print_brief(entry: dict, reason: str,
     doc      = entry['doc']
     sources  = entry.get('sources', [])
     sep      = '=' * 60
-    print(f'\n{sep}')
-    print(f'DOC    : {doc}')
-    print(f'REASON : {reason}')
+    Logger.stdout(f'\n{sep}')
+    Logger.stdout(f'DOC    : {doc}')
+    Logger.stdout(f'REASON : {reason}')
     if changed:
-        print('CHANGED FILES:')
+        Logger.stdout('CHANGED FILES:')
         for f in changed:
-            print(f'  - {f}')
-    print('SOURCE PATHS TO RE-READ:')
+            Logger.stdout(f'  - {f}')
+    Logger.stdout('SOURCE PATHS TO RE-READ:')
     for s in sources:
-        print(f'  - {s}')
+        Logger.stdout(f'  - {s}')
     if stale:
-        print('STALE MARKERS:')
+        Logger.stdout('STALE MARKERS:')
         for lineno, note in stale:
-            print(f'  - line {lineno}: {note}')
-    print(f'ACTION : Re-explore the source paths above and rewrite the relevant')
-    print(f'         sections of {doc}. Add or remove <!-- STALE --> markers as needed.')
+            Logger.stdout(f'  - line {lineno}: {note}')
+    Logger.stdout(f'ACTION : Re-explore the source paths above and rewrite the relevant')
+    Logger.stdout(f'         sections of {doc}. Add or remove <!-- STALE --> markers as needed.')
 
 # ---------------------------------------------------------------------------
 # main
@@ -137,10 +138,10 @@ def main(mode: str | None = None,
         changed = [f.strip() for f in re.split(r'[,;]', target) if f.strip()]
         affected = files_to_affected_docs(changed, index)
 
-        print(f'\n=== Context Update Brief  ·  mode: changed ===')
-        print(f'Input files: {changed}')
+        Logger.stdout(f'\n=== Context Update Brief  ·  mode: changed ===')
+        Logger.stdout(f'Input files: {changed}')
         if not affected:
-            print('No context docs are affected by these files.')
+            Logger.stdout('No context docs are affected by these files.')
             return
         for entry, matched in affected:
             print_brief(entry, 'source files changed', matched, scan_stale(ROOT / entry['doc']))
@@ -154,20 +155,20 @@ def main(mode: str | None = None,
             )
             changed = [f.strip() for f in result.stdout.splitlines() if f.strip()]
         except subprocess.CalledProcessError as e:
-            print(f'git diff failed: {e.stderr.strip()}')
+            Logger.stdout(f'git diff failed: {e.stderr.strip()}')
             return
 
-        print(f'\n=== Context Update Brief  ·  mode: git (since {since_commit}) ===')
+        Logger.stdout(f'\n=== Context Update Brief  ·  mode: git (since {since_commit}) ===')
         if not changed:
-            print(f'No changed files found since {since_commit}.')
+            Logger.stdout(f'No changed files found since {since_commit}.')
             return
-        print(f'Changed files ({len(changed)}):')
+        Logger.stdout(f'Changed files ({len(changed)}):')
         for f in changed:
-            print(f'  {f}')
+            Logger.stdout(f'  {f}')
 
         affected = files_to_affected_docs(changed, index)
         if not affected:
-            print('No context docs are affected by these changes.')
+            Logger.stdout('No context docs are affected by these changes.')
             return
         for entry, matched in affected:
             print_brief(entry, f'source files changed since {since_commit}', matched,
@@ -179,18 +180,18 @@ def main(mode: str | None = None,
         target_norm = target.replace('\\', '/')
         matching = [e for e in index if e['doc'].replace('\\', '/') == target_norm]
 
-        print(f'\n=== Context Update Brief  ·  mode: doc ===')
+        Logger.stdout(f'\n=== Context Update Brief  ·  mode: doc ===')
         if not matching:
-            print(f'WARNING: {target} not found in _index.yaml — outputting partial brief.')
+            Logger.stdout(f'WARNING: {target} not found in _index.yaml — outputting partial brief.')
             stale = scan_stale(ROOT / target)
-            print(f'DOC    : {target}')
-            print(f'REASON : Forced refresh requested')
+            Logger.stdout(f'DOC    : {target}')
+            Logger.stdout(f'REASON : Forced refresh requested')
             if stale:
-                print('STALE MARKERS:')
+                Logger.stdout('STALE MARKERS:')
                 for lineno, note in stale:
-                    print(f'  - line {lineno}: {note}')
-            print(f'ACTION : Re-explore source code and rewrite {target}.')
-            print(f'         Consider adding this doc to context/_index.yaml.')
+                    Logger.stdout(f'  - line {lineno}: {note}')
+            Logger.stdout(f'ACTION : Re-explore source code and rewrite {target}.')
+            Logger.stdout(f'         Consider adding this doc to context/_index.yaml.')
             return
         for entry in matching:
             print_brief(entry, 'forced refresh requested',
@@ -198,7 +199,7 @@ def main(mode: str | None = None,
 
     # ── stale ─────────────────────────────────────────────────────────────
     elif mode == 'stale':
-        print(f'\n=== Context Update Brief  ·  mode: stale ===')
+        Logger.stdout(f'\n=== Context Update Brief  ·  mode: stale ===')
         found = False
         for entry in index:
             markers = scan_stale(ROOT / entry['doc'])
@@ -206,17 +207,17 @@ def main(mode: str | None = None,
                 found = True
                 print_brief(entry, 'STALE markers found', stale=markers)
         if not found:
-            print('No <!-- STALE: ... --> markers found in any context doc. All clear.')
+            Logger.stdout('No <!-- STALE: ... --> markers found in any context doc. All clear.')
 
     # ── all ───────────────────────────────────────────────────────────────
     elif mode == 'all':
-        print(f'\n=== Context Update Brief  ·  mode: all ===')
+        Logger.stdout(f'\n=== Context Update Brief  ·  mode: all ===')
         for entry in index:
             print_brief(entry, 'full refresh requested',
                         stale=scan_stale(ROOT / entry['doc']) or None)
 
     else:
-        print(f"Unknown mode '{mode}'. Choose from: changed, git, doc, stale, all")
+        Logger.stdout(f"Unknown mode '{mode}'. Choose from: changed, git, doc, stale, all")
 
 
 if __name__ == '__main__':

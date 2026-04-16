@@ -77,7 +77,7 @@ Items are ordered roughly by impact; none are blockers.
 ### `main/util/page.py`
 - **Side effect at module load**: `make_script_detail_file` (called from
   `script_pages`) generates `.py` files when the module is first imported.
-  This is an import-time side effect that complicates testing and cold starts.
+  This is an import-time side effect that complicates testing and cold starts. **done**
 
 ### `main/util/navigation.py` / `main/util/control.py`
 - **Hard-coded magic constants**: page size 500, queue timeout 20 s, max queue
@@ -86,7 +86,7 @@ Items are ordered roughly by impact; none are blockers.
 ### `main/pages/` (generated wrappers)
 - **22 near-identical page files**: each wrapper is a 7-line stub.  A single
   dynamic page that reads `script_key` from URL query params would eliminate
-  all generated files and the `make_script_detail_file` side effect.
+  all generated files and the `make_script_detail_file` side effect. **done**
 
 ---
 
@@ -95,8 +95,8 @@ Items are ordered roughly by impact; none are blockers.
 - **`Any` overuse**: many return types are annotated `Any` or left unannotated;
   tighten with concrete types as Streamlit's stubs improve.
 - **`ActionLogger` not wired up**: `ActionLogger` is defined and imported but
-  all call sites are commented out.  Either wire it in or remove the dead code.
+  all call sites are commented out.  Either wire it in or remove the dead code. **done**
 - **Session state key collisions**: bare string keys (`'choose-task-page'`,
   `'task-filter-status'`, etc.) are duplicated across `task_queue.py` and
   `script_detail.py`.  A central registry or `NamedTuple` of key constants
-  would prevent silent collisions.
+  would prevent silent collisions. 

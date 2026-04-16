@@ -1,3 +1,10 @@
+"""CatBoost booster wrapper.
+
+Classes:
+    CatBoost — :class:`BasicBoostModel` sub-class wrapping ``catboost.train``.
+               ``eval_metric: None`` is explicitly popped before ``fit()`` is
+               called because CatBoost rejects a ``None`` value for that key.
+"""
 import json , tempfile , catboost
 
 from pathlib import Path
@@ -8,6 +15,15 @@ from ..util import BasicBoostModel , BoostInput
 PLOT_PATH : Path | None = None
 
 class CatBoost(BasicBoostModel):
+    """CatBoost wrapper conforming to the :class:`BasicBoostModel` interface.
+
+    Notable ``fit()`` behaviour:
+        * ``eval_metric: None`` is popped from ``train_param`` before calling
+          ``catboost.train`` because CatBoost raises an error for ``None``
+          values (unlike LightGBM which ignores them).
+        * GPU training uses ``task_type='GPU'``; CatBoost requires all data to
+          be on CPU — the ``to_boost_input`` path handles that.
+    """
     DEFAULT_TRAIN_PARAM = {
         'objective': 'RMSE' , # 'MAE' NDCG , RMSE
         'num_boost_round' : 100 , 

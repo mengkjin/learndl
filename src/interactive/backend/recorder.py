@@ -62,6 +62,8 @@ class BackendTaskRecorder:
         if 'email' in self.params:
             self.params['email'] = bool(self.params['email'])
 
+        self.task_db = TaskDatabase()
+
     def __repr__(self) -> str:
         """Return a human-readable representation of the recorder."""
         return f'BackendTaskRecorder(task_id = {self.task_id})'
@@ -98,7 +100,11 @@ class BackendTaskRecorder:
         """Coerce CLI-style string values ('True', 'None', '42') to their Python equivalents."""
         kwargs = argparse_dict(**kwargs)
         for key, value in kwargs.items():
-            kwargs[key] = ast.literal_eval(value) if isinstance(value , str) else value
+            if isinstance(value , str):
+                try:
+                    value = ast.literal_eval(value)
+                except Exception:
+                    value = value
             if not isinstance(value , str):
                 kwargs[key] = value
             elif value.lower() in ['true' , 'false']:
@@ -106,10 +112,7 @@ class BackendTaskRecorder:
             elif value.lower() in ['null' , 'none']:
                 kwargs[key] = None
             else:
-                try:
-                    kwargs[key] = ast.literal_eval(value)
-                except Exception:
-                    kwargs[key] = value
+                kwargs[key] = value
         return kwargs
 
     @property
@@ -131,7 +134,7 @@ class BackendTaskRecorder:
             self.update_msg['exit_code'] = 1
             self.update_msg['exit_message'] = str(exc_value)
             self.update_msg['exit_error'] = traceback.format_exception(exc_type, exc_value, exc_traceback)
-        TaskDatabase().update_task(self.task_id, backend_updated = True, **self.update_msg)
+        self.task_db.update_task(self.task_id, backend_updated = True, **self.update_msg)
 
     @dataclass(slots = True)
     class ExitMessage:

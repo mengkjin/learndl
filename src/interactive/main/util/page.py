@@ -1,17 +1,16 @@
 """Page registry, page-file generation, and page-header rendering.
 
 Maintains the static lists of intro pages and dynamically discovered script
-pages, auto-generates a thin Streamlit page file for each script under
-``main/pages/``, and provides :func:`print_page_header` which every page
-calls at the top of its ``main()`` to register the active page and render the
-shared header row and control panel.
+    get_intro_page , get_script_page , print_page_header ,
+    show_script_detail , show_param_settings , show_report_main) 
+each page's ``main()``.
 """
+import re
 import streamlit as st
 from pathlib import Path
 from typing import Literal
 
 from src.proj import Proj , CONST
-from src.interactive.backend import PathItem , runs_page_url
 
 from .control import SC , set_current_page
 
@@ -49,6 +48,23 @@ SCRIPT_ICONS = {
     'trading' : ':material/payments:',
 }
 
+
+def script_detail_url_path(script_key: str) -> str:
+    """Stable ``url_path`` for each script's ``st.Page`` (must be unique per script).
+
+    Streamlit forbids ``/`` in ``url_path`` (no nested segments); use a single token.
+    """
+    slug = re.sub(r'[/\\]', '_', script_key)
+    return f'_script_{slug}'
+
+
+def script_detail_page_callable(script_key: str):
+    """Return a no-arg callable suitable for ``st.Page(..., url_path=...)``."""
+    def _run() -> None:
+        from src.interactive.main.util.script_detail import show_script_detail
+        show_script_detail(script_key)
+    return _run
+
 def intro_pages() -> dict[str, dict]:
     """Return a dict mapping intro page name → page metadata for all intro pages."""
     return {page:get_intro_page(page) for page in INTRO_PAGES}
@@ -84,22 +100,20 @@ def get_intro_page(page_name : str) -> dict:
 def script_pages() -> dict[str, dict]:
     """Return a dict mapping script key → page metadata for all enabled scripts.
 
-    Iterates discovered :class:`PathItem` file entries, auto-generates the
-    per-script detail file if missing, and caches each page in session state.
+    Iterates discovered :class:`PathItem` file entries and caches each
+    ``st.Page`` in session state (callable-backed; no stub ``.py`` files).
     """
     pages = {}
     items = [item for item in SC.path_items if item.is_file and item.level > 0]
     for item in items:
-        if not runs_page_path(item.script_key).exists():
-            make_script_detail_file(item)
         pages[item.script_key] = get_script_page(item.script_key)
     return pages
 
 def get_script_page(script_key: str) -> dict:
     """Return (and cache) the metadata dict for a script page.
 
-    Creates a ``st.Page`` for the script's auto-generated detail file and
-    stores the result in ``st.session_state['app_script_pages']``.
+    Creates a ``st.Page`` wrapping :func:`~src.interactive.main.util.script_detail.show_script_detail`
+    and stores the result in ``st.session_state['app_script_pages']``.
 
     Args:
         script_key: Relative path key such as ``'4_train/1_train_model.py'``.
@@ -119,13 +133,17 @@ def get_script_page(script_key: str) -> dict:
         if runner.script_key not in SC.script_runners: 
             SC.script_runners[runner.script_key] = runner
         
-        assert runs_page_path(runner.script_key).exists() , f"Script detail page {runs_page_path(runner.script_key)} does not exist"
         icon = SCRIPT_ICONS[runner.script_group]
         help = f"**Script**: *{str(runner.script)}*\n**Description**: {runner.content}"
         if runner.todo: 
             help += f"\n**TODO**: {runner.todo}"
         st.session_state['app_script_pages'][runner.script_key] = {
-            'page' : st.Page(runner.page_url , title = runner.format_path , icon = icon) ,
+            'page' : st.Page(
+                script_detail_page_callable(runner.script_key),
+                title = runner.format_path,
+                icon = icon,
+                url_path = script_detail_url_path(runner.script_key),
+            ),
             'group' : runner.script_group ,
             'label' : runner.format_path ,
             'head' : runner.format_path ,
@@ -134,36 +152,6 @@ def get_script_page(script_key: str) -> dict:
             'runner' : runner ,
         }
     return st.session_state['app_script_pages'][runner.script_key]
-
-def runs_page_path(script_key : str):
-    """get runs page path"""
-    return PAGE_DIR.parent.joinpath(runs_page_url(script_key))
-
-def all_runs_page_paths() -> list[Path]:
-    """Return all auto-generated script detail page files under the pages directory."""
-    return [path for path in PAGE_DIR.iterdir() if path.is_file and path.name.startswith('_')]
-
-def make_script_detail_file(item : PathItem | Path):
-    """make script detail file"""
-    if item.is_dir: 
-        return
-    if isinstance(item, Path):
-        item = PathItem.from_path(item)
-    with open(runs_page_path(item.script_key), 'w') as f:
-        f.write(f"""
-from src.interactive.main.util import show_script_detail
-
-def main():
-    show_script_detail({repr(item.script_key)}) 
-
-if __name__ == '__main__':
-    main()
-""")
-
-def remake_all_script_detail_files() -> None:
-    """Delete and regenerate every auto-generated script detail page file."""
-    [path.unlink() for path in all_runs_page_paths()]
-    [make_script_detail_file(path) for path in PathItem.iter_folder()]
 
 def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro') -> None:
     """Register the active page and render the shared header and control panel.

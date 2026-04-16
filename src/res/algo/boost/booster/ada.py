@@ -1,3 +1,13 @@
+"""Custom AdaBoost implementation using rank-binned decision stumps.
+
+Classes:
+    AdaBoost    — :class:`BasicBoostModel` sub-class; converts labels to ternary
+                  ``{-1, 0, 1}`` and trains a :class:`StrongLearner`.
+    StrongLearner — Ensemble of :class:`WeakLearner` stumps trained via the
+                  AdaBoost.M1 weight-update rule.
+    WeakLearner — Single decision stump selected by minimum Gini impurity over
+                  rank-binned features.
+"""
 import torch
 import numpy as np
 import pandas as pd
@@ -8,6 +18,16 @@ from src.proj import Logger
 from src.res.algo.boost.util import BasicBoostModel , BoostInput , load_xingye_data
 
 class AdaBoost(BasicBoostModel):
+    """AdaBoost wrapper using rank-binned decision stumps.
+
+    Pre-processing:
+        * Features are rank-percentile binned into ``n_bins`` integer buckets.
+        * Labels are collapsed to ternary ``{-1, 0, +1}`` via tertile rank.
+        * Training concatenates the train and validation sets (no early stopping).
+
+    Constraints:
+        Only ``cs_type in ['ones', None]`` is supported for weight computation.
+    """
     DEFAULT_TRAIN_PARAM = {
         'n_learner' : 30, 
         'n_bins' : 20 , 
@@ -78,7 +98,13 @@ class AdaBoost(BasicBoostModel):
         return rank
     
 class StrongLearner:
-    def __init__(self , n_learner = 30, n_bins = 20 , max_nan_ratio : float = 0.8 , **kwargs):   
+    """Ensemble of :class:`WeakLearner` stumps trained with AdaBoost.M1.
+
+    At each round a new :class:`WeakLearner` is fitted on the current sample
+    weights; weights are then updated by ``exp(-y * y_pred)`` and renormalised.
+    Final prediction is the mean of all stump scores, z-scored by std.
+    """
+    def __init__(self , n_learner = 30, n_bins = 20 , max_nan_ratio : float = 0.8 , **kwargs):
         self.n_learner     = n_learner
         self.n_bins        = n_bins
         self.max_nan_ratio = max_nan_ratio
@@ -132,6 +158,15 @@ class StrongLearner:
         return obj
     
 class WeakLearner:
+    """Single decision stump for one round of AdaBoost.
+
+    :meth:`fit` selects the feature with the minimum weighted Gini impurity
+    over the rank-binned input and stores per-bin log-odds predictions.
+    Features with NaN ratio exceeding ``max_nan_ratio`` are excluded.
+
+    :meth:`predict` looks up the bin-level log-odds for the selected feature
+    and returns ``nan`` for ``-1`` (missing) entries.
+    """
     EPS = 1e-6
     SLOTS = ['n_bins','max_nan_ratio','n_feat','feat_losses','feat_idx','bin_predictions']
     def __init__(self, n_bins : int , max_nan_ratio : float = 0.8): 

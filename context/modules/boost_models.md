@@ -10,102 +10,115 @@
 Boosting models share the `AlgoModule` interface with NN models, making them interchangeable in the `ModelAPI` training pipeline. The central class hierarchy:
 
 ```
-BasicBoostModel (abstract)
-├── GeneralBoostModel       — direct fit with fixed params
-│   ├── Lgbm
-│   ├── XgBoost
-│   ├── CatBoost
-│   └── AdaBoost
-└── OptunaBoostModel        — Optuna-guided hyperparam search before final fit
-    ├── OptunaLgbm
-    ├── OptunaXgBoost
-    └── OcatBoost
+BasicBoostModel (abstract)           — src/res/algo/boost/util/basic.py
+└── [concrete back-ends]             — src/res/algo/boost/booster/
+    ├── Lgbm                         — lgbm.py
+    ├── XgBoost                      — xgboost.py
+    ├── CatBoost                     — catboost.py
+    └── AdaBoost                     — ada.py
+
+GeneralBoostModel                    — booster/general.py
+    Wraps one of the concrete back-ends selected by boost_type.
+
+OptunaBoostModel(GeneralBoostModel)  — booster/optuna.py
+    Runs an Optuna study to pick best params, then delegates to GeneralBoostModel.
 ```
 
-`GeneralBoostModel.AVAILABLE_BOOSTS` maps string names to concrete classes:
+`AVAILABLE_BOOSTS` in `booster/general.py` maps string names to concrete classes:
 ```python
-{'lgbm': Lgbm, 'xgboost': XgBoost, 'catboost': CatBoost, 'adaboost': AdaBoost}
+{'lgbm': Lgbm, 'ada': AdaBoost, 'xgboost': XgBoost, 'catboost': CatBoost}
 ```
 
-The `boost_type` field in config determines which concrete class is instantiated.
+The `boost_type` argument to `GeneralBoostModel` / `AlgoModule.get_boost()` selects the back-end.
 
 ---
 
 ## Key Classes
 
-### `BasicBoostModel` (abstract base)
-Defines the interface all boosters implement:
-- `fit(boost_input)` — train on a `BoostInput`
-- `predict(boost_input)` — return a `BoostOutput`
-- Abstract `_fit` / `_predict` implemented by subclasses
+### `BasicBoostModel` (abstract base) — `boost/util/basic.py`
+Defines the interface all concrete boosters implement:
+- `fit(train, valid, silent)` — train; sub-classes call `boost_fit_inputs()` to normalise inputs
+- `predict(x)` — return a `BoostOutput`
+- `to_dict() / load_dict()` — serialisation (each sub-class stores its own native model)
+- `import_data(train, valid, test)` — loads and converts to `BoostInput` via `to_boost_input()`
+- `df_input(factor_data, idx, windows_len)` — walk-forward split returning `{train, valid, test}` dicts
 
-### `GeneralBoostModel`
-Wraps the four concrete boosters. Selects implementation via `boost_type` config field.
+Parameter flow:
+- `DEFAULT_TRAIN_PARAM` keys are the only valid `train_param` keys (validated in `assert_param`).
+- `n_bins` in `train_param` triggers categorical label conversion; automatically capped at
+  `DEFAULT_CATEGORICAL_MAX_BINS` (10) for softmax objectives.
 
-| Method | Purpose |
-|--------|---------|
-| `fit(boost_input)` | Train with fixed hyperparams from config |
-| `predict(boost_input)` | Score samples, return `BoostOutput` |
-| `feature_importance()` | Return feature importance array (LGBM/XGBoost only) |
+### `GeneralBoostModel` — `booster/general.py`
+Thin dispatcher that splits a flat `params` dict into three namespaces:
+- Keys in `BoostWeightMethod.__slots__` → `weight_param`
+- Key `'verbosity'` → `fit_verbosity` (controls log frequency)
+- Everything else → `train_param`
 
-### `OptunaBoostModel`
-Adds Optuna hyperparameter search before final fit.
+Calling the instance (`model(x)`) wraps `x` into a `BoostInput` and calls `forward()`.
 
-| Item | Description |
-|------|-------------|
-| `DEFAULT_N_TRIALS` | Default number of Optuna trials (class-level constant) |
-| `study_create(direction, ...)` | Create an Optuna study with pruner/sampler |
-| `optimize(boost_input, n_trials)` | Run Optuna search loop, record best params |
-| `trial_suggest_params(trial, boost_type)` | Suggest a param dict for one trial |
+### `OptunaBoostModel` — `booster/optuna.py`
+Adds Optuna HPO to the fit pipeline:
 
-**`trial_suggest_params` parameter spaces by booster:**
+| Method | Description |
+|--------|-------------|
+| `study_create(direction, silent)` | Create named study, persisted to SQLite by default |
+| `study_optimize(n_trials, silent)` | Run trials; each calls `study_objective()` |
+| `study_objective(trial)` | Suggests params, fits, returns mean RankIC on valid set |
+| `trial_suggest_params(trial)` | Per-booster Optuna search space |
+| `study_plot(plot_type, ...)` | Visualise study results |
+
+Trial limits: LGBM/XGBoost/CatBoost capped at 100 trials; AdaBoost at 20.
+
+**`trial_suggest_params` search spaces (actual implementation):**
 
 *LGBM*
 ```python
 {
-  'num_leaves':        trial.suggest_int(20, 300),
-  'max_depth':         trial.suggest_int(3, 10),
-  'min_child_samples': trial.suggest_int(10, 100),
-  'learning_rate':     trial.suggest_float(0.01, 0.3, log=True),
-  'n_estimators':      trial.suggest_int(50, 500),
-  'subsample':         trial.suggest_float(0.5, 1.0),
-  'colsample_bytree':  trial.suggest_float(0.5, 1.0),
-  'reg_alpha':         trial.suggest_float(1e-8, 10.0, log=True),
-  'reg_lambda':        trial.suggest_float(1e-8, 10.0, log=True),
+  'objective':        ['mse', 'mae'],
+  'learning_rate':    log-uniform [1e-3, 0.3],
+  'max_depth':        int [3, 12],
+  'num_leaves':       int [20, 100] step 10,
+  'min_data_in_leaf': int [10, 50] step 10,
+  'reg_alpha':        log-uniform [1e-7, 100],
+  'reg_lambda':       log-uniform [1e-6, 100],
+  'feature_fraction': [0.5, 1.0] step 0.1,
+  'bagging_fraction': [0.5, 1.0] step 0.1,
 }
 ```
 
 *XGBoost*
 ```python
 {
-  'max_depth':         trial.suggest_int(3, 10),
-  'min_child_weight':  trial.suggest_int(1, 10),
-  'learning_rate':     trial.suggest_float(0.01, 0.3, log=True),
-  'n_estimators':      trial.suggest_int(50, 500),
-  'subsample':         trial.suggest_float(0.5, 1.0),
-  'colsample_bytree':  trial.suggest_float(0.5, 1.0),
-  'gamma':             trial.suggest_float(1e-8, 1.0, log=True),
-  'reg_alpha':         trial.suggest_float(1e-8, 10.0, log=True),
-  'reg_lambda':        trial.suggest_float(1e-8, 10.0, log=True),
+  'objective':        ['reg:squarederror', 'reg:absoluteerror'],
+  'learning_rate':    log-uniform [1e-3, 0.3],
+  'max_depth':        int [3, 12],
+  'subsample':        [0.5, 1.0] step 0.1,
+  'colsample_bytree': [0.5, 1.0] step 0.1,
+  'reg_alpha':        log-uniform [1e-7, 100],
+  'reg_lambda':       log-uniform [1e-6, 100],
 }
 ```
 
 *CatBoost*
 ```python
 {
-  'depth':               trial.suggest_int(4, 10),
-  'learning_rate':       trial.suggest_float(0.01, 0.3, log=True),
-  'iterations':          trial.suggest_int(50, 500),
-  'l2_leaf_reg':         trial.suggest_float(1e-8, 10.0, log=True),
-  'bagging_temperature': trial.suggest_float(0.0, 1.0),
+  'objective':            ['RMSE', 'MAE'],
+  'learning_rate':        log-uniform [1e-3, 0.3],
+  'max_depth':            int [3, 12],
+  'l2_leaf_reg':          log-uniform [1e-3, 10.0],
+  'bagging_temperature':  [0.0, 1.0],
+  'random_strength':      log-uniform [1e-9, 10.0],
+  'od_type':              ['IncToDec', 'Iter'],
+  'min_data_in_leaf':     int [1, 100],
 }
 ```
 
 *AdaBoost*
 ```python
 {
-  'n_estimators':  trial.suggest_int(50, 500),
-  'learning_rate': trial.suggest_float(0.01, 2.0, log=True),
+  'n_learner':     int [10, 50] step 5,
+  'n_bins':        int [10, 30] step 5,
+  'max_nan_ratio': [0.5, 0.9] step 0.1,
 }
 ```
 
@@ -113,43 +126,84 @@ Adds Optuna hyperparameter search before final fit.
 
 ## Data Contracts
 
-### `BoostInput` (dataclass)
+### `BoostInput` — `boost/util/boost_io.py`
 ```python
 @dataclass
 class BoostInput:
-    x: torch.Tensor    # shape: (n_sample, n_date, n_feature)
-    y: torch.Tensor    # shape: (n_sample,) or (n_sample, n_date)
-    w: torch.Tensor    # sample weights
-    secid: np.ndarray
-    date: np.ndarray
+    x:            torch.Tensor       # (n_sample, n_date, n_feature) — 3-D
+    y:            torch.Tensor|None  # (n_sample, n_date) — 2-D
+    w:            torch.Tensor|None  # (n_sample, n_date); None → computed via weight_method
+    secid:        np.ndarray         # (n_sample,)
+    date:         np.ndarray         # (n_date,)
+    feature:      np.ndarray         # (n_feature,)
+    weight_param: dict               # forwarded to BoostWeightMethod
+    n_bins:       int|None           # when set, y is converted to int category labels
 ```
 
+**Flat accessor methods** (NaN rows dropped, date-major order by default):
+- `X()` → `(n_finite, n_use_feature)` tensor
+- `Y()` → `(n_finite,)` tensor (categorical int or float)
+- `W()` → `(n_finite,)` weight tensor
+- `SECID()` / `DATE()` → flat index arrays
+
 Constructors:
-- `BoostInput.from_dataframe(df, feature_cols, label_col)` — build from a pandas DataFrame
-- `BoostInput.from_tensor(x, y, ...)` — direct tensor construction
-- `BoostInput.from_numpy(arr, ...)` — from numpy arrays
+- `BoostInput.from_dataframe(df, weight_param)` — last column is label; secid/date auto-detected
+- `BoostInput.from_tensor(x, y, w, secid, date, feature, weight_param)` — handles 2-D and 3-D `x`
+- `BoostInput.from_numpy(...)` — thin wrapper around `from_tensor`
+- `BoostInput.concat(datas)` — union-merges a list of `BoostInput` objects along all axes
 
-The 3D `x` tensor is automatically flattened to 2D `(n_sample * n_date, n_feature)` internally before passing to sklearn-compatible booster APIs.
-
-### `BoostOutput` (dataclass)
+### `BoostOutput` — `boost/util/boost_io.py`
 ```python
 @dataclass
 class BoostOutput:
-    pred:   np.ndarray   # predictions (n_sample,)
-    secid:  np.ndarray   # security IDs
-    date:   np.ndarray   # dates
-    finite: np.ndarray   # boolean mask: True where prediction is finite
+    pred:   torch.Tensor    # flat predictions of length n_finite
+    secid:  np.ndarray      # (n_sample,)
+    date:   np.ndarray      # (n_date,)
+    finite: torch.Tensor    # bool mask (n_sample, n_date) — non-NaN positions
+    label:  torch.Tensor    # original continuous y for evaluation
 ```
 
-### `BoostWeightMethod` (dataclass)
-Controls how sample weights are computed:
-```python
-@dataclass
-class BoostWeightMethod:
-    ts_type: str    # time-series weighting: 'linear', 'exp', 'uniform'
-    cs_type: str    # cross-sectional weighting: 'rank', 'uniform'
-    bm_type: str    # benchmark: 'none', 'index'
-```
+`to_2d()` reconstructs the full `(n_sample, n_date)` grid filling non-finite positions with 0.
+
+### `BoostWeightMethod` — `boost/util/boost_io.py`
+Three-axis multiplicative weight calculator:
+
+| Axis | Param | Options | Effect |
+|------|-------|---------|--------|
+| Time-series | `ts_type` | `'lin'`, `'exp'`, `None` | Recent dates get higher weight |
+| Cross-sectional | `cs_type` | `'top'`, `'ones'`, `None` | Top-ranked or positive-label up-weighting |
+| Benchmark | `bm_type` | `'in'`, `None` | Securities in `bm_secid` get weight ×2 |
+
+Final weight: `w = cs_weight * ts_weight * bm_weight` (element-wise, shape `(n_sample, n_date)`).
+
+### `LgbmPlot` — `booster/lgbm.py`
+Visualisation helper accessed via `lgbm_model.plot`:
+
+| Method | Output |
+|--------|--------|
+| `training()` | Loss curve with best-iteration marker |
+| `importance()` | Feature importance bar chart |
+| `histogram(feature_idx)` | Split-value histograms |
+| `tree(num_trees_list)` | Rendered tree structures |
+| `shap(train)` | SHAP summary + per-feature dependence (requires `shap` package) |
+| `sdt(train)` | Single-distillation tree |
+| `pdp(train)` | Partial dependence plots |
+
+All methods save to `plot_path` when configured; methods that need a path return early if it is `None`.
+
+---
+
+## Custom AdaBoost Implementation
+
+`AdaBoost` in `booster/ada.py` is a fully custom implementation (not sklearn-based):
+
+- **Input transform**: rank-percentile → integer bins `[0, n_bins-1]`; NaN → -1
+- **Label transform**: tertile rank → ternary `{-1, 0, +1}`
+- **`StrongLearner`**: ensemble of `WeakLearner` stumps; weights updated via `exp(-y * y_pred)`
+- **`WeakLearner`**: single decision stump selected by minimum Gini impurity (weighted `sqrt(pos*neg)` sum); stores per-bin log-odds predictions
+- **Predict**: mean of stump scores, z-scored by std
+
+Training combines train+valid before fitting (no early stopping).  Only `cs_type in ['ones', None]` is supported for weight computation.
 
 ---
 
@@ -158,45 +212,37 @@ class BoostWeightMethod:
 ### Boost algo configs (`configs/algo/boost/`)
 | File | Booster | Key Fields |
 |------|---------|-----------|
-| `lgbm.yaml` | LightGBM | `seqlens`, `objective`, `linear_tree`, `learning_rate`, `num_leaves`, `n_estimators` |
-| `xgboost.yaml` | XGBoost | `seqlens`, `objective`, `max_depth`, `learning_rate`, `n_estimators` |
-| `catboost.yaml` | CatBoost | `seqlens`, `objective`, `depth`, `iterations`, `learning_rate` |
-| `ada.yaml` | AdaBoost | `seqlens`, `n_estimators`, `learning_rate` |
-
-Key shared fields:
-- `seqlens` — look-back window lengths (same concept as NN configs; tensor is flattened before use)
-- `objective` — loss function (e.g., `'regression'`, `'rank'`)
-- `linear_tree` — LGBM-specific: fit linear models at each leaf
+| `lgbm.yaml` | LightGBM | `objective`, `linear_tree`, `learning_rate`, `num_leaves`, `num_boost_round` |
+| `xgboost.yaml` | XGBoost | `objective`, `max_depth`, `learning_rate`, `num_boost_round` |
+| `catboost.yaml` | CatBoost | `objective`, `max_depth`, `learning_rate`, `num_boost_round` |
+| `ada.yaml` | AdaBoost | `n_learner`, `n_bins`, `max_nan_ratio` |
 
 ### Schedule configs (`configs/model/schedule/`)
-| Schedule | Architecture |
-|----------|-------------|
-| `lgbm_of_factors.yaml` | LightGBM on pre-computed factor inputs |
-| `xgb_of_factors.yaml` | XGBoost on pre-computed factor inputs |
-| `xgb_of_factors_long.yaml` | XGBoost long-horizon variant |
-
-A schedule config sets `model.module: boost` and `model.algo: lgbm` (or `xgboost`, etc.) to dispatch through `AlgoModule`.
+A schedule config sets `model.module: boost` and passes `boost_type` to dispatch
+through `AlgoModule.get_boost()`.
 
 ---
 
 ## Integration with ModelAPI
 
-Boost models enter through the same `ModelAPI` / `AlgoModule` interface as NN models:
 ```python
 from src.api.model import ModelAPI
 ModelAPI.train_model('lgbm_of_factors')
 ```
 
-`AlgoModule` (`src/res/algo/api.py`) dispatches to boost vs. NN based on `model.module` config field.
-
-Training for boosters is a single `fit` call per CV fold (no epochs/batches). Predictions are written to `PATH.prediction / schedule_name /` in the same feather format as NN outputs.
+`AlgoModule` (`src/res/algo/api.py`) dispatches to boost vs. NN based on
+`model.module` config field.  Training for boosters is a single `fit` call per
+CV fold (no epochs/batches).  Predictions are written to
+`PATH.prediction / schedule_name /` in the same feather format as NN outputs.
 
 ---
 
 ## Common Patterns / Gotchas
 
-- Run factor update (`scripts/2_factor/0_update_factors.py`) before training `lgbm_of_factors` — it requires pre-computed factor values
-- Feature importance via `GeneralBoostModel.feature_importance()` is only available for LGBM and XGBoost (not CatBoost/AdaBoost)
+- Run factor update before training `lgbm_of_factors` — it requires pre-computed factor values
+- Feature importance is only available for LGBM (`lgbm_model.plot.importance()`) and implicitly for XGBoost
 - Optuna search can be slow — `DEFAULT_N_TRIALS` controls the budget; reduce for quick experiments
-- The 3D `BoostInput.x` is flattened to 2D internally — callers do not need to reshape
-- Boost models train much faster than NN models; useful for rapid signal prototyping and baseline comparisons
+- `BoostInput.from_dataframe` treats the **last column** as the label — column order matters
+- `eval_metric: None` must be popped before CatBoost `fit()`; this is done inside `CatBoost.fit()` automatically
+- XGBoost serialisation uses a temporary JSON file (no `model_to_string` API in XGBoost)
+- `AlgoModule.export_available_modules()` is called at import time and writes a file to `PATH.temp` — a known side-effect (see `TODO_res_algo.md`)

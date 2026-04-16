@@ -1,3 +1,9 @@
+"""LightGBM booster wrapper and plot utilities.
+
+Classes:
+    Lgbm      — :class:`BasicBoostModel` sub-class wrapping ``lightgbm.train``.
+    LgbmPlot  — Plot helpers (training curve, feature importance, SHAP, PDP, SDT).
+"""
 import lightgbm
 import numpy as np
 import pandas as pd
@@ -14,6 +20,16 @@ from ..util import BasicBoostModel , BoostInput
 PLOT_PATH : Path | None = None
 
 class Lgbm(BasicBoostModel):
+    """LightGBM wrapper conforming to the :class:`BasicBoostModel` interface.
+
+    Key ``fit()`` behaviour:
+        * ``num_boost_round`` and ``n_bins`` are popped from ``train_param``
+          before being passed to ``lightgbm.train``.
+        * When ``objective == 'softmax'`` the ``num_class`` parameter is set
+          to ``n_bins`` automatically.
+        * GPU training is activated when ``use_gpu`` is ``True`` by setting
+          ``device_type='gpu'``.
+    """
     DEFAULT_TRAIN_PARAM = {
         'objective': 'mse', # 'mae' , 'quantile' ,'softmax'
         'metric' : None , # ndcg
@@ -88,6 +104,22 @@ class Lgbm(BasicBoostModel):
     def plot(self): return LgbmPlot(self)
 
 class LgbmPlot:
+    """Visualization helper attached to a fitted :class:`Lgbm` instance.
+
+    All plot methods save to ``plot_path`` when it is set.  Methods that
+    require a ``plot_path`` (histogram, tree, SHAP, PDP) silently return early
+    when one is not configured.
+
+    Methods:
+        training    — training/validation loss curve with best-iteration marker.
+        importance  — feature importance bar chart.
+        histogram   — split-value histograms for each feature.
+        tree        — rendered tree structure(s).
+        shap        — SHAP summary and per-feature dependence plots (requires
+                      the ``shap`` package).
+        sdt         — single-distillation tree (SDT) visualisation.
+        pdp         — partial dependence plots for each feature.
+    """
     def __init__(self , lgbm : 'Lgbm' , plot_path : Path | None = PLOT_PATH) -> None:
         self.lgbm = lgbm
         self.plot_path = plot_path

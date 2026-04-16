@@ -329,26 +329,29 @@ class DataBlock:
               inday_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'check' , 
               feature_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'stack'):
         """merge multiple blocks into one block , if inplace is True, merge into the first block"""
-        blocks = [blk for blk in block_list if isinstance(blk , cls) and not blk.empty]
-        if len(blocks) == 0: 
-            return cls()
-        elif len(blocks) == 1: 
-            return blocks[0] if inplace else blocks[0].copy()
+        blocks = [*block_list]
+        if inplace:
+            assert len(blocks) >= 1 , 'merge: inplace is True, but block_list is empty'
+            target_block = blocks[0]
+        else:
+            target_block = cls()
+        merge_blocks = [blk for blk in blocks if isinstance(blk , cls) and not blk.empty]
+        if len(merge_blocks) == 0 or (len(merge_blocks) == 1 and (merge_blocks[0] is target_block)): 
+            return target_block
             
-        secid   = index_merge([blk.secid   for blk in blocks] , method = secid_method)
-        date    = index_merge([blk.date    for blk in blocks] , method = date_method)
-        inday   = index_merge([blk.inday   for blk in blocks] , method = inday_method)
-        feature = index_merge([blk.feature for blk in blocks] , method = feature_method)
+        secid   = index_merge([blk.secid   for blk in merge_blocks] , method = secid_method)
+        date    = index_merge([blk.date    for blk in merge_blocks] , method = date_method)
+        inday   = index_merge([blk.inday   for blk in merge_blocks] , method = inday_method)
+        feature = index_merge([blk.feature for blk in merge_blocks] , method = feature_method)
 
         values = torch.full((len(secid),len(date),len(inday),len(feature)) , torch.nan)
         
-        for i , blk in enumerate(blocks): 
+        for i , blk in enumerate(merge_blocks): 
             tar_grid , src_grid = intersect_meshgrid([secid , date , inday , feature] , [blk.secid , blk.date , blk.inday , blk.feature] , )
             values[*tar_grid] = blk.values[*src_grid].to(values)
 
-        block = blocks[0] if inplace else blocks[0].copy() 
-        block.update(values = values , secid = secid , date = date , feature = feature)
-        return block
+        target_block.update(values = values , secid = secid , date = date , feature = feature)
+        return target_block
 
     def merge_others(self , *others : DataBlock , inplace = False):
         """Merge one or more additional blocks into this block; equivalent to ``merge([self, *others])``."""

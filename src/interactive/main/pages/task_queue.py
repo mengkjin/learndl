@@ -4,7 +4,7 @@ from typing import Literal , Callable
 
 from src.proj import PATH
 
-from src.interactive.main.util import SC , runs_page_url , print_page_header
+from src.interactive.main.util import SC , get_script_page , print_page_header
 
 PAGE_NAME = 'task_queue'
 
@@ -221,7 +221,9 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
                     key=f"queue-item-report-{item.id}" ,
                     help = "Show complete report in main page" ,
                     on_click = SC.click_show_complete_report , args = (item,)):
-                    st.switch_page(runs_page_url(item.script_key))
+                    meta = get_script_page(item.script_key)
+                    if meta:
+                        st.switch_page(meta['page'])
                     
                 cols[3].button(":violet-badge[:material/remove:]", 
                             key=f"queue-item-delist-{item.id}", help="Delist from Queue", 

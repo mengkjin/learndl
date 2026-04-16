@@ -1,3 +1,12 @@
+"""Abstract base class and utilities shared by all boost model implementations.
+
+Classes:
+    BasicBoostModel  — ABC with data import, weight wiring, fit/predict interface,
+                       and serialisation helpers.
+
+Functions:
+    load_xingye_data — Load the Xingye (兴业) factor dataset for offline testing.
+"""
 import torch
 import numpy as np
 import pandas as pd
@@ -17,6 +26,21 @@ from .boost_io import BoostInput , BoostOutput
 __all__ = ['BasicBoostModel' , 'load_xingye_data']
 
 class BasicBoostModel(ABC):
+    """Abstract base class for all gradient-boost wrappers.
+
+    Sub-classes must implement :meth:`fit`, :meth:`predict`, :meth:`to_dict`,
+    and :meth:`load_dict`.
+
+    Class attributes:
+        DEFAULT_TRAIN_PARAM:         Default hyper-parameters for the underlying
+                                     booster.  Sub-class overrides are merged at
+                                     ``__init__`` time via :meth:`update_param`.
+        DEFAULT_WEIGHT_PARAM:        Default :class:`BoostWeightMethod` kwargs.
+        DEFAULT_CATEGORICAL_N_BINS:  Fallback bin count for softmax objectives
+                                     when ``n_bins`` is not specified (default 3).
+        DEFAULT_CATEGORICAL_MAX_BINS: Hard cap on ``n_bins`` for softmax
+                                     (default 10).
+    """
     DEFAULT_TRAIN_PARAM = {}
     DEFAULT_WEIGHT_PARAM = {}
     DEFAULT_CATEGORICAL_N_BINS = 3

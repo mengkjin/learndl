@@ -1,3 +1,15 @@
+"""Top-level registry and factory for all algorithm modules (NN + boost).
+
+Classes:
+    AlgoModule — class-method registry that can instantiate any model by name,
+                 resolve its type (``'nn'`` or ``'boost'``), and export the full
+                 module list to a text file.
+
+.. warning::
+    ``AlgoModule.export_available_modules()`` is called at module import time,
+    writing a file to ``PATH.temp``.  This is a side-effect that should be
+    made opt-in (see ``TODO_res_algo.md``).
+"""
 import torch
 
 from typing import Any , Literal
@@ -9,6 +21,18 @@ from .boost.api import AVAILABLE_BOOSTS , OptunaBoostModel , GeneralBoostModel
 __all__ = ['AlgoModule' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 'OptunaBoostModel' , 'GeneralBoostModel']
 
 class AlgoModule:
+    """Unified registry and factory for all NN and boost models.
+
+    Class attributes:
+        _availables: ``{'nn': AVAILABLE_NNS, 'boost': AVAILABLE_BOOSTS}`` —
+                     nested dict of ``{name: class}`` mappings.
+
+    Type heuristics in :meth:`module_type`:
+        * ``'boost'`` — name is ``'boost'``, in ``AVAILABLE_BOOSTS``, or
+          starts with ``'boost@'``.
+        * ``'nn'``    — name is ``'nn'``, in ``AVAILABLE_NNS``, or starts
+          with ``'nn@'``.
+    """
     _availables = {'boost' : AVAILABLE_BOOSTS , 'nn' : AVAILABLE_NNS}
     
     @classmethod

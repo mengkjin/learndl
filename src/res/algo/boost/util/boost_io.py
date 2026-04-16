@@ -63,25 +63,31 @@ class BoostOutput:
 
 @dataclass
 class BoostInput:
-    '''
-    x: 3d tensor, (n_sample, n_date, n_feature)
-    y: 2d tensor, (n_sample, n_date)    
-    w: 2d tensor, (n_sample, n_date)
-    secid: 1d array, (n_sample)
-    date: 1d array, (n_date)
-    feature: 1d array, (n_feature)
-    weight_param:
-        ts_type : Literal['lin' , 'exp'] | None = None ,
-        cs_type : Literal['top' , 'ones'] | None = None ,
-        bm_type : Literal['in'] | None = None ,
-        ts_lin_rate : float = 0.5 ,
-        ts_half_life_rate : float = 0.5 ,
-        cs_top_tau : float = 0.75*np.log(0.5)/np.log(0.75) ,
-        cs_ones_rate : float = 2. ,
-        bm_rate : float = 2. ,
-        bm_secid : np.ndarray | list | None = None
-    as_categorical: whether to convert y to categorical
-    '''
+    """Aligned 3-D tensor container for boost model input.
+
+    Attributes:
+        x:            Feature tensor of shape ``(n_sample, n_date, n_feature)``.
+        y:            Label tensor of shape ``(n_sample, n_date)``, or ``None``.
+        w:            Pre-computed sample weight tensor of same shape as ``y``.
+                      When ``None``, weights are derived on-the-fly from
+                      ``weight_method``.
+        secid:        Security ID array of shape ``(n_sample,)``.
+        date:         Date array of shape ``(n_date,)``.
+        feature:      Feature name array of shape ``(n_feature,)``.
+        weight_param: Keyword arguments forwarded to :class:`BoostWeightMethod`.
+                      Supported keys:
+                        * ``ts_type``           – ``'lin'`` | ``'exp'`` | ``None``
+                        * ``cs_type``           – ``'top'`` | ``'ones'`` | ``None``
+                        * ``bm_type``           – ``'in'`` | ``None``
+                        * ``ts_lin_rate``       – float (default 0.5)
+                        * ``ts_half_life_rate`` – float (default 0.5)
+                        * ``cs_top_tau``        – float
+                        * ``cs_ones_rate``      – float (default 2.0)
+                        * ``bm_rate``           – float (default 2.0)
+                        * ``bm_secid``          – benchmark security IDs or ``None``
+        n_bins:       When not ``None``, ``y`` is converted to integer category
+                      labels in ``[0, n_bins - 1]`` for classification training.
+    """
     x : torch.Tensor
     y : torch.Tensor | Any = None
     w : torch.Tensor | Any = None
@@ -142,7 +148,22 @@ class BoostInput:
             self.use_feature = use_feature
 
     def obj_flatten(self , obj : torch.Tensor | np.ndarray | None , dropna = True , date_first = True) -> Any:
-        if obj is None: 
+        """Flatten a 2-D or 3-D array to 1-D (or 2-D for ``x``) by the finite mask.
+
+        Parameters
+        ----------
+        obj:        Tensor/array aligned with ``(n_sample, n_date, ...)``.
+        dropna:     If ``True`` (default) keep only positions where
+                    ``self.finite`` is ``True``; otherwise keep all.
+        date_first: If ``True`` (default) transpose to ``(n_date, n_sample, ...)``
+                    before flattening so that the output is date-major.
+
+        Returns
+        -------
+        Flattened array of length ``n_finite`` (or ``n_sample * n_date`` when
+        ``dropna=False``).
+        """
+        if obj is None:
             return obj
 
         finite = self.finite if dropna else self.finite.fill_(True)
@@ -157,18 +178,30 @@ class BoostInput:
         return obj[finite]
 
     def SECID(self , dropna = True):
+        """Return flat security-ID array aligned with the finite mask."""
         return self.obj_flatten(self.secid[:,None].repeat(len(self.date),axis=1) , dropna=dropna)
 
-    def DATE(self , dropna = True): 
+    def DATE(self , dropna = True):
+        """Return flat date array aligned with the finite mask."""
         return self.obj_flatten(self.date[None,:].repeat(len(self.secid),axis=0) , dropna=dropna)
 
-    def X(self) -> torch.Tensor: 
+    def X(self) -> torch.Tensor:
+        """Return flat feature matrix of shape ``(n_finite, n_use_feature)``.
+
+        Only the columns in ``use_feature`` are returned; NaN rows are dropped.
+        """
         return self.obj_flatten(self.x[...,match_slice(self.use_feature , self.feature)] , dropna=True)
-    
-    def Y(self): 
+
+    def Y(self):
+        """Return flat label vector of length ``n_finite``, NaN rows dropped."""
         return self.obj_flatten(self.y , dropna=True)
-    
-    def W(self): 
+
+    def W(self):
+        """Return flat sample weight vector of length ``n_finite``, NaN rows dropped.
+
+        If ``self.w`` is ``None`` the weights are computed on-the-fly from
+        ``weight_method.calculate_weight()``.
+        """
         w = self.weight_method.calculate_weight(self.y , self.secid) if self.w is None and self.y is not None else self.w
         return self.obj_flatten(w , dropna=True)
     
@@ -220,6 +253,20 @@ class BoostInput:
         def nfeat(self): return self.x.shape[-1]
         
     def output(self , pred : torch.Tensor | np.ndarray | Any):
+        """Wrap a flat prediction array into a :class:`BoostOutput`.
+
+        Parameters
+        ----------
+        pred: Flat prediction array of length ``n_finite``.
+              If 2-D (softmax output with shape ``(n_finite, n_class)``),
+              a linear combination with centred class indices is applied to
+              collapse to a scalar score.
+
+        Returns
+        -------
+        :class:`BoostOutput` with ``secid``, ``date``, and ``finite`` from this
+        container and ``label`` set to the original continuous ``_raw_y``.
+        """
         if isinstance(pred , torch.Tensor):
             new_pred = pred
         else:
@@ -262,6 +309,17 @@ class BoostInput:
 
     @classmethod
     def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str,Any] | None = None):
+        """Construct from a tidy ``DataFrame`` with a secid/date multi-index.
+
+        The last column is treated as the label (``y``); all other columns
+        become features.  The index is auto-detected from common column names:
+        ``['SecID','instrument','secid','StockID']`` and
+        ``['TradeDate','datetime','date']``.
+
+        .. note::
+            The last-column-is-label assumption is undocumented upstream and
+            is a known fragility (see ``TODO_res_algo.md``).
+        """
         weight_param = weight_param or {}
         SECID_COLS = ['SecID','instrument','secid','StockID']
         DATE_COLS  = ['TradeDate','datetime','date']  
@@ -285,16 +343,26 @@ class BoostInput:
 
     @classmethod
     def from_numpy(cls , x : np.ndarray , y : np.ndarray | Any = None,  w : np.ndarray | Any = None ,
-                   secid : Any = None , date : Any = None , feature : Any = None , 
+                   secid : Any = None , date : Any = None , feature : Any = None ,
                    weight_param : dict[str,Any] = {}):
+        """Construct from NumPy arrays, delegating to :meth:`from_tensor`."""
         return cls.from_tensor(torch.Tensor(x) , None if y is None else torch.Tensor(y) ,
                                None if w is None else torch.Tensor(w) ,
                                secid , date , feature , weight_param)
     
     @classmethod
     def from_tensor(cls , x : torch.Tensor , y : torch.Tensor | Any = None , w : torch.Tensor | Any = None ,
-                    secid : Any = None , date : Any = None , feature : Any = None , 
+                    secid : Any = None , date : Any = None , feature : Any = None ,
                     weight_param : dict[str,Any] = {}):
+        """Construct from tensors, normalising shapes and generating default indices.
+
+        ``x`` may be 2-D ``(n_sample, n_feature)`` (treated as single date) or
+        3-D ``(n_sample, n_date, n_feature)``.  ``y`` may be 1-D, 2-D, or 3-D
+        with a trailing size-1 feature axis which is squeezed.
+
+        Default ``secid``/``date``/``feature`` are integer ``arange`` sequences
+        when not provided.
+        """
         assert x.ndim in [2,3] , x.ndim
         assert y is None or y.ndim in [x.ndim - 1, x.ndim] , (y.ndim , x.ndim)
         if y is not None and y.ndim == x.ndim:
@@ -315,6 +383,13 @@ class BoostInput:
     
     @classmethod
     def concat(cls , datas : 'list[BoostInput | None]'):
+        """Union-merge a list of :class:`BoostInput` objects along all axes.
+
+        ``secid`` and ``date`` are union-merged; ``feature`` is stacked
+        (concatenated without deduplication).  Overlapping ``x``/``y`` cells
+        from later blocks overwrite earlier ones.  ``None`` entries and
+        incomplete blocks (``complete == False``) are silently skipped.
+        """
         blocks = [data for data in datas if data is not None and data.complete]
         
         secid   = index_merge([blk.secid   for blk in blocks] , method = 'union')
@@ -339,6 +414,30 @@ class BoostInput:
     
 @dataclass(slots=True)
 class BoostWeightMethod:
+    """Three-axis multiplicative sample weight calculator.
+
+    Computes ``w = cs_weight * ts_weight * bm_weight`` element-wise over a
+    ``(n_sample, n_date)`` grid.
+
+    Attributes:
+        ts_type:           Time-series weighting scheme.
+                           ``'lin'`` — linearly increasing from ``ts_lin_rate``
+                           to 1 across dates.
+                           ``'exp'`` — exponential decay with half-life
+                           ``ts_half_life_rate * n_date``.
+        cs_type:           Cross-sectional weighting scheme.
+                           ``'ones'`` — doubles weight on positive-label samples.
+                           ``'top'`` — exponential rank-based upweighting.
+        bm_type:           Benchmark membership weighting.
+                           ``'in'`` — doubles weight for securities in
+                           ``bm_secid``.
+        ts_lin_rate:       Start value of linear time-series weights (default 0.5).
+        ts_half_life_rate: Half-life as a fraction of ``n_date`` (default 0.5).
+        cs_top_tau:        Decay exponent for the ``'top'`` cross-sectional scheme.
+        cs_ones_rate:      Multiplier applied to positive-label rows (default 2.0).
+        bm_rate:           Multiplier applied to benchmark members (default 2.0).
+        bm_secid:          Security IDs that constitute the benchmark universe.
+    """
     ts_type : Literal['lin' , 'exp'] | None = None
     cs_type : Literal['top' , 'positive' , 'ones'] | None = None
     bm_type : Literal['in'] | None = None
@@ -350,12 +449,24 @@ class BoostWeightMethod:
     bm_secid : np.ndarray | list | None = None
 
     def calculate_weight(self , y : np.ndarray | torch.Tensor , secid : Any):
-        if y.ndim == 3 and y.shape[-1] == 1: 
+        """Compute the combined ``(n_sample, n_date)`` weight matrix.
+
+        The result is the element-wise product of :meth:`cs_weight`,
+        :meth:`ts_weight`, and :meth:`bm_weight`.
+        """
+        if y.ndim == 3 and y.shape[-1] == 1:
             y = y[...,0]
         assert y.ndim == 2 , y.shape
         return self.cs_weight(y) * self.ts_weight(y) * self.bm_weight(y , secid)
 
     def cs_weight(self , y : np.ndarray | torch.Tensor , **kwargs):
+        """Cross-sectional weights of shape ``(n_sample, n_date)``.
+
+        ``'ones'``: samples with label ``== 1`` get weight ``cs_ones_rate``
+        (default ×2).
+        ``'top'``: exponential rank-based decay so top-ranked securities receive
+        higher weight.  ``None``: uniform ones.
+        """
         w = y * 0 + 1.
         if self.cs_type is None: 
             return w
@@ -370,6 +481,12 @@ class BoostWeightMethod:
         return w
     
     def ts_weight(self , y : np.ndarray | torch.Tensor , **kwargs):
+        """Time-series weights of shape ``(n_sample, n_date)``.
+
+        ``'lin'``: linearly increases from ``ts_lin_rate`` to 1 across dates.
+        ``'exp'``: exponential decay so recent dates have higher weight.
+        ``None``: uniform ones.
+        """
         w = y * 0 + 1.
         if self.ts_type is None: 
             return w
@@ -382,6 +499,11 @@ class BoostWeightMethod:
         return w
     
     def bm_weight(self , y : np.ndarray | torch.Tensor , secid : np.ndarray | list):
+        """Benchmark-membership weights of shape ``(n_sample, n_date)``.
+
+        ``'in'``: securities in ``bm_secid`` receive weight ``bm_rate + 1``
+        (default ×2), others weight 1.  ``None``: uniform ones.
+        """
         w = y * 0 + 1.
         if self.bm_type is None: 
             return w
