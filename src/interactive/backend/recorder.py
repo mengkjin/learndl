@@ -57,7 +57,7 @@ class BackendTaskRecorder:
         else:
             task_item = TaskItem.create(None , source=parsed_kwargs.get('source' , None) , queue = True)
             self._task_id = task_item.id
-        self.update_msg : dict[str , Any] = {'pid': os.getpid()}
+        self.update_msg : dict[str , Any] = {}
         self.params = parsed_kwargs
         if 'email' in self.params:
             self.params['email'] = bool(self.params['email'])
@@ -122,6 +122,11 @@ class BackendTaskRecorder:
 
     def __enter__(self) -> 'BackendTaskRecorder':
         """Enter the recording context; returns self."""
+        start_time = datetime.now().timestamp()
+        pid = os.getpid()
+        self.task_db.update_task(
+            self.task_id, backend_updated = True, 
+            pid = pid, status = 'running', start_time = start_time)
         return self
 
     def __exit__(self , exc_type : type[BaseException] | None , exc_value : BaseException | None , exc_traceback : Any) -> None:

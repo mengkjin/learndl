@@ -901,7 +901,7 @@ class TaskItem:
     
     def refresh(self) -> dict[str, Any]:
         '''refresh task item status , return True if status changed'''
-        changed = {}
+        changed = self.reload()
 
         if self.pid and self.is_running:
             status = check_process_status(self.pid)
@@ -915,16 +915,14 @@ class TaskItem:
                     changed['status'] = 'complete'
                 
             elif status != 'running':
-                self.update({'status': 'running'} , sync = False)
-
-        changed = changed | self.reload()
-
+                ... # do nothing
+                
         if changed and 'status' in changed:
             new_status = changed['status']
-            Logger.info(f"Task {self.id} status [{new_status.upper()}]")
+            Logger.only_once(f"Task {self.id} status [{new_status.upper()}]" , object = self , mark = f'status_{new_status}' , printer = Logger.info)
             if new_status == 'error' and 'exit_error' in changed:
                 Logger.stdout(f"exit_error : {changed['exit_error']}" , color = 'lightred' , indent = 1)
-            if 'exit_files' in changed:
+            if 'exit_files' in changed and changed['exit_files']:
                 Logger.stdout(f"exit_files : {changed["exit_files"]}" , indent = 1)
         return changed
 
@@ -966,12 +964,14 @@ class TaskItem:
 
     def wait_until_running(self , starting_timeout : int = 20):
         """wait for running"""
-        if not self.is_running:
+        if not self.is_starting:
             return True
-        while not self.is_running:
+        while self.is_starting:
             self.refresh()
+            time.sleep(1)
             if self.status == 'starting':
                 starting_timeout = starting_timeout - 1
+            
             if starting_timeout <= 0:
                 Logger.error(f'Script {self.script} running timeout! Still starting')
                 self.update({
@@ -979,7 +979,6 @@ class TaskItem:
                     'exit_code': 1 ,
                     'exit_error': f'Script {self.script} running timeout! Still starting'} , sync = True)
                 return False
-            time.sleep(1)
         return True
 
     def wait_until_completion(self , starting_timeout : int = 20):
@@ -988,15 +987,6 @@ class TaskItem:
             return True
         while self.is_running:
             self.refresh()
-            if self.status == 'starting':
-                starting_timeout = starting_timeout - 1
-            if starting_timeout <= 0:
-                Logger.error(f'Script {self.script} running timeout! Still starting')
-                self.update({
-                    'status': 'error' , 'end_time': datetime.now().timestamp() ,
-                    'exit_code': 1 ,
-                    'exit_error': f'Script {self.script} running timeout! Still starting'} , sync = True)
-                return False
             time.sleep(1)
         return True
 
@@ -1144,6 +1134,11 @@ class TaskItem:
     def is_running(self) -> bool:
         """True when status is ``'running'`` or ``'starting'``."""
         return self.status in ['running', 'starting']
+
+    @property
+    def is_starting(self) -> bool:
+        """True when status is ``'starting'``."""
+        return self.status == 'starting'
 
     @property
     def plain_icon(self) -> str:
@@ -1294,10 +1289,7 @@ class TaskItem:
         """
         assert self.script_cmd is not None , 'script cmd is not set'
         try:
-            start_time = timestamp()
             self.script_cmd.run(as_workspace=as_workspace, from_workspace=from_workspace)
-            pid = self.script_cmd.get_real_pid()
-            self.update({'pid': pid, 'status': 'running', 'start_time': start_time} , sync = True)
         except Exception as e:
             self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , sync = True)
             Logger.print_exc(e)
