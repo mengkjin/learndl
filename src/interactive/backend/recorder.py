@@ -5,7 +5,7 @@ Provides :class:`BackendTaskRecorder`, a decorator / context-manager that wraps
 a script's ``main`` function so it reports lifecycle events (start, PID, exit
 code, output files, errors) back to :class:`~src.interactive.backend.task.TaskDatabase`.
 """
-import os  , traceback
+import os  , traceback , ast
 
 from typing import Any , Callable
 from pathlib import Path
@@ -60,8 +60,6 @@ class BackendTaskRecorder:
         self.update_msg : dict[str , Any] = {'pid': os.getpid()}
         self.params = parsed_kwargs
         if 'email' in self.params:
-            if isinstance(self.params['email'] , str):
-                self.params['email'] = eval(self.params['email'])
             self.params['email'] = bool(self.params['email'])
 
     def __repr__(self) -> str:
@@ -100,16 +98,18 @@ class BackendTaskRecorder:
         """Coerce CLI-style string values ('True', 'None', '42') to their Python equivalents."""
         kwargs = argparse_dict(**kwargs)
         for key, value in kwargs.items():
+            kwargs[key] = ast.literal_eval(value) if isinstance(value , str) else value
             if not isinstance(value , str):
                 kwargs[key] = value
             elif value.lower() in ['true' , 'false']:
-                kwargs[key] = eval(value.lower().capitalize())
+                kwargs[key] = ast.literal_eval(value.capitalize())
             elif value.lower() in ['null' , 'none']:
                 kwargs[key] = None
-            elif value.isdigit():
-                kwargs[key] = eval(value)
             else:
-                kwargs[key] = value
+                try:
+                    kwargs[key] = ast.literal_eval(value)
+                except Exception:
+                    kwargs[key] = value
         return kwargs
 
     @property

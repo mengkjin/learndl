@@ -11,7 +11,7 @@ Key helpers:
   into a persistent ``st.empty()`` placeholder, enabling clean reruns.
 * :func:`conditional_path` — resolves a format string to a file path,
   trying alternatives separated by ``|`` until one exists.
-* :func:`direclty_open_file` — opens a file in the host OS file viewer
+* :func:`directly_open_file` — opens a file in the host OS file viewer
   (typo preserved from original).
 """
 import streamlit as st
@@ -379,7 +379,7 @@ def show_report_main(runner : ScriptRunner):
                                          icon = ":material/open_in_new:" , 
                                          help = f":blue[**Open**]: {path}" or f":red[**Open**]: {path} (File Not Found)", 
                                          disabled = not path.exists()):
-                                direclty_open_file(path)
+                                directly_open_file(path)
 
                         with col1:
                             st.caption(f":material/file_present: /{path.relative_to(PATH.main)}")
@@ -422,7 +422,7 @@ def show_report_main(runner : ScriptRunner):
     else:
         SC.running_report_init = False
 
-def direclty_open_file(path : Path | None = None) -> None:
+def directly_open_file(path : Path | None = None) -> None:
     """Open *path* in the host OS default file viewer.
 
     Uses ``os.startfile`` on Windows and ``subprocess.run(['open', ...])`` on
@@ -430,7 +430,7 @@ def direclty_open_file(path : Path | None = None) -> None:
     platform is unsupported.
 
     Note:
-        The function name contains a typo (``direclty``) preserved intentionally
+        The function name contains a typo (``directly``) preserved intentionally
         for backwards compatibility with existing call sites.
 
     Args:

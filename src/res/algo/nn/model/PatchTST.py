@@ -1,4 +1,8 @@
+"""PatchTST: Patch-based Time Series Transformer.
 
+Reference: Nie et al. (2022) "A Time Series is Worth 64 Words: Long-term
+Forecasting with Transformers."
+"""
 import torch
 
 from torch import nn , Tensor
@@ -9,21 +13,46 @@ from .. import layer as Layer
 __all__ = ['PatchTST']
 
 class PatchTST(nn.Module):
-    '''
-    in:  [bs x seq_len x nvars]
-    out: [bs x seq_len x nvars] for pretrain
-         [bs x predict_steps] for prediction
-    '''
+    """Patch-based Time Series Transformer.
+
+    Splits each variable's time series into overlapping patches, embeds them,
+    and applies a Transformer encoder.  Supports both pretraining (masked
+    patch reconstruction) and prediction modes.
+
+    Args:
+        nvars:          Number of input variables (channels).
+        seq_len:        Input sequence length.
+        d_model:        Transformer embedding dimension.
+        patch_len:      Length of each patch (default ``5``).
+        stride:         Patch stride; defaults to ``patch_len // 2``.
+        shared_embedding: Share the patch embedding across all variables.
+        shared_head:    Share the prediction head across all variables.
+        revin:          Use Reversible Instance Normalization (default
+                        ``True``).
+        n_layers:       Number of Transformer encoder layers (default ``3``).
+        n_heads:        Number of attention heads (default ``8``).
+        d_ff:           Feedforward network dimension (default ``64``).
+        res_attention:  Enable Realformer residual attention.
+        pe:             Positional encoding type (see ``layer.PE``).
+        learn_pe:       Whether the PE is learnable.
+        head_dropout:   Dropout in the prediction head.
+        predict_steps:  Number of prediction time steps (default ``1``).
+        head_type:      ``'prediction'`` or ``'pretrain'``.
+
+    Shapes:
+        Input:  ``[bs, seq_len, nvars]``
+        Output: ``[bs, nvars, seq_len]`` (pretrain) or ``[bs, predict_steps]`` (prediction)
+    """
     def __init__(
-        self, 
-        nvars : int , 
-        seq_len: int , 
-        d_model: int , 
-        patch_len:int = 5 , 
-        stride:int|None = None, 
+        self,
+        nvars : int ,
+        seq_len: int ,
+        d_model: int ,
+        patch_len:int = 5 ,
+        stride:int|None = None,
         shared_embedding=True, shared_head = False,
-        revin:bool=True,n_layers:int=3, n_heads=8, d_ff:int=64, 
-        norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act_type:str='gelu', 
+        revin:bool=True,n_layers:int=3, n_heads=8, d_ff:int=64,
+        norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act_type:str='gelu',
         res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
         head_type = 'prediction', **kwargs
@@ -371,8 +400,13 @@ class TSTEncoderLayer(nn.Module):
         return x, scores
     
 class patch_tst(PatchTST):
+    """Training-framework adapter for PatchTST.  Registry key: ``'patch_tst'``.
+
+    Maps the standard ``(input_dim, seq_len, hidden_dim, num_output)``
+    interface to PatchTST constructor arguments.
+    """
     def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
-        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim ,
                          predict_steps = num_output , head_type = 'prediction' , **kwargs)
 
 if __name__ == '__main__' :

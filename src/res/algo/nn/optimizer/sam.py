@@ -5,7 +5,17 @@
 # Time    :   2023/07/04 14:37:18
 # Author  :   Pu Yanheng
 '''
+"""SAM-family sharpness-aware minimizers.
 
+All optimizers in this module wrap a base optimizer and add an extra forward-
+backward pass to perturb parameters toward sharper loss regions, then update
+from the perturbed gradient.  This improves generalization by seeking flat
+minima.
+
+Helper utilities:
+    disable_running_stats / enable_running_stats — freeze BatchNorm momentum
+    during the second forward pass to avoid polluting running statistics.
+"""
 # here put the import lib
 import contextlib
 from collections import defaultdict
@@ -20,6 +30,13 @@ import torch.distributed
 from src.proj import Logger
 
 def disable_running_stats(model):
+    """Freeze BatchNorm running statistics by setting momentum to 0.
+
+    Called before the second (perturbed) forward pass in SAM variants so that
+    the perturbed pass does not update the BatchNorm running mean/variance.
+    The original momentum is saved as ``backup_momentum`` and restored by
+    :func:`enable_running_stats`.
+    """
     def _disable(module):
         if isinstance(module, _BatchNorm):
             setattr(module, 'backup_momentum', module.momentum)
@@ -27,13 +44,40 @@ def disable_running_stats(model):
     model.apply(_disable)
 
 def enable_running_stats(model):
+    """Restore BatchNorm momentum from ``backup_momentum`` after the SAM step.
+
+    Must be called after the SAM update (i.e. after the second forward/backward
+    pass) to resume normal BatchNorm tracking.
+    """
     def _enable(module):
         if isinstance(module, _BatchNorm) and hasattr(module, 'backup_momentum'):
             module.momentum = getattr(module, 'backup_momentum')
     model.apply(_enable)
 
 class SAM(optim.Optimizer):
+    """Sharpness-Aware Minimization (SAM).
 
+    Two-step optimization loop:
+    1. ``first_step``  — perturbs weights to the local loss maximum
+       ``w + e(w)`` where ``e(w) = rho * grad / ||grad||₂``
+    2. ``second_step`` — reverts to ``w`` and performs the true gradient step
+       using the perturbed gradient.
+
+    Usage requires a closure for the second forward-backward pass::
+
+        optimizer.first_step(zero_grad=True)
+        loss = model(inputs)
+        loss.backward()
+        optimizer.second_step(zero_grad=True)
+
+    Args:
+        params:         Model parameters (same as any ``optim.Optimizer``).
+        base_optimizer: Instantiated inner optimizer (e.g. ``torch.optim.SGD``).
+        rho:            Neighborhood size for perturbation (default ``0.05``).
+
+    Reference: Foret et al. (2021) "Sharpness-Aware Minimization for
+    Efficiently Improving Generalization."
+    """
     def __init__(self, params, base_optimizer, rho=0.05, **kwargs) -> None:
         assert isinstance(base_optimizer, torch.optim.Optimizer), \
             f"base_optimizer must be an `Optimizer`, but got {type(base_optimizer)}"
@@ -49,6 +93,14 @@ class SAM(optim.Optimizer):
 
     @torch.no_grad()
     def first_step(self, zero_grad=False):
+        """Perturb parameters to the local loss maximum ``w + e(w)``.
+
+        Computes perturbation ``e(w) = rho * grad / ||grad||₂`` and adds it to
+        each parameter.  Saves ``e_w`` in optimizer state for reverting later.
+
+        Args:
+            zero_grad: If ``True``, call ``self.zero_grad()`` after perturbing.
+        """
         grad_norm = self._grad_norm()
         for group in self.param_groups:
             scale = group["rho"] / (grad_norm + 1e-7)
@@ -63,6 +115,14 @@ class SAM(optim.Optimizer):
 
     @torch.no_grad()
     def second_step(self, zero_grad=False):
+        """Revert perturbation and perform the base optimizer step.
+
+        Subtracts the saved ``e_w`` from each parameter (returning to ``w``),
+        then calls ``base_optimizer.step()`` with the current gradients.
+
+        Args:
+            zero_grad: If ``True``, call ``self.zero_grad()`` after the step.
+        """
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -75,6 +135,12 @@ class SAM(optim.Optimizer):
 
     @torch.no_grad()
     def step(self, closure=None, **kwargs):
+        """Perform a full SAM step using a closure for the second forward-backward pass.
+
+        Args:
+            closure: A callable that performs a forward and backward pass and
+                     returns the loss.  Required for SAM.
+        """
         assert closure is not None, "SAM requires closure, which is not provided."
 
         self.first_step()
@@ -83,6 +149,11 @@ class SAM(optim.Optimizer):
         self.second_step()
 
     def _grad_norm(self):
+        """Compute the L2 gradient norm across all parameter groups.
+
+        Places all per-parameter norms on a shared device to handle model
+        parallelism safely.
+        """
         # put everything on the same device, in case of model parallelism
         shared_device = self.param_groups[0]["params"][0].device
         norm = torch.norm(
@@ -100,7 +171,29 @@ class SAM(optim.Optimizer):
 
 
 class SSAMF(SAM):
+    """Sparse SAM with Fisher Information mask (SSAM-F).
 
+    Extends SAM by masking the perturbation to the top-k most important
+    parameters as measured by their Fisher Information (squared gradient).
+    Reduces compute and can improve generalization by focusing sharpness
+    reduction on the most sensitive parameters.
+
+    Args:
+        sparsity:    Fraction of parameters to *mask out* (set perturbation
+                     to zero).  Default ``0.5`` keeps top 50%.
+        num_samples: Number of training samples used to estimate Fisher
+                     Information when ``update_mask`` is called.
+        update_freq: Epoch frequency at which to recompute the Fisher mask.
+                     Mask is updated at the first batch of each epoch that is
+                     a multiple of ``update_freq``.
+
+    NOTE: ``update_mask`` uses ``CrossEntropyLoss`` internally, which is only
+    appropriate for classification tasks.  For regression tasks this is
+    incorrect; see ``TODO_res_algo.md``.
+
+    Reference: Liu et al. (2022) "Sparse and Imperceptible Adversarial Attack
+    via a Hessian-based Method."
+    """
     def __init__(
         self,
         params,
@@ -144,6 +237,17 @@ class SSAMF(SAM):
 
     @torch.no_grad()
     def update_mask(self, model, train_data, **kwargs):
+        """Recompute the Fisher Information mask from a random subset of data.
+
+        Accumulates squared gradients over ``num_samples`` random training
+        examples to estimate per-parameter Fisher Information.  The top
+        ``(1 - sparsity) * total_params`` parameters by Fisher Information
+        receive a mask value of 1 (live); the rest are set to 0 (pruned).
+
+        Args:
+            model:      The model being trained.
+            train_data: PyTorch DataLoader or Dataset with ``dataset`` attribute.
+        """
         fisher_value_dict = {}
         fisher_mask_dict = {}
         for group in self.param_groups:
@@ -229,6 +333,11 @@ class SSAMF(SAM):
 
     @torch.no_grad()
     def mask_info(self):
+        """Return the fraction of live (unmasked / active) parameters.
+
+        Returns:
+            Float in ``[0.0, 1.0]``.  ``1.0`` means all parameters are active.
+        """
         live_num = 0
         total_num = 0
         for group in self.param_groups:
@@ -239,7 +348,24 @@ class SSAMF(SAM):
 
 
 class ASAM(optim.Optimizer):
+    """Adaptive SAM (ASAM) — weight-adaptive perturbation.
 
+    Scales the perturbation ``e(w)`` by ``|w| + eta``, making the neighborhood
+    size adaptive to the magnitude of each weight.  This addresses the scale-
+    invariance issue in the original SAM where large-weight parameters dominate
+    the norm calculation.
+
+    Args:
+        params:    Model parameters.
+        optimizer: Base optimizer instance.
+        model:     The model (needed for named_parameters iteration).
+        rho:       Neighborhood radius (default ``0.5``).
+        eta:       Minimum adaptive scale to prevent zero perturbation on
+                   very small weights (default ``0.01``).
+
+    Reference: Kim et al. (2021) "ASAM: Adaptive Sharpness-Aware Minimization
+    for Scale-Invariant Learning of Deep Neural Networks."
+    """
     def __init__(self, params, optimizer, model, rho=0.5, eta=0.01, **kwargs):
 
         assert isinstance(optimizer, torch.optim.Optimizer), "base_optimizer must be an `Optimizer`"
@@ -305,7 +431,27 @@ class ASAM(optim.Optimizer):
 
 
 class GSAM(optim.Optimizer):
+    """Gradient SAM (GSAM) — surrogate gap minimization via gradient decomposition.
 
+    After perturbing weights, decomposes the perturbed gradient into:
+    * Vertical component: orthogonal to the original gradient direction
+    * Parallel component: along the original gradient direction
+
+    Subtracts ``alpha * vertical`` from the gradient before the base optimizer
+    step, pushing optimization toward directions that simultaneously reduce
+    loss and sharpness.
+
+    Args:
+        gsam_alpha:  Coefficient for subtracting the vertical gradient
+                     component (default ``0.2``).
+        rho_t:       Perturbation radius (default ``0.05``).
+        adaptive:    If ``True``, scale perturbation by ``|w|²`` (ASAM-style).
+        grad_reduce: How to reduce gradients across distributed workers:
+                     ``'mean'`` (default) or ``'sum'``.
+
+    Reference: Zhuang et al. (2022) "Surrogate Gap Minimization Improves
+    Sharpness-Aware Training."
+    """
     def __init__(
         self,
         params,
@@ -504,6 +650,22 @@ class GSAM(optim.Optimizer):
 
 
 class GAM(optim.Optimizer):
+    """Gradient Agreement Maximization (GAM).
+
+    Uses three forward-backward passes per step:
+    1. Computes gradient at ``w`` (``g_0``)
+    2. Perturbs to ``w + e_0``; computes gradient there (``g_1``)
+    3. Applies grad-norm ascent perturbation; computes gradient (``g_2``)
+    4. Decomposes gradients to maximize agreement between the three estimates
+
+    The update direction combines ``g_1`` and ``g_2`` with a vertical
+    decomposition to reduce sharpness.
+
+    Args:
+        args: Dict with keys ``grad_rho``, ``grad_norm_rho``, ``grad_beta_1``,
+              ``grad_beta_2``, ``grad_beta_3``, ``grad_gamma``.
+        grad_reduce: ``'mean'`` or ``'sum'``.
+    """
     def __init__(
         self,
         params,
@@ -774,7 +936,20 @@ class GAM(optim.Optimizer):
 
 
 class FriendlySAM(torch.optim.Optimizer):
+    """Friendly SAM — momentum-corrected perturbation direction.
 
+    Before computing the perturbation norm, subtracts a momentum term
+    (``sigma * m``) from the gradient, where ``m`` is an EMA of past gradients.
+    This reduces the perturbation noise caused by stochastic gradients.
+
+    Args:
+        rho:      Perturbation radius (default ``0.05``).
+        sigma:    Momentum subtraction coefficient (default ``1``).
+        lmbda:    EMA decay for the momentum estimate (default ``0.9``).
+        adaptive: If ``True``, use ASAM-style weight-adaptive scaling.
+
+    Reference: Zhang et al. (2023) "Friendly Sharpness-Aware Minimization."
+    """
     def __init__(
         self,
         params,

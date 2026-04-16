@@ -27,6 +27,11 @@ from src.proj import PATH , Logger , MACHINE  # noqa
 from src.proj.util import Options # noqa
 from .task import TaskItem , TaskQueue , runs_page_url
 
+def _format_path(script_key : str) -> str:
+    """get human-readable breadcrumb path, e.g. ``'Data > Train Data'`` from script_key"""
+    return ' > '.join(re.sub(r'^\d+ ', '', p).title()
+                      for p in Path(script_key.replace('_', ' ')).with_suffix('').parts)
+
 @dataclass
 class PathItem:
     """A single file or directory entry rooted under the scripts folder.
@@ -104,8 +109,7 @@ class PathItem:
     @property
     def format_path(self) -> str:
         """Human-readable breadcrumb path, e.g. ``'Data > Train Data'``."""
-        return ' > '.join(re.sub(r'^\d+ ', '', p).title()
-                          for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
+        return _format_path(self.script_key)
 
     @classmethod
     def from_key(cls , script_key : str , base_dir : Path = PATH.scpt) -> 'PathItem':
@@ -411,8 +415,7 @@ class ScriptRunner:
     @property
     def format_path(self) -> str:
         """Human-readable breadcrumb path, e.g. ``'Data > Train Data'``."""
-        return ' > '.join(re.sub(r'^\d+ ', '', p).title()
-                          for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
+        return _format_path(self.script_key)
 
     @property
     def path_parts(self) -> list[str]:

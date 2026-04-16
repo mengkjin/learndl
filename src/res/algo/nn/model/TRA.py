@@ -1,3 +1,8 @@
+"""TRA: Temporal Routing Adaptor for multi-state stock prediction.
+
+Reference: Ye et al. (2021) "Temporal Routing Adaptor for Dynamic Scene
+Understanding."
+"""
 import torch
 from torch import nn , Tensor
 
@@ -5,8 +10,37 @@ from src.proj import Logger
 from .RNN import get_rnn_mod
 
 class block_tra(nn.Module):
-    '''Temporal Routing Adaptor (TRA) mapping segment'''
-    def __init__(self, hidden_dim , tra_dim = 8 , num_states = 1, hist_loss_seq_len = 60 , horizon = 20 , 
+    """Temporal Routing Adaptor (TRA) mapping head.
+
+    Maintains ``num_states`` parallel predictors and an LSTM-based router that
+    assigns each sample to a state using Gumbel-Softmax.  When ``num_states=1``
+    it degenerates to a single predictor (no routing).
+
+    Args:
+        hidden_dim:       Input hidden representation dimension.
+        tra_dim:          LSTM router hidden dimension (default ``8``).
+        num_states:       Number of parallel predictor states (default ``1``).
+        hist_loss_seq_len: Length of the historical loss sequence fed to the
+                          router (default ``60``).
+        horizon:          Number of future time steps to skip in the router
+                          input (default ``20``).
+        tau:              Gumbel-Softmax temperature (default ``1.0``).
+        src_info:         Information sources for the router — combination of
+                          ``'LR'`` (latent representation) and ``'TPE'``
+                          (temporal prediction error).
+        gamma:            Initial Sinkhorn regularization coefficient.
+        rho:              Decay rate for ``gamma`` (``gamma * rho^step``).
+
+    Forward args (beyond ``x``):
+        hist_loss: Historical per-state loss sequence ``[bs, hist_loss_seq_len, num_states]``.
+                   Required when ``num_states > 1``.
+        y:         Current target ``[bs, 1]``.  Required during training when
+                   ``num_states > 1``.
+
+    Returns:
+        ``(final_pred, {'loss_opt_transport': ..., 'hidden': preds, 'preds': preds})``
+    """
+    def __init__(self, hidden_dim , tra_dim = 8 , num_states = 1, hist_loss_seq_len = 60 , horizon = 20 ,
                  tau=1.0, src_info = 'LR_TPE' , gamma = 0.01 , rho = 0.999 , **kwargs):
         super().__init__()
         self.num_states = num_states
@@ -91,7 +125,20 @@ class block_tra(nn.Module):
         return final_pred , {'loss_opt_transport' : loss_opt_transport , 'hidden': preds , 'preds': preds}
     
     def loss_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor:
-        '''special penalty for tra'''
+        """Sinkhorn optimal transport regularization loss for TRA.
+
+        Penalizes the negative log-likelihood of the router assignment under
+        the optimal transport plan.  The regularization coefficient decays as
+        ``gamma * rho^global_steps``, allowing gradual reduction of the
+        routing constraint over training.
+
+        Args:
+            preds:  Per-state predictions ``[bs, num_states]``.
+            label:  Ground-truth returns ``[bs, 1]``.
+
+        Returns:
+            Scalar loss tensor (negative, to be *minimized*).
+        """
         assert self.probs is not None , f'{self.__class__.__name__} probs are None'
         self.global_steps += 1
         square_error = (preds - label).square()
@@ -119,7 +166,11 @@ class block_tra(nn.Module):
             return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)  
 
 def shoot_infs(inp_tensor):
-    """Replaces inf by maximum of tensor"""
+    """Replace ``inf`` values with the maximum finite value in the tensor.
+
+    Used to stabilize the Sinkhorn normalization; prevents ``exp(inf/eps)``
+    from producing NaN during the iterative row/column normalization.
+    """
     valid = torch.isfinite(inp_tensor)
 
     if ~valid.all():
@@ -129,6 +180,21 @@ def shoot_infs(inp_tensor):
     return inp_tensor
 
 def sinkhorn(Q, n_iters=3, epsilon=0.01):
+    """Sinkhorn-Knopp iterative row-and-column normalization.
+
+    Converts a log-score matrix into a doubly-stochastic assignment matrix
+    used as the optimal transport plan in ``block_tra.loss_opt_transport``.
+
+    Args:
+        Q:       Score matrix (negative squared error), shape ``[bs, num_states]``.
+        n_iters: Number of Sinkhorn iterations (default ``3``).
+        epsilon: Temperature for ``exp(Q / epsilon)``; smaller → sharper
+                 assignments.
+
+    Returns:
+        Doubly-stochastic matrix of the same shape as ``Q`` (values sum to 1
+        across both axes after normalization).
+    """
     # epsilon should be adjusted according to logits value's scale
     with torch.no_grad():
         Q = shoot_infs(Q)
@@ -139,8 +205,28 @@ def sinkhorn(Q, n_iters=3, epsilon=0.01):
     return Q
 
 class tra(nn.Module):
+    """TRA model: RNN backbone + ``block_tra`` routing head.
+
+    ``_default_category = 'tra'`` signals to the training loop that this model
+    requires extra forward arguments: ``hist_loss`` and ``y`` must be provided
+    during training when ``num_states > 1``.
+
+    Args:
+        input_dim:          Input feature dimension.
+        hidden_dim:         RNN and TRA hidden dimension.
+        rnn_type:           RNN backbone type (default ``'lstm'``).
+        rnn_layers:         Number of RNN layers (default ``2``).
+        num_states:         Number of TRA predictor states (default ``1``).
+        hist_loss_seq_len:  Length of historical loss window (default ``60``).
+        hist_loss_horizon:  Future horizon trimmed from router input
+                            (default ``20``).
+
+    Shapes:
+        Input:  ``[bs, seq_len, input_dim]``
+        Output: ``([bs, 1], {'loss_opt_transport': ..., 'hidden': ..., 'preds': ...})``
+    """
     _default_category = 'tra'
-    def __init__(self , input_dim , hidden_dim , rnn_type = 'lstm' , rnn_layers = 2 , 
+    def __init__(self , input_dim , hidden_dim , rnn_type = 'lstm' , rnn_layers = 2 ,
                  num_states=1, hist_loss_seq_len = 60 , hist_loss_horizon = 20 , **kwargs):
         super().__init__()
         self.num_states = num_states

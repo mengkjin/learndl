@@ -1,3 +1,13 @@
+"""Multi-task loss combination strategies for multi-head NN training.
+
+Strategies available (``name`` argument to MultiHeadLosses):
+    'ewa'    — Equal Weight Average (no reweighting)
+    'dwa'    — Dynamic Weight Average (Liu et al. 2019)
+    'ruw'    — Revised Uncertainty Weighting (Groenendijk et al. 2022)
+    'gls'    — Geometric Loss Strategy (Chennupati et al. 2019)
+    'rws'    — Random Weight Loss (Lin et al. 2021)
+    'hybrid' — Hybrid of DWA epoch weights + RUW uncertainty weights
+"""
 import torch
 from torch import nn , Tensor
 from typing import Any
@@ -8,20 +18,36 @@ import numpy as np
 from src.proj import Logger
 
 class MultiHeadLosses:
-    '''some realization of multi-losses combine method'''
+    """Orchestrator for multi-task / multi-head loss combination.
+
+    When ``num_head > 1`` and ``name`` is provided, wraps a concrete
+    ``BaseMHLCalculator`` strategy that re-weights per-head losses.  When
+    disabled (``num_head <= 1`` or ``name=None``), passes the loss tensor
+    through unchanged.
+
+    Args:
+        num_head: Number of output heads.  ``-1`` or ``1`` disables
+                  multi-head combination.
+        name:     Strategy key — one of ``'ewa'``, ``'dwa'``, ``'ruw'``,
+                  ``'gls'``, ``'rws'``, ``'hybrid'``.
+        params:   Hyper-parameters forwarded to the strategy constructor
+                  (e.g. ``{'tau': 2.0}`` for DWA).
+        mt_param: Default per-step parameters forwarded at call time
+                  (e.g. ``{'alpha': module.multiloss_alpha}`` for RUW/Hybrid).
+    """
     def __init__(self , num_head = -1 , name : str | None = None , params : dict[str,Any] | None = None , mt_param : dict[str,Any] | None = None , **kwargs):
-        '''
+        """
         example:
             import torch
             import numpy as np
             import matplotlib.pyplot as plt
-            
+
             ml = MultiHeadLosses(2)
             ml.view_plot(2 , 'dwa')
             ml.view_plot(2 , 'ruw')
             ml.view_plot(2 , 'gls')
             ml.view_plot(2 , 'rws')
-        '''
+        """
         self.num_head = num_head
         self.name = name
         self.params = params or {}
@@ -30,12 +56,28 @@ class MultiHeadLosses:
 
     @staticmethod
     def add_params(module : nn.Module , num_of_heads : int):
+        """Inject a learnable ``multiloss_alpha`` parameter into a model.
+
+        Must be called inside the model's ``__init__`` so that the parameter
+        is registered with the optimizer.  Only injects when
+        ``num_of_heads > 1``.
+
+        Args:
+            module:       The ``nn.Module`` to inject the parameter into.
+            num_of_heads: Number of output heads; if ``<= 1`` this is a no-op.
+        """
         if num_of_heads > 1:
             assert not hasattr(module , 'multiloss_alpha') , f'{module} already has multiloss_alpha'
             module.multiloss_alpha = nn.Parameter((torch.ones(num_of_heads) + 1e-4).requires_grad_())
 
     @staticmethod
     def get_params(module : nn.Module | Any):
+        """Extract ``multiloss_alpha`` from a module for use as ``mt_param``.
+
+        Returns:
+            ``{'alpha': module.multiloss_alpha}`` if the attribute exists,
+            otherwise an empty dict.
+        """
         if isinstance(module , nn.Module) and hasattr(module , 'multiloss_alpha'):
             return {'alpha':module.multiloss_alpha}
         else:
@@ -55,8 +97,22 @@ class MultiHeadLosses:
             self.multiloss = None
         return self
     
-    def __call__(self , losses : Tensor | dict[str,Tensor] , mt_param : dict[str,Any] | None = None , **kwargs) -> Tensor | dict[str,Tensor]: 
-        '''calculate combine loss of multiple output losses'''
+    def __call__(self , losses : Tensor | dict[str,Tensor] , mt_param : dict[str,Any] | None = None , **kwargs) -> Tensor | dict[str,Tensor]:
+        """Apply the multi-head loss combination strategy.
+
+        Args:
+            losses:   Per-head loss tensor of shape ``(num_head,)`` or a dict
+                      of named sub-losses passed through when strategy is
+                      disabled.
+            mt_param: Per-step parameters (e.g. ``{'alpha': ...}`` for
+                      RUW/Hybrid).  Merged with the instance-level
+                      ``self.mt_param``.
+
+        Returns:
+            When strategy is active: a ``dict`` mapping
+            ``'multiloss.<name>.head.<i>'`` keys to per-head loss tensors.
+            When disabled: returns ``losses`` unchanged.
+        """
         if self.multiloss is not None:
             return self.multiloss(losses , self.mt_param | (mt_param or {}) , **kwargs)
         else:
@@ -66,6 +122,15 @@ class MultiHeadLosses:
 
     @classmethod
     def view_plot(cls , num_head = 2 , multi_type = 'ruw'):
+        """Visualize the loss surface of a given multi-head strategy.
+
+        Plotting helper for offline analysis — not used during training.
+
+        Args:
+            num_head:   Number of task heads to visualize (2 for 3-D plots).
+            multi_type: Strategy to visualize — one of ``'ruw'``, ``'gls'``,
+                        ``'rws'``, ``'dwa'``.
+        """
         if multi_type == 'ruw':
             num_head = min(num_head, 2)
             x,y = torch.rand(100,num_head),torch.rand(100,1)
@@ -129,10 +194,18 @@ class MultiHeadLosses:
         #plt.close(fig)
 
 class BaseMHLCalculator():
-    '''base class of multi_head_losses class'''
+    """Abstract base class for multi-head loss calculators.
+
+    Tracks a rolling history of per-head loss tensors (``record_losses``) to
+    support epoch-relative weighting strategies like DWA.
+
+    Subclasses override ``weight()`` and/or ``penalty()`` to implement their
+    specific reweighting logic.  ``multihead_losses()`` applies the weight and
+    records for history; ``total_loss()`` sums the dict for scalar reporting.
+    """
     def __init__(self , num_head : int , **kwargs):
         self.num_head = num_head
-        self.record_num = 0 
+        self.record_num = 0
         self.record_losses : list[Tensor] = []
         self.kwargs = kwargs
         self.reset(**kwargs)
@@ -166,10 +239,17 @@ class BaseMHLCalculator():
         return self.__class__.__name__.lower()
 
 class EWA(BaseMHLCalculator):
-    '''Equal weight average'''
+    """Equal Weight Average — applies no reweighting (all weights = 1)."""
 
 class Hybrid(BaseMHLCalculator):
-    '''Hybrid of DWA and RUW'''
+    """Hybrid of DWA epoch-relative weights and RUW uncertainty weights.
+
+    Requires ``params={'tau': float, 'phi': float}`` and a learnable
+    ``alpha`` parameter passed in ``mt_param`` at each step.
+
+    Weight formula: ``DWA_weight + 1/alpha²``
+    Penalty: RUW uncertainty penalty + optional L1 constraint on ``|log alpha|``
+    """
     def reset(self , **kwargs):
         self.tau : float = kwargs['tau']
         self.phi : float = kwargs['phi']
@@ -191,7 +271,17 @@ class Hybrid(BaseMHLCalculator):
         return penalty
 
 class DWA(BaseMHLCalculator):
-    '''dynamic weight average , https://arxiv.org/pdf/1803.10704.pdf'''
+    """Dynamic Weight Average (Liu et al. 2019).
+
+    Weights each head by the relative change in its loss over the last epoch:
+    ``w_i = exp(L_{t-1,i} / L_{t-2,i} / tau)``, then normalizes so weights
+    sum to ``num_head``.
+
+    Requires ``params={'tau': float}`` (temperature; larger tau → flatter
+    weights).
+
+    Reference: https://arxiv.org/pdf/1803.10704.pdf
+    """
     def reset(self , **kwargs):
         self.tau : float = kwargs['tau']
     def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
@@ -203,7 +293,17 @@ class DWA(BaseMHLCalculator):
         return weight
     
 class RUW(BaseMHLCalculator):
-    '''Revised Uncertainty Weighting (RUW) Loss , https://arxiv.org/pdf/2206.11049v2.pdf (RUW + DWA)'''
+    """Revised Uncertainty Weighting (Groenendijk et al. 2022).
+
+    Weight formula: ``w_i = 1 / alpha_i²`` where ``alpha`` is a learnable
+    parameter injected via ``MultiHeadLosses.add_params()``.
+    Penalty: ``sum(log(log(alpha²) + 1)) + |phi - sum|log(alpha)||``
+    when ``phi`` is provided.
+
+    Requires ``params={'phi': float | None}`` and ``mt_param={'alpha': Tensor}``.
+
+    Reference: https://arxiv.org/pdf/2206.11049v2.pdf
+    """
     def reset(self , **kwargs):
         self.phi : float = kwargs['phi']
     def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
@@ -219,11 +319,27 @@ class RUW(BaseMHLCalculator):
         return penalty
 
 class GLS(BaseMHLCalculator):
-    '''geometric loss strategy , Chennupati etc.(2019)'''
+    """Geometric Loss Strategy (Chennupati et al. 2019).
+
+    Combines losses as their geometric mean:
+    ``(prod(L_i^w_i))^(1/sum(w_i))``
+
+    NOTE: The override method is named ``multi_losses`` but the base class
+    method is ``multihead_losses``.  This naming mismatch means ``GLS`` never
+    actually overrides the base class and falls back to equal weighting.
+    This is a known bug — see ``TODO_res_algo.md``.
+    """
     def multi_losses(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
         weight = self.weight(losses , mt_param)
         return losses.pow(weight).prod().pow(1 / weight.sum())
+
 class RWS(BaseMHLCalculator):
-    '''random weight loss, RW , Lin etc.(2021) , https://arxiv.org/pdf/2111.10603.pdf'''
-    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor: 
+    """Random Weight Loss (Lin et al. 2021).
+
+    At each step, samples random softmax weights to combine the per-head
+    losses, providing implicit multi-task loss diversification.
+
+    Reference: https://arxiv.org/pdf/2111.10603.pdf
+    """
+    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
         return nn.functional.softmax(torch.rand_like(losses),-1)

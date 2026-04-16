@@ -1,3 +1,8 @@
+"""TSMixer: Time-Series MLP-Mixer with patch-level and feature-level mixing.
+
+Reference: Chen et al. (2023) "TSMixer: An All-MLP Architecture for Time
+Series Forecasting."
+"""
 import torch
 
 from torch import nn , Tensor
@@ -8,10 +13,30 @@ from .. import layer as Layer
 __all__ = ['TSMixer']
 
 class TSMixer(nn.Module):
-    """
-    in:  [bs x seq_len x nvars]
-    out: [bs x seq_len x nvars] for pretrain
-         [bs x predict_steps] for prediction
+    """Time-Series MLP-Mixer.
+
+    Patches the input sequence, then alternates between patch-wise temporal
+    mixing and feature-wise channel mixing using MLP blocks.  Optionally adds
+    channel mixing between variables.
+
+    Args:
+        nvars:            Number of input variables (channels).
+        seq_len:          Input sequence length.
+        d_model:          Patch embedding dimension.
+        patch_len:        Patch length (default ``5``).
+        stride:           Patch stride; defaults to ``patch_len // 2``.
+        channel_mixer:    If True, add a ``ChannelMixerBlock`` per layer.
+        expansion_factor: MLP hidden expansion factor (default ``2``).
+        gated_attn:       If True, apply ``GatedAttention`` to suppress
+                          irrelevant patches/features.
+        revin:            Use RevIN normalization (default ``True``).
+        norm_type:        Normalization type: ``'batch'`` or ``'layer'``.
+        head_type:        ``'prediction'`` or ``'pretrain'``.
+        predict_steps:    Number of output prediction steps.
+
+    Shapes:
+        Input:  ``[bs, seq_len, nvars]``
+        Output: ``[bs, nvars, seq_len]`` (pretrain) or ``[bs, predict_steps]``
     """
     def __init__(
         self, 
@@ -425,8 +450,13 @@ class TSMixerEncoder(nn.Module):
         return x
 
 class ts_mixer(TSMixer):
+    """Training-framework adapter for TSMixer.  Registry key: ``'ts_mixer'``.
+
+    Maps the standard ``(input_dim, seq_len, hidden_dim, num_output)``
+    interface to TSMixer constructor arguments.
+    """
     def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
-        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim ,
                          predict_steps = num_output , head_type = 'prediction' , **kwargs)
         
 if __name__ == '__main__':

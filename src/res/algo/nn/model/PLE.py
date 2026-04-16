@@ -1,3 +1,8 @@
+"""PLE: Progressive Layered Extraction multi-task GRU.
+
+Reference: Tang et al. (2021) "Progressive Layered Extraction (PLE):
+A Novel Multi-Task Learning (MTL) Model for Personalized Recommendations."
+"""
 import torch
 import torch.nn as nn
 
@@ -7,9 +12,28 @@ from ..loss import MultiHeadLosses
 __all__ = ['ple_gru']
 
 class ple_gru(nn.Module):
-    '''
-    Progressive Layered Extraction
-    '''
+    """Progressive Layered Extraction multi-task GRU.  Registry key: ``'ple_gru'``.
+
+    Stacks ``expert_layers`` PLE layers, each with one shared expert and
+    ``num_output`` task-specific experts.  Each layer uses gated attention
+    to combine its experts.  A separate prediction head per task produces the
+    final scalar output.  A learnable ``multiloss_alpha`` parameter is injected
+    for multi-task loss weighting.
+
+    Args:
+        input_dim:     Input feature dimension (default ``6``).
+        hidden_dim:    GRU hidden dimension (default ``32``).
+        dropout:       Dropout rate (default ``0.1``).
+        act_type:      Activation key for the prediction head (default
+                       ``'leaky'``).
+        expert_layers: Number of PLE layers, must be ``>= 2`` (default ``2``).
+        rnn_layers:    Number of GRU layers per expert (default ``2``).
+        num_output:    Number of tasks / output heads (must be ``2 <= n <= 4``).
+
+    Shapes:
+        Input:  ``[bs, seq_len, input_dim]``
+        Output: ``[bs, num_output]``
+    """
     def __init__(
             self, 
             input_dim    = 6 ,
@@ -56,6 +80,25 @@ class ple_gru(nn.Module):
         return z
     
 class ExpertLayer(nn.Module):
+    """Single PLE layer with one shared and ``num_output`` task-specific experts.
+
+    For the first layer (``first_layer=True``), all experts receive the raw
+    input ``x``.  For subsequent layers, experts receive the shared/task
+    output vectors from the previous layer.
+
+    Args:
+        input_dim:    Input feature dimension (used for raw input expert inputs
+                      in the first layer).
+        hidden_dim:   GRU expert output dimension.
+        first_layer:  Whether this is the first PLE layer.
+        dropout:      Dropout rate.
+        rnn_layers:   Number of GRU layers per expert.
+        num_output:   Number of task-specific expert branches.
+
+    Returns:
+        ``(shared_output, [task_output_1, ..., task_output_num_output])``
+        where each tensor has shape ``[bs, seq_len, hidden_dim]``.
+    """
     def __init__(
             self, 
             input_dim    = 6 ,
@@ -88,6 +131,24 @@ class ExpertLayer(nn.Module):
         return shared_output , task_outputs
     
 class GatingNetwork(nn.Module):
+    """GRU-based gating network for expert selection.
+
+    Processes the raw input ``x`` with a GRU to produce ``feature_dim``
+    softmax attention weights, then computes a weighted sum over the provided
+    expert output vectors.
+
+    Args:
+        selector_dim: Input feature dimension for the GRU (raw ``x``).
+        feature_dim:  Number of experts to select from (``1 + num_output``
+                      for shared gate, ``2`` for task gates).
+        num_layers:   GRU layers.
+        dropout:      Dropout rate.
+
+    Shapes (forward):
+        x:     ``[bs, seq_len, selector_dim]``
+        *vecs: ``feature_dim`` tensors of shape ``[bs, seq_len, hidden_dim]``
+        Output: weighted sum ``[bs, seq_len, hidden_dim]``
+    """
     def __init__(
             self, 
             selector_dim = 6 ,
@@ -106,6 +167,18 @@ class GatingNetwork(nn.Module):
         return v
     
 class ExpertNetwork(nn.Module):
+    """Single GRU expert that returns the full output sequence.
+
+    Args:
+        input_dim:  Input feature dimension.
+        hidden_dim: GRU hidden/output dimension.
+        num_layers: Number of GRU layers.
+        dropout:    Dropout rate.
+
+    Shapes:
+        Input:  ``[bs, seq_len, input_dim]``
+        Output: ``[bs, seq_len, hidden_dim]``
+    """
     def __init__(
             self, 
             input_dim = 6 ,

@@ -9,9 +9,9 @@ Items are ordered roughly by impact; none are blockers.
 
 ### `backend/task.py`
 - **Busy-wait polling loop**: `wait_until_completion` sleeps 1 s per iteration.
-  Consider using `asyncio` or `threading.Event` to avoid burning a thread.
+  Consider using `asyncio` or `threading.Event` to avoid burning a thread. **may use watchdog**
 - **No DB indexes**: the SQLite task table has no indexes on `script` or
-  `status` columns; full-table scans become slow as the database grows.
+  `status` columns; full-table scans become slow as the database grows. **already add**
 - **Full queue always loaded**: `TaskQueue` loads every row on each rerun.
   Introduce server-side pagination at the DB level for large histories.
 - **`check_killed` heuristic**: relies on a crash-protector file pattern —
@@ -23,12 +23,12 @@ Items are ordered roughly by impact; none are blockers.
 ### `backend/recorder.py`
 - **`parse_kwargs` uses `eval()`**: type-coercion of kwargs values is done via
   `eval()`.  If kwargs ever originate from untrusted input this is a security
-  risk.  Replace with a typed parser or `ast.literal_eval` where possible.
+  risk.  Replace with a typed parser or `ast.literal_eval` where possible. **already done**
 
 ### `backend/script.py`
 - **Duplicated `format_path` logic**: `PathItem.format_path` and
   `ScriptRunner.format_path` share the same implementation; extract a shared
-  helper to avoid drift.
+  helper to avoid drift. **already done**
 - **Misleading existing docstrings**: the original `build_task` and
   `preview_cmd` docstrings said "return exit code" — they actually return
   `TaskItem` / `str` respectively (fixed in the doc pass).
@@ -40,22 +40,22 @@ Items are ordered roughly by impact; none are blockers.
 ### `frontend/frontend.py`
 - **`YAMLFileEditor` singleton leak**: instances are keyed on an arbitrary
   string and stored in a class-level dict with no cleanup on page change.
-  Long-running sessions accumulate stale `YAMLFileEditorState` objects.
+  Long-running sessions accumulate stale `YAMLFileEditorState` objects. **no need to change**
 
 ### `frontend/param_input.py`
 - **Fragile command-string parsing**: `ParamInputsForm.cmd_to_param_values`
   restores parameter values by regex-parsing the rendered command string.
-  If the command format changes the restoration silently fails.
+  If the command format changes the restoration silently fails. **no need to change**
 
 ### `frontend/param_cache.py`
 - **Partial overlap with `st.session_state`**: `ParamCache` manually mirrors
   some of what Streamlit's session state already provides.  Consider unifying
-  to reduce duplication.
+  to reduce duplication. **no need to change**
 
 ### `frontend/logo.py`
 - **Runtime font download**: fonts are fetched from `dafont.com` at startup.
   This creates a network dependency and is fragile in air-gapped environments.
-  Bundle the font files in the repo or cache them locally on first download.
+  Bundle the font files in the repo or cache them locally on first download. **already doing that**
 
 ---
 
@@ -64,15 +64,15 @@ Items are ordered roughly by impact; none are blockers.
 ### `main/util/control.py`
 - **Queue refresh on every callback**: `universal_action` calls
   `TaskQueue.refresh()` after every single UI callback, even for lightweight
-  actions.  Batch or debounce the refresh for better performance.
+  actions.  Batch or debounce the refresh for better performance. **that is exactly what i plan for**
 - **`ControlGitClearPullButton` platform check**: `MACHINE.platform_coding`
   is evaluated via a string comparison on `MACHINE.name`.  A proper capability
-  flag (e.g. `MACHINE.supports_git_pull: bool`) would be more robust.
+  flag (e.g. `MACHINE.supports_git_pull: bool`) would be more robust. **too much**
 
 ### `main/util/script_detail.py`
 - **Typo in function name**: `direclty_open_file` → `directly_open_file`.
   The typo is preserved for backwards compatibility with existing call sites
-  inside this module, but should be fixed with a deprecation alias.
+  inside this module, but should be fixed with a deprecation alias. **altered**
 
 ### `main/util/page.py`
 - **Side effect at module load**: `make_script_detail_file` (called from

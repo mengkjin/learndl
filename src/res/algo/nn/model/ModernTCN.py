@@ -1,3 +1,8 @@
+"""ModernTCN: Modern Temporal Convolutional Network with patch-based mixing.
+
+Reference: Luo & Wang (2024) "ModernTCN: A Modern Pure Convolution Structure
+for General Time Series Analysis."
+"""
 import torch
 import torch.nn.functional as F
 
@@ -7,11 +12,30 @@ from src.proj import Logger
 from .. import layer as Layer
 
 class ModernTCN(nn.Module):
-    '''
-    in:  [bs x seq_len x nvars]
-    out: [bs x seq_len x nvars] for pretrain
-         [bs x predict_steps] for prediction
-    '''
+    """Modern Temporal Convolutional Network.
+
+    Uses strided Conv1d for simultaneous patching and embedding, then applies
+    stacked ModernTCN blocks that combine depthwise temporal mixing, pointwise
+    feature mixing, and pointwise channel mixing.
+
+    Args:
+        nvars:            Number of input variables (channels).
+        seq_len:          Input sequence length.
+        d_model:          Patch embedding dimension.
+        patch_len:        Patch length (default ``5``).
+        stride:           Patch stride; defaults to ``patch_len // 2``.
+        kernel_size:      Depthwise convolution kernel size (default ``3``).
+        expansion_factor: Feature mixer expansion factor (default ``1``).
+        channel_mixer:    If True, apply channel mixing across variables.
+        revin:            Use RevIN normalization (default ``True``).
+        n_layers:         Number of ModernTCN blocks (default ``3``).
+        head_type:        ``'prediction'`` or ``'pretrain'``.
+        predict_steps:    Number of output steps.
+
+    Shapes:
+        Input:  ``[bs, seq_len, nvars]``
+        Output: ``[bs, nvars, seq_len]`` (pretrain) or ``[bs, predict_steps]``
+    """
     def __init__(
         self, 
         nvars : int , 
@@ -324,8 +348,13 @@ class ModernTCNPretrainHead(nn.Module):
         return x
     
 class modern_tcn(ModernTCN):
+    """Training-framework adapter for ModernTCN.  Registry key: ``'modern_tcn'``.
+
+    Maps the standard ``(input_dim, seq_len, hidden_dim, num_output)``
+    interface to ModernTCN constructor arguments.
+    """
     def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
-        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim ,
                          predict_steps = num_output , head_type = 'prediction' , **kwargs)
         
 if __name__ == '__main__':

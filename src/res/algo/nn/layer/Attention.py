@@ -1,9 +1,57 @@
+"""Multi-head scaled dot-product attention layers.
+
+Includes optional Realformer residual attention (He et al. 2020) and
+Locality Self-Attention (LSA) learnable scaling (Lee et al. 2021).
+"""
 import torch
 
 from torch import nn , Tensor
 class MultiheadAttention(nn.Module):
+    """Multi-head scaled dot-product attention.
+
+    Supports two optional extensions controlled at construction time:
+
+    * **Residual attention** (``res_attention=True``): carries the raw
+      attention score tensor (``prev``) from the previous layer into the
+      current softmax, following Realformer (He et al. 2020).
+    * **LSA** (``lsa=True``): makes the ``scale`` factor a learnable
+      ``nn.Parameter`` instead of the fixed ``head_dim ** -0.5``, following
+      Vision Transformer for Small-Size Datasets (Lee et al. 2021).
+
+    Args:
+        d_model:       Total model dimension.
+        n_heads:       Number of attention heads.
+        d_k:           Key/query head dimension.  Defaults to
+                       ``d_model // n_heads``.
+        d_v:           Value head dimension.  Defaults to
+                       ``d_model // n_heads``.
+        res_attention: Enable Realformer residual attention scores.
+        attn_dropout:  Dropout applied to attention weights.
+        proj_dropout:  Dropout applied to the output projection.
+        qkv_bias:      Whether to use bias in the Q/K/V linear projections.
+        lsa:           Enable learnable scaling (LSA).
+
+    Input shapes:
+        Q:       ``[bs, max_q_len, d_model]``
+        K, V:    ``[bs, q_len, d_model]``  (defaults to Q when not provided)
+        prev:    ``[bs, n_heads, q_len, seq_len]`` — residual attention scores
+                 from the previous layer (only used when ``res_attention=True``)
+        key_padding_mask: ``[bs, seq_len]`` — boolean mask; ``True`` positions
+                 are filled with ``-inf`` before softmax
+        attn_mask:        ``[1, seq_len, seq_len]`` — additive or boolean mask
+
+    Returns:
+        When ``res_attention=False``:
+            ``(output, attn_weights)``
+            * ``output``:       ``[bs, q_len, d_model]``
+            * ``attn_weights``: ``[bs, n_heads, q_len, seq_len]``
+        When ``res_attention=True``:
+            ``(output, attn_weights, attn_scores)``
+            * ``attn_scores``:  ``[bs, n_heads, q_len, seq_len]`` — raw
+              pre-softmax scores to pass as ``prev`` to the next layer
+    """
     def __init__(self, d_model, n_heads, d_k=None, d_v=None, res_attention=False, attn_dropout=0., proj_dropout=0., qkv_bias=True, lsa=False):
-        """Multi Head Attention Layer
+        """
         Input shape:
             Q:       [batch_size (bs) x max_q_len x d_model]
             K, V:    [batch_size (bs) x q_len x d_model]

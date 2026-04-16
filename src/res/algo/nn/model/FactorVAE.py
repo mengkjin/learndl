@@ -1,3 +1,9 @@
+"""FactorVAE: Variational Autoencoder-based factor model for stock returns.
+
+Reference: Liu et al. (2021) "FactorVAE: A Probabilistic Dynamic Factor
+Model Based on Variational Autoencoder for Predicting Cross-Sectional Stock
+Returns."
+"""
 import torch
 from torch import nn,Tensor
 from torch.distributions import Normal , kl_divergence
@@ -6,8 +12,37 @@ from src.proj import Logger
 from ..layer.MLP import MLP
 
 class FactorVAE(nn.Module):
+    """FactorVAE: VAE-based factor model for stock return prediction.
+
+    ``_default_category = 'vae'`` signals to the training loop that this model
+    requires the target ``y`` as a forward argument during training.
+
+    Architecture (training):
+    1. ``FeatureExtractor`` — GRU encodes the stock feature sequence → ``[bs, hidden_dim]``
+    2. ``FactorEncoder`` — uses portfolio weights + future returns to learn
+       the posterior distribution ``N(mu_post, sigma_post)`` over factors
+    3. ``VAESampling`` — samples factors from the posterior
+    4. ``FactorDecoder`` — generates ``y_hat`` from factors and hidden features
+    5. ``FactorPredictor`` — learns the prior ``N(mu_prior, sigma_prior)``
+    6. KL divergence between posterior and prior is the VAE regularization term
+
+    At eval time, uses Monte Carlo averaging (``monte_carlo`` samples) from
+    the prior distribution.
+
+    Args:
+        input_dim:        Input feature dimension (default ``6``).
+        hidden_dim:       GRU hidden dimension (default ``32``).
+        factor_num:       Number of latent factors (default ``64``).
+        gru_input_size:   Projection dimension before GRU (default ``16``).
+        portfolio_size:   Number of synthetic portfolio vectors (default ``100``).
+        encoder_h_size:   Factor encoder hidden size (default ``32``).
+        alpha_h_size:     Alpha layer hidden size (default ``64``).
+        predictor_h_size: Factor predictor attention key size (default ``16``).
+        monte_carlo:      MC samples for eval prediction (default ``1000``).
+        gamma:            KL loss weight (default ``0.001``).
+    """
     _default_category = 'vae'
-    
+
     def __init__(
         self,
         input_dim : int = 6 ,
@@ -115,6 +150,16 @@ class PortfolioLayer(nn.Module):
         return p
     
 class VAESampling(nn.Module):
+    """Reparameterization trick sampling for VAE.
+
+    When ``noise`` is provided (for reproducible testing), uses the given
+    noise tensor.  Otherwise, samples a new standard normal ``eps`` and
+    applies the reparameterization trick.
+
+    NOTE: ``reparameterize`` contains a bug: it uses ``mu + sigma + eps``
+    instead of ``mu + sigma * eps``.  The multiplication is essential for the
+    reparameterization trick — see ``TODO_res_algo.md``.
+    """
     def forward(self , mu : Tensor , sigma : Tensor , noise : Tensor | None = None):
         if noise is None:  
             return self.reparameterize(mu , sigma)
@@ -216,10 +261,19 @@ class FactorDecoder(nn.Module):
         return stock_returns, mu_alpha, sigma_alpha, beta
     
 class FactorPredictor(nn.Module):
-    '''
-    in  : [bs x hidden_dim]
-    out : ([factor_num x 1] , [factor_num x 1])
-    '''
+    """Learn the prior factor distribution from the hidden representation.
+
+    Uses a cross-attention mechanism with ``factor_num`` learnable query
+    vectors to pool the hidden state into ``factor_num`` factor summaries,
+    then maps to ``N(mu_prior, sigma_prior)``.
+
+    NOTE: The forward loop over ``range(self.factor_num)`` prevents batched
+    GPU execution; it should be vectorized — see ``TODO_res_algo.md``.
+
+    Shapes:
+        Input:  ``[bs, hidden_dim]``
+        Output: ``([factor_num], [factor_num])`` — prior mu and sigma
+    """
     def __init__(self, hidden_dim : int = 32, factor_num : int = 64,  predictor_h_size : int = 32):
         super().__init__()
         self.factor_num = factor_num

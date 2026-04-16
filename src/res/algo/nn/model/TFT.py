@@ -1,3 +1,8 @@
+"""TFT: Temporal Fusion Transformer for multi-horizon time-series forecasting.
+
+Reference: Lim et al. (2021) "Temporal Fusion Transformers for Interpretable
+Multi-horizon Time Series Forecasting."
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,8 +10,21 @@ from typing import Any
 import math
 
 from src.proj import Logger , CONST
+
 class GatedResidualNetwork(nn.Module):
-    """门控残差网络"""
+    """Gated Residual Network (GRN) building block for TFT.
+
+    Architecture: ``ELU(Linear1(x)) → Dropout → Linear2 → gate(sigmoid) ×
+    output + skip-connection(x)`` → LayerNorm
+
+    Used throughout TFT as a gated nonlinear transformation with residual.
+
+    Args:
+        input_dim:  Input dimension.
+        hidden_dim: Intermediate dimension.
+        output_dim: Output dimension.
+        dropout:    Dropout rate (default ``0.1``).
+    """
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, dropout: float = 0.1):
         super().__init__()
         self.input_dim = input_dim
@@ -42,7 +60,25 @@ class GatedResidualNetwork(nn.Module):
         return self.layer_norm(output + x)
 
 class VariableSelectionNetwork(nn.Module):
-    """变量选择网络"""
+    """Variable Selection Network (VSN) for soft input variable importance weighting.
+
+    Splits the input into ``num_vars`` equal sub-variables, applies a GRN to
+    each, then produces softmax importance weights via another GRN.  The final
+    output is a weighted sum of per-variable representations.
+
+    NOTE: Assumes ``input_dim % num_vars == 0``; silently truncates if not.
+    See ``TODO_res_algo.md``.
+
+    Args:
+        input_dim:  Total input dimension (split equally into ``num_vars``).
+        num_vars:   Number of variables to select from.
+        hidden_dim: GRN hidden dimension.
+        dropout:    Dropout rate.
+
+    Returns:
+        ``(output, weights)`` — weighted combination ``[bs, hidden_dim]``
+        and importance weights ``[bs, num_vars]``.
+    """
     def __init__(self, input_dim: int, num_vars: int, hidden_dim: int, dropout: float = 0.1):
         super().__init__()
         self.input_dim = input_dim
@@ -87,7 +123,17 @@ class VariableSelectionNetwork(nn.Module):
         return output, weights.squeeze(-1)
 
 class MultiHeadAttention(nn.Module):
-    """多头注意力机制"""
+    """Multi-head attention used within TFT (local implementation).
+
+    NOTE: This is a separate implementation from ``layer.Attention.MultiheadAttention``.
+    It uses PyTorch's built-in ``nn.MultiheadAttention`` internally, adds a
+    dropout layer, and applies LayerNorm with residual connection.
+
+    Args:
+        d_model:   Model dimension.
+        num_heads: Number of attention heads.
+        dropout:   Dropout rate.
+    """
     def __init__(self, d_model: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
         assert d_model % num_heads == 0 , (d_model , num_heads)
@@ -131,7 +177,36 @@ class MultiHeadAttention(nn.Module):
         return self.layer_norm(output + query)
 
 class TemporalFusionTransformer(nn.Module):
-    """Temporal Fusion Transformer模型"""
+    """Temporal Fusion Transformer (TFT) for multi-horizon forecasting.
+
+    ``_default_data_type = 'day+style+indus'`` signals to the training loop
+    that the input is a 3-tuple: ``(trade, style, indus)``.
+
+    Architecture:
+    1. Variable selection on trade features and optional static (industry)
+       features using VSN
+    2. Temporal processing with LSTM encoder + decoder
+    3. Multi-head attention over the encoder output
+    4. Feed-forward GRN refinement
+    5. Quantile prediction head
+
+    Args:
+        input_dim:    Tuple ``(trade_dim, style_dim, indus_dim)`` or scalar
+                      for single-source input.
+        hidden_dim:   TFT model dimension.
+        quantiles:    List of quantile levels to predict (default
+                      ``[0.1, 0.5, 0.9]``).
+        num_heads:    Number of attention heads (default ``4``).
+        dropout:      Dropout rate.
+        num_vars:     Number of input variables to select from.
+
+    Forward input:
+        Tuple ``(trade, style, indus)`` or plain tensor, depending on
+        ``_default_data_type``.
+
+    Returns:
+        Quantile predictions ``[bs, 1, len(quantiles)]`` or plain tensor.
+    """
     _default_data_type = 'day+style+indus'
     
     def __init__(

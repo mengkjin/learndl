@@ -1,3 +1,6 @@
+"""Convolutional building blocks: Temporal Convolutional Network (TCN) and
+1-D / 2-D ResNet blocks for intra-day feature extraction.
+"""
 import torch
 
 from torch import nn , Tensor
@@ -8,6 +11,22 @@ from .. import layer as Layer
 
 # 1-d conv resnet
 class _tcn_block(nn.Module):
+    """Single dilated causal convolution residual block for TCN.
+
+    Architecture: ``WeightNorm-Conv1d → chomp → ReLU → Dropout → (same again)``
+    with an optional 1×1 residual projection when ``input_dim != output_dim``.
+
+    Args:
+        input_dim:   Number of input channels.
+        output_dim:  Number of output channels.
+        dilation:    Dilation factor for the causal convolution.
+        dropout:     Dropout rate after each activation.
+        kernel_size: Convolution kernel size (default ``3``).
+
+    Shapes:
+        Input:  ``[bs, input_dim, seq_len]`` (channels-first)
+        Output: ``[bs, output_dim, seq_len]``
+    """
     def __init__(self, input_dim , output_dim , dilation, dropout=0.0 , kernel_size=3):
         super().__init__()
         padding = (kernel_size-1) * dilation
@@ -31,6 +50,12 @@ class _tcn_block(nn.Module):
         return self.relu(output + self.residual(x))
     
     class _chomp(nn.Module):
+        """Remove causal padding from the right end of the time dimension.
+
+        After a causal ``Conv1d`` with ``padding = (kernel-1) * dilation``,
+        the output has ``padding`` extra time steps on the right.  This module
+        removes them so that the output length matches the input length.
+        """
         def __init__(self, padding):
             super().__init__()
             self.padding = padding
@@ -38,6 +63,23 @@ class _tcn_block(nn.Module):
             return x[:, :, :-self.padding] # .contiguous()
 
 class mod_tcn(nn.Module):
+    """Temporal Convolutional Network (TCN) sub-module.
+
+    Stacks ``num_layers`` ``_tcn_block`` blocks with exponentially increasing
+    dilation (``2^0, 2^1, ..., 2^(num_layers-1)``), giving a receptive field
+    of ``O(2^num_layers)``.
+
+    Args:
+        input_dim:   Number of input features.
+        output_dim:  Number of output features.
+        dropout:     Dropout rate.
+        num_layers:  Number of TCN blocks (min 2).
+        kernel_size: Convolution kernel size (default ``3``).
+
+    Shapes:
+        Input:  ``[bs, seq_len, input_dim]``  (channels-last, permuted internally)
+        Output: ``[bs, seq_len, output_dim]``
+    """
     def __init__(self, input_dim , output_dim , dropout=0.0 , num_layers = 2 , kernel_size = 3):
         super().__init__()
         if kernel_size is None: 
@@ -54,6 +96,23 @@ class mod_tcn(nn.Module):
         return self.net(x.permute(0,2,1)).permute(0,2,1)
     
 class _resnet_block_1d(nn.Module):
+    """Bottleneck 1-D ResNet block with optional clipping.
+
+    Architecture: ``1×1 Conv → BN → Act → 3×1 Conv → BN → Act → 1×1 Conv → BN → Act``
+    with a residual 1×1 projection when ``dim_in != dim_out``.
+
+    Args:
+        dim_in:     Number of input channels.
+        dim_out:    Number of output channels (default ``64``).
+        dim_med:    Bottleneck intermediate channels (default ``dim_out // 4``).
+        clip_value: Clamp residual shortcut to ``[-clip_value, clip_value]``
+                    to prevent exploding activations (default ``10``).
+        act_type:   Activation function key (default ``'leaky'``).
+
+    Shapes:
+        Input:  ``[bs, dim_in, seq_len]``  (channels-first)
+        Output: ``[bs, dim_out, seq_len]``
+    """
     def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , act_type = 'leaky' , **kwargs) -> None:
         super().__init__()
         self.clip_value = clip_value
@@ -84,6 +143,24 @@ class _resnet_block_1d(nn.Module):
         return x1 + x2
     
 class mod_resnet_1d(nn.Module):
+    """Stacked 1-D ResNet blocks for intra-day feature extraction.
+
+    Applies ``resnet_blocks`` bottleneck residual blocks to a per-sample
+    feature sequence, then flattens and projects to ``dim_out``.  Used as an
+    intra-day encoder in ``resnet_lstm``/``resnet_gru`` where each date's
+    intra-day bar sequence is processed independently.
+
+    Args:
+        seq_len:       Intra-day sequence length (e.g. number of bars per day).
+        feat_len:      Number of input features per bar.
+        dim_out:       Output dimension (default ``64``).
+        clip_value:    Residual clipping threshold (default ``10``).
+        resnet_blocks: Number of residual blocks (default ``3``).
+
+    Shapes:
+        Input:  ``[bs, n_days, seq_len, feat_len]``
+        Output: ``[bs, n_days, dim_out]``
+    """
     def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , resnet_blocks = 3 , **kwargs) -> None:
         super().__init__()
         self.seq_len = seq_len
@@ -105,6 +182,16 @@ class mod_resnet_1d(nn.Module):
     
 # 2-d conv resnet
 class _resnet_block_2d(nn.Module):
+    """Bottleneck 2-D ResNet block with optional clipping.
+
+    Parallel to ``_resnet_block_1d`` but uses ``Conv2d`` layers.  Used for
+    treating the ``(seq_len, feat_len)`` intra-day feature matrix as a 2-D
+    input.
+
+    Shapes:
+        Input:  ``[bs, dim_in, seq_len, feat_len]``  (channels-first)
+        Output: ``[bs, dim_out, seq_len, feat_len]``
+    """
     def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , act_type = 'leaky' , **kwargs) -> None:
         super().__init__()
         self.clip_value = clip_value
@@ -135,6 +222,23 @@ class _resnet_block_2d(nn.Module):
         return x1 + x2
     
 class mod_resnet_2d(nn.Module):
+    """Stacked 2-D ResNet blocks treating the intra-day feature grid as an image.
+
+    Wraps the ``(seq_len, feat_len)`` feature matrix in a channel dimension
+    (``dim_in=1``), applies ``resnet_blocks`` 2-D bottleneck residual blocks,
+    then flattens and projects to ``dim_out``.
+
+    Args:
+        seq_len:       Intra-day sequence length.
+        feat_len:      Number of features per bar.
+        dim_out:       Output dimension (default ``64``).
+        clip_value:    Residual clipping threshold (default ``10``).
+        resnet_blocks: Number of residual blocks (default ``3``).
+
+    Shapes:
+        Input:  ``[bs, n_days, seq_len, feat_len]``
+        Output: ``[bs, n_days, dim_out]``
+    """
     def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , resnet_blocks = 3 , **kwargs) -> None:
         super().__init__()
         self.clip_value = clip_value

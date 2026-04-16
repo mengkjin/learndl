@@ -103,9 +103,9 @@ class TaskDatabase:
                     exit_error TEXT
                 )
                 ''')
-            
-            # Create indexes for script and status columns
-            
+            cursor.execute('CREATE INDEX IF NOT EXISTS ix_task_records_script ON task_records(script)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS ix_task_records_status ON task_records(status)')
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS task_exit_files (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

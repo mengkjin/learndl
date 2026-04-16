@@ -1,3 +1,8 @@
+"""RiskAttGRU: GRU with risk-factor cross-attention (style + industry factors).
+
+The model uses style and industry risk factors as attention keys and queries
+to produce a context vector that attends over the GRU hidden state.
+"""
 import torch
 import torch.nn as nn
 
@@ -8,8 +13,45 @@ from .. import layer as Layer
 __all__ = ['risk_att_gru']
 
 class risk_att_gru(nn.Module):
+    """GRU with explicit risk-factor cross-attention.  Registry key: ``'risk_att_gru'``.
+
+    ``_default_data_type = 'day+style+indus'`` signals to the training loop
+    that this model requires a 3-tuple input: ``(trade, style, indus)``.
+
+    Architecture:
+    1. GRU encodes the daily trading feature sequence → ``H = [bs, hidden_dim]``
+    2. Industry features are optionally embedded: ``indus → [bs, indus_dim]``
+    3. Style + embedded indus are concatenated to form risk vector ``r``
+    4. Explicit Q/K/V attention: ``A = softmax(Qr · (Kr)ᵀ / sqrt(h))``;
+       context = ``A @ V(H)``
+    5. Concatenate ``H`` and context → MLP → scalar output
+
+    Note: This is an explicit Q/K/V attention computation, *not* the standard
+    multi-head attention module.
+
+    Args:
+        input_dim:    Tuple ``(trade_dim, style_dim, indus_dim)`` — defaults
+                      use the project's CONST config for style/indus counts.
+        hidden_dim:   GRU hidden dimension (default ``32``).
+        att_dim:      Attention key/query dimension (default ``128``).
+        dropout:      Dropout rate (default ``0.1``).
+        act_type:     Activation key for the MLP (default ``'leaky'``).
+        rnn_layers:   Number of GRU layers (default ``2``).
+        indus_dim:    Industry embedding dimension (default ``8``).
+        indus_embed:  If True, embed the industry one-hot encoding with a
+                      Linear layer before attention (default ``True``).
+
+    Forward input:
+        x: Tuple ``(trade, style, indus)``
+           * ``trade``: ``[bs, seq_len, trade_dim]``
+           * ``style``: ``[bs, 1, style_dim]``
+           * ``indus``: ``[bs, 1, indus_dim]``
+
+    Returns:
+        Scalar prediction ``[bs, 1]``.
+    """
     _default_data_type = 'day+style+indus'
-    
+
     def __init__(
             self, 
             input_dim    = (6,len(CONST.Conf.Factor.RISK.style),len(CONST.Conf.Factor.RISK.indus)),

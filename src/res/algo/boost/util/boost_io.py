@@ -1,4 +1,10 @@
+"""Data containers for the boost pipeline.
 
+Classes:
+    BoostOutput      — flat prediction container with secid/date index
+    BoostInput       — aligned 3-D tensor container with weight computation
+    BoostWeightMethod — three-axis (ts/cs/bm) sample weight calculator
+"""
 import torch
 import numpy as np
 import pandas as pd
@@ -15,6 +21,18 @@ __all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
 
 @dataclass
 class BoostOutput:
+    """Container for boost model predictions.
+
+    Attributes:
+        pred:   Flat prediction tensor for the finite (non-NaN) positions.
+        secid:  Security IDs array of shape ``(n_sample,)``.
+        date:   Date array of shape ``(n_date,)``.
+        finite: Boolean mask of shape ``(n_sample, n_date)`` indicating
+                non-NaN positions.  Used to map flat ``pred`` back to the
+                full 2-D grid.
+        label:  Optional ground-truth tensor of shape ``(n_sample, n_date)``
+                for IC evaluation.
+    """
     pred    : torch.Tensor
     secid   : np.ndarray
     date    : np.ndarray
@@ -22,6 +40,10 @@ class BoostOutput:
     label   : torch.Tensor | Any = None
 
     def to_2d(self):
+        """Reconstruct the full ``(n_sample, n_date)`` prediction grid.
+
+        Fills NaN positions with ``0`` (the same dtype as ``pred``).
+        """
         pred = self.label.to(self.pred) * 0
         pred[self.finite] = self.pred
         return pred
