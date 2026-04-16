@@ -40,7 +40,8 @@ AVAILABLE_NNS = {
     'factor_vae'        : Model.FactorVAE.FactorVAE,
     'risk_att_gru'      : Model.RiskAttGRU.risk_att_gru,
     'ple_gru'           : Model.PLE.ple_gru,
-    'tft'               : Model.TFT.TemporalFusionTransformer
+    'tft'               : Model.TFT.TemporalFusionTransformer,
+    'astgnn'            : Model.ABCM.Astgnn,
 }
 
 def get_nn_module(module_name : str) -> nn.Module:

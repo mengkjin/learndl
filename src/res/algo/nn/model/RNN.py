@@ -371,7 +371,7 @@ class uni_rnn_mapping(nn.Module):
     """
     def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
-        self.fc_map_out = nn.Sequential(Layer.EwLinear()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
+        self.fc_map_out = nn.Sequential(Layer.MeanPool()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
         if output_as_factors: 
             self.fc_map_out.append(nn.BatchNorm1d(1))
     def forward(self , x : Tensor) -> Tensor:
@@ -449,7 +449,7 @@ class multi_rnn_mapping(nn.Module):
     def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
         if hidden_as_factors: 
-            self.fc_map_out = nn.Sequential(Layer.EwLinear())
+            self.fc_map_out = nn.Sequential(Layer.MeanPool())
         else:
             self.fc_map_out = nn.Sequential(nn.Linear(hidden_dim, 1))
         if output_as_factors:  

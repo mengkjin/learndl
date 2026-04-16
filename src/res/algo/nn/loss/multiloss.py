@@ -324,12 +324,8 @@ class GLS(BaseMHLCalculator):
     Combines losses as their geometric mean:
     ``(prod(L_i^w_i))^(1/sum(w_i))``
 
-    NOTE: The override method is named ``multi_losses`` but the base class
-    method is ``multihead_losses``.  This naming mismatch means ``GLS`` never
-    actually overrides the base class and falls back to equal weighting.
-    This is a known bug — see ``TODO_res_algo.md``.
     """
-    def multi_losses(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def multihead_losses(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
         weight = self.weight(losses , mt_param)
         return losses.pow(weight).prod().pow(1 / weight.sum())
 

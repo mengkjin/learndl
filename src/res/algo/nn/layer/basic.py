@@ -3,7 +3,7 @@
 Classes:
     Pass       — identity / no-op layer
     Transpose  — dimension transposition with optional contiguous copy
-    EwLinear   — temporal mean pooling along a specified dimension
+    MeanPool   — temporal mean pooling along a specified dimension
     Parallel   — runs N independent copies of a sub-module in parallel
 """
 import torch
@@ -35,7 +35,7 @@ class Transpose(nn.Module):
         else:
             return x.transpose(*self.dims)
 
-class EwLinear(nn.Module):
+class MeanPool(nn.Module):
     """Temporal mean pooling (element-wise mean) along a specified dimension.
 
     Despite the name, this is not a trainable linear layer — it computes the

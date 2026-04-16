@@ -156,9 +156,6 @@ class VAESampling(nn.Module):
     noise tensor.  Otherwise, samples a new standard normal ``eps`` and
     applies the reparameterization trick.
 
-    NOTE: ``reparameterize`` contains a bug: it uses ``mu + sigma + eps``
-    instead of ``mu + sigma * eps``.  The multiplication is essential for the
-    reparameterization trick — see ``TODO_res_algo.md``.
     """
     def forward(self , mu : Tensor , sigma : Tensor , noise : Tensor | None = None):
         if noise is None:  
@@ -168,7 +165,7 @@ class VAESampling(nn.Module):
 
     def reparameterize(self, mu : Tensor , sigma : Tensor):
         eps = torch.randn_like(sigma)
-        return mu + sigma + eps
+        return mu + sigma * eps
 
 class DistributionLayer(nn.Module):
     '''
@@ -286,13 +283,9 @@ class FactorPredictor(nn.Module):
         k , v = self.k_map(x) , self.v_map(x)
         q_norm = self.query.norm(dim=0,keepdim=True) + 1e-6
         k_norm = k.norm(dim=-1,keepdim=True) + 1e-6
-        f = []
-        for i in range(self.factor_num):
-            a = torch.nn.ReLU()(self.query[:,i] * k / q_norm[:,i] / k_norm) + 1e-6
-            a = a / a.sum(-1 , keepdim=True)
-            f.append((a * v).sum(0))
-        f = torch.cat(f)
-        return self.factor_net(f)
+        a = torch.nn.ReLU()(self.query.unsqueeze(0) * k.unsqueeze(-1) / q_norm.unsqueeze(0) / k_norm.unsqueeze(-1)) + 1e-6
+        a = torch.sum(a / a.sum(1 , keepdim=True) * v.unsqueeze(-1) , dim = 0)
+        return self.factor_net(a.flatten())
     
 if __name__ == '__main__':
     from src.res.model.util import BatchInput

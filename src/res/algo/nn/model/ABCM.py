@@ -14,17 +14,7 @@ from torch import Tensor
 from src.proj import Logger
 from src.res.algo.nn import layer as Layer
 
-class mod_gru(nn.Module):
-    """Local copy of ``mod_gru`` from ``RNN.py``.  Should import from there instead.
-
-    NOTE: This is a duplication — see ``TODO_res_algo.md``.
-    """
-    def __init__(self , input_dim , output_dim , dropout=0.0 , num_layers = 2):
-        super().__init__()
-        num_layers = min(3,num_layers)
-        self.gru = nn.GRU(input_dim , output_dim , num_layers = num_layers , dropout = dropout , batch_first = True)
-    def forward(self, x : Tensor) -> Tensor:
-        return self.gru(x)[0]
+from .RNN import mod_gru
 
 class Astgnn(nn.Module):
     """Alpha-Beta Co-Mining GRU model (ABCM).  Registry key: ``'abcm'``
@@ -79,7 +69,7 @@ class Astgnn(nn.Module):
             Layer.Act.get_activation_fn(act_type), 
             nn.Dropout(dropout)
         )
-        self.alpha_map_out = Layer.EwLinear()
+        self.alpha_map_out = Layer.MeanPool()
         self.loss_corr_lamb = loss_corr_lamb
 
     def forward(self, input : Tensor | tuple[Tensor,...] | list[Tensor]):

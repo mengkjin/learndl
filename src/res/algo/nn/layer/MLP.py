@@ -40,6 +40,7 @@ class MLP(nn.Module):
             self.net.add_module('input', nn.Linear(input_size, hidden_size[0]))
             for i in range(num_hidden_layer - 1):
                 self.net.add_module(f'hidden_{i}', nn.Linear(hidden_size[i], hidden_size[i + 1]))
+                self.net.add_module(f'hidden_{i}_activation', get_activation_fn(activation))
             self.net.add_module('out', nn.Linear(hidden_size[num_hidden_layer - 1], output_size))
             self.net.add_module('out_activ', get_activation_fn(out_activation))
         else:

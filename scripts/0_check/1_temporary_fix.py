@@ -8,15 +8,11 @@
 # mode: shell
 
 from src.proj.util import ScriptTool 
-from src.api import UpdateAPI #
-from src.data.crawler.announcement.agent import AnnouncementAgent #
-from src.data.util.classes import DataCache
-from src.proj import DB , MACHINE
+from src.proj import DB 
 from src.res.factor.risk import TuShareCNE5_Calculator
 
 @ScriptTool('temporary_fix')
 def main(**kwargs):
-    # AnnouncementAgent.update()
     calculator = TuShareCNE5_Calculator()
     paths = DB.paths('models' , 'tushare_cne5_cov' , start = 0)
     for path in paths:

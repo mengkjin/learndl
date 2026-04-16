@@ -15,9 +15,10 @@ Sub-modules:
     PLE        — Progressive Layered Extraction multi-task GRU
     RiskAttGRU — GRU with risk-factor cross-attention
     TFT        — Temporal Fusion Transformer
+    ABCM       — Alpha-Beta Co-Mining GRU
 """
 from . import (
     CNN, TFT , ModernTCN , PatchTST , PLE , RNN , RiskAttGRU ,
     TSMixer , TRA , FactorVAE ,
-    Attention ,
+    Attention , ABCM ,
 )

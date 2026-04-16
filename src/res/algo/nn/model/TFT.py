@@ -122,7 +122,7 @@ class VariableSelectionNetwork(nn.Module):
         
         return output, weights.squeeze(-1)
 
-class MultiHeadAttention(nn.Module):
+class MultiHeadAttentionNew(nn.Module):
     """Multi-head attention used within TFT (local implementation).
 
     NOTE: This is a separate implementation from ``layer.Attention.MultiheadAttention``.
@@ -289,7 +289,7 @@ class TemporalFusionTransformer(nn.Module):
         
         # 多头注意力层
         self.attention_layers = nn.ModuleList([
-            MultiHeadAttention(hidden_dim, num_heads, dropout)
+            MultiHeadAttentionNew(hidden_dim, num_heads, dropout)
             for _ in range(num_layers)
         ])
         

@@ -16,6 +16,7 @@ from typing import Any , Literal
 
 from src.func import match_values , index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
+from src.proj import Logger
 
 __all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
 
@@ -308,17 +309,14 @@ class BoostInput:
         return df
 
     @classmethod
-    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str,Any] | None = None):
+    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str,Any] | None = None , label_col : str | None = None):
         """Construct from a tidy ``DataFrame`` with a secid/date multi-index.
 
-        The last column is treated as the label (``y``); all other columns
+        The label column is treated as the label (``y``); all other columns
         become features.  The index is auto-detected from common column names:
         ``['SecID','instrument','secid','StockID']`` and
-        ``['TradeDate','datetime','date']``.
-
-        .. note::
-            The last-column-is-label assumption is undocumented upstream and
-            is a known fragility (see ``TODO_res_algo.md``).
+        ``['TradeDate','datetime','date']``.  The label column is auto-detected
+        from common column names: ``['label']``.
         """
         weight_param = weight_param or {}
         SECID_COLS = ['SecID','instrument','secid','StockID']
@@ -331,11 +329,15 @@ class BoostInput:
         assert len(var_sec) == len(var_date) == 1, (var_sec , var_date , data.columns)
         data = data.set_index([var_sec[0] , var_date[0]])
 
-        xarr = xr.Dataset.from_dataframe(data.iloc[:,:-1])
+        if label_col is None:
+            label_col = data.columns.to_list()[-1]
+        if not label_col.lower().startswith(('ret' , 'y' , 'label' , 'rtn' , 'res' , 'std')):
+            Logger.warning(f'using {label_col} as label column, not recommended')
+        xarr = xr.Dataset.from_dataframe(data.drop(columns=[label_col]))
+        yarr = xr.Dataset.from_dataframe(data[[label_col]])
+
         xindex = [arr.values for arr in xarr.indexes.values()] + [list(xarr.data_vars)]
         x = torch.Tensor(np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1))
-
-        yarr = xr.Dataset.from_dataframe(data.iloc[:,-1:])
         y = torch.Tensor(np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)[...,0])
         
         secid , date , feature = xindex[0] , xindex[1] , xindex[-1]
