@@ -4,7 +4,7 @@ from typing import Literal , Callable
 
 from src.proj import PATH
 
-from src.interactive.main.util import SC , get_script_page , print_page_header
+from src.interactive.main.util import SC , get_script_page , print_page_header , render_task_queue_backend_poll
 
 PAGE_NAME = 'task_queue'
 
@@ -67,6 +67,8 @@ def show_task_queue_header_button(name : str, click_on : Callable, icon : str, h
             font-size: 12px;
             font-weight: 600;
             white-space: nowrap;
+            text-align: center;
+            align-self: center;
         ">{title.title()}</div>
         """       
         st.markdown(body , unsafe_allow_html = True)
@@ -255,6 +257,7 @@ def main() -> None:
     """Entry point for the task queue page."""
     print_page_header(PAGE_NAME)
     show_task_queue()
+    render_task_queue_backend_poll()
 
 if __name__ == '__main__':
     main() 

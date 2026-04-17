@@ -667,4 +667,19 @@ class ControlPanel:
         
           
    
+@st.fragment(run_every=1)
+def render_task_queue_backend_poll() -> None:
+    """Poll ``TaskQueue`` for DB/backend updates without blocking the app thread.
+
+    Replaces the blocking :meth:`~src.interactive.backend.task.TaskQueue.keep_refreshing`
+    loop. Uses ``run_every`` so Streamlit can still process clicks; when
+    :meth:`~src.interactive.backend.task.TaskQueue.refresh` reports changes, a
+    full rerun refreshes list widgets outside this fragment.
+    """
+    if SessionControl._instance is None:
+        return
+    if SessionControl._instance.task_queue.refresh(backend_only=True):
+        st.rerun()
+
+
 SC = SessionControl()

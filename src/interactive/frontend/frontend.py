@@ -633,13 +633,12 @@ def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[]
     """
     st.error(f":material/warning:**{title}**")
     col1 , col2 = st.columns(2 , gap = 'small')
-    if col1.button("**Confirm**" , icon = ":material/check_circle:" , type = "primary"):
-        on_confirm()
-        st.rerun()
-    if col2.button("**Abort**" , icon = ":material/cancel:" , type = "secondary"):
-        if on_abort is not None: 
-            on_abort()
-        st.rerun()
+    with col1:
+        if st.button("**Confirm**" , icon = ":material/check_circle:" , type = "primary" , on_click = on_confirm):
+            st.rerun()
+    with col2:
+        if st.button("**Abort**" , icon = ":material/cancel:" , type = "secondary" , on_click = on_abort):
+            st.rerun()
 
 def estimate_text_width(text : str, font_size : int = 24) -> int:
     """Estimate the rendered pixel width of *text* given *font_size*.

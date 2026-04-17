@@ -50,19 +50,18 @@ class BackendTaskRecorder:
     '''
     def __init__(self , **kwargs) -> None:
         """Initialise recorder, resolve or auto-create the task_id, and capture PID."""
+        self.task_db = TaskDatabase()
         parsed_kwargs = self.parse_kwargs(kwargs)
         task_id : str | None = parsed_kwargs.pop('task_id' , None)
         if task_id:
             self._task_id = task_id
         else:
-            task_item = TaskItem.create(None , source=parsed_kwargs.get('source' , None) , queue = True)
+            task_item = TaskItem.create(None , self.task_db , source=parsed_kwargs.get('source' , None) , queue = True)
             self._task_id = task_item.id
         self.update_msg : dict[str , Any] = {}
         self.params = parsed_kwargs
         if 'email' in self.params:
             self.params['email'] = bool(self.params['email'])
-
-        self.task_db = TaskDatabase()
 
     def __repr__(self) -> str:
         """Return a human-readable representation of the recorder."""

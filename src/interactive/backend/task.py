@@ -117,7 +117,7 @@ class TaskDatabase:
             
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS task_backend_updated (
-                    task_id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
                     updated_time REAL NOT NULL,
                     FOREIGN KEY (task_id) REFERENCES task_records(task_id)
                 )
@@ -212,6 +212,7 @@ class TaskDatabase:
                 task.exit_message,
                 task.exit_error
             ))
+
             cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task.id,))
             for file_path in task.exit_files or []:
                 cursor.execute('''
@@ -247,8 +248,8 @@ class TaskDatabase:
         task_id:
             The task to update.
         backend_updated:
-            If True, insert a row into ``task_backend_updated`` so the frontend
-            knows to refresh this task on the next poll.
+            If True, upsert ``task_backend_updated`` so the frontend knows to
+            refresh this task on the next poll.
         **kwargs:
             Column-value pairs to write; ``exit_files`` is handled separately.
         """
@@ -272,10 +273,13 @@ class TaskDatabase:
                     VALUES (?, ?)
                     ''', (task_id, file_path))
             if backend_updated:
-                cursor.execute('''
-                INSERT INTO task_backend_updated (task_id, updated_time)
-                VALUES (?, ?)
-                ''', (task_id, timestamp()))
+                cursor.execute(
+                    '''
+                    INSERT INTO task_backend_updated (task_id, updated_time)
+                    VALUES (?, ?)
+                    ''',
+                    (task_id, timestamp()),
+                )
 
         new_status = self.check_task_status(task_id)
         if 'status' in kwargs:
@@ -455,6 +459,13 @@ class TaskQueue:
     task_db:
         Shared database instance; a new one is created if not supplied.
     """
+    _instance : TaskQueue | None = None
+
+    def __new__(cls , *args , **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self , queue_id : str | None = None , max_queue_size : int | None = 100 , task_db : TaskDatabase | None = None) -> None:
         assert max_queue_size is None or max_queue_size > 0 , 'max_queue_size must be None or greater than 0'
         self.task_db = task_db or TaskDatabase()
@@ -569,17 +580,34 @@ class TaskQueue:
         """Return the number of tasks with the given *status*."""
         return [item.status for item in self.queue.values()].count(status)
 
-    def refresh(self) -> list | bool:
+    def refresh(self , backend_only : bool = False) -> list | bool:
         """Pull updates for running and backend-updated tasks from the database.
 
         Returns True (or a non-empty list) if any task changed status, False (or
         an empty list) otherwise.
         """
-        backend_updated_item_ids = self.task_db.get_backend_updated_tasks()
-        running_item_ids = [item.id for item in self.queue.values() if item.is_running]
-        item_ids = list(set(backend_updated_item_ids + running_item_ids))
+        item_ids = self.task_db.get_backend_updated_tasks()
+        if not backend_only:
+            item_ids += [item.id for item in self.queue.values() if item.is_running]
+        item_ids = list(set(item_ids))
         changed = [self.queue[item_id].refresh() for item_id in item_ids if item_id in self.queue]
         return changed and any(changed)
+
+    def keep_refreshing(self , refresh_interval : int = 1) -> None:
+        """Legacy name for polling the DB for backend-side task updates.
+
+        The previous implementation blocked forever (``while True`` + ``sleep``),
+        so a Streamlit script never finished a run and **all widgets stopped
+        responding**. Interactive code should call
+        :func:`~src.interactive.main.util.control.render_task_queue_backend_poll`
+        instead; this method is kept as a no-op for accidental callers.
+
+        Parameters
+        ----------
+        refresh_interval:
+            Ignored; retained for API compatibility.
+        """
+        _ = refresh_interval
     
     def sync(self) -> None:
         '''sync tasks in record into current queue'''
@@ -727,6 +755,7 @@ class TaskItem:
     exit_error : str | None = None
 
     task_id : str | None = None
+    queue: TaskQueue | None = None
     
     def __post_init__(self) -> None:
         """Validate fields, normalise ``source``, and initialise transient attributes."""
@@ -875,6 +904,7 @@ class TaskItem:
         item.dump()
         if isinstance(queue, TaskQueue):
             queue.add(item)
+            item.queue = queue
         elif queue:
             item.task_db.add_queue_task(item.task_db.active_queue() , item.id)
         return item
@@ -962,32 +992,45 @@ class TaskItem:
         else:
             return False
 
-    def wait_until_running(self , starting_timeout : int = 20):
+    def wait_until_running(self , * , refresh_interval : int = 1 , refresh_all_interval : int = 5 , starting_timeout : int = 20):
         """wait for running"""
+        assert refresh_all_interval % refresh_interval == 0 , f'refresh_all_interval must be a multiple of refresh_interval'
+        assert refresh_all_interval > 0 and refresh_interval > 0 , f'refresh_all_interval and refresh_interval must be greater than 0'
         if not self.is_starting:
             return True
+        refresh_time = 0
         while self.is_starting:
-            self.refresh()
-            time.sleep(1)
-            if self.status == 'starting':
-                starting_timeout = starting_timeout - 1
-            
-            if starting_timeout <= 0:
+            if refresh_time >= starting_timeout:
                 Logger.error(f'Script {self.script} running timeout! Still starting')
                 self.update({
                     'status': 'error' , 'end_time': datetime.now().timestamp() ,
                     'exit_code': 1 ,
                     'exit_error': f'Script {self.script} running timeout! Still starting'} , sync = True)
                 return False
+            self.refresh()
+            if refresh_time % refresh_all_interval == 0:
+                if self.queue is not None:
+                    self.queue.refresh(backend_only = True)
+                elif TaskQueue._instance is not None:
+                    TaskQueue._instance.refresh(backend_only = True)
+            time.sleep(refresh_interval)
+            refresh_time += refresh_interval
         return True
 
-    def wait_until_completion(self , starting_timeout : int = 20):
+    def wait_until_completion(self , refresh_interval : int = 1 , refresh_all_interval : int = 5 , starting_timeout : int = 20):
         """wait for complete"""
         if not self.is_running:
             return True
+        refresh_time = 0
         while self.is_running:
             self.refresh()
-            time.sleep(1)
+            if refresh_time % refresh_all_interval == 0:
+                if self.queue is not None:
+                    self.queue.refresh(backend_only = True)
+                elif TaskQueue._instance is not None:
+                    TaskQueue._instance.refresh(backend_only = True)
+            time.sleep(refresh_interval)
+            refresh_time += refresh_interval
         return True
 
     def get_crash_protector(self) -> list[str]:

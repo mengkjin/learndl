@@ -30,7 +30,7 @@ from src.interactive.frontend import (
 
 from src.proj import PATH , MACHINE
 
-from .control import SC
+from .control import SC , render_task_queue_backend_poll
 from .page import get_script_page , print_page_header
 
 def on_first_page(max_page : int) -> None:
@@ -84,6 +84,7 @@ def show_script_detail(script_key : str):
     show_param_settings(runner)
     SC.get_control_panel().buttons['script-runner-run'].refresh(runner)
     show_report_main(runner)
+    render_task_queue_backend_poll()
     
 def clear_and_show(show_func : Callable) -> Callable:
     """Decorator: render *show_func* into a persistent ``st.empty()`` placeholder.
@@ -341,6 +342,7 @@ def show_report_main(runner : ScriptRunner):
                 'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
                 'Value': st.column_config.TextColumn(width="large", help='Value of the item')
             }
+            item.wait_until_running()
             with df_placeholder.expander(":material/data_table: **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 

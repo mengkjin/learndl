@@ -115,7 +115,7 @@ class CmuxTree:
             else:
                 workspaces = []
             if not workspaces:
-                workspaces = [workspace for workspace in self.current_window.workspaces if workspace.kwargs.get('title') == from_workspace]
+                workspaces = [workspace for workspace in self.current_window.workspaces if workspace.title == from_workspace]
         return workspaces[-1] if workspaces else None
 
     def get_surface(self , window_id: str | None = None , workspace_ref: str | None = None) -> CmuxSurface | None:

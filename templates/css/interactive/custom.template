@@ -1,5 +1,11 @@
 .stVerticalBlock[class*="queue-header-buttons"] {
-    div {justify-content: center !important;}
+    div {
+        justify-content: center !important;
+        align-items: center !important;
+    }
+    .stMarkdown {
+        
+    }
     button {
         min-width: 60px !important;
         height: 60px !important;
