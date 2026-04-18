@@ -9,7 +9,7 @@ from typing import Any , Literal , Type , ClassVar
 
 from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates , CONST
 from src.proj.util import dfs_to_excel , figs_to_pdf
-from src.res.factor.util import Benchmark , Portfolio , CompositeAlpha , Universe , Port
+from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
 
@@ -68,7 +68,7 @@ class TradingPort:
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1
         self.test_end = 20991231 if self.test_end < 0 else self.test_end
 
-        self.Alpha = CompositeAlpha(self.alpha , self.components , self.weights)
+        self.Alpha = AlphaComposite(self.alpha , self.components , self.weights)
         self.Universe = Universe(self.universe)
 
         self.new_ports : dict[int , pd.DataFrame] = {}

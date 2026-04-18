@@ -3,6 +3,7 @@
 from .factor import FactorConfig
 from .model import ModelSettingConfig
 from .trading import TradingPortConfig
+from .fmp import FMPConfig
 
 __all__ = ['Conf']
 
@@ -11,3 +12,4 @@ class Conf:
     Factor = FactorConfig()
     Model = ModelSettingConfig()
     TradingPort = TradingPortConfig()
+    Fmp = FMPConfig()

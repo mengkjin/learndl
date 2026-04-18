@@ -51,8 +51,8 @@ def email_to_fanghan(test = False):
     with TempFile(attachments) as temp_file:
         df1 = DB.load('pred' , 'gru_day_V1' , use_date)
 
-        from src.res.factor.util import CompositeAlpha
-        df2 = CompositeAlpha('use_daily' , [
+        from src.res.factor.util import AlphaComposite
+        df2 = AlphaComposite('use_daily' , [
             'factor@ht_master_combined' ,
             'factor@df_scores_v0' ,
             'gru_day_V1'

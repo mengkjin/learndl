@@ -215,3 +215,30 @@ class BaseFactorAnalyticTest(ABC):
 
     def load(self , path : Path | str):
         """load intermediate data from path for future use"""
+
+    @classmethod
+    def get_test_class(cls , test_type : TYPE_of_TEST):
+        match test_type:
+            case 'factor':
+                from src.res.factor.analytic.factor_perf import FactorPerfTest
+                return FactorPerfTest
+            case 'optim':
+                from src.res.factor.analytic.fmp_optim import OptimFMPTest
+                return OptimFMPTest
+            case 'top':
+                from src.res.factor.analytic.fmp_top import TopFMPTest
+                return TopFMPTest
+            case 't50':
+                from src.res.factor.analytic.fmp_t50 import T50FMPTest
+                return T50FMPTest
+            case 'screen':
+                from src.res.factor.analytic.fmp_screen import ScreenFMPTest
+                return ScreenFMPTest
+            case 'revscreen':
+                from src.res.factor.analytic.fmp_revscreen import RevScreenFMPTest
+                return RevScreenFMPTest
+            case 'reinforce':
+                from src.res.factor.analytic.fmp_reinforce import ReinforceFMPTest
+                return ReinforceFMPTest
+            case _:
+                raise ValueError(f'Invalid test type: {test_type}')

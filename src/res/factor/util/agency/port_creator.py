@@ -62,6 +62,26 @@ class PortCreator(ABC):
             self.create_result.analyze(self.bench_port , self.init_port)
         return self
 
+    @classmethod
+    def select_creator(cls , category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any) -> type[PortCreator]:
+        if category == 'optim':
+            from src.res.factor.fmp.optimizer.optim import OptimizedPortfolioCreator
+            return OptimizedPortfolioCreator
+        elif category == 'top':
+            from src.res.factor.fmp.generator.top import TopStocksPortfolioCreator
+            return TopStocksPortfolioCreator
+        elif category == 'screen':
+            from src.res.factor.fmp.generator.screen import ScreeningPortfolioCreator
+            return ScreeningPortfolioCreator
+        elif category == 'revscreen':
+            from src.res.factor.fmp.generator.revscreen import RevScreeningPortfolioCreator
+            return RevScreeningPortfolioCreator
+        elif category == 'reinforce':
+            from src.res.factor.fmp.generator.reinforce import ReinforcePortfolioCreator
+            return ReinforcePortfolioCreator
+        else:
+            raise ValueError(f'Unknown category: {category}')
+
 class PortCreateUtility:
     '''compute final utility of a portfolio'''
     def __init__(self , **kwargs) -> None:

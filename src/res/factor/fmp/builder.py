@@ -7,17 +7,15 @@ from typing import Any , Literal
 
 from src.proj import Duration , Logger , Dates , Proj
 
-from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount
-from .optimizer import OptimizedPortfolioCreator
-from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator , RevScreeningPortfolioCreator , ReinforcePortfolioCreator
+from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
-                        get_full_name , get_benchmark , get_benchmark_name , parse_full_name)
+                        get_full_name , get_benchmark , get_benchmark_name , parse_full_name , category_title)
 
 class PortfolioBuilder:
     '''
     alpha : AlphaModel
     benchmark : Benchmark | Portfolio | Port | str
-    category : Literal['optim' , 'top' , 'screen'] | Any
+    category : str but in BUILDER_TYPES
     lag : int , lag periods (not days)
     strategy : str
     suffixes : list[str] | str
@@ -49,7 +47,7 @@ class PortfolioBuilder:
         indus_control : float = 0.1
     revscreen accepted kwargs:
         screen_ratio : float = 0.5
-        screener : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+        screener : str | list[str] = "gru_day_V1"
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
@@ -64,7 +62,7 @@ class PortfolioBuilder:
         no_zone : float = 0.5
         indus_control : float = 0.1
     '''
-    def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any , 
+    def __init__(self , category : str | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
                  resume_path : Path | str | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
@@ -162,20 +160,7 @@ class PortfolioBuilder:
         return self.portfolio.account
     
     def setup(self):
-        match self.category:
-            case 'optim':
-                creator_class = OptimizedPortfolioCreator
-            case 'top':
-                creator_class = TopStocksPortfolioCreator
-            case 'screen':
-                creator_class = ScreeningPortfolioCreator
-            case 'revscreen':
-                creator_class = RevScreeningPortfolioCreator
-            case 'reinforce':
-                creator_class = ReinforcePortfolioCreator
-            case _:
-                raise ValueError(f'Unknown category: {self.category}')
-
+        creator_class = PortCreator.select_creator(self.category)
         self.creator = creator_class(self.full_name , indent = self.indent , vb_level = self.vb_level + 1 , **self.kwargs)
         return self
         
@@ -209,7 +194,7 @@ class PortfolioBuilder:
         return cls(alpha = alpha , build_on = build_on , indent = indent , vb_level = vb_level , **elements , **kwargs)
     
     @staticmethod
-    def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] , alpha : AlphaModel | str , 
+    def get_full_name(category : str , alpha : AlphaModel | str , 
                       benchmark : Portfolio | Benchmark | str | None = None , 
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
@@ -250,7 +235,7 @@ class PortfolioGroupBuilder:
     '''
     def __init__(
         self , 
-        category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any ,
+        category : str ,
         alpha_models : AlphaModel | list[AlphaModel] , 
         benchmarks : str | None | list = None , 
         add_lag : int = 0 , 
@@ -352,18 +337,7 @@ class PortfolioGroupBuilder:
     
     @property
     def category_title(self):
-        if self.category == 'optim':
-            return 'Optimized'
-        elif self.category == 'top':
-            return 'TopStocks'
-        elif self.category == 'screen':
-            return 'Screening'
-        elif self.category == 'revscreen':
-            return 'RevScreening'
-        elif self.category == 'reinforce':
-            return 'Reinforce'
-        else:
-            return self.category.title()
+        return category_title(self.category)
     
     @property
     def port_name_nchar(self):

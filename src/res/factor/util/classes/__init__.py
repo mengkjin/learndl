@@ -1,6 +1,6 @@
 from .port import Port
 
-from .alpha_model import AlphaModel , Amodel , CompositeAlpha
+from .alpha_model import AlphaModel , Amodel , AlphaComposite , AlphaScreener
 from .risk_model import RiskModel , Rmodel , RiskAnalytic , RiskProfile , Attribution , RISK_MODEL
 
 from .portfolio import Portfolio

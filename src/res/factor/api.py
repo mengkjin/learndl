@@ -4,8 +4,7 @@ from pathlib import Path
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import (
-    TEST_TYPES , TYPE_of_TEST , FactorPerfTest , OptimFMPTest , 
-    TopFMPTest , T50FMPTest , ScreenFMPTest , RevScreenFMPTest , ReinforceFMPTest)
+    TEST_TYPES , TYPE_of_TEST , FactorPerfTest , OptimFMPTest , BaseFactorAnalyticTest , TopFMPTest)
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
     AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
@@ -72,27 +71,9 @@ class FactorTestAPI:
     Hierarchy = StockFactorHierarchy
 
     @classmethod
-    def get_analytic_test(cls , test_type : TYPE_of_TEST):
-        if test_type == 'factor':
-            return FactorPerfTest
-        elif test_type == 'optim':
-            return OptimFMPTest
-        elif test_type == 'top':
-            return TopFMPTest
-        elif test_type == 't50':
-            return T50FMPTest
-        elif test_type == 'screen':
-            return ScreenFMPTest
-        elif test_type == 'revscreen':
-            return RevScreenFMPTest
-        elif test_type == 'reinforce':
-            return ReinforceFMPTest
-        else:
-            raise ValueError(f'Invalid test type: {test_type}')
-
-    @classmethod
-    def get_test_name(cls , test_type : TYPE_of_TEST):
-        return cls.get_analytic_test(test_type).__name__
+    def get_test_class(cls , test_type : TYPE_of_TEST):
+        """get the test class for the given test type , test type"""
+        return BaseFactorAnalyticTest.get_test_class(test_type)
 
     @classmethod
     def FastAnalyze(cls , factor_name : str , start : int | None = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
@@ -127,7 +108,7 @@ class FactorTestAPI:
     def create(cls , test_type : TYPE_of_TEST ,
                test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False ,
                start : int = -1 , end : int = 99991231 ,**kwargs):
-        testor_type = cls.get_analytic_test(test_type)
+        testor_type = cls.get_test_class(test_type)
         testor = testor_type.create(test_path , resume , save_resumable , start , end , **kwargs)
         return testor
 
@@ -137,13 +118,13 @@ class FactorTestAPI:
             test_types = [test_types]
         last_portfolio_dates = []
         for test_type in test_types:
-            last_portfolio_date = cls.get_analytic_test(test_type).last_portfolio_date(test_path)
+            last_portfolio_date = cls.get_test_class(test_type).last_portfolio_date(test_path)
             last_portfolio_dates.append(last_portfolio_date)
         return min(last_portfolio_dates) if len(last_portfolio_dates) else 19000101
 
     @classmethod
     def factor_stats_saved_dates(cls , test_path : Path | str):
-        return cls.get_analytic_test('factor').factor_stats_saved_dates(test_path)
+        return cls.get_test_class('factor').factor_stats_saved_dates(test_path)
 
     @classmethod
     def FactorPerf(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,

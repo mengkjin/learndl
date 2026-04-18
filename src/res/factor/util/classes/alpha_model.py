@@ -4,6 +4,7 @@ import pandas as pd
 
 from copy import deepcopy
 from dataclasses import dataclass
+from scipy.stats import rankdata
 from typing import Any , Literal , Callable
 
 from src.proj import CONST
@@ -12,7 +13,14 @@ from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 
 from .general_model import GeneralModel
 
-__all__ = ['AlphaModel' , 'Amodel']
+__all__ = ['AlphaModel' , 'Amodel' , 'AlphaComposite' , 'AlphaScreener']
+
+def _rank_pct(arr : np.ndarray , axis : int = -1) -> np.ndarray:
+    with np.errstate(invalid='ignore'):
+        ranks = rankdata(arr, method='average', axis=axis, nan_policy='omit')
+        n_valid = np.count_nonzero(~np.isnan(arr), axis=axis, keepdims=True)
+        rank_pct = np.where(np.isnan(arr) , np.nan , np.where(n_valid > 1, (ranks - 1) / (n_valid - 1), 0.5))
+    return rank_pct
 
 @dataclass
 class Amodel:
@@ -59,6 +67,10 @@ class Amodel:
         if name is not None: 
             self.name = name
         return self
+    def zscore(self , inplace = False):
+        new = self if inplace else self.copy()
+        new.alpha = zscore(new.alpha)
+        return new
     def pre_process(self , inplace = False):
         # nan_as_num , winsor , normal
         new = self if inplace else self.copy()
@@ -121,16 +133,19 @@ class Amodel:
             return cls.from_dataframe(date , data , secid , filter_date=True)
         
     @classmethod
-    def combine(cls , alphas : list[Amodel] , weights : list[float] | np.ndarray | None = None , 
-                date : int | None = None , name : str = 'combined_alpha' , normalize = True):
+    def combine_linear(
+        cls , alphas : list[Amodel] , weights : list[float] | np.ndarray | None = None , 
+        date : int | None = None , name : str = 'combined_alpha' , normalize = True
+    ):
         assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
+        if len(alphas) == 1:
+            return alphas[0].zscore(inplace=False) if normalize else alphas[0]
+
         if weights is None:
             weights = np.ones(len(alphas))
         elif isinstance(weights , list):
             weights = np.array(weights)
         assert len(alphas) == len(weights) , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
-        if len(alphas) == 1:
-            return alphas[0]
 
         if date is None:
             date = alphas[0].date
@@ -138,9 +153,45 @@ class Amodel:
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
         all_alphas = np.stack([alpha.alpha_of(secid) for alpha in alphas] , axis = 0)
         alpha = np.sum(all_alphas * weights[:,None] , axis = 0) / weights.sum()
+        amodel = cls(date , alpha , secid , name)
         if normalize: 
-            alpha = zscore(alpha)
-        return cls(date , alpha , secid , name)
+            amodel = amodel.zscore(inplace=True)
+        return amodel
+
+    @classmethod
+    def combine_worst(
+        cls , alphas : list[Amodel] , method : Literal['worst' , 'worst2'] , 
+        date : int | None = None , name : str = 'combined_alpha' , normalize = False
+    ):
+        assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
+        if len(alphas) == 1:
+            return alphas[0].zscore(inplace=False) if normalize else alphas[0]
+
+        if date is None:
+            date = alphas[0].date
+
+        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
+        all_alphas = np.stack([alpha.alpha_of(secid) for alpha in alphas] , axis = 0)
+        rank_pct = _rank_pct(all_alphas , axis = 1)
+        
+        if method == 'worst':
+            has_data = np.any(~np.isnan(rank_pct), axis=0)
+            alpha = _rank_pct(np.nan_to_num(rank_pct,nan=np.inf).min(axis = 0),axis = 0)
+            alpha[~has_data] = np.nan
+        elif method == 'worst2':
+            if rank_pct.shape[0] <= 2:
+                partitioned = rank_pct
+            else:
+                partitioned = np.partition(rank_pct, kth=2, axis=0)
+            has_data = np.any(~np.isnan(partitioned[:2]), axis=0)
+            alpha = np.full(partitioned.shape[1], np.nan)
+            alpha[has_data] = np.nanmean(partitioned[:2][:,has_data], axis=0)
+        else:
+            raise ValueError(f'method must be "worst" or "worst2": {method}')
+        amodel = cls(date , alpha , secid , name)
+        if normalize: 
+            amodel = amodel.zscore(inplace=True)
+        return amodel
 
     @classmethod
     def empty_model(cls , date : int , name : str = 'empty_alpha') -> Amodel:
@@ -229,45 +280,7 @@ class AlphaModel(GeneralModel):
             new.models[date] = new.models[tar_date].assign(date = date , name = new.name)
         return new
 
-class CompositeAlpha:
-    def __init__(self , name : str | list[str] , components : list[str] | None = None , weights : list[float] | Literal['equal'] | None = None):
-        assert name , f'name must be non-empty: {name}'
-        
-        if isinstance(name , list) or ',' in name:
-            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {name} {components}'
-            self.name = 'combined_alpha'
-            self.components = name if isinstance(name , list) else name.split(',')
-        else:
-            self.name = name
-            self.components = components if components else [name]
-        
-        if isinstance(weights , list):
-            assert len(self.components) == len(weights) , f'components {self.components} and weights {weights} must have the same length'
-            self.weights = np.array(weights).astype(float)
-        elif weights is None or isinstance(weights , str) and weights == 'equal':
-            self.weights = np.ones(len(self.components))
-        else:
-            raise ValueError(f'weights must be a list of floats or "equal": {weights}')
-
-    @property
-    def composite_components(self) -> list[CompositeAlphaComponent]:
-        return [CompositeAlphaComponent(component) for component in self.components]
-
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
-
-    def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
-        if not isinstance(date , (list , np.ndarray)):
-            date = [date]
-
-        alpha_models = [comp.get_alpha_model(date) for comp in self.composite_components]
-        models : list[Amodel] = []
-        for d in date:
-            amodel = Amodel.combine([alpha.get(d , latest=True) for alpha in alpha_models] , self.weights , date = d)
-            models.append(amodel)
-        return AlphaModel(self.name , models)
-
-class CompositeAlphaComponent:
+class AlphaComponent:
     _cache_normalized : dict[str , AlphaModel] = {}
     _cache_unnormalized : dict[str , AlphaModel] = {}
 
@@ -292,9 +305,21 @@ class CompositeAlphaComponent:
     def __repr__(self) -> str:
         return self.name
 
-    def get_alpha_model(self , date : int | list[int] | np.ndarray , normalize : bool = True) -> AlphaModel:
-        from src.res.factor.util.classes import StockFactor
+    @classmethod
+    def StockFactor(cls):
+        if not hasattr(cls , '_stock_factor'):
+            from src.res.factor.util.classes import StockFactor
+            cls._stock_factor = StockFactor
+        return cls._stock_factor
 
+    @classmethod
+    def StockFactorHierarchy(cls):
+        if not hasattr(cls , '_stock_factor_hierarchy'):
+            from src.res.factor.calculator import StockFactorHierarchy
+            cls._stock_factor_hierarchy = StockFactorHierarchy
+        return cls._stock_factor_hierarchy
+
+    def get_alpha_model(self , date : int | list[int] | np.ndarray , normalize : bool = True) -> AlphaModel:
         cached_alpha_model = self.get_cache(self.name , normalize = normalize)
         cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
         new_dates = np.setdiff1d(date , cached_dates)
@@ -302,7 +327,7 @@ class CompositeAlphaComponent:
         if len(new_dates) == 0:
             return cached_alpha_model.subset(date)
             
-        factor = StockFactor(self.loads(new_dates))
+        factor = self.StockFactor()(self.loads(new_dates))
         if normalize:
             factor = factor.normalize(inplace=True)
         alpha_model = factor.alpha_model().rename(self.name)
@@ -345,13 +370,95 @@ class CompositeAlphaComponent:
 
     @classmethod
     def factor_loads(cls , factor_name : str) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:
-        from src.res.factor.calculator import StockFactorHierarchy
+        hierarchy = cls.StockFactorHierarchy()
         def wrapper(date : int | list[int] | np.ndarray) -> pd.DataFrame:
             if not isinstance(date , (list , np.ndarray)):
                 date = [date]
-            df = StockFactorHierarchy.get_factor(factor_name).Loads(date)
+            df = hierarchy.get_factor(factor_name).Loads(date)
             if df.empty or min(date) < min(df['date']):
-                prev_df = StockFactorHierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date))
+                prev_df = hierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date))
                 df = prev_df if df.empty else pd.concat([prev_df , df])
             return df
         return wrapper
+
+class AlphaComposite:
+    def __init__(self , name : str | list[str] , components : list[str] | None = None , weights : list[float] | Literal['equal'] | None = None):
+        assert name , f'name must be non-empty: {name}'
+        
+        if isinstance(name , list) or ',' in name:
+            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {name} {components}'
+            self.name = 'combined_alpha'
+            self.components = name if isinstance(name , list) else name.split(',')
+        else:
+            self.name = name
+            self.components = components if components else [name]
+        
+        if isinstance(weights , list):
+            assert len(self.components) == len(weights) , f'components {self.components} and weights {weights} must have the same length'
+            self.weights = np.array(weights).astype(float)
+        elif weights is None or isinstance(weights , str) and weights == 'equal':
+            self.weights = np.ones(len(self.components))
+        else:
+            raise ValueError(f'weights must be a list of floats or "equal": {weights}')
+
+    @property
+    def alpha_components(self) -> list[AlphaComponent]:
+        return [AlphaComponent(component) for component in self.components]
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
+
+    def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
+        if not isinstance(date , (list , np.ndarray)):
+            date = [date]
+
+        alpha_models = [comp.get_alpha_model(date) for comp in self.alpha_components]
+        models : list[Amodel] = []
+        for d in date:
+            amodel = Amodel.combine_linear([alpha.get(d , latest=True) for alpha in alpha_models] , self.weights , date = d)
+            models.append(amodel)
+        return AlphaModel(self.name , models)
+
+class AlphaScreener:
+    def __init__(self , name : str | list[str] , components : list[str] | None = None ,
+                 method : Literal['worst' , 'worst2'] = 'worst2' , ratio : float = 0.5):
+        assert name , f'name must be non-empty: {name}'
+        
+        if isinstance(name , list) or ',' in name:
+            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {name} {components}'
+            self.name = 'combined_alpha'
+            self.components = name if isinstance(name , list) else name.split(',')
+        else:
+            self.name = name
+            self.components = components if components else [name]
+        self.method : Literal['worst' , 'worst2'] = method
+        self.ratio = ratio
+
+    @property
+    def alpha_components(self) -> list[AlphaComponent]:
+        return [AlphaComponent(component) for component in self.components]
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(name={self.name},components={self.components},method={self.method})'
+
+    def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
+        if not isinstance(date , (list , np.ndarray)):
+            date = [date]
+
+        alpha_models = [comp.get_alpha_model(date , normalize = False) for comp in self.alpha_components]
+        models : list[Amodel] = []
+        for d in date:
+            amodel = Amodel.combine_worst([alpha.get(d , latest=True) for alpha in alpha_models] , self.method , date = d)
+            models.append(amodel)
+        return AlphaModel(self.name , models)
+
+    def screened_pool(self , date : int , secid : np.ndarray | list[int] | Any = None , ratio : float | None = None) -> np.ndarray | None:
+        screen_alpha = self.get(date).get(date).to_dataframe()
+        if screen_alpha.empty:
+            return None
+        
+        if secid is not None and len(secid) > 0: 
+            screen_alpha = screen_alpha.query('secid in @secid').copy()
+        screen_alpha.loc[:, 'rankpct'] = screen_alpha['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
+        ratio = ratio if ratio is not None else self.ratio
+        return screen_alpha.query('rankpct >= @ratio')['secid'].to_numpy()
