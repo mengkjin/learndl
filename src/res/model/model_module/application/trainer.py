@@ -185,7 +185,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def resumable_models(cls , registered : bool = True , **kwargs) -> list[ModelPath]:
         if registered:
-            return [pred_model.model_path for pred_model in PredictionModel.SelectModels() if pred_model.model_path.base.exists()]
+            return [pred_model.model_path for pred_model in PredictionModel.SelectModels() if pred_model.model_path.is_resumable]
         else:
             return [ModelPath(model) for model in cls.available_models()]
 

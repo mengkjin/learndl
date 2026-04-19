@@ -37,14 +37,7 @@ class PortfolioBuilder:
         buffer_zone : float = 0.8
         no_zone : float = 0.5
         indus_control : float = 0.1
-    screen accepted kwargs:
-        screen_ratio : float = 0.5
-        sorter : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
-        n_best : int = 50
-        turn_control : float = 0.2
-        buffer_zone : float = 0.8
-        no_zone : float = 0.5
-        indus_control : float = 0.1
+
     revscreen accepted kwargs:
         screen_ratio : float = 0.5
         screener : str | list[str] = "gru_day_V1"
@@ -53,9 +46,19 @@ class PortfolioBuilder:
         buffer_zone : float = 0.8
         no_zone : float = 0.5
         indus_control : float = 0.1
+        
+    screen accepted kwargs:
+        screen_ratio : float = 0.5
+        sorter : str | list[str] = "gru_day_V1"
+        n_best : int = 50
+        turn_control : float = 0.2
+        buffer_zone : float = 0.8
+        no_zone : float = 0.5
+        indus_control : float = 0.1
+    
     reinforce accepted kwargs:
         screen_ratio : float = 0.5
-        screener : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+        screener : str | list[str] = "gru_day_V1"
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8

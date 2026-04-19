@@ -54,7 +54,7 @@ class GeneralModel(ABC):
     def copy(self): return deepcopy(self)
     def item(self):
         assert len(self.models) == 1 , f'expect 1 model , but got {len(self.models)}'
-        return list(self.models.values())[0]
+        return self.models[list(self.models.keys())[0]]
     def subset(self , date : int | list[int] | np.ndarray):
         if not isinstance(date , (list , np.ndarray)):
             date = [date]

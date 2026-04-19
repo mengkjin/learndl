@@ -22,6 +22,11 @@ def _rank_pct(arr : np.ndarray , axis : int = -1) -> np.ndarray:
         rank_pct = np.where(np.isnan(arr) , np.nan , np.where(n_valid > 1, (ranks - 1) / (n_valid - 1), 0.5))
     return rank_pct
 
+def _to_dates(date : int | list[int] | np.ndarray) -> np.ndarray:
+    if not isinstance(date , (list , np.ndarray)):
+        date = [date]
+    return np.array(date)
+
 @dataclass
 class Amodel:
     '''Alpha model of one day instance'''
@@ -92,6 +97,9 @@ class Amodel:
         if indus: 
             df = DATAVENDOR.INFO.add_indus(df , self.date , na_indus_as)
         return df
+
+    def to_alpha_model(self) -> AlphaModel:
+        return AlphaModel(self.name , self)
 
     @classmethod
     def create_random(cls , date : int , secid : np.ndarray | list[int] | Any = [1,2,600001]):
@@ -211,6 +219,11 @@ class AlphaModel(GeneralModel):
     def load_day_model(self, date: int) -> Any:
         """load alpha model for a specific date , is not implemented in this class"""
         ...
+    def get_model(self , date : int , latest = True) -> Amodel:
+        return self.get(date , latest)
+    @property
+    def empty(self) -> bool:
+        return len(self.models) == 0 or (len(self.models) == 1 and self.item().empty)
     def item(self) -> Amodel:
         return super().item()
     def alpha(self) -> np.ndarray:
@@ -285,6 +298,7 @@ class AlphaComponent:
     _cache_unnormalized : dict[str , AlphaModel] = {}
 
     def __init__(self , name : str):
+
         if name in CONST.Conf.Model.SETTINGS['prediction']:
             alpha_type , alpha_name , alpha_column = 'pred' , name , None
         elif '@' in name:
@@ -381,84 +395,112 @@ class AlphaComponent:
             return df
         return wrapper
 
-class AlphaComposite:
-    def __init__(self , name : str | list[str] , components : list[str] | None = None , weights : list[float] | Literal['equal'] | None = None):
-        assert name , f'name must be non-empty: {name}'
-        
-        if isinstance(name , list) or ',' in name:
-            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {name} {components}'
+class AlphaCombination:
+    def __init__(self , alpha : str | list[str] | AlphaModel | Amodel , components : list[str] | None = None):
+        if isinstance(alpha , (AlphaModel , Amodel)):
+            self.name = alpha.name
+            self.final_alpha = alpha
+        elif isinstance(alpha , list) or ',' in alpha:
+            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {alpha} {components}'
             self.name = 'combined_alpha'
-            self.components = name if isinstance(name , list) else name.split(',')
+            self.components = alpha if isinstance(alpha , list) else alpha.split(',')
         else:
-            self.name = name
-            self.components = components if components else [name]
-        
-        if isinstance(weights , list):
-            assert len(self.components) == len(weights) , f'components {self.components} and weights {weights} must have the same length'
-            self.weights = np.array(weights).astype(float)
-        elif weights is None or isinstance(weights , str) and weights == 'equal':
-            self.weights = np.ones(len(self.components))
-        else:
-            raise ValueError(f'weights must be a list of floats or "equal": {weights}')
+            self.name = alpha
+            self.components = components if components else [alpha]
+
+    @property
+    def final_alpha(self) -> AlphaModel | None:
+        if not hasattr(self , '_final_alpha'):
+            return None
+        return self._final_alpha
+
+    @final_alpha.setter
+    def final_alpha(self , alpha : AlphaModel | Amodel):
+        self._final_alpha = alpha if isinstance(alpha , AlphaModel) else alpha.to_alpha_model()
 
     @property
     def alpha_components(self) -> list[AlphaComponent]:
-        return [AlphaComponent(component) for component in self.components]
+        if not hasattr(self , '_alpha_components'):
+            self._alpha_components = [AlphaComponent(component) for component in self.components]
+        return self._alpha_components
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(name={self.name},components={self.components})'
+
+    def get_alpha_models(self , date : int | list[int] | np.ndarray , additional_alpha_model : AlphaModel | Amodel | None = None) -> list[AlphaModel]:
+        date = _to_dates(date)
+
+        if self.final_alpha is not None:
+            alpha_models = [self.final_alpha]
+        else:
+            alpha_models = [comp.get_alpha_model(date) for comp in self.alpha_components]
+
+        if additional_alpha_model is not None:
+            alpha_models.append(additional_alpha_model.to_alpha_model() if isinstance(additional_alpha_model , Amodel) else additional_alpha_model)
+
+        return alpha_models
+
+class AlphaComposite(AlphaCombination):
+    def __init__(self , alpha : str | list[str] | AlphaModel | Amodel , components : list[str] | None = None , 
+                 weights : list[float] | Literal['equal'] | None = None):
+        super().__init__(alpha , components)
+        
+        if isinstance(weights , list):
+            assert (len(weights) - len(self.components)) in [0 , 1], f'components {self.components} and weights {weights} must have the same length or the difference is 1'
+            self.weights = np.array(weights).astype(float)
+        elif weights is None or isinstance(weights , str) and weights == 'equal':
+            self.weights = np.ones(len(self.components) + 1)
+        else:
+            raise ValueError(f'weights must be a list of floats or "equal": {weights}')
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
 
-    def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
-        if not isinstance(date , (list , np.ndarray)):
-            date = [date]
+    def get(self , date : int | list[int] | np.ndarray , additional_alpha_model : AlphaModel | Amodel | None = None) -> AlphaModel:
+        date = _to_dates(date)
+        alpha_models = self.get_alpha_models(date , additional_alpha_model)
+        assert alpha_models , f'no alpha models created, if AlphaComposite is empty, please submit a final alpha or components'
 
-        alpha_models = [comp.get_alpha_model(date) for comp in self.alpha_components]
         models : list[Amodel] = []
         for d in date:
-            amodel = Amodel.combine_linear([alpha.get(d , latest=True) for alpha in alpha_models] , self.weights , date = d)
+            amodel = Amodel.combine_linear([alpha.get(d , latest=True) for alpha in alpha_models] , self.weights[:len(alpha_models)] , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 
-class AlphaScreener:
-    def __init__(self , name : str | list[str] , components : list[str] | None = None ,
+class AlphaScreener(AlphaCombination):
+    def __init__(self , alpha : str | list[str] | AlphaModel | Amodel , components : list[str] | None = None ,
                  method : Literal['worst' , 'worst2'] = 'worst2' , ratio : float = 0.5):
-        assert name , f'name must be non-empty: {name}'
-        
-        if isinstance(name , list) or ',' in name:
-            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {name} {components}'
-            self.name = 'combined_alpha'
-            self.components = name if isinstance(name , list) else name.split(',')
-        else:
-            self.name = name
-            self.components = components if components else [name]
+        super().__init__(alpha , components)
         self.method : Literal['worst' , 'worst2'] = method
         self.ratio = ratio
-
-    @property
-    def alpha_components(self) -> list[AlphaComponent]:
-        return [AlphaComponent(component) for component in self.components]
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},method={self.method})'
 
-    def get(self , date : int | list[int] | np.ndarray) -> AlphaModel:
-        if not isinstance(date , (list , np.ndarray)):
-            date = [date]
+    def get(self , date : int | list[int] | np.ndarray , additional_alpha_model : AlphaModel | Amodel | None = None) -> AlphaModel | None:
+        date = _to_dates(date)
+        alpha_models = self.get_alpha_models(date , additional_alpha_model)
+        if not alpha_models:
+            return None
 
-        alpha_models = [comp.get_alpha_model(date , normalize = False) for comp in self.alpha_components]
         models : list[Amodel] = []
         for d in date:
             amodel = Amodel.combine_worst([alpha.get(d , latest=True) for alpha in alpha_models] , self.method , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 
-    def screened_pool(self , date : int , secid : np.ndarray | list[int] | Any = None , ratio : float | None = None) -> np.ndarray | None:
-        screen_alpha = self.get(date).get(date).to_dataframe()
-        if screen_alpha.empty:
+    def screened_pool(self , date : int , secid : np.ndarray | list[int] | Any = None , ratio : float | None = None , 
+                      additional_alpha_model : AlphaModel | Amodel | None = None) -> np.ndarray | None:
+        alpha = self.get(date , additional_alpha_model)
+        if alpha is None or alpha.empty:
+            return None
+
+        alpha = alpha.get(date).to_dataframe()
+        if alpha.empty:
             return None
         
         if secid is not None and len(secid) > 0: 
-            screen_alpha = screen_alpha.query('secid in @secid').copy()
-        screen_alpha.loc[:, 'rankpct'] = screen_alpha['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
+            alpha = alpha.query('secid in @secid').copy()
+        alpha.loc[:, 'rankpct'] = alpha['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
         ratio = ratio if ratio is not None else self.ratio
-        return screen_alpha.query('rankpct >= @ratio')['secid'].to_numpy()
+        return alpha.query('rankpct >= @ratio')['secid'].to_numpy()

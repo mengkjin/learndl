@@ -37,7 +37,8 @@ class TradingPort:
     test_end    : int = -1
     benchmark   : str = 'csi500'
     exclusion   : str = 'st_bse_lowprice_loser_warnst'
-    sorting_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+    sorter      : str | list[str] | None = None
+    screener    : str | list[str] | None = None
     screen_ratio  : float = 0.5
     buffer_zone   : float = 0.8
     no_zone       : float = 0.5
@@ -62,8 +63,10 @@ class TradingPort:
         assert not self.backtest or self.test_start > 0 , f'test_start must be positive when backtest is True: {self.test_start}'
         
         assert self.category in ['top' , 'screen' , 'reinforce'] , f'category must be top or screen or reinforce: {self.category}'
-        if self.category in ['screen' , 'reinforce']:
-            assert self.sorting_alpha is not None , 'sorting_alpha must be provided'
+        if self.category == 'screen':
+            assert self.sorter is not None , 'sorter must be provided for screen category'
+        elif self.category == 'reinforce':
+            assert self.screener is not None , 'screener must be provided for reinforce category'
     
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1
         self.test_end = 20991231 if self.test_end < 0 else self.test_end
@@ -285,7 +288,7 @@ class TrackingPort(TradingPort):
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
-                                   indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
+                                   indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
                                    screen_ratio = self.screen_ratio , indent = indent + 1 , vb_level = vb_level + 1).setup()
 
         pf = builder.build(date).port.to_dataframe()
@@ -360,7 +363,7 @@ class BacktestPort(TradingPort):
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
-                                   indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
+                                   indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
                                    screen_ratio = self.screen_ratio , indent = indent + 1 , vb_level = vb_level + 1).setup()
 
         for date in date_list:

@@ -119,7 +119,7 @@ class ModelPath:
 
     @property
     def is_resumable(self) -> bool:
-        return any(p.is_file() for p in self.archive().rglob('*'))
+        return self.archive().exists() and any(p.is_file() for p in self.archive().rglob('*'))
 
     @property
     def model_nums(self) -> np.ndarray:

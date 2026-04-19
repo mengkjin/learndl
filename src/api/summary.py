@@ -2,7 +2,8 @@ import pandas as pd
 from pathlib import Path
 from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount
 from src.res.model.model_module.application.trainer import ModelTrainer
-from src.proj import Logger , PATH , CONST
+from src.res.factor.util.stats.aggregate import eval_period_ic_multi
+from src.proj import Logger , PATH , CONST , DB
 
 from .util import wrap_update
 
@@ -42,12 +43,32 @@ def backtest_port_account_summary(by_max_columns : int = 12):
             acc_paths[tport] = {'port':available_paths[0]} 
     return display_account_summary(acc_paths , 'Backtest Portfolio' , by_max_columns = by_max_columns)
 
+def model_ic_summary():
+    paths : dict[str , Path] = {}
+    
+    model_paths = ModelTrainer.all_resumable_models()
+    for model_path in model_paths:
+        if (path := model_path.snapshot('basic_test' , f'test_by_date.feather')).exists():
+            paths[model_path.model_name] = path
+    ic_tables = {}
+    for name , path in paths.items():
+        df = DB.load_df(path)
+        ic_tables[name] = df.astype({'date' : 'int'}).query('submodel == "best"').groupby('date')['value'].mean().\
+            reset_index(drop = False).dropna().rename(columns = {'value' : 'ic'})
+    df = eval_period_ic_multi(ic_tables)
+    return df
+
+def ic_summaries(by_max_columns : int = 12):
+    df = model_ic_summary()
+    for i in range(0, len(df.columns), by_max_columns):
+        Logger.display(df.iloc[:,i:i+by_max_columns].dropna(how = 'all'))
+
 def account_summaries(by_max_columns : int = 12):
     model_account_summary(by_max_columns)
     tracking_port_account_summary(by_max_columns)
     backtest_port_account_summary(by_max_columns)
 
-def concat_dfs_split(dfs : dict[str,pd.DataFrame] , by_max_columns : int = 10) -> list[pd.DataFrame]:
+def concat_dfs_split(dfs : dict[str,pd.DataFrame] , by_max_columns : int = 12) -> list[pd.DataFrame]:
     if not dfs:
         return []
     out_dfs : list[pd.DataFrame] = []
@@ -72,4 +93,5 @@ class SummaryAPI:
 
     @classmethod
     def process(cls):
+        ic_summaries()
         account_summaries()

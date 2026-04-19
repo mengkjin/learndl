@@ -278,11 +278,18 @@
 }
 .stElementContainer[class*="exit-file"] {
     &[class*="open"] button {
-        min-width: 500px !important;
-        justify-content: flex-start !important;
+        div {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
     }
     &[class*="-preview"] {
         &[class*="-select"] button {
+            justify-self: flex-end !important;
+            div {
+                justify-content: center !important;
+                align-items: center !important;
+            }
             background: #1E88E5 !important;
             color: white !important;
         }

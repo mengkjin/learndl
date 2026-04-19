@@ -1,19 +1,21 @@
 default:
-  top:
+  generator: 
     n_best: 50
     turn_control: 0.1
     buffer_zone: 0.8
     no_zone: 0.5
     indus_control: 0.1
+    screen_ratio: 0.5
+    
+  top:
+    n_best: 50
+    sorter: self
+    screener: null
 
   screen:
     sorter: gru_day_V1
-    screen_ratio: 0.5
-    
-  revscreen:
-    screener: gru_day_V1
-    screen_ratio: 0.5
+    screener: self
     
   reinforce:
+    sorter: self
     screener: gru_day_V1
-    screen_ratio: 0.5

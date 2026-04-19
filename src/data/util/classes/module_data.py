@@ -140,7 +140,7 @@ class ModuleData:
     @property
     def enable_cache(self):
         """True when disk caching is active (``use_data`` is ``'fit'``/``'both'`` and cache key exists)."""
-        return self.datacache # and self.use_data in ['fit' , 'both'] 
+        return bool(self.datacache) # and self.use_data in ['fit' , 'both'] 
 
     @property
     def loaded(self):

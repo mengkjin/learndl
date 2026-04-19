@@ -62,7 +62,7 @@ def get_strategy_name(category : str , strategy : str = 'default' , kwargs : dic
             n = kwargs.get('n_best' , CONST.Conf.Fmp.default['top']['n_best'])
             strategy = f'Top{n:_>3d}'
         elif category in ['screen' , 'revscreen' , 'reinforce']:
-            ratio = kwargs.get('screen_ratio' , CONST.Conf.Fmp.default[category]['screen_ratio'])
+            ratio = kwargs.get('screen_ratio' , CONST.Conf.Fmp.default['generator']['screen_ratio'])
             strategy = f'{ratio * 100:.0f}pct'
         elif category == 'optim':
             strategy = os.path.basename(kwargs['config_path']) if 'config_path' in kwargs else 'default'
