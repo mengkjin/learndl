@@ -289,8 +289,8 @@ class TaskDatabase:
                 new_kwargs = {'status' : new_status} | {k: v for k, v in kwargs.items() if k != 'status'}
                 for k, v in new_kwargs.items():
                     if k.endswith('_time'):
-                        assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
-                        new_kwargs[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
+                        assert v is None or isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
+                        new_kwargs[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})' if v else 'None'
                 Logger.info(f"Task {task_id} status [{new_status.upper()}]")
 
     def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
@@ -1063,8 +1063,8 @@ class TaskItem:
                 changed = {'status' : changed['status']} | {k: v for k, v in changed.items() if k != 'status'}
             for k, v in changed.items():
                 if k.endswith('_time'):
-                    assert isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
-                    changed[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})'
+                    assert v is None or isinstance(v, float) , f'{k} must be a float, but got {type(v)}'
+                    changed[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})' if v else 'None'
         self.task_db.del_backend_updated_task(self.id)
         return changed
 
