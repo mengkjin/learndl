@@ -125,7 +125,7 @@ class BackendTaskRecorder:
         pid = os.getpid()
         self.task_db.update_task(
             self.task_id, backend_updated = True, 
-            pid = pid, status = 'running', start_time = start_time)
+            pid = pid, status = 'running', start_time = start_time , end_time = None , exit_code = None , exit_message = None , exit_error = None , exit_files = None)
         return self
 
     def __exit__(self , exc_type : type[BaseException] | None , exc_value : BaseException | None , exc_traceback : Any) -> None:

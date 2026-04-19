@@ -19,3 +19,7 @@ default:
   reinforce:
     sorter: self
     screener: gru_day_V1
+
+  revscreen:
+    sorter: self
+    screener: gru_day_V1
