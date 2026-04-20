@@ -11,7 +11,7 @@ sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1, week: 5} # others will b
 data.prenorm.day: {'divlast' : True  , 'histnorm' : True}
 data.prenorm.week: {'channelnorm' : True}
 
-data.types: 30m # ['day+30m' , 30m , day , ...] , use if input_type is data
+data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
 
 hidden.types: # list of hidden states , use if input_type is hidden
   - gru_day_V0.0.best

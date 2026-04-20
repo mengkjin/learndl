@@ -51,6 +51,7 @@ class BasicTestResult(BaseCallBack):
             'date' : self.metrics.epoch_batch_keys[-len(self.model_test_dates):] ,
             'value' : self.metrics.epoch_batch_accuracies[-len(self.model_test_dates):]
         }).query('date in @self.model_test_dates')
+        print(df_date)
         self.test_df_date = pd.concat([self.test_df_date , df_date])
 
     def on_test_end(self): 

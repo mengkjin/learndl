@@ -75,17 +75,29 @@ backtest_ports:
     alpha: 
       - gru_dfl2cs
 
-  add_model.all:
+  test_backtest.0:
     alpha: 
-      - gru_week
-      - gru_30m
       - gru_dfl2
       - gru_dfl2cs
 
-  add_model.all2:
+  test_backtest.1:
     alpha: 
       - gru_dfl2
       - gru_dfl2cs
     screener:
       - gru_week
       - gru_30m
+
+  test_backtest.2:
+    alpha: 
+      - gru_dfl2
+      - gru_dfl2cs
+    screener:
+      - gru_30m
+
+  test_backtest.3:
+    alpha: 
+      - gru_dfl2
+      - gru_dfl2cs
+    screener:
+      - gru_week
