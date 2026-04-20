@@ -63,7 +63,7 @@ def batch_x(batch_input : BatchInput , nn_to_calculate_hidden : nn.Module | None
 def batch_loader_concat(batch_loader : Iterator[BatchInput] , nn_to_calculate_hidden : nn.Module | None = None):
     new_batchs : list[BatchInput] = []
     for b in batch_loader:
-        new_batch_data = BatchInput(batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.valid)
+        new_batch_data = BatchInput(batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.valid , b.y_date , b.y_secid)
         new_batchs.append(new_batch_data.cpu())
     return BatchInput.concat(*new_batchs)
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
@@ -17,8 +18,7 @@ def _object_shape(obj : Any) -> Any:
         return tuple([_object_shape(x) for x in obj])
     else: 
         return type(obj)
-
-@dataclass(slots=True)
+@dataclass
 class BatchInput:
     '''custom data component of a batch(x,y,w,i,valid)'''
     x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
@@ -26,6 +26,8 @@ class BatchInput:
     w       : torch.Tensor | None
     i       : torch.Tensor 
     valid   : torch.Tensor
+    y_date  : np.ndarray
+    y_secid : np.ndarray
     kwargs  : dict[str,Any] = field(default_factory=dict)
     
     def __post_init__(self):
@@ -41,7 +43,7 @@ class BatchInput:
         else:
             if isinstance(device , Device): 
                 device = device.device
-            inputs = {name:Device.send_to(getattr(self , name) , device) for name in self.__slots__}
+            inputs = {name:Device.send_to(getattr(self , name) , device) for name in ['x' , 'y' , 'w' , 'i' , 'valid' , 'y_date' , 'y_secid' , 'kwargs']}
             return BatchInput(**inputs)
         
     def cpu(self):  
@@ -81,6 +83,35 @@ class BatchInput:
     def info(self):
         return f'{self.__class__.__name__}:\n' + \
             '\n'.join([f'{k} : {shape}' for k,shape in self.shape.items()])
+
+    @property
+    def date(self) -> np.ndarray:
+        if not hasattr(self , '_date'):
+            self._date = self.y_date[self.i.cpu()[:,1]]
+        return self._date
+    
+    @property
+    def secid(self) -> np.ndarray:
+        if not hasattr(self , '_secid'):
+            self._secid = self.y_secid[self.i.cpu()[:,0]]
+        return self._secid
+    
+    @property
+    def date0(self) -> int:
+        date = self.date
+        assert (date == date[0]).all() , date
+        return self.date.astype(int)[0]
+
+    @property
+    def label0(self) -> np.ndarray:
+        label = self.y.cpu().squeeze().numpy()
+        if label.ndim == 1:
+            return label
+        elif label.ndim == 2:
+            return label[:,0]
+        else:
+            raise ValueError(f'label shape {label.shape} is not supported')
+
     @classmethod
     def random(cls , batch_size = 2 , seq_len = 30 , n_inputs = 6 , predict_steps = 1):
 
@@ -90,19 +121,30 @@ class BatchInput:
         w = None
         i = torch.Tensor([])
         v = torch.Tensor([])
-        return cls(x , y , w , i , v)
+        y_date = np.array([])
+        y_secid = np.array([])
+        return cls(x , y , w , i , v , y_date , y_secid)
     @classmethod
-    def concat(cls , *batch_datas):
-        assert len(batch_datas) > 0
+    def concat(cls , *batch_inputs):
+        assert len(batch_inputs) > 0 , f'batch_inputs is empty'
         
         x , y , w , i , v , kwargs = [] , [] , [] , [] , [] , []
-        for bd in batch_datas:
+        y_date , y_secid = np.array([]), np.array([])
+        for bd in batch_inputs:
             assert isinstance(bd , cls) , type(bd)
             x.append(bd.x)
             y.append(bd.y)
             w.append(bd.w)
             i.append(bd.i)
             v.append(bd.valid)
+            if len(y_date) == 0:
+                y_date = bd.y_date
+            else:
+                assert np.array_equal(y_date , bd.y_date) , (y_date , bd.y_date)
+            if len(y_secid) == 0:
+                y_secid = bd.y_secid
+            else:
+                assert np.array_equal(y_secid , bd.y_secid) , (y_secid , bd.y_secid)
             kwargs.append(bd.kwargs)
         assert all([len(kwg) == 0 for kwg in kwargs]) , [kwg.keys() for kwg in kwargs]
         if isinstance(x[0] , torch.Tensor):
@@ -115,7 +157,7 @@ class BatchInput:
         w = None if w[0] is None else torch.concat(w)
         i = torch.concat(i)
         v = torch.concat(v)
-        return cls(x , y , w , i , v)
+        return cls(x , y , w , i , v , y_date , y_secid)
 
     @classmethod
     def generate(cls , data_type : str = 'day+style' , label_num : Literal[1,2] = 1):
@@ -290,6 +332,11 @@ class BatchData:
     @property
     def device(self): 
         return self.input.device
+
+    def pred_df(self , narrow_df = False , colnames : str | list | None = None , **kwargs):
+        df = self.output.pred_df(self.input.secid , self.input.date , narrow_df , colnames , **kwargs)
+        df['label'] = self.input.label0
+        return df
 
     def loss_inputs(self , exclude_nan : bool = False):
         label , pred , weight = self.input.y , self.output.pred , self.input.w

@@ -22,7 +22,7 @@ class ModelTrainSettings:
     - resume_test_factor_perf [bool]: resume option of model train: if resume test factor perf
     """
 
-    _resume_test : Literal[False , 'last_model_date' , 'last_pred_date'] = 'last_pred_date'
+    _resume_test : Literal[False , 'last_model_date' , 'last_pred_date'] = 'last_model_date'
     _resume_test_fmp : Literal[False] | str = 'trailing_5'
     _resume_test_fmp_account : bool = True
     _resume_test_factor_perf : bool = True

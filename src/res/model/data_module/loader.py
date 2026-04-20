@@ -24,7 +24,7 @@ class BatchInputLoader:
         for batch_i , batch_input in enumerate(self.loader):
             assert isinstance(batch_input , BatchInput) , f'{type(batch_input)} is not a BatchInput'
             if self.exclude_dates is not None or self.include_dates is not None:
-                batch_date  = self.data_module.batch_date0(batch_input)
+                batch_date  = batch_input.date0
                 if self.exclude_dates is not None and np.isin(batch_date , self.exclude_dates): 
                     continue
                 if self.include_dates is not None and ~np.isin(batch_date , self.include_dates): 
@@ -58,6 +58,6 @@ class BatchInputLoader:
     def of_date(self , date : int):
         assert self.data_module.config.sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.sample_method , self.data_module.stage)
         for batch_input in self:
-            if self.data_module.batch_date(batch_input)[0] == date:
+            if batch_input.date0 == date:
                 return batch_input
         raise ValueError(f'date {date} not found in loader')

@@ -40,7 +40,7 @@ def rolling_rotation(x : torch.Tensor , index0 : torch.Tensor | Any , index1 : t
     return new_x
 
 def finite_position(data : torch.Tensor , index1 : torch.Tensor | None = None , 
-                    seqlen : int = 1 , step : int = 1 , endpoint_nonzero = False , x_all_valid = True):
+                    seqlen : int = 1 , step : int = 1 , endpoint_nonzero = False , all_valid = True) -> torch.Tensor:
     '''return finite position (with shape of len(index[0]) * step_len) the first 2 dims'''
     if index1 is None: 
         index1 = torch.arange(data.shape[1])
@@ -50,11 +50,11 @@ def finite_position(data : torch.Tensor , index1 : torch.Tensor | None = None ,
     if seqlen * step > 1:
         agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
     try:
-        predicate : Callable[...,torch.Tensor] = torch.all if x_all_valid else torch.any
+        predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
         valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
     except MemoryError:
-        predicate = torch.multiply if x_all_valid else torch.add
-        valid = torch.full_like((agg[:,:len(index1)]), x_all_valid)
+        predicate = torch.multiply if all_valid else torch.add
+        valid = torch.full_like((agg[:,:len(index1)]), all_valid)
         for i in range(seqlen):
             valid = predicate(valid , agg[:,index1 + i * step])
     if endpoint_nonzero: 
@@ -310,11 +310,8 @@ class DataModule(BaseDataModule):
         self.y_std = self.standardize_y(y_full , None , None , no_weight = True)[0]
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
-        valid_y = self.y_std if self.stage == 'fit' else None
-        
-        valid_sampled = self.multiple_valid(valid_x , valid_y , self.step_idx , x_all_valid=(self.config.module_type == 'nn'))
+        valid_sampled = self.multiple_valid(valid_x , self.step_idx , all_valid=(self.config.module_type == 'nn'))
         y_sampled , w_sampled = self.standardize_y(self.y_std , valid_sampled , self.step_idx)
-            
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
         self.static_dataloader(x_full , y_sampled , w_sampled , valid_sampled)
@@ -323,32 +320,29 @@ class DataModule(BaseDataModule):
             gc.collect() 
             torch.cuda.empty_cache()
 
-    def multiple_valid(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , 
-                       x_all_valid = True) -> torch.Tensor | None:
+    def multiple_valid(self , x : dict[str,torch.Tensor] , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
         '''
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
-        y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         '''
-        valid = None if y is None else finite_position(y, index1 , 1)
-        for k , v in x.items(): 
-            new_val = finite_position(v , index1 , self.seq_lens[k] , self.seq_steps[k] , k in DataBlockNorm.DIVLAST , x_all_valid)
-            if x_all_valid:
-                valid = new_val * (True if valid is None else valid)
-            else:
-                valid = new_val + (False if valid is None else valid)
-        return valid
+        if not x:
+            return None
+        finites = torch.stack(
+            [finite_position(v,index1,self.seq_lens[k],self.seq_steps[k],k in DataBlockNorm.DIVLAST,all_valid) for k , v in x.items()] ,
+            dim = -1
+        )
+        return finites.all(dim=-1) if all_valid else finites.any(dim=-1)
      
     def standardize_y(self , y : torch.Tensor , valid : torch.Tensor | None , index1 : torch.Tensor | None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
         '''standardize y and weight'''
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if valid is not None: 
-            y.nan_to_num_(0)[~valid] = torch.nan
+            y[~valid] = torch.nan
         weight_scheme = self.config.weight_scheme(self.loader_param.stage , no_weight)
         assert weight_scheme in ['equal' , 'top' , None] , weight_scheme
         w = None
-        if y.isnan().all().item(): 
+        if self.stage != 'fit' and y.isnan().all().item(): 
             return y , w
         y = T.standardize(y , dim=0)
         if weight_scheme == 'top':
@@ -411,7 +405,7 @@ class DataModule(BaseDataModule):
                 b_w = self.batch_data_y(w , index0 , yindex1)
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
-                batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v)
+                batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
                 batch_key = f'{set_key}.{bnum}'
 
                 self.storage.save(batch_input , batch_key , group = self.stage)

@@ -282,26 +282,6 @@ class BaseDataModule(ABC):
     def next_model_date(self , model_date):
         late_dates = self.model_date_list[self.model_date_list > model_date]
         return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
-        
-    def batch_date(self , batch_input : BatchInput):
-        return self.y_date[batch_input.i.cpu()[:,1]]
-    
-    def batch_secid(self , batch_input : BatchInput):
-        return self.y_secid[batch_input.i.cpu()[:,0]]
-    
-    def batch_date0(self , batch_input : BatchInput):
-        batch_date = self.batch_date(batch_input)
-        assert (batch_date == batch_date[0]).all() , batch_date
-        return batch_date[0]
-
-    def batch_label(self , batch_input : BatchInput):
-        label = batch_input.y.cpu().squeeze().numpy()
-        if label.ndim == 1:
-            return label
-        elif label.ndim == 2:
-            return label[:,0]
-        else:
-            raise ValueError(f'label shape {label.shape} is not supported')
 
     @property
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
@@ -731,7 +711,7 @@ class BaseTrainer(ModelStreamLine):
 
     def assert_date_equity(self): 
         date0 = self.batch_dates[self.batch_idx] 
-        date1 = self.data.batch_date0(self.batch_input) 
+        date1 = self.batch_input.date0 
         if not date0 == date1:
             Logger.alert1(f'y_date: {self.data.y_date}')
             Logger.alert1(f'batch_idx: {self.batch_idx}')
@@ -739,7 +719,7 @@ class BaseTrainer(ModelStreamLine):
             Logger.alert1(f'early_test_dates: {self.data.early_test_dates}')
             Logger.alert1(f'model_test_dates: {self.data.model_test_dates}')
             Logger.alert1(f'batch_input.i: {self.batch_input.i[0]}')
-            Logger.alert1(f'data.batch_date0: {self.data.batch_date0(self.batch_input)}')
+            Logger.alert1(f'batch_input.date0: {self.batch_input.date0}')
             Logger.error(f'Date equity assertion failed: {date0} != {date1}')
             raise ValueError(f'Date equity assertion failed: {date0} != {date1}')
 
@@ -1105,24 +1085,12 @@ class PredRecorder(ModelStreamLineWithTrainer):
         Logger.stdout(f'{self.__class__.__name__} : {resume_info}' , vb_level = vb_level)
     
     def append_batch_preds(self):
-        if self.pred_idx in self.pred_dict.keys(): 
+        if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
             return
-        if self.batch_output.empty: 
+        df = self.batch_data.pred_df().dropna().query('date in @self.data.test_full_dates')
+        if df.empty:
             return
-        
-        which_output = self.trainer.model_param.get('which_output' , 0)
-        
-        secid = self.data.batch_secid(self.batch_input)
-        date  = self.data.batch_date(self.batch_input)
-        pred = self.batch_output.pred_df(secid , date).dropna()
-        pred = pred.query('date in @self.data.test_full_dates')
-        if len(pred) == 0: 
-            return
-
-        label = pd.DataFrame({'secid' : secid , 'date' : date , 'label' : self.data.batch_label(self.batch_input)})
-        
-        df = pred.merge(label , on=self.PRED_IDXS)
-        if which_output is None:
+        if (which_output := self.trainer.model_param.get('which_output' , 0)) is None:
             df['pred'] = df.loc[:,[col for col in df.columns if col.startswith('pred.')]].mean(axis=1)
         else:
             df['pred'] = df[f'pred.{which_output}']

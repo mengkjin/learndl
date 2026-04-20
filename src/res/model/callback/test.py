@@ -36,7 +36,7 @@ class BasicTestResult(BaseCallBack):
     def get_test_df(self) -> pd.DataFrame:
         df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date]) if self.config.is_resuming else self.test_df_date
         df = df.drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
-                sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True)
+                sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         return df
 
     def on_test_start(self): 
@@ -51,7 +51,6 @@ class BasicTestResult(BaseCallBack):
             'date' : self.metrics.epoch_batch_keys[-len(self.model_test_dates):] ,
             'value' : self.metrics.epoch_batch_accuracies[-len(self.model_test_dates):]
         }).query('date in @self.model_test_dates')
-        print(df_date)
         self.test_df_date = pd.concat([self.test_df_date , df_date])
 
     def on_test_end(self): 

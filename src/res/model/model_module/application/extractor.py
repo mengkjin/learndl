@@ -115,12 +115,10 @@ class ModelHiddenExtractor:
         desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'
         hiddens : list[pd.DataFrame] = []
         for batch_input in loader:
-            date  = self.data.batch_date(batch_input)
-            secid = self.data.batch_secid(batch_input)
-            df = self.model(batch_input).hidden_df(secid , date)
+            df = self.model(batch_input).hidden_df(batch_input.secid , batch_input.date)
             if df is not None: 
                 hiddens.append(df)
-            loader.display(f'{desc}/{date[0]}')
+            loader.display(f'{desc}/{batch_input.date[0]}')
 
         if len(hiddens) == 0: 
             return

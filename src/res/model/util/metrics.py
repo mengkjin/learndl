@@ -201,11 +201,11 @@ class MetricFunction:
                 # if not self.DISPLAY_LOG.get(criterion , False):
                 #     Logger.success(f'{self.__class__.__name__} {criterion} calculated!' , vb_level = 'max')
                 #     self.DISPLAY_LOG[criterion] = True
-                loss = component(which_output = which_output , which_label = which_label , **inputs)
-                if isinstance(loss , dict):
-                    results.update(loss)
+                value = component(which_output = which_output , which_label = which_label , **inputs)
+                if isinstance(value , dict):
+                    results.update(value)
                 else:
-                    results[criterion] = loss
+                    results[criterion] = value
         return results
 
 class LossFunction(MetricFunction):
