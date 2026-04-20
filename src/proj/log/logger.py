@@ -295,9 +295,14 @@ class Logger:
         new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['critical'] | kwargs))
 
     @classmethod
-    def only_once(cls , *args , object : Any | None = None , mark : str = 'default' , printer = new_stdout ,  **kwargs):
+    def only_once(cls , *args , object : Any | None | Literal['os' , 'logger'] = None , mark : str = 'default' , printer = new_stdout ,  **kwargs):
         """display the message only once for the same object and key"""
-        Once.run(printer , args , kwargs , mark , Logger if object is None else object)
+        if object is None:
+            return printer(*args , **kwargs)
+        else:
+            if object == 'logger':
+                object = Logger
+            Once.run(printer , args , kwargs , mark , object)
 
     @classmethod
     def log_only(cls , *args , **kwargs):

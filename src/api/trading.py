@@ -21,6 +21,14 @@ class TradingAPI:
         BacktestPortfolioManager.rebuild(port_name).analyze()
 
     @classmethod
+    def backtest_rebuild_all(cls):
+        """
+        Rebuild all backtest portfolios:
+        """
+        for port_name in Const.TradingPort.backtest_ports.keys():
+            BacktestPortfolioManager.rebuild(port_name).analyze()
+
+    @classmethod
     def update(cls): 
         """
         Update trading portfolios for both laptop and server:

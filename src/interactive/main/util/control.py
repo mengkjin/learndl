@@ -19,7 +19,7 @@ from typing import Any , ClassVar , Callable
 from pathlib import Path
 from datetime import datetime
 
-from src.proj import PATH , Logger , Proj , MACHINE
+from src.proj import PATH , Logger , Proj , MACHINE , Const
 from src.proj.util import Options
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache
@@ -422,10 +422,17 @@ class SessionControl:
         # st.session_state['script-task-selector-placeholder'].write('')
     
     @staticmethod
-    def wait_until_completion(item : TaskItem , starting_timeout : int = 20):
+    def wait_until_completion(item : TaskItem , starting_timeout : int = Const.Pref.interactive.get('task_starting_timeout' , 20)):
         """wait for complete"""
         return item.wait_until_completion(starting_timeout)
 
+    @st.fragment(run_every=Const.Pref.interactive.get('task_queue_backend_refresh_interval' , 5))
+    def task_queue_backend_refresh(self) -> None:
+        """refresh task queue backend automatically"""
+        changed = self.task_queue.refresh(backend_only=True)
+        if changed:
+            # Logger.success(f"Task Queue Backend Refreshed: {changed}")
+            st.rerun()
 
 class ControlPanelButton(ABC):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
@@ -665,21 +672,4 @@ class ControlPanel:
             st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 
                     help="""Should the script run silently? Not selected will use script header value.""")
         
-          
-   
-@st.fragment(run_every=1)
-def render_task_queue_backend_poll() -> None:
-    """Poll ``TaskQueue`` for DB/backend updates without blocking the app thread.
-
-    Replaces the blocking :meth:`~src.interactive.backend.task.TaskQueue.keep_refreshing`
-    loop. Uses ``run_every`` so Streamlit can still process clicks; when
-    :meth:`~src.interactive.backend.task.TaskQueue.refresh` reports changes, a
-    full rerun refreshes list widgets outside this fragment.
-    """
-    if SessionControl._instance is None:
-        return
-    if SessionControl._instance.task_queue.refresh(backend_only=True):
-        st.rerun()
-
-
 SC = SessionControl()

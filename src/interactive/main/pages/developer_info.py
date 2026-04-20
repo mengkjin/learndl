@@ -3,7 +3,7 @@ import streamlit as st
 
 from src.interactive.frontend.frontend import expander_subheader # , ActionLogger
 
-from src.interactive.main.util import SC , print_page_header , render_task_queue_backend_poll
+from src.interactive.main.util import SC , print_page_header
 
 PAGE_NAME = 'developer_info'
 
@@ -69,7 +69,7 @@ def main() -> None:
     """Entry point for the developer info page."""
     print_page_header(PAGE_NAME)
     show_developer_info()
-    render_task_queue_backend_poll()
+    SC.task_queue_backend_refresh()
 
 if __name__ == '__main__':
     main()

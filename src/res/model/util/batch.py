@@ -346,21 +346,24 @@ class BatchData:
                 weight = weight[:,None]
         if pred.ndim == 1: 
             pred  = pred[:,None]
-        
         others = self.output.other
+
         row_pos = self._slice_nonnan(label , pred , weight) if exclude_nan else None
         if row_pos is not None:
             label = label[row_pos]
             pred = pred[row_pos]
             weight = weight[row_pos] if weight is not None else None
-            for key , value in others.items():
+
+            others = {}
+            for key , value in self.output.other.items():
                 if not isinstance(value , torch.Tensor) or len(value) != len(row_pos):
+                    others[key] = value
                     continue
                 if value.ndim == 2 and value.shape[1] == len(value):
                     Logger.warning(f'{key} is a 2-dim square tensor of {value.shape}, remove nan for both rows and columns')
-                    others[key] = others[key][row_pos][:,row_pos]
+                    others[key] = value[row_pos][:,row_pos]
                 else:
-                    others[key] = others[key][row_pos]
+                    others[key] = value[row_pos]
 
         return {'label':label , 'pred':pred , 'weight':weight , **others}
 

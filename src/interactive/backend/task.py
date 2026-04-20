@@ -305,10 +305,13 @@ class TaskDatabase:
             cursor.execute('SELECT task_id FROM task_backend_updated')
             return [row['task_id'] for row in cursor.fetchall()]
         
-    def clear_backend_updated_tasks(self) -> None:
+    def clear_backend_updated_tasks(self, task_ids: list[str] | None = None) -> None:
         """Remove all entries from the task_backend_updated tracking table."""
+        if not task_ids:
+            return
+        ph = ','.join('?' * len(task_ids))
         with self.conn_handler as (conn, cursor):
-            cursor.execute('DELETE FROM task_backend_updated')
+            cursor.execute(f'DELETE FROM task_backend_updated WHERE task_id IN ({ph})', tuple(task_ids),)
 
     def is_backend_updated(self, task_id: str) -> bool:
         """Check if task is backend updated"""
@@ -580,7 +583,7 @@ class TaskQueue:
         """Return the number of tasks with the given *status*."""
         return [item.status for item in self.queue.values()].count(status)
 
-    def refresh(self , backend_only : bool = False) -> list | bool:
+    def refresh(self , backend_only : bool = False) -> dict[str, dict[str, Any]]:
         """Pull updates for running and backend-updated tasks from the database.
 
         Returns True (or a non-empty list) if any task changed status, False (or
@@ -589,25 +592,13 @@ class TaskQueue:
         item_ids = self.task_db.get_backend_updated_tasks()
         if not backend_only:
             item_ids += [item.id for item in self.queue.values() if item.is_running]
+        if not item_ids:
+            return {}
         item_ids = list(set(item_ids))
-        changed = [self.queue[item_id].refresh() for item_id in item_ids if item_id in self.queue]
-        return changed and any(changed)
-
-    def keep_refreshing(self , refresh_interval : int = 1) -> None:
-        """Legacy name for polling the DB for backend-side task updates.
-
-        The previous implementation blocked forever (``while True`` + ``sleep``),
-        so a Streamlit script never finished a run and **all widgets stopped
-        responding**. Interactive code should call
-        :func:`~src.interactive.main.util.control.render_task_queue_backend_poll`
-        instead; this method is kept as a no-op for accidental callers.
-
-        Parameters
-        ----------
-        refresh_interval:
-            Ignored; retained for API compatibility.
-        """
-        _ = refresh_interval
+        changed = {item_id: self.queue[item_id].refresh() for item_id in item_ids if item_id in self.queue}
+        if orphan_ids := [item_id for item_id in item_ids if item_id not in self.queue]:
+            self.task_db.clear_backend_updated_tasks(orphan_ids)
+        return {k : v for k, v in changed.items() if v}
     
     def sync(self) -> None:
         '''sync tasks in record into current queue'''

@@ -4,7 +4,7 @@ from typing import Literal , Callable
 
 from src.proj import PATH
 
-from src.interactive.main.util import SC , get_script_page , print_page_header , render_task_queue_backend_poll
+from src.interactive.main.util import SC , get_script_page , print_page_header
 
 PAGE_NAME = 'task_queue'
 
@@ -257,7 +257,7 @@ def main() -> None:
     """Entry point for the task queue page."""
     print_page_header(PAGE_NAME)
     show_task_queue()
-    render_task_queue_backend_poll()
+    SC.task_queue_backend_refresh()
 
 if __name__ == '__main__':
     main() 

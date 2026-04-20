@@ -134,12 +134,12 @@ class ModuleData:
     @property
     def secid(self):
         """Security universe from the ``'y'`` block."""
-        return self.y.secid
+        return self.blocks['y'].secid
 
     @property
     def date(self):
         """Date range from the ``'y'`` block."""
-        return self.y.date
+        return self.blocks['y'].date
 
     @property
     def enable_cache(self):
@@ -235,8 +235,8 @@ class ModuleData:
                 self.blocks[key].merge_others(ext_block , inplace = True)
                 if i == 0:
                     assert key == 'y' , f'y must be the first key'
-                    secid = self.secid_filter(self.blocks[key].secid) # use the y_secid to align all other blocks in next step
-                    date = self.date_filter(self.blocks[key].date) # use the y_date to align all other blocks in next step
+                    self.blocks[key] = self.date_filter.filter_block(self.secid_filter.filter_block(self.blocks[key]))
+                    secid , date = self.blocks[key].secid , self.blocks[key].date # use the y_secid and y_date to fasten the loading of other blocks in next step
         return self
 
     def align_blocks(self):
@@ -321,40 +321,6 @@ class ModuleData:
         """Normalise a data-type key via ``data_type_abbr``."""
         return data_type_abbr(data_type)
 
-    def filter_dates(self , start : int | None = None , end : int | None = None , inplace = False):
-        """Restrict all blocks to dates in [start, end]; returns self (optionally a copy)."""
-        if start is None and end is None:
-            return self
-        if not inplace:
-            self = self.copy()
-        date = CALENDAR.slice(self.date , start , end)
-        for block in self.blocks.values():
-            block = block.align_date(date , inplace = True)
-        return self
-
-    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
-        """
-        Keep (or exclude) specific secids from all blocks.
-
-        Parameters
-        ----------
-        secid : array-like | None
-            secids to keep or exclude.
-        exclude : bool
-            If True, remove the listed secids instead of keeping them.
-        inplace : bool
-            Modify in-place; otherwise return a copy.
-        """
-        if secid is None:
-            return self
-        if not inplace:
-            self = self.copy()
-        mask = np.isin(self.secid , secid)
-        secid = self.secid[~mask] if exclude else self.secid[mask]
-        for block in self.blocks.values():
-            block = block.align_secid(secid , inplace = True)
-        return self
-
 class SecidFilter:
     """
     Callable filter that subsets a security universe array.
@@ -387,6 +353,10 @@ class SecidFilter:
     def __call__(self , secid : np.ndarray) -> np.ndarray:
         """Apply the configured filter to ``secid`` and return the filtered array."""
         return self.filter(secid)
+
+    def filter_block(self , block : DataBlock) -> DataBlock:
+        """Apply the filter to a single block."""
+        return block.align_secid(self.filter(block.secid) , inplace = True)
 
     def filter_blocks(self , blocks : dict[str,DataBlock]) -> dict[str,DataBlock]:
         """Apply the filter to all blocks in the dict (aligns secid axis of each block)."""
@@ -444,10 +414,13 @@ class DateFilter:
             assert len(dates) == 2 , f'input.filter.date {value} is not valid , should be yyyyMMdd~yyyyMMdd'
             self.filter = partial(self.slice , start = int(dates[0]) if dates[0] else None , end = int(dates[1]) if dates[1] else None)
 
-        
     def __call__(self , date : np.ndarray) -> np.ndarray:
         """Apply the date filter to ``date`` and return the filtered array."""
         return self.filter(date)
+
+    def filter_block(self , block : DataBlock) -> DataBlock:
+        """Apply the date filter to a single block."""
+        return block.align_date(self.filter(block.date) , inplace = True)
 
     def filter_blocks(self , blocks : dict[str,DataBlock]) -> dict[str,DataBlock]:
         """Apply the date filter to all blocks' date axis."""

@@ -1,6 +1,6 @@
 """Non-instantiable project facade: config namespaces, verbosity, logging, and shared instances."""
 from __future__ import annotations
-from typing import Any
+from typing import Any , Literal
 
 from src.__version__ import __version__
 from src.proj.core import Silence , NoInstanceMeta
@@ -34,26 +34,32 @@ class Proj(metaclass=ProjMeta):
         return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
 
     @classmethod
-    def print_info(cls , script_level : bool = True , identifier = 'project_initialized'):
+    def print_info(cls , once_type : Literal['os' , 'script'] | None = None , identifier = 'project_initialized'):
         """
         Print project info once per process (script: ``Proj.instances`` flag; OS: env var).
 
         Warns if this host is marked ``cuda_server`` but CUDA is unavailable.
         """
-        import torch , os
+        import torch
         from src.proj.log import Logger
         
-        def _print_project_info():
-            Logger.stdout_pairs(cls.info() , title = 'Project Info:')
-            if MACHINE.cuda_server and not torch.cuda.is_available():
-                Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
+        # def _print_project_info():
+        #     Logger.stdout_pairs(cls.info() , title = 'Project Info:')
+        #     if MACHINE.cuda_server and not torch.cuda.is_available():
+        #         Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
 
-        if script_level and not getattr(cls.instances , identifier , False):
-            _print_project_info()
-            setattr(cls.instances , identifier , True)
-        elif not script_level and identifier not in os.environ:
-            _print_project_info()
-            os.environ[identifier] = "1"
+        # if script_level and not getattr(cls.instances , identifier , False):
+        #     _print_project_info()
+        #     setattr(cls.instances , identifier , True)
+        # elif not script_level and identifier not in os.environ:
+        #     _print_project_info()
+        #     os.environ[identifier] = "1"
+
+        object = 'logger' if once_type == 'script' else 'os'
+        Logger.only_once(cls.info() , printer = Logger.stdout_pairs , title = 'Project Info:' , object = object , mark = identifier)
+        if MACHINE.cuda_server and not torch.cuda.is_available():
+            Logger.only_once(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status' , printer = Logger.error , object = object , mark = identifier)
+
 
     @classmethod
     def print_disk_info(cls):

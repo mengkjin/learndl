@@ -1,8 +1,8 @@
 """Run-once guards for callables keyed by object identity and a user mark."""
-
+import os
 import functools
 import threading
-from typing import Any, Callable , Iterable
+from typing import Any, Callable , Iterable , Literal
 
 class Once:
     """
@@ -43,18 +43,27 @@ class Once:
     lock = threading.Lock()
 
     @classmethod
-    def run(cls, func: Callable, func_args : Iterable, func_kwargs : dict , mark: Any = 'default' , object: Any | None = None) -> Any:
-        key = (object.__class__.__name__ , id(object) , mark)
+    def run(cls, func: Callable, func_args : Iterable, func_kwargs : dict , mark: Any = 'default' , object: Any | None | Literal['os'] = None) -> Any:
         with cls.lock:
-            execute_mark = key not in cls._executed
-            if execute_mark:
-                cls._executed.add(key)
+            if object == 'os':
+                os_key = f'_learndl_once_identifier_{mark}'
+                execute_mark = os_key not in os.environ
+                if execute_mark:
+                    os.environ[os_key] = "1"
+            else:
+                key = (object.__class__.__name__ , id(object) , mark)
+                execute_mark = key not in cls._executed
+                if execute_mark:
+                    cls._executed.add(key)
         if execute_mark:
             try:
                 return func(*func_args, **func_kwargs)
             except Exception:
                 with cls.lock:
-                    cls._executed.remove(key)
+                    if object == 'os':
+                        os.environ.pop(os_key)
+                    else:
+                        cls._executed.remove(key)
                 raise
         else:
             return None

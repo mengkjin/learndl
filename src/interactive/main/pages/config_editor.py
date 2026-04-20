@@ -4,7 +4,7 @@ import streamlit as st
 from src.proj import PATH
 from src.interactive.frontend.frontend import YAMLFileEditor
 
-from src.interactive.main.util import SC , print_page_header , render_task_queue_backend_poll
+from src.interactive.main.util import SC , print_page_header
     
 PAGE_NAME = 'config_editor'
 
@@ -26,7 +26,7 @@ def main() -> None:
     """Entry point for the config editor page."""
     print_page_header(PAGE_NAME)
     show_config_editor()
-    render_task_queue_backend_poll()
+    SC.task_queue_backend_refresh()
     
 if __name__ == '__main__':
     main() 

@@ -157,7 +157,7 @@ class AutoRunTask:
         self.catchers.enter(self.task_full_name , self.task_name , self.init_time)
         self.status = 'Running'
         self.set_verbosity()
-        Proj.print_info(script_level = True)
+        Proj.print_info(once_type = 'script')
         Logger.divider()
         return self
 

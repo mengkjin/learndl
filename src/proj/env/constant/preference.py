@@ -9,19 +9,19 @@ class Preference:
     @property
     def project(self) -> dict[str , Any]:
         """Get the project preference"""
-        return MACHINE.config.get('preference/project')
+        return MACHINE.config.get('constant/preference/project')
 
     @property
     def interactive(self) -> dict[str , Any]:
         """Get the interactive preference"""
-        return MACHINE.config.get('preference/interactive')
+        return MACHINE.config.get('constant/preference/interactive')
 
     @property
     def logger(self) -> dict[str , Any]:
         """Get the logger preference"""
-        return MACHINE.config.get('preference/logger')
+        return MACHINE.config.get('constant/preference/logger')
 
     @property
     def shell_opener(self) -> dict[str , Any]:
         """Get the shell opener preference"""
-        return MACHINE.config.get('preference/shell_opener')
+        return MACHINE.config.get('constant/preference/shell_opener')

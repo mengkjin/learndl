@@ -310,7 +310,9 @@ class DataModule(BaseDataModule):
         self.y_std = self.standardize_y(y_full , None , None , no_weight = True)[0]
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
-        valid_sampled = self.multiple_valid(valid_x , self.step_idx , all_valid=(self.config.module_type == 'nn'))
+        valid_y = self.y_std if self.stage == 'fit' else None
+
+        valid_sampled = self.multiple_valid(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
         y_sampled , w_sampled = self.standardize_y(self.y_std , valid_sampled , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
@@ -320,20 +322,32 @@ class DataModule(BaseDataModule):
             gc.collect() 
             torch.cuda.empty_cache()
 
-    def multiple_valid(self , x : dict[str,torch.Tensor] , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
+    def multiple_valid(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
         '''
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
         others : rolling window non-nan , default as self.seqy
         '''
-        if not x:
+        valid_y = None if y is None else finite_position(y, index1 , 1)
+
+        if x:
+            finites = torch.stack(
+                [finite_position(v,index1,self.seq_lens[k],self.seq_steps[k],k in DataBlockNorm.DIVLAST,all_valid) for k , v in x.items()] ,
+                dim = -1
+            )
+            valid_x = finites.all(dim=-1) if all_valid else finites.any(dim=-1)
+        else:
+            valid_x = None
+
+        if valid_y is None and valid_x is None:
             return None
-        finites = torch.stack(
-            [finite_position(v,index1,self.seq_lens[k],self.seq_steps[k],k in DataBlockNorm.DIVLAST,all_valid) for k , v in x.items()] ,
-            dim = -1
-        )
-        return finites.all(dim=-1) if all_valid else finites.any(dim=-1)
-     
+        elif valid_y is None:
+            return valid_x
+        elif valid_x is None:
+            return valid_y
+        else:
+            return valid_x * valid_y
+        
     def standardize_y(self , y : torch.Tensor , valid : torch.Tensor | None , index1 : torch.Tensor | None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
         '''standardize y and weight'''
         y = y[:,index1].clone() if index1 is not None else y.clone()

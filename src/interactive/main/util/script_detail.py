@@ -30,7 +30,7 @@ from src.interactive.frontend import (
 
 from src.proj import PATH , MACHINE
 
-from .control import SC , render_task_queue_backend_poll
+from .control import SC
 from .page import get_script_page , print_page_header
 
 def on_first_page(max_page : int) -> None:
@@ -84,7 +84,7 @@ def show_script_detail(script_key : str):
     show_param_settings(runner)
     SC.get_control_panel().buttons['script-runner-run'].refresh(runner)
     show_report_main(runner)
-    render_task_queue_backend_poll()
+    SC.task_queue_backend_refresh()
     
 def clear_and_show(show_func : Callable) -> Callable:
     """Decorator: render *show_func* into a persistent ``st.empty()`` placeholder.

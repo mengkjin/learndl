@@ -90,13 +90,11 @@ class Metrics:
     def calculate(self , dataset : Literal['train','valid','test','predict'] , batch_key : Any , batch_data : BatchData):
         '''Calculate loss(with gradient), penalty , accuracy'''
         self.new_batch(batch_key = batch_key)
-
         accuracies = self.accuracy_function.accuracies(batch_data, self.which_output , self.which_label , require_grad = False)
         if self.module_type == 'nn' and dataset in ['train','valid']:
             losses = self.loss_function.losses(batch_data , self.which_output , self.which_label , require_grad = dataset == 'train')
         else:
             losses = {}
-
         self.batch_metrics.set_values(accuracies , losses)
         self.collect_batch()
         return self

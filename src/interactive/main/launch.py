@@ -32,7 +32,7 @@ def main() -> None:
 
     Prints project info, builds the multi-page navigation object, and runs it.
     """
-    Proj.print_info(script_level = False)
+    Proj.print_info(once_type = 'os')
     pg = page_setup(navigation_position = 'both')
     pg.run()
     

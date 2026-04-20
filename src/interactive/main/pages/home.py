@@ -5,7 +5,7 @@ import psutil
 
 from src.proj import Const
 from src.interactive.frontend.frontend import expander_subheader
-from src.interactive.main.util import print_page_header , render_task_queue_backend_poll
+from src.interactive.main.util import SC , print_page_header
 
 PAGE_NAME = 'home'
 
@@ -95,7 +95,7 @@ def main() -> None:
     show_tutorial()
     show_system_info()
     show_pending_features()
-    render_task_queue_backend_poll()
+    SC.task_queue_backend_refresh()
     
 if __name__ == '__main__':
     main() 

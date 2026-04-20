@@ -2,7 +2,7 @@ import streamlit as st
 import re
 
 from src.interactive.backend import ScriptRunner
-from src.interactive.main.util import SC , get_script_page , print_page_header , render_task_queue_backend_poll
+from src.interactive.main.util import SC , get_script_page , print_page_header
 
 PAGE_NAME = 'script_structure'
 
@@ -52,7 +52,7 @@ def show_script_runner(runner: ScriptRunner):
 def main():
     print_page_header(PAGE_NAME)
     show_script_structure() 
-    render_task_queue_backend_poll()
+    SC.task_queue_backend_refresh()
 
 if __name__ == '__main__':
     main() 

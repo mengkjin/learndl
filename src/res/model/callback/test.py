@@ -44,11 +44,10 @@ class BasicTestResult(BaseCallBack):
         self.test_dfs_date.append(df_date)
 
     def complete_test_df(self , vb_level : Any = 3) -> pd.DataFrame:
-        if self.config.is_resuming:
-            df = DB.load_df(self.path_test_df).dropna()
-        else:
-            df = pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
-        df = pd.concat([df , *self.test_dfs_date])
+        test_dfs = [df for df in self.test_dfs_date if not df.empty]
+        if self.config.is_resuming and not (df := DB.load_df(self.path_test_df).dropna()).empty:
+            test_dfs.append(df)
+        df = pd.concat(test_dfs) if test_dfs else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
         preds = self.trainer.record.get_preds(target_dates)
@@ -60,8 +59,10 @@ class BasicTestResult(BaseCallBack):
                 warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
                 return subdf[['pred']].corrwith(subdf['label'], method='spearman')
         new_df = grouped.apply(df_ic , include_groups = False).rename(columns = {'pred' : 'value'}).reset_index(drop=False)
-
-        df = pd.concat([df , new_df]).drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
+        if df.empty:
+            df = new_df
+        elif not new_df.empty:
+            df = pd.concat([df , new_df]).drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         
         DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 'never')
