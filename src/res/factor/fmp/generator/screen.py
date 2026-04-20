@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any , Literal
 
-from src.proj import CONST
+from src.proj import Const
 from .basic import BasicCreatorConfig , BasicPortfolioCreator
 
 builder_type = 'screen'
@@ -14,12 +14,12 @@ class ScreeningPortfolioCreatorConfig(BasicCreatorConfig):
     Then, the stocks are sorted by a sorting alpha (e.g. choose top 50 of gru_day_V1)
 
     kwargs:
-        sorter          : str | list[str] = CONST.Conf.Fmp.default[builder_type]['sorter'] , source and key of alpha to be used for sorting
+        sorter          : str | list[str] = CONST.Fmp.default[builder_type]['sorter'] , source and key of alpha to be used for sorting
     '''
 
     def __init__(
         self , 
-        sorter : str | list[str] = CONST.Conf.Fmp.default[builder_type]['sorter'] , 
+        sorter : str | list[str] = Const.Factor.FMP.creator[builder_type]['sorter'] , 
         screener : Literal['self'] = 'self' ,
         **kwargs
     ):

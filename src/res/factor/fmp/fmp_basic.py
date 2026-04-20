@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from src.proj import CONST
+from src.proj import Const
 
 from ..util import Portfolio , Benchmark , AlphaModel , Port
 
@@ -59,10 +59,10 @@ def get_strategy_name(category : str , strategy : str = 'default' , kwargs : dic
     kwargs = kwargs or {}   
     if not strategy or strategy == 'default':
         if category == 'top':
-            n = kwargs.get('n_best' , CONST.Conf.Fmp.default['top']['n_best'])
+            n = kwargs.get('n_best' , Const.Factor.FMP.creator['top']['n_best'])
             strategy = f'Top{n:_>3d}'
         elif category in ['screen' , 'revscreen' , 'reinforce']:
-            ratio = kwargs.get('screen_ratio' , CONST.Conf.Fmp.default['generator']['screen_ratio'])
+            ratio = kwargs.get('screen_ratio' , Const.Factor.FMP.creator['generator']['screen_ratio'])
             strategy = f'{ratio * 100:.0f}pct'
         elif category == 'optim':
             strategy = os.path.basename(kwargs['config_path']) if 'config_path' in kwargs else 'default'

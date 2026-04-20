@@ -6,7 +6,7 @@ from typing import Any , Literal
 from src.proj.env import MACHINE
 from src.proj.core import singleton
 
-__all__ = ['FactorConfig' , 'Factor']
+__all__ = ['FactorConstants']
 
 @singleton
 class FactorUpdateConfig:
@@ -22,19 +22,23 @@ class FactorUpdateConfig:
     @property
     def start(self) -> int:
         """start date of factor update"""
-        return 20110101 if MACHINE.updatable else 20241101
+        if not hasattr(self , '_start'):
+            self._start = MACHINE.config.get('constant/default/factor' , 'update/start') if MACHINE.updatable else MACHINE.config.get('constant/default/factor' , 'update/test_start')
+        return self._start
     @property
     def end(self) -> int:
         """end date of factor update"""
-        return 20401231 if MACHINE.updatable else 20241231
+        if not hasattr(self , '_end'):
+            self._end = MACHINE.config.get('constant/default/factor' , 'update/end') if MACHINE.updatable else MACHINE.config.get('constant/default/factor' , 'update/test_end')
+        return self._end
     @property
     def step(self) -> int:
         """step of factor update"""
-        return 5
+        return MACHINE.config.get('constant/default/factor' , 'update/step')
     @property
     def init_date(self) -> int:
         """uniforminit date of factor update"""
-        return 20110101
+        return MACHINE.config.get('constant/default/factor' , 'update/init_date')
     @property
     def target_dates(self) -> np.ndarray:
         """target dates of factor update"""
@@ -174,27 +178,34 @@ class PortfolioOptimizationConfig:
     @property
     def default(self) -> dict[str , Any]:
         """default portfolio optimization config"""
-        if not hasattr(self, '_default'):
-            self._default = MACHINE.configs('util' , 'factor' , 'default_opt_config')
-        return self._default
+        return MACHINE.config.get('algo/opt_portfolio/default')
     @property
     def custom(self) -> dict[str , Any]:
         """custom portfolio optimization config"""
-        if not hasattr(self, '_custom'):
-            self._custom = MACHINE.configs('util' , 'factor' , 'custom_opt_config')
-        return self._custom
+        return MACHINE.config.get('algo/opt_portfolio/custom')
 
-class _StockFactorDefinitionMetaType:
-    def __get__(self,instance,owner) -> list[str]:
+@singleton
+class StockFactorDefinitionConfig:
+    """
+    Hierarchical labels for stock factors and validation helpers:
+    - meta_type: meta type of stock factor
+    - category0: category0 of stock factor
+    - category1: category1 of stock factor
+    - cat0_to_meta: map a category0 label to coarse meta type (stock/market/affiliate/pooling)
+    - cat0_to_cat1: get the possible category1 of the category0 of stock factor
+    - cat1_to_cat0: get the category0 given category1 of stock factor
+    - validate_categories: raise ``ValueError`` if ``category1`` is not allowed under ``category0``
+    """
+    @property
+    def meta_type(self) -> list[str]:
+        """meta type of stock factor"""
         return [
             'stock' , 'market' , 'affiliate' , 'pooling'
         ]
-
-    def __set__(self,instance,value):
-        raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
-
-class _StockFactorDefinitionCat0:
-    def __get__(self,instance,owner) -> list[str]:
+    
+    @property
+    def category0(self) -> list[str]:
+        """category0 of stock factor"""
         return [
             'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' ,
             'market' ,
@@ -202,11 +213,9 @@ class _StockFactorDefinitionCat0:
             'pooling' , 
         ]
 
-    def __set__(self,instance,value):
-        raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
-
-class _StockFactorDefinitionCat1:
-    def __get__(self,instance,owner) -> dict[str , list[str] | None]:
+    @property
+    def category1(self) -> dict[str , list[str] | None]:
+        """category1 of stock factor"""
         return {
             'external' : ['sellside'] ,
             'risk' : ['style'] ,
@@ -219,47 +228,11 @@ class _StockFactorDefinitionCat1:
             'alternative' : None ,
             'market' : ['market_event']
         }
-    def __set__(self,instance,value):
-        raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
 
-class CategoryError(Exception): 
-    """Invalid factor category0/category1 combination."""
-
-@singleton
-class StockFactorDefinitionConfig:
-    """
-    Hierarchical labels for stock factors and validation helpers:
-    - meta_type: meta type of stock factor
-    - category0: category0 of stock factor
-    - category1: category1 of stock factor
-    - cat0_to_meta: map a category0 label to coarse meta type (stock/market/affiliate/pooling)
-    - cat0_to_cat1: get the possible category1 of the category0 of stock factor
-    - cat1_to_cat0: get the category0 given category1 of stock factor
-    - validate_categories: raise ``CategoryError`` if ``category1`` is not allowed under ``category0``
-    """
-    _META = _StockFactorDefinitionMetaType()
-    _CAT0 = _StockFactorDefinitionCat0()
-    _CAT1 = _StockFactorDefinitionCat1()
-
-    @property
-    def meta_type(self) -> list[str]:
-        """meta type of stock factor"""
-        return self._META
-    
-    @property
-    def category0(self) -> list[str]:
-        """category0 of stock factor"""
-        return self._CAT0
-    @property
-    def category1(self) -> dict[str , list[str] | None]:
-        """category1 of stock factor"""
-        return self._CAT1
-
-    @classmethod
-    def cat0_to_meta(cls , category0 : str) -> Literal['stock' , 'market' , 'affiliate' , 'pooling']:
+    def cat0_to_meta(self , category0 : str) -> Literal['stock' , 'market' , 'affiliate' , 'pooling']:
         """Map a category0 label to coarse meta type (stock/market/affiliate/pooling)."""
-        if category0 not in cls._CAT0:
-            raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
+        if category0 not in self.category0:
+            raise ValueError(f'category0 is should be in {self.category0}, but got {category0}')
         if category0 == 'market':
             return 'market'
         elif category0 in ['risk' , 'external']:
@@ -269,13 +242,11 @@ class StockFactorDefinitionConfig:
         else:
             return 'stock'
             
-    @classmethod
-    def cat0_to_cat1(cls , category0 : str) -> list[str] | None:
+    def cat0_to_cat1(self , category0 : str) -> list[str] | None:
         """Get the possible category1 of the category0 of stock factor"""
-        return cls._CAT1[category0]
+        return self.category1[category0]
 
-    @classmethod
-    def cat1_to_cat0(cls , category1 : str) -> str:
+    def cat1_to_cat0(self , category1 : str) -> str:
         """Get the category0 given category1 of stock factor"""
         match category1:
             case 'quality' | 'growth' | 'value' | 'earning':
@@ -300,22 +271,34 @@ class StockFactorDefinitionConfig:
                 raise ValueError(f'undefined category1: {category1}')
         return category0
 
-    @classmethod
-    def validate_categories(cls , category0 : str , category1 : str) -> None:
-        """Raise ``CategoryError`` if ``category1`` is not allowed under ``category0``."""
-        if category0 not in cls._CAT0:
-            raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
+    def validate_categories(self , category0 : str , category1 : str) -> None:
+        """Raise ``ValueError`` if ``category1`` is not allowed under ``category0``."""
+        if category0 not in self.category0:
+            raise ValueError(f'category0 is should be in {self.category0}, but got {category0}')
 
         if not category1:
-            raise CategoryError('category1 is not set')
+            raise ValueError('category1 is not set')
 
-        if (category1_list := cls._CAT1[category0]):
+        if (category1_list := self.category1[category0]):
             if category1 not in category1_list:
-                raise CategoryError(f'category1 is should be in {category1_list}, but got {category1}')
+                raise ValueError(f'category1 is should be in {category1_list}, but got {category1}')
+
+@singleton
+class FMPConfig:
+    """
+    Thin view over YAML-loaded FMP metadata:
+    - default: default FMP config
+    """
+    @property
+    def creator(self) -> dict[str , dict]:
+        """default FMP config"""
+        if not hasattr(self , '_creator'):
+            self._creator = MACHINE.config.get('constant/default/factor' , 'factor_model_portfolio/creator')
+        return self._creator
 
 
 @singleton
-class FactorConfig:
+class FactorConstants:
     """Aggregate accessor for factor-related sub-configs (UPDATE, RISK, BENCH, ...):
     - UPDATE: factor update config
     - RISK: risk model config
@@ -324,50 +307,45 @@ class FactorConfig:
     - ROUNDING: rounding config
     - OPTIM: portfolio optimization config
     - STOCK: stock factor definition config
+    - FMP: FMP config
     """
-
-    _update = FactorUpdateConfig()
-    _risk = RiskModelConfig()
-    _bench = BenchmarksConfig()
-    _trade = TradeConfig()
-    _rounding = RoundingConfig()
-    _optim = PortfolioOptimizationConfig()
-    _stock = StockFactorDefinitionConfig()
 
     @property
     def UPDATE(self):
         """config of factor update , include start , end , step , init_date"""
-        return self._update
+        return FactorUpdateConfig()
 
     @property
     def RISK(self):
         """config of risk model , include market , style , indus , common"""
-        return self._risk
+        return RiskModelConfig()
 
     @property
     def BENCH(self):
         """config of benchmarks , include availables , defaults , categories , none"""
-        return self._bench
+        return BenchmarksConfig()
 
     @property
     def TRADE(self):
         """config of trade cost , include default , harvest , yale"""
-        return self._trade
+        return TradeConfig()
 
     @property
     def ROUNDING(self):
         """config of rounding , include weight , exposure , contribution , ret , turnover"""
-        return self._rounding
+        return RoundingConfig()
 
     @property
     def OPTIM(self):
         """config of portfolio optimization , include default , custom"""
-        return self._optim
+        return PortfolioOptimizationConfig()
 
     @property
     def STOCK(self):
         """config of stock factor definition , include category0 , category1 , cat0_to_cat1 , cat1_to_cat0 , validate_categories"""
-        return self._stock
-    
+        return StockFactorDefinitionConfig()
 
-Factor = FactorConfig()
+    @property
+    def FMP(self):
+        """config of FMP , include creator"""
+        return FMPConfig()

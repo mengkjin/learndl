@@ -1,6 +1,6 @@
 from typing import Any , Literal
 
-from src.proj import CONST
+from src.proj import Const
 
 from .basic import BasicCreatorConfig , BasicPortfolioCreator
 
@@ -14,13 +14,13 @@ class RevScreeningPortfolioCreatorConfig(BasicCreatorConfig):
     Then, the stocks are sorted by the target alpha (e.g. choose top 50 of pred)
 
     kwargs:
-        screener     : str | list[str] = CONST.Conf.Fmp.default[builder_type]['screener'] , source and key of alpha to be used for sorting
+        screener     : str | list[str] = CONST.Fmp.default[builder_type]['screener'] , source and key of alpha to be used for sorting
     '''
     slots = ['screener' , 'screen_ratio' , 'n_best' , 'turn_control' , 'buffer_zone' , 'no_zone' , 'indus_control']
 
     def __init__(
         self , 
-        screener : str | list[str] = CONST.Conf.Fmp.default[builder_type]['screener'] , 
+        screener : str | list[str] = Const.Factor.FMP.creator[builder_type]['screener'] , 
         sorter : Literal['self'] = 'self' ,
         **kwargs
     ):

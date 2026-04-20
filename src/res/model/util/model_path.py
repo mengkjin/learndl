@@ -11,7 +11,7 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , LogFile , DB , CALENDAR , CONST
+from src.proj import PATH , Logger , LogFile , DB , CALENDAR , Const
 from src.proj.util import torch_load
 
 from .core import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
@@ -472,7 +472,7 @@ class PredictionModel(ModelPath):
     '''
     START_DATE = 20170101
     FMP_STEP = 5
-    MODEL_DICT : dict[str,dict[str,Any]] = CONST.Conf.Model.SETTINGS['prediction']
+    MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
 
     def __new__(cls , *args , **kwargs) -> PredictionModel | Any:
         return super().__new__(cls , *args , **kwargs)
@@ -595,7 +595,7 @@ class HiddenExtractionModel(ModelPath):
     for a hidden extraction model to extract hidden states
     model dict stored in configs/proj/model_settings.yaml file under hidden_extraction section
     '''
-    MODEL_DICT : dict[str,dict[str,Any]] = CONST.Conf.Model.SETTINGS['hidden_extraction']
+    MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['hidden_extraction']
     def __new__(cls , *args , **kwargs) -> HiddenExtractionModel | Any:
         return super().__new__(cls , *args , **kwargs)
 

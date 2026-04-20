@@ -18,7 +18,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , DB , Proj , CALENDAR , CONST
+from src.proj import PATH , Logger , DB , Proj , CALENDAR , Const
 from src.data.util import DataBlock
 
 @dataclass
@@ -173,4 +173,4 @@ class FactorCategory1Loader(BlockLoader):
     @property
     def category0(self) -> str:
         """Get the category0 of the factor"""
-        return CONST.Conf.Factor.STOCK.cat1_to_cat0(self.category1)
+        return Const.Factor.STOCK.cat1_to_cat0(self.category1)

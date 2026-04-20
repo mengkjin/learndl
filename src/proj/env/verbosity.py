@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Any , Literal
 from src.proj.core import stderr , singleton
-from src.proj.env.constant import CONST
+
+from .machine import MACHINE
 
 __all__ = ['Verbosity']
 
@@ -51,11 +52,11 @@ class Verbosity:
     - ``is_max_level``: check if ``vb`` is at or above ``max``
     
     """
-    max = CONST.Pref.get('project' , 'vb_max' , 10)
-    min = CONST.Pref.get('project' , 'vb_min' , 0)
-    never = CONST.Pref.get('project' , 'vb_never' , 99)
-    always = CONST.Pref.get('project' , 'vb_always' , -99)
-    callback = CONST.Pref.get('project' , 'vb_level_callback' , 10)
+    max = MACHINE.config.get('constant/project' , 'vb_max' , default = 10)
+    min = MACHINE.config.get('constant/project' , 'vb_min' , default = 0)
+    never = MACHINE.config.get('constant/project' , 'vb_never' , default = 99)
+    always = MACHINE.config.get('constant/project' , 'vb_always' , default = -99)
+    callback = MACHINE.config.get('constant/project' , 'vb_level_callback' , default = 10)
 
     assert never > max > min > always , (never , max , min , always)
 
@@ -84,7 +85,7 @@ class Verbosity:
     def vb(self) -> int:
         """Current global verbosity (clamped to ``min``..``max`` when set)."""
         if not hasattr(self , '_vb'):
-            self._vb = CONST.Pref.get('project' , 'vb' , 1)
+            self._vb = MACHINE.config.get('constant/project' , 'vb' , default = 1)
         return self._vb
 
     @property

@@ -13,7 +13,7 @@ import pathlib , os
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from src.proj import Proj , CONST
+from src.proj import Proj , Const
 from src.interactive.main.util.navigation import page_setup
 
 file_path = str(pathlib.Path(__file__).absolute())
@@ -24,8 +24,8 @@ assert os.getcwd().lower() == path , \
 
 st.set_option('client.showSidebarNavigation', False)
 
-if CONST.Pref.get('interactive' , 'auto_refresh_interval' , 0) > 0:
-    st_autorefresh.st_autorefresh(interval = CONST.Pref.get('interactive' , 'auto_refresh_interval' , 0) * 1000)
+if (auto_refresh_interval := Const.Pref.interactive.get('auto_refresh_interval' , 0)) > 0:
+    st_autorefresh.st_autorefresh(interval = auto_refresh_interval * 1000)
   
 def main() -> None:
     """Bootstrap and run the Streamlit app.

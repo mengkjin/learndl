@@ -1,9 +1,10 @@
+import warnings
 import pandas as pd
 import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Logger , DB , Proj , CONST
+from src.proj import Logger , DB , Proj , Const
 from src.proj.util import dfs_to_excel , figs_to_pdf
 
 from src.res.factor.util import StockFactor
@@ -27,20 +28,9 @@ class BasicTestResult(BaseCallBack):
     def path_test_df(self): return self.snap_folder.joinpath('test_by_date.feather')
     @property
     def path_result(self): return self.config.base_path.rslt('basic_test.xlsx')
-    
-    def save_test_df(self , vb_level : Any = 3):
-        df = self.get_test_df()
-        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 'never')
-        Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
-
-    def get_test_df(self) -> pd.DataFrame:
-        df = pd.concat([DB.load_df(self.path_test_df) , self.test_df_date]) if self.config.is_resuming else self.test_df_date
-        df = df.drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
-                sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
-        return df
 
     def on_test_start(self): 
-        self.test_df_date = pd.DataFrame()
+        self.test_dfs_date : list[pd.DataFrame] = []
 
     def on_test_submodel_end(self):
         """update test_df_date and test_df_model"""
@@ -51,12 +41,38 @@ class BasicTestResult(BaseCallBack):
             'date' : self.metrics.epoch_batch_keys[-len(self.model_test_dates):] ,
             'value' : self.metrics.epoch_batch_accuracies[-len(self.model_test_dates):]
         }).query('date in @self.model_test_dates')
-        self.test_df_date = pd.concat([self.test_df_date , df_date])
+        self.test_dfs_date.append(df_date)
+
+    def complete_test_df(self , vb_level : Any = 3) -> pd.DataFrame:
+        if self.config.is_resuming:
+            df = DB.load_df(self.path_test_df).dropna()
+        else:
+            df = pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
+        df = pd.concat([df , *self.test_dfs_date])
+
+        target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
+        preds = self.trainer.record.get_preds(target_dates)
+
+        grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
+        def df_ic(subdf : pd.DataFrame , **kwargs):
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
+                warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
+                return subdf[['pred']].corrwith(subdf['label'], method='spearman')
+        new_df = grouped.apply(df_ic , include_groups = False).rename(columns = {'pred' : 'value'}).reset_index(drop=False)
+
+        df = pd.concat([df , new_df]).drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
+                sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
+        
+        DB.save_df(df , self.path_test_df , overwrite = True , vb_level = 'never')
+        Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
+
+        return df
 
     def on_test_end(self): 
         """update test_summary"""
-        self.save_test_df()
-        df_date = self.get_test_df().query('date in @self.test_full_dates')
+        df = self.complete_test_df()
+        df_date = df.query('date in @self.test_full_dates')
         if df_date.empty:
             return
 
@@ -171,7 +187,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def get_factor_for_factor_test(self):
         test_dates = self.test_dates[::5]
-        if CONST.Conf.Model.TRAIN.resume_test_factor_perf is False:
+        if Const.Model.resume_factor_perf is False:
             return self.get_factor(test_dates)
         else:
             saved_dates = FactorTestAPI.factor_stats_saved_dates(self.snap_folder)
@@ -181,10 +197,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
             return self.get_factor(target_dates).set_pseudo_date(test_dates)
 
     def get_factor_for_fmp_test(self):
-        if CONST.Conf.Model.TRAIN.resume_test_fmp is False:
+        if Const.Model.resume_fmp is False:
             return self.get_factor(self.test_dates)
-        elif CONST.Conf.Model.TRAIN.resume_test_fmp.startswith('trailing_'):
-            trailing_days = int(CONST.Conf.Model.TRAIN.resume_test_fmp.removeprefix('trailing_'))
+        elif Const.Model.resume_fmp.startswith('trailing_'):
+            trailing_days = int(Const.Model.resume_fmp.removeprefix('trailing_'))
             assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
             pred_last_date = self.trainer.record.resumed_last_pred_date
             port_last_date = FactorTestAPI.last_portfolio_date(self.snap_folder , self.fmp_tasks)
@@ -192,7 +208,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
             test_date_num = sum(self.test_dates > last_date) + trailing_days
             return self.get_factor(self.test_dates[-test_date_num:])
         else:
-            raise ValueError(f'Invalid resuming test fmp option: {CONST.Conf.Model.TRAIN.resume_test_fmp}')
+            raise ValueError(f'Invalid resuming test fmp option: {Const.Model.resume_fmp}')
 
 
     def factor_test(self , indent : int = 0 , vb_level : Any = 2):

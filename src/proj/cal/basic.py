@@ -22,7 +22,7 @@ class BasicCalendar:
     def __init__(self) -> None:
         """Load and merge the calendar, build 'full'/'cal'/'trd' DataFrame and accelerate use ndarray and index."""
         calendar = DB.load("information_ts", "calendar", missing_ok=False).loc[:, ["calendar", "trade"]]
-        reserved = pd.DataFrame(MACHINE.configs("util", "calendar", "calendar"))
+        reserved = pd.DataFrame(MACHINE.config.get('constant/data/calendar'))
         if not reserved.empty:
             calendar = pd.concat([calendar, reserved.loc[:, ["calendar", "trade"]]])
         calendar = calendar.drop_duplicates(subset="calendar", keep="first").sort_values("calendar")

@@ -3,7 +3,7 @@ import pandas as pd
 from abc import abstractmethod
 from typing import Any
 
-from src.proj import Logger , CONST
+from src.proj import Logger , Const
 from ...util import Port , AlphaModel , AlphaScreener , Amodel , AlphaComposite , PortCreator , PortCreateResult
 
 class BasicCreatorConfig:
@@ -16,12 +16,12 @@ class BasicCreatorConfig:
         self , 
         sorter : str | list[str] | None = None , 
         screener : str | list[str] | None = None , 
-        n_best : int = CONST.Conf.Fmp.default['generator']['n_best'] , 
-        turn_control : float = CONST.Conf.Fmp.default['generator']['turn_control'] , 
-        buffer_zone : float = CONST.Conf.Fmp.default['generator']['buffer_zone'] , 
-        no_zone : float = CONST.Conf.Fmp.default['generator']['no_zone'] , 
-        indus_control : float = CONST.Conf.Fmp.default['generator']['indus_control'] , 
-        screen_ratio : float = CONST.Conf.Fmp.default['generator']['screen_ratio'] , 
+        n_best : int = Const.Factor.FMP.creator['generator']['n_best'] , 
+        turn_control : float = Const.Factor.FMP.creator['generator']['turn_control'] , 
+        buffer_zone : float = Const.Factor.FMP.creator['generator']['buffer_zone'] , 
+        no_zone : float = Const.Factor.FMP.creator['generator']['no_zone'] , 
+        indus_control : float = Const.Factor.FMP.creator['generator']['indus_control'] , 
+        screen_ratio : float = Const.Factor.FMP.creator['generator']['screen_ratio'] , 
         **kwargs
     ):
         self.n_best = n_best

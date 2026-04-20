@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import Proj , Logger , CALENDAR , DB , Dates , CONST
+from src.proj import Proj , Logger , CALENDAR , DB , Dates , Const
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -76,11 +76,11 @@ class AccountConfig:
     @property
     def trade_cost(self): 
         if self.trade_engine == 'default':
-            return CONST.Conf.Factor.TRADE.default
+            return Const.Factor.TRADE.default
         elif self.trade_engine == 'harvest':
-            return CONST.Conf.Factor.TRADE.harvest
+            return Const.Factor.TRADE.harvest
         elif self.trade_engine == 'yale':
-            return CONST.Conf.Factor.TRADE.yale
+            return Const.Factor.TRADE.yale
         else:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
@@ -211,8 +211,8 @@ class PortfolioAccount:
         df = pd.concat([acc.df for acc in accs])
         old_index = [index for index in df.index.names if index]
         df = df.reset_index(old_index , drop = False).sort_values('model_date').reset_index(drop = True)
-        new_bm = np.setdiff1d(df['benchmark'] , CONST.Conf.Factor.BENCH.categories).tolist()
-        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONST.Conf.Factor.BENCH.categories + new_bm , ordered=True) 
+        new_bm = np.setdiff1d(df['benchmark'] , Const.Factor.BENCH.categories).tolist()
+        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = Const.Factor.BENCH.categories + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()  
         return df
@@ -418,7 +418,7 @@ class PortfolioAccountant:
         self.resume_path = resume_path
 
         vb_level = Proj.vb(vb_level)
-        if CONST.Conf.Model.TRAIN.resume_test_fmp_account:
+        if Const.Model.resume_fmp_account:
             self.resumed_account = PortfolioAccount.load(self.resume_path)
             if resume_drop_last:
                 last_model_date = self.resumed_account.max_model_date
@@ -488,12 +488,12 @@ class PortfolioAccountant:
             rets = self.get_rets(port_old , port_new , bench , ed)
             turn = port_new.turnover(port_old)
 
-            df.loc[mdate , 'pf'] = np.round(rets[f'pf_{self.config.price_type}'] , CONST.Conf.Factor.ROUNDING.ret)
-            df.loc[mdate , 'bm'] = np.round(rets['bm'] , CONST.Conf.Factor.ROUNDING.ret)
-            df.loc[mdate , 'overnight'] = np.round(rets[f'overnight_{self.config.price_type}'] , CONST.Conf.Factor.ROUNDING.ret)
-            df.loc[mdate , 'turn'] = np.round(turn , CONST.Conf.Factor.ROUNDING.ret)
+            df.loc[mdate , 'pf'] = np.round(rets[f'pf_{self.config.price_type}'] , Const.Factor.ROUNDING.ret)
+            df.loc[mdate , 'bm'] = np.round(rets['bm'] , Const.Factor.ROUNDING.ret)
+            df.loc[mdate , 'overnight'] = np.round(rets[f'overnight_{self.config.price_type}'] , Const.Factor.ROUNDING.ret)
+            df.loc[mdate , 'turn'] = np.round(turn , Const.Factor.ROUNDING.ret)
             for price_type in ['close' , 'open' , 'vwap']:
-                df.loc[mdate , f'pf_{price_type}'] = np.round(rets[f'pf_{price_type}'] , CONST.Conf.Factor.ROUNDING.ret)
+                df.loc[mdate , f'pf_{price_type}'] = np.round(rets[f'pf_{price_type}'] , Const.Factor.ROUNDING.ret)
             
             if self.config.analytic: 
                 df.loc[mdate , 'analytic']    = RISK_MODEL.get(mdate).analyze(port_new , bench , port_old) #type:ignore

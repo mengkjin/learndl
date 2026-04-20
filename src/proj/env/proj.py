@@ -4,26 +4,25 @@ from typing import Any
 
 from src.__version__ import __version__
 from src.proj.core import Silence , NoInstanceMeta
-from src.proj.env.machine import MACHINE
-from src.proj.env.constant import CONST
-
+from .machine import MACHINE
 from .verbosity import Verbosity
-from .files import LogWriterFile , UniqueFileList
-from .ins import InstanceCollection
+from .variable import LogWriterFile , UniqueFileList , InstanceCollection
 
 __all__ = ['Proj']
 
 class ProjMeta(NoInstanceMeta):
     """Metaclass for ``Proj``: blocks direct instantiation and exposes module-level descriptors."""
     log_writer = LogWriterFile()
-    debug_mode = CONST.Pref.get('project' , 'debug_mode' , False)
-    show_vb_level = CONST.Pref.get('project' , 'show_vb_level' , False)
-
+    
 
 class Proj(metaclass=ProjMeta):
     """Static entry point: ``Conf``, ``vb``, ``instances``, paths to log writer and file lists."""
     vb = Verbosity()
     silence = Silence()
+
+    debug_mode = MACHINE.config.get('constant/project' , 'debug_mode' , default = False)
+    show_vb_level = MACHINE.config.get('constant/project' , 'show_vb_level' , default = False)
+
     instances = InstanceCollection()
     email_attachments = UniqueFileList('email_attachments')
     exit_files = UniqueFileList('exit_files')

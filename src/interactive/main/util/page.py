@@ -10,7 +10,7 @@ import streamlit as st
 from pathlib import Path
 from typing import Literal
 
-from src.proj import Proj , CONST
+from src.proj import Proj , Const
 
 from .control import SC , set_current_page
 
@@ -19,7 +19,7 @@ assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 
 INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
-PAGE_TITLE = f":red[:material/rocket_launch:] :rainbow[{CONST.Pref.get('interactive' , 'page_title' , 'Learndl')} (_v{Proj.version}_)]"
+PAGE_TITLE = f":red[:material/rocket_launch:] :rainbow[{Const.Pref.interactive.get('page_title' , 'Learndl')} (_v{Proj.version}_)]"
 
 PAGE_ICONS = {
     'home' : ':material/home:' ,

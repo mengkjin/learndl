@@ -3,7 +3,7 @@ import platform, torch , sys
 import streamlit as st
 import psutil
 
-from src.proj import CONST
+from src.proj import Const
 from src.interactive.frontend.frontend import expander_subheader
 from src.interactive.main.util import print_page_header , render_task_queue_backend_poll
 
@@ -83,10 +83,10 @@ def show_system_info() -> None:
         
 def show_pending_features() -> None:
     """Render warning badges for any pending features configured in preferences."""
-    if not CONST.Pref.get('interactive' , 'pending_features' , []):
+    if not (pending_features := Const.Pref.interactive.get('pending_features' , [])):
         return
     with expander_subheader('home-pending-features' , 'Pending Features' , ':material/pending_actions:' , True):
-        for feature in CONST.Pref.get('interactive' , 'pending_features' , []):
+        for feature in pending_features:
             st.warning(feature , icon = ":material/schedule:")
 
 def main() -> None:

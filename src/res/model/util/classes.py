@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any , final , Iterator , Literal , Sized
 from torch.utils.tensorboard import SummaryWriter as TBSummaryWriter
 
-from src.proj import Proj , Logger , DB , PATH , CONST
+from src.proj import Proj , Logger , DB , PATH , Const
 from src.proj.util import FilteredIterable
 from src.res.algo import AlgoModule
 from src.res.algo.nn.loss import MultiHeadLosses
@@ -471,7 +471,7 @@ class BaseTrainer(ModelStreamLine):
         return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else np.inf
     @property
     def batch_resumed(self): 
-        if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and CONST.Conf.Model.TRAIN.resume_test == 'last_pred_date':
+        if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and Const.Model.resume_test == 'last_pred_date':
             return sum(self.data.model_test_dates <= self.record.resumed_last_pred_date)
         else:
             return 0
@@ -1045,7 +1045,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         - only resume predictions before the last model date if resume option is 'last_model_date'
         - only resume predictions with all submodels
         """ 
-        if not self.config.is_resuming or not CONST.Conf.Model.TRAIN.resume_test:
+        if not self.config.is_resuming or not Const.Model.resume_test:
             return
         
         resume_info = f'Resume testing'
@@ -1063,12 +1063,12 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 models_all = pred_records.query('model_date <= @latest_model_date')
                 models_previous = pred_records.query('model_date < @latest_model_date')
                 
-                if CONST.Conf.Model.TRAIN.resume_test == 'last_model_date' and not models_previous.empty:
+                if Const.Model.resume_test == 'last_model_date' and not models_previous.empty:
                     self.resumed_models_finished = models_previous[['model_date' , 'model_num']].reset_index(drop=True)
                     self.resumed_last_pred_date = min(models_previous['max_pred_date'].max() , self.max_test_date)
                     self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
                     resume_info += f', recognize past saved preds before model date {latest_model_date}'
-                elif CONST.Conf.Model.TRAIN.resume_test == 'last_pred_date':
+                elif Const.Model.resume_test == 'last_pred_date':
                     if max_pred_date < self.max_test_date:
                         self.resumed_models_finished = models_previous[['model_date' , 'model_num']]
                         self.resumed_last_pred_date = max_pred_date

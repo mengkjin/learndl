@@ -37,7 +37,7 @@ class TushareUtils:
 
     @property
     def token(self):
-        return MACHINE.secret['accounts']['tushare']['token']
+        return MACHINE.secret.get('accounts' , 'tushare/token')
 
     @property
     def api(self):

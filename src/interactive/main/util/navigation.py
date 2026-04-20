@@ -10,7 +10,7 @@ from __future__ import annotations
 import streamlit as st
 from typing import Any, Literal
 
-from src.proj import CONST
+from src.proj import Const
 from src.interactive.frontend.logo import get_logo
 from src.interactive.frontend.style import style
 from src.interactive.backend.script import ScriptRunner
@@ -24,7 +24,7 @@ def page_config() -> None:
     :func:`style` to inject the project's custom CSS.
     """
     st.set_page_config(
-        page_title=CONST.Pref.get('interactive' , 'page_title' , 'Learndl'),
+        page_title = Const.Pref.interactive.get('page_title' , 'Learndl'),
         page_icon=":material/rocket_launch:",
         layout= 'wide' , # 'centered',
         initial_sidebar_state="expanded"
@@ -120,7 +120,7 @@ def script_links(show_dir: bool = False) -> None:
                 st.page_link(page['page'] , label = ' > '.join([f'**{parts[0].upper()}**' , *parts[1:]]) , icon = page['icon'] , help = page['help'])
             group = page['group']
 
-def page_setup(navigation_position : Literal['top', 'sidebar' , 'both'] = CONST.Pref.get('interactive' , 'navigation_position' , 'both')) -> Any:
+def page_setup(navigation_position : Literal['top', 'sidebar' , 'both'] | None = None) -> Any:
     """Apply page config and build navigation according to ``navigation_position``.
 
     - ``'top'``    — top bar only (hidden sidebar nav)
@@ -133,6 +133,8 @@ def page_setup(navigation_position : Literal['top', 'sidebar' , 'both'] = CONST.
     Returns:
         The ``st.navigation`` runner; call ``.run()`` to execute the active page.
     """
+    if navigation_position is None:
+        navigation_position = Const.Pref.interactive.get('navigation_position' , 'both')
     page_config()
     if navigation_position == 'top' or navigation_position == 'both':
         pg = top_navigation('top')

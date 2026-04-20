@@ -20,7 +20,7 @@ from abc import abstractmethod , ABCMeta
 from datetime import datetime
 from typing import Any , Type , Literal
 
-from src.proj import Proj , Logger , CALENDAR , Dates , Duration , CONST
+from src.proj import Proj , Logger , CALENDAR , Dates , Duration , Const
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -82,7 +82,7 @@ class PreProcessorProperty:
     def category0(self , owner) -> str:
         """Look up the category0 for a FactorPreProcessor via CONST config."""
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
-        return CONST.Conf.Factor.STOCK.cat1_to_cat0(owner.category1)
+        return Const.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def category1(self , owner) -> str:
         """Derive category1 by stripping ``'PrePro_'`` prefix from the class name."""

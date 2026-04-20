@@ -27,7 +27,7 @@ import polars as pl
 
 from typing import Any , Literal
 
-from src.proj import Proj , DB , CALENDAR , CONST
+from src.proj import Proj , DB , CALENDAR , Const
 from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
@@ -74,7 +74,7 @@ class PrePro_y(TradePreProcessor):
     """
     def block_loaders(self) -> dict[str,BlockLoader]:
         return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONST.Conf.Factor.RISK.indus, 'size'])}
+                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Const.Factor.RISK.indus, 'size'])}
     def final_feat(self):
         """All features are kept (return labels + neutralised variants)."""
         return None
@@ -208,7 +208,7 @@ class PrePro_week(TradePreProcessor):
 class PrePro_style(PreProcessor):
     """CNE5 style factor exposures (key: ``'style'``)."""
     def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONST.Conf.Factor.RISK.style)}
+        return {'style' : BlockLoader('models', 'tushare_cne5_exp', Const.Factor.RISK.style)}
 
     def final_feat(self):
         """Keep all style features."""
@@ -221,7 +221,7 @@ class PrePro_style(PreProcessor):
 class PrePro_indus(PreProcessor):
     """CNE5 industry factor exposures (key: ``'indus'``)."""
     def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONST.Conf.Factor.RISK.indus)}
+        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', Const.Factor.RISK.indus)}
 
     def final_feat(self):
         """Keep all industry features."""

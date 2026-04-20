@@ -22,8 +22,8 @@ class SellsideFTPDownloader(object):
     and downloading remote CSV files.
     """
     def __init__(self, source='msjg'):
-        assert source in MACHINE.secret['accounts']['sellside'] , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
-        self.ftp_param : dict[str , Any] = MACHINE.secret['accounts']['sellside'][source]
+        assert source in MACHINE.secret.get('accounts' , 'sellside') , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
+        self.ftp_param : dict[str , Any] = MACHINE.secret.get('accounts' , f'sellside/{source}')
         type = self.ftp_param.pop('type')
         assert type.startswith('ftp') , f'{source} is not a valid ftp source : {self.ftp_param}'
         if type.endswith('.disabled'):
@@ -59,7 +59,7 @@ class SellsideFTPDownloader(object):
 
     @classmethod
     def available_sources(cls) -> list[str]:
-        return [key for key , value in MACHINE.secret['accounts']['sellside'].items() if value['type'] == 'ftp']
+        return [key for key , value in MACHINE.secret.get('accounts' , 'sellside').items() if value['type'] == 'ftp']
 
 def main():
     connector = SellsideFTPDownloader()

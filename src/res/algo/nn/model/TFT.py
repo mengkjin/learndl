@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from typing import Any
 import math
 
-from src.proj import Logger , CONST
+from src.proj import Logger , Const
 
 class GatedResidualNetwork(nn.Module):
     """Gated Residual Network (GRN) building block for TFT.
@@ -211,7 +211,7 @@ class TemporalFusionTransformer(nn.Module):
     def __init__(
         self,
         input_dim : tuple[int,int] | tuple[int,int,int] = \
-            (6 , len(CONST.Conf.Factor.RISK.style),len(CONST.Conf.Factor.RISK.indus)), # aka , known dynamic dim , static dim
+            (6 , len(Const.Factor.RISK.style),len(Const.Factor.RISK.indus)), # aka , known dynamic dim , static dim
         hidden_dim: int = 16,
         label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used
         num_heads: int = 4,
@@ -244,7 +244,7 @@ class TemporalFusionTransformer(nn.Module):
         self.indus_dim = indus_dim
         self.indus_embed = indus_embed
 
-        assert self.static_dim == len(CONST.Conf.Factor.RISK.indus) , (input_dim , len(CONST.Conf.Factor.RISK.indus))
+        assert self.static_dim == len(Const.Factor.RISK.indus) , (input_dim , len(Const.Factor.RISK.indus))
         
         if indus_embed:
             self.indus_embedding = nn.Linear(self.static_dim , indus_dim)

@@ -3,7 +3,7 @@ from pathlib import Path
 from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount
 from src.res.model.model_module.application.trainer import ModelTrainer
 from src.res.factor.util.stats.aggregate import eval_period_ic_multi
-from src.proj import Logger , PATH , CONST , DB
+from src.proj import Logger , PATH , Const , DB
 
 from .util import wrap_update
 
@@ -29,7 +29,7 @@ def model_account_summary(by_max_columns : int = 12):
 
 def tracking_port_account_summary(by_max_columns : int = 12):
     acc_paths : dict[str , dict[str , Path]] = {}
-    for tport in CONST.Conf.TradingPort.tracking_ports:
+    for tport in Const.TradingPort.tracking_ports:
         available_paths = list(PATH.rslt_trade.joinpath('tracking', tport).glob('account.tar'))
         if available_paths:
             acc_paths[tport] = {'port':available_paths[0]} 
@@ -37,7 +37,7 @@ def tracking_port_account_summary(by_max_columns : int = 12):
 
 def backtest_port_account_summary(by_max_columns : int = 12):
     acc_paths : dict[str , dict[str , Path]] = {}
-    for tport in CONST.Conf.TradingPort.backtest_ports:
+    for tport in Const.TradingPort.backtest_ports:
         available_paths = list(PATH.rslt_trade.joinpath('backtest', tport).glob('account.tar'))
         if available_paths:
             acc_paths[tport] = {'port':available_paths[0]} 

@@ -6,7 +6,7 @@ to produce a context vector that attends over the GRU hidden state.
 import torch
 import torch.nn as nn
 
-from src.proj import CONST
+from src.proj import Const
 
 from .. import layer as Layer
 
@@ -54,7 +54,7 @@ class risk_att_gru(nn.Module):
 
     def __init__(
             self, 
-            input_dim    = (6,len(CONST.Conf.Factor.RISK.style),len(CONST.Conf.Factor.RISK.indus)),
+            input_dim    = (6,len(Const.Factor.RISK.style),len(Const.Factor.RISK.indus)),
             hidden_dim   = 2**5,
             att_dim      = 2**7 ,
             dropout      = 0.1,
@@ -66,10 +66,10 @@ class risk_att_gru(nn.Module):
         super().__init__()
         
         self.trade_gru = nn.GRU(input_dim[0] , hidden_dim , num_layers = rnn_layers , dropout = dropout , batch_first = True)
-        assert input_dim[1] == len(CONST.Conf.Factor.RISK.style) , \
-            (input_dim , (len(CONST.Conf.Factor.RISK.style),len(CONST.Conf.Factor.RISK.indus)))
-        assert input_dim[2] == len(CONST.Conf.Factor.RISK.indus) , \
-            (input_dim , (len(CONST.Conf.Factor.RISK.style),len(CONST.Conf.Factor.RISK.indus)))
+        assert input_dim[1] == len(Const.Factor.RISK.style) , \
+            (input_dim , (len(Const.Factor.RISK.style),len(Const.Factor.RISK.indus)))
+        assert input_dim[2] == len(Const.Factor.RISK.indus) , \
+            (input_dim , (len(Const.Factor.RISK.style),len(Const.Factor.RISK.indus)))
 
         if indus_embed:
             self.indus_embedding = nn.Linear(input_dim[-1] , indus_dim)

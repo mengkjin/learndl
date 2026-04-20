@@ -1,5 +1,5 @@
 from typing import Any , Literal
-from src.proj import CONST
+from src.proj import Const
 
 from .basic import BasicCreatorConfig , BasicPortfolioCreator
 
@@ -14,7 +14,7 @@ class TopStocksPortfolioCreatorConfig(BasicCreatorConfig):
     slots = ['n_best' , 'screener' , 'screen_ratio' , 'turn_control' , 'buffer_zone' , 'no_zone' , 'indus_control']
     def __init__(
         self , 
-        n_best : int = CONST.Conf.Fmp.default[builder_type]['n_best'] , 
+        n_best : int = Const.Factor.FMP.creator[builder_type]['n_best'] , 
         sorter : Literal['self'] = 'self' ,
         **kwargs
     ):

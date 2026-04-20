@@ -5,55 +5,39 @@
 
 ---
 
-## 1. Machine Configuration — `MACHINE`
+## 1. Project Environment Class — `MACHINE` , `PATH` , `Proj` , `Const`
 
-Singleton object loaded from `configs/proj/machine.yaml`. Read via `from src.proj.config import MACHINE`.
+# MACHINE: 
 
-Key attributes (≈20 total):
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `MACHINE.name` | str | Hostname identifier |
-| `MACHINE.data_root` | Path | Root directory for all data files |
-| `MACHINE.n_jobs` | int | Default parallelism level |
-| `MACHINE.cuda` | bool | Whether CUDA is available |
-| `MACHINE.device` | str | `'cuda'` or `'cpu'` |
-| `MACHINE.ram_gb` | float | Available RAM in GB |
-| `MACHINE.storage_type` | str | `'ssd'` or `'hdd'` — affects I/O strategy |
+Includes key attributes of the machine being used
+Read via `from src.proj.env import MACHINE`.
 
----
+# PATH:
 
-## 2. Path Management — `PATH`
-
-Static class with 50+ named paths. All paths are derived from `MACHINE.data_root` — **never hardcode paths**.
-
-```python
-from src.proj.path import PATH
+Static class with 50+ named paths. All paths are derived from `MACHINE.main_path` — **never hardcode paths**.
+Read via `from src.proj.env import PATH`
 
 PATH.data          # data root
-PATH.factor        # factor value store
+PATH.logs          # logs of project
 PATH.model         # trained model checkpoints
-PATH.prediction    # model prediction outputs
-PATH.portfolio     # portfolio weight files
-PATH.log           # log files
-PATH.config        # configs root
-# ... 40+ more
-```
+PATH.result        # general result of factor / tradingport
+PATH.conf          # configureation files
+...
 
 All return `pathlib.Path` objects. Use `PATH.xxx / 'subdir' / 'file.parquet'` for construction.
 
----
+# Const: 
 
-## 3. Constants — `CONST`, `Proj`, 
+Includes configuration / preference / default_value of various utilities
+Read via `from src.proj.env import Const`
 
-| Object  | Source                  | Purpose                                                          |
-| ------- | ----------------------- | ---------------------------------------------------------------- |
-| `CONST` | `src/proj/env/constant` | Global constants (universe lists, index codes, preference, etc.) |
-| `Proj`  | `src/proj/env/variable` | Global variables (verbosity, instance registry, etc.)            |
+# Proj: 
+
+Includes verbosity control / temporal files record / runtime instances record
+Read via `from src.proj.env import Proj`
 
 
----
-
-## 4. Trading Calendar — `CALENDAR`
+## 2. Trading Calendar — `CALENDAR`
 
 Static class with 50+ methods. Import: `from src.proj.calendar import CALENDAR`.
 
@@ -104,7 +88,7 @@ dates.loc(d)   # index of date d
 
 ---
 
-## 5. Database I/O
+## 3. Database I/O
 
 ### `DBPath` — path resolution for data files
 ```python
@@ -130,7 +114,7 @@ arr[i:j]    # lazy slice — only reads requested rows from disk
 
 ---
 
-## 6. Logging — `Logger`
+## 4. Logging — `Logger`
 
 Context manager and decorator-based logging. Import: `from src.proj.logger import Logger`.
 
@@ -160,7 +144,7 @@ Additional context managers in `src/proj/logger.py`:
 
 ---
 
-## 7. Singletons and Utility Patterns
+## 5. Singletons and Utility Patterns
 
 ### `SingletonMeta` — thread-safe singleton metaclass
 ```python
@@ -221,7 +205,7 @@ flat = FlattenDict({'a': {'b': 1, 'c': 2}})
 
 ---
 
-## 8. Numerical Utilities — `src/func/`
+## 6. Numerical Utilities — `src/func/`
 
 Infrastructure-level vectorized operations for numpy/tensor/pandas. No business logic.
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from scipy.stats import rankdata
 from typing import Any , Literal , Callable
 
-from src.proj import CONST
+from src.proj import Const
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 
@@ -299,7 +299,7 @@ class AlphaComponent:
 
     def __init__(self , name : str):
 
-        if name in CONST.Conf.Model.SETTINGS['prediction']:
+        if name in Const.Model.strategies['prediction']:
             alpha_type , alpha_name , alpha_column = 'pred' , name , None
         elif '@' in name:
             exprs = name.split('@')

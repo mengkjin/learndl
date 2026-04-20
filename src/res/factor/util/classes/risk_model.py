@@ -7,7 +7,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal
 
-from src.proj import DB , CONST , Proj
+from src.proj import DB , Const , Proj
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 
 from .general_model import GeneralModel
@@ -15,8 +15,8 @@ from .port import Port
 
 __all__ = ['RiskModel' , 'RiskProfile' , 'RiskAnalytic' , 'Attribution' , 'RISK_MODEL']
 
-_style = CONST.Conf.Factor.RISK.style
-_indus = CONST.Conf.Factor.RISK.indus
+_style = Const.Factor.RISK.style
+_indus = Const.Factor.RISK.indus
 
 @dataclass
 class Rmodel:
@@ -55,9 +55,9 @@ class Rmodel:
         return df.to_numpy(float).flatten()
     @property
     def common_factors(self): 
-        return CONST.Conf.Factor.RISK.common
+        return Const.Factor.RISK.common
     def FCS_aligned(self , secid : np.ndarray | Any = None):
-        F = self.F.loc[: , CONST.Conf.Factor.RISK.common]
+        F = self.F.loc[: , Const.Factor.RISK.common]
         C = self.C
         S = self.S
         if secid is not None: 
@@ -281,11 +281,11 @@ class RiskAnalytic:
 
     def rounding(self):
         if self.industry is not None: 
-            self.industry = self.industry.round(CONST.Conf.Factor.ROUNDING.exposure)
+            self.industry = self.industry.round(Const.Factor.ROUNDING.exposure)
         if self.style    is not None: 
-            self.style    = self.style.round(CONST.Conf.Factor.ROUNDING.exposure)
+            self.style    = self.style.round(Const.Factor.ROUNDING.exposure)
         if self.risk     is not None: 
-            self.risk     = self.risk.round(CONST.Conf.Factor.ROUNDING.exposure)
+            self.risk     = self.risk.round(Const.Factor.ROUNDING.exposure)
         return self
 
     def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
@@ -446,10 +446,10 @@ class Attribution:
     
     def rounding(self):
         decimals : dict[Any, int] = {
-            'portfolio' : CONST.Conf.Factor.ROUNDING.exposure , 
-            'benchmark' : CONST.Conf.Factor.ROUNDING.exposure , 
-            'active'    : CONST.Conf.Factor.ROUNDING.exposure , 
-            'contribution' : CONST.Conf.Factor.ROUNDING.contribution}
+            'portfolio' : Const.Factor.ROUNDING.exposure , 
+            'benchmark' : Const.Factor.ROUNDING.exposure , 
+            'active'    : Const.Factor.ROUNDING.exposure , 
+            'contribution' : Const.Factor.ROUNDING.contribution}
         if self.source is not None:     
             self.source   = self.source.round(decimals)
         if self.industry is not None:   

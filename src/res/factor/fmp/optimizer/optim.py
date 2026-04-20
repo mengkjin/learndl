@@ -46,7 +46,7 @@ class OptimizedPortfolioCreatorConfig:
 
     @property
     def opt_config(self):
-        return MACHINE.configs('util' , 'factor' , f'{self.optim_config}_opt_config') if self.optim_config else {}
+        return MACHINE.config.get(f'algo/opt_portfolio/{self.optim_config}') if self.optim_config else {}
 
     @property
     def opt_cond(self):

@@ -114,7 +114,7 @@ class Connection:
     @classmethod
     def connection(cls , key : str):
         if key not in cls.stored_connections:
-            kwargs : dict[str,Any] = {**MACHINE.secret['accounts']['sellside'][key]}
+            kwargs : dict[str,Any] = {**MACHINE.secret.get('accounts' , f'sellside/{key}')}
             type : str = kwargs.pop('type')
             assert type.startswith('sql') , f'{key} is not a valid sql source'
             if type.endswith('.disabled'):
@@ -129,7 +129,7 @@ class Connection:
 
     @classmethod
     def available_keys(cls) -> list[str]:
-        return [key for key , value in MACHINE.secret['accounts']['sellside'].items() if value['type'] == 'sql']
+        return [key for key , value in MACHINE.secret.get('accounts' , 'sellside').items() if value['type'] == 'sql']
 
     @classmethod
     def test_all_connections(cls) -> None:

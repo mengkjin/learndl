@@ -1,5 +1,3 @@
-import torch
-
 from src.proj import Logger
 from src.res.model.util import ModelConfig , BatchInput
 from .module import DataModule
@@ -27,16 +25,8 @@ def get_realistic_batch_data(input_data_types='day') -> BatchInput:
     Logger.stdout(batch_input.info)
     return batch_input
 
-def get_random_batch_data(dims = (30 , 6) , batch_size = 10 , predict_steps = 1) -> BatchInput:
+def get_random_batch_data(batch_size = 10 , seq_len = 30 , n_inputs = 6 , predict_steps = 1) -> BatchInput:
     '''
     get a sample of random batch_input , 'day' , 'day+style' , '15m+style' ...
     '''
-
-    x = torch.rand(batch_size , *dims)
-
-    y = torch.rand(batch_size , predict_steps)
-    w = None
-    i = torch.Tensor([])
-    v = torch.Tensor([])
-    
-    return BatchInput(x , y , w , i , v)
+    return BatchInput.random(batch_size , seq_len , n_inputs , predict_steps)

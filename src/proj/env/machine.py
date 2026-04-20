@@ -18,7 +18,7 @@ def get_project_root() -> Path:
     raise RuntimeError("pyproject.toml not found, please confirm the project root directory contains this file")
 
 MAIN_PATH = get_project_root()
-SECRET_PATH = MAIN_PATH.joinpath('.secret')
+
 @dataclass
 class _MachineSettings:
     name : str
@@ -75,29 +75,66 @@ def _get_best_device():
     else:
         return 'CPU'
 
-def _get_secret() -> dict:
-    """Load all ``.yaml`` / ``.json`` files under ``.secret`` into a stem-keyed dict.
+class ConfFileLazyLoader:
+    """Lazy loader for config files"""
+    _root_path : Path
+    def __init__(self, name: str , root_path: Path):
+        self._name = name
+        self._root_path = root_path
+        self._contents : dict[str, Any] = {}
 
-    Returns:
-        Mapping of filename stem to parsed content (dict/list/scalar per file).
+    @property
+    def name(self) -> str:
+        return self._name
 
-    Raises:
-        ValueError: If a non-file entry exists under ``SECRET_PATH``.
-        AssertionError: If a file is not YAML or JSON.
-    """
-    secret = {}
-    for file in SECRET_PATH.iterdir():
-        if file.is_file():
-            assert file.suffix == '.yaml' or file.suffix == '.json' , f'{file} is not a yaml or json file'
-            if file.suffix == '.yaml':
-                with open(file , 'r') as f:
-                    secret[file.stem] = yaml.safe_load(f)
-            elif file.suffix == '.json':
-                with open(file , 'r') as f:
-                    secret[file.stem] = json.load(f)
+    def __call__(self, main_key: str , sub_key: str | None = None , **kwargs) -> Any:
+        return self.get(main_key, sub_key, **kwargs)
+
+    def get(self, main_key: str , sub_key: str | None = None , **kwargs) -> Any:
+        """
+        Get the content of the config file by the main key and sub key
+        will lazy load the content of main_key if not loaded yet
+        """
+        content = self._get_content(main_key)
+        if not sub_key:
+            return content
+        for arg in sub_key.split('/'):
+            if isinstance(content, dict):
+                if arg not in content and 'default' in kwargs:
+                    return kwargs['default']
+                content = content[arg]
+            else:
+                raise ValueError(f'{self.name} {content} is not a dict , cannot get {arg} from sub_key {sub_key}')
+        return content
+
+    def _get_content(self, key: str) -> dict:
+        """Load all ``.yaml`` / ``.json`` files under ``root_path`` into a stem-keyed dict.
+
+        Returns:
+            Mapping of filename stem to parsed content (dict/list/scalar per file).
+
+        Raises:
+            ValueError: If a non-file entry exists under ``root_path``.
+            AssertionError: If a file is not YAML or JSON.
+        """
+        if key in self._contents:
+            return self._contents[key]
+
+        for suffix in ('.json' , '.yaml'):
+            if (path := self._root_path.joinpath(*key.split('/')).with_suffix(suffix)).exists():
+                break
         else:
-            raise ValueError(f'{file} is not a file')
-    return secret
+            raise FileNotFoundError(f'{self.name} file {key} does not exist')
+        
+        if path.suffix == '.yaml':
+            with open(path , 'r') as f:
+                content = yaml.safe_load(f)
+        elif path.suffix == '.json':
+            with open(path , 'r') as f:
+                content = json.load(f)
+
+        self._contents[key] = content
+        return content
 
 class MACHINE:
     """
@@ -124,9 +161,10 @@ class MACHINE:
     system_name : Literal['linux' , 'windows' , 'macos'] = _get_system_name()
     
     main_path = MAIN_PATH
-    secret = _get_secret()
+    secret = ConfFileLazyLoader('Secret' , MAIN_PATH.joinpath('.secret'))
+    config = ConfFileLazyLoader('Config' , MAIN_PATH.joinpath('configs'))
 
-    setting = _MachineSettings(**secret['machines'][name])
+    setting = _MachineSettings(**secret.get('machines' , name))
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
     
     cuda_server = setting.cuda_server
@@ -176,42 +214,4 @@ class MACHINE:
     @classmethod
     def machine_main_path(cls , machine_name : str) -> Path:
         """Get the main path at another machine"""
-        return Path(cls.secret['machines'][machine_name]['main_path'])
-    
-    @classmethod
-    def PATH(cls):
-        """Get the PATH of the machine"""
-        if not hasattr(cls , '_path'):
-            from src.proj.env.path import PATH
-            cls._path = PATH
-        return cls._path
-        
-    @classmethod
-    def configs(cls , *args , raise_if_not_exist = True , **kwargs) -> dict:
-        """
-        Get the configs of the machine
-        possible suffixes: .json , .yaml , prefer json over yaml
-        additional kwargs: e.g. encoding
-        """
-        PATH = cls.PATH()
-        path = PATH.conf.joinpath(*args)
-        if path.is_dir():
-            raise TypeError(f'Config {"/".join(args)} is a directory')
-        for suffix in ('.json' , '.yaml'):
-            if (path := PATH.conf.joinpath(*args).with_suffix(suffix)).exists():
-                break
-        else:
-            if raise_if_not_exist:
-                raise FileNotFoundError(f'Config file {"/".join(args)} does not exist')
-            else:
-                return {}
-        
-        additional_kwargs = {}
-        kwargs = kwargs | additional_kwargs
-
-        if path.suffix == '.yaml':
-            return PATH.read_yaml(path , **kwargs)
-        elif path.suffix == '.json':
-            return PATH.read_json(path , **kwargs)
-        else:
-            raise ValueError(f'Unsupported config file type: {path.suffix}')
+        return Path(cls.secret.get('machines' , f'{machine_name}/main_path'))

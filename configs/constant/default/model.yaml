@@ -1,0 +1,7 @@
+
+resuming_options:
+  training : True # always resume training , will not be affected if changed
+  testing : 'last_pred_date' # False , last_model_date , last_pred_date
+  fmp : 'trailing_5' # False , trailing_5
+  fmp_account : True # resume option of model train: if resume test fmp account
+  factor_perf : True # resume option of model train: if resume test factor perf

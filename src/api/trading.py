@@ -1,17 +1,17 @@
 from src.res.trading import TrackingPortfolioManager , BacktestPortfolioManager
 
-from src.proj import Logger , CONST
+from src.proj import Logger , Const
 from .util import wrap_update
 
 class TradingAPI:
     @classmethod
     def available_ports(cls , backtest : bool | None = None) -> list[str]:
         if backtest is None:
-            return list(CONST.Conf.TradingPort.tracking_ports.keys()) + list(CONST.Conf.TradingPort.backtest_ports.keys())
+            return list(Const.TradingPort.tracking_ports.keys()) + list(Const.TradingPort.backtest_ports.keys())
         elif backtest:
-            return list(CONST.Conf.TradingPort.backtest_ports.keys())
+            return list(Const.TradingPort.backtest_ports.keys())
         else:
-            return list(CONST.Conf.TradingPort.tracking_ports.keys())
+            return list(Const.TradingPort.tracking_ports.keys())
 
     @classmethod
     def backtest_rebuild(cls , port_name : str):

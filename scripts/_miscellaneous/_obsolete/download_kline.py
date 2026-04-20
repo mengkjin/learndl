@@ -5,8 +5,8 @@ from pathlib import Path
 
 from src.proj import MACHINE , Logger , DB
 
-key_id = MACHINE.secret['accounts']['aws']['access_key_id']
-access_key = MACHINE.secret['accounts']['aws']['secret_access_key']
+key_id = MACHINE.secret.get('accounts','aws/access_key_id')
+access_key = MACHINE.secret.get('accounts','aws/secret_access_key')
 
 session = boto3.Session(aws_access_key_id=key_id, aws_secret_access_key=access_key, region_name='cn-north-1')
 s3 = session.resource('s3')

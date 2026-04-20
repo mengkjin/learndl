@@ -16,7 +16,7 @@ from src.proj.log import Logger
 class EmailSetting:
     """Descriptor that reads a named field from merged server/machine email YAML."""
 
-    EmailSettings = MACHINE.secret['accounts']['email']
+    EmailSettings : dict = MACHINE.secret.get('accounts' , 'email')
 
     def __init__(self , name : str , server : Literal['netease'] = 'netease'):
         server_settings = self.EmailSettings.get(server , {})
