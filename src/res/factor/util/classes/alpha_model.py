@@ -5,9 +5,9 @@ import pandas as pd
 from copy import deepcopy
 from dataclasses import dataclass
 from scipy.stats import rankdata
-from typing import Any , Literal , Callable
+from typing import Any , Literal , Callable , Union , Sequence
 
-from src.proj import Const
+from src.proj import Const , DB
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 
@@ -293,60 +293,55 @@ class AlphaModel(GeneralModel):
             new.models[date] = new.models[tar_date].assign(date = date , name = new.name)
         return new
 
+ComponentInputType = Union[str , AlphaModel , Amodel]
 class AlphaComponent:
     _cache_normalized : dict[str , AlphaModel] = {}
     _cache_unnormalized : dict[str , AlphaModel] = {}
 
-    def __init__(self , name : str):
-
-        if name in Const.Model.strategies['prediction']:
-            alpha_type , alpha_name , alpha_column = 'pred' , name , None
-        elif '@' in name:
-            exprs = name.split('@')
-            alpha_type , alpha_name = exprs[:2]
-            alpha_column = exprs[2] if len(exprs) > 2 else None
+    def __init__(self , input : ComponentInputType , normalize : bool = True):
+        self.input = input
+        self.normalize = normalize
+        if isinstance(input , (AlphaModel , Amodel)):
+            self.name = input.name
         else:
-            raise Exception(f'{name} is not a valid alpha')
+            if input in Const.Model.strategies['prediction']:
+                alpha_type , alpha_name , alpha_column = 'pred' , input , None
+            elif '@' in input:
+                exprs = input.split('@')
+                alpha_type , alpha_name = exprs[:2]
+                alpha_column = exprs[2] if len(exprs) > 2 else None
+            else:
+                raise Exception(f'{input} is not a valid alpha')
 
-        self.name = f'{alpha_type}@{alpha_name}'
-        if alpha_type in ['sellside' , 'pred']:
-            self.loads = self.db_loads(alpha_type , alpha_name , alpha_column)
-        elif alpha_type == 'factor':
-            self.loads = self.factor_loads(alpha_name)
-        else:
-            raise Exception(f'{alpha_type} is not a valid alpha type')
+            self.name = f'{alpha_type}@{alpha_name}'
+            if alpha_type in ['sellside' , 'pred']:
+                self.loads = self.db_loads(alpha_type , alpha_name , alpha_column , name = self.name , normalize = normalize)
+            elif alpha_type == 'factor':
+                self.loads = self.factor_loads(alpha_name , name = self.name , normalize = normalize)
+            else:
+                raise Exception(f'{alpha_type} is not a valid alpha type')
 
     def __repr__(self) -> str:
         return self.name
 
-    @classmethod
-    def StockFactor(cls):
-        if not hasattr(cls , '_stock_factor'):
-            from src.res.factor.util.classes import StockFactor
-            cls._stock_factor = StockFactor
-        return cls._stock_factor
+    def get_alpha_model(self , date : int | list[int] | np.ndarray) -> AlphaModel:
+        if isinstance(self.input , AlphaModel):
+            return self.input
+        elif isinstance(self.input , Amodel):
+            return self.input.to_alpha_model()
 
-    @classmethod
-    def StockFactorHierarchy(cls):
-        if not hasattr(cls , '_stock_factor_hierarchy'):
-            from src.res.factor.calculator import StockFactorHierarchy
-            cls._stock_factor_hierarchy = StockFactorHierarchy
-        return cls._stock_factor_hierarchy
-
-    def get_alpha_model(self , date : int | list[int] | np.ndarray , normalize : bool = True) -> AlphaModel:
-        cached_alpha_model = self.get_cache(self.name , normalize = normalize)
+        if isinstance(date , int):
+            date = [date]
+        cached_alpha_model = self.get_cache(self.name , normalize = self.normalize)
         cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
         new_dates = np.setdiff1d(date , cached_dates)
         
         if len(new_dates) == 0:
             return cached_alpha_model.subset(date)
             
-        factor = self.StockFactor()(self.loads(new_dates))
-        if normalize:
-            factor = factor.normalize(inplace=True)
-        alpha_model = factor.alpha_model().rename(self.name)
+        alpha_model = self.loads(new_dates)
         new_alpha_model = cached_alpha_model.append(alpha_model)
-        self.set_cache(new_alpha_model , self.name , normalize = normalize)
+        self.set_cache(new_alpha_model , self.name , normalize = self.normalize)
         return new_alpha_model.subset(date)
 
     @classmethod
@@ -367,9 +362,9 @@ class AlphaComponent:
             cls._cache_unnormalized[name] = alpha_model
 
     @classmethod
-    def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:
-        from src.proj import DB
-        def wrapper(date : int | list[int] | np.ndarray) -> pd.DataFrame:
+    def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None , name : str = 'alpha0' , normalize : bool = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+        from src.res.factor.util.classes import StockFactor
+        def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
             if not isinstance(date , (list , np.ndarray)):
                 date = [date]
             column = db_column if db_column is not None else db_key
@@ -379,44 +374,44 @@ class AlphaComponent:
                 df = prev_df if df.empty else pd.concat([prev_df , df])
             assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
             df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
-            return df
+            factor = StockFactor(df)
+            if normalize:
+                factor = factor.normalize(inplace=True)
+            alpha_model = factor.alpha_model()
+            alpha_model.rename(name)
+            return alpha_model
         return wrapper
 
     @classmethod
-    def factor_loads(cls , factor_name : str) -> Callable[[int | list[int] | np.ndarray], pd.DataFrame]:
-        hierarchy = cls.StockFactorHierarchy()
-        def wrapper(date : int | list[int] | np.ndarray) -> pd.DataFrame:
+    def factor_loads(cls , factor_name : str , name : str = 'alpha0' , normalize : bool = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+        from src.res.factor.calculator import StockFactorHierarchy
+        from src.res.factor.util.classes import StockFactor
+        def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
             if not isinstance(date , (list , np.ndarray)):
                 date = [date]
-            df = hierarchy.get_factor(factor_name).Loads(date)
-            if df.empty or min(date) < min(df['date']):
-                prev_df = hierarchy.get_factor(factor_name).Load(min(date) , closest = True).assign(date = min(date))
-                df = prev_df if df.empty else pd.concat([prev_df , df])
-            return df
+            factor = StockFactorHierarchy.get_factor(factor_name).Loads(date)
+            factor = StockFactor(factor)
+            if normalize:
+                factor = factor.normalize(inplace=True)
+            alpha_model = factor.alpha_model()
+            alpha_model.rename(name)
+            return alpha_model
         return wrapper
 
 class AlphaCombination:
-    def __init__(self , alpha : str | list[str] | AlphaModel | Amodel , components : list[str] | None = None):
-        if isinstance(alpha , (AlphaModel , Amodel)):
-            self.name = alpha.name
-            self.final_alpha = alpha
-        elif isinstance(alpha , list) or ',' in alpha:
-            assert not components , f'components are not allowed when alpha name suggest a composite alpha , {alpha} {components}'
-            self.name = 'combined_alpha'
-            self.components = alpha if isinstance(alpha , list) else alpha.split(',')
+    def __init__(self , alpha : str | ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None):
+        if isinstance(alpha , str):
+            if ',' in alpha:
+                self.name = 'combined_alpha'
+                assert not components , f'components are not allowed when alpha name suggest a composite alpha , {alpha} {components}'
+                self.components : list[ComponentInputType] = list(alpha.split(','))
+            else:
+                self.name = alpha
+                self.components = list(components) if components else [alpha]
         else:
-            self.name = alpha
-            self.components = components if components else [alpha]
-
-    @property
-    def final_alpha(self) -> AlphaModel | None:
-        if not hasattr(self , '_final_alpha'):
-            return None
-        return self._final_alpha
-
-    @final_alpha.setter
-    def final_alpha(self , alpha : AlphaModel | Amodel):
-        self._final_alpha = alpha if isinstance(alpha , AlphaModel) else alpha.to_alpha_model()
+            assert not components , f'components are not allowed when alpha is Amodel / AlphaModel / list , {alpha} {components}'
+            self.name = 'combined_alpha'
+            self.components = [*alpha] if isinstance(alpha , Sequence) else [alpha]
 
     @property
     def alpha_components(self) -> list[AlphaComponent]:
@@ -427,21 +422,22 @@ class AlphaCombination:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components})'
 
-    def get_alpha_models(self , date : int | list[int] | np.ndarray , additional_alpha_model : AlphaModel | Amodel | None = None) -> list[AlphaModel]:
+    def __len__(self) -> int:
+        return len(self.components)
+
+    def get_alpha_models(self , date : int | list[int] | np.ndarray , 
+                         other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> list[AlphaModel]:
         date = _to_dates(date)
+        alpha_models = [comp.get_alpha_model(date) for comp in self.alpha_components]
 
-        if self.final_alpha is not None:
-            alpha_models = [self.final_alpha]
-        else:
-            alpha_models = [comp.get_alpha_model(date) for comp in self.alpha_components]
-
-        if additional_alpha_model is not None:
-            alpha_models.append(additional_alpha_model.to_alpha_model() if isinstance(additional_alpha_model , Amodel) else additional_alpha_model)
+        if other_models:
+            other_combination = AlphaCombination(other_models)
+            alpha_models.extend([comp.get_alpha_model(date) for comp in other_combination.alpha_components])
 
         return alpha_models
 
 class AlphaComposite(AlphaCombination):
-    def __init__(self , alpha : str | list[str] | AlphaModel | Amodel , components : list[str] | None = None , 
+    def __init__(self , alpha : ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None , 
                  weights : list[float] | Literal['equal'] | None = None):
         super().__init__(alpha , components)
         
@@ -456,9 +452,9 @@ class AlphaComposite(AlphaCombination):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
 
-    def get(self , date : int | list[int] | np.ndarray , additional_alpha_model : AlphaModel | Amodel | None = None) -> AlphaModel:
+    def get(self , date : int | list[int] | np.ndarray , other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> AlphaModel:
         date = _to_dates(date)
-        alpha_models = self.get_alpha_models(date , additional_alpha_model)
+        alpha_models = self.get_alpha_models(date , other_models)
         assert alpha_models , f'no alpha models created, if AlphaComposite is empty, please submit a final alpha or components'
 
         models : list[Amodel] = []
@@ -468,7 +464,7 @@ class AlphaComposite(AlphaCombination):
         return AlphaModel(self.name , models)
 
 class AlphaScreener(AlphaCombination):
-    def __init__(self , alpha : str | list[str] | AlphaModel | Amodel , components : list[str] | None = None ,
+    def __init__(self , alpha : ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None ,
                  method : Literal['worst' , 'worst2'] = 'worst2' , ratio : float = 0.5):
         super().__init__(alpha , components)
         self.method : Literal['worst' , 'worst2'] = method
@@ -477,9 +473,9 @@ class AlphaScreener(AlphaCombination):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},method={self.method})'
 
-    def get(self , date : int | list[int] | np.ndarray , additional_alpha_model : AlphaModel | Amodel | None = None) -> AlphaModel | None:
+    def get(self , date : int | list[int] | np.ndarray , other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> AlphaModel | None:
         date = _to_dates(date)
-        alpha_models = self.get_alpha_models(date , additional_alpha_model)
+        alpha_models = self.get_alpha_models(date , other_models)
         if not alpha_models:
             return None
 
@@ -490,14 +486,15 @@ class AlphaScreener(AlphaCombination):
         return AlphaModel(self.name , models)
 
     def screened_pool(self , date : int , secid : np.ndarray | list[int] | Any = None , ratio : float | None = None , 
-                      additional_alpha_model : AlphaModel | Amodel | None = None) -> np.ndarray | None:
-        alpha = self.get(date , additional_alpha_model)
+                      other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> np.ndarray | None:
+        secid = np.array(secid) if secid is not None else None
+        alpha = self.get(date , other_models)
         if alpha is None or alpha.empty:
-            return None
+            return secid
 
         alpha = alpha.get(date).to_dataframe()
         if alpha.empty:
-            return None
+            return secid
         
         if secid is not None and len(secid) > 0: 
             alpha = alpha.query('secid in @secid').copy()

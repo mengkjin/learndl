@@ -84,14 +84,8 @@ class BasicCreatorConfig:
         alpha_model : AlphaModel | Amodel ,
         bench_port : Port | None = None, 
     ):
-        secid = None
-        additional_alpha_model = alpha_model if self.self_in_screener else None
-        screened_pool = self.alpha_screener.screened_pool(model_date , secid = None if bench_port is None else bench_port.secid , 
-                                                          additional_alpha_model = additional_alpha_model)
-        if screened_pool is not None and len(screened_pool) > 0:
-            secid = screened_pool
-        elif bench_port and len(bench_port) > 0:
-            secid = bench_port.secid
+        secid = None if bench_port is None else bench_port.secid
+        secid = self.alpha_screener.screened_pool(model_date , secid , other_models = alpha_model if self.self_in_screener else None)
         return secid
 
     def generate_top_stock_port(
@@ -111,7 +105,7 @@ class BasicCreatorConfig:
             init_port = Port.none_port(model_date)
 
         pool = sort_model.to_dataframe(indus=True , na_indus_as = 'unknown')
-        if screened_pool is not None:
+        if screened_pool is not None and len(screened_pool) > 0:
             pool = pool.query('secid in @screened_pool').copy()
         
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)

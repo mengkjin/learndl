@@ -13,9 +13,9 @@ from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_su
 
 class PortfolioBuilder:
     '''
+    category : str but in BUILDER_TYPES
     alpha : AlphaModel
     benchmark : Benchmark | Portfolio | Port | str
-    category : str but in BUILDER_TYPES
     lag : int , lag periods (not days)
     strategy : str
     suffixes : list[str] | str

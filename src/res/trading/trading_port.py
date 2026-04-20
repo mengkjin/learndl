@@ -357,10 +357,10 @@ class BacktestPort(TradingPort):
         Logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
         alpha = self.Alpha.get(date_list)
         Logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
-        universe = self.Universe.get(date_list , self.exclusion)
+        univ_port = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])
         Logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
-        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
+        builder = PortfolioBuilder(self.category , alpha , univ_port , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
