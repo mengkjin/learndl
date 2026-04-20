@@ -110,12 +110,16 @@ class ModuleData:
     @property
     def x(self) -> dict[str,DataBlock]:
         """All blocks except ``'y'`` (the feature/input blocks)."""
-        return {key:value for key,value in self.blocks.items() if key != 'y'}
+        if not hasattr(self , '_x') or self._x is None:
+            self._x = {key:value for key,value in self.blocks.items() if key != 'y'}
+        return self._x
 
     @property
     def y(self) -> DataBlock:
         """The label block, feature-aligned to ``y_labels``."""
-        return self.blocks['y'].align_feature(self.y_labels)
+        if not hasattr(self , '_y') or self._y is None:
+            self._y = self.blocks['y'].align_feature(self.y_labels)
+        return self._y
 
     @property
     def empty_x(self):
@@ -130,12 +134,12 @@ class ModuleData:
     @property
     def secid(self):
         """Security universe from the ``'y'`` block."""
-        return self.blocks['y'].secid
+        return self.y.secid
 
     @property
     def date(self):
         """Date range from the ``'y'`` block."""
-        return self.blocks['y'].date
+        return self.y.date
 
     @property
     def enable_cache(self):
@@ -185,6 +189,7 @@ class ModuleData:
         norms: ['y' , *data_type_list] DataBlockNorms (if exists)
         factor: factor_names DataBlock
         '''
+        self.init_data()
         self.load_cache()
         self.extend_blocks()
         self.align_blocks()
@@ -193,6 +198,13 @@ class ModuleData:
         self.load_factor()
         DataBlock.blocks_ffill(self.blocks , exclude = ['y'])
         self._loaded = True
+        return self
+
+    def init_data(self):
+        self._x = None
+        self._y = None
+        self.blocks = {}
+        self.norms = {}
         return self
 
     def load_cache(self):

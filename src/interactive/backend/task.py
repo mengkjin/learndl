@@ -1222,7 +1222,7 @@ class TaskItem:
     @property
     def duration_str(self) -> str:
         """Human-readable duration string (e.g. ``'1m 23s'``)."""
-        return Duration(self.duration).fmtstr
+        return Duration(self.duration).fmtstr if self.duration > 0 else 'N/A'
 
     @property
     def running_str(self) -> str:

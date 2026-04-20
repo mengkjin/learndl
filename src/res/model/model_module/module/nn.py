@@ -86,6 +86,8 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
+        raise Exception('test')
+
         Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
 
     def collect(self , submodel = 'best' , *args):
