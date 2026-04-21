@@ -8,6 +8,26 @@ from src.proj import Logger , PATH , Const , DB
 from .util import wrap_update
 
 def display_account_summary(accounts : dict[str , dict[str , Path]] , account_type : str , by_max_columns : int = 12):
+    """
+    Render account period-return tables for *accounts* via ``Logger.display``.
+
+    Args:
+        accounts: Map model/port name to column→tar path dicts.
+        account_type: Label used in captions.
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: short
+      memory_usage: medium
+    """
     dfs = {model : PortfolioAccount.EvalPeriodRet(paths) for model , paths in accounts.items()}
     dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
     for i , df in enumerate(dfs):
@@ -16,6 +36,18 @@ def display_account_summary(accounts : dict[str , dict[str , Path]] , account_ty
     return dfs
 
 def model_account_summary(by_max_columns : int = 12):
+    """
+    Summarize model FMP account archives discovered under each resumable model path.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: short
+      memory_usage: medium
+    """
     acc_paths : dict[str , dict[str , Path]] = {}
     fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rein' : 'reinforce'}
     model_paths = ModelTrainer.all_resumable_models()
@@ -28,6 +60,18 @@ def model_account_summary(by_max_columns : int = 12):
     return display_account_summary(acc_paths , 'Model FMP' , by_max_columns = by_max_columns)
 
 def tracking_port_account_summary(by_max_columns : int = 12):
+    """
+    Summarize tracking-portfolio ``account.tar`` artifacts for configured tracking ports.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: short
+      memory_usage: medium
+    """
     acc_paths : dict[str , dict[str , Path]] = {}
     for tport in Const.TradingPort.tracking_ports:
         available_paths = list(PATH.rslt_trade.joinpath('tracking', tport).glob('account.tar'))
@@ -36,6 +80,18 @@ def tracking_port_account_summary(by_max_columns : int = 12):
     return display_account_summary(acc_paths , 'Tracking Portfolio' , by_max_columns = by_max_columns)
 
 def backtest_port_account_summary(by_max_columns : int = 12):
+    """
+    Summarize backtest-portfolio ``account.tar`` artifacts for configured backtest ports.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: short
+      memory_usage: medium
+    """
     acc_paths : dict[str , dict[str , Path]] = {}
     for tport in Const.TradingPort.backtest_ports:
         available_paths = list(PATH.rslt_trade.joinpath('backtest', tport).glob('account.tar'))
@@ -44,6 +100,21 @@ def backtest_port_account_summary(by_max_columns : int = 12):
     return display_account_summary(acc_paths , 'Backtest Portfolio' , by_max_columns = by_max_columns)
 
 def model_ic_summary():
+    """
+    Aggregate per-model IC curves (best submodel) into a multi-model evaluation frame.
+
+    Returns:
+        ``eval_period_ic_multi`` dataframe.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: short
+      memory_usage: medium
+    """
     paths : dict[str , Path] = {}
     
     model_paths = ModelTrainer.all_resumable_models()
@@ -59,16 +130,52 @@ def model_ic_summary():
     return df
 
 def ic_summaries(by_max_columns : int = 12):
+    """
+    Display ``model_ic_summary`` output split into column batches.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: short
+      memory_usage: medium
+    """
     df = model_ic_summary()
     for i in range(0, len(df.columns), by_max_columns):
         Logger.display(df.iloc[:,i:i+by_max_columns].dropna(how = 'all'))
 
 def account_summaries(by_max_columns : int = 12):
+    """
+    Run model, tracking, and backtest account summaries in one call.
+
+    [API Interaction]:
+      expose: false
+      roles: [user, developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: medium
+      memory_usage: medium
+    """
     model_account_summary(by_max_columns)
     tracking_port_account_summary(by_max_columns)
     backtest_port_account_summary(by_max_columns)
 
 def concat_dfs_split(dfs : dict[str,pd.DataFrame] , by_max_columns : int = 12) -> list[pd.DataFrame]:
+    """
+    Split wide name→dataframe map into batches whose total column count stays under *by_max_columns*.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: immediate
+      memory_usage: low
+    """
     if not dfs:
         return []
     out_dfs : list[pd.DataFrame] = []
@@ -83,15 +190,51 @@ def concat_dfs_split(dfs : dict[str,pd.DataFrame] , by_max_columns : int = 12) -
     return out_dfs
 
 def concat_dfs(accounts : dict[str,pd.DataFrame]) -> pd.DataFrame:
+    """
+    Horizontally concat named dataframes and reindex to the longest member index.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: immediate
+      memory_usage: low
+    """
     longest_index = max(accounts.values(), key=len).index
     return pd.concat(accounts , axis = 1).reindex(index = longest_index).rename_axis(index = '')
 
 class SummaryAPI:
     @classmethod
     def update(cls):
+        """
+        Run the wrapped summary refresh (IC + account tables).
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: read_only
+          lock_num: -1
+          disable_platforms: []
+          execution_time: medium
+          memory_usage: medium
+        """
         wrap_update(cls.process , 'Summary')
 
     @classmethod
     def process(cls):
+        """
+        Emit IC summaries followed by combined account summaries.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: read_only
+          lock_num: -1
+          disable_platforms: []
+          execution_time: medium
+          memory_usage: medium
+        """
         ic_summaries()
         account_summaries()

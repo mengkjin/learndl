@@ -1,6 +1,7 @@
 import pandas as pd
 
 from itertools import combinations
+from pathlib import Path
 from typing import Generator , Iterator , Type , Literal , Any
 
 from .factor_calc import FactorCalculator
@@ -59,13 +60,14 @@ class StockFactorHierarchy:
         return df
     
     @classmethod
-    def export_factor_table(cls) -> None:
+    def export_factor_table(cls) -> Path:
         '''export factor list to csv'''
         if MACHINE.updatable:
             df = cls.full_factor_table()
             df.to_csv(PATH.local_share.joinpath('factor_list.csv') , index = False)
             if PATH.share_folder is not None:
                 df.to_csv(PATH.share_folder.joinpath('factor_list.csv') , index = False)
+        return PATH.local_share.joinpath('factor_list.csv')
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:

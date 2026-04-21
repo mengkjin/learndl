@@ -1,4 +1,5 @@
 import torch
+from functools import wraps
 from typing import Literal , Callable
 from src.func import allna , exact
 from src.func import tensor as T
@@ -10,10 +11,10 @@ class PrimTool:
         def decorator(func):
             func_name = func.__name__
             assert func_name not in cls.registry , f'{func_name} already registered'
+            @wraps(func)
             def wrapper(*args , **kwargs):
                 new_func = cls.prim_legit(n_arg,**decor_kwargs)(func)
                 return new_func(*args , **kwargs)
-            wrapper.__name__ = func_name
             cls.registry[func_name] = wrapper
             return wrapper
         return decorator
@@ -26,26 +27,26 @@ class PrimTool:
     @classmethod
     def prim_legit_x(cls,**decor_kwargs):
         def decorator(func):
+            @wraps(func)
             def wrapper(x , *args, **kwargs):
                 legit = cls.input_checker(x , **decor_kwargs)
                 x = func(x , *args , **kwargs) if legit else None
                 if allna(x):
                     return None
                 return x
-            wrapper.__name__ = func.__name__
             return wrapper
         return decorator
     
     @classmethod
     def prim_legit_xy(cls,**decor_kwargs):
         def decorator(func):
+            @wraps(func)
             def wrapper(x , y ,*args, **kwargs):
                 legit = cls.input_checker(x , y , **decor_kwargs)
                 x = func(x , y , *args , **kwargs) if legit else None
                 if allna(x):
                     return None
                 return x
-            wrapper.__name__ = func.__name__
             return wrapper
         return decorator
     

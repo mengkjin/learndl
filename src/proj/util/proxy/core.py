@@ -5,7 +5,7 @@ import random
 from typing import Iterable , Literal
 
 INVALID_THRESHOLD = 3
-MAX_CONCURRENT = 2
+lock_num = 2
 
 class Proxy:
     """Single proxy address (``protocol://host:port``) with source tracking and verification history."""
@@ -150,7 +150,7 @@ class ProxyStats(Proxy):
     @property
     def available(self) -> bool:
         """Whether the proxy is available (valid and occupied < max concurrent)"""
-        return self.valid and self.stats['occupied'] < MAX_CONCURRENT
+        return self.valid and self.stats['occupied'] < lock_num
 
     @property
     def total_count(self) -> int:

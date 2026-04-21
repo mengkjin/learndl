@@ -11,6 +11,20 @@ from .notification import NotificationAPI
 class UpdateAPI:
     @classmethod
     def daily(cls):
+        """
+        Orchestrate the full daily refresh: data, factors, models, trading, summaries, notifications.
+
+        Skips early when ``MACHINE.updatable`` is false or ``DataAPI.is_updated`` fails.
+
+        [API Interaction]:
+          expose: false
+          roles: [admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: long
+          memory_usage: high
+        """
         if not MACHINE.updatable:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
@@ -24,7 +38,7 @@ class UpdateAPI:
         ModelAPI.update()
         FactorAPI.Pooling.update(timeout = 3)
         FactorAPI.Stats.update()
-        FactorAPI.Hierarchy.update()
+        FactorAPI.export_factor_table()
         with Proj.vb.WithVB(1):
             ModelAPI.resume_testing()
         TradingAPI.update()
@@ -34,6 +48,21 @@ class UpdateAPI:
 
     @classmethod
     def rollback(cls , rollback_date : int):
+        """
+        Roll back data and factor layers to *rollback_date* (no model/trading rollback here).
+
+        Args:
+            rollback_date: Calendar-validated trade date (YYYYMMDD).
+
+        [API Interaction]:
+          expose: false
+          roles: [admin]
+          risk: destructive
+          lock_num: -1
+          disable_platforms: []
+          execution_time: long
+          memory_usage: high
+        """
         if not MACHINE.updatable:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
@@ -44,10 +73,22 @@ class UpdateAPI:
         FactorAPI.Affiliate.rollback(rollback_date)
         FactorAPI.Pooling.rollback(rollback_date , timeout = 10)
         FactorAPI.Stats.rollback(rollback_date)
-        FactorAPI.Hierarchy.rollback(rollback_date)
+        FactorAPI.export_factor_table()
 
     @classmethod
     def weekly(cls):
+        """
+        Weekly maintenance hook: currently triggers ``ModelAPI.update_models`` on updatable machines.
+
+        [API Interaction]:
+          expose: false
+          roles: [admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: long
+          memory_usage: high
+        """
         if not MACHINE.updatable:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return

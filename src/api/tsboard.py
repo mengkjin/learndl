@@ -3,6 +3,21 @@ from pathlib import Path
 from src.proj import PATH , Logger
 
 def call_tensorboard(log_dir : str | Path):
+    """
+    Launch TensorBoard via ``uv run tensorboard --logdir`` (blocks until user interrupt).
+
+    Args:
+        log_dir: Directory containing event files.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: long
+      memory_usage: medium
+    """
     if isinstance(log_dir , Path):
         log_dir = log_dir.as_posix()
     try:
@@ -15,6 +30,18 @@ def call_tensorboard(log_dir : str | Path):
         raise e
 
 def run_local_tensorboard():
+    """
+    Start TensorBoard pointing at ``PATH.tensorboard/run`` if logs exist.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: long
+      memory_usage: medium
+    """
     log_dir = PATH.tensorboard.joinpath('run')
     if not log_dir.exists():
         Logger.alert1("No local Tensorboard logs found in run folder")
@@ -22,6 +49,18 @@ def run_local_tensorboard():
     call_tensorboard(log_dir.as_posix())
 
 def run_packed_tensorboard():
+    """
+    Interactively pick a packed ``.tar`` of TensorBoard logs, unpack to temp, and launch.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: long
+      memory_usage: medium
+    """
     packed_tars = list(PATH.tensorboard.glob('*.tar'))
     if len(packed_tars) == 0:
         Logger.alert1("No packed Tensorboard logs found in tar folder")
@@ -40,6 +79,18 @@ def run_packed_tensorboard():
     call_tensorboard(log_dir.as_posix())
 
 def run_trained_models_tensorboard():
+    """
+    Interactively pick a trained model with preserved tensorboard snapshots and launch TB.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: long
+      memory_usage: medium
+    """
     from src.api.model import ModelAPI
     from src.res.model.util.model_path import ModelPath
     candidates = [ModelPath(model) for model in ModelAPI.available_models(include_short_test = True)]
@@ -58,6 +109,20 @@ def run_trained_models_tensorboard():
     call_tensorboard(log_dir)
 
 def launch_tensorboard(**kwargs):
+    """
+    CLI menu to launch TensorBoard for local runs, packed archives, or trained-model logs.
+
+    ``**kwargs`` reserved for future options; currently uses ``stdin`` prompts.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: []
+      execution_time: long
+      memory_usage: medium
+    """
     os.chdir(PATH.main)
     Logger.success("Will launch TensorBoard for the following options:")
 

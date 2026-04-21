@@ -8,11 +8,25 @@ from .util import wrap_update
 
 class DataAPI:
     @classmethod
-    def update(cls , sellside = True , risk = True , affiliated = True): 
+    def update(cls , sellside : bool = True , risk : bool = True , affiliated : bool = True): 
         """
-        Update datas for both laptop and server:
-        a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
-        b. for server, move Updater's to Database'
+        Update core, sellside, risk, custom, and announcement data pipelines for laptop and server roles.
+
+        Args:
+            sellside: When false, skip sellside download/update.
+            risk: When false, skip risk-model update.
+            affiliated: When false, skip custom/affiliated data update.
+
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [developer, admin]
+          risk: write
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: [macos]
+          execution_time: long
+          memory_usage: high
         """
         # download data from tushare and other sources
         wrap_update(CoreDataUpdater.update , 'download core data')
@@ -34,9 +48,25 @@ class DataAPI:
 
 
     @classmethod
-    def rollback(cls , rollback_date : int , risk = True , affiliated = True):
+    def rollback(cls , rollback_date : int , risk : bool = True , affiliated : bool = True):
         """
-        Rollback data to the specified date
+        Rollback core, risk, and affiliated data to *rollback_date* (calendar-validated by callers).
+
+        Args:
+            rollback_date: Trade date (YYYYMMDD) to roll back toward.
+            risk: When false, skip risk-model rollback.
+            affiliated: When false, skip custom/affiliated rollback.
+
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [developer, admin]
+          risk: write
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: [macos]
+          execution_time: long
+          memory_usage: high
         """
         wrap_update(CoreDataUpdater.rollback , 'rollback download core data' ,rollback_date = rollback_date)
         wrap_update(RiskModelUpdater.rollback , 'rollback risk models' , skip = not risk , rollback_date = rollback_date)
@@ -45,31 +75,62 @@ class DataAPI:
     @classmethod
     def prepare_predict_data(cls): 
         """
-        prepare latest(1 year or so) train data for predict use, do it after 'update'
+        Build or refresh the latest prediction-oriented train window (typically ~1y) via ``PreProcessorTask``.
+        Run after routine ``update`` when prediction pipelines need fresh inputs.
+
+        [API Interaction]:
+          expose: true
+          email: false
+          roles: [developer, admin]
+          risk: write
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: []
+          execution_time: medium
+          memory_usage: high
         """
         wrap_update(PreProcessorTask.update , 'prepare predict data' , predict = True)
 
     @classmethod
-    def reconstruct_train_data(cls , confirm = 0): 
+    def reconstruct_train_data(cls , confirm : int = 0): 
         """
-        reconstruct historical(since 2007 , use for models starting at 2017) train data
+        Rebuild long-history training tables (since ~2007) for models that start around 2017.
+
+        Args:
+            confirm: Pass-through confirmation flag to ``PreProcessorTask.update`` , if zero, will prompt for confirmation.
+
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [developer, admin]
+          risk: write
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: [macos]
+          execution_time: long
+          memory_usage: high
         """
         wrap_update(PreProcessorTask.update , 'reconstruct historical data' , predict = False , confirm = confirm)
     
     @classmethod
     def is_updated(cls):
         """
-        Return if the data is updated to the latest date
+        Whether the dataset is updated through the latest expected trade date
         
         Args:
-          None
+          No arguments
         Returns:
-          bool: is the data updated to the latest date
+          bool: True iff local updated date is not before the calendar's required update-to trade date
 
         [API Interaction]:
-          allow: all
-          disable_machine: []
-          expected_execution_time: immediate
+          expose: true
+          email: false
+          roles: [user, developer, admin]
+          risk: read_only
+          lock_num: -1
+          disable_platforms: []
+          execution_time: immediate
+          memory_usage: low
         """
         updated = CALENDAR.updated()
         update_to = CALENDAR.td(CALENDAR.update_to()) # use trade date to compare

@@ -9,6 +9,7 @@ statistics are taken, depending on the function.
 from __future__ import annotations
 import torch
 import torch.nn.functional as F
+from functools import wraps
 from torch import Tensor , nan
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -117,8 +118,8 @@ class TsRoller:
         """
         def decorator(func : Callable[..., Tensor]):
             """Wrap a unary rolling ``func`` for chunked time-axis execution."""
+            @wraps(func)
             def wrapper(x : Tensor , d : int , *args , **kwargs):
-                """Run ``func`` on time chunks of ``x`` and concatenate along dim 1."""
                 chunk_num = (np.prod(x.shape) * d / chunk_size).__ceil__()
                 chunk_len = ((x.shape[0] + (chunk_num - 1) * d) / chunk_num).__ceil__()
                 sub_rets : list[Tensor] = []
@@ -128,7 +129,6 @@ class TsRoller:
                     sub_rets.append(func(x[start:end] , d , *args , **kwargs))
                 ret = torch.concat(sub_rets , dim = 0)
                 return ret
-            wrapper.__name__ = func.__name__
             return wrapper
         return decorator
 
@@ -144,6 +144,7 @@ class TsRoller:
         """
         def decorator(func : Callable[..., Tensor]):
             """Wrap a binary rolling ``func`` for chunked time-axis execution."""
+            @wraps(func)
             def wrapper(x : Tensor , y : Tensor , d : int , *args , **kwargs):
                 """Run ``func`` on aligned time chunks of ``x`` and ``y``; concat on dim 1."""
                 chunk_num = ((np.prod(x.shape) + np.prod(y.shape)) * d / chunk_size).__ceil__()
@@ -155,7 +156,6 @@ class TsRoller:
                     sub_rets.append(func(x[start:end] , y[start:end] , d , *args , **kwargs))
                 ret = torch.concat(sub_rets , dim = 0)
                 return ret
-            wrapper.__name__ = func.__name__
             return wrapper
         return decorator
 
@@ -193,13 +193,13 @@ class TsRoller:
         """
         def decorator(func):
             """Return a rolling wrapper around unary ``func`` using unfold/fold."""
+            @wraps(func)
             def wrapper(x : Tensor , d : int , *args , dim : int = 1 , **kwargs):
                 """Apply ``func`` inside length-``d`` windows along ``dim``."""
                 x = cls.unfold(x , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 z = func(x , 1 , *args , dim = -1 , **kwargs)
                 z = cls.fold(z , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 return z
-            wrapper.__name__ = func.__name__
             outer = cls.chunk_along_d0_x()(wrapper)
             return outer
         return decorator
@@ -217,6 +217,7 @@ class TsRoller:
         """
         def decorator(func):
             """Return a rolling wrapper around binary ``func`` using unfold/fold on ``x`` and ``y``."""
+            @wraps(func)
             def wrapper(x : Tensor , y : Tensor , d : int , *args , dim : int = 1 , **kwargs):
                 """Apply ``func`` to paired windows of ``x`` and ``y`` along ``dim``."""
                 x = cls.unfold(x , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
@@ -224,7 +225,6 @@ class TsRoller:
                 z = func(x , y , 1 , *args , dim = -1 , **kwargs)
                 z = cls.fold(z , d , dim = dim , nan = nan , pinf = pinf , ninf = ninf, **decor_kwargs)
                 return z
-            wrapper.__name__ = func.__name__
             outer = cls.chunk_along_d0_x()(wrapper)
             return outer
         return decorator

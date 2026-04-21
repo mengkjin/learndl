@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 from typing import Any , Callable
 
@@ -163,6 +164,12 @@ class AutoRunTask:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.end_time = datetime.now()
+        if isinstance(self.func_return , Path):
+            Proj.exit_files.append(self.func_return)
+        elif isinstance(self.func_return , str):
+            Logger.conclude(self.func_return , level = 'info')
+        elif self.func_return is not None:
+            Logger.display(self.func_return)
 
         assert exc_type is None , 'Unexpected exception in AutoRunTask , should be caught by the caller!'
 
@@ -184,6 +191,7 @@ class AutoRunTask:
 
     def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
+        @wraps(func)
         def wrapper(*args , **kwargs):
             self.kwargs.update(kwargs)
             with self:

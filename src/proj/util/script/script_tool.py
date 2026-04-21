@@ -3,6 +3,7 @@
 import inspect , os
 from pathlib import Path
 
+from functools import wraps
 from typing import Any, Callable
 
 from src.proj.env import PATH
@@ -63,7 +64,6 @@ class ScriptTool:
         lock_name : str | None = None ,
         lock_num : int = 1 , 
         lock_timeout : int = 60 , 
-        lock_wait_time : int = 1 ,
         markdown_catcher : bool = False ,
         verbosity : int | None = None ,
         **kwargs
@@ -76,7 +76,7 @@ class ScriptTool:
         self.lock_name = lock_name
         
         self.backend_recorder = BackendTaskRecorder(**kwargs)
-        self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout , lock_wait_time)
+        self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout)
         self.autorun_task = AutoRunTask(task_name , task_key , forfeit_if_done , verbosity , task_id = self.task_id , markdown_catcher = markdown_catcher)
 
         # set current working directory to main
@@ -85,11 +85,15 @@ class ScriptTool:
 
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
-        self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
-        if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
-            from src.interactive.backend import ScriptHeader
-            self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
-        return self.backend_recorder(self.script_lock(self.autorun_task(func)))
+        @wraps(func)
+        def wrapper(*args , **kwargs):
+            self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
+            if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
+                from src.interactive.backend import ScriptHeader
+                self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
+            new_func = self.backend_recorder(self.script_lock(self.autorun_task(func)))
+            return new_func(*args , **kwargs)
+        return wrapper
 
     def __repr__(self):
         return f'ScriptTool(task_name={self.task_name},task_key={self.task_key},lock_name={self.lock_name})'

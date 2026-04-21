@@ -6,6 +6,18 @@ from src.proj.util import Options , Email , TempFile , TaskRecorder
 from .util import wrap_update
 
 def check_cuda_status():
+    """
+    Log CUDA availability on platform servers and optionally email diagnostics on failure.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: read_only
+      lock_num: -1
+      disable_platforms: [windows, macos]
+      execution_time: immediate
+      memory_usage: low
+    """
     if not MACHINE.platform_server:
         Logger.skipping(f'{MACHINE.name} is not platform server, skip checking cuda status')
     elif torch.cuda.is_available(): 
@@ -31,6 +43,21 @@ def check_cuda_status():
 
 
 def email_to_fanghan(test = False):
+    """
+    Send the daily factor-update email with score attachment when not already recorded.
+
+    Args:
+        test: When true, send to the developer mailbox instead of production recipient.
+
+    [API Interaction]:
+      expose: false
+      roles: [admin]
+      risk: write
+      lock_num: -1
+      disable_platforms: [windows, macos]
+      execution_time: short
+      memory_usage: low
+    """
     if not MACHINE.platform_server:
         Logger.skipping(f'{MACHINE.name} is not platform server, skip emailing to fanghan')
         return
@@ -69,16 +96,52 @@ def email_to_fanghan(test = False):
     return
 
 def reset_options_cache():
+    """
+    Clear the in-process ``Options`` cache after notification work completes.
+
+    [API Interaction]:
+      expose: false
+      roles: [developer, admin]
+      risk: write
+      lock_num: -1
+      disable_platforms: []
+      execution_time: immediate
+      memory_usage: low
+    """
     Options.cache.clear()
     Logger.success(f'Reset Options Cache')
 
 class NotificationAPI:
     @classmethod
     def update(cls):
+        """
+        Run the wrapped notification pipeline (CUDA check, email, cache reset).
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: short
+          memory_usage: low
+        """
         wrap_update(cls.process , 'Notification')
 
     @classmethod
     def process(cls):
+        """
+        Execute CUDA diagnostics, Fanghan email task, and ``reset_options_cache``.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: short
+          memory_usage: low
+        """
         check_cuda_status()
         email_to_fanghan()
         reset_options_cache()

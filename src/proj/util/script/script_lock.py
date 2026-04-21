@@ -1,9 +1,11 @@
 """File-based locks under ``PATH.runtime/script_lock`` for single-instance scripts."""
 
-import functools , time , random
+import time , random
+
 import portalocker
 
 from datetime import datetime
+from functools import wraps
 from typing import Any, Callable
 
 from src.proj.env import PATH
@@ -90,7 +92,7 @@ class ScriptLock:
     
     def __call__(self, func: Callable) -> Callable:
         """decorator usage"""
-        @functools.wraps(func)
+        @wraps(func)
         def wrapper(*args, **kwargs):
             with self:
                 return func(*args, **kwargs)
@@ -105,8 +107,8 @@ class ScriptLockMultiple:
         initialize multiple lock manager
         Args:
             lock_name: base name of locks
-            lock_num: maximum number of instances allowed to run simultaneously
-            timeout: timeout seconds, None means infinite wait
+            lock_num: maximum number of instances allowed to run simultaneously, <= 0 means no limit
+            timeout: timeout seconds, None or <= 0 means infinite wait
             wait_time: wait time seconds between each check
             vb_level: minimum verbosity level to output logs
         """
@@ -169,7 +171,7 @@ class ScriptLockMultiple:
         start_time = datetime.now()
         self._has_wait_message = False
         
-        if self.timeout:
+        if self.timeout and self.timeout > 0:
             # there is timeout
             while (datetime.now() - start_time).total_seconds() < self.timeout:
                 lock_id = self._try_acquire_any_lock()
@@ -207,7 +209,7 @@ class ScriptLockMultiple:
 
     def __call__(self, func: Callable) -> Callable:
         """decorator usage"""
-        @functools.wraps(func)
+        @wraps(func)
         def wrapper(*args, **kwargs):
             with self:
                 return func(*args, **kwargs)

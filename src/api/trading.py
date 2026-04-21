@@ -6,6 +6,24 @@ from .util import wrap_update
 class TradingAPI:
     @classmethod
     def available_ports(cls , backtest : bool | None = None) -> list[str]:
+        """
+        List tracking and/or backtest portfolio port keys from ``Const.TradingPort``.
+
+        Args:
+            backtest: None returns both families; true only backtest; false only tracking.
+
+        Returns:
+            Port name strings.
+
+        [API Interaction]:
+          expose: false
+          roles: [user, developer, admin]
+          risk: read_only
+          lock_num: -1
+          disable_platforms: []
+          execution_time: immediate
+          memory_usage: low
+        """
         if backtest is None:
             return list(Const.TradingPort.tracking_ports.keys()) + list(Const.TradingPort.backtest_ports.keys())
         elif backtest:
@@ -16,14 +34,35 @@ class TradingAPI:
     @classmethod
     def backtest_rebuild(cls , port_name : str):
         """
-        Rebuild backtest portfolio for a given port:
+        Rebuild a single backtest portfolio directory and run analysis for *port_name*.
+
+        Args:
+            port_name: Key in ``Const.TradingPort.backtest_ports``.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: medium
+          memory_usage: medium
         """
         BacktestPortfolioManager.rebuild(port_name , analyze = True)
 
     @classmethod
     def backtest_rebuild_all(cls):
         """
-        Rebuild all backtest portfolios:
+        Rebuild every configured backtest portfolio sequentially.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: long
+          memory_usage: high
         """
         for port_name in Const.TradingPort.backtest_ports.keys():
             BacktestPortfolioManager.rebuild(port_name , analyze = True)
@@ -31,7 +70,16 @@ class TradingAPI:
     @classmethod
     def update(cls): 
         """
-        Update trading portfolios for both laptop and server:
+        Refresh tracking and backtest portfolio state for laptop and server deployments.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: write
+          lock_num: -1
+          disable_platforms: []
+          execution_time: medium
+          memory_usage: medium
         """
         def update_trading_ports():
             TrackingPortfolioManager.update()
@@ -40,6 +88,25 @@ class TradingAPI:
 
     @classmethod
     def Analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs):
+        """
+        Run portfolio analysis for *port_name* on either backtest or tracking ports.
+
+        Args:
+            port_name: Registered port key.
+            start, end: Optional date window; extra ``**kwargs`` forwarded to managers.
+
+        Returns:
+            Manager-specific analysis object when applicable.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: read_only
+          lock_num: -1
+          disable_platforms: []
+          execution_time: short
+          memory_usage: medium
+        """
         if port_name in cls.available_ports(backtest = True):
             return BacktestPortfolioManager.analyze(port_name , start , end , **kwargs)
         elif port_name in cls.available_ports(backtest = False):
@@ -49,6 +116,22 @@ class TradingAPI:
 
     @classmethod
     def Backtest(cls , port_name_starter : str , start : int | None = None , end : int | None = None , **kwargs): 
+        """
+        Analyze all backtest ports whose names start with *port_name_starter*.
+
+        Args:
+            port_name_starter: Prefix filter against backtest port keys.
+            start, end: Optional date window; ``**kwargs`` forwarded to ``BacktestPortfolioManager.analyze``.
+
+        [API Interaction]:
+          expose: false
+          roles: [developer, admin]
+          risk: read_only
+          lock_num: -1
+          disable_platforms: []
+          execution_time: long
+          memory_usage: high
+        """
         available_ports = cls.available_ports(backtest = True)
         ports = [port for port in available_ports if port.startswith(port_name_starter)]
         if ports:

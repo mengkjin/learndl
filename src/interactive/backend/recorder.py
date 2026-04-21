@@ -8,6 +8,7 @@ code, output files, errors) back to :class:`~src.interactive.backend.task.TaskDa
 from __future__ import annotations
 import os  , traceback , ast
 
+from functools import wraps
 from typing import Any , Callable
 from pathlib import Path
 from dataclasses import dataclass
@@ -70,6 +71,7 @@ class BackendTaskRecorder:
 
     def __call__(self , func : Callable) -> Callable:
         """Decorate *func* so it runs inside this recorder's context manager."""
+        @wraps(func)
         def wrapper(*args , **kwargs):
             with self:
                 ret = func(*args , **kwargs , **self.params)
@@ -159,6 +161,7 @@ class BackendTaskRecorder:
             Handles: None, str, Path, 2-tuple ``(message, files-list)``, n-tuple,
             list, dict, AutoRunTask, and arbitrary objects (via ``str()``).
             """
+            from src.proj.util import AutoRunTask
             if ret is None:
                 return cls()
             elif isinstance(ret , cls):
@@ -188,7 +191,7 @@ class BackendTaskRecorder:
                     return cls(message = '\n'.join(ret))
             elif isinstance(ret , dict):
                 return cls(**{k:v for k,v in ret.items() if k in cls.__slots__})
-            elif ret.__class__.__name__ == 'AutoRunTask':
+            elif isinstance(ret , AutoRunTask):
                 return cls(message = ret.exit_message , files = ret.exit_files ,
                            code = len(ret.error_messages) , error = '\n'.join(ret.error_messages))
             else:

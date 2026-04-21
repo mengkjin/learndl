@@ -1,6 +1,7 @@
 import torch
 from datetime import datetime
 
+from functools import wraps
 from typing import Any , Literal, Callable
 import pandas as pd
 
@@ -61,10 +62,10 @@ class AccTimer:
     def count(self) -> int:
         return len(self.time_costs)
     def __call__(self , func : Callable):
+        @wraps(func)
         def wrapper(*args , **kwargs):
             with self:
                 return func(*args , **kwargs)
-        wrapper.__name__ = func.__name__
         return wrapper
 
 class gpTimer:

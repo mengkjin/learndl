@@ -738,7 +738,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         return self.load_factor(date)
 
     @classmethod
-    def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
+    def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
               indent : int = 1 , vb_level : Any = 'max'
         ) -> pd.DataFrame:
@@ -746,7 +746,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         dates = np.intersect1d(dates , cls.stored_dates())
         dfs : list[pd.DataFrame] = []
         for db in cls.full_dbs():
-            df = cls.loads_from_db(**db , dates = dates , indent = indent , vb_level = vb_level)
+            df = cls.loads_from_db(**db , dates = dates , closest = closest , indent = indent , vb_level = vb_level)
             if not df.empty:
                 dfs.append(df)
                 dates = np.setdiff1d(dates , df['date'])
@@ -882,7 +882,7 @@ class MarketFactorCalculator(FactorCalculator):
         }
 
     @classmethod
-    def Loads(cls , start : int | None = None , end : int | None = None , fillna = False , 
+    def Loads(cls , start : int | None = None , end : int | None = None , closest = False , fillna = False , 
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median' ,
               indent : int = 1 , vb_level : Any = 'max'
         ) -> pd.DataFrame:
