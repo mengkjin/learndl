@@ -461,7 +461,13 @@ class AlphaComposite(AlphaCombination):
 
         models : list[Amodel] = []
         for d in date:
-            amodel = Amodel.combine_linear([alpha.get(d , latest=True) for alpha in alpha_models] , self.weights[:len(alpha_models)] , date = d)
+            alphas = [alpha.get(d , latest=True) for alpha in alpha_models]
+            if not any(not alpha.empty for alpha in alphas):
+                for model in alpha_models:
+                    print(model.name)
+                    print(model.available_dates())
+                raise ValueError(f'all alphas are empty at date {d}')
+            amodel = Amodel.combine_linear(alphas , self.weights[:len(alpha_models)] , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 
