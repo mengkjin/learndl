@@ -77,7 +77,7 @@ def show_system_info() -> None:
     with expander_subheader('home-system-info' , 'System Info' , ':material/computer:' , True ,
                             help = 'System Info , includes OS, memory, GPU, CPU, Python, and Streamlit version.'):
         for i , (label , value) in enumerate(options.items()):
-            cols = st.columns([1,4])
+            cols = st.columns([2,3])
             cols[0].markdown(f"***{label}***")
             cols[1].markdown(f":blue-badge[*{value}*]")
         

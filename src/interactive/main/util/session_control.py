@@ -1,26 +1,22 @@
-"""Session state, action callbacks, and the control panel for the interactive app.
+"""Session state, action callbacks.
 
 Key objects:
 
 * :class:`SessionControl` (``SC``) — dataclass-based singleton that owns the
   task queue, script runners, param cache, and all button click handlers.
   Instantiated once at module import as the module-level ``SC``.
-* :func:`universal_action` — decorator that refreshes the task queue after
-  every callback so the UI always reflects the latest state.
-* :class:`ControlPanelButton` / :class:`ControlPanel` — the shared action
-  bar rendered at the top of every page via :meth:`SessionControl.get_control_panel`.
+* :func:`queue_refresh_trigger` — decorator that triggers task queue refresh after
+  every callback.
 """
+from __future__ import annotations
 import streamlit as st
-import subprocess
 
-from abc import abstractmethod , ABC
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Callable
 from pathlib import Path
 from datetime import datetime
 
-from src.proj import PATH , Logger , Proj , MACHINE , Const
-from src.proj.util import Options
+from src.proj import PATH , Logger , Const
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache
 
@@ -33,8 +29,8 @@ def get_cached_task_db() -> TaskDatabase:
     """get cached task database manager"""
     return TaskDatabase()
 
-def universal_action(func : Callable) -> Callable:
-    """Decorator: refresh the task queue after every UI callback.
+def queue_refresh_trigger(func : Callable) -> Callable:
+    """Decorator: trigger task queue refresh after every UI callback.
 
     Wraps ``func`` so that :meth:`TaskQueue.refresh` is called on the active
     :class:`SessionControl` instance after each invocation, keeping the
@@ -117,7 +113,7 @@ class SessionControl:
             st.session_state.session_control = self
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
 
-    @universal_action
+    @queue_refresh_trigger
     def switch_page(self , page_name : str) -> None:
         """Record the active page name and refresh the queue (via ``universal_action``)."""
         self.current_page_name = page_name
@@ -141,8 +137,9 @@ class SessionControl:
             raise ValueError(f"Script {script_key} not found in SC.script_runners")
         return runner
 
-    def get_control_panel(self) -> 'ControlPanel':
+    def get_control_panel(self):
         """Return the shared :class:`ControlPanel`, creating it once per session."""
+        from src.interactive.main.util.control_panel import ControlPanel
         if not hasattr(self, '_control_panel'):
             self._control_panel = ControlPanel()
         return self._control_panel
@@ -227,7 +224,7 @@ class SessionControl:
                 return False
         return True
    
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_item(self , item : TaskItem):
         """click queue item"""
         if self.running_report_queue is not None and self.running_report_queue == item.id:
@@ -258,7 +255,7 @@ class SessionControl:
             file_options = [item.name for item in file_options]
         self.queue_last_action = f"Task Filter Path File: {file_options}" , True
 
-    @universal_action
+    @queue_refresh_trigger
     def click_log_clear_confirmation(self):
         """click log clear confirmation"""
         def on_confirm():
@@ -267,32 +264,32 @@ class SessionControl:
             self.queue_last_action = f"Log Clear Aborted" , False
         action_confirmation(on_confirm , on_abort , title = "Are You Sure about Clearing Logs (This Action is Irreversible)?")
 
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_sync(self):
         """click task queue sync"""
         self.task_queue.sync()
         self.queue_last_action = f"Queue Manually Synced at {datetime.now().strftime('%H:%M:%S')}" , True
    
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_refresh(self):
         """click task queue refresh"""
         self.task_queue.refresh()
         self.queue_last_action = f"Queue Manually Refreshed at {datetime.now().strftime('%H:%M:%S')}" , True
 
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_clean(self):
         """click task queue refresh confirmation"""
         items = [item for item in self.task_queue.values() if item.is_error or item.is_killed]
         [self.task_queue.remove(item) for item in items]
         self.queue_last_action = f"Queue Cleaned All Error Tasks at {datetime.now().strftime('%H:%M:%S')}" , True
 
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_delist_all(self):
         """click task queue delist all"""
         self.task_queue.clear_queue_only()
         self.queue_last_action = f"Entire Queue Delisted" , True
 
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_remove_all(self):
         """click task queue refresh confirmation"""
         def on_confirm():
@@ -303,13 +300,13 @@ class SessionControl:
         action_confirmation(on_confirm , on_abort , 
                             title = "Are You Sure about Removing All Tasks in Queue (Will be Auto Backuped)?")
 
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_delist_item(self , item : TaskItem):
         """click task queue delist item"""
         self.task_queue.delist(item)
         self.queue_last_action = f"Delist Success: {item.id}" , True
 
-    @universal_action
+    @queue_refresh_trigger
     def click_queue_remove_item(self , item : TaskItem):
         """click task queue remove item"""
         def on_confirm():
@@ -326,7 +323,7 @@ class SessionControl:
         else:
             on_confirm()
 
-    @universal_action
+    @queue_refresh_trigger
     @st.dialog("Are You Sure about Restoring from Backup?")
     def click_queue_restore_all(self):
         """click task queue restore all"""
@@ -352,7 +349,7 @@ class SessionControl:
             self.queue_last_action = f"Restore Aborted" , False
             st.rerun()
         
-    @universal_action
+    @queue_refresh_trigger
     def click_script_runner_filter(self , runner : ScriptRunner):
         """click script runner filter"""
         st.session_state['task-filter-status'] = 'All'
@@ -360,7 +357,7 @@ class SessionControl:
         st.session_state['task-filter-path-folder'] = []
         st.session_state['task-filter-path-file'] = [runner.path.path]
         
-    @universal_action
+    @queue_refresh_trigger
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
         params = self.add_global_settings(params)
@@ -386,7 +383,7 @@ class SessionControl:
         """click file previewer"""
         # TODO: things to do before download
 
-    @universal_action
+    @queue_refresh_trigger
     def click_show_complete_report(self , item : TaskItem):
         """click show complete report"""
         self.current_task_item = item.id
@@ -394,7 +391,7 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-    @universal_action
+    @queue_refresh_trigger
     def click_item_choose_select(self , item : TaskItem):
         """click choose task item"""
         new_id = item.id if self.current_task_item != item.id else None
@@ -404,7 +401,7 @@ class SessionControl:
         self.running_report_init = True
         self.running_report_file_previewer = None
 
-    @universal_action
+    @queue_refresh_trigger
     def click_choose_item_selectbox(self , item_id : str | None = None):
         """click choose task item"""
         if item_id is None: 
@@ -434,242 +431,4 @@ class SessionControl:
             # Logger.success(f"Task Queue Backend Refreshed: {changed}")
             st.rerun()
 
-class ControlPanelButton(ABC):
-    """Abstract base for a single button in the :class:`ControlPanel` action bar.
-
-    Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class
-    variables and implement :meth:`button` to render the Streamlit widget.
-    """
-    key : str = ''
-    icon : str = ''
-    title : str = ''
-
-    @abstractmethod
-    def button(self , script_key : str | None = None) -> None:
-        """Render the Streamlit button widget for this action.
-
-        Args:
-            script_key: The currently active script key, or ``None`` when on
-                an intro page.
-        """
-        ...
-
-    def refresh(self , *args , **kwargs) -> None:
-        """Redraw the button with updated state (override in subclasses as needed)."""
-        pass
-
-    def show(self , script_key : str | None = None) -> None:
-        """Render the button + label into the persistent panel placeholder slot."""
-        if self.key not in st.session_state:
-            st.session_state[self.key] = st.empty()
-        with st.session_state[self.key]:
-            with st.container():
-                self.button(script_key = script_key)
-                self.print_title()
-
-    def print_title(self) -> None:
-        """Render the small capitalised label below the button icon."""
-        body = f"""
-        <div style="
-            margin-bottom: 0px;
-            margin-top: -10px;
-            padding: 0 0 20px 0;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-        ">{self.title.upper()}</div>
-        """       
-        st.markdown(body , unsafe_allow_html = True)
-
-class ScriptRunnerRunButton(ControlPanelButton):
-    """Button that submits the current script to the task queue.
-
-    Rendered as disabled (greyed) when no script is selected or required
-    parameters are missing; enabled (green) otherwise.
-    """
-    key = f"script-runner-run"
-    icon = f":material/mode_off_on:"
-    title = f"Run Script"
-
-    def button(self , script_key : str | None = None):
-        help = f"Please Choose a Script to Run First" if script_key is None else f"Please Fill Required Parameters"
-        st.button(self.icon, key=f'{self.key}-disabled' , help = help)
-
-    def refresh(self , runner : ScriptRunner):
-        with st.session_state[self.key]:
-            if SC.param_inputs_form is None:
-                raise ValueError("ParamInputsForm is not initiated")
-            params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
-            
-            if SC.get_script_runner_validity(params):
-                disabled = False
-                preview_cmd = SC.get_script_runner_cmd(runner , params)
-                if preview_cmd: 
-                    help_text = preview_cmd
-                else:
-                    help_text = f"Parameters valid, run {runner.script_key}"
-                button_key = f"{self.key}-enabled-{runner.script_key}"
-            else:
-                disabled = True
-                help_text = f"Parameters invalid, please check required ones"
-                button_key = f"{self.key}-disabled-{runner.script_key}"
-
-            with st.container():
-                st.button(self.icon, key=button_key , 
-                        help = help_text , disabled = disabled , 
-                        on_click = SC.click_script_runner_run , args = (runner, params)) 
-                self.print_title()
-
-class GlobalScriptLatestTaskButton(ControlPanelButton):
-    """Button that navigates to the latest task across all scripts."""
-    key = f"global-script-latest-task"
-    icon = f":material/reply_all:"
-    title = f"Latest for All"
-
-    def button(self , script_key : str | None = None):
-        item = SC.get_latest_task_item()
-        if item is None:
-            st.button(self.icon, key=f"{self.key}-disabled" , 
-                    help = "Please Run a Task First" , disabled = True)
-        else:
-            if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
-                        help = f":blue[**Show Latest Task**]: {item.id}" , 
-                        on_click = SC.click_show_complete_report , args = (item,) ,
-                        disabled = False):
-                if SC.current_page_name != repr(item.script_key):
-                    from src.interactive.main.util.page import get_script_page
-
-                    meta = get_script_page(item.script_key)
-                    if meta:
-                        st.switch_page(meta['page'])
-                else:
-                    #from .script_detail import show_report_main
-                    #show_report_main(SC.get_script_runner(item.script_key))
-                    st.rerun()
-
-class CurrentScriptLatestTaskButton(ControlPanelButton):
-    """Button that shows the latest task for the currently displayed script."""
-    key = f"current-script-latest-task"
-    icon = f":material/reply:"
-    title = f"Current Latest"
-
-    def button(self , script_key : str | None = None):
-        item = SC.get_latest_task_item(script_key) if script_key is not None else None
-        if item is None:
-            st.button(self.icon, key=f"{self.key}-disabled" , 
-                        help = "Please Run a Task of This Script First" if script_key is not None else "Please Choose a Script First" , disabled = True)
-        else:
-            if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
-                        help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
-                        on_click = SC.click_show_complete_report , args = (item,) ,
-                        disabled = False):
-                #from .script_detail import show_report_main
-                #show_report_main(SC.get_script_runner(item.script_key))
-                st.rerun()
-
-class ControlRefreshInteractiveButton(ControlPanelButton):
-    """Button that regenerates all script-detail pages and reinitialises the session."""
-    key = f"control-refresh-interactive"
-    icon = f":material/refresh:"
-    title = f"Refresh All"
-
-    def button(self , script_key : str | None = None):
-        st.button(self.icon, key=f"{self.key}-enabled" , help = "Refresh Task Queue / Options / Scripts" , 
-                  on_click = self.refresh_all , disabled = False)
- 
-    def refresh_all(self):
-        with st.spinner("Refreshing..."):
-            with Proj.silence:
-                Options.update()
-        SC.rerun()
-        st.rerun()
-
-class ControlGitClearPullButton(ControlPanelButton):
-    """Button that resets local changes and pulls the latest code from remote.
-
-    Disabled automatically on coding platforms (``MACHINE.platform_coding``).
-    """
-    key = f"control-git-clear-pull"
-    icon = f":material/cloud_download:"
-    title = f"Git Pull"
-
-    def button(self , script_key : str | None = None):
-        if MACHINE.platform_coding:
-            st.button(self.icon, key=f"{self.key}-disabled" , help = f"Git Pull is not available on coding platform {MACHINE.name}" , disabled = True)
-        else:
-            st.button(self.icon, key=f"{self.key}-enabled" , help = "Clear Local Changes and Pull Latest Code" , disabled = False, on_click = self.clear_git_pull)
-        
-    def clear_git_pull(self):
-        if MACHINE.platform_coding:
-            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
-        else:
-            import shutil
-            from src.proj import PATH , Logger
-
-            subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
-            subprocess.run(['git', 'clean', '-fd'], check=True)
-            subprocess.run(['git', 'pull'], check=True)
-            
-            for folder in [*PATH.main.joinpath('src').rglob('*/') , *PATH.main.joinpath('configs').rglob('*/')][::-1]:
-                if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
-                    subfiles = [x for x in folder.rglob('*') if x.is_file()]
-                    if not len(subfiles):
-                        Logger.stdout(f"Removing empty folder: {folder}")
-                        folder.rmdir()
-                    else:
-                        if all([x.suffix == '.pyc' for x in subfiles]):
-                            Logger.stdout(f"Removing folder with only pyc files: {folder}")
-                            shutil.rmtree(folder)
-                        else:
-                            Logger.error(f"Error removing folder: {folder}:")
-                            Logger.error(f"Subfiles: {subfiles}")
-            Logger.success("Git Pull Finished")
-
-class ControlPanel:
-    """Horizontal action bar rendered at the top of every app page.
-
-    Contains a fixed set of :class:`ControlPanelButton` instances plus a
-    settings popover for global run toggles (verbosity, email, silent mode).
-    """
-    control_panel_key = "page-control-panel"
-    buttons : dict[str, ControlPanelButton] = {
-        'script-runner-run' : ScriptRunnerRunButton(),
-        'global-script-latest-task' : GlobalScriptLatestTaskButton(),
-        'current-script-latest-task' : CurrentScriptLatestTaskButton(),
-        'control-refresh-interactive' : ControlRefreshInteractiveButton(),
-        'control-git-clear-pull' : ControlGitClearPullButton(),
-    }
-    
-    def show(self , script_key : str | None = None) -> None:
-        """Render the full control panel (buttons + settings popover).
-
-        Args:
-            script_key: Passed through to each button so they can
-                enable/disable themselves based on whether a script is active.
-        """
-        with st.container(key = self.control_panel_key):
-            columns = st.columns([1,10,1] , gap = 'small' , vertical_alignment = 'center')
-            _ , buttons , settings = columns
-            with buttons.container(key = f"{self.control_panel_key}-buttons"):
-                self.show_buttons(script_key = script_key)
-            with settings.container(key = f"{self.control_panel_key}-settings"):
-                self.show_settings()
-
-    def show_buttons(self , script_key : str | None = None) -> None:
-        """Lay out one column per button and call each button's :meth:`show`."""
-        cols = st.columns(len(self.buttons) , gap = 'small' , vertical_alignment = 'center')
-        for col , button in zip(cols, self.buttons.values()):
-            with col:
-                button.show(script_key = script_key)
-
-    def show_settings(self) -> None:
-        """Render the settings gear popover with global run toggles."""
-        with st.popover('**:material/settings:**'):
-            st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
-                    help="""Should use max verbosity or min? Not selected will use default.""")
-            st.toggle('**:blue[Disable Email]**', value=False , key = 'global-settings-disable-email'  , 
-                    help="""If email after the script is complete? Not selected will use script header value.""")
-            st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 
-                    help="""Should the script run silently? Not selected will use script header value.""")
-        
 SC = SessionControl()

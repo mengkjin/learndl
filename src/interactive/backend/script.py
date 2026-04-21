@@ -97,7 +97,7 @@ class PathItem:
         items.sort(key=lambda x: (x.path))
         return items
 
-    def script_runner(self) -> 'ScriptRunner':
+    def script_runner(self) -> ScriptRunner:
         """Construct a :class:`ScriptRunner` wrapping this item."""
         return ScriptRunner(self)
 
@@ -112,13 +112,13 @@ class PathItem:
         return _format_path(self.script_key)
 
     @classmethod
-    def from_key(cls , script_key : str , base_dir : Path = PATH.scpt) -> 'PathItem':
+    def from_key(cls , script_key : str , base_dir : Path = PATH.scpt) -> PathItem:
         """Construct a :class:`PathItem` from a *script_key* string and optional base directory."""
         parts = Path(script_key).parts
         return PathItem(base_dir.joinpath(*parts) , len(parts) - 1)
 
     @classmethod
-    def from_path(cls , path : Path) -> 'PathItem':
+    def from_path(cls , path : Path) -> PathItem:
         """Construct a :class:`PathItem` from an absolute path that must be under ``PATH.scpt``."""
         if not path.is_relative_to(PATH.scpt):
             raise ValueError(f'{path} is not a relative path to {PATH.scpt} , connot convert to PathItem')
@@ -185,7 +185,7 @@ class ScriptHeader:
         return ScriptParamInput.from_dict(self.parameters)
 
     @classmethod
-    def read_from_file(cls , path : Path) -> 'ScriptHeader':
+    def read_from_file(cls , path : Path) -> ScriptHeader:
         """Parse YAML front-matter from *path* and return a populated :class:`ScriptHeader`.
 
         On any read/parse failure a disabled header with an error description is
@@ -365,7 +365,7 @@ class ScriptRunner:
         return f"ScriptRunner(script={self.script})"
 
     @classmethod
-    def from_key(cls , script_key : str) -> 'ScriptRunner':
+    def from_key(cls , script_key : str) -> ScriptRunner:
         """Construct a :class:`ScriptRunner` from a *script_key* string."""
         return PathItem.from_key(script_key).script_runner()
 

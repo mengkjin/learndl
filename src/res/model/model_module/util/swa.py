@@ -29,9 +29,11 @@ class SWAEnsembler(ABC):
     @abstractmethod
     def reset(self): ...
     @abstractmethod
-    def assess(self , module , epoch : int , accuracy = 0. , loss = 0.): '''accuracy or loss to update assessment'''
+    def assess(self , module , epoch : int , accuracy = 0. , loss = 0.): 
+        '''accuracy or loss to update assessment'''
     @abstractmethod
-    def collect(self , module , *args , **kwargs) -> nn.Module: '''output the final fittest model state dict'''
+    def collect(self , module , *args , **kwargs) -> nn.Module: 
+        '''output the final fittest model state dict'''
 
 class SWAModel:
     def __init__(self , module : nn.Module) -> None:

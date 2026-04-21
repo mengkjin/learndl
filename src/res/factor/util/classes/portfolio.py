@@ -257,7 +257,7 @@ class Portfolio:
             self.ports = {date:port for date,port in self.ports.items() if date in dates}
         return self
     
-    def replace(self , port : 'Port|Portfolio' , inplace = False):
+    def replace(self , port : Port|Portfolio , inplace = False):
         """replace the portfolio with the given port or portfolio"""
         if not inplace:
             self = self.copy()

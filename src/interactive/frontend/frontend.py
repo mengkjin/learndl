@@ -300,7 +300,7 @@ class YAMLFileEditorState:
         ...
 
     @classmethod
-    def get_state(cls , key : str , root : Path | str | None = None) -> 'YAMLFileEditorState':
+    def get_state(cls , key : str , root : Path | str | None = None) -> YAMLFileEditorState:
         """Retrieve or create a :class:`YAMLFileEditorState` from ``st.session_state``.
 
         Parameters
@@ -379,7 +379,7 @@ class YAMLFileEditor:
         """Return a debug string showing the key and root directory."""
         return f"YAMLFileEditor(key={self.key},root={self.file_root})"
 
-    def init_session_state(self) -> 'YAMLFileEditor':
+    def init_session_state(self) -> YAMLFileEditor:
         """Sync the editor state from ``st.session_state`` and return self."""
         self.state = YAMLFileEditorState.get_state(key = self.key , root = self.file_root)
         return self

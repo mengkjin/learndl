@@ -101,3 +101,11 @@ backtest_ports:
       - gru_dfl2cs
     screener:
       - gru_week
+
+  test_backtest.4:
+    alpha: 
+      - gru_dfl2
+      - gru_dfl2cs
+    screener:
+      - gru_dfl2
+      - gru_dfl2cs

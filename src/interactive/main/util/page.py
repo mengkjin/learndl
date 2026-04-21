@@ -12,7 +12,7 @@ from typing import Literal
 
 from src.proj import Proj , Const
 
-from .control import SC , set_current_page
+from .session_control import SC , set_current_page
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"

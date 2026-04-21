@@ -5,6 +5,7 @@ Provides :class:`BackendTaskRecorder`, a decorator / context-manager that wraps
 a script's ``main`` function so it reports lifecycle events (start, PID, exit
 code, output files, errors) back to :class:`~src.interactive.backend.task.TaskDatabase`.
 """
+from __future__ import annotations
 import os  , traceback , ast
 
 from typing import Any , Callable
@@ -119,7 +120,7 @@ class BackendTaskRecorder:
         '''task_id : script_name@time_id'''
         return self._task_id
 
-    def __enter__(self) -> 'BackendTaskRecorder':
+    def __enter__(self) -> BackendTaskRecorder:
         """Enter the recording context; returns self."""
         start_time = datetime.now().timestamp()
         pid = os.getpid()
@@ -152,7 +153,7 @@ class BackendTaskRecorder:
         error : str | None = None
 
         @classmethod
-        def from_return(cls , ret : Any | None = None) -> 'BackendTaskRecorder.ExitMessage':
+        def from_return(cls , ret : Any | None = None) -> BackendTaskRecorder.ExitMessage:
             """Convert a raw function return value to a normalised ExitMessage.
 
             Handles: None, str, Path, 2-tuple ``(message, files-list)``, n-tuple,

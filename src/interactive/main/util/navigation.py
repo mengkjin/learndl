@@ -8,13 +8,13 @@ on the configured ``navigation_position``.
 """
 from __future__ import annotations
 import streamlit as st
-from typing import Any, Literal
+from typing import Literal
 
 from src.proj import Const
 from src.interactive.frontend.logo import get_logo
 from src.interactive.frontend.style import style
 from src.interactive.backend.script import ScriptRunner
-from .control import SC 
+from .session_control import SC 
 from .page import intro_pages , script_pages , PAGE_TITLE
 
 def page_config() -> None:
@@ -31,7 +31,7 @@ def page_config() -> None:
     )
     style()
 
-def top_navigation(position : Literal['top', 'sidebar' , 'hidden'] = 'top') -> Any:
+def top_navigation(position : Literal['top', 'sidebar' , 'hidden'] = 'top'):
     """Build a Streamlit multi-page navigation object grouped by page category.
 
     Groups intro pages under ``'Intro'`` and script pages under
@@ -120,7 +120,7 @@ def script_links(show_dir: bool = False) -> None:
                 st.page_link(page['page'] , label = ' > '.join([f'**{parts[0].upper()}**' , *parts[1:]]) , icon = page['icon'] , help = page['help'])
             group = page['group']
 
-def page_setup(navigation_position : Literal['top', 'sidebar' , 'both'] | None = None) -> Any:
+def page_setup(navigation_position : Literal['top', 'sidebar' , 'both'] | None = None):
     """Apply page config and build navigation according to ``navigation_position``.
 
     - ``'top'``    — top bar only (hidden sidebar nav)

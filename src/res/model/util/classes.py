@@ -241,7 +241,8 @@ class BaseDataModule(ABC):
         self.storage  : MemFileStorage
         self.buffer   : BaseBuffer
     @abstractmethod
-    def prepare_data() -> None: '''prepare all data in advance of training'''
+    def prepare_data() -> None: 
+        '''prepare all data in advance of training'''
     @abstractmethod
     def load_data(self) -> None: 
         '''load prepared data at training begin , only load data once in a fitting'''
@@ -257,13 +258,17 @@ class BaseDataModule(ABC):
         self.early_test_dates : np.ndarray
         self.model_test_dates : np.ndarray
     @abstractmethod
-    def train_dataloader(self)  -> Iterator[BatchInput]: '''return train dataloaders'''
+    def train_dataloader(self)  -> Iterator[BatchInput]: 
+        '''return train dataloaders'''
     @abstractmethod
-    def val_dataloader(self)    -> Iterator[BatchInput]: '''return valid dataloaders'''
+    def val_dataloader(self)    -> Iterator[BatchInput]: 
+        '''return valid dataloaders'''
     @abstractmethod
-    def test_dataloader(self)   -> Iterator[BatchInput]: '''return test dataloaders'''
+    def test_dataloader(self)   -> Iterator[BatchInput]: 
+        '''return test dataloaders'''
     @abstractmethod
-    def predict_dataloader(self)-> Iterator[BatchInput]: '''return predict dataloaders'''
+    def predict_dataloader(self)-> Iterator[BatchInput]: 
+        '''return predict dataloaders'''
     @classmethod
     def initialize(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level : Any = 2 , min_key_len = -1 , **kwargs):
         data = cls(config , use_data = use_data , *args , **kwargs)

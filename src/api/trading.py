@@ -18,7 +18,7 @@ class TradingAPI:
         """
         Rebuild backtest portfolio for a given port:
         """
-        BacktestPortfolioManager.rebuild(port_name).analyze()
+        BacktestPortfolioManager.rebuild(port_name , analyze = True)
 
     @classmethod
     def backtest_rebuild_all(cls):
@@ -26,7 +26,7 @@ class TradingAPI:
         Rebuild all backtest portfolios:
         """
         for port_name in Const.TradingPort.backtest_ports.keys():
-            BacktestPortfolioManager.rebuild(port_name).analyze()
+            BacktestPortfolioManager.rebuild(port_name , analyze = True)
 
     @classmethod
     def update(cls): 

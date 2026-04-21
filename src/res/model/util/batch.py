@@ -290,7 +290,7 @@ class BatchOutput:
         return df.assign(**kwargs)
     
     @classmethod
-    def from_module(cls , module : nn.Module | Any , inputs : 'Any | BatchInput | BatchData' , **kwargs):
+    def from_module(cls , module : nn.Module | Any , inputs : Any | BatchInput | BatchData , **kwargs):
         """module can be a nn.Module or any other object (e.g.PredictorModel) that can be called with inputs and kwargs"""
         if isinstance(inputs , BatchInput) or isinstance(inputs , BatchData): 
             inputs = inputs['x']

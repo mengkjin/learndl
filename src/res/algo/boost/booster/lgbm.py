@@ -4,6 +4,7 @@ Classes:
     Lgbm      — :class:`BasicBoostModel` sub-class wrapping ``lightgbm.train``.
     LgbmPlot  — Plot helpers (training curve, feature importance, SHAP, PDP, SDT).
 """
+from __future__ import annotations
 import lightgbm
 import numpy as np
 import pandas as pd
@@ -120,7 +121,7 @@ class LgbmPlot:
         sdt         — single-distillation tree (SDT) visualisation.
         pdp         — partial dependence plots for each feature.
     """
-    def __init__(self , lgbm : 'Lgbm' , plot_path : Path | None = PLOT_PATH) -> None:
+    def __init__(self , lgbm : Lgbm , plot_path : Path | None = PLOT_PATH) -> None:
         self.lgbm = lgbm
         self.plot_path = plot_path
         if self.plot_path is not None: 

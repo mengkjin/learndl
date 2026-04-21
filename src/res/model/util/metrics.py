@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 import torch
@@ -462,7 +463,7 @@ class AggregatedMetrics:
         for name in self.metric_names:
             self.tables[name].clear()
             self.averages[name].clear()
-    def append(self , metrics : 'BatchMetrics | AggregatedMetrics'):
+    def append(self , metrics : BatchMetrics | AggregatedMetrics):
         assert self.initiated , f'{self} is not initiated , please call new() first'
         assert not metrics.collected , f'{metrics} is already collected , please call new() first'
         metrics.collected = True

@@ -30,7 +30,7 @@ from src.interactive.frontend import (
 
 from src.proj import PATH , MACHINE
 
-from .control import SC
+from .session_control import SC
 from .page import get_script_page , print_page_header
 
 def on_first_page(max_page : int) -> None:
@@ -124,9 +124,12 @@ def show_script_task_selector(runner : ScriptRunner):
     subheader = expander_subheader(wkey , header , icon , False , help = help)
 
     with subheader:
+        selector_placeholder = st.empty()
+        with selector_placeholder:
+            st.info(help)
         if emtpy_queue: 
             return
-        
+
         status_options = ["All" , "Running" , "Complete" , "Error"]
         source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
         status = st.radio(":blue-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True)

@@ -493,7 +493,7 @@ class TaskQueue:
         """Return True if *item* is present in the queue."""
         return item in self.queue.values()
 
-    def get(self, task_id : str | None = None) -> 'TaskItem | None':
+    def get(self, task_id : str | None = None) -> TaskItem | None:
         """Return the :class:`TaskItem` with the given *task_id*, or None."""
         if task_id is None:
             return None
@@ -539,7 +539,7 @@ class TaskQueue:
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : Path | str | None , source : str | None = None) -> 'TaskItem':
+    def create_item(self , script : Path | str | None , source : str | None = None) -> TaskItem:
         """Create a new :class:`TaskItem`, persist it, and add it to this queue."""
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
@@ -605,7 +605,7 @@ class TaskQueue:
         self.task_db.sync_queue(self.queue_id)
         self.reload()
             
-    def status_message(self , queue : dict[str, 'TaskItem'] | None = None) -> str:
+    def status_message(self , queue : dict[str, TaskItem] | None = None) -> str:
         """Return a pipe-separated summary string of task status counts.
 
         Example: ``"Total: 5 | Running: 1 | Complete: 3 | Error: 1"``
@@ -622,7 +622,7 @@ class TaskQueue:
         msg = ' | '.join([f"{k.title()}: {v}" for k, v in counts.items()])
         return msg
 
-    def source_message(self , queue : dict[str, 'TaskItem'] | None = None) -> str:
+    def source_message(self , queue : dict[str, TaskItem] | None = None) -> str:
         """Return a pipe-separated summary string of task source counts (py/app/bash/other)."""
         if queue is None:
             queue = self.queue
@@ -641,7 +641,7 @@ class TaskQueue:
                source : str | None = None,
                folder : list[Path] | None = None,
                file : list[Path] | None = None ,
-               queue : dict[str, 'TaskItem'] | None = None) -> dict[str, 'TaskItem']:
+               queue : dict[str, TaskItem] | None = None) -> dict[str, TaskItem]:
         """Return a filtered, sorted copy of the queue.
 
         Parameters
@@ -676,7 +676,7 @@ class TaskQueue:
             queue = {k: v for k, v in queue.items() if v.path in file}
         return {item.id: item for item in self.sort(queue)}   
     
-    def latest_n(self , num : int = 10 , script_key : str | None = None) -> dict[str, 'TaskItem']:
+    def latest_n(self , num : int = 10 , script_key : str | None = None) -> dict[str, TaskItem]:
         """Return the *num* most-recently created tasks, optionally filtered by *script_key*."""
         if script_key is None:
             d = self.queue.copy()
@@ -684,7 +684,7 @@ class TaskQueue:
             d = {k:v for k,v in self.queue.items() if v.script_key == script_key}
         return {item.id: item for item in self.sort(d)[:num]}
     
-    def latest(self , script_key : str | None = None) -> 'TaskItem | None':
+    def latest(self , script_key : str | None = None) -> TaskItem | None:
         """Return the single most-recently created task, or None if the queue is empty."""
         d = self.latest_n(1 , script_key)
         if d:
@@ -693,7 +693,7 @@ class TaskQueue:
             return None
     
     @classmethod
-    def sort(cls , task_items : dict[str, 'TaskItem'] | list['TaskItem'] | Sequence['TaskItem'], key : str = 'create_time' , reverse : bool = True) -> list['TaskItem']:
+    def sort(cls , task_items : dict[str, TaskItem] | list[TaskItem] | Sequence[TaskItem], key : str = 'create_time' , reverse : bool = True) -> list[TaskItem]:
         """Sort *task_items* by the given attribute *key*, newest first by default."""
         if isinstance(task_items, dict):
             task_items = list(task_items.values())
@@ -746,7 +746,6 @@ class TaskItem:
     exit_error : str | None = None
 
     task_id : str | None = None
-    queue: TaskQueue | None = None
     
     def __post_init__(self) -> None:
         """Validate fields, normalise ``source``, and initialise transient attributes."""
@@ -771,15 +770,21 @@ class TaskItem:
             return self.id == other
         return False
     
-    def set_task_db(self , task_db : TaskDatabase | None = None) -> 'TaskItem':
+    def set_task_db(self , task_db : TaskDatabase | None = None) -> TaskItem:
         """Attach a :class:`TaskDatabase` to this item (creates one if not provided). Returns self."""
         if task_db is not None:
             self._task_db = task_db
         elif self._task_db is None:
             self._task_db = TaskDatabase()
         return self
+
+    def set_queue(self , queue : TaskQueue | None = None) -> TaskItem:
+        """Attach a :class:`TaskQueue` to this item (creates one if not provided). Returns self."""
+        if queue is not None:
+            self._queue = queue
+        return self
     
-    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
+    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> TaskItem:
         """Build and attach the :class:`ScriptCmd`, persisting the resulting ``cmd`` string. Returns self."""
         self.script_cmd = ScriptCmd(script, params, mode, **kwargs)
         self.update({'cmd': str(self.script_cmd)} , sync = True)
@@ -790,6 +795,13 @@ class TaskItem:
         """The attached :class:`TaskDatabase`; raises if not yet set."""
         assert self._task_db is not None , 'task_db is not set'
         return self._task_db
+
+    @property
+    def queue(self) -> TaskQueue | None:
+        """The attached :class:`TaskQueue` or None"""
+        if not self._queue:
+            self._queue = None
+        return self._queue
 
     @property
     def path(self) -> Path:
@@ -863,7 +875,7 @@ class TaskItem:
     
     @classmethod
     def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
-               queue : TaskQueue | bool | None = None) -> 'TaskItem':
+               queue : TaskQueue | bool | None = None) -> TaskItem:
         """Factory: create and persist a new :class:`TaskItem`.
 
         Parameters
@@ -895,7 +907,7 @@ class TaskItem:
         item.dump()
         if isinstance(queue, TaskQueue):
             queue.add(item)
-            item.queue = queue
+            item.set_queue(queue)
         elif queue:
             item.task_db.add_queue_task(item.task_db.active_queue() , item.id)
         return item
@@ -912,7 +924,7 @@ class TaskItem:
         return str(cmd)
     
     @classmethod
-    def load(cls , task_id: str , task_db : TaskDatabase | None = None) -> 'TaskItem':
+    def load(cls , task_id: str , task_db : TaskDatabase | None = None) -> TaskItem:
         """Load a persisted :class:`TaskItem` from the database by *task_id*."""
         task_db = task_db or TaskDatabase()
         item = task_db.get_task(task_id)
@@ -1305,13 +1317,13 @@ class TaskItem:
                     exit_info.append(('Exit Files', '\n'.join(self.exit_files)))
         return enter_info + exit_info
         
-    def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all') -> 'pd.DataFrame':
+    def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all') -> pd.DataFrame:
         """Return task metadata as a two-column DataFrame (Item / Value)."""
         data_list = self.info_list(info_type = info_type)
         df = pd.DataFrame(data_list , columns = pd.Index(['Item', 'Value']))
         return df
     
-    def run_script(self , as_workspace: str | None = None , from_workspace: str | None = None) -> 'TaskItem':
+    def run_script(self , as_workspace: str | None = None , from_workspace: str | None = None) -> TaskItem:
         """Launch the script subprocess, capture the PID, and update status to ``'running'``.
 
         Parameters

@@ -8,3 +8,4 @@ from .dynamic_import import *
 from .torch_load import *
 from .parallel import *
 from .disk_info import *
+from .deepreload import *

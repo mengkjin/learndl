@@ -3,7 +3,11 @@ page_title: "Learndl"
 pending_features: []
 auto_refresh_interval: 0 # seconds
 
-navigation_position: "both" # "sidebar", "both"
+navigation_position: "sidebar" # "sidebar", "both"
 
 task_queue_backend_refresh_interval: 5 # seconds
 task_starting_timeout: 20 # seconds
+
+control_panel_width_ratio : 0.8 # a float between 0 and 1, the width ratio of the control panel
+control_panel_buttons_columns : [3 , 5]
+control_panel_popovers_columns : [2 , 3]

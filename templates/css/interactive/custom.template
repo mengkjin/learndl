@@ -190,16 +190,16 @@
         }  
     }
 }
-.stVerticalBlock[class*="control-panel"] {
+.stVerticalBlock[class*="control-panel-container"] {
     min-height: 110px !important;
-    margin-bottom: -20px !important;
+    margin-top: 20px !important;
+    
     .stElementContainer {
         justify-content: center !important;
     }
     .stVerticalBlock[class*="control-panel-buttons"] {
         padding: 0 !important;
         margin-bottom: 0 !important;
-        margin-top: 20px !important;
         .stTooltipIcon {
             justify-content: center !important;
         }
@@ -218,6 +218,14 @@
                 background-color: green !important;
                 color: white !important;
                 &:hover {background-color: darkgreen !important;}
+            }
+        }
+        .stElementContainer[class*="reboot-app"] {
+            align-self: center !important;
+            button {
+                background-color: #E63946 !important;
+                color: white !important;
+                &:hover {background-color: #A8202A !important;}
             }
         }
         .stElementContainer[class*="global-script-latest-task"] {
@@ -247,9 +255,9 @@
         .stElementContainer[class*="git-clear-pull"] {
             align-self: center !important;
             button {
-                background-color: coral !important;
+                background-color: #D4AF37 !important;
                 color: white !important;
-                &:hover {background-color: #F44336 !important;}
+                &:hover {background-color: #997922 !important;}
             }
         }
         .stElementContainer[class*="-disabled"] button {
@@ -267,13 +275,33 @@
             align-self: center !important;
         }
     }
-    .stVerticalBlock[class*="control-panel-settings"] {   
+    .stVerticalBlock[class*="control-panel-popovers"] {   
         padding: 0 !important;
-        margin-bottom: 0 !important;
-        margin-top: 20px !important;
         p {
             font-size: 14px !important;
         }
+    }
+}
+[data-baseweb="popover"] {
+    padding: 10px !important;
+}
+div[class*="control-panel-popover-container"] {
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0.5rem !important;
+    margin-button: -10px !important;
+    button {
+        padding: 1px 5px 1px 5px !important;
+        div {
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
+    }
+    span {
+        font-size : 13px;
+    }
+    p {
+        font-size : 13px;
     }
 }
 .stElementContainer[class*="exit-file"] {
@@ -369,22 +397,28 @@ div[data-testid*="stSidebarUserContent"] {
     } 
     .stVerticalBlock[class*="sidebar-script-links"] {
         .stPageLink {
-            margin-top: 0 !important;
+            margin-top: -5px !important;
             margin-bottom: -5px !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
             padding-left: 10px !important;
+            span {
+                font-size: 16px !important;
+            }
+            p {
+                font-size: 14px !important;
+            }
         }
         button {
             span {
-                font-size: 20px !important;
+                font-size: 16px !important;
                 font-weight: bold !important;
             }
-            height: 24px !important;
-            width: 24px !important;
-            min-width: 24px !important;
-            min-height: 24px !important;
-            margin-top: 0 !important;
+            height: 20px !important;
+            width: 20px !important;
+            min-width: 20px !important;
+            min-height: 20px !important;
+            margin-top: -5px !important;
             margin-bottom: -5px !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;

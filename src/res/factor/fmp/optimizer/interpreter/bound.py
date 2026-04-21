@@ -30,14 +30,14 @@ class StockBound:
     def __add__(self , other):
         return self.copy().union(other)
         
-    def intersect(self , other : 'StockBound'):
+    def intersect(self , other : StockBound):
         if other.lb is not None: 
             self.update_lb(other.lb , type = 'intersect')
         if other.ub is not None: 
             self.update_ub(other.ub , type = 'intersect')
         return self
     
-    def union(self , other : 'StockBound'):
+    def union(self , other : StockBound):
         if other.lb is not None: 
             self.update_lb(other.lb , type = 'union')
         if other.ub is not None: 

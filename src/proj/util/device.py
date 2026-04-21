@@ -1,5 +1,5 @@
 """Torch device selection, nested ``.to()``, and simple RAM usage string."""
-
+from __future__ import annotations
 import psutil , torch
 from torch.nn import Module
 from typing import Any
@@ -59,7 +59,7 @@ class Device:
         return self.compare_devices(self.device , other)
 
     @staticmethod
-    def compare_devices(device1 : 'torch.device | Device' , device2 : 'torch.device | Device') -> bool:
+    def compare_devices(device1 : torch.device | Device , device2 : torch.device | Device) -> bool:
         dev1 = device1 if isinstance(device1 , torch.device) else device1.device
         dev2 = device2 if isinstance(device2 , torch.device) else device2.device
         return (dev1.type == dev2.type) and ((dev1.index or 0) == (dev2.index or 0))

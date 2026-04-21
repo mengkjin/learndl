@@ -6,6 +6,7 @@ Provides :class:`WidgetParamInput` (a Streamlit-aware extension of
 which renders a complete parameter form for a given script and manages the
 option ↔ value transformation pipeline.
 """
+from __future__ import annotations
 from typing import Literal , Any , Callable
 import streamlit as st
 
@@ -179,7 +180,7 @@ class ParamInputsForm:
         self.trigger_item = item
         self.cache = cache
 
-    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , cmd : str | None = None) -> 'ParamInputsForm':
+    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , cmd : str | None = None) -> ParamInputsForm:
         """Render the parameter form widgets.
 
         Parameters
@@ -233,7 +234,7 @@ class ParamInputsForm:
             param_values[param_name] = value
         return param_values
 
-    def init_customized_container(self , cmd : str = '' , num_cols : int = 4) -> 'ParamInputsForm':
+    def init_customized_container(self , cmd : str = '' , num_cols : int = 4) -> ParamInputsForm:
         """Render widgets in a responsive multi-column grid layout. Returns self."""
         num_cols = min(num_cols, len(self.param_dict))
         cmd_param_values = self.cmd_to_param_values(cmd)
@@ -250,7 +251,7 @@ class ParamInputsForm:
                     st.error(err_msg , icon = ":material/error:")
         return self
     
-    def init_form(self , cmd : str) -> 'ParamInputsForm':
+    def init_form(self , cmd : str) -> ParamInputsForm:
         """Render all widgets inside a ``st.form`` container with a Submit button. Returns self."""
         cmd_param_values = self.cmd_to_param_values(cmd)
         with st.form(f"ParamInputsForm-{self.runner.script_key}" , clear_on_submit = False):

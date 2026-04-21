@@ -58,9 +58,11 @@ class BaseFactorAnalyticCalculator(ABC):
             self.timer.__exit__(*args)
 
     @abstractmethod
-    def calculator(self) -> Callable[...,pd.DataFrame]: '''Define calculator'''
+    def calculator(self) -> Callable[...,pd.DataFrame]: 
+        '''Define calculator'''
     @abstractmethod
-    def plotter(self) -> Callable: '''Define plotter'''
+    def plotter(self) -> Callable: 
+        '''Define plotter'''
     @abstractmethod
     def calc(self , *args , **kwargs):
         self.calc_rslt = self.calculator()(*args , **kwargs)

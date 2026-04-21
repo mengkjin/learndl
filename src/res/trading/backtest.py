@@ -15,11 +15,12 @@ class BacktestPortfolioManager:
         return tp.build(date).analyze(start = start , end = end , **kwargs)
 
     @classmethod
-    def rebuild(cls , port_name : str , date : int | None = None , export = True , indent : int = 1 , vb_level : Any = 2):
+    def rebuild(cls , port_name : str , date : int | None = None , export = True , analyze = True , indent : int = 1 , vb_level : Any = 2):
         tp = BacktestPort.load(port_name)
         date = date if date is not None else CALENDAR.updated()
         tp.rebuild(date , export = export , indent = indent , vb_level = vb_level)
-        tp.analyze(end = date)
+        if analyze:
+            tp.analyze(end = date)
         return tp
 
     @classmethod

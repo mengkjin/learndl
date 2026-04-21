@@ -120,8 +120,7 @@ class OutputDeflector:
 class DeflectorGroup:
     """Pair of ``OutputDeflector``s for stdout and stderr."""
 
-    def __init__(self , catcher : 'OutputCatcher' , 
-                 keep_original : bool = True):
+    def __init__(self , catcher : OutputCatcher , keep_original : bool = True):
         self.stdout = OutputDeflector('stdout', catcher, keep_original)
         self.stderr = OutputDeflector('stderr', catcher, keep_original)
 
@@ -448,7 +447,7 @@ class TimedOutput:
 
         return cls(output_type, content , infos , valid)
     
-    def equivalent(self, other: 'TimedOutput') -> bool:
+    def equivalent(self, other: TimedOutput) -> bool:
         """
         Check if the output item is equivalent to the other item
         equivalent means the content is very similar , or the progress bar is the same

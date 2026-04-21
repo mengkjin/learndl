@@ -5,6 +5,7 @@ Classes:
     BoostInput       — aligned 3-D tensor container with weight computation
     BoostWeightMethod — three-axis (ts/cs/bm) sample weight calculator
 """
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
@@ -384,7 +385,7 @@ class BoostInput:
         return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod
-    def concat(cls , datas : 'list[BoostInput | None]'):
+    def concat(cls , datas : list[BoostInput | None]):
         """Union-merge a list of :class:`BoostInput` objects along all axes.
 
         ``secid`` and ``date`` are union-merged; ``feature`` is stacked
