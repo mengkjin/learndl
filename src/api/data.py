@@ -58,7 +58,19 @@ class DataAPI:
     
     @classmethod
     def is_updated(cls):
-        """return True if the data is updated to the latest date"""
+        """
+        Return if the data is updated to the latest date
+        
+        Args:
+          None
+        Returns:
+          bool: is the data updated to the latest date
+
+        [API Interaction]:
+          allow: all
+          disable_machine: []
+          expected_execution_time: immediate
+        """
         updated = CALENDAR.updated()
         update_to = CALENDAR.td(CALENDAR.update_to()) # use trade date to compare
         is_updated = updated >= update_to

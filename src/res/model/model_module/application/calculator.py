@@ -41,7 +41,7 @@ class ModelCalculator:
         self._model_keys = value
 
     def _get_model_date(self , date : int) -> int:
-        """get the latest model date before the query date"""
+        """get the closest model date before the query date"""
         model_dates = self.model_path.model_dates[self.model_path.model_dates < date]
         assert len(model_dates) > 0 , f'no model date before {date}'
         return model_dates[-1]

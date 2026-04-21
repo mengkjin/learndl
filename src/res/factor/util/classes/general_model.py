@@ -26,25 +26,25 @@ class GeneralModel(ABC):
         return self
     def available_dates(self): 
         return np.array(list(self.models.keys()))
-    def latest_avail_date(self , date : int = 99991231):
+    def closest_avail_date(self , date : int = 99991231):
         available_dates = self.available_dates()
         if date in available_dates: 
             return date
         tar_dates = available_dates[available_dates < date]
         return max(tar_dates) if len(tar_dates) else -1
-    def get_model(self , date : int , latest = True):
-        return self.get(date , latest)
-    def get(self , date : int , latest = True):
+    def get_model(self , date : int , closest = True):
+        return self.get(date , closest)
+    def get(self , date : int , closest = True):
         if date in self.models:
             return self.models[date]
-        use_date = self.latest_avail_date(date) if latest else date
+        use_date = self.closest_avail_date(date) if closest else date
         if use_date not in self.models and use_date in self.available_dates():
             self.append(self.load_day_model(date))
         return self.models.get(use_date , None)
-    def has(self , date : int , latest = True):
+    def has(self , date : int , closest = True):
         if date in self.models: 
             return True
-        return self.available_dates().min() <= date if latest else False
+        return self.available_dates().min() <= date if closest else False
     def load_models(self , dates : np.ndarray | Any = None , start : int = -1 , end : int = -1):
         if dates is None:
             dates = self.available_dates()

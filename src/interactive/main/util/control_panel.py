@@ -106,7 +106,7 @@ class GlobalScriptLatestTaskButton(ControlPanelButton):
     """Button that navigates to the latest task across all scripts."""
     key = f"global-script-latest-task"
     icon = f":material/reply_all:"
-    title = f"Latest for All"
+    title = f"Global Last Task"
 
     def button(self , script_key : str | None = None):
         item = SC.get_latest_task_item()
@@ -133,7 +133,7 @@ class CurrentScriptLatestTaskButton(ControlPanelButton):
     """Button that shows the latest task for the currently displayed script."""
     key = f"current-script-latest-task"
     icon = f":material/reply:"
-    title = f"Current Latest"
+    title = f"Current Last Task"
 
     def button(self , script_key : str | None = None):
         item = SC.get_latest_task_item(script_key) if script_key is not None else None

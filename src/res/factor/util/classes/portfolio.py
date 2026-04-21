@@ -28,9 +28,9 @@ class Portfolio:
     .weight_block() : generate the weight of the portfolio as a DataBlock
     .append(port , override = False , ignore_name = False) : append a port to the portfolio
     .available_dates() : return the available dates of the portfolio
-    .latest_avail_date(date : int = 99991231) : return the latest available date of the portfolio before the given date
+    .closest_avail_date(date : int = 99991231) : return the closest available date of the portfolio before the given date
     .has(date : int) : return True if the portfolio has the given date
-    .get(date : int , latest = False) : return the port for the given date
+    .get(date : int , closest = False) : return the port for the given date
     .from_dataframe(df : pd.DataFrame , name : str | Any = None) : create a portfolio from a dataframe
     .to_dataframe() : convert the portfolio to a dataframe
     .load(path : Path | str) : load a portfolio from a path (dataframe)
@@ -129,8 +129,8 @@ class Portfolio:
         """return the available dates of the portfolio"""
         return self.port_date
 
-    def latest_avail_date(self , date : int = 99991231):
-        """return the latest available date of the portfolio before the given date"""
+    def closest_avail_date(self , date : int = 99991231):
+        """return the closest available date of the portfolio before the given date"""
         available_dates = self.available_dates()
         if date in available_dates: 
             return date
@@ -139,11 +139,11 @@ class Portfolio:
     def has(self , date : int):
         """return True if the portfolio has the given date"""
         return date in self.ports
-    def get(self , date : int , latest = False): 
+    def get(self , date : int , closest = False): 
         """return the port for the given date"""
         port = self.ports.get(date , None)
         if port is None:
-            use_date = self.latest_avail_date(date) if latest else date
+            use_date = self.closest_avail_date(date) if closest else date
             port = self.ports.get(use_date , None)
         if port is None: 
             return Port.none_port(date , self.name)

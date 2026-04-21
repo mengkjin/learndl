@@ -401,12 +401,12 @@ class HiddenPath:
     def get_hidden_df(self , model_date : int , exact = False , indent : int = 1 , vb_level : Any = 2) -> tuple[int, pd.DataFrame]:
         """get hidden dataframe"""
         if not exact: 
-            model_date = self.latest_hidden_model_date(model_date)
+            model_date = self.closest_hidden_model_date(model_date)
         hidden_df = DB.load_df(self.target_path(model_date))
         return model_date , hidden_df
     
-    def latest_hidden_model_date(self , model_date) -> int:
-        """latest hidden model date"""
+    def closest_hidden_model_date(self , model_date) -> int:
+        """closest hidden model date"""
         possible_model_dates = self.model_dates()
         return possible_model_dates[possible_model_dates <= model_date].max()
 

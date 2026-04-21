@@ -173,8 +173,8 @@ class RiskModel(GeneralModel):
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
     def available_dates(self): return DB.dates('models' , 'tushare_cne5_exp')
-    def get(self , date : int , latest = True) -> Rmodel:
-        model = super().get(date , latest)
+    def get(self , date : int , closest = True) -> Rmodel:
+        model = super().get(date , closest)
         assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'
         return model
     def load_day_model(self , date : int):

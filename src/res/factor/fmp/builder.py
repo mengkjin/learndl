@@ -170,7 +170,7 @@ class PortfolioBuilder:
     def build(self , date : int):
         assert hasattr(self , 'creator') , 'PortfolioBuilder not setup!'
         assert self.alpha.has(date) , f'{self.alpha.name} has no data at {date}'
-        init_port = self.portfolio.get(date , latest = True)
+        init_port = self.portfolio.get(date , closest = True)
         port_rslt = self.creator.create(date , self.alpha.get(date , lag = self.lag) , self.benchmark , init_port)
         self.creations.append(port_rslt)
         self.portfolio.append(port_rslt.port.with_name(self.portfolio.name))

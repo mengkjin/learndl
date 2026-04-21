@@ -378,17 +378,14 @@ def load_pl(db_src : str , db_key : str , date : int | None = None , *,
     return df
 
 def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
-          key_column = 'date' , override_existing_key = False , use_alt = False , 
+          key_column = 'date' , override_existing_key = False , use_alt = False , closest = False ,
           accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
           fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database"""
     assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load instead'
 
     db_path = DBPath(db_src , db_key)
-    if dates is None:
-        assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
-        dates = db_path.dates(start , end , use_alt = use_alt)
-    paths = {int(date):db_path.path(date , use_alt = use_alt) for date in dates}
+    paths = db_path.get_paths(dates , start , end , use_alt = use_alt , closest = closest)
     if not paths:
         return pd.DataFrame()
     df = load_df(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator)
@@ -399,16 +396,15 @@ def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = 
     return df
 
 def loads_pl(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
-             key_column : str | None = 'date' , override_existing_key = False , use_alt = False , 
+             key_column : str | None = 'date' , override_existing_key = False , use_alt = False , closest = False ,
              accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
              fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database but use polars to load"""
     assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load_pl instead'
     db_path = DBPath(db_src , db_key)
-    if dates is None:
-        assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
-        dates = db_path.dates(start , end , use_alt = use_alt)
-    paths = {int(date):db_path.path(date , use_alt = use_alt) for date in dates}
+    paths = db_path.get_paths(dates , start , end , use_alt = use_alt , closest = closest)
+    if not paths:
+        return pl.DataFrame()
     df = load_df_pl(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator)
     df = dfHandler.load_process_polars(df , syntax = db_path.syntax(dates) , indent = indent , vb_level = vb_level , **kwargs)
     if fill_datavendor:

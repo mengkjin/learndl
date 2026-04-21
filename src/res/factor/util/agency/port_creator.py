@@ -24,7 +24,7 @@ class PortCreator(ABC):
         elif isinstance(benchmark , Port):
             self.bench_port = benchmark
         else:
-            self.bench_port = benchmark.get(model_date , latest = True)
+            self.bench_port = benchmark.get(model_date , closest = True)
         self.detail_infos = detail_infos
 
         t0 = datetime.now()

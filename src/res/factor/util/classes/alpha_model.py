@@ -219,8 +219,8 @@ class AlphaModel(GeneralModel):
     def load_day_model(self, date: int) -> Any:
         """load alpha model for a specific date , is not implemented in this class"""
         ...
-    def get_model(self , date : int , latest = True) -> Amodel:
-        return self.get(date , latest)
+    def get_model(self , date : int , closest = True) -> Amodel:
+        return self.get(date , closest)
     @property
     def empty(self) -> bool:
         return len(self.models) == 0 or (len(self.models) == 1 and self.item().empty)
@@ -263,22 +263,22 @@ class AlphaModel(GeneralModel):
             raise ValueError(f'model must be a Amodel, list of Amodel, dict of Amodel, or AlphaModel: {type(model)}')
         return self
     
-    def subset(self , date : int | list[int] | np.ndarray , latest = False):
+    def subset(self , date : int | list[int] | np.ndarray , closest = False):
         if not isinstance(date , (list , np.ndarray)):
             date = [date]
-        if latest:
-            date = list(set([self.latest_avail_date(d) for d in date]))
+        if closest:
+            date = list(set([self.closest_avail_date(d) for d in date]))
         models = {d : self.models.get(d) for d in date if d in self.models}
         return self.__class__(name = self.name , models = models)
 
-    def get(self , date : int , latest = True , lag : int = 0) -> Amodel:
+    def get(self , date : int , closest = True , lag : int = 0) -> Amodel:
         if lag:
             assert lag > 0 , lag
             avail_dates = np.sort(self.available_dates())
             avail_dates = avail_dates[avail_dates < date]
             if len(avail_dates): 
                 date = avail_dates[-min(lag , len(avail_dates))]
-        model = super().get(date , latest)
+        model = super().get(date , closest)
         if model is None:
             model = Amodel.empty_model(date , name = self.name)
         return model
@@ -332,19 +332,18 @@ class AlphaComponent:
         elif isinstance(self.input , Amodel):
             return self.input.to_alpha_model()
 
-        if isinstance(date , int):
-            date = [date]
+        date = _to_dates(date)
         cached_alpha_model = self.get_cache(self.name , normalize = self.normalize)
         cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
         new_dates = np.setdiff1d(date , cached_dates)
         
         if len(new_dates) == 0:
-            return cached_alpha_model.subset(date , latest = True)
+            return cached_alpha_model.subset(date , closest = True)
             
         alpha_model = self.loads(new_dates)
         new_alpha_model = cached_alpha_model.append(alpha_model)
         self.set_cache(new_alpha_model , self.name , normalize = self.normalize)
-        return new_alpha_model.subset(date , latest = True)
+        return new_alpha_model.subset(date , closest = True)
 
     @classmethod
     def get_cache(cls , name : str , normalize : bool = True) -> AlphaModel:
@@ -364,16 +363,12 @@ class AlphaComponent:
             cls._cache_unnormalized[name] = alpha_model
 
     @classmethod
-    def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None , name : str = 'alpha0' , normalize : bool = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+    def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None , name : str = 'alpha0' , normalize : bool = True , closest = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
         from src.res.factor.util.classes import StockFactor
         def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
-            if not isinstance(date , (list , np.ndarray)):
-                date = [date]
+            date = _to_dates(date)
             column = db_column if db_column is not None else db_key
-            df = DB.loads(db_src , db_key , date , override_existing_key = True , vb_level = 'never')
-            if df.empty or min(date) < min(df['date']):
-                prev_df = DB.load(db_src , db_key , min(date) , closest = True , vb_level = 'never').assign(date = min(date))
-                df = prev_df if df.empty else pd.concat([prev_df , df])
+            df = DB.loads(db_src , db_key , date , override_existing_key = True , closest = closest , vb_level = 'never')
             assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
             df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
             factor = StockFactor(df)
@@ -385,13 +380,12 @@ class AlphaComponent:
         return wrapper
 
     @classmethod
-    def factor_loads(cls , factor_name : str , name : str = 'alpha0' , normalize : bool = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+    def factor_loads(cls , factor_name : str , name : str = 'alpha0' , normalize : bool = True , closest = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
         from src.res.factor.calculator import StockFactorHierarchy
         from src.res.factor.util.classes import StockFactor
         def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
-            if not isinstance(date , (list , np.ndarray)):
-                date = [date]
-            factor = StockFactorHierarchy.get_factor(factor_name).Loads(date)
+            date = _to_dates(date)
+            factor = StockFactorHierarchy.get_factor(factor_name).Loads(date , closest = closest)
             factor = StockFactor(factor)
             if normalize:
                 factor = factor.normalize(inplace=True)
@@ -461,7 +455,7 @@ class AlphaComposite(AlphaCombination):
 
         models : list[Amodel] = []
         for d in date:
-            alphas = [alpha.get(d , latest=True) for alpha in alpha_models]
+            alphas = [alpha.get(d , closest=True) for alpha in alpha_models]
             if not any(not alpha.empty for alpha in alphas):
                 for model in alpha_models:
                     print(model.name)
@@ -489,7 +483,7 @@ class AlphaScreener(AlphaCombination):
 
         models : list[Amodel] = []
         for d in date:
-            amodel = Amodel.combine_worst([alpha.get(d , latest=True) for alpha in alpha_models] , self.method , date = d)
+            amodel = Amodel.combine_worst([alpha.get(d , closest=True) for alpha in alpha_models] , self.method , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 

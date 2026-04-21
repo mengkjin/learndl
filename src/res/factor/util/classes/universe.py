@@ -69,7 +69,7 @@ class Universe:
                 df = pd.DataFrame({'date' : date , 'secid' : secid})
             elif self.name.startswith('top'):
                 top_num = int(self.name.split('.')[0].removeprefix('top'))
-                df = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.latest_date('val' , date)).sort_values('circ_mv' , ascending=False)
+                df = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.closest_date('val' , date)).sort_values('circ_mv' , ascending=False)
                 df = df.query('secid in @secid').iloc[:top_num].loc[:,['secid']].\
                     reset_index().assign(date = date).loc[:,['date' , 'secid']]
             elif self.name in Benchmark.AVAILABLES:

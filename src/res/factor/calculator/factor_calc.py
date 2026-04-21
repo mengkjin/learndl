@@ -351,13 +351,13 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return cls().load_factor(date , closest = closest)
 
     @classmethod
-    def Loads(cls , dates : np.ndarray | list[int] , normalize = False , 
+    def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
               indent : int = 1 , vb_level : Any = 'max'
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , indent = indent , vb_level = vb_level)
+        df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , indent = indent , vb_level = vb_level)
         if cls.meta_type == 'stock' and normalize:
             df = StockFactor.normalize_df(df , fill_method = fill_method)
         return df
@@ -704,10 +704,10 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def loads_from_db(cls , src : str , key : str , dates : np.ndarray | list[int] , col : str | None = None , 
-                      indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
+                      closest = False , indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
         if len(dates) == 0:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
-        df = DB.loads(src , key , dates , override_existing_key = True , indent = indent , vb_level = vb_level)
+        df = DB.loads(src , key , dates , override_existing_key = True , closest = closest , indent = indent , vb_level = vb_level)
         if df.empty:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         if not col:

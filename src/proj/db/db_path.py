@@ -190,6 +190,20 @@ class DBPath:
                 return max(dates)
         return None
 
+    def get_paths(self , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , year = None , 
+                  use_alt = False , closest = False) -> dict[int, Path]:
+        """get paths from database"""
+        if dates is None:
+            assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
+            dates = self.dates(start , end , use_alt = use_alt)
+        paths = {date:self.path(date , use_alt = use_alt) for date in dates}
+        paths = {date:path for date,path in paths.items() if path.exists()}
+        if closest and len(dates) > 0 and min(dates) not in paths:
+            prev_date = self.date_closest(min(dates))
+            if prev_date is not None:
+                paths[prev_date] = self.path(prev_date , use_alt = use_alt)
+        return paths
+
     def alternatives(self) -> list[DBPath]:
         """get alternatives of database"""
         if self.src in self.src_alternatives:

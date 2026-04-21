@@ -35,7 +35,7 @@ class TradeDataAccess(DateDataAccess):
         df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'never')
         return df
 
-    def latest_date(self , data_type : str , date : int | None = None) -> int:
+    def closest_date(self , data_type : str , date : int | None = None) -> int:
         """Return the most recent date available in the DB for ``data_type``, optionally capped at ``date``."""
         dates = DB.dates(self.DB_SRC , self.DB_KEYS[data_type])
         if date: 

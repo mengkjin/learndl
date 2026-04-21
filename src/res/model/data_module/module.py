@@ -205,7 +205,7 @@ class DataModule(BaseDataModule):
         hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
         for hidden_key in self.input_keys_hidden:
             hidden_path = HiddenPath.from_key(hidden_key)
-            if hidden_key in hidden_input and hidden_input[hidden_key][0] == hidden_path.latest_hidden_model_date(self.model_date):
+            if hidden_key in hidden_input and hidden_input[hidden_key][0] == hidden_path.closest_hidden_model_date(self.model_date):
                 df = hidden_input[hidden_key][1]
             else:
                 hidden_model_date , df = hidden_path.get_hidden_df(self.model_date , exact=False)

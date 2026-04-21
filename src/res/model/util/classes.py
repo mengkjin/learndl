@@ -1056,7 +1056,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         resume_info = f'Resume testing'
         pred_records = self.pred_records()
 
-        latest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
+        closest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
         pred_records = pred_records.query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
         
         if not pred_records.empty:
@@ -1065,19 +1065,19 @@ class PredRecorder(ModelStreamLineWithTrainer):
             if self.min_test_date < min_pred_date:
                 resume_info += f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
             else:
-                models_all = pred_records.query('model_date <= @latest_model_date')
-                models_previous = pred_records.query('model_date < @latest_model_date')
+                models_all = pred_records.query('model_date <= @closest_model_date')
+                models_previous = pred_records.query('model_date < @closest_model_date')
                 
                 if Const.Model.resume_test == 'last_model_date' and not models_previous.empty:
                     self.resumed_models_finished = models_previous[['model_date' , 'model_num']].reset_index(drop=True)
                     self.resumed_last_pred_date = min(models_previous['max_pred_date'].max() , self.max_test_date)
-                    self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
-                    resume_info += f', recognize past saved preds before model date {latest_model_date}'
+                    self.resumed_models_unfinished = pred_records.query('model_date == @closest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
+                    resume_info += f', recognize past saved preds before model date {closest_model_date}'
                 elif Const.Model.resume_test == 'last_pred_date':
                     if max_pred_date < self.max_test_date:
                         self.resumed_models_finished = models_previous[['model_date' , 'model_num']]
                         self.resumed_last_pred_date = max_pred_date
-                        self.resumed_models_unfinished = pred_records.query('model_date == @latest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
+                        self.resumed_models_unfinished = pred_records.query('model_date == @closest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
                     else:
                         self.resumed_models_finished = models_all[['model_date' , 'model_num']]
                         self.resumed_last_pred_date = self.max_test_date
@@ -1113,7 +1113,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def collect_avg_preds(self):
         self.save_avg_preds(self.model_date)
         
-    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , latest : bool = False) -> pd.DataFrame:
+    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
             return self.empty_preds()
@@ -1122,10 +1122,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
             pred_records = pred_records.query('model_num == @model_num')
         if pred_records.empty:
             Logger.error(f'No pred records found for test dates {pred_dates}')
-            if latest:
+            if closest:
                 pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min()')
-                latest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
-                pred_records = pred_records.query('max_pred_date == @latest_pred_date')
+                closest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
+                pred_records = pred_records.query('max_pred_date == @closest_pred_date')
                 df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
             else:
                 df = self.empty_preds()
@@ -1133,7 +1133,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
             df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
         return df
 
-    def get_avg_preds(self , pred_dates : np.ndarray , latest : bool = False) -> pd.DataFrame:
+    def get_avg_preds(self , pred_dates : np.ndarray , closest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
             return self.empty_preds()
@@ -1145,10 +1145,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         if avg_pred_records.empty:
             Logger.error(f'No avg pred records found for test dates {pred_dates}')
-            if latest:
+            if closest:
                 avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
-                latest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
-                avg_pred_records = avg_pred_records.query('max_pred_date == @latest_avg_pred_date')
+                closest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
+                avg_pred_records = avg_pred_records.query('max_pred_date == @closest_avg_pred_date')
                 df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
                 df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
             else:

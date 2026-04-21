@@ -60,18 +60,18 @@ class Benchmark(Portfolio):
         self.benchmark_attempted_dates = []
         return self
 
-    def get(self , date : int , latest = True):
+    def get(self , date : int , closest = True):
         if self.name in self.NONE: 
             return Port.none_port(date , self.name)
         port = self.ports.get(date , None)
         if port is not None: 
             return port
-        if not latest: 
+        if not closest: 
             return Port.none_port(date , self.name)
         if DB.path('benchmark_ts' , f'{self.name}_projected' , date , use_alt = True).exists():
             port = Port(DB.load('benchmark_ts' , f'{self.name}_projected' , date) , date , self.name)
         else:
-            use_date = self.latest_avail_date(date)
+            use_date = self.closest_avail_date(date)
             if use_date in self.ports:
                 port = self.ports[use_date].evolve_to_date(date)
             elif use_date in self.available_dates():
@@ -90,7 +90,7 @@ class Benchmark(Portfolio):
     
     def get_dates(self , dates : np.ndarray | list):
         for d in DATAVENDOR.CALENDAR.diffs(dates , self.benchmark_attempted_dates): 
-            self.get(d , latest = True)
+            self.get(d , closest = True)
 
     def sec_num(self , date : np.ndarray | list):
         if self:
@@ -132,16 +132,16 @@ class Benchmark(Portfolio):
         elif isinstance(bm , Port):
             return bm
         elif isinstance(bm , Benchmark):
-            return bm.get(model_date , latest=True)
+            return bm.get(model_date , closest=True)
         elif isinstance(bm , Portfolio):
             if bm.is_default and default_config and not bm.has(model_date):
                 port = cls.day_port(default_config , model_date)
                 bm.append(port , ignore_name = True)
             else:
-                port = bm.get(model_date , latest=True)
+                port = bm.get(model_date , closest=True)
             return port
         elif isinstance(bm , str):
-            return cls(bm).get(model_date , latest=True)
+            return cls(bm).get(model_date , closest=True)
         elif isinstance(bm , dict):
             name = str({(k if isinstance(k,(Portfolio,Port)) else str(k)):v for k,v in bm.items()})
             for i , (key , value) in enumerate(bm.items()):
