@@ -278,7 +278,7 @@ class IntroPagePopover(ControlPanelPopover):
         
         for name , page in pages.items():
             if st.button(f'**{page["label"]}**' , icon = page["icon"] , key = f"control-panel-{self.key}-{name}" ,
-                         help = f""":blue[**{page['label'].title()}**] - {page['help']}""" , width = 'stretch'):
+                         help = f""":blue[**{page['label'].title()}**] - {page['help']}""" , width = 'stretch' , type = 'tertiary'):
                 st.switch_page(page['page'])
             
 class GlobalSettingsPopover(ControlPanelPopover):
@@ -324,11 +324,11 @@ class MoreButtonsPopover(ControlPanelPopover):
         icon = f":material/reply_all:"
         title = f"**Latest for All**"
         if item is None:
-            st.button(title , icon = icon, disabled = True, help = "Please Run a Task First" ,)
+            st.button(title , icon = icon, disabled = True, help = "Please Run a Task First" , type = 'tertiary')
         else:
             if st.button(title , icon = icon, width = 'stretch',
                          help = f":blue[**Show Latest Task**]: {item.id}" , 
-                         on_click = SC.click_show_complete_report , args = (item,)):
+                         on_click = SC.click_show_complete_report , args = (item,), type = 'tertiary'):
                 if SC.current_page_name != repr(item.script_key):
                     from src.interactive.main.util.page import get_script_page
 
@@ -343,10 +343,10 @@ class MoreButtonsPopover(ControlPanelPopover):
         icon = ':material/reply:'
         title = f'**Current Latest**'
         if item is None:
-            st.button(title , icon = icon , disabled = True, width = 'stretch',
+            st.button(title , icon = icon , disabled = True, width = 'stretch', type = 'tertiary' ,
                       help = "Please Run a Task of This Script First" if script_key is not None else "Please Choose a Script First")
         else:
-            if st.button(title , icon = icon , width = 'stretch',
+            if st.button(title , icon = icon , width = 'stretch', type = 'tertiary' ,
                          help = f":blue[**Show Latest Task of This Script**]: {item.id}" , 
                          on_click = SC.click_show_complete_report , args = (item,)):
                 #from .script_detail import show_report_main
@@ -402,7 +402,7 @@ class ControlPanel:
             ncols = max(min(len(self.buttons) , max_cols) , min_cols)
             buttons = list(self.buttons.values())
             for irow in range(nrows):
-                cols = st.columns(ncols , gap = 'large' , vertical_alignment = 'center')
+                cols = st.columns(ncols , gap = 'small' , vertical_alignment = 'center')
                 for icol , col in zip(range(ncols), cols):
                     if irow * ncols + icol >= len(buttons):
                         break
@@ -421,7 +421,7 @@ class ControlPanel:
             ncols = max(min(len(self.popovers) , max_cols) , min_cols)
             popovers = list(self.popovers.values())
             for irow in range(nrows):
-                cols = st.columns(ncols , gap = 'small' , vertical_alignment = 'center')
+                cols = st.columns(ncols , gap = 'large' , vertical_alignment = 'center')
                 for icol , col in zip(range(ncols), cols):
                     if irow * ncols + icol >= len(popovers):
                         break

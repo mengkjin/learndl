@@ -5,36 +5,282 @@
 
 ---
 
-## 1. Project Environment Class — `MACHINE` , `PATH` , `Proj` , `Const`
+## 1. Project Environment — `src/proj/env/`
 
-# MACHINE: 
+Import all four top-level objects from the package:
+```python
+from src.proj.env import MACHINE, PATH, Const, Proj
+```
 
-Includes key attributes of the machine being used
-Read via `from src.proj.env import MACHINE`.
+---
 
-# PATH:
+### `MACHINE` — `src/proj/env/machine.py`
 
-Static class with 50+ named paths. All paths are derived from `MACHINE.main_path` — **never hardcode paths**.
-Read via `from src.proj.env import PATH`
+Static class (class-level attributes only, never instantiated). Auto-resolved at import time from the host name and the `.secret/machines.yaml` config.
 
-PATH.data          # data root
-PATH.logs          # logs of project
-PATH.model         # trained model checkpoints
-PATH.result        # general result of factor / tradingport
-PATH.conf          # configureation files
-...
+**Key attributes:**
+```python
+MACHINE.name            # socket hostname (first segment)
+MACHINE.system_name     # 'linux' | 'windows' | 'macos'
+MACHINE.main_path       # project root Path (from pyproject.toml discovery)
+MACHINE.config          # ConfFileLazyLoader — reads configs/ YAMLs by stem key
+MACHINE.secret          # ConfFileLazyLoader — reads .secret/ YAMLs
 
-All return `pathlib.Path` objects. Use `PATH.xxx / 'subdir' / 'file.parquet'` for construction.
+MACHINE.cuda_server     # bool: is this a dedicated GPU server
+MACHINE.python_path     # interpreter path
+MACHINE.share_folder    # Path | None: optional shared network folder
+MACHINE.mosek_lic_path  # Path | None
+MACHINE.updatable       # bool: may run live data updates
+MACHINE.emailable       # bool: may send notification emails
+MACHINE.nickname        # display name
 
-# Const: 
+MACHINE.belong_to_hfm   # bool: host name starts with hno/hpo
+MACHINE.hfm_factor_dir  # Path | None: HFM shared alpha dir (HFM machines only)
 
-Includes configuration / preference / default_value of various utilities
-Read via `from src.proj.env import Const`
+MACHINE.platform_server # bool: name == 'mengkjin-server'
+MACHINE.platform_coding # bool: is_macos
 
-# Proj: 
+MACHINE.cpu_count       # os.cpu_count()
+MACHINE.max_workers     # 40 on server, cpu_count elsewhere
+MACHINE.best_device     # 'CUDA:<name>' | 'MPS' | 'CPU'
+MACHINE.timezone        # local timezone object
+MACHINE.utc8            # bool: timezone == Asia/Shanghai
+```
 
-Includes verbosity control / temporal files record / runtime instances record
-Read via `from src.proj.env import Proj`
+**`ConfFileLazyLoader`** — used by `MACHINE.config` and `MACHINE.secret`:
+```python
+# Lazy-loads YAML/JSON from a root directory by slash-separated key path
+MACHINE.config('constant/project')                     # returns full dict
+MACHINE.config('constant/project', 'vb', default=1)   # nested lookup with fallback
+MACHINE.config.get('strategy/model')                   # same as __call__
+```
+Files are loaded once and cached. Keys may be nested with `/` separators.
+
+**Utility methods:**
+```python
+MACHINE.info()                          # dict of key attributes for display
+MACHINE.machine_main_path('other-host') # Path: main_path of another machine from secrets
+```
+
+---
+
+### `PATH` — `src/proj/env/path.py`
+
+Static class of `pathlib.Path` constants. All paths derived from `MACHINE.main_path` — **never hardcode paths**. Called `PATH.mkdir_path()` at import time to ensure all directories exist.
+
+```python
+# Project root
+PATH.main           # project root
+PATH.scpt           # scripts/
+PATH.fac_def        # src/res/factor/defs/
+PATH.conf           # configs/
+PATH.schedule       # configs/model/schedule/
+
+# data/ tree
+PATH.data           # data/
+PATH.database       # data/DataBase/
+PATH.export         # data/Export/
+PATH.interim        # data/Interim/
+PATH.miscel         # data/Miscellaneous/
+PATH.updater        # data/Updater/
+
+# interim sub-paths
+PATH.block          # data/Interim/DataBlock/
+PATH.batch          # data/Interim/MiniBatch/
+PATH.checkpoint     # data/Interim/Checkpoint/
+PATH.datacache      # data/Interim/DataCache/
+PATH.norm           # data/Interim/HistNorm/
+
+# export sub-paths
+PATH.hidden         # data/Export/hidden_feature/
+PATH.factor         # data/Export/stock_factor/
+PATH.pred           # data/Export/model_prediction/
+PATH.fmp            # data/Export/factor_model_port/
+PATH.fmp_account    # data/Export/factor_model_account/
+PATH.trade_port     # data/Export/trading_portfolio/
+
+# logs/ + results/ + models/
+PATH.logs           # logs/
+PATH.log_model      # logs/model/
+PATH.result         # results/
+PATH.rslt_factor    # results/factor/
+PATH.rslt_trade     # results/trade/
+PATH.model          # models/
+PATH.model_nn       # models/nn/
+PATH.model_boost    # models/boost/
+PATH.model_factor   # models/factor/
+PATH.model_st       # models/st/
+
+# resources + templates
+PATH.resource       # resources/
+PATH.backup         # resources/backup/
+PATH.template       # templates/
+
+# machine-local (not shared, not in git)
+PATH.local_resources  # .local_resources/
+PATH.local_share      # .local_resources/shared/
+PATH.local_machine    # .local_resources/<hostname>/
+PATH.temp             # .local_resources/temp/
+PATH.app_db           # .local_resources/<hostname>/app_db/
+PATH.runtime          # .local_resources/<hostname>/runtime/
+PATH.optuna           # .local_resources/<hostname>/optuna/
+PATH.tensorboard      # .local_resources/<hostname>/tensorboard/
+PATH.share_folder     # alias for MACHINE.share_folder
+PATH.shared_schedule  # .local_resources/shared/schedule_model/
+```
+
+**File I/O helpers:**
+```python
+PATH.read_yaml(path)                          # → dict (empty {} if missing)
+PATH.dump_yaml(data, path, overwrite=False)   # write with indented block style
+PATH.read_json(path)                          # → dict
+PATH.dump_json(data, path, overwrite=False)
+
+PATH.load_template('css', 'interactive', 'custom')   # → string.Template from .template file
+PATH.load_templates('css', 'interactive')            # → dict[stem, Template] for a directory
+
+PATH.file_modified_date(path)   # → int YYYYMMDD (19970101 if missing)
+PATH.file_modified_time(path)   # → int YYYYMMDD HHMMSS
+
+PATH.path_at_machine(path, 'other-host')  # translate a local path to another machine's layout
+PATH.list_files(directory, fullname=False, recur=False)  # list files, filtering dotfiles
+PATH.filter_paths(paths)                  # drop names starting with '.' or '~'
+PATH.copytree(src, dst)
+PATH.copyfiles(src, dst, bases)
+PATH.deltrees(dir, bases)
+PATH.mkdir_path()               # ensure all Path class attrs exist on disk
+```
+
+---
+
+### `Const` — `src/proj/env/constant/`
+
+Aggregate accessor for domain config trees. All sub-objects are `@singleton` instances.
+
+```python
+from src.proj.env import Const
+
+Const.Pref        # Preference — project/interactive/logger/shell_opener config dicts
+Const.Factor      # FactorConstants — factor sub-configs
+Const.Model       # ModelConstants — model resume flags + strategy list
+Const.TradingPort # TradingPortConstants — trading / backtest port lists
+```
+
+#### `Const.Pref` — `Preference`
+Property-based lazy loads of `configs/constant/preference/` YAML files:
+```python
+Const.Pref.project       # dict: general project preferences
+Const.Pref.interactive   # dict: interactive app preferences
+Const.Pref.logger        # dict: logger preferences
+Const.Pref.shell_opener  # dict: shell opener preferences
+```
+
+#### `Const.Factor` — `FactorConstants`
+```python
+Const.Factor.UPDATE    # FactorUpdateConfig: start, end, step, init_date, target_dates
+Const.Factor.RISK      # RiskModelConfig: market, style, indus, common factor lists
+Const.Factor.BENCH     # BenchmarksConfig: availables, defaults, tests, categories, none
+Const.Factor.TRADE     # TradeConfig: default(0.00035), harvest(0.002), yale(0.00035)
+Const.Factor.ROUNDING  # RoundingConfig: weight(6), exposure(6), ret/turnover(8)
+Const.Factor.OPTIM     # PortfolioOptimizationConfig: default, custom (from YAML)
+Const.Factor.STOCK     # StockFactorDefinitionConfig: category taxonomy + validators
+Const.Factor.FMP       # FMPConfig: creator dict
+
+# Stock factor taxonomy helpers
+Const.Factor.STOCK.category0          # list of top-level categories
+Const.Factor.STOCK.category1          # dict: cat0 → list[cat1] | None
+Const.Factor.STOCK.cat0_to_meta(c0)   # 'stock' | 'market' | 'affiliate' | 'pooling'
+Const.Factor.STOCK.cat0_to_cat1(c0)   # allowed cat1 list
+Const.Factor.STOCK.cat1_to_cat0(c1)   # reverse lookup
+Const.Factor.STOCK.validate_categories(c0, c1)  # raises ValueError if invalid
+```
+
+#### `Const.Model` — `ModelConstants`
+Resume flags read from `configs/constant/default/model.yaml`:
+```python
+Const.Model.resume_test         # False | 'last_model_date' | 'last_pred_date'
+Const.Model.resume_fmp          # False | 'trailing_N' str
+Const.Model.resume_fmp_account  # bool
+Const.Model.resume_factor_perf  # bool
+Const.Model.strategies          # dict: full strategy/model YAML
+```
+
+#### `Const.TradingPort` — `TradingPortConstants`
+```python
+Const.TradingPort.focused_ports   # list[str]: highlighted port names
+Const.TradingPort.tracking_ports  # dict[str, dict]: live trading port specs
+Const.TradingPort.backtest_ports  # dict[str, dict]: backtest port specs
+```
+
+---
+
+### `Proj` — `src/proj/env/proj.py`
+
+Non-instantiable static facade (metaclass `ProjMeta(NoInstanceMeta)`). Runtime state for verbosity, log files, and cross-module instance references.
+
+```python
+from src.proj.env import Proj
+
+Proj.vb                 # Verbosity singleton — global verbosity level
+Proj.silence            # Silence context manager
+Proj.debug_mode         # bool (from configs/constant/project.yaml)
+Proj.show_vb_level      # bool
+Proj.instances          # InstanceCollection — trainer / account / factor handles
+Proj.email_attachments  # UniqueFileList — files to attach on next email send
+Proj.exit_files         # UniqueFileList — files to process on clean exit
+Proj.version            # str: package __version__
+Proj.log_writer         # LogWriterFile descriptor — current log TextIOWrapper | None
+
+Proj.info()             # dict: MACHINE.info() merged with vb + log_writer
+Proj.print_info(once_type='script')   # print once per script or per OS process
+Proj.print_disk_info()  # show disk usage
+```
+
+#### `Verbosity` — `src/proj/env/verbosity.py`
+
+Singleton. Controls how much a function prints. Levels: `always`(-99) < `min`(0) ≤ `vb` ≤ `max`(10) < `never`(99).
+
+```python
+vb = Proj.vb    # or: from src.proj.env.verbosity import Verbosity; vb = Verbosity()
+
+vb.vb           # int: current global level (default 1)
+vb.vb_level     # int | None: per-context override (set by WithVbLevel)
+
+vb.set_vb(5)              # change global level
+vb.ignore(vb_level=3)     # True if 3 > vb (suppress output)
+vb.is_max_level           # bool: vb >= max
+
+# Numeric comparison operators delegate to vb.vb
+if vb >= 2: ...
+
+# Context managers
+with Verbosity.WithVbLevel(3): ...  # temporary vb_level for this block
+with Verbosity.WithVB(5): ...       # temporary global vb, restored on exit
+
+# Resolve symbolic levels
+vb('max')     # → 10    vb('min') → 0
+vb('never')   # → 99    vb('always') → -99
+vb(None)      # → current vb
+```
+
+#### `InstanceCollection` — `src/proj/env/variable/ins.py`
+Lazy descriptors returning cross-module singletons:
+```python
+Proj.instances.trainer   # BaseTrainer._trainer  (None if not running)
+Proj.instances.account   # PortfolioAccount._account
+Proj.instances.factor    # StockFactor._factor
+Proj.instances.status()  # dict of non-None slots
+```
+
+#### `UniqueFileList` — `src/proj/env/variable/files.py`
+Thread-safe deduplicated path list:
+```python
+Proj.email_attachments.append(path)
+Proj.email_attachments.extend(p1, p2)
+Proj.email_attachments.pop_all()   # returns list and clears
+Proj.email_attachments.ban('tmp')  # reject paths containing 'tmp'
+Proj.exit_files.insert(0, path)    # insert at front, deduplicating
+```
 
 
 ## 2. Trading Calendar — `CALENDAR`

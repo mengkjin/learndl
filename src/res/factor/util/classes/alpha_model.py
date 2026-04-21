@@ -263,9 +263,11 @@ class AlphaModel(GeneralModel):
             raise ValueError(f'model must be a Amodel, list of Amodel, dict of Amodel, or AlphaModel: {type(model)}')
         return self
     
-    def subset(self , date : int | list[int] | np.ndarray):
+    def subset(self , date : int | list[int] | np.ndarray , latest = False):
         if not isinstance(date , (list , np.ndarray)):
             date = [date]
+        if latest:
+            date = list(set([self.latest_avail_date(d) for d in date]))
         models = {d : self.models.get(d) for d in date if d in self.models}
         return self.__class__(name = self.name , models = models)
 
@@ -337,12 +339,12 @@ class AlphaComponent:
         new_dates = np.setdiff1d(date , cached_dates)
         
         if len(new_dates) == 0:
-            return cached_alpha_model.subset(date)
+            return cached_alpha_model.subset(date , latest = True)
             
         alpha_model = self.loads(new_dates)
         new_alpha_model = cached_alpha_model.append(alpha_model)
         self.set_cache(new_alpha_model , self.name , normalize = self.normalize)
-        return new_alpha_model.subset(date)
+        return new_alpha_model.subset(date , latest = True)
 
     @classmethod
     def get_cache(cls , name : str , normalize : bool = True) -> AlphaModel:
