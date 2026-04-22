@@ -7,8 +7,8 @@
 # email: False
 # mode: shell
 
-from src.api import launch_tensorboard
+from src.api import TSBoardAPI
 
 if __name__ == '__main__':
-    launch_tensorboard()
+    TSBoardAPI.launch()
     

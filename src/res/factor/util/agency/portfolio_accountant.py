@@ -583,7 +583,10 @@ class PortfolioAccountManager:
         return self
     
     def load_dir(self , append = True):
-        [self.load_single(path , append = append) for path in self.account_dir.iterdir() if path.suffix == '.pkl']
+        for pkl in [path for path in self.account_dir.iterdir() if path.suffix == '.pkl']:
+            if pkl.with_suffix('.tar').exists():
+                pkl.unlink()
+        [self.load_single(path , append = append) for path in self.account_dir.iterdir()]
         return self
     
     def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : Any = 1):

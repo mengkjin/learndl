@@ -18,15 +18,6 @@ def display_account_summary(accounts : dict[str , dict[str , Path]] , account_ty
 
     Returns:
         List of displayed dataframe batches.
-
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: short
-      memory_usage: medium
     """
     dfs = {model : PortfolioAccount.EvalPeriodRet(paths) for model , paths in accounts.items()}
     dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
@@ -39,14 +30,11 @@ def model_account_summary(by_max_columns : int = 12):
     """
     Summarize model FMP account archives discovered under each resumable model path.
 
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: short
-      memory_usage: medium
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
     """
     acc_paths : dict[str , dict[str , Path]] = {}
     fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rein' : 'reinforce'}
@@ -63,14 +51,11 @@ def tracking_port_account_summary(by_max_columns : int = 12):
     """
     Summarize tracking-portfolio ``account.tar`` artifacts for configured tracking ports.
 
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: short
-      memory_usage: medium
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
     """
     acc_paths : dict[str , dict[str , Path]] = {}
     for tport in Const.TradingPort.tracking_ports:
@@ -83,14 +68,11 @@ def backtest_port_account_summary(by_max_columns : int = 12):
     """
     Summarize backtest-portfolio ``account.tar`` artifacts for configured backtest ports.
 
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: short
-      memory_usage: medium
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
     """
     acc_paths : dict[str , dict[str , Path]] = {}
     for tport in Const.TradingPort.backtest_ports:
@@ -105,15 +87,6 @@ def model_ic_summary():
 
     Returns:
         ``eval_period_ic_multi`` dataframe.
-
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: short
-      memory_usage: medium
     """
     paths : dict[str , Path] = {}
     
@@ -133,14 +106,11 @@ def ic_summaries(by_max_columns : int = 12):
     """
     Display ``model_ic_summary`` output split into column batches.
 
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: short
-      memory_usage: medium
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
     """
     df = model_ic_summary()
     for i in range(0, len(df.columns), by_max_columns):
@@ -150,14 +120,8 @@ def account_summaries(by_max_columns : int = 12):
     """
     Run model, tracking, and backtest account summaries in one call.
 
-    [API Interaction]:
-      expose: false
-      roles: [user, developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: medium
-      memory_usage: medium
+    Args:
+        by_max_columns: Column batch size per table chunk.
     """
     model_account_summary(by_max_columns)
     tracking_port_account_summary(by_max_columns)
@@ -167,14 +131,12 @@ def concat_dfs_split(dfs : dict[str,pd.DataFrame] , by_max_columns : int = 12) -
     """
     Split wide name→dataframe map into batches whose total column count stays under *by_max_columns*.
 
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: immediate
-      memory_usage: low
+    Args:
+        dfs: Dictionary of dataframe names and dataframes.
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
     """
     if not dfs:
         return []
@@ -193,18 +155,14 @@ def concat_dfs(accounts : dict[str,pd.DataFrame]) -> pd.DataFrame:
     """
     Horizontally concat named dataframes and reindex to the longest member index.
 
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: immediate
-      memory_usage: low
+    Args:
+        accounts: Dictionary of dataframe names and dataframes.
+
+    Returns:
+        Concatenated dataframe.
     """
     longest_index = max(accounts.values(), key=len).index
     return pd.concat(accounts , axis = 1).reindex(index = longest_index).rename_axis(index = '')
-
 class SummaryAPI:
     @classmethod
     def update(cls):
@@ -212,29 +170,20 @@ class SummaryAPI:
         Run the wrapped summary refresh (IC + account tables).
 
         [API Interaction]:
-          expose: false
+          expose: true
+          email: true
           roles: [developer, admin]
           risk: read_only
-          lock_num: -1
+          lock_num: 1
+          lock_timeout: 1
           disable_platforms: []
-          execution_time: medium
-          memory_usage: medium
+          execution_time: short
+          memory_usage: low
         """
-        wrap_update(cls.process , 'Summary')
-
-    @classmethod
-    def process(cls):
-        """
-        Emit IC summaries followed by combined account summaries.
-
-        [API Interaction]:
-          expose: false
-          roles: [developer, admin]
-          risk: read_only
-          lock_num: -1
-          disable_platforms: []
-          execution_time: medium
-          memory_usage: medium
-        """
-        ic_summaries()
-        account_summaries()
+        def summary_process():
+            """
+            Emit IC summaries followed by combined account summaries.
+            """
+            ic_summaries()
+            account_summaries()
+        wrap_update(summary_process , 'Summary')

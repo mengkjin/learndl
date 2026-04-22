@@ -80,7 +80,7 @@ class ModelTrainer(BaseTrainer):
         return trainer
 
     @classmethod
-    def update_models(cls , force_update = False):
+    def update_models(cls , force_update : bool = False):
         # if not MACHINE.server:
         #     Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         # else:

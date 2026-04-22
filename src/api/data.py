@@ -13,9 +13,9 @@ class DataAPI:
         Update core, sellside, risk, custom, and announcement data pipelines for laptop and server roles.
 
         Args:
-            sellside: When false, skip sellside download/update.
-            risk: When false, skip risk-model update.
-            affiliated: When false, skip custom/affiliated data update.
+          sellside: When false, skip sellside download/update.
+          risk: When false, skip risk-model update.
+          affiliated: When false, skip custom/affiliated data update.
 
         [API Interaction]:
           expose: true
@@ -53,9 +53,9 @@ class DataAPI:
         Rollback core, risk, and affiliated data to *rollback_date* (calendar-validated by callers).
 
         Args:
-            rollback_date: Trade date (YYYYMMDD) to roll back toward.
-            risk: When false, skip risk-model rollback.
-            affiliated: When false, skip custom/affiliated rollback.
+          rollback_date: Trade date (YYYYMMDD) to roll back toward.
+          risk: When false, skip risk-model rollback.
+          affiliated: When false, skip custom/affiliated rollback.
 
         [API Interaction]:
           expose: true

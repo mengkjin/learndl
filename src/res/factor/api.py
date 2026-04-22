@@ -127,7 +127,7 @@ class FactorTestAPI:
         return cls.get_test_class('factor').factor_stats_saved_dates(test_path)
 
     @classmethod
-    def FactorPerf(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
+    def FactorPerf(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' ,
                    test_path : Path | str | None = None , resume : bool = False , 
                    indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                    write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
@@ -137,7 +137,7 @@ class FactorTestAPI:
         return pm
     
     @classmethod
-    def FmpOptim(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
+    def FmpOptim(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' , 
                  test_path : Path | str | None = None , resume : bool = False , 
                  indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                  write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
@@ -148,7 +148,7 @@ class FactorTestAPI:
 
 
     @classmethod
-    def FmpTop(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
+    def FmpTop(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' , 
                test_path : Path | str | None = None , resume : bool = False , 
                indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):

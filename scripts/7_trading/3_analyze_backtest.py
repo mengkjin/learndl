@@ -24,7 +24,7 @@ from src.proj.util import ScriptTool
 @ScriptTool('analyze_tradeport' , '@port_name_starter' , lock_num = 0)
 def main(port_name_starter : str | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert port_name_starter is not None , 'port_name_starter is required'
-    TradingAPI.Backtest(port_name_starter, start , end)
+    TradingAPI.backtest(port_name_starter, start , end)
     
 if __name__ == '__main__':
     main()

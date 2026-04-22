@@ -8,15 +8,6 @@ def call_tensorboard(log_dir : str | Path):
 
     Args:
         log_dir: Directory containing event files.
-
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: long
-      memory_usage: medium
     """
     if isinstance(log_dir , Path):
         log_dir = log_dir.as_posix()
@@ -32,15 +23,6 @@ def call_tensorboard(log_dir : str | Path):
 def run_local_tensorboard():
     """
     Start TensorBoard pointing at ``PATH.tensorboard/run`` if logs exist.
-
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: long
-      memory_usage: medium
     """
     log_dir = PATH.tensorboard.joinpath('run')
     if not log_dir.exists():
@@ -51,15 +33,6 @@ def run_local_tensorboard():
 def run_packed_tensorboard():
     """
     Interactively pick a packed ``.tar`` of TensorBoard logs, unpack to temp, and launch.
-
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: long
-      memory_usage: medium
     """
     packed_tars = list(PATH.tensorboard.glob('*.tar'))
     if len(packed_tars) == 0:
@@ -81,15 +54,6 @@ def run_packed_tensorboard():
 def run_trained_models_tensorboard():
     """
     Interactively pick a trained model with preserved tensorboard snapshots and launch TB.
-
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: long
-      memory_usage: medium
     """
     from src.api.model import ModelAPI
     from src.res.model.util.model_path import ModelPath
@@ -108,33 +72,37 @@ def run_trained_models_tensorboard():
     
     call_tensorboard(log_dir)
 
-def launch_tensorboard(**kwargs):
-    """
-    CLI menu to launch TensorBoard for local runs, packed archives, or trained-model logs.
+class TSBoardAPI:
+    @classmethod
+    def launch(cls):
+        """
+        CLI menu to launch TensorBoard for local runs, packed archives, or trained-model logs.
 
-    ``**kwargs`` reserved for future options; currently uses ``stdin`` prompts.
+        ``**kwargs`` reserved for future options; currently uses ``stdin`` prompts.
 
-    [API Interaction]:
-      expose: false
-      roles: [developer, admin]
-      risk: read_only
-      lock_num: -1
-      disable_platforms: []
-      execution_time: long
-      memory_usage: medium
-    """
-    os.chdir(PATH.main)
-    Logger.success("Will launch TensorBoard for the following options:")
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [developer, admin]
+          risk: read_only
+          lock_num: -1
+          lock_timeout: 1
+          disable_platforms: []
+          execution_time: immediate
+          memory_usage: medium
+        """
+        os.chdir(PATH.main)
+        Logger.success("Will launch TensorBoard for the following options:")
 
-    options = ["local Tensorboard logs in run folder (lastest training)" , "Packed Tensorboard tar files (all past trainings)" , "Tensorboard logs of Trained Models (preserved training logs)"]
-    for i , option in enumerate(options):
-        Logger.stdout(f"{i + 1:>2}. {option}" , indent = 1 , color = 'lightyellow')
-    index = int(input("Enter the number of the option to launch: "))
-    assert index >= 1 and index <= len(options) , f"Invalid index: {index} , must be between 1 and {len(options)}"
-    
-    if index == 1:
-        run_local_tensorboard()
-    elif index == 2:
-        run_packed_tensorboard()
-    elif index == 3:
-        run_trained_models_tensorboard()
+        options = ["local Tensorboard logs in run folder (lastest training)" , "Packed Tensorboard tar files (all past trainings)" , "Tensorboard logs of Trained Models (preserved training logs)"]
+        for i , option in enumerate(options):
+            Logger.stdout(f"{i + 1:>2}. {option}" , indent = 1 , color = 'lightyellow')
+        index = int(input("Enter the number of the option to launch: "))
+        assert index >= 1 and index <= len(options) , f"Invalid index: {index} , must be between 1 and {len(options)}"
+        
+        if index == 1:
+            run_local_tensorboard()
+        elif index == 2:
+            run_packed_tensorboard()
+        elif index == 3:
+            run_trained_models_tensorboard()
