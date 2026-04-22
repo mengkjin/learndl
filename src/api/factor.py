@@ -278,7 +278,7 @@ class FactorAPI:
           expose: true
           email: true
           roles: [user, developer, admin]
-          override_args_attrs:
+          override_arg_attr:
             benchmark :
               type: str
               default: defaults
@@ -323,7 +323,7 @@ class FactorAPI:
           expose: true
           email: true
           roles: [developer, admin]
-          override_args_attrs:
+          override_arg_attr:
             benchmark :
               type: str
               default: defaults
@@ -366,7 +366,7 @@ class FactorAPI:
           expose: true
           email: true
           roles: [developer, admin]
-          override_args_attrs:
+          override_arg_attr:
             benchmark :
               type: str
               default: defaults
@@ -429,7 +429,7 @@ class FactorAPI:
           lock_num: 2
           disable_platforms: []
           execution_time: long
-          memory_usage: large
+          memory_usage: high
         """
         factor_calc = StockFactorHierarchy.get_factor(factor_name)
         dates = factor_calc.FactorDates(start,end,step)
@@ -450,7 +450,7 @@ class FactorAPI:
           lock_num: 1
           disable_platforms: []
           execution_time: long
-          memory_usage: large
+          memory_usage: high
         """
         from src.api import ModelAPI
         for factor in Options.available_factors():

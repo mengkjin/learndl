@@ -356,7 +356,6 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
               indent : int = 1 , vb_level : Any = 'max'
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
-        dates = np.intersect1d(dates , cls.stored_dates())
         df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , indent = indent , vb_level = vb_level)
         if cls.meta_type == 'stock' and normalize:
             df = StockFactor.normalize_df(df , fill_method = fill_method)
@@ -743,16 +742,27 @@ class AffiliateFactorCalculator(FactorCalculator):
               indent : int = 1 , vb_level : Any = 'max'
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
-        dates = np.intersect1d(dates , cls.stored_dates())
+        if len(dates) == 0:
+            return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
+        min_date = min(dates)
+        stored_dates = cls.stored_dates()
+        dates = np.intersect1d(dates , stored_dates)
+        if closest and min_date not in dates:
+            prev_dates = stored_dates[stored_dates <= min_date]
+            if len(prev_dates) > 0:
+                dates = np.concatenate([prev_dates[-1:] , dates])
         dfs : list[pd.DataFrame] = []
         for db in cls.full_dbs():
-            df = cls.loads_from_db(**db , dates = dates , closest = closest , indent = indent , vb_level = vb_level)
+            df = cls.loads_from_db(**db , dates = dates , closest = False , indent = indent , vb_level = vb_level)
             if not df.empty:
                 dfs.append(df)
                 dates = np.setdiff1d(dates , df['date'])
             if len(dates) == 0:
                 break
-        df = pd.concat(dfs) if dfs else pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
+        if dfs:
+            df = pd.concat(dfs).drop_duplicates(subset = ['secid' , 'date'] , keep = 'last').sort_values(['secid' , 'date']).reset_index(drop = True)
+        else:
+            df = pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         return df
 
     @classmethod

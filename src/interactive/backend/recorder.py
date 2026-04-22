@@ -200,7 +200,7 @@ class BackendTaskRecorder:
     def _func_return(self , func_return : Any | None = None) -> None:
         """Extract exit metadata from the wrapped function's return value into update_msg."""
         if not self.task_id:
-            return
+            raise ValueError('task_id is not set')
         exit_msg = self.ExitMessage.from_return(func_return)
         self.exit_msg = exit_msg
         if exit_msg.message:

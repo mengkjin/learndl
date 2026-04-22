@@ -4,7 +4,7 @@ import inspect , os
 from pathlib import Path
 
 from functools import wraps
-from typing import Any, Callable
+from typing import Any , Callable , Literal
 
 from src.proj.env import PATH
 from src.proj.log import Logger
@@ -66,6 +66,8 @@ class ScriptTool:
         lock_timeout : int = 60 , 
         markdown_catcher : bool = False ,
         verbosity : int | None = None ,
+        source_mode : Literal['script' , 'api'] = 'script' ,
+        interaction : dict[str, Any] | None = None ,
         **kwargs
     ):  
 
@@ -74,9 +76,18 @@ class ScriptTool:
         self.task_name = task_name
         self.task_key = task_key
         self.lock_name = lock_name
+        self.source_mode = source_mode
+        self.interaction = interaction
+
+        ln , lt = lock_num , lock_timeout
+        if source_mode == 'api' and interaction:
+            if 'lock_num' in interaction:
+                ln = int(interaction['lock_num'])
+            if interaction.get('lock_timeout') is not None:
+                lt = int(interaction['lock_timeout'])
         
         self.backend_recorder = BackendTaskRecorder(**kwargs)
-        self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout)
+        self.script_lock = ScriptLockMultiple(lock_name or task_name , ln , lt)
         self.autorun_task = AutoRunTask(task_name , task_key , forfeit_if_done , verbosity , task_id = self.task_id , markdown_catcher = markdown_catcher)
 
         # set current working directory to main
@@ -88,9 +99,19 @@ class ScriptTool:
         @wraps(func)
         def wrapper(*args , **kwargs):
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
-            if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
-                from src.interactive.backend import ScriptHeader
-                self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
+            if self.source_mode == 'api':
+                data = self.interaction
+                if data is None:
+                    from src.api.contract import interaction_for_callable
+                    data = interaction_for_callable(func)
+                if data is not None and 'email' in data:
+                    self.autorun_task.kwargs['email'] = bool(data['email'])
+                elif 'email' not in self.autorun_task.kwargs:
+                    self.autorun_task.kwargs['email'] = False
+            else:
+                if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
+                    from src.interactive.backend import ScriptHeader
+                    self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
             new_func = self.backend_recorder(self.script_lock(self.autorun_task(func)))
             return new_func(*args , **kwargs)
         return wrapper
