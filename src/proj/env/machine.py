@@ -1,6 +1,6 @@
 """Machine identity, OS, secrets, and config loading for the current host."""
 
-import sys , socket , platform , os , torch , pytz , yaml , json , uuid
+import sys , socket , platform , os , torch , pytz , yaml , json , machineid
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,11 +98,11 @@ def _machine_name_init() -> str:
     initialize the machine name if not exists in the secret folder
     """
     # 0. get the machine uuid 
-    machine_uuid = uuid.getnode()
+    machine_id = machineid.id()
 
     # 1. prepare the secret directory, if name_path exists, return the name
     SECRET_PATH.mkdir(parents=True, exist_ok=True)
-    name_path = SECRET_PATH.joinpath(f'machine_name.{machine_uuid}.yaml')
+    name_path = SECRET_PATH.joinpath(f'machine_name.{machine_id}.yaml')
     if name_path.exists():
         return _load_config_file(name_path)['name']
 
