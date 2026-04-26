@@ -119,9 +119,7 @@ class GlobalScriptLatestTaskButton(ControlPanelButton):
                         on_click = SC.click_show_complete_report , args = (item,) ,
                         disabled = False):
                 if SC.current_page_name != repr(item.script_key):
-                    from src.interactive.main.util.page import get_script_page
-
-                    meta = get_script_page(item.script_key)
+                    meta = SC.get_page(item.script_key)
                     if meta:
                         st.switch_page(meta['page'])
                 else:
@@ -273,8 +271,7 @@ class IntroPagePopover(ControlPanelPopover):
 
     def popover(self , script_key : str | None = None) -> None:
         """Render icon-button shortcuts for each intro page in the sidebar."""
-        from src.interactive.main.util.page import intro_pages
-        pages = intro_pages()
+        pages = SC.intro_pages
         
         for name , page in pages.items():
             if st.button(f'**{page["label"]}**' , icon = page["icon"] , key = f"control-panel-{self.key}-{name}" ,
@@ -330,9 +327,7 @@ class MoreButtonsPopover(ControlPanelPopover):
                          help = f":blue[**Show Latest Task**]: {item.id}" , 
                          on_click = SC.click_show_complete_report , args = (item,), type = 'tertiary'):
                 if SC.current_page_name != repr(item.script_key):
-                    from src.interactive.main.util.page import get_script_page
-
-                    meta = get_script_page(item.script_key)
+                    meta = SC.get_page(item.script_key)
                     if meta:
                         st.switch_page(meta['page'])
                 else:

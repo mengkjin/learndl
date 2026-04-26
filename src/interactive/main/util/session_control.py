@@ -12,17 +12,14 @@ from __future__ import annotations
 import streamlit as st
 
 from dataclasses import dataclass , field
-from typing import Any , ClassVar , Callable
+from functools import wraps
+from typing import Any , ClassVar , Callable , Literal
 from pathlib import Path
 from datetime import datetime
-
+import time
 from src.proj import PATH , Logger , Const
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache
-
-def set_current_page(key: str) -> None:
-    """Store ``key`` as the active page name in Streamlit session state."""
-    st.session_state["current_page"] = key
 
 @st.cache_resource
 def get_cached_task_db() -> TaskDatabase:
@@ -74,6 +71,7 @@ class SessionControl:
     # universal
     script_runners : dict[str, ScriptRunner] = field(default_factory=dict)
     task_queue : TaskQueue | Any = None
+    current_script : str | None = None
     current_task_item : str | None = None
 
     # for task queue page
@@ -89,7 +87,19 @@ class SessionControl:
     # for config editor page
     config_editor_state : YAMLFileEditorState | None = None
 
+    # for api console page
+    api_endpoint_selected : str | None = None
+
+    placeholders : dict[str, Any] = field(default_factory=dict)
+
     _instance : 'ClassVar[SessionControl | None]' = None
+
+    @property
+    def current_runner(self) -> ScriptRunner | None:
+        """get current runner"""
+        if self.current_script is None:
+            return None
+        return self.get_script_runner(self.current_script)
     
     def __post_init__(self) -> None:
         """Initialize the instance and register it as the active singleton."""
@@ -113,10 +123,67 @@ class SessionControl:
             st.session_state.session_control = self
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
 
+    def wrap_page(self , page_name : str) -> Callable:
+        """wrap page"""
+        def wrapper(func : Callable):
+            @wraps(func)
+            def inner_func(*args , **kwargs):
+                page = self.page_header(page_name)
+                if page is None:
+                    return
+                func(*args , **kwargs)
+                self.task_queue_backend_refresh()
+            return inner_func
+        return wrapper
+
+    @property
+    def intro_pages(self) -> dict:
+        """get intro pages"""
+        from src.interactive.main.util.page import intro_pages
+        if not hasattr(self, '_intro_pages'):
+            self._intro_pages = intro_pages()
+        return self._intro_pages
+
+    @property
+    def script_pages(self) -> dict:
+        """get script pages"""
+        from src.interactive.main.util.page import script_pages
+        if not hasattr(self, '_script_pages'):
+            self._script_pages = script_pages()
+        return self._script_pages
+
+    def get_page(self , page_name : str) -> dict:
+        """get page"""
+        if page_name in self.intro_pages:
+            return self.intro_pages[page_name]
+        else:
+            from src.interactive.main.util.page import get_page
+            return get_page(page_name)
+
     @queue_refresh_trigger
-    def switch_page(self , page_name : str) -> None:
-        """Record the active page name and refresh the queue (via ``universal_action``)."""
+    def page_header(self , page_name : str , type : Literal['intro' , 'script'] = 'intro'):
+        """Register the active page and render the shared header and control panel.
+
+        Called at the top of every page's ``main()`` function.  Sets the current
+        page in session state, notifies :class:`SessionControl`, then renders the
+        coloured icon + rainbow title header followed by the control panel row.
+
+        Args:
+            page_name: The intro page name (e.g. ``'home'``) or script key
+                (e.g. ``'4_train/1_train_model.py'``).
+            type: ``'intro'`` for intro pages, ``'script'`` for script pages.
+        Returns:
+            The page metadata dict, or ``None`` if the page is not found.
+        """
+        """Store ``key`` as the active page name in Streamlit session state."""
+        st.session_state["current_page"] = page_name
         self.current_page_name = page_name
+        self.current_script = None if page_name in self.intro_pages else page_name
+        self_page = self.get_page(page_name) 
+        
+        st.header(f"*_:red[{self_page['icon']}] :rainbow[{self_page['head']}]_*" , help = self_page['help'])
+        self.get_control_panel().show(self.current_script)
+        return self_page
     
     def get_script_runner(self , script_key : str) -> ScriptRunner:
         """Return the :class:`ScriptRunner` for *script_key*, creating it on first access.
@@ -143,6 +210,10 @@ class SessionControl:
         if not hasattr(self, '_control_panel'):
             self._control_panel = ControlPanel()
         return self._control_panel
+
+    def refresh_run_button(self , runner : ScriptRunner):
+        """refresh run button"""
+        SC.get_control_panel().buttons['script-runner-run'].refresh(runner)
     
     def get_task_item(self , task_id : str | None = None) -> TaskItem | None:
         """Look up *task_id* in the queue; returns ``None`` if not found."""
@@ -428,7 +499,8 @@ class SessionControl:
         """refresh task queue backend automatically"""
         changed = self.task_queue.refresh(backend_only=True)
         if changed:
-            # Logger.success(f"Task Queue Backend Refreshed: {changed}")
+            st.success(f"Task Queue Backend Refreshed: {changed}")
+            time.sleep(1)
             st.rerun()
 
 SC = SessionControl()

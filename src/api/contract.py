@@ -9,11 +9,19 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
-from dataclasses import dataclass
+from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Callable , Iterator
+from typing import Any , Callable , Iterator , Literal
 
 import yaml
+
+__all__ = [
+    "INTERACTION_HEADER" ,
+    "ROLES" , "RISKS" , "PLATFORMS" , "EXECUTION_TIMES" , "MEMORY_USAGE" ,
+    "endpoint_schema" ,
+    "filter_kwargs_explicit_only" ,
+    "APIEndpoint" ,
+]
 
 INTERACTION_HEADER = "[API Interaction]:"
 
@@ -24,18 +32,120 @@ EXECUTION_TIMES = frozenset({"immediate" , "short" , "medium" , "long"})
 MEMORY_USAGE = frozenset({"low" , "medium" , "high"})
 
 # Contract keys (``max_concurrent`` is forbidden).
-REQUIRED_INTERACTION_KEYS = frozenset({
+REQUIRED_SCHEMA_KEYS = frozenset({
     "expose" , "roles" , "risk" , "lock_num" , "disable_platforms" ,
     "execution_time" , "memory_usage" ,
 })
-OPTIONAL_INTERACTION_KEYS = frozenset({
+OPTIONAL_SCHEMA_KEYS = frozenset({
     "lock_timeout" , "override_arg_attr" , "email" ,
 })
-KNOWN_INTERACTION_KEYS = REQUIRED_INTERACTION_KEYS | OPTIONAL_INTERACTION_KEYS
-FORBIDDEN_INTERACTION_KEYS = frozenset({"max_concurrent"})
+KNOWN_SCHEMA_KEYS = REQUIRED_SCHEMA_KEYS | OPTIONAL_SCHEMA_KEYS
+FORBIDDEN_SCHEMA_KEYS = frozenset({"max_concurrent"})
+
+def endpoint_schema(obj : Any) -> dict[str, Any] | None:
+    """Parse ``[API Interaction]`` for a function or method-like *obj*."""
+    doc = inspect.getdoc(obj)
+    return _parse_schema_block(doc)
+@dataclass(frozen = True)
+class APIEndpoint:
+    """Resolved API endpoint metadata for one callable."""
+    module : str
+    qual_path : str
+    func : Callable[..., Any]
+    schema : dict[str, Any]
+    description : str = ''
+    parameters : list[dict[str, Any]] = field(default_factory=list)
+
+    def __repr__(self) -> str:
+        return f"APIEndpoint(module={self.module!r}, qual_path={self.qual_path!r})"
+
+    @property
+    def qualname(self) -> str:
+        return f"{self.module}.{self.qual_path}"
+
+    @property
+    def exposed(self) -> bool:
+        return self.schema.get("expose") is True
+
+    @property
+    def lock_num(self) -> int:
+        return self.schema.get("lock_num" , 1)
+
+    @property
+    def lock_timeout(self) -> int:
+        return self.schema.get("lock_timeout" , 60)
+
+    @property
+    def lock_name(self) -> str:
+        return f"{self.qualname}"
+
+    @property
+    def disable_platforms(self) -> list[str]:
+        return self.schema.get("disable_platforms" , [])
+
+    @property
+    def execution_time(self) -> Literal['immediate' , 'short' , 'medium' , 'long']:
+        return self.schema.get("execution_time" , "immediate")
+
+    @property
+    def memory_usage(self) -> Literal['low' , 'medium' , 'high']:
+        return self.schema.get("memory_usage" , "low")
+
+    @property
+    def email(self) -> bool:
+        return self.schema.get("email" , False)
+
+    @property
+    def override_arg_attr(self) -> dict[str, Any]:
+        return self.schema.get("override_arg_attr" , {})
+
+    @property
+    def roles(self) -> list[str]:
+        return self.schema.get("roles" , [])
+
+    @property
+    def risk(self) -> str:
+        return self.schema.get("risk" , "read_only")
+
+    @property
+    def task_id(self) -> str:
+        return f"{self.qualname}@{int(datetime.now().timestamp())}"
+
+    def bind_args(self, **kwargs: Any) -> dict[str, Any]:
+        sig = inspect.signature(self.func)
+        filtered = filter_kwargs_explicit_only(sig , kwargs)
+        bound_args = sig.bind_partial(**filtered)
+        return bound_args.arguments
+
+    def execute(self, **kwargs: Any) -> Any:
+        return self.func(**self.bind_args(**kwargs))
+
+    def execute_with_script_tool(self, **kwargs: Any) -> Any:
+        from src.proj.util.script.script_tool import ScriptTool
+        tool = ScriptTool(task_name = self.qualname, source_mode = 'api', interaction = self.schema)
+        return tool(self.func)(**kwargs)
+
+    @classmethod
+    def iter_with_schema(cls , exposed : bool = True) -> Iterator[APIEndpoint]:
+        """Yield callables whose docstring defines a non-empty ``[API Interaction]`` block."""
+        for mod_name , path , fn in _iter_api_routines():
+            desc = _describe_api_callable(fn)
+            if desc['schema']:
+                api = APIEndpoint(
+                    module = mod_name , qual_path = path , func = fn , 
+                    schema = desc['schema'] , description = desc['description'] , parameters = desc['parameters'])
+                if not exposed or api.exposed:
+                    yield api
+    
+    @classmethod
+    def from_qualname(cls, qualname: str) -> APIEndpoint:
+        for ep in cls.iter_with_schema():
+            if ep.qualname == qualname:
+                return ep
+        raise ValueError(f"unknown qualname: {qualname!r}")
 
 
-def parse_interaction_block(doc: str | None) -> dict[str, Any] | None:
+def _parse_schema_block(doc: str | None) -> dict[str, Any] | None:
     """Return parsed mapping under ``[API Interaction]:``, or None if absent or empty."""
     if not doc or INTERACTION_HEADER not in doc:
         return None
@@ -64,8 +174,7 @@ def parse_interaction_block(doc: str | None) -> dict[str, Any] | None:
 def _err(msg : str) -> str:
     return msg
 
-
-def validate_interaction_schema(
+def _validate_interaction_schema(
     data : dict[str, Any] ,
     *,
     strict_unknown_keys : bool = True ,
@@ -73,16 +182,16 @@ def validate_interaction_schema(
     """Return a list of human-readable validation errors (empty if valid)."""
     errs : list[str] = []
 
-    for forbidden in FORBIDDEN_INTERACTION_KEYS:
+    for forbidden in FORBIDDEN_SCHEMA_KEYS:
         if forbidden in data:
             errs.append(_err(f"forbidden key {forbidden!r} (use lock_num / lock_timeout instead)"))
 
     if strict_unknown_keys:
         for k in data:
-            if k not in KNOWN_INTERACTION_KEYS:
+            if k not in KNOWN_SCHEMA_KEYS:
                 errs.append(_err(f"unknown key {k!r}"))
 
-    missing = REQUIRED_INTERACTION_KEYS - data.keys()
+    missing = REQUIRED_SCHEMA_KEYS - data.keys()
     if missing:
         errs.append(_err(f"missing required keys: {sorted(missing)!r}"))
 
@@ -150,17 +259,10 @@ def validate_interaction_schema(
                                 f"not {type(iv).__name__}"
                             )
                         )
-
     return errs
 
 
-def interaction_for_callable(obj : Any) -> dict[str, Any] | None:
-    """Parse ``[API Interaction]`` for a function or method-like *obj*."""
-    doc = inspect.getdoc(obj)
-    return parse_interaction_block(doc)
-
-
-def explicit_signature_parameters(sig : inspect.Signature) -> dict[str , inspect.Parameter]:
+def _explicit_signature_parameters(sig : inspect.Signature) -> dict[str , inspect.Parameter]:
     """Drop VAR_POSITIONAL and VAR_KEYWORD parameters (``*args`` / ``**kwargs``)."""
     return {
         n: p
@@ -168,19 +270,10 @@ def explicit_signature_parameters(sig : inspect.Signature) -> dict[str , inspect
         if p.kind not in (inspect.Parameter.VAR_POSITIONAL , inspect.Parameter.VAR_KEYWORD)
     }
 
-
 def filter_kwargs_explicit_only(sig : inspect.Signature , kwargs : dict[str, Any]) -> dict[str, Any]:
     """Keep only keys that map to explicit (non var-*) parameters."""
-    explicit = explicit_signature_parameters(sig)
+    explicit = _explicit_signature_parameters(sig)
     return {k: v for k , v in kwargs.items() if k in explicit}
-
-
-def bind_explicit_only(callable_obj : Callable[..., Any] , kwargs : dict[str, Any]) -> inspect.BoundArguments:
-    """Bind *kwargs* to *callable_obj* using only explicit parameters (exclude ``**kwargs`` / ``*args``)."""
-    sig = inspect.signature(callable_obj)
-    filtered = filter_kwargs_explicit_only(sig , kwargs)
-    return sig.bind_partial(**filtered)
-
 
 def _walk_class_attrs(cls : type , prefix : str) -> Iterator[tuple[str , Callable[..., Any]]]:
     for key , value in cls.__dict__.items():
@@ -189,14 +282,14 @@ def _walk_class_attrs(cls : type , prefix : str) -> Iterator[tuple[str , Callabl
         if isinstance(value , type):
             yield from _walk_class_attrs(value , f"{prefix}.{key}")
         elif isinstance(value , classmethod):
-            yield f"{prefix}.{key}" , value.__func__
+            yield f"{prefix}.{key}" , getattr(cls , key)
         elif isinstance(value , staticmethod):
-            yield f"{prefix}.{key}" , value.__func__
+            yield f"{prefix}.{key}" , getattr(cls , key)
         elif inspect.isfunction(value):
             yield f"{prefix}.{key}" , value
 
 
-def iter_api_routines() -> Iterator[tuple[str , str , Callable[..., Any]]]:
+def _iter_api_routines() -> Iterator[tuple[str , str , Callable[..., Any]]]:
     """Yield ``(module_name, qual_path, function)`` for public callables under ``src.api``."""
     import src.api as api_pkg
 
@@ -219,66 +312,13 @@ def iter_api_routines() -> Iterator[tuple[str , str , Callable[..., Any]]]:
                 for path , fn in _walk_class_attrs(obj , name):
                     yield mod_name , path , fn
 
-
-@dataclass(frozen = True)
-class APIEndpoint:
-    """Resolved API endpoint metadata for one callable."""
-    module : str
-    qual_path : str
-    func : Callable[..., Any]
-    interaction : dict[str, Any]
-
-    @property
-    def qualname(self) -> str:
-        return f"{self.module}.{self.qual_path}"
-
-    @property
-    def task_id(self) -> str:
-        return f"{self.qualname}@{int(datetime.now().timestamp())}"
-
-    def execute(self, **kwargs: Any) -> Any:
-        return self.func(**kwargs)
-
-    def execute_with_script_tool(self, **kwargs: Any) -> Any:
-        from src.proj.util.script.script_tool import ScriptTool
-        tool = ScriptTool(task_name = self.qualname, source_mode = 'api', interaction = self.interaction)
-        return tool(self.func)(**kwargs)
-
-def iter_endpoints_with_interaction() -> Iterator[APIEndpoint]:
-    """Yield callables whose docstring defines a non-empty ``[API Interaction]`` block."""
-    for mod_name , path , fn in iter_api_routines():
-        block = interaction_for_callable(fn)
-        if block:
-            yield APIEndpoint(module = mod_name , qual_path = path , func = fn , interaction = block)
-
-
-def validate_all_api_interactions(*, strict_unknown_keys : bool = True) -> list[tuple[str , list[str]]]:
-    """Validate every discovered interaction block; return list of ``(qual_path, errors)``."""
-    bad : list[tuple[str , list[str]]] = []
-    for rec in iter_endpoints_with_interaction():
-        key = f"{rec.module}:{rec.qual_path}"
-        errs = validate_interaction_schema(rec.interaction , strict_unknown_keys = strict_unknown_keys)
-        if errs:
-            bad.append((key , errs))
-    return bad
-
-
-def assert_all_api_contracts_ok(*, strict_unknown_keys : bool = True) -> None:
-    """Raise AssertionError with details if any contract is invalid."""
-    bad = validate_all_api_interactions(strict_unknown_keys = strict_unknown_keys)
-    if bad:
-        lines = [f"{k}: " + "; ".join(e) for k , e in bad]
-        raise AssertionError("API [API Interaction] validation failed:\n" + "\n".join(lines))
-
-
-def human_description_before_interaction(doc : str | None) -> str:
+def _human_description_before_schema(doc : str | None) -> str:
     """Return the human docstring slice before ``[API Interaction]:``."""
     if not doc:
         return ''
     if INTERACTION_HEADER not in doc:
         return doc.strip()
     return doc.split(INTERACTION_HEADER , 1)[0].strip()
-
 
 def _annotation_repr(ann : Any) -> str | None:
     if ann is None or ann is inspect.Parameter.empty:
@@ -287,29 +327,23 @@ def _annotation_repr(ann : Any) -> str | None:
         return ann.__name__
     return str(ann)
 
-
-def describe_api_callable(obj : Any) -> dict[str, Any]:
-    """
-    Build description text, validated ``[API Interaction]`` schema, and parameter rows.
-
-    Parameter rows merge ``override_arg_attr`` entries for the same name. ``cls`` / ``self``
-    are omitted when they appear as the first explicit positional parameter (raw classmethod).
-    """
+def _describe_api_callable(obj : Any , require_schema : bool = False) -> dict[str, Any]:
+    """Build human description, validated schema, and parameter rows (merges ``override_arg_attr``)."""
     doc = inspect.getdoc(obj)
-    schema = interaction_for_callable(obj)
-    if schema is None:
-        raise ValueError(f'no [API Interaction] block on {obj!r}')
-    errs = validate_interaction_schema(schema)
-    if errs:
-        raise ValueError('; '.join(errs))
+    schema = endpoint_schema(obj)
+    if schema:
+        errs = _validate_interaction_schema(schema)
+        if errs:
+            raise ValueError('; '.join(errs))
+    else:
+        if require_schema:
+            raise ValueError(f'no [API Interaction] block on {obj!r}')
+    schema = schema or {}
     sig = inspect.signature(obj)
-    explicit = explicit_signature_parameters(sig)
+    explicit = _explicit_signature_parameters(sig)
     oaa : dict[str, Any] = schema.get('override_arg_attr') or {}
-    items = list(explicit.items())
-    if items and items[0][0] in ('cls' , 'self'):
-        items = items[1:]
     params : list[dict[str, Any]] = []
-    for name , p in items:
+    for name , p in explicit.items():
         default = None if p.default is inspect.Parameter.empty else p.default
         row : dict[str, Any] = {
             'name': name ,
@@ -319,26 +353,7 @@ def describe_api_callable(obj : Any) -> dict[str, Any]:
         }
         params.append(row)
     return {
-        'description': human_description_before_interaction(doc) ,
+        'description': _human_description_before_schema(doc) ,
         'schema': schema ,
         'parameters': params ,
     }
-
-
-__all__ = [
-    "INTERACTION_HEADER" ,
-    "ROLES" , "RISKS" , "PLATFORMS" , "EXECUTION_TIMES" , "MEMORY_USAGE" ,
-    "parse_interaction_block" ,
-    "validate_interaction_schema" ,
-    "interaction_for_callable" ,
-    "explicit_signature_parameters" ,
-    "filter_kwargs_explicit_only" ,
-    "bind_explicit_only" ,
-    "iter_api_routines" ,
-    "iter_endpoints_with_interaction" ,
-    "validate_all_api_interactions" ,
-    "assert_all_api_contracts_ok" ,
-    "APIEndpoint" ,
-    "human_description_before_interaction" ,
-    "describe_api_callable" ,
-]

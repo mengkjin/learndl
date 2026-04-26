@@ -1,6 +1,6 @@
 """Machine identity, OS, secrets, and config loading for the current host."""
 
-import sys , socket , platform , os , torch , pytz , yaml , json
+import sys , socket , platform , os , torch , pytz , yaml , json , uuid
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +18,24 @@ def get_project_root() -> Path:
     raise RuntimeError("pyproject.toml not found, please confirm the project root directory contains this file")
 
 MAIN_PATH = get_project_root()
+SECRET_PATH = MAIN_PATH.joinpath('.secret')
+CONFIG_PATH = MAIN_PATH.joinpath('configs')
+
+def _load_config_file(path: Path) -> dict:
+    """Load the config file from the path , yaml or json"""
+    for suffix in ('.yaml' , '.json'):
+        # yaml or json file, yaml first
+        if (path := path.with_suffix(suffix)).exists():
+            break
+    else:
+        raise FileNotFoundError(f'{path} does not exist')
+    
+    with open(path , 'r') as f:
+        if path.suffix == '.yaml':
+            content = yaml.safe_load(f)
+        elif path.suffix == '.json':
+            content = json.load(f)
+    return content
 
 @dataclass
 class _MachineSettings:
@@ -75,6 +93,61 @@ def _get_best_device():
     else:
         return 'CPU'
 
+def _machine_name_init() -> str:
+    """
+    initialize the machine name if not exists in the secret folder
+    """
+    # 0. get the machine uuid 
+    machine_uuid = uuid.getnode()
+
+    # 1. prepare the secret directory, if name_path exists, return the name
+    SECRET_PATH.mkdir(parents=True, exist_ok=True)
+    name_path = SECRET_PATH.joinpath(f'machine_name.{machine_uuid}.yaml')
+    if name_path.exists():
+        return _load_config_file(name_path)['name']
+
+    # 2. if first time to run, guess the machine name and match the machine list
+    name = socket.gethostname().split('.')[0]
+    machine_list = _load_config_file(SECRET_PATH.joinpath('machines.yaml'))
+    if name in machine_list:
+        with open(name_path, 'w') as f:
+            yaml.dump({'name': name}, f)
+        return name
+
+    # 3. if name is not in the machine list, ask the user to input the required attributes
+    required_attributes = {
+        'name': str,
+        'cuda_server': bool,
+        'python_path': str,
+        'share_folder': str,
+        'mosek_lic_path': str,
+        'updatable': bool,
+        'emailable': bool,
+        'nickname': str,
+    }
+    sys.stdout.write(f"Machine '{name}' is not in the known machine list, please input the following attributes:")
+    user_inputs = {'name': name}
+    for attr , attr_type in required_attributes.items():
+        if attr == 'name':
+            continue
+        value = input(f"  {attr}: ").strip()
+        if not value:
+            if attr_type is bool:
+                if value.lower() not in ['true' , 'false']:
+                    raise ValueError(f"Invalid boolean value: {value}")
+                value = value.lower()
+            else:
+                value = attr_type(value)
+        if value:
+            user_inputs[attr] = value
+    assert all(attr in user_inputs for attr in required_attributes) , f"Missing attributes: {set(required_attributes) - set(user_inputs)}"
+    machine_list[name] = user_inputs
+    with open(name_path, 'w') as f:
+        yaml.dump(user_inputs, f)
+    with open(SECRET_PATH.joinpath('machines.yaml'), 'w') as f:
+        yaml.dump(machine_list, f)
+    return name
+
 class ConfFileLazyLoader:
     """Lazy loader for config files"""
     _root_path : Path
@@ -120,21 +193,9 @@ class ConfFileLazyLoader:
         if key in self._contents:
             return self._contents[key]
 
-        for suffix in ('.json' , '.yaml'):
-            if (path := self._root_path.joinpath(*key.split('/')).with_suffix(suffix)).exists():
-                break
-        else:
-            raise FileNotFoundError(f'{self.name} file {key} does not exist')
-        
-        if path.suffix == '.yaml':
-            with open(path , 'r') as f:
-                content = yaml.safe_load(f)
-        elif path.suffix == '.json':
-            with open(path , 'r') as f:
-                content = json.load(f)
-
-        self._contents[key] = content
-        return content
+        path = self._root_path.joinpath(*key.split('/'))
+        self._contents[key] = _load_config_file(path)
+        return self._contents[key]
 
 class MACHINE:
     """
@@ -157,12 +218,12 @@ class MACHINE:
     platform_coding : bool , is this machine a platform coding
 
     """
-    name : str = socket.gethostname().split('.')[0]
+    name : str = _machine_name_init()
     system_name : Literal['linux' , 'windows' , 'macos'] = _get_system_name()
     
     main_path = MAIN_PATH
-    secret = ConfFileLazyLoader('Secret' , MAIN_PATH.joinpath('.secret'))
-    config = ConfFileLazyLoader('Config' , MAIN_PATH.joinpath('configs'))
+    secret = ConfFileLazyLoader('Secret' , SECRET_PATH)
+    config = ConfFileLazyLoader('Config' , CONFIG_PATH)
 
     setting = _MachineSettings(**secret.get('machines' , name))
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'

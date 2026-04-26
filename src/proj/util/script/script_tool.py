@@ -96,14 +96,26 @@ class ScriptTool:
 
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
+        if self.source_mode == 'api':
+            from src.api.contract import filter_kwargs_explicit_only
+            sig = inspect.signature(func)
+            @wraps(func)
+            def _api_explicit_target(*args: Any , **kwargs: Any) -> Any:
+                """Strip ``email`` / ``task_id`` / etc. so ``AutoRunTask`` metadata never reaches API callables."""
+                return func(*args , **filter_kwargs_explicit_only(sig , kwargs))
+
+            inner = _api_explicit_target
+        else:
+            inner = func
+
         @wraps(func)
         def wrapper(*args , **kwargs):
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
             if self.source_mode == 'api':
                 data = self.interaction
                 if data is None:
-                    from src.api.contract import interaction_for_callable
-                    data = interaction_for_callable(func)
+                    from src.api.contract import endpoint_schema
+                    data = endpoint_schema(func)
                 if data is not None and 'email' in data:
                     self.autorun_task.kwargs['email'] = bool(data['email'])
                 elif 'email' not in self.autorun_task.kwargs:
@@ -112,7 +124,7 @@ class ScriptTool:
                 if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
                     from src.interactive.backend import ScriptHeader
                     self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
-            new_func = self.backend_recorder(self.script_lock(self.autorun_task(func)))
+            new_func = self.backend_recorder(self.script_lock(self.autorun_task(inner)))
             return new_func(*args , **kwargs)
         return wrapper
 

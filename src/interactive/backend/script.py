@@ -180,7 +180,7 @@ class ScriptHeader:
         if self.mode not in ['shell', 'os']:
             raise ValueError(f'Invalid mode: {self.mode}')
 
-    def get_param_inputs(self) -> list['ScriptParamInput']:
+    def get_param_inputs(self) -> list[ScriptParamInput]:
         """Return the list of :class:`ScriptParamInput` objects built from ``parameters``."""
         return ScriptParamInput.from_dict(self.parameters)
 
@@ -252,6 +252,8 @@ class ScriptParamInput:
 
     Attributes
     ----------
+    script_key:
+        Script key (used as the cache key).
     name:
         Parameter name (used as the CLI flag and widget key).
     type:
@@ -281,66 +283,13 @@ class ScriptParamInput:
     enum: list[str] | None = None
 
     @classmethod
-    def from_dict(cls, param_inputs: dict[str, dict[str, Any]]) -> list['ScriptParamInput']:
+    def from_dict(cls, param_inputs: dict[str, dict[str, Any]]) -> list[ScriptParamInput]:
         """Build a list of :class:`ScriptParamInput` instances from a raw parameters dict."""
         return [cls(name = name, **param_inputs[name]) for name in param_inputs]
 
     def as_dict(self) -> dict[str, Any]:
         """Serialise this instance to a plain dict."""
         return asdict(self)
-
-    @property
-    def ptype(self) -> type | list[str]:
-        """Resolve ``type`` to a Python type object or list of valid string options."""
-        if isinstance(self.type, str):
-            if self.type == 'str':
-                ptype = str
-            elif self.type == 'int':
-                ptype = int
-            elif self.type == 'float':
-                ptype = float
-            elif self.type == 'bool':
-                ptype = bool
-            elif self.type in ['list', 'tuple' , 'enum']:
-                assert self.enum , f'enum is required for {self.type}'
-                ptype = list(self.enum)
-            else:
-                try:
-                    ptype = eval(self.type)
-                except Exception as e:
-                    Logger.warning(e)
-                    Logger.warning(f'Invalid type: {self.type} , using str as default')
-                    ptype = str
-        elif isinstance(self.type, (list, tuple)):
-            ptype = list(self.type)
-        else:
-            raise ValueError(f'Invalid type: {self.type}')
-        return ptype
-
-    @property
-    def title(self) -> str:
-        """Human-readable title derived from the parameter name (snake_case → Title Case)."""
-        title = self.name.replace('_', ' ').title()
-        return title
-
-    @property
-    def placeholder(self) -> str:
-        """Placeholder text for text/number widgets; falls back to ``name`` when ``desc`` is empty."""
-        placeholder = self.desc if self.desc else self.name
-        return placeholder
-
-    def is_valid(self , value : Any) -> bool:
-        """Return True if *value* satisfies the ``required`` constraint."""
-        if self.required:
-            return value not in ['', None , 'Choose an option']
-        return True
-
-    def error_message(self, value : Any) -> str | None:
-        """Return a user-facing error string if *value* is invalid, otherwise None."""
-        if not self.is_valid(value):
-            operator = 'input' if self.type in ['str', 'int', 'float'] else 'select'
-            return f"Please {operator} a valid value for [{self.title}]"
-        return None
 
 class ScriptRunner:
     """High-level facade over a :class:`PathItem` that couples header metadata with task building.
@@ -357,7 +306,6 @@ class ScriptRunner:
         """Initialise runner from *path_item*, asserting it is a Python file."""
         self.path = path_item
         assert self.script.is_file() and self.script.suffix == '.py', f'{self.script} is not a python script'
-
         self.header = ScriptHeader.read_from_file(self.script)
 
     def __repr__(self) -> str:

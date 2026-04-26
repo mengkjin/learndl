@@ -1,0 +1,37 @@
+/* Keyed via ``st.container(key=...colored-container-<color>...)`` — see ``colored_container.py``. */
+.stVerticalBlock[class*="colored-container-blue"] {
+    background-color: #dbeafe !important;
+    border: 1px solid #93c5fd !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+}
+.stVerticalBlock[class*="colored-container-green"] {
+    background-color: #dcfce7 !important;
+    border: 1px solid #86efac !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+}
+.stVerticalBlock[class*="colored-container-red"] {
+    background-color: #fee2e2 !important;
+    border: 1px solid #fca5a5 !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+}
+.stVerticalBlock[class*="colored-container-orange"] {
+    background-color: #ffedd5 !important;
+    border: 1px solid #fdba74 !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+}
+.stVerticalBlock[class*="colored-container-purple"] {
+    background-color: #f3e8ff !important;
+    border: 1px solid #d8b4fe !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+}
+.stVerticalBlock[class*="colored-container-gray"] {
+    background-color: #f3f4f6 !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1rem !important;
+}

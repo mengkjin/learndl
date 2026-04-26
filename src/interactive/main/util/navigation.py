@@ -15,7 +15,7 @@ from src.interactive.frontend.logo import get_logo
 from src.interactive.frontend.style import style
 from src.interactive.backend.script import ScriptRunner
 from .session_control import SC 
-from .page import intro_pages , script_pages , PAGE_TITLE
+from .page import PAGE_TITLE
 
 def page_config() -> None:
     """Configure the Streamlit page and apply custom CSS styling.
@@ -45,8 +45,8 @@ def top_navigation(position : Literal['top', 'sidebar' , 'hidden'] = 'top'):
         The ``st.navigation`` runner returned by Streamlit.
     """
     pages = {}
-    pages['Intro'] = [page['page'] for page in intro_pages().values()]
-    for page in script_pages().values():
+    pages['Intro'] = [page['page'] for page in SC.intro_pages.values()]
+    for page in SC.script_pages.values():
         group_name = page['group'].title() + ' Scripts'
         if group_name not in pages: 
             pages[group_name] = []
@@ -65,7 +65,7 @@ def custom_sidebar_navigation() -> None:
 
 def intro_links() -> None:
     """Render icon-button shortcuts for each intro page in the sidebar."""
-    pages = intro_pages()
+    pages = SC.intro_pages
     with st.container(key = "sidebar-intro-links"):
         cols = st.columns(len(pages))
         for col , (name , page) in zip(cols , pages.items()):
@@ -95,7 +95,7 @@ def script_links(show_dir: bool = False) -> None:
                 ">{x}</div>""", unsafe_allow_html=True)
         
         group = ''
-        for name , page in script_pages().items():
+        for name , page in SC.script_pages.items():
             if show_dir and page['group'] != group:
                 subsubheader(page['group'].upper() + ' Scripts')
             parts : list[str] = page['label'].split(' > ')

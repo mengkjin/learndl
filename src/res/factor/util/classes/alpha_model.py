@@ -44,6 +44,23 @@ class Amodel:
         return f'{self.__class__.__name__}(name={self.name},date={self.date},length={len(self)})'
     def __bool__(self):
         return True
+    def __neg__(self):
+        return self * -1
+    def __mul__(self , other : int | float):
+        assert other != 0 , 'multiplication by 0 is not allowed'
+        direction = 1 if other > 0 else -1
+        scale = abs(other)
+        new_name = self.name
+        if direction == -1:
+            new_name = new_name.removeprefix('-') if new_name.startswith('-') else f'-{new_name}'
+        if scale != 1 and '.rescaled' not in new_name:
+            new_name = f'{new_name}.rescaled'
+        return Amodel(self.date , self.alpha * other , self.secid , new_name)
+    def reverse(self):
+        """inplace version of -Amodel"""
+        self.alpha = -self.alpha
+        self.name = self.name.removeprefix('-') if self.name.startswith('-') else f'-{self.name}'
+        return self
     @property
     def empty(self) -> bool:
         return len(self) == 0
@@ -76,12 +93,17 @@ class Amodel:
         new = self if inplace else self.copy()
         new.alpha = zscore(new.alpha)
         return new
-    def pre_process(self , inplace = False):
-        # nan_as_num , winsor , normal
+    def pre_process(self , pre_fill = None , after_fill = 0 , inplace = False):
+        # nan_as_num for pre_fill , winsor , normal , nan_as_num for after_fill
         new = self if inplace else self.copy()
-        new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))
+        alpha = new.alpha
+        alpha = fill_na_as_const(alpha , pre_fill)
+        alpha = winsorize_by_dist(alpha , winsor_rng=0.5)
+        alpha = zscore(alpha)
+        alpha = fill_na_as_const(alpha , after_fill)
+        new.alpha = alpha
         return new
-    def alpha_of(self , secid : np.ndarray | Any = None , nan = 0. , rank = False) -> np.ndarray:
+    def alpha_of(self , secid : np.ndarray | Any = None , nan : float = np.nan , rank = False) -> np.ndarray:
         if self.empty:
             return self.alpha if secid is None else np.full(len(secid) , nan , dtype=float)
         value = self.alpha if not rank else pd.Series(self.alpha).rank(pct=True).to_numpy()
@@ -143,7 +165,7 @@ class Amodel:
     @classmethod
     def combine_linear(
         cls , alphas : list[Amodel] , weights : list[float] | np.ndarray | None = None , 
-        date : int | None = None , name : str = 'combined_alpha' , normalize = True
+        date : int | None = None , name : str = 'combined_alpha' , * , normalize = True
     ):
         assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
         if len(alphas) == 1:
@@ -159,7 +181,7 @@ class Amodel:
             date = alphas[0].date
 
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
-        all_alphas = np.stack([alpha.alpha_of(secid) for alpha in alphas] , axis = 0)
+        all_alphas = np.stack([alpha.alpha_of(secid , nan = 0) for alpha in alphas] , axis = 0)
         alpha = np.sum(all_alphas * weights[:,None] , axis = 0) / weights.sum()
         amodel = cls(date , alpha , secid , name)
         if normalize: 
@@ -179,18 +201,18 @@ class Amodel:
             date = alphas[0].date
 
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
-        all_alphas = np.stack([alpha.alpha_of(secid) for alpha in alphas] , axis = 0)
-        rank_pct = _rank_pct(all_alphas , axis = 1)
+        all_alphas = np.stack([alpha.alpha_of(secid , rank = True) for alpha in alphas] , axis = 0)
+        # rank_pct = _rank_pct(all_alphas , axis = 1)
         
         if method == 'worst':
-            has_data = np.any(~np.isnan(rank_pct), axis=0)
-            alpha = _rank_pct(np.nan_to_num(rank_pct,nan=np.inf).min(axis = 0),axis = 0)
+            has_data = np.any(~np.isnan(all_alphas), axis=0)
+            alpha = np.nan_to_num(all_alphas,nan=np.inf).min(axis = 0)
             alpha[~has_data] = np.nan
         elif method == 'worst2':
-            if rank_pct.shape[0] <= 2:
-                partitioned = rank_pct
+            if all_alphas.shape[0] <= 2:
+                partitioned = all_alphas
             else:
-                partitioned = np.partition(rank_pct, kth=2, axis=0)
+                partitioned = np.partition(all_alphas, kth=2, axis=0)
             has_data = np.any(~np.isnan(partitioned[:2]), axis=0)
             alpha = np.full(partitioned.shape[1], np.nan)
             alpha[has_data] = np.nanmean(partitioned[:2][:,has_data], axis=0)
@@ -226,10 +248,29 @@ class AlphaModel(GeneralModel):
         return len(self.models) == 0 or (len(self.models) == 1 and self.item().empty)
     def item(self) -> Amodel:
         return super().item()
+    def last_model(self) -> Amodel:
+        assert not self.empty , 'empty AlphaModel has no last model'
+        return self.models[max(self.models.keys())]
     def alpha(self) -> np.ndarray:
         return self.item().alpha
     def __repr__(self):
         return f'{self.__class__.__name__} (name={self.name})({len(self.models)} days loaded)'
+    def __neg__(self):
+        return self * -1
+    def __mul__(self , other : int | float):
+        assert other != 0 , 'multiplication by 0 is not allowed'
+        if not self.empty:
+            self = self.copy()
+            for date in self.models.keys():
+                self.models[date] = self.models[date] * other
+            self.name = self.last_model().name
+        return self
+    def reverse(self) -> AlphaModel:
+        """inplace version of AlphaModel * -1"""
+        for date in self.models.keys():
+            self.models[date] = self.models[date].reverse()
+        self.name = self.name.removeprefix('-') if self.name.startswith('-') else f'-{self.name}'
+        return self
     @classmethod
     def from_dataframe(cls , data: pd.DataFrame | pd.Series , name : str | Any = None):
         if isinstance(data , pd.Series): 
@@ -306,22 +347,30 @@ class AlphaComponent:
         if isinstance(input , (AlphaModel , Amodel)):
             self.name = input.name
         else:
+            assert not input.startswith('--') , f'alpha name cannot start with --: {input}'
+            if input.startswith('-'):
+                direction = -1
+                input = input.removeprefix('-')
+            else:
+                direction = 1
             if input in Const.Model.strategies['prediction']:
-                alpha_type , alpha_name , alpha_column = 'pred' , input , None
+                src , key , col = 'pred' , input , None
             elif '@' in input:
                 exprs = input.split('@')
-                alpha_type , alpha_name = exprs[:2]
-                alpha_column = exprs[2] if len(exprs) > 2 else None
+                src , key = exprs[:2]
+                col = exprs[2] if len(exprs) > 2 else None
             else:
                 raise Exception(f'{input} is not a valid alpha')
 
-            self.name = f'{alpha_type}@{alpha_name}'
-            if alpha_type in ['sellside' , 'pred']:
-                self.loads = self.db_loads(alpha_type , alpha_name , alpha_column , name = self.name , normalize = normalize)
-            elif alpha_type == 'factor':
-                self.loads = self.factor_loads(alpha_name , name = self.name , normalize = normalize)
+            self.name = f'{src}@{key}'
+            if src in ['sellside' , 'pred']:
+                alpha = (src , key , col)
+                self.loads = self.db_loads(alpha , name = self.name , normalize = normalize , direction = direction)
+            elif src == 'factor':
+                alpha = key
+                self.loads = self.factor_loads(alpha , name = self.name , normalize = normalize , direction = direction)
             else:
-                raise Exception(f'{alpha_type} is not a valid alpha type')
+                raise Exception(f'{src} is not a valid alpha type')
 
     def __repr__(self) -> str:
         return self.name
@@ -362,36 +411,30 @@ class AlphaComponent:
         else:
             cls._cache_unnormalized[name] = alpha_model
 
+    
     @classmethod
-    def db_loads(cls , db_src : str , db_key : str , db_column : str | None = None , name : str = 'alpha0' , normalize : bool = True , closest = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+    def db_loads(cls , alpha : tuple[str,str,str | None] , name : str = 'alpha0' , 
+                 normalize : bool = True , closest = True , direction : int = 1) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
         from src.res.factor.util.classes import StockFactor
         def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
             date = _to_dates(date)
-            column = db_column if db_column is not None else db_key
-            df = DB.loads(db_src , db_key , date , override_existing_key = True , closest = closest , vb_level = 'never')
-            assert df.empty or (column in df.columns.to_list()) , f'{column} not in {df.columns} at date {date}'
-            df = pd.DataFrame(columns=['secid' , 'date' , column]) if df.empty else df.loc[:,['secid' , 'date' , column]]
-            factor = StockFactor(df)
-            if normalize:
-                factor = factor.normalize(inplace=True)
-            alpha_model = factor.alpha_model()
-            alpha_model.rename(name)
-            return alpha_model
+            src , key , col = alpha
+            col = col if col else key
+            df = DB.loads(src , key , date , override_existing_key = True , closest = closest , vb_level = 'never')
+            assert df.empty or (col in df.columns.to_list()) , f'{col} not in {df.columns} at date {date}'
+            df = pd.DataFrame(columns=['secid' , 'date' , col]) if df.empty else df.loc[:,['secid' , 'date' , col]]
+            return StockFactor(df).alpha_model(normalize , name , direction)
         return wrapper
 
     @classmethod
-    def factor_loads(cls , factor_name : str , name : str = 'alpha0' , normalize : bool = True , closest = True) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+    def factor_loads(cls , factor_name : str , name : str = 'alpha0' , 
+                     normalize : bool = True , closest = True , direction : int = 1) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
         from src.res.factor.calculator import StockFactorHierarchy
         from src.res.factor.util.classes import StockFactor
         def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
             date = _to_dates(date)
-            factor = StockFactorHierarchy.get_factor(factor_name).Loads(date , closest = closest)
-            factor = StockFactor(factor)
-            if normalize:
-                factor = factor.normalize(inplace=True)
-            alpha_model = factor.alpha_model()
-            alpha_model.rename(name)
-            return alpha_model
+            df = StockFactorHierarchy.get_factor(factor_name).Loads(date , closest = closest)
+            return StockFactor(df).alpha_model(normalize , name , direction)
         return wrapper
 
 class AlphaCombination:
@@ -485,18 +528,17 @@ class AlphaScreener(AlphaCombination):
         return AlphaModel(self.name , models)
 
     def screened_pool(self , date : int , secid : np.ndarray | list[int] | Any = None , ratio : float | None = None , 
-                      other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> np.ndarray | None:
-        secid = np.array(secid) if secid is not None else None
+                      other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> np.ndarray:
         alpha = self.get(date , other_models)
         if alpha is None or alpha.empty:
-            return secid
+            return np.array([] , dtype = int)
 
-        alpha = alpha.get(date).to_dataframe()
+        alpha = alpha.get(date).to_dataframe().dropna()
         if alpha.empty:
-            return secid
+            return np.array([] , dtype = int)
         
         if secid is not None and len(secid) > 0: 
             alpha = alpha.query('secid in @secid').copy()
-        alpha.loc[:, 'rankpct'] = alpha['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
+        alpha.loc[:, 'rankpct'] = alpha['alpha'].rank(pct = True , method = 'first' , ascending = True)
         ratio = ratio if ratio is not None else self.ratio
-        return alpha.query('rankpct >= @ratio')['secid'].to_numpy()
+        return alpha.query('rankpct < @ratio')['secid'].to_numpy()

@@ -13,19 +13,22 @@ from .basic import alert_message , DIV_TOL
 
 warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
-def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
+def fill_na_as_const(x: np.ndarray, fill : float | None = None , inplace = True):
     """Replace NaNs with a constant (copy).
 
     Args:
-        x_: Input array.
-        c_: Fill value for NaN positions.
+        x: Input array.
+        fill: Fill value for NaN positions.
 
     Returns:
         New array with NaNs replaced by ``c_``.
     """
-    rtn = x_.copy()
-    rtn[np.isnan(x_)] = c_
-    return rtn
+    if fill is None:
+        return x
+    if not inplace:
+        x = x.copy()
+    x[np.isnan(x)] = fill
+    return x
 
 def multi_bin_label(x : np.ndarray , n = 10):
     """Quantile-based multi-bin labels and nonnegative weights.
@@ -63,25 +66,25 @@ def bin_label(x : np.ndarray):
     w[:] = y + 1
     return y, w
 
-def norm_to_1(x_: np.ndarray , value : float = 1.):
+def norm_to_1(x: np.ndarray , value : float = 1.):
     """Min-max scale to ``[0, value]`` ignoring NaNs.
 
     Args:
-        x_: Input array.
+        x: Input array.
         value: Target max after scaling.
 
     Returns:
         Scaled array, or zeros if empty or constant input.
     """
-    if len(x_) and value:
-        if np.nanmax(x_) - np.nanmin(x_) == 0:
-            return np.zeros_like(x_)
+    if len(x) and value:
+        if np.nanmax(x) - np.nanmin(x) == 0:
+            return np.zeros_like(x)
         else:
-            return (x_ - np.nanmin(x_)) / (np.nanmax(x_) - np.nanmin(x_)) * value
+            return (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x)) * value
     else:
-        return np.zeros_like(x_)
+        return np.zeros_like(x)
 
-def rank(x_: np.ndarray, is_zscore=True, is_norm_inv=False):
+def rank(x: np.ndarray, is_zscore=True, is_norm_inv=False):
     """Dense rank with optional z-score or normal-inverse transform.
 
     Args:
@@ -92,10 +95,10 @@ def rank(x_: np.ndarray, is_zscore=True, is_norm_inv=False):
     Returns:
         Transformed 1-D array, or all-NaN if ranking fails after imputation.
     """
-    x = x_.copy()
+    x = x.copy()
     nan_flg = np.isnan(x)
     if nan_flg.any():
-        x[nan_flg] = np.nanmedian(x_)
+        x[nan_flg] = np.nanmedian(x)
     if not np.isnan(x).any():
         rtn = rankdata(x, method='dense')
         if is_zscore and not is_norm_inv:
@@ -112,31 +115,31 @@ def rank(x_: np.ndarray, is_zscore=True, is_norm_inv=False):
         rtn = np.full_like(x, np.nan)
     return rtn
 
-def rank_in_category(x_: list[np.ndarray], category_: np.ndarray):
-    """Rank each array in ``x_`` within ``category_`` groups.
+def rank_in_category(x: list[np.ndarray], category: np.ndarray):
+    """Rank each array in ``x`` within ``category`` groups.
 
     Args:
-        x_: List of 1-D arrays aligned with ``category_``.
-        category_: Category labels, same length as each ``x_[i]``.
+        x: List of 1-D arrays aligned with ``category``.
+        category: Category labels, same length as each ``x[i]``.
 
     Returns:
         List of arrays with group-wise ``rank(..., True, True)``; singleton groups get 0.0.
     """
-    cate_list = list(np.unique(category_))
+    cate_list = list(np.unique(category))
     rtn = list()
-    for i in range(len(x_)):
-        rtn.append(np.zeros_like(category_) * np.nan)
+    for i in range(len(x)):
+        rtn.append(np.zeros_like(category) * np.nan)
     for cate in cate_list:
-        fl = category_ == cate
-        for i in range(len(x_)):
-            tmp = x_[i][fl]
+        fl = category == cate
+        for i in range(len(x)):
+            tmp = x[i][fl]
             if tmp.shape[0] == 1:
                 rtn[i][fl] = 0.0
             else:
                 rtn[i][fl] = rank(tmp, True, True)
     return rtn
 
-def norm_inv(x_: np.ndarray):
+def norm_inv(x: np.ndarray):
     """Apply ``scipy.stats.norm.ppf`` elementwise (open interval (0,1)).
 
     Args:
@@ -148,14 +151,14 @@ def norm_inv(x_: np.ndarray):
     Raises:
         AssertionError: If any value is outside ``(0, 1)``.
     """
-    if len(x_) == 0: 
-        return x_ * 0.0
-    assert (x_ > 0).all() , x_.min()
-    assert (x_ < 1).all() , x_.max()
-    rtn = norm.ppf(x_)
+    if len(x) == 0: 
+        return x * 0.0
+    assert (x > 0).all() , x.min()
+    assert (x < 1).all() , x.max()
+    rtn = norm.ppf(x)
     return rtn
 
-def zscore(x_: np.ndarray):
+def zscore(x: np.ndarray):
     """Cross-sectional z-score: subtract ``nanmean``, divide by ``nanstd + DIV_TOL``.
 
     Args:
@@ -164,9 +167,9 @@ def zscore(x_: np.ndarray):
     Returns:
         Z-scored array.
     """
-    u = np.nanmean(x_)
-    d = np.nanstd(x_) + DIV_TOL
-    return (x_ - u) / d
+    u = np.nanmean(x)
+    d = np.nanstd(x) + DIV_TOL
+    return (x - u) / d
 
 def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.05):
     """Clip a 1-D series to percentile bounds.

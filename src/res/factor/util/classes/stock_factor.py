@@ -841,8 +841,36 @@ class StockFactor:
             subset = self.twin(factor = factor_input , benchmark = benchmark.name)
             self.cache_benchmark_subsets[benchmark.name] = subset
         return self.cache_benchmark_subsets[benchmark.name]
+
+    def alpha_model(self , normalize : bool = False , new_name : str | None = None , direction : int = 1) -> AlphaModel:
+        """
+        transform the factor to alpha model , only one factor is supported
+        """
+        assert len(self.factor_names) == 1 , f'only one factor is supported for alpha model , but got {len(self.factor_names)}'
+        if normalize:
+            self = self.normalize(inplace=True)
+        alpha_model = self.get_cached_alpha_model(self.factor_names[0] , use_cache = not new_name and direction > 0)
+        if new_name:
+            alpha_model.rename(new_name)
+        if direction < 0:
+            alpha_model = alpha_model.reverse()
+        return alpha_model
     
-    def alpha_model(self , use_cache = True) -> AlphaModel:
+    def alpha_models(self , normalize : bool = False , direction : int = 1) -> list[AlphaModel]:
+        """
+        transform the factor to alpha model , only one factor is supported
+        """
+        if normalize:
+            self = self.normalize(inplace=True)
+        alpha_models : list[AlphaModel] = []
+        for name in self.factor_names:
+            alpha_model = self.get_cached_alpha_model(name , use_cache = direction > 0)
+            if direction < 0:
+                alpha_model = alpha_model.reverse()
+            alpha_models.append(alpha_model)
+        return alpha_models
+
+    def get_cached_alpha_model(self , name : str , use_cache = True) -> AlphaModel:
         """
         transform the factor to alpha model , only one factor is supported
         """
@@ -851,17 +879,6 @@ class StockFactor:
         if name not in self.cache_alpha_models or not use_cache:
             self.cache_alpha_models[name] = self._get_alpha_model(name)
         return self.cache_alpha_models[name]
-
-    def alpha_models(self , use_cache = True) -> list[AlphaModel]:
-        """
-        transform the factor to alpha models , multiple factors are supported
-        """
-        models = []
-        for name in self.factor_names:
-            if name not in self.cache_alpha_models or not use_cache:
-                self.cache_alpha_models[name] = self._get_alpha_model(name)
-            models.append(self.cache_alpha_models[name])
-        return models
 
     def risk_model(self , load = True):
         """

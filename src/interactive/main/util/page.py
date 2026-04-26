@@ -1,23 +1,21 @@
 """Page registry, page-file generation, and page-header rendering.
 
 Maintains the static lists of intro pages and dynamically discovered script
-    get_intro_page , get_script_page , print_page_header ,
-    show_script_detail , show_param_settings , show_report_main) 
-each page's ``main()``.
 """
 import re
 import streamlit as st
 from pathlib import Path
-from typing import Literal
 
 from src.proj import Proj , Const
 
-from .session_control import SC , set_current_page
+from .session_control import SC
+
+__all__ = ['intro_pages' , 'script_pages' , 'get_page' , 'PAGE_TITLE']
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 
-INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
+INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue' , 'api_console']
 
 PAGE_TITLE = f":red[:material/rocket_launch:] :rainbow[{Const.Pref.interactive.get('page_title' , 'Learndl')} (_v{Proj.version}_)]"
 
@@ -26,6 +24,7 @@ PAGE_ICONS = {
     'developer_info' : ':material/bug_report:' ,
     'config_editor' : ':material/edit_document:' ,
     'task_queue' : ':material/event_list:' ,
+    'api_console' : ':material/api:' ,
     'script_structure' : ':material/account_tree:' ,
 }
 
@@ -34,6 +33,7 @@ PAGE_HELPS = {
     'developer_info' : f"This is for developer only. Check boxes to select what information to show." ,
     'config_editor' : 'This File Editor is for editing selected config files. For other config files, please use the file explorer.' ,
     'task_queue' : f"Shows the entire task queue. Adjust filter to show more specific tasks." ,
+    'api_console' : 'Browse src.api endpoints with [API Interaction] (expose: true), run in-process or enqueue via the API adapter script.' ,
     'script_structure' : f"The script structure of project runs. Click the script button to switch to script page." ,
 }
 
@@ -48,8 +48,29 @@ SCRIPT_ICONS = {
     'trading' : ':material/payments:',
 }
 
+def get_page(page_name : str) -> dict:
+    if page_name in INTRO_PAGES:
+        return _get_intro_page(page_name)
+    else:
+        return _get_script_page(page_name)
 
-def script_detail_url_path(script_key: str) -> str:
+def intro_pages() -> dict[str, dict]:
+    """Return a dict mapping intro page name → page metadata for all intro pages."""
+    return {page:_get_intro_page(page) for page in INTRO_PAGES}
+
+def script_pages() -> dict[str, dict]:
+    """Return a dict mapping script key → page metadata for all enabled scripts.
+
+    Iterates discovered :class:`PathItem` file entries and caches each
+    ``st.Page`` in session state (callable-backed; no stub ``.py`` files).
+    """
+    pages = {}
+    items = [item for item in SC.path_items if item.is_file and item.level > 0]
+    for item in items:
+        pages[item.script_key] = _get_script_page(item.script_key)
+    return pages
+
+def _script_detail_url_path(script_key: str) -> str:
     """Stable ``url_path`` for each script's ``st.Page`` (must be unique per script).
 
     Streamlit forbids ``/`` in ``url_path`` (no nested segments); use a single token.
@@ -57,19 +78,14 @@ def script_detail_url_path(script_key: str) -> str:
     slug = re.sub(r'[/\\]', '_', script_key)
     return f'_script_{slug}'
 
-
-def script_detail_page_callable(script_key: str):
+def _script_detail_page_callable(script_key: str):
     """Return a no-arg callable suitable for ``st.Page(..., url_path=...)``."""
     def _run() -> None:
         from src.interactive.main.util.script_detail import show_script_detail
         show_script_detail(script_key)
     return _run
 
-def intro_pages() -> dict[str, dict]:
-    """Return a dict mapping intro page name → page metadata for all intro pages."""
-    return {page:get_intro_page(page) for page in INTRO_PAGES}
-
-def get_intro_page(page_name : str) -> dict:
+def _get_intro_page(page_name : str) -> dict:
     """Return (and cache) the metadata dict for a single intro page.
 
     The result is stored in ``st.session_state['app_intro_pages']`` so that
@@ -97,19 +113,7 @@ def get_intro_page(page_name : str) -> dict:
         }
     return st.session_state['app_intro_pages'][page_name]
 
-def script_pages() -> dict[str, dict]:
-    """Return a dict mapping script key → page metadata for all enabled scripts.
-
-    Iterates discovered :class:`PathItem` file entries and caches each
-    ``st.Page`` in session state (callable-backed; no stub ``.py`` files).
-    """
-    pages = {}
-    items = [item for item in SC.path_items if item.is_file and item.level > 0]
-    for item in items:
-        pages[item.script_key] = get_script_page(item.script_key)
-    return pages
-
-def get_script_page(script_key: str) -> dict:
+def _get_script_page(script_key: str) -> dict:
     """Return (and cache) the metadata dict for a script page.
 
     Creates a ``st.Page`` wrapping :func:`~src.interactive.main.util.script_detail.show_script_detail`
@@ -139,10 +143,10 @@ def get_script_page(script_key: str) -> dict:
             help += f"\n**TODO**: {runner.todo}"
         st.session_state['app_script_pages'][runner.script_key] = {
             'page' : st.Page(
-                script_detail_page_callable(runner.script_key),
+                _script_detail_page_callable(runner.script_key),
                 title = runner.format_path,
                 icon = icon,
-                url_path = script_detail_url_path(runner.script_key),
+                url_path = _script_detail_url_path(runner.script_key),
             ),
             'group' : runner.script_group ,
             'label' : runner.format_path ,
@@ -152,37 +156,3 @@ def get_script_page(script_key: str) -> dict:
             'runner' : runner ,
         }
     return st.session_state['app_script_pages'][runner.script_key]
-
-def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro') -> None:
-    """Register the active page and render the shared header and control panel.
-
-    Called at the top of every page's ``main()`` function.  Sets the current
-    page in session state, notifies :class:`SessionControl`, then renders the
-    coloured icon + rainbow title header followed by the control panel row.
-
-    Args:
-        page_name: The intro page name (e.g. ``'home'``) or script key
-            (e.g. ``'4_train/1_train_model.py'``).
-        type: ``'intro'`` for intro pages, ``'script'`` for script pages.
-    """
-    set_current_page(page_name)
-    SC.switch_page(page_name)
-    if type == 'intro':
-        script_key = None
-        self_page = get_intro_page(page_name) 
-    elif type == 'script':
-        script_key = page_name
-        self_page = get_script_page(script_key)
-        if self_page is None:
-            st.error(f"Script {script_key} not not enabled")
-            return
-    else:
-        raise ValueError(f"type {type} should be 'intro' or 'script'")
-    
-    # st.title(PAGE_TITLE)
-    st.header(f"*_:red[{self_page['icon']}] :rainbow[{self_page['head']}]_*" , help = self_page['help'])
-    # if 'control-panel' not in st.session_state:
-    #     st.session_state['control-panel'] = ControlPanel()
-    # st.session_state['control-panel'].show(script_key = script_key)
-    SC.get_control_panel().show(script_key = script_key)
-    

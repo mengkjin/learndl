@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from abc import abstractmethod
 from typing import Any
@@ -54,12 +55,6 @@ class BasicCreatorConfig:
         return cls(**use_kwargs)
 
     @property
-    def self_in_sorter(self) -> bool:
-        return 'self' in self.sorter
-    @property
-    def self_in_screener(self) -> bool:
-        return 'self' in self.screener
-    @property
     def alpha_sorter(self) -> AlphaComposite:
         if not hasattr(self , '_sorter_alpha'):
             self._sorter_alpha = AlphaComposite([alpha for alpha in self.sorter if alpha != 'self'])
@@ -70,6 +65,35 @@ class BasicCreatorConfig:
             self._screener_alpha = AlphaScreener([alpha for alpha in self.screener if alpha != 'self'] , ratio = self.screen_ratio)
         return self._screener_alpha
 
+    def get_sorting_alpha(self , model_date : int , alpha_model : AlphaModel | Amodel) -> Amodel:
+        alpha_composite = self.alpha_sorter.get(model_date , alpha_model if 'self' in self.sorter else None)
+        sorting_alpha = alpha_composite.get_model(model_date)
+        if not sorting_alpha:
+            sorting_alpha = alpha_model.get_model(model_date)
+        return sorting_alpha
+
+    def get_candidate_pool(
+        self ,
+        model_date : int , 
+        alpha_model : AlphaModel | Amodel ,
+        bench_port : Port | None = None
+    ) -> np.ndarray:
+        alpha_model = alpha_model if isinstance(alpha_model , AlphaModel) else alpha_model.to_alpha_model()
+        secid = alpha_model.get(model_date).secid
+        if bench_port and not bench_port.emtpy:
+            secid = np.intersect1d(secid , bench_port.secid)
+        return secid
+
+    def get_screened_pool(
+        self ,
+        model_date : int , 
+        alpha_model : AlphaModel | Amodel ,
+        bench_port : Port | None = None, 
+    ) -> np.ndarray:
+        secid = bench_port.secid if bench_port else None
+        secid = self.alpha_screener.screened_pool(model_date , secid , other_models = alpha_model if 'self' in self.screener else None)
+        return secid
+
     @property
     def stay_num(self) -> float:
         return (1 - self.turn_control) * self.n_best
@@ -78,16 +102,6 @@ class BasicCreatorConfig:
     def indus_slots(self) -> float:
         return self.n_best * self.indus_control
 
-    def get_screened_pool(
-        self ,
-        model_date : int , 
-        alpha_model : AlphaModel | Amodel ,
-        bench_port : Port | None = None, 
-    ):
-        secid = None if bench_port is None else bench_port.secid
-        secid = self.alpha_screener.screened_pool(model_date , secid , other_models = alpha_model if self.self_in_screener else None)
-        return secid
-
     def generate_top_stock_port(
         self ,
         model_date : int , 
@@ -95,18 +109,17 @@ class BasicCreatorConfig:
         init_port : Port | None = None, 
         bench_port : Port | None = None, 
     ) -> pd.DataFrame:
-        sorting_alpha = self.alpha_sorter.get(model_date , alpha_model if self.self_in_sorter else None)
-        sort_model = sorting_alpha.get_model(model_date)
-        if not sort_model:
-            sort_model = alpha_model.get_model(model_date)
-
+        sorting_alpha = self.get_sorting_alpha(model_date , alpha_model)
+        candidate_pool = self.get_candidate_pool(model_date , alpha_model , bench_port) # noqa
         screened_pool = self.get_screened_pool(model_date , alpha_model , bench_port)
+
         if init_port is None:
             init_port = Port.none_port(model_date)
 
-        pool = sort_model.to_dataframe(indus=True , na_indus_as = 'unknown')
-        if screened_pool is not None and len(screened_pool) > 0:
-            pool = pool.query('secid in @screened_pool').copy()
+        pool = sorting_alpha.to_dataframe(indus=True , na_indus_as = 'unknown').query('secid in @candidate_pool')
+        if len(screened_pool) > 0:
+            pool = pool.query('secid in @screened_pool')
+        pool = pool.reset_index(drop = True)
         
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)

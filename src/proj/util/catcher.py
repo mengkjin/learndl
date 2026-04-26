@@ -422,9 +422,9 @@ class TimedOutput:
             elif isinstance(content , pd.DataFrame): 
                 output_type = 'data_frame'
             else: 
-                if not isinstance(content , str):
+                if not isinstance(content , (str , bool , int , float , Path)):
                     Logger.warning(f"Unknown output type for catcher.TimedOutput.create: {type(content)}")
-                    content = str(content)
+                content = str(content)
                 output_type = 'stdout'
         if output_type == 'stderr':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
