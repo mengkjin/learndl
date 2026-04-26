@@ -5,7 +5,7 @@ import io
 from pathlib import Path
 import threading
 
-from src.proj.core import stderr
+from src.proj.core import stderr , strPath
 
 class LogWriterFile:
     """Descriptor storing the optional main project log stream (``TextIOWrapper``)."""
@@ -56,7 +56,7 @@ class UniqueFileList:
             self.file_list.clear()
             return files
 
-    def append(self , file : Path | str):
+    def append(self , file : strPath):
         """Append a path if not duplicate and not matching ``ban_patterns``."""
         with self.lock:
             file = Path(file)
@@ -67,7 +67,7 @@ class UniqueFileList:
                 return
             self.file_list.append(file)
 
-    def extend(self , *files : Path | str):
+    def extend(self , *files : strPath):
         """Append multiple paths with the same rules as ``append``."""
         with self.lock:
             for file in files:
@@ -79,7 +79,7 @@ class UniqueFileList:
                     continue
                 self.file_list.append(file)
     
-    def insert(self , index : int , file : Path | str):
+    def insert(self , index : int , file : strPath):
         """Insert at ``index``; if ``file`` already present, remove old occurrence first."""
         with self.lock:
             file = Path(file)
@@ -90,7 +90,7 @@ class UniqueFileList:
                 self.file_list.remove(file)
             self.file_list.insert(index , file)
 
-    def remove(self , file : Path | str):
+    def remove(self , file : strPath):
         """Remove ``file`` from the list."""
         with self.lock:
             self.file_list.remove(Path(file))

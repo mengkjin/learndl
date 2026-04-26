@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from src.proj.core import strPath
 from src.proj.util.shell_opener import Shell , ProcessDiscovery
 
 __all__ = ['ScriptCmd']
@@ -12,7 +13,7 @@ class ScriptCmd:
 
     macos_terminal_profile_name = 'Basic'
     macos_tempfile_method = False
-    def __init__(self , script : str | Path , params : dict | None = None , 
+    def __init__(self , script : strPath , params : dict | None = None , 
                  mode: Literal['shell', 'os'] = 'shell' , **kwargs):
         self.script = (str(script.absolute()) if isinstance(script , Path) else script)
         self.py_path = "uv run"

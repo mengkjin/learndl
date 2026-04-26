@@ -1,8 +1,9 @@
 import os , shutil , subprocess
 from pathlib import Path
 from src.proj import PATH , Logger
+from src.proj.core import strPath
 
-def call_tensorboard(log_dir : str | Path):
+def call_tensorboard(log_dir : strPath):
     """
     Launch TensorBoard via ``uv run tensorboard --logdir`` (blocks until user interrupt).
 

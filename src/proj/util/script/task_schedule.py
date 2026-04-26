@@ -6,6 +6,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 
+from src.proj.core import strPath
 from src.proj.env import MACHINE , PATH
 from src.proj.log import Logger
 
@@ -166,7 +167,7 @@ class TaskScheduler:
             task.run(exclude_script = exclude_script)
 
     @classmethod
-    def add_run_script(cls, script : str | Path , kwargs : dict | None = None , machine_name : str = 'mengkjin-server'):
+    def add_run_script(cls, script : strPath , kwargs : dict | None = None , machine_name : str = 'mengkjin-server'):
         """add a script to run"""
         kwargs = kwargs or {}
         if isinstance(script , str):

@@ -1,8 +1,8 @@
 """SQLite-backed history of task runs (status, timing, logs) under ``PATH.app_db``."""
 
 from datetime import datetime
-from pathlib import Path
 
+from src.proj.core import strPath
 from src.proj.env import PATH
 from src.proj.log import Logger
 
@@ -194,7 +194,7 @@ class TaskRecorder:
     def get_backup_paths(self):
         return self.conn_handler.all_backup_paths()
     
-    def restore_backup(self , backup_path : Path | str):
+    def restore_backup(self , backup_path : strPath):
         self.clear_database()
         self.conn_handler.restore(backup_path , delete_backup = True)
     

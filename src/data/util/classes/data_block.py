@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import PATH , Logger , CALENDAR , DB
+from src.proj.core import strPath
 from src.proj.util import properties , torch_load
 from src.func import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice
 
@@ -58,7 +59,7 @@ def data_type_alias(key : str) -> list[str]:
     assert alias[-1] == key , f'{alias[-1]} != {key}'
     return alias
 
-def save_dict(data : dict , file_path : str | Path):
+def save_dict(data : dict , file_path : strPath):
     """
     Save a dictionary to disk.
 
@@ -75,7 +76,7 @@ def save_dict(data : dict , file_path : str | Path):
     else:
         raise Exception(file_path)
 
-def load_dict(file_path : str | Path , keys = None) -> dict[str,Any]:
+def load_dict(file_path : strPath , keys = None) -> dict[str,Any]:
     """
     Load a dictionary from disk.
 

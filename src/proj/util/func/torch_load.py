@@ -1,13 +1,12 @@
 """``torch.load`` wrapper that picks ``weights_only`` API for torch >= 2.6."""
 
 import torch
-from pathlib import Path
 
 from src.proj import Logger
-
+from src.proj.core import strPath
 __all__ = ['torch_load']
 
-def torch_load_old(path : str | Path , weights_only : bool = False , **kwargs):
+def torch_load_old(path : strPath , weights_only : bool = False , **kwargs):
     """``torch.load`` without ``weights_only`` (torch < 2.6)."""
     try:
         return torch.load(path , **kwargs)
@@ -15,7 +14,7 @@ def torch_load_old(path : str | Path , weights_only : bool = False , **kwargs):
         Logger.error(f'torch_load_old({path}) error: ModuleNotFoundError: {e}')
         raise
     
-def torch_load_new(path : str | Path , weights_only : bool = False , **kwargs):
+def torch_load_new(path : strPath , weights_only : bool = False , **kwargs):
     """``torch.load`` with ``weights_only`` (torch >= 2.6)."""
     try:
         return torch.load(path , weights_only = weights_only , **kwargs)

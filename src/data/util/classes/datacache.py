@@ -4,9 +4,9 @@ from __future__ import annotations
 import shutil , threading , torch , json
 
 from typing import Any
-from pathlib import Path
 
 from src.proj import PATH , Logger
+from src.proj.core import strPath
 from src.proj.util import torch_load
 
 __all__ = ['DataCache']
@@ -157,7 +157,7 @@ class DataCache:
             return cls._try_save_metadata(metadata[key] , cls._get_meta_file(key))
 
     @classmethod
-    def _try_save_metadata(cls , metadata : dict[str, Any] , path : str | Path) -> bool:
+    def _try_save_metadata(cls , metadata : dict[str, Any] , path : strPath) -> bool:
         """Remove the metadata for a specific key"""
         try:
             _ = json.dumps(metadata)

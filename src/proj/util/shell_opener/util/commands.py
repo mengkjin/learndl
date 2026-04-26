@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Sequence, Any
 
+from src.proj.core import strPath
+
 __all__ = ["format_python_command" , "to_shell_string" , "guess_command_title"]
 
 def _win_cmd_quote(s: str) -> str:
@@ -45,7 +47,7 @@ def to_shell_string(cmd_list : Sequence[Any] | str) -> str:
         return ' '.join(shlex.quote(str(x)) for x in cmd_list)
 
 def format_python_command(
-    script: str | Path,
+    script: strPath,
     args: Sequence[str] | None = None,
     kwargs: dict[str, Any] | None = None,
     *,

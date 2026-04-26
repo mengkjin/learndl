@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Literal, Type
 
 from src.proj import PATH, MACHINE, Logger , Const
+from src.proj.core import strPath
 from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
@@ -102,7 +103,7 @@ class BaseModelConfig:
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
 
     def __init__(
-        self, base_path: ModelPath | Path | str | None, *,
+        self, base_path: ModelPath | strPath | None, *,
         module: str | None = None, schedule_name: str | None = None, override=None,
         **kwargs,
     ):
@@ -642,7 +643,7 @@ class BaseModelConfig:
 class AlgoConfig:
     def __init__(
         self,
-        base_path: ModelPath | Path | str | None,
+        base_path: ModelPath | strPath | None,
         *,
         override: dict[str, Any] | None = None,
         module: str | None = None,
@@ -810,7 +811,7 @@ class ModelConfigOptions:
 class ModelConfig(BaseModelConfig):
     def __init__(
         self,
-        base_path: ModelPath | Path | str | None = None, *,
+        base_path: ModelPath | strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None,
         start: int | None = None, end: int | None = None, stage=-1, resume=-1, selection=-1,
         **kwargs,
@@ -835,7 +836,7 @@ class ModelConfig(BaseModelConfig):
         return self.algo_config.boost_head_config
 
     @classmethod
-    def initialize(cls, base_path: ModelPath | Path | str | None, *, vb_level : Any = 2, min_key_len = -1, **kwargs):
+    def initialize(cls, base_path: ModelPath | strPath | None, *, vb_level : Any = 2, min_key_len = -1, **kwargs):
         config = cls(base_path, **kwargs).start_model()
         config.print_out(vb_level=vb_level, min_key_len=min_key_len)
         return config

@@ -1,7 +1,8 @@
 from contextlib import nullcontext
 from typing import Literal
-from pathlib import Path
-from src.proj import MACHINE , Logger , Proj  
+
+from src.proj import MACHINE , Logger , Proj 
+from src.proj.core import strPath
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
@@ -40,7 +41,7 @@ class ModelTrainer(BaseTrainer):
         return app
         
     @classmethod
-    def GO(cls , * , base_path : ModelPath | Path | str | None = None , title : str | None = None , 
+    def GO(cls , * , base_path : ModelPath | strPath | None = None , title : str | None = None , 
            paragraph : bool = False , html_catcher : bool = True, 
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
            log_operation : Literal['update_models' , 'resume_testing'] | None = None , 

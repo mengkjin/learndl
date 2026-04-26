@@ -4,6 +4,8 @@ import sqlite3 , shutil
 from datetime import datetime
 from pathlib import Path
 
+from src.proj.core import strPath
+
 # custom datetime adapter and converter to solve Python 3.12 deprecation warning
 def adapt_datetime(dt):
     """Convert datetime to ISO format string for SQLite storage"""
@@ -25,7 +27,7 @@ class DBConnHandler:
             cursor.execute('SELECT * FROM table')
             Logger.stdout(cursor.fetchall())
     """
-    def __init__(self, db_path: str | Path):
+    def __init__(self, db_path: strPath):
         self.db_path = Path(db_path)
         self.reset()
 
@@ -33,7 +35,7 @@ class DBConnHandler:
         self.check_same_thread = False
         
     @staticmethod
-    def get_connection(db_path: str | Path , check_same_thread: bool = True) -> sqlite3.Connection:
+    def get_connection(db_path: strPath , check_same_thread: bool = True) -> sqlite3.Connection:
         """Get database connection"""
         conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
         conn.row_factory = sqlite3.Row  # allow to access rows as dictionaries
@@ -81,7 +83,7 @@ class DBConnHandler:
         with self() as (conn, cursor):
             return cursor.execute('SELECT name FROM sqlite_master WHERE type = "table"').fetchall()
 
-    def restore(self, backup_path: Path | str, delete_backup: bool = False) -> None:
+    def restore(self, backup_path: strPath, delete_backup: bool = False) -> None:
         """Restore database from a backup path"""
         backup_path = Path(backup_path)
         assert backup_path.exists() , f'Backup file {backup_path} does not exist'

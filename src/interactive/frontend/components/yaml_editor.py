@@ -14,6 +14,7 @@ import yaml
 from dataclasses import dataclass
 
 from src.proj import PATH
+from src.proj.core import strPath
 
 @dataclass
 class YAMLFileEditorState:
@@ -43,7 +44,7 @@ class YAMLFileEditorState:
         ...
 
     @classmethod
-    def get_state(cls , key : str , root : Path | str | None = None) -> YAMLFileEditorState:
+    def get_state(cls , key : str , root : strPath | None = None) -> YAMLFileEditorState:
         """Retrieve or create a :class:`YAMLFileEditorState` from ``st.session_state``.
 
         Parameters
@@ -104,7 +105,7 @@ class YAMLFileEditor:
             cls._instances[key] = super().__new__(cls)
         return cls._instances[key]
     
-    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = PATH.main , 
+    def __init__(self , key : str = 'yaml_file_editor' , file_root : strPath = PATH.main , 
                  file_input = True , height : int | None = 500):
         self.key = key
         self.file_root = Path(file_root)
@@ -131,11 +132,11 @@ class YAMLFileEditor:
         """Return the current root directory from the editor state."""
         return self.state.root
 
-    def set_file_path(self , file_path : Path | str) -> None:
+    def set_file_path(self , file_path : strPath) -> None:
         """Update the relative file path in the editor state."""
         self.state.path = str(file_path)
 
-    def get_file_path(self , file_path : Path | str | None = None) -> Path:
+    def get_file_path(self , file_path : strPath | None = None) -> Path:
         """Resolve the absolute target path from root + relative path (or explicit override)."""
         root = self.get_file_root()
         if root.is_file():
@@ -146,7 +147,7 @@ class YAMLFileEditor:
             file_path = root.joinpath(file_path)
         return file_path
     
-    def validate_file(self , file_path : Path | str | None = None) -> None:
+    def validate_file(self , file_path : strPath | None = None) -> None:
         """Check that the resolved path exists and has a ``.yaml`` extension; update ``state.path_status``."""
         file_path = self.get_file_path(file_path)
         if file_path.suffix != '.yaml':
@@ -169,7 +170,7 @@ class YAMLFileEditor:
             except yaml.YAMLError as e:
                 self.state.content_status = f'YAML syntax error: {e}'
 
-    def load_file(self , file_path : Path | str | None = None) -> str:
+    def load_file(self , file_path : strPath | None = None) -> str:
         """Load the target file into ``state.load_content`` and return its text (or '' on error)."""
         self.validate_file(file_path)
         if self.state.path_status != 'success':
@@ -185,7 +186,7 @@ class YAMLFileEditor:
             self.state.load_status = f'Load file failed: {e}'
         return self.state.load_content
 
-    def save_file(self , file_path : Path | str | None = None) -> None:
+    def save_file(self , file_path : strPath | None = None) -> None:
         """Validate YAML syntax then write ``state.edit_content`` to disk."""
         file_path = self.get_file_path(file_path)
         try:
@@ -201,7 +202,7 @@ class YAMLFileEditor:
         except Exception as e:
             self.state.save_status = f'Save file failed: {e}'
 
-    def init_path_input(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None) -> None:
+    def init_path_input(self , file_path : strPath | Sequence[strPath] | None = None , default_file : strPath | None = None) -> None:
         """Render a text input or selectbox for choosing the YAML file path."""
         if file_path is None and default_file is not None:
             file_path = default_file
@@ -234,7 +235,7 @@ class YAMLFileEditor:
             raise ValueError(f"Invalid file path: {file_path}")
 
     @st.fragment
-    def show_yaml_editor(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None) -> None:
+    def show_yaml_editor(self , file_path : strPath | Sequence[strPath] | None = None , default_file : strPath | None = None) -> None:
         """Render the full YAML editor widget (path input, ace editor, Reload/Validate/Save buttons).
 
         Decorated with ``@st.fragment`` so it re-runs independently of the page.

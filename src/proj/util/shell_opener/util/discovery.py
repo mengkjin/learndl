@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from src.proj.core import strPath
+
 from ..preference import DISCOVER_WAIT_TIMEOUT , DISCOVER_WAIT_INTERVAL
 
 class ProcessDiscovery:
@@ -46,7 +48,7 @@ class ProcessDiscovery:
     def find_running_instances(
         cls,
         *,
-        script: Optional[str | Path] = None,
+        script: Optional[strPath] = None,
         task_id: Optional[str] = None,
     ) -> list[int]:
         """
@@ -148,7 +150,7 @@ class ProcessDiscovery:
     def wait_for_running_instances(
         cls,
         *,
-        script: Optional[str | Path] = None,
+        script: Optional[strPath] = None,
         task_id: Optional[str] = None,
     ) -> list[int]:
         """

@@ -9,8 +9,8 @@ from email import encoders
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj.env import MACHINE
-from src.proj.env import Proj
+from src.proj.env import MACHINE , Proj
+from src.proj.core import strPath
 from src.proj.log import Logger
 
 class EmailSetting:
@@ -63,7 +63,7 @@ class Email(metaclass=EmailMeta):
     
     @classmethod
     def message(cls , title : str  , body : str | None = None , recipient : str | None = None , * ,
-                attachments : str | Path | list[Path] | list[str] | None = None ,
+                attachments : strPath | list[strPath] | None = None ,
                 project_attachments : bool = False ,
                 title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:'):
         message = MIMEMultipart()
@@ -124,7 +124,7 @@ class Email(metaclass=EmailMeta):
     def send(cls , title : str  , 
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None , * , 
-             attachments : str | Path | list[Path] | list[str] | None = None ,
+             attachments : strPath | list[strPath] | None = None ,
              project_attachments : bool = False ,
              title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:' ,
              confirmation_message = ''):

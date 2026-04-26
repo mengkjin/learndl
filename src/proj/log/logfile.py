@@ -5,6 +5,7 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from pathlib import Path
 
+from src.proj.core import strPath
 from src.proj.env import PATH
 
 @dataclass
@@ -111,7 +112,7 @@ class LogFile:
     """
     log file class , support log rotation
     """
-    def __init__(self , log_file : Path | str , rotate : bool = False , rotation_size_mb : int = 10):
+    def __init__(self , log_file : strPath , rotate : bool = False , rotation_size_mb : int = 10):
         self.host_file = Path(log_file)
         self.rotate = rotate
         self.rotation_size_mb = rotation_size_mb

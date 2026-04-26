@@ -7,6 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 from string import Template
+
+from src.proj.core import strPath
+
 from .machine import MACHINE
 
 class PATH:
@@ -84,7 +87,7 @@ class PATH:
     shared_schedule = local_share.joinpath('schedule_model')
 
     @classmethod
-    def path_at_machine(cls , path : Path | str , machine_name : str) -> str | Path:
+    def path_at_machine(cls , path : strPath , machine_name : str) -> strPath:
         """Return a path under the selected machine (maybe another machine).
 
         Args:
@@ -104,7 +107,7 @@ class PATH:
                 return path
         
     @staticmethod
-    def read_yaml(yaml_file : str | Path , **kwargs) -> dict[str, Any]:
+    def read_yaml(yaml_file : strPath , **kwargs) -> dict[str, Any]:
         """Read yaml file"""
         yaml_file = Path(yaml_file)
         if yaml_file.suffix == '' and yaml_file.with_suffix('.yaml').exists():
@@ -124,7 +127,7 @@ class PATH:
             return super().increase_indent(flow, False)
 
     @classmethod
-    def dump_yaml(cls , data , yaml_file : str | Path , * , indent = 2 , overwrite = False , **kwargs) -> None:
+    def dump_yaml(cls , data , yaml_file : strPath , * , indent = 2 , overwrite = False , **kwargs) -> None:
         """Dump data to yaml file"""
         assert isinstance(data , dict) , type(data)
         yaml_file = Path(yaml_file)
@@ -135,7 +138,7 @@ class PATH:
             yaml.dump(data ,  f , Dumper = cls.IndentedDumper , indent = indent , **kwargs)
 
     @staticmethod
-    def read_json(json_file : str | Path , encoding = 'utf-8' , **kwargs) -> dict[str, Any]:
+    def read_json(json_file : strPath , encoding = 'utf-8' , **kwargs) -> dict[str, Any]:
         """Read json file"""
         json_file = Path(json_file)
         if json_file.suffix == '' and json_file.with_suffix('.json').exists():
@@ -148,7 +151,7 @@ class PATH:
         return d
 
     @staticmethod
-    def dump_json(data , json_file : str | Path , ensure_ascii = False , indent = 4 , overwrite = False , **kwargs) -> None:
+    def dump_json(data , json_file : strPath , ensure_ascii = False , indent = 4 , overwrite = False , **kwargs) -> None:
         """Dump data to json file"""
         assert isinstance(data , dict) , type(data)
         json_file = Path(json_file)
@@ -159,24 +162,24 @@ class PATH:
             json.dump(data , f , ensure_ascii = ensure_ascii , indent = indent , **kwargs)
 
     @staticmethod
-    def copytree(src : str | Path , dst : str | Path) -> None:
+    def copytree(src : strPath , dst : strPath) -> None:
         """Copy entire directory"""
         shutil.copytree(src , dst)
 
     @staticmethod
-    def copyfiles(src : str | Path , dst : str | Path , bases : list[str]) -> None:
+    def copyfiles(src : strPath , dst : strPath , bases : list[str]) -> None:
         """Copy files from source to destination"""
         [shutil.copyfile(f'{src}/{base}' , f'{dst}/{base}') for base in bases]
 
     @staticmethod
-    def deltrees(dir : str | Path , bases : list[str]) -> None:
+    def deltrees(dir : strPath , bases : list[str]) -> None:
         """Delete sub folders in the directory"""
         for base in bases:
             sys.stderr.write(f'\u001b[31m\u001b[1mDeleting {base} in {dir}\u001b[0m\n')
             shutil.rmtree(f'{dir}/{base}')
 
     @staticmethod
-    def file_modified_date(path : Path | str , default = 19970101) -> int:
+    def file_modified_date(path : strPath , default = 19970101) -> int:
         """Get the modified date of the file in '%Y%m%d' format"""
         path = Path(path)
         if path.exists():
@@ -185,7 +188,7 @@ class PATH:
             return default
 
     @staticmethod
-    def file_modified_time(path : Path | str , default = 19970101000000) -> int:
+    def file_modified_time(path : strPath , default = 19970101000000) -> int:
         """Get the modified time of the file in '%Y%m%d%H%M%S' format"""
         path = Path(path)
         if path.exists():
@@ -202,7 +205,7 @@ class PATH:
                 member.mkdir(parents=True , exist_ok=True)
 
     @classmethod
-    def list_files(cls , directory : str | Path , fullname = False , recur = False) -> list[Path]:
+    def list_files(cls , directory : strPath , fullname = False , recur = False) -> list[Path]:
         """List all files in directory"""
         if isinstance(directory , str): 
             directory = Path(directory)

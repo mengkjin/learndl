@@ -8,16 +8,17 @@ from typing import Any , Generator , Mapping , Iterable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
+from src.proj.core import strPath , strPaths
 
-from .core import DATAFRAME_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE , PATH_TYPE , PATHS_TYPE
+from .core import DATAFRAME_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE
 
 __all__ = ['DBPath' , 'path_date' , 'file_dates' , 'dir_dates' , 'rename' , 'path' , 'dates' , 'paths' , 'min_date' , 'max_date']
 
-def path_date(path : PATH_TYPE) -> int:
+def path_date(path : strPath) -> int:
     """get date from path"""
     return int(Path(path).stem[-8:])
 
-def file_dates(paths : PATHS_TYPE , startswith = '' , endswith = '') -> np.ndarray[int, Any]:
+def file_dates(paths : strPaths , startswith = '' , endswith = '') -> np.ndarray[int, Any]:
     """get dates from paths"""
     if isinstance(paths , Mapping):
         paths = paths.values()

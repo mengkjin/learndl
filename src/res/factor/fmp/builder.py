@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import Duration , Logger , Dates , Proj
+from src.proj.core import strPath
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
@@ -68,7 +69,7 @@ class PortfolioBuilder:
     def __init__(self , category : str | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
-                 resume_path : Path | str | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+                 resume_path : strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         self.category     = category
@@ -248,7 +249,7 @@ class PortfolioGroupBuilder:
         attribution : bool = True ,
         trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
         resume : bool = False ,
-        resume_path : Path | str | None = None ,
+        resume_path : strPath | None = None ,
         start : int = -1 ,
         end : int = 99991231 ,
         caller = None ,

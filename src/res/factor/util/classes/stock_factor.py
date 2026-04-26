@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any , Literal , Iterable
 
 from src.proj import DB , Logger
+from src.proj.core import strPath
 from src.proj.util import properties
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
@@ -402,7 +403,7 @@ class CacheFactorStats:
         return common_elements(dates)
 
     @classmethod
-    def saved_dates(cls , path : Path | str , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
+    def saved_dates(cls , path : strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
                     exclude_csi2000 : bool = True) -> np.ndarray:
         path = Path(path)
         if not path.exists():

@@ -6,14 +6,14 @@ import pandas as pd
 
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
-from pathlib import Path
 from typing import Any , Literal
 
 from src.proj.log import Logger
+from src.proj.core import strPath
 
 __all__ = ['dfs_to_excel' , 'figs_to_pdf']
 
-def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : str | Path , mode : Literal['a','w'] = 'w' , 
+def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : strPath , mode : Literal['a','w'] = 'w' , 
                  name_prefix = '' , print_prefix = None , indent : int = 1 , vb_level : Any = 3):
     """Write each DataFrame to a sheet; optionally log via ``Logger.footnote``.
 
@@ -30,7 +30,7 @@ def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : str | Path , mode : Lit
         Logger.footnote(f'{print_prefix} saved to {path}' , indent = indent , vb_level = vb_level)
     return path
 
-def figs_to_pdf(figs : dict[str , Figure] , path : str | Path , print_prefix = None , indent : int = 1 , vb_level : Any = 3):
+def figs_to_pdf(figs : dict[str , Figure] , path : strPath , print_prefix = None , indent : int = 1 , vb_level : Any = 3):
     """Save figures to one PDF and close each figure.
 
     Returns:

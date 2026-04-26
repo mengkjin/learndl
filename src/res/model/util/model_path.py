@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import PATH , Logger , LogFile , DB , CALENDAR , Const
+from src.proj.core import strPath
 from src.proj.util import torch_load
 
 from .core import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
@@ -35,13 +36,13 @@ class ModelPath:
     
     """
 
-    def __new__(cls , model_input : ModelPath | Path | str | None , *args , **kwargs) -> ModelPath:
+    def __new__(cls , model_input : ModelPath | strPath | None , *args , **kwargs) -> ModelPath:
         if isinstance(model_input , ModelPath):
             return model_input
         else:
             return super().__new__(cls)
 
-    def __init__(self , model_input : Path | str | None | Any) -> None:
+    def __init__(self , model_input : strPath | None | Any) -> None:
         if not isinstance(model_input , self.__class__):
             self.parse_input(model_input)
 
@@ -52,7 +53,7 @@ class ModelPath:
     def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
-    def parse_input(self , model_input : Path | str | None):
+    def parse_input(self , model_input : strPath | None):
         parsed_model_input = parse_model_input(model_input)
         self.full_name : str = parsed_model_input.pop('full_name')
         self.full_name_kwargs : dict[str,Any] = parsed_model_input
@@ -429,7 +430,7 @@ class ModelDict:
         self.boost_head = None
         self.boost_dict = None
 
-    def save(self , path : str | Path , stack = False) -> None:
+    def save(self , path : strPath , stack = False) -> None:
         """uniformly save model dictionary"""
         if isinstance(path , str): 
             path = Path(path)
@@ -524,7 +525,7 @@ class PredictionModel(ModelPath):
         return path
 
     @classmethod
-    def UnpackModelArchives(cls , path : Path | str | None = None , delete_tar = True , overwrite = False) -> None:
+    def UnpackModelArchives(cls , path : strPath | None = None , delete_tar = True , overwrite = False) -> None:
         if path is None:
             paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
             paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]

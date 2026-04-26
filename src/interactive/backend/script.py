@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Literal , Any , ClassVar
 from dataclasses import dataclass , asdict , field
 
-from src.proj import PATH , Logger , MACHINE  # noqa
+from src.proj import PATH , Logger , MACHINE # noqa
+from src.proj.core import strPath
 from src.proj.util import Options # noqa
 from .task import TaskItem , TaskQueue , runs_page_url
 
@@ -76,8 +77,8 @@ class PathItem:
         return self.path.absolute()
 
     @classmethod
-    def iter_folder(cls, folder_path: Path | str = PATH.scpt, level: int = 0 ,
-                    min_level: int = 0 , max_level: int = 2) -> list['PathItem']:
+    def iter_folder(cls, folder_path: strPath = PATH.scpt, level: int = 0 ,
+                    min_level: int = 0 , max_level: int = 2) -> list[PathItem]:
         '''get all valid items from folder recursively'''
         items : list[PathItem] = []
         if level < min_level or level > max_level:

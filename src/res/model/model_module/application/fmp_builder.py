@@ -69,9 +69,13 @@ class ModelPortfolioBuilder:
             
             yield kwargs
     
-    def iter_fmp_names(self):
-        for kwargs in self.iter_builder_kwargs():
-            yield PortfolioBuilder.get_full_name(**kwargs)
+    def iter_fmp_names(self , fmp_names : list[str] | None = None):
+        if fmp_names is None:
+            for kwargs in self.iter_builder_kwargs():
+                yield PortfolioBuilder.get_full_name(**kwargs)
+        else:
+            for name in fmp_names:
+                yield name
 
     def iter_builders(self , date : int , indent : int = 0 , vb_level : Any = 1):
         for kwargs in self.iter_builder_kwargs(date , indent = indent , vb_level = vb_level):           
@@ -111,32 +115,28 @@ class ModelPortfolioBuilder:
     
     def account_last_model_dates(self , fmp_names : list[str] | None = None):
         last_dates = self.account_manager.account_last_model_dates()
-        if fmp_names is None: 
-            fmp_names = list(self.iter_fmp_names())
-        ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start , -1).as_int()) for name in fmp_names}
-        return ret
+        default_date = CALENDAR.td(self.reg_model.start , -1).as_int()
+        return {name:last_dates.get(name , default_date) for name in self.iter_fmp_names(fmp_names)}
     
     def account_last_end_dates(self , fmp_names : list[str] | None = None):
         last_dates = self.account_manager.account_last_end_dates()
-        if fmp_names is None: 
-            fmp_names = list(self.iter_fmp_names())
-        ret = {name:last_dates.get(name , self.reg_model.start) for name in fmp_names}
-        return ret
+        default_date = self.reg_model.start
+        return {name:last_dates.get(name , default_date) for name in self.iter_fmp_names(fmp_names)}
     
     def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : Any = 3):
         vb_level = Proj.vb(vb_level)
-        self.load_accounts(resume = resume , indent = indent + 1 , vb_level = vb_level + 1)
         self._update_account_record = []
 
-        last_end_dates   = self.account_last_end_dates()
-        update_fmp_names = [name for name , end in last_end_dates.items() if end < CALENDAR.updated()]
-        if len(update_fmp_names) == 0: 
-            return
+        if resume:
+            last_end_dates   = self.account_last_end_dates()
+            update_fmp_names = [name for name , end in last_end_dates.items() if end < CALENDAR.updated()]
 
-        last_model_dates = self.account_last_model_dates(update_fmp_names)
-        account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
-        if len(account_dates) == 0: 
-            return
+            last_model_dates = self.account_last_model_dates(update_fmp_names)
+            account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
+            if not update_fmp_names or not account_dates: 
+                return
+
+        self.load_accounts(resume = resume , indent = indent + 1 , vb_level = vb_level + 1)
         all_fmp_dfs = pd.concat([self.reg_model.load_fmp(date) for date in account_dates])
 
         for fmp_name in update_fmp_names:

@@ -29,7 +29,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Literal, TypeAlias
 
-StrPath: TypeAlias = str | Path
+from src.proj.core import strPath
 RerunScope: TypeAlias = Literal["app", "fragment"]
 
 __all__ = ['deepreload' , 'ipython_recursive_reload' , 'streamlit_hot_reload']
@@ -88,7 +88,7 @@ def _names_to_reload(
 
 
 def deepreload(
-    root: StrPath,
+    root: strPath,
     *,
     modules: Mapping[str, ModuleType | None] | None = None,
     exclude: Iterable[str] | None = None,
@@ -194,7 +194,7 @@ class StreamlitHotReloadResult:
 
 
 def streamlit_hot_reload(
-    root: StrPath,
+    root: strPath,
     *,
     clear_cache_resource: bool = True,
     clear_cache_data: bool = True,

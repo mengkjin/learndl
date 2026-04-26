@@ -1,14 +1,14 @@
 """Run many callables in-process, threaded, or multiprocessed with shared result dict."""
 from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from typing import Any , Callable , Literal , Mapping , Iterable
-
+from typing import Any , Callable , Literal , Mapping , Iterable , TypeVar
 from src.proj import MACHINE , Logger
 
 __all__ = ['parallel' , 'FuncCall']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
-INPUT_TYPE = Callable | tuple[Callable , Iterable | None] | tuple[Callable , list | tuple | None , dict | None]
+T = TypeVar('T')
+INPUT_TYPE = Callable[..., T] | tuple[Callable[..., T] , Iterable | None] | tuple[Callable[..., T] , list | tuple | None , dict | None]
 
 def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:
     """get parallel method index
@@ -32,7 +32,7 @@ def parallel(
     inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , 
     method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
     max_workers = MAX_WORKERS , ignore_error = False , **kwargs
-):
+) -> dict[Any , T]:
     """Execute ``FuncCall`` inputs; populate and return the shared results dict.
 
     Args:
@@ -142,7 +142,7 @@ class FuncCall:
     @classmethod
     def parallel(cls , inputs : Mapping[Any , INPUT_TYPE] , 
                  method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
-                 max_workers = MAX_WORKERS , ignore_error : bool = False) -> dict[Any , Any]:
+                 max_workers = MAX_WORKERS , ignore_error : bool = False) -> dict[Any , T]:
         """Convenience: delegate to module-level ``parallel``."""
         return parallel(inputs , method , max_workers , ignore_error)
 

@@ -3,13 +3,14 @@ from typing import Any , Literal
 from pathlib import Path
 
 from src.proj import PATH , Logger
+from src.proj.core import strPath
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
 TYPE_MODULE_TYPES = Literal['nn' , 'boost' , 'factor' ,'']
 MODULE_TYPES : list[TYPE_MODULE_TYPES] = ['nn' , 'boost' , 'factor' , '']
 
-def parse_model_input(model_input : Path | str | None) -> dict[str,Any]:
+def parse_model_input(model_input : strPath | None) -> dict[str,Any]:
     """return full model name and root path of a given model input"""
     if model_input is None or model_input == '' or model_input == Path(''):
         return {

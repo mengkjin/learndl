@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , Logger , DB , Proj
+from src.proj.core import strPath
 from src.proj.util import dfs_to_excel , figs_to_pdf , camel_to_snake
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
@@ -92,7 +93,7 @@ class BaseFactorAnalyticTest(ABC):
     TEST_TITLE = TestTitle()
 
     def __init__(
-        self , test_path : Path | str | None = None , 
+        self , test_path : strPath | None = None , 
         resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
         which : str | list[str] | Literal['all'] = 'all' , **kwargs
     ):
@@ -117,7 +118,7 @@ class BaseFactorAnalyticTest(ABC):
         return f'{self.__class__.__name__}'
 
     @classmethod
-    def create(cls , test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False , 
+    def create(cls , test_path : strPath | None = None , resume : bool = False , save_resumable : bool = False , 
                start : int = -1 , end : int = 99991231 , which = 'all' , **kwargs):
         testor = cls(test_path , resume , save_resumable , start , end , which , **kwargs)
         return testor
@@ -160,7 +161,7 @@ class BaseFactorAnalyticTest(ABC):
             return rslt_dir.joinpath(self.test_name)
 
     @test_path.setter
-    def test_path(self , path : Path | str | None):
+    def test_path(self , path : strPath | None):
         self._test_path = path if path is None else Path(path)
 
     @property
@@ -171,7 +172,7 @@ class BaseFactorAnalyticTest(ABC):
             return self._test_path.joinpath(camel_to_snake(self.__class__.__name__))
 
     @classmethod
-    def last_portfolio_date(cls , test_path : Path | str | None = None):
+    def last_portfolio_date(cls , test_path : strPath | None = None):
         if test_path is None:
             return 19000101
         else:
@@ -188,7 +189,7 @@ class BaseFactorAnalyticTest(ABC):
             return self.resume_path.joinpath(f'factor_stats')
 
     @classmethod
-    def factor_stats_saved_dates(cls , test_path : Path | str | None = None) -> np.ndarray:
+    def factor_stats_saved_dates(cls , test_path : strPath | None = None) -> np.ndarray:
         if test_path is None:
             return np.array([] , dtype=int)
         else:
@@ -211,11 +212,11 @@ class BaseFactorAnalyticTest(ABC):
         figs_to_pdf(figs   , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , print_prefix=f'{self.__class__.__name__} Analytic Plots')
         return self
 
-    def save(self , path : Path | str):
+    def save(self , path : strPath):
         """save intermediate data to path for future use"""
         ...
 
-    def load(self , path : Path | str):
+    def load(self , path : strPath):
         """load intermediate data from path for future use"""
 
     @classmethod

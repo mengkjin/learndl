@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence , Literal , Any
 
 from src.proj import PATH , Proj , Logger
+from src.proj.core import strPath
 from src.proj.util import torch_load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
@@ -21,14 +22,14 @@ class gpLogger:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , job_dir : Path | str | None = None , status : gpStatus | None = None , vb_level : Any = 2 , *args , **kwargs) -> None:
+    def __init__(self , job_dir : strPath | None = None , status : gpStatus | None = None , vb_level : Any = 2 , *args , **kwargs) -> None:
         self.initiate(job_dir , status , vb_level , *args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'job_dir')
 
-    def initiate(self , job_dir : Path | str | None = None , status : gpStatus | None = None , vb_level : Any = 2) -> None:
+    def initiate(self , job_dir : strPath | None = None , status : gpStatus | None = None , vb_level : Any = 2) -> None:
         if self.initiated:
             return
 

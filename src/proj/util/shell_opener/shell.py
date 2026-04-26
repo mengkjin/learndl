@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Optional , Any
 
+from src.proj.core import strPath
 from .util import process , compose_with_pause , format_python_command , to_shell_string , guess_command_title
 from .preference import PAUSE_WHEN_DONE
 from .macos import open_in_macos
@@ -24,18 +25,18 @@ class Shell:
       execute a shell line; by default appends a pause before exit.
     - :meth:`run_py` / :meth:`open_py` — convenience wrappers that build the Python command line.
     """
-    default_cwd: Optional[Path | str] = None
+    default_cwd: Optional[strPath] = None
 
-    def __init__(self, *, default_cwd: Optional[Path | str] = None) -> None:
+    def __init__(self, *, default_cwd: Optional[strPath] = None) -> None:
         self.set_default_cwd(default_cwd)
 
     @classmethod
-    def set_default_cwd(cls, default_cwd: Optional[Path | str]) -> None:
+    def set_default_cwd(cls, default_cwd: Optional[strPath]) -> None:
         """Set the class-level default working directory used when ``cwd`` is not explicitly passed."""
         cls.default_cwd = default_cwd
 
     @staticmethod
-    def _resolve_cwd(cwd: Optional[Path | str], fallback: Optional[Path | str]) -> str:
+    def _resolve_cwd(cwd: Optional[strPath], fallback: Optional[strPath]) -> str:
         """Return an absolute cwd string: prefer ``cwd``, then ``fallback``, then ``Path.cwd()``."""
         base = cwd if cwd is not None else fallback
         if base is not None:
@@ -47,7 +48,7 @@ class Shell:
         cls,
         cmd: str | Sequence[str],
         *,
-        cwd: Optional[Path | str] = None,
+        cwd: Optional[strPath] = None,
         env: Optional[Mapping[str, str]] = None,
     ):
         """
@@ -65,7 +66,7 @@ class Shell:
         cmd: str | Sequence[str],
         *,
         pause_when_done: bool = PAUSE_WHEN_DONE ,
-        cwd: Optional[Path | str] = None ,
+        cwd: Optional[strPath] = None ,
         option: Any | None = None ,
         title: str | None = None ,
         new_on: str | None = None ,
@@ -102,9 +103,9 @@ class Shell:
 
     @classmethod
     def run_py(
-        cls, py_script: str | Path, * ,
+        cls, py_script: strPath, * ,
         py_path: str | None = None, args: Sequence[str] | None = None, kwargs : dict | None = None,
-        cwd: Optional[Path | str] = None ,
+        cwd: Optional[strPath] = None ,
     ) -> None:
         """Run a Python script in the background (no terminal window) via :meth:`run`."""
         cmd = format_python_command(py_script, args=args , kwargs=kwargs , py_path=py_path)
@@ -112,10 +113,10 @@ class Shell:
 
     @classmethod
     def open_py(
-        cls, py_script: str | Path, * ,
+        cls, py_script: strPath, * ,
         py_path: str | None = None, args: Sequence[str] | None = None, kwargs : dict | None = None,
         pause_when_done: bool = PAUSE_WHEN_DONE ,
-        cwd: Optional[Path | str] = None ,
+        cwd: Optional[strPath] = None ,
         option: Any | None = None ,
         title: str | None = None,
         new_on: str | None = None,
@@ -130,7 +131,7 @@ class Shell:
                  title=title, new_on=new_on, as_workspace=as_workspace, from_workspace=from_workspace)
 
     @classmethod
-    def py_cmd(cls, py_script: str | Path, * ,
+    def py_cmd(cls, py_script: strPath, * ,
                py_path: str | None = None, args: Sequence[str] | None = None, kwargs : dict | None = None,
                ) -> str:
         """Build and return the shell command line for running a Python script (without launching it)."""

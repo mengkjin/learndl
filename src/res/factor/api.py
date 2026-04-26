@@ -1,6 +1,6 @@
 from typing import Any , Literal
-from pathlib import Path
 
+from src.proj.core import strPath
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import (
@@ -92,7 +92,7 @@ class FactorTestAPI:
     @classmethod
     def run_test(cls , test_type : TYPE_of_TEST , 
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
-                 test_path : Path | str | None = None , 
+                 test_path : strPath | None = None , 
                  resume : bool = False , save_resumable : bool = False , 
                  indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                  write_down = False , display_figs = False , **kwargs):
@@ -106,14 +106,14 @@ class FactorTestAPI:
 
     @classmethod
     def create(cls , test_type : TYPE_of_TEST ,
-               test_path : Path | str | None = None , resume : bool = False , save_resumable : bool = False ,
+               test_path : strPath | None = None , resume : bool = False , save_resumable : bool = False ,
                start : int = -1 , end : int = 99991231 ,**kwargs):
         testor_type = cls.get_test_class(test_type)
         testor = testor_type.create(test_path , resume , save_resumable , start , end , **kwargs)
         return testor
 
     @classmethod
-    def last_portfolio_date(cls , test_path : Path | str , test_types : list[TYPE_of_TEST] | TYPE_of_TEST):
+    def last_portfolio_date(cls , test_path : strPath , test_types : list[TYPE_of_TEST] | TYPE_of_TEST):
         if not isinstance(test_types , list):
             test_types = [test_types]
         last_portfolio_dates = []
@@ -123,12 +123,12 @@ class FactorTestAPI:
         return min(last_portfolio_dates) if len(last_portfolio_dates) else 19000101
 
     @classmethod
-    def factor_stats_saved_dates(cls , test_path : Path | str):
+    def factor_stats_saved_dates(cls , test_path : strPath):
         return cls.get_test_class('factor').factor_stats_saved_dates(test_path)
 
     @classmethod
     def FactorPerf(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' ,
-                   test_path : Path | str | None = None , resume : bool = False , 
+                   test_path : strPath | None = None , resume : bool = False , 
                    indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                    write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
         pm = cls.run_test('factor' , factor , benchmark , test_path , resume , save_resumable , 
@@ -138,7 +138,7 @@ class FactorTestAPI:
     
     @classmethod
     def FmpOptim(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' , 
-                 test_path : Path | str | None = None , resume : bool = False , 
+                 test_path : strPath | None = None , resume : bool = False , 
                  indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                  write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
         pm = cls.run_test('optim' , factor , benchmark , test_path , resume , save_resumable , 
@@ -149,7 +149,7 @@ class FactorTestAPI:
 
     @classmethod
     def FmpTop(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' , 
-               test_path : Path | str | None = None , resume : bool = False , 
+               test_path : strPath | None = None , resume : bool = False , 
                indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
         pm = cls.run_test('top' , factor , benchmark , test_path , resume , save_resumable , 

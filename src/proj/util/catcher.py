@@ -12,9 +12,8 @@ from datetime import datetime
 from matplotlib.figure import Figure
 from string import Template
 
-from src.proj.env import PATH , MACHINE
-from src.proj.env import Proj
-from src.proj.core import Duration , str_to_html , dataframe_to_html , figure_to_html
+from src.proj.env import PATH , MACHINE , Proj
+from src.proj.core import Duration , str_to_html , dataframe_to_html , figure_to_html , strPath
 from src.proj.log import Logger
 
 __all__ = [
@@ -193,7 +192,7 @@ class OutputCatcher(ABC):
             self._export_file_list : list[Path] = []
         return self._export_file_list
 
-    def set_export_files(self , export_file_list : list[Path | str] | Path | str | None = None):
+    def set_export_files(self , export_file_list : list[strPath] | strPath | None = None):
         """Replace export targets with normalized ``Path`` list."""
         self.export_file_list.clear()
         if export_file_list is None:
@@ -203,7 +202,7 @@ class OutputCatcher(ABC):
         else:
             self.export_file_list.append(Path(export_file_list))
 
-    def add_export_file(self , export_path : Path | str | None = None):
+    def add_export_file(self , export_path : strPath | None = None):
         """Add an path to the export file list"""
         if export_path is None:
             return
@@ -258,7 +257,7 @@ class LogWriter(OutputCatcher):
             Logger.stdout('This will be caught')
         contents = catcher.contents
     """
-    def __init__(self, log_path : str | Path | None = None):
+    def __init__(self, log_path : strPath | None = None):
         self.log_path = Path(log_path) if log_path is not None else None
         if log_path is None: 
             self.log_writer = None

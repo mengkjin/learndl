@@ -392,8 +392,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor(factor_names = [cls.factor_name])
         calc = cls()
-        func_calls = {date:(calc.eval_factor , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb(vb_level) + 2}) for date in dates}
-        dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
+        func_calls = {date:(calc.eval_factor_series , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb(vb_level) + 2}) for date in dates}
+        dfs : dict[int , pd.Series] = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs)
         if normalize: 
             factor.normalize(fill_method , inplace = True)

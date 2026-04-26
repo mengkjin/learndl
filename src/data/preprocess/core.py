@@ -198,7 +198,8 @@ class PreProcessor(metaclass=PreProcessorMeta):
         np.seterr(invalid = 'warn' , divide = 'warn')
         return data_block
 
-    def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+    def pre_process(self , start : int | None = None , end : int | None = None , * , 
+                    secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
         """
         Load raw blocks, apply the transformation, slice to [start, end], and apply masking.
 

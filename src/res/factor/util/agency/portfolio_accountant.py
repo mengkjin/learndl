@@ -3,11 +3,13 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from dataclasses import dataclass
+from dataclasses import dataclass , asdict
 from pathlib import Path
 from typing import Literal , Any
 
 from src.proj import Proj , Logger , CALENDAR , DB , Dates , Const
+from src.proj.core import strPath
+from src.proj.util import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -29,6 +31,9 @@ class AccountConfig:
 
     def __bool__(self):
         return True
+
+    def to_dict(self):
+        return asdict(self)
 
     @property
     def key(self):
@@ -254,33 +259,44 @@ class PortfolioAccount:
             account.loc[date , 'attribution'] = v #type:ignore
         return cls(account.reset_index(drop = False) , index = index)
 
-    def save(self , path : Path | str | None = None , vb_level : Any = 1 , indent : int = 0):
+    def save(self , path : strPath | None = None , vb_level : Any = 1 , indent : int = 0):
         if path is None or self.empty:
             return self
         path = Path(path)
-        assert path.suffix in ['.pkl' , '.tar'] , f'{path} is not a pkl or tar file'
         if path.suffix == '.pkl':
+            raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
             self.df.to_pickle(path)
             Logger.stdout(f'Account Saved to {path}' , indent = indent , vb_level = vb_level , italic = True)
         else:
             account_dfs = self.to_dfs()
-            DB.save_dfs_to_tar(account_dfs , path , prefix = 'Account' , indent = indent , vb_level = vb_level)
+            meta = {
+                **self.config.to_dict() ,
+                'last_model_date' : self.max_model_date ,
+                'last_end_date' : self.max_end_date ,
+            }
+            DB.save_dfs_to_tar(account_dfs , path , meta = meta , prefix = 'Account' , indent = indent , vb_level = vb_level)
         return self
 
     @classmethod
-    def load(cls , path : Path | str | None = None) -> PortfolioAccount:
-        """load portfolio account from a path (a tar file or a pickle file)"""
+    def load(cls , path : strPath | None = None) -> PortfolioAccount:
+        """load portfolio account from a path (a tar file or a pickle (disabled now) file)"""
         if path is None:
             return cls()
         path = Path(path)
         if not path.exists():
             return cls()
-        assert path.suffix in ['.pkl' , '.tar'] , f'{path} is not a pkl or tar file'
         if path.suffix == '.pkl':
-            account = cls(pd.read_pickle(path))
-        else:
+            raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
+            # account = cls(pd.read_pickle(path))
+        elif path.name.endswith(tuple(DB.tar_suffixes)):
             account = cls.from_dfs(DB.load_dfs_from_tar(path))
+        else:
+            raise ValueError(f'{path} is not a pkl or tar file')
         return account
+
+    @classmethod
+    def load_meta(cls , path : strPath) -> dict[str, Any]:
+        return DB.load_tar_meta(path)
 
     @property
     def empty(self):
@@ -391,13 +407,13 @@ class PortfolioAccountant:
         return self.portfolio.available_dates()
 
     @property
-    def resume_path(self) -> Path | str | None:
+    def resume_path(self) -> strPath | None:
         if not hasattr(self , '_resume_path'):
             self._resume_path = None
         return Path(self._resume_path) if self._resume_path else None
 
     @resume_path.setter
-    def resume_path(self , value : Path | str | None):
+    def resume_path(self , value : strPath | None):
         self._resume_path = Path(value) if value else None
 
     def accounting(self , 
@@ -405,7 +421,7 @@ class PortfolioAccountant:
                    start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
                    daily = False , cache = False , with_index : dict[str,Any] | None = None ,
-                   resume_path : Path | str | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+                   resume_path : strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
                    indent : int = 0 , vb_level : Any = 1):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
@@ -541,52 +557,69 @@ class PortfolioAccountManager:
     """
     Manage portfolio accounts in a directory.
     """
-    def __init__(self , account_dir : str | Path):
+    def __init__(self , account_dir : strPath):
         self.account_dir = Path(account_dir)
-        self.accounts : dict[str , PortfolioAccount] = {}
         self.account_dir.mkdir(exist_ok=True)
+
+        self.accounts : dict[str , PortfolioAccount] = {}
+        self.account_metas : dict[str , dict[str, Any]] = {}
+        self.load_dir_metas()
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.account_names})'
     
+    @property
+    def account_names(self):
+        return list(self.accounts.keys())
+
+    @property
+    def dir_loaded(self):
+        if not hasattr(self , '_dir_loaded'):
+            self._dir_loaded = False
+        return self._dir_loaded
+
+    @property
+    def account_paths(self):
+        if not hasattr(self , '_account_paths'):
+            self._account_paths = {path.stem:path for path in self.account_dir.iterdir()}
+            assert all(path.name.endswith(tuple(DB.tar_suffixes)) for path in self._account_paths.values()), \
+                f'{self.account_dir} contains non-tar files : {list(set(path.name for path in self.account_dir.iterdir()) - set(DB.tar_suffixes))}'
+        return self._account_paths
+
+    def load_dir_metas(self):
+        for name , path in self.account_paths.items():
+            self.account_metas[name] = PortfolioAccount.load_meta(path)
+        return self
+    
+    def account_last_model_dates(self):
+        if all(bool(meta) for meta in self.account_metas.values()):
+            return {name:meta['last_model_date'] for name,meta in self.account_metas.items()}
+        self.load_dir()
+        return {name:account.max_model_date for name,account in self.accounts.items()}
+    
+    def account_last_end_dates(self):
+        if all(bool(meta) for meta in self.account_metas.values()):
+            return {name:meta['last_end_date'] for name,meta in self.account_metas.items()}
+        self.load_dir()
+        return {name:account.max_end_date for name,account in self.accounts.items()}
+
+    def load_dir(self):
+        if self.dir_loaded:
+            return self
+        func_calls = {path:(PortfolioAccount.load , (path ,)) for path in self.account_dir.iterdir()}
+        dfs : dict[Path , PortfolioAccount] = parallel(func_calls)
+        for path , account in dfs.items():
+            self.accounts[path.stem] = account
+        self._dir_loaded = True
+        return self
+
     def append_accounts(self , **accounts : PortfolioAccount):
         for name , new_account in accounts.items():
             self.accounts[name] = PortfolioAccount.Concat(self.accounts.get(name , None) , new_account)
         return self
     
-    @property
-    def account_names(self):
-        return list(self.accounts.keys())
-    
-    def account_last_model_dates(self):
-        return {name:account.max_model_date for name,account in self.accounts.items()}
-    
-    def account_last_end_dates(self):
-        return {name:account.max_end_date for name,account in self.accounts.items()}
-
-    def load_single(self , path : str | Path , missing_ok = True , append = True):
-        path = Path(path)
-        pkl_path = path.with_suffix('.pkl')
-        tar_path = path.with_suffix('.tar')
-        assert missing_ok or pkl_path.exists() or tar_path.exists() , f'{path} not exist'
-        account = PortfolioAccount.load(tar_path if tar_path.exists() else pkl_path)
-        if path.stem in self.accounts:
-            if append:
-                self.accounts[path.stem] = PortfolioAccount.Concat(self.accounts[path.stem] , account)
-            else:
-                raise KeyError(f'{path.stem} is already in the accounts')
-        self.accounts[path.stem] = account
-        return self
-    
     def clear(self):
         self.accounts.clear()
-        return self
-    
-    def load_dir(self , append = True):
-        for pkl in [path for path in self.account_dir.iterdir() if path.suffix == '.pkl']:
-            if pkl.with_suffix('.tar').exists():
-                pkl.unlink()
-        [self.load_single(path , append = append) for path in self.account_dir.iterdir()]
         return self
     
     def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : Any = 1):
