@@ -130,10 +130,12 @@ class ModelPortfolioBuilder:
         if resume:
             last_end_dates   = self.account_last_end_dates()
             update_fmp_names = [name for name , end in last_end_dates.items() if end < CALENDAR.updated()]
+            if not update_fmp_names: 
+                return
 
             last_model_dates = self.account_last_model_dates(update_fmp_names)
             account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
-            if not update_fmp_names or not account_dates: 
+            if not account_dates: 
                 return
 
         self.load_accounts(resume = resume , indent = indent + 1 , vb_level = vb_level + 1)
