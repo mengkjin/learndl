@@ -203,7 +203,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         elif Const.Model.resume_fmp.startswith('trailing_'):
             trailing_days = int(Const.Model.resume_fmp.removeprefix('trailing_'))
             assert trailing_days > 0 , f'trailing_days must be greater than 0 , but got {trailing_days}'
-            pred_last_date = self.trainer.record.resumed_last_pred_date
+            pred_last_date = self.trainer.record.resumed_max_pred_date
             port_last_date = FactorTestAPI.last_portfolio_date(self.snap_folder , self.fmp_tasks)
             last_date = min(pred_last_date , port_last_date)
             test_date_num = sum(self.test_dates > last_date) + trailing_days

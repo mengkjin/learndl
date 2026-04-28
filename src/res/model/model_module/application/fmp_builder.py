@@ -19,11 +19,21 @@ class ModelPortfolioBuilder:
         self.reg_model = reg_model
         self.fmp_tables : dict[int , pd.DataFrame] = {}
         self.account_manager = PortfolioAccountManager(reg_model.account_dir)
-        self._update_fmps_record = []
-        self._update_account_record = []
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.reg_model})'
+
+    @property
+    def updated_fmp_dates(self) -> list[Any]:
+        if not hasattr(self , '_updated_fmp_dates'):
+            self._updated_fmp_dates = []
+        return self._updated_fmp_dates
+
+    @property
+    def updated_account_dates(self) -> list[Any]:
+        if not hasattr(self , '_updated_account_dates'):
+            self._updated_account_dates = []
+        return self._updated_account_dates
     
     def pred_factor(self , dates : int | list[int] | np.ndarray):
         dates = [dates] if not isinstance(dates , Iterable) else dates
@@ -84,7 +94,6 @@ class ModelPortfolioBuilder:
     def update_fmps(self , update = True , overwrite = False , indent = 1 , vb_level : Any = 2):
         '''get update dates and build portfolios'''
         assert update != overwrite , 'update and overwrite must be different here'
-        self._update_fmps_record = []
         
         dates = CALENDAR.diffs(self.reg_model.fmp_target_dates , self.reg_model.fmp_dates if update else [])
         dates = [d for d in dates if d in self.reg_model.pred_dates]
@@ -98,7 +107,7 @@ class ModelPortfolioBuilder:
             Logger.stdout(f'Finished build fmps for {self.reg_model} at {date}' , indent = indent + 1 , vb_level = vb_level + 1)
             if deploy:
                 self.reg_model.save_fmp(self.fmp_tables[date] , date , False , indent = indent + 1 , vb_level = vb_level + 2)
-            self._update_fmps_record.append(date)
+            self.updated_fmp_dates.append(date)
         
     def build_day(self , date : int , indent : int = 1 , vb_level : Any = 1):
         ports = [builder.build(date).port.to_dataframe() for builder in self.iter_builders(date , indent = indent , vb_level = vb_level)]
@@ -125,7 +134,6 @@ class ModelPortfolioBuilder:
     
     def accounting(self , resume = True , deploy = True , indent : int = 1 , vb_level : Any = 3):
         vb_level = Proj.vb(vb_level)
-        self._update_account_record = []
 
         if resume:
             last_end_dates   = self.account_last_end_dates()
@@ -153,7 +161,7 @@ class ModelPortfolioBuilder:
             with Logger.Timer(f'Deploy accounts for {self.reg_model} at {Dates(account_dates)}' , indent = indent , vb_level = vb_level + 1 , enter_vb_level = vb_level + 2):
                 self.account_manager.deploy(update_fmp_names , overwrite = True , indent = indent + 2 , vb_level = vb_level + 2)
             
-        self._update_account_record = account_dates
+        self.updated_account_dates.extend(account_dates)
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
@@ -166,14 +174,14 @@ class ModelPortfolioBuilder:
         for model in models:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 2)
-            if md._update_fmps_record:
-                Logger.success(f'Update model portfolios for {model} , len={len(md._update_fmps_record)}' , indent = indent + 1 , vb_level = vb_level)
+            if md.updated_fmp_dates:
+                Logger.success(f'Update model portfolios for {model} , len={len(md.updated_fmp_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
                 Logger.skipping(f'Model portfolios for {model} is up to date' , indent = indent + 1 , vb_level = vb_level)
 
             md.accounting(resume = True , deploy = True , indent = indent + 1 , vb_level = vb_level + 2)
-            if md._update_account_record:
-                Logger.success(f'Update model portfolios accounting for {model} , len={len(md._update_account_record)}' , indent = indent + 1 , vb_level = vb_level)
+            if md.updated_account_dates:
+                Logger.success(f'Update model portfolios accounting for {model} , len={len(md.updated_account_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
                 Logger.skipping(f'Model portfolios accounting for {model} is up to date' , indent = indent + 1 , vb_level = vb_level)
         return md

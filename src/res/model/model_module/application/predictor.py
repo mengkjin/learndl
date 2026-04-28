@@ -30,18 +30,36 @@ class ModelPredictor:
 
         self.config = ModelConfig(self.model_name , stage=2 , resume=1).start_model()
         self.model = get_predictor_module(self.config)
-        self.df = pd.DataFrame()
-
-        self._current_update_dates = []
-        self._current_deploy_dates = []
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(reg_model={str(self.reg_model)})'
 
     def __call__(self , date : int):
-        if self.df.empty or date not in self.df['date'].unique():
+        if self.cached_df.empty or date not in self.cached_df['date'].unique():
             self.predict_dates([date])
-        return self.df.query('date == @date')
+        return self.cached_df.query('date == @date')
+
+    @property
+    def cached_df(self) -> pd.DataFrame:
+        if not hasattr(self , '_cached_df'):
+            self._cached_df = pd.DataFrame()
+        return self._cached_df
+
+    @cached_df.setter
+    def cached_df(self , value : pd.DataFrame):
+        self._cached_df = value
+
+    @property
+    def current_update_dates(self) -> list[Any]:
+        if not hasattr(self , '_current_update_dates'):
+            self._current_update_dates = []
+        return self._current_update_dates
+
+    @property
+    def current_deploy_dates(self) -> list[Any]:
+        if not hasattr(self , '_current_deploy_dates'):
+            self._current_deploy_dates = []
+        return self._current_deploy_dates
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None):
         '''get update dates and predict these dates'''
@@ -58,6 +76,7 @@ class ModelPredictor:
         if len(dates) == 0: 
             return self
         dates = np.array(dates)
+        print(dates)
         use_data0 = 'both' if min(dates) <= CALENDAR.today(-100) else 'predict'
         use_data1 = self.use_data 
         self.data_module  = DataModule(self.config , use_data0 if self.use_data == 'both' else use_data1).load_data() 
@@ -69,7 +88,7 @@ class ModelPredictor:
                                 'model_date' : [max(self.reg_model.model_dates[self.reg_model.model_dates < d]) for d in pred_dates] , 
                                 'calculated' : 0})
         torch.set_grad_enabled(False)
-        df_list = []
+        df_list : list[pd.DataFrame] = []
         
         for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
             for model_num in self.model_nums:
@@ -90,20 +109,18 @@ class ModelPredictor:
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
 
         if df_list:
-            self.df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
-        else:
-            self.df = pd.DataFrame()
+            self.cached_df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
         return self
 
     def save_preds(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
-        new_df = df if isinstance(df , pd.DataFrame) else self.df
-        if new_df.empty: 
+        if df is None:
+            df = self.cached_df
+        if df.empty: 
             return self
-        self._current_update_dates = []
-        for date , subdf in new_df.groupby(date_col):
-            new_df = subdf.drop(columns='date').set_index(secid_col)
-            self.reg_model.save_pred(new_df , date , overwrite , indent = 2 , vb_level = 3)
-            self._current_update_dates.append(date)
+        for date , subdf in df.groupby(date_col):
+            subdf = subdf.drop(columns='date').set_index(secid_col)
+            self.reg_model.save_pred(subdf , date , overwrite , indent = 2 , vb_level = 3)
+            self.current_update_dates.append(date)
         return self
 
     @property
@@ -122,11 +139,11 @@ class ModelPredictor:
             else:
                 deployed_dates = [int(path.name.removesuffix('.txt').split('_')[-1]) for path in path_deploy.glob('*.txt')]
                 dates = np.setdiff1d(self.reg_model.pred_dates , deployed_dates)
-            self._current_deploy_dates = []
+
             for date in dates:
                 df = self.reg_model.load_pred(date , vb_level = 'never')
                 df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
-                self._current_deploy_dates.append(date)
+                self.current_deploy_dates.append(date)
         except OSError as e:
             Logger.error(f'{self.reg_model.pred_name} deploy error: {e}')
 
@@ -135,7 +152,7 @@ class ModelPredictor:
     def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''prediction correlation of ecent days'''
         if df is None: 
-            df = self.df
+            df = self.cached_df
         if df is None: 
             return NotImplemented
         dates : Any = df[date_col].unique()
@@ -161,13 +178,13 @@ class ModelPredictor:
         for model in models:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start = start , end = end)
-            if md._current_update_dates:
-                Logger.success(f'Update model prediction for {model} , len={len(md._current_update_dates)}' , indent = 1 , vb_level = vb_level)
+            if md.current_update_dates:
+                Logger.success(f'Update model prediction for {model} , len={len(md.current_update_dates)}' , indent = 1 , vb_level = vb_level)
             else:
                 Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
             if md.deploy_required:
-                if md._current_deploy_dates:
-                    Logger.success(f'Deploy model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = 1 , vb_level = vb_level)
+                if md.current_deploy_dates:
+                    Logger.success(f'Deploy model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = 1 , vb_level = vb_level)
                 else:
                     Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
         return md
@@ -184,13 +201,13 @@ class ModelPredictor:
         for model in models:
             md = cls(model)
             md.update_preds(update = False , overwrite = True , start = start , end = end)
-            if md._current_update_dates:
-                Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
+            if md.current_update_dates:
+                Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md.current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
                 Logger.stdout(f'No new recalculating model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
             if md.deploy_required:
-                if md._current_deploy_dates:
-                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}' , indent = indent + 1 , vb_level = vb_level)
+                if md.current_deploy_dates:
+                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = indent + 1 , vb_level = vb_level)
                 else:
                     Logger.stdout(f'No new deploying model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
         return md

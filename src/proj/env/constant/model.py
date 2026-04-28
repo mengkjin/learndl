@@ -27,6 +27,14 @@ class ModelConstants:
         return self._resume_test
 
     @property
+    def resume_test_start(self) -> Literal['last_model_date' , 'last_pred_date']:
+        """resume option of model train: if resume testing"""
+        if not hasattr(self , '_resume_test_start'):
+            self._resume_test_start = MACHINE.config.get('constant/default/model' , 'resuming_options/testing_start')
+            assert self._resume_test_start in ['last_model_date' , 'last_pred_date'] , f'Invalid value: {self._resume_test_start}'
+        return self._resume_test_start
+
+    @property
     def resume_fmp(self) -> Literal[False] | str:
         """resume option of model train: if resume test fmp"""
         if not hasattr(self , '_resume_test_fmp'):

@@ -680,7 +680,7 @@ class StockFactor:
 
     def frame(self) -> pd.DataFrame:
         """
-        return the factor data as a pandas DataFrame
+        return the factor data as a pandas DataFrame , indexed by [secid, date] or [secid, date, inday]
         """
         prior_input = self.prior_input
         if isinstance(prior_input , DataBlock):
@@ -875,8 +875,6 @@ class StockFactor:
         """
         transform the factor to alpha model , only one factor is supported
         """
-        assert len(self.factor_names) == 1 , f'only one factor is supported for alpha model , but got {len(self.factor_names)}'
-        name = self.factor_names[0]
         if name not in self.cache_alpha_models or not use_cache:
             self.cache_alpha_models[name] = self._get_alpha_model(name)
         return self.cache_alpha_models[name]

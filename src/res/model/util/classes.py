@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any , final , Iterator , Literal , Sized
 from torch.utils.tensorboard import SummaryWriter as TBSummaryWriter
 
-from src.proj import Proj , Logger , DB , PATH , Const
+from src.proj import Proj , Logger , DB , PATH , Const , CALENDAR
 from src.proj.util import FilteredIterable
 from src.res.algo import AlgoModule
 from src.res.algo.nn.loss import MultiHeadLosses
@@ -477,7 +477,7 @@ class BaseTrainer(ModelStreamLine):
     @property
     def batch_resumed(self): 
         if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and Const.Model.resume_test == 'last_pred_date':
-            return sum(self.data.model_test_dates <= self.record.resumed_last_pred_date)
+            return sum(self.data.model_test_dates <= self.record.resumed_max_pred_date)
         else:
             return 0
     @property
@@ -598,7 +598,7 @@ class BaseTrainer(ModelStreamLine):
                         break
                 condition = ~models_trained
             elif self.status.stage == 'test':
-                resumed_models_finished = self.record.resumed_models_finished.groupby(['model_date' , 'model_num']).groups
+                resumed_models_finished = self.record.resumed_models.groupby(['model_date' , 'model_num']).groups
                 resumed = [(model_date , model_num) not in resumed_models_finished for model_date , model_num in model_iter]
                 condition = np.array(resumed)
             else:
@@ -861,37 +861,37 @@ class PredRecorder(ModelStreamLineWithTrainer):
         self._preds_dict = value
 
     @property
-    def resumed_models_finished(self) -> pd.DataFrame:
-        """models dataframe for resumed testing"""
-        if not hasattr(self , '_resumed_models_finished'):
-            self._resumed_models_finished = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models_finished
+    def resumed_models(self) -> pd.DataFrame:
+        """
+        Resumed models in testing, these models are finished and will not be loaded and tested again. 
+        Columns: model_num, model_date
 
-    @resumed_models_finished.setter
-    def resumed_models_finished(self , value : pd.DataFrame):
-        self._resumed_models_finished = value
+        The dataframe is the same for both scenarios of resuming testing from last pred date and last model date.
+        """
+        if not hasattr(self , '_resumed_models'):
+            self._resumed_models = pd.DataFrame(columns = ['model_num' , 'model_date'])
+        return self._resumed_models
 
-    @property
-    def resumed_models_unfinished(self) -> pd.DataFrame:
-        """models dataframe for resumed testing"""
-        if not hasattr(self , '_resumed_models_unfinished'):
-            self._resumed_models_unfinished = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models_unfinished
-
-    @resumed_models_unfinished.setter
-    def resumed_models_unfinished(self , value : pd.DataFrame):
-        self._resumed_models_unfinished = value
+    @resumed_models.setter
+    def resumed_models(self , value : pd.DataFrame):
+        self._resumed_models = value
 
     @property
-    def resumed_last_pred_date(self) -> int:
-        """last predicted date for resumed testing"""
-        if not hasattr(self , '_resumed_last_pred_date'):
-            self._resumed_last_pred_date = 19000101
-        return self._resumed_last_pred_date
+    def resumed_max_pred_date(self) -> int:
+        """
+        Resumed maximum predicted date for resumed testing.
+        Before this date, the predictions will not be tested again, but the model might be loaded to test dates before this date.
+        
+        In scenario of resuming testing from last pred date, this date is min(last predicted date, date before min(missing pred dates)).
+        In scenario of resuming testing from last model date, this date is max(predicted dates of all models before last model date).
+        """
+        if not hasattr(self , '_resumed_max_pred_date'):
+            self._resumed_max_pred_date = 19000101
+        return self._resumed_max_pred_date
 
-    @resumed_last_pred_date.setter
-    def resumed_last_pred_date(self , value : int):
-        self._resumed_last_pred_date = value
+    @resumed_max_pred_date.setter
+    def resumed_max_pred_date(self , value : int):
+        self._resumed_max_pred_date = value
 
     @property
     def snap_folder(self) -> Path: 
@@ -905,6 +905,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def folder_avg_preds(self) -> Path:
         """folder to save averaged model predictions"""
         return self.snap_folder.joinpath('avg_preds')
+    @property
+    def folder_records(self) -> Path:
+        """folder to save prediction records, such as missing pred dates"""
+        return self.snap_folder.joinpath('records')
     @property
     def min_test_date(self) -> int:
         """minimum test date"""
@@ -927,7 +931,13 @@ class PredRecorder(ModelStreamLineWithTrainer):
             
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
+        
         DB.save_df(df , path , overwrite = True , vb_level = 'max')
+        existing_dates = df['date'].unique()
+        new_missing_dates = CALENDAR.range(min_pred_date , max_pred_date , 'td')
+        old_missing_dates = self.get_missing_pred_dates()
+        missing_dates = np.setdiff1d(np.union1d(new_missing_dates , old_missing_dates) , existing_dates)
+        self.reset_missing_pred_dates(missing_dates)
 
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
@@ -941,6 +951,32 @@ class PredRecorder(ModelStreamLineWithTrainer):
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
         DB.save_df(df , path , overwrite = True , vb_level = 'max')
+
+    def update_avg_preds(self , pred_df : pd.DataFrame):
+        if pred_df.empty:
+            return pred_df.drop(columns = ['model_num'] , errors='ignore')
+        avg_df = pred_df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
+        for model_date in avg_df['model_date'].unique():
+            avg_paths = [path for path in self.folder_avg_preds.glob('*.feather') if path.name.startswith(f'{model_date}.')]
+            assert len(avg_paths) <= 1 , f'Multiple old paths found for model {model_date}: {avg_paths}'
+            if avg_paths:
+                old_path = avg_paths[0]
+                old_df = DB.load_df(old_path)
+            else:
+                old_path = None
+                old_df = pd.DataFrame()
+            new_df = avg_df.query('model_date == @model_date')
+            if not old_df.empty:
+                new_df = pd.concat([old_df , new_df]).drop_duplicates(subset=['model_date' , 'submodel' , 'secid' , 'date'] , keep='last').\
+                    sort_values(by=['model_date' , 'submodel' , 'secid' , 'date']).reset_index(drop=True)
+
+            min_pred_date , max_pred_date = new_df['date'].min() , new_df['date'].max()
+            new_path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
+            DB.save_df(new_df , new_path , overwrite = True , vb_level = 'max')
+            if old_path and old_path != new_path:
+                old_path.unlink()
+        Logger.success(f'Updated avg preds for pred dates {pred_df["date"].unique()}')
+        return avg_df
 
     def archive_model_records(self):
         records : list[tuple[int,int]] = []
@@ -959,7 +995,27 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def avg_pred_records(self):
         return pd.DataFrame([[path , *path.name.split('.')[:3]] for path in self.folder_avg_preds.glob('*.feather')], columns = ['path' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
             astype({'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
-        
+
+    def reset_missing_pred_dates(self , missing_dates : np.ndarray | list[int]):
+        """log missing prediction dates in records folder"""
+        if not isinstance(missing_dates , list):
+            missing_dates = missing_dates.tolist()
+        PATH.dump_json({'missing_dates' : missing_dates} , self.folder_records.joinpath('missing_pred_dates.json') , overwrite = True)
+
+    def update_missing_pred_dates(self , missing_dates : np.ndarray | list[int]):
+        """log missing prediction dates in records folder"""
+        if not isinstance(missing_dates , list):
+            missing_dates = missing_dates.tolist()
+        existing_missing_dates = self.get_missing_pred_dates()
+        self.reset_missing_pred_dates(np.union1d(missing_dates , existing_missing_dates))
+       
+    def get_missing_pred_dates(self) -> np.ndarray:
+        """get missing prediction dates from records folder"""
+        try:
+            return np.array(PATH.read_json(self.folder_records.joinpath('missing_pred_dates.json'))['missing_dates'])
+        except Exception:
+            return np.array([] , dtype=int)
+
     @property
     def retrained_models(self) -> list[tuple[int,int]]:
         """retrained models for resumed testing , must be tested"""
@@ -1050,44 +1106,41 @@ class PredRecorder(ModelStreamLineWithTrainer):
         - only resume predictions before the last model date if resume option is 'last_model_date'
         - only resume predictions with all submodels
         """ 
+        self.resume_info = ''
         if not self.config.is_resuming or not Const.Model.resume_test:
             return
         
-        resume_info = f'Resume testing'
-        pred_records = self.pred_records()
-
-        closest_model_date = pred_records.groupby('model_num')['model_date'].max().min()
-        pred_records = pred_records.query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
+        pred_records = self.pred_records().query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
         
-        if not pred_records.empty:
-            min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
-            max_pred_date = pred_records.groupby('model_num')['max_pred_date'].max().min()
-            if self.min_test_date < min_pred_date:
-                resume_info += f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
-            else:
-                models_all = pred_records.query('model_date <= @closest_model_date')
-                models_previous = pred_records.query('model_date < @closest_model_date')
-                
-                if Const.Model.resume_test == 'last_model_date' and not models_previous.empty:
-                    self.resumed_models_finished = models_previous[['model_date' , 'model_num']].reset_index(drop=True)
-                    self.resumed_last_pred_date = min(models_previous['max_pred_date'].max() , self.max_test_date)
-                    self.resumed_models_unfinished = pred_records.query('model_date == @closest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
-                    resume_info += f', recognize past saved preds before model date {closest_model_date}'
-                elif Const.Model.resume_test == 'last_pred_date':
-                    if max_pred_date < self.max_test_date:
-                        self.resumed_models_finished = models_previous[['model_date' , 'model_num']]
-                        self.resumed_last_pred_date = max_pred_date
-                        self.resumed_models_unfinished = pred_records.query('model_date == @closest_model_date')[['model_date' , 'model_num']].reset_index(drop=True)
-                    else:
-                        self.resumed_models_finished = models_all[['model_date' , 'model_num']]
-                        self.resumed_last_pred_date = self.max_test_date
-                        self.resumed_models_unfinished = pd.DataFrame(columns = ['model_date' , 'model_num']).astype(int)
-                    resume_info += f', recognize past saved preds before prediction date {self.resumed_last_pred_date}'
-            
         if pred_records.empty:
-            resume_info += f', no saved preds found'
+            self.resume_info = f', no saved preds found'
+            return
 
-        Logger.stdout(f'{self.__class__.__name__} : {resume_info}' , vb_level = vb_level)
+        closest_model_date = pred_records.groupby('model_num')['model_date'].max().min() # noqa: F841
+        min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
+        if self.min_test_date < min_pred_date:
+            self.resume_info = f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
+            return
+ 
+        missing_dates = CALENDAR.slice(self.get_missing_pred_dates() , self.min_test_date , self.max_test_date)
+        max_pred_date = min([
+            pred_records.groupby('model_num')['max_pred_date'].max().min(),
+            CALENDAR.td(missing_dates.min() , -1).td if len(missing_dates) > 0 else self.max_test_date,
+            self.max_test_date
+        ])
+        valid_models = pred_records.query('model_date <= @closest_model_date')
+        prev_models = valid_models.query('model_date < @closest_model_date')
+        resumed_models = prev_models.query('max_pred_date <= @max_pred_date')[['model_date' , 'model_num']].reset_index(drop=True)
+        self.resumed_models = resumed_models
+        if Const.Model.resume_test == 'last_model_date':
+            if not prev_models.empty:
+                max_pred_date = min(max_pred_date , prev_models['max_pred_date'].max())
+            self.resumed_max_pred_date = max_pred_date
+            self.resume_info = f', recognize past saved preds before model date {self.resumed_models["model_date"].max()} and prediction date {self.resumed_max_pred_date}'
+        elif Const.Model.resume_test == 'last_pred_date':
+            self.resumed_max_pred_date = max_pred_date
+            self.resume_info = f', recognize past saved preds before prediction date {self.resumed_max_pred_date}'
+
     
     def append_batch_preds(self):
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
@@ -1131,6 +1184,8 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 df = self.empty_preds()
         else:
             df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
+            missing_dates = np.setdiff1d(pred_dates , df['date'].unique())
+            self.update_missing_pred_dates(missing_dates)
         return df
 
     def get_avg_preds(self , pred_dates : np.ndarray , closest : bool = False) -> pd.DataFrame:
@@ -1140,19 +1195,21 @@ class PredRecorder(ModelStreamLineWithTrainer):
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         [self.save_avg_preds(model_date) for model_date in np.setdiff1d(pred_records['model_date'] , avg_pred_records['model_date'])]
-                
         
         avg_pred_records = self.avg_pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
         if avg_pred_records.empty:
             Logger.error(f'No avg pred records found for test dates {pred_dates}')
-            if closest:
-                avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
-                closest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
-                avg_pred_records = avg_pred_records.query('max_pred_date == @closest_avg_pred_date')
-                df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
-                df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
-            else:
-                df = self.empty_preds()
+            pred_df = self.get_preds(pred_dates , closest = closest)
+            df = self.update_avg_preds(pred_df)
+            if df.empty:
+                if closest:
+                    avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
+                    closest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
+                    avg_pred_records = avg_pred_records.query('max_pred_date == @closest_avg_pred_date')
+                    df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
+                    df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
+                else:
+                    df = self.empty_preds()
         else:
             df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
             df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
@@ -1167,6 +1224,8 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def on_test_start(self):
         self.purge_outdated_model_preds()
         self.setup_resuming_status()
+        if self.resume_info:
+            Logger.stdout(f'{self.__class__.__name__} : Resume testing {self.resume_info}' , vb_level = 2)
     
     def on_test_batch_end(self): 
         self.append_batch_preds()
