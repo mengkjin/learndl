@@ -142,7 +142,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
 
     def target_dates(self , update_type : Literal['recalc' , 'update' , 'rollback'] , 
                      rollback_date : int = 99991231 , start : int = START_DATE , **kwargs):
-        full_dates = CALENDAR.range(max(start , self.START_DATE) , CALENDAR.updated() , 'td')
+        full_dates = CALENDAR.range(max(start , self.START_DATE) , None , 'td' , updated = True)
         if update_type == 'recalc':
             return full_dates
         elif update_type == 'update':
@@ -191,7 +191,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
 
 class MicroCap_400(CustomIndex):
     def rebalance_dates(self) -> np.ndarray:
-        return CALENDAR.range(self.START_DATE , CALENDAR.updated() , 'td')
+        return CALENDAR.range(self.START_DATE , None , 'td' , updated = True)
 
     def rebalance_portfolio(self , date : int) -> pd.DataFrame:
         prev_date = CALENDAR.td(date , -1)

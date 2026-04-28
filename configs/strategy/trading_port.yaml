@@ -85,6 +85,7 @@ backtest_ports:
       - gru_dfl2
       - gru_dfl2cs
     screener:
+      - gru_day_V1
       - gru_week
       - gru_30m
 

@@ -76,7 +76,6 @@ class ModelPredictor:
         if len(dates) == 0: 
             return self
         dates = np.array(dates)
-        print(dates)
         use_data0 = 'both' if min(dates) <= CALENDAR.today(-100) else 'predict'
         use_data1 = self.use_data 
         self.data_module  = DataModule(self.config , use_data0 if self.use_data == 'both' else use_data1).load_data() 

@@ -393,7 +393,7 @@ class SellsideSQLDownloader:
 
     @classmethod
     def update_dates(cls , start , end , keys = None):
-        dates = CALENDAR.range(start , end , 'td')
+        dates = CALENDAR.range(start , end , 'td' , updated = True)
         if len(dates) == 0: 
             return NotImplemented
 
@@ -421,7 +421,7 @@ if __name__ == '__main__':
 
     start = 20100901 
     end   = 20100915
-    dates = CALENDAR.range(start , end , 'td')
+    dates = CALENDAR.range(start , end , 'td' , updated = True)
 
     downloader = SellsideSQLDownloader.factors_downloaders('dongfang.hfq_chars')['dongfang.hfq_chars']
     df = downloader.query_factor_values(start , end)

@@ -473,7 +473,7 @@ class DayFetcher(TradeDataFetcher):
 
     def missing_dates(self):
         """get missing dates"""
-        dates = CALENDAR.range(self.START_DATE , CALENDAR.update_to() , type = 'td')
+        dates = CALENDAR.range(self.START_DATE , None , type = 'td' , updated = True)
         stored_dates = DB.dates(self.DB_SRC , self.DB_KEY)
         missing_dates = np.setdiff1d(dates , stored_dates)
         return missing_dates

@@ -106,8 +106,7 @@ def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
 
 def target_dates(data_type : DATA_TYPES , date : int | None = None):
     start = src_start_date(data_type)
-    end   = CALENDAR.update_to() if date is None else date
-    dates = CALENDAR.range(start , end , type = 'td')
+    dates = CALENDAR.range(start , date , type = 'td' , updated = True)
     return Dates(CALENDAR.diffs(dates , stored_dates(data_type , 1)))
 
 def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Dates:

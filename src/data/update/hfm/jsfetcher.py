@@ -492,7 +492,7 @@ def kline_download():
     download_path = PATH.miscel.joinpath('JSMinute')
 
     os.makedirs(download_path , exist_ok=True)
-    target_dates = CALENDAR.range(20241201 , CALENDAR.update_to() , 'td')
+    target_dates = CALENDAR.range(20241201 , None , 'td' , updated = True)
     stored_dates = [int(x.name.split('.')[-2]) for x in download_path.iterdir() if x.is_file() and x.name.endswith('.zip')]
     dates = np.setdiff1d(target_dates , stored_dates)
 

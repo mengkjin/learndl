@@ -547,7 +547,7 @@ class PredictionModel(ModelPath):
         """model pred target dates"""
         start = max(self.start , int(CALENDAR.td(min(self.model_dates) , 1)))
         end = None
-        return CALENDAR.range(start , end , 'td')
+        return CALENDAR.range(start , end , 'td' , updated = True)
     
     @property
     def fmp_dates(self) -> np.ndarray:
