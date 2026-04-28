@@ -68,7 +68,7 @@ class Amodel:
         return self
     def copy(self): 
         return deepcopy(self)
-    def align(self , secid : np.ndarray | Any = None , inplace = False , nan = 0.):
+    def align(self , secid : np.ndarray | Any = None , inplace = False , nan = np.nan):
         new_alpha = self if inplace else self.copy()
         if secid is None: 
             return self

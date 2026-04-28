@@ -17,7 +17,8 @@ def get_exception_name(e: Exception) -> str:
     exc_type = type(e)
     return f"{exc_type.__module__}.{exc_type.__qualname__}"
 
-def retry_on_exceptions(func: Callable[..., T], error_handler: Callable[[Exception], str | Exception] , * , label: str, attempts: int = 1, base_delay: float = 1.5) -> Callable[..., T | Exception]:
+def retry_on_exceptions(func: Callable[..., T], error_handler: Callable[[Exception], str | Exception] , * , label: str, 
+                        attempts: int = 1, base_delay: float = 1.5) -> Callable[..., T | Exception]:
     """
     Retry on exceptions with a given error handler
     """
@@ -112,7 +113,8 @@ class ErrorHandler(Generic[T]):
     }
     def __init__(
         self, func: Callable[..., T | Exception] , 
-        handle_types: dict[str , dict[str,Any]] | list[str] | tuple[str,...] = () , * , label: str = ''):
+        handle_types: dict[str , dict[str,Any]] | list[str] | tuple[str,...] = () , * , 
+        label: str = ''):
         self.raw_func = func
         for error_type in handle_types:
             if isinstance(handle_types, dict):

@@ -18,7 +18,7 @@ def get_test_proxies():
     return ProxySet(["http://1.2.3.4:8080", "http://5.6.7.8:3128", "http://9.10.11.12:9999", "http://4.4.4.4:8080", "http://5.5.5.5:3129"])
 
 def get_working_proxies(
-    target_url: str , * , min_count: int = 5, max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
+    target_url: str , start_with: Iterable[Proxy | str] = () , * , min_count: int = 5, max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
     dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: Literal['all','none','simple'] = 'all') -> ProxySet:
     """
     return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
@@ -38,7 +38,7 @@ def get_working_proxies(
             timer_quick = Logger.Timer(f'{prefix}Quick Verify ({timeout/2:.1f}s) for {ProxyVerifier.QUICK_VERIFY_URL}', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
             timer_final = Logger.Timer(f'{prefix}Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
             with timer_find as timer:
-                cands = ProxyCache.get_cached_proxies('all') if round == 0 else finder.find()
+                cands = ProxyCache.get_cached_proxies('all').extend(start_with) if round == 0 else finder.find()
                 timer.add_key_suffix(f', get {len(cands)} new proxies')
             if go_with_cached_proxies and round == 0:
                 return cands
@@ -83,7 +83,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
         self , 
         proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown' , * , 
         url: str , adaptive: bool = False,
-        refresh_interval: int = 30 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2,
+        refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2,
         go_with_cached_proxies: bool = False,
         **kwargs
     ):
@@ -106,7 +106,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.url},{'adaptive' if self.adaptive else 'static'},refresh_attempt={self.refresh_attempt}/{self.refresh_max_attempts})"
 
-    def init_refresh_stats(self , refresh_interval: int = 30 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2):
+    def init_refresh_stats(self , refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2):
         """Initialise adaptive-refresh counters and thresholds."""
         self.refresh_enabled = self.adaptive
         self.refresh_time = datetime.now()
@@ -141,7 +141,10 @@ class ProxyStatsSetURL(ProxyStatsSet):
     def refresh_proxies(self , go_with_cached_proxies: bool = False , detail_level: Literal['all','none','simple'] = 'all'):
         """Discover new working proxies and replace the invalid ones in the pool."""
         old_proxies = [proxy for proxy in self.proxies if proxy.invalid]
-        new_proxies = [ProxyStats(proxy) for proxy in get_working_proxies(self.url, go_with_cached_proxies = go_with_cached_proxies , detail_level = detail_level)]
+        new_proxies = [
+            ProxyStats(proxy) for proxy in 
+            get_working_proxies(self.url, self.proxies , go_with_cached_proxies = go_with_cached_proxies , detail_level = detail_level)
+        ]
         self.proxies = list(set(old_proxies + new_proxies))
         self.refresh_time = datetime.now()
 
@@ -166,9 +169,8 @@ class ProxyStatsSetURL(ProxyStatsSet):
         prefix = f'URL {self.url} Proxies '
         refresh_time = datetime.now()
         if refresh_time - self.refresh_time < timedelta(seconds=self.refresh_interval):
-            Logger.alert1(f"{prefix}refresh re-called too soon, will not refresh anymore")
-            self.refresh_enabled = False
-            return
+            Logger.alert1(f"{prefix}refresh re-called too soon, will wait for {self.refresh_interval}")
+            time.sleep(self.refresh_interval - (refresh_time - self.refresh_time).total_seconds())
         self.refresh_proxies(detail_level = 'none')
         self.refresh_attempt += 1
         if self.proxies:
@@ -285,7 +287,7 @@ class AdaptiveProxyPool(ProxyPool):
     def __init__(
         self, target_urls: list[str] | str , * , 
         go_with_cached_proxies: bool = False,
-        refresh_interval: int = 30 ,
+        refresh_interval: int = 5 ,
         refresh_max_attempts: int = 10 ,
         refresh_threshold: float = 0.2 ,
     ):

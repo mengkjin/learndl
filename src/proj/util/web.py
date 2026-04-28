@@ -77,6 +77,12 @@ def timeout_expanding_sessions(session : requests.Session, expansion : float = 2
 
 def request_with_timeouterror(session: requests.Session, request_method: Literal['get', 'post'], *args, expansion : float = 2. , max_retry_count: int = 2, **kwargs) -> requests.Response:
     """GET/POST with exponentially growing timeouts until success or retries exhausted."""
+    if expansion < 1:
+        Logger.alert1(f"expansion {expansion} is less than 1, setting to 1")
+        expansion = 1
+    if max_retry_count < 1:
+        Logger.alert1(f"max_retry_count {max_retry_count} is less than 1, setting to 1")
+        max_retry_count = 1
     match request_method:
         case 'get':
             method = session.get

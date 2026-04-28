@@ -98,6 +98,7 @@ class ProxySet:
     def extend(self , proxies: Iterable[Proxy | str]):
         """Append proxies and deduplicate in place."""
         self.proxies = Proxy.unique(self.proxies + [Proxy(proxy) for proxy in proxies])
+        return self
 
     def to_urls(self) -> list[str]:
         """Return a plain list of URL strings for serialisation."""
@@ -192,6 +193,7 @@ class ProxyStatsSet(ProxySet):
     def extend(self , proxies: Iterable[ProxyStats | Proxy | str]):
         """Append proxies (auto-converting to ProxyStats singletons) and deduplicate in place."""
         self.proxies = ProxyStats.unique(self.proxies + [ProxyStats(proxy) for proxy in proxies])
+        return self
 
     @property
     def valid_ratio(self) -> float:

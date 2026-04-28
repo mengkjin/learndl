@@ -79,19 +79,10 @@ class BasicCreatorConfig:
         bench_port : Port | None = None
     ) -> np.ndarray:
         alpha_model = alpha_model if isinstance(alpha_model , AlphaModel) else alpha_model.to_alpha_model()
-        secid = alpha_model.get(model_date).secid
-        if bench_port and not bench_port.emtpy:
-            secid = np.intersect1d(secid , bench_port.secid)
-        return secid
-
-    def get_screened_pool(
-        self ,
-        model_date : int , 
-        alpha_model : AlphaModel | Amodel ,
-        bench_port : Port | None = None, 
-    ) -> np.ndarray:
-        secid = bench_port.secid if bench_port else None
-        secid = self.alpha_screener.screened_pool(model_date , secid , other_models = alpha_model if 'self' in self.screener else None)
+        candidates = alpha_model.get(model_date).secid
+        universe = bench_port.secid if (bench_port and not bench_port.emtpy) else None
+        screened = self.alpha_screener.screened_pool(model_date , universe , other_models = alpha_model if 'self' in self.screener else None)
+        secid = np.setdiff1d(candidates , screened)
         return secid
 
     @property
@@ -109,17 +100,12 @@ class BasicCreatorConfig:
         init_port : Port | None = None, 
         bench_port : Port | None = None, 
     ) -> pd.DataFrame:
-        sorting_alpha = self.get_sorting_alpha(model_date , alpha_model)
-        candidate_pool = self.get_candidate_pool(model_date , alpha_model , bench_port) # noqa
-        screened_pool = self.get_screened_pool(model_date , alpha_model , bench_port)
-
+        candidates = self.get_candidate_pool(model_date , alpha_model , bench_port)
+        sorting_alpha = self.get_sorting_alpha(model_date , alpha_model).align(candidates)
+        pool = sorting_alpha.to_dataframe(indus=True , na_indus_as = 'unknown')
+        
         if init_port is None:
             init_port = Port.none_port(model_date)
-
-        pool = sorting_alpha.to_dataframe(indus=True , na_indus_as = 'unknown').query('secid in @candidate_pool')
-        if len(screened_pool) > 0:
-            pool = pool.query('secid in @screened_pool')
-        pool = pool.reset_index(drop = True)
         
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
@@ -130,17 +116,14 @@ class BasicCreatorConfig:
             (pool['rankpct'] >= self.buffer_zone) + (pool['selected'].cumsum() <= self.stay_num) * (pool['rankpct'] >= self.no_zone))
 
         stay = pool.query('selected & buffered')
-        stay_secid = stay['secid'].to_numpy() # noqa
 
-        stay_ind_count : pd.Series | Any = stay.groupby('indus')['secid'].count()
-        stay_ind_count = stay_ind_count.rename('count')
-        
-        new_pool = pool.query('(secid not in @stay_secid)').merge(stay_ind_count , on = 'indus' , how = 'left')
-        max_ind_rank = self.indus_slots - new_pool['count'].fillna(0) # noqa
-        entry = new_pool.query('ind_rank < @max_ind_rank').sort_values('alpha' , ascending = False).head(self.n_best - stay.shape[0])
+        remain = pool.query('secid not in @stay.secid')
+        remain = remain.merge(stay.groupby('indus')['secid'].count().rename('ind_count') , on = 'indus' , how = 'left')
+        remain['max_ind_rank'] = self.indus_slots - remain['ind_count'].fillna(0)
 
-        df = pd.concat([stay[['secid' , 'indus']] , entry[['secid' , 'indus']]]).\
-            assign(weight = 1).filter(items=['secid' , 'weight']).drop_duplicates(subset=['secid'])
+        entry = remain.query('ind_rank < max_ind_rank').sort_values('alpha' , ascending = False).head(self.n_best - stay.shape[0])
+
+        df = pd.DataFrame({'secid' : np.union1d(stay['secid'] , entry['secid']) , 'weight' : 1})
         return df
 
 class BasicPortfolioCreator(PortCreator):

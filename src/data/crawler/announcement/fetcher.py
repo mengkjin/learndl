@@ -65,7 +65,9 @@ class FetcherTask:
         return fetcher.fetch_date(self.start, self.end)
 
     def fetch_date_with_error_handler(self, proxy: str | None):
-        fetch_date = ErrorHandler(self.fetch_date, handle_types=['http', 'all'], label=f"{self.title}" + (f"[{proxy}]" if proxy else ""))
+        fetch_date = ErrorHandler(
+            self.fetch_date, handle_types = ['http', 'all'],
+            label=f"{self.title}" + (f"[{proxy}]" if proxy else ""))
         return fetch_date(proxy)
 
     def claw(self , proxy: str | None) -> bool | Exception:
@@ -208,7 +210,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
                 "TITLE": "",
                 "stockType": stock_type,
             }
-            r = request_with_timeouterror(self.session ,'get' , self.JSONP_URL, params=params, headers={"Referer": self.REFERER})
+            r = request_with_timeouterror(self.session ,'get' , self.JSONP_URL, params=params, headers={"Referer": self.REFERER} , expansion=1)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, dict):
                 break
@@ -255,7 +257,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
         while True:
             body = {**body_base, "pageNum": page_num}
             url = f"{self.ANN_LIST}?random={random.random()}"
-            r = request_with_timeouterror(self.session , 'post' , url, json=body, headers=headers)
+            r = request_with_timeouterror(self.session , 'post' , url, json=body, headers=headers , expansion=1)
             data = r.json()
             chunk = data.get("data") or []
             if not chunk:
@@ -288,7 +290,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
 
         while True:
             body = self._query_body(page, start, end)
-            r = request_with_timeouterror(self.session , 'post' , self.ANNOUNCE_URL, data=body, headers=headers)
+            r = request_with_timeouterror(self.session , 'post' , self.ANNOUNCE_URL, data=body, headers=headers , expansion=1)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, list) or not payload:
                 break

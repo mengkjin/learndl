@@ -35,7 +35,7 @@ class TradingPort:
     backtest    : bool = False
     test_start  : int = 20190101 # -1 for no backtest
     test_end    : int = -1
-    benchmark   : str = 'csi500'
+    benchmark   : str = 'csi500' # only used for accounting
     exclusion   : str = 'st_bse_lowprice_loser_warnst'
     sorter      : str | list[str] | None = None
     screener    : str | list[str] | None = None
