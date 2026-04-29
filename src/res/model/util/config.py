@@ -108,6 +108,7 @@ class BaseModelConfig:
         **kwargs,
     ):
         self.base_path = ModelPath(base_path)
+        self.start_with_none = not self.base_path
         self.force_module = module
         self.schedule_name = schedule_name
         self.override = (override or {}) | kwargs
@@ -151,8 +152,8 @@ class BaseModelConfig:
     def current_config_param(self) -> FlattenDict:
         return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
 
-    def optional_load_params(self , option : Literal["current", "default"] , resumed_first: bool = True):
-        Param = self.resumed_config_param() if resumed_first else None
+    def optional_load_params(self , option : Literal["current", "default"]):
+        Param = None if self.start_with_none else self.resumed_config_param()
         if Param is None:
             Param = self.current_config_param() if option == "current" else self.default_config_param()
         return Param
@@ -290,6 +291,7 @@ class BaseModelConfig:
     def generate_algo_config(self):
         model_param = AlgoConfig(
             self.base_path,
+            start_with_none=self.start_with_none,
             module=self.model_module,
             boost_head=self.boost_head,
             short_test=self.short_test,
@@ -644,6 +646,7 @@ class AlgoConfig:
     def __init__(
         self,
         base_path: ModelPath | strPath | None,
+        start_with_none: bool ,
         *,
         override: dict[str, Any] | None = None,
         module: str | None = None,
@@ -653,6 +656,7 @@ class AlgoConfig:
         **kwargs,
     ):
         self.base_path = ModelPath(base_path)
+        self.start_with_none = start_with_none
         self.model_module = module
         self.boost_head = boost_head
         self.short_test = short_test
@@ -668,7 +672,7 @@ class AlgoConfig:
     def load_params(self):
         if self.base_path.is_null_model:
             self.model_param = get_config_dict(None)
-        elif self.base_path and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
+        elif self.base_path and not self.start_with_none and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
             self.model_param = get_config_dict(conf_file)
         else:
             self.model_param = get_config_dict(self.source_conf_file())
@@ -703,6 +707,7 @@ class AlgoConfig:
         if self.boost_head:
             self.boost_head_config = AlgoConfig(
                 self.base_path,
+                start_with_none=self.start_with_none,
                 module=self.boost_head,
                 boost_head=False,
                 schedule_config=self.schedule_config,
@@ -875,11 +880,12 @@ class ModelConfig(BaseModelConfig):
                 Logger.alert1(f"{self.base_path} is cleared")
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
-        self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , overwrite=self.short_test , vb_level = 'never')
-        self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , overwrite=self.short_test , vb_level = 'never')
-        self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , overwrite=self.short_test , vb_level = 'never')
+        dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}
+        self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , **dump_kwargs)
+        self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , **dump_kwargs)
+        self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , **dump_kwargs)
         if self.boost_head_config:
-            self.boost_head_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head_config.model_module}") , overwrite=False , vb_level = 'never')
+            self.boost_head_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head_config.model_module}") , **dump_kwargs)
         return self
 
     @property
