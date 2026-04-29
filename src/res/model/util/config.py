@@ -148,7 +148,7 @@ class BaseModelConfig:
 
     def default_config_param(self) -> FlattenDict:
         return self.REQUIRED_CONFIG_PARAM.combine_with(self.OPTIONAL_CONFIG_PARAM)
-
+        
     def current_config_param(self) -> FlattenDict:
         return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
 

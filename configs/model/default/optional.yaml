@@ -62,7 +62,7 @@ callbacks.SummaryWriter: {}
 callbacks.TrainConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
 callbacks.FitConverge: {'patience' : 5 , 'eps' : 1.0e-5}
 callbacks.CudaEmptyCache: {'batch_interval' : 20}
-callbacks.DetailedAlphaAnalysis: {'use_num' : 'avg'}
+callbacks.DetailedAlphaAnalysis: {}
 
 conditional.short_test:
   model.beg_date: 20241101
