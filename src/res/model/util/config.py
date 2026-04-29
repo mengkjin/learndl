@@ -114,7 +114,7 @@ class BaseModelConfig:
         self.load_params()
         self.override_params()
         self.check_validity()
-
+        
     def __bool__(self):
         return True
 
@@ -823,7 +823,7 @@ class ModelConfig(BaseModelConfig):
         assert self.base_path, self.base_path
         assert self.model_config.base_path is self.base_path, f"{self.model_config.base_path} != {self.base_path}"
         assert self.algo_config.base_path is self.algo_config.base_path, f"{self.algo_config.base_path} != {self.algo_config.base_path}"
-
+        
     def __repr__(self):
         return f"{self.__class__.__name__}(base_path={self.base_path})"
 
@@ -867,7 +867,6 @@ class ModelConfig(BaseModelConfig):
 
     def start_model(self):
         self.process_parser()
-
         if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():
                 if (not self.short_test and not self.base_path.is_null_model and self.model_config.resumable):

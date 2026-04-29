@@ -81,7 +81,7 @@ class FlattenDict:
 
     def __repr__(self) -> str:
         """Pretty-printed flattened dict."""
-        return pformat(self.flattened)
+        return f'{self.__class__.__name__}({pformat(self.flattened)})'
 
     def __str__(self) -> str:
         """String form of flattened dict."""
@@ -107,7 +107,7 @@ class FlattenDict:
 
     def copy(self) -> FlattenDict:
         """Return a deep copy of the flattened dict."""
-        copied : Any = deepcopy(self.flattened)
+        copied : Any = deepcopy(self)
         return copied
 
     def update(self, d : dict[str, Any] | FlattenDict , relevant_only: bool = True) -> FlattenDict:
