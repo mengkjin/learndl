@@ -357,17 +357,16 @@ class PortfolioGroupBuilder:
         self.builders_resume()
 
         t0 = datetime.now()
-        opt_count = 0
-            
+ 
         Logger.stdout(f'{self.class_name}.build start...' , indent = self.indent , vb_level = self.vb_level + 3)
         iter_date_builder = self.iter_date_builder()
-        for i , (date , builder) in enumerate(iter_date_builder):
+        for opt_count , (date , builder) in enumerate(iter_date_builder):
             builder.build(date)
-            if (opt_count + 1) % 100 == 0 or i == len(iter_date_builder) - 1: 
+            if (opt_count + 1) % 100 == 0 or opt_count == len(iter_date_builder) - 1: 
                 self.print_build_info(date , opt_count , builder)
 
         secs = (datetime.now() - t0).total_seconds()
-        Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)*1000):.1f} ms per building' , 
+        Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building' , 
                       indent = self.indent , vb_level = self.vb_level)
         self.save_portfolios()
         return self

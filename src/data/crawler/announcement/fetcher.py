@@ -62,7 +62,7 @@ class FetcherTask:
 
     def fetch_date(self, proxy: str | None) -> list[Announcement] | Exception:
         fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, proxy)
-        return fetcher.fetch_date(self.start, self.end)
+        return fetcher.fetch_date(self.start, self.end , title=self.title)
 
     def fetch_date_with_error_handler(self, proxy: str | None):
         fetch_date = ErrorHandler(
@@ -70,9 +70,10 @@ class FetcherTask:
             label=f"{self.title}" + (f"[{proxy}]" if proxy else ""))
         return fetch_date(proxy)
 
-    def claw(self , proxy: str | None) -> bool | Exception:
+    def crawl(self , proxy: str | None) -> bool | Exception:
         if self.should_be_skipped:
             return True
+        Logger.stdout(f"Crawling {self.title} with proxy {proxy}" , vb_level = 2)
         result = self.fetch_date_with_error_handler(proxy)
         value = result.unwrap(error='return')
         if isinstance(value, Exception):
@@ -84,7 +85,7 @@ class FetcherTask:
             return False
 
     def to_proxy_caller(self , pool) -> ProxyCaller:
-        return ProxyCaller(self.claw, self.url, pool = pool)
+        return ProxyCaller(self.crawl, self.url, pool = pool)
 
     def run(self, pool = None, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3 , error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
         """Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) still fails and ``auto_discover_proxy`` is enabled."""
@@ -101,12 +102,12 @@ class FetcherTask:
                 proxy = pool.acquire(url=self.url)
                 if proxy is None:
                     break
-                result = self.claw(proxy.url)
+                result = self.crawl(proxy.url)
                 pool.release(proxy, result is not None)
                 if result is not None:
                     break
         if result is None:
-            result = self.claw(None)
+            result = self.crawl(None)
 
         if error == 'raise' and isinstance(result, Exception):
             raise result
@@ -121,7 +122,7 @@ class FetcherTask:
                 if not task.should_be_skipped:
                     tasks.append(task)
         if (len(tasks) >= 100):
-            raise ValueError("Too many tasks, something is wrong")
+            Logger.error(f"Too many tasks in {start}~{end}, be cautious!")
         return tasks
 
 class AnnoucementFetcher(ABC):
@@ -132,7 +133,7 @@ class AnnoucementFetcher(ABC):
         self.proxy = proxy
 
     def init_session(self) -> requests.Session:
-        self.session = http_session(proxy=self.proxy , trust_env = self.proxy is None , timeout = (15,150))
+        self.session = http_session(proxy=self.proxy , trust_env = self.proxy is None)
         return self.session
 
     @property
@@ -149,7 +150,7 @@ class AnnoucementFetcher(ABC):
         return f"{self.__class__.__name__}({self.proxy})"
 
     def fetch_date(
-        self , start: int , end: int | None = None
+        self , start: int , end: int | None = None , * , title : str = ''
     ) -> list[Announcement] | TimeoutError | requests.exceptions.Timeout:
         if end is None:
             end = start
@@ -158,7 +159,7 @@ class AnnoucementFetcher(ABC):
         with self.init_session():
             for kwargs in self.FETCH_KWARGS:
                 try:
-                    announcements = self.fetch_announcements(start, end, **kwargs)
+                    announcements = self.fetch_announcements(start, end, **kwargs, title=title)
                 except (TimeoutError , requests.exceptions.Timeout) as e:
                     Logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
                     return e
@@ -169,7 +170,7 @@ class AnnoucementFetcher(ABC):
         return out
 
     @abstractmethod
-    def fetch_announcements(self, start : int, end: int) -> list[Announcement]:
+    def fetch_announcements(self, start : int, end: int, *, title : str = '') -> list[Announcement]:
         raise NotImplementedError
 
     @classmethod
@@ -189,7 +190,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
     JSONP_URL = "https://query.sse.com.cn/security/stock/queryCompanyBulletinNew.do"
     FETCH_KWARGS : list[dict[str, Any]] = [{"stock_type": "1"}, {"stock_type": "8"}]
 
-    def fetch_announcements(self, start : int, end: int, *, stock_type: str = "1", page_size: int = 50) -> list[Announcement]:
+    def fetch_announcements(self, start : int, end: int, *, stock_type: str = "1", page_size: int = 50 , title : str = '') -> list[Announcement]:
         """Shanghai Stock Exchange: query.sse.com.cn JSONP, fields contain SECURITY_CODE / SECURITY_NAME / TITLE / BULLETIN_TYPE_DESC / SSEDATE / URL."""
         start_s = datetime.strptime(str(start), "%Y%m%d").date().isoformat()
         end_s = datetime.strptime(str(end), "%Y%m%d").date().isoformat()
@@ -210,7 +211,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
                 "TITLE": "",
                 "stockType": stock_type,
             }
-            r = request_with_timeouterror(self.session ,'get' , self.JSONP_URL, params=params, headers={"Referer": self.REFERER} , expansion=1)
+            r = request_with_timeouterror(self.session ,'get' , self.JSONP_URL, params=params, headers={"Referer": self.REFERER} , expansion=1, title=title)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, dict):
                 break
@@ -240,7 +241,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
     REFERER = "https://www.szse.cn/disclosure/listed/notice/index.html"
     ANN_LIST = "https://www.szse.cn/api/disc/announcement/annList"
 
-    def fetch_announcements(self, start : int, end: int, *, page_size: int = 50) -> list[Announcement]:
+    def fetch_announcements(self, start : int, end: int, *, page_size: int = 50 , title : str = '') -> list[Announcement]:
         """Shenzhen Stock Exchange: POST annList (POST JSON, paging by seDate interval."""
         start_s = datetime.strptime(str(start), "%Y%m%d").date().isoformat()
         end_s = datetime.strptime(str(end), "%Y%m%d").date().isoformat()
@@ -257,7 +258,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
         while True:
             body = {**body_base, "pageNum": page_num}
             url = f"{self.ANN_LIST}?random={random.random()}"
-            r = request_with_timeouterror(self.session , 'post' , url, json=body, headers=headers , expansion=1)
+            r = request_with_timeouterror(self.session , 'post' , url, json=body, headers=headers , expansion=1, title=title)
             data = r.json()
             chunk = data.get("data") or []
             if not chunk:
@@ -275,7 +276,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
     REFERER = "https://www.bse.cn/disclosure/announcement.html"
     ANNOUNCE_URL = "https://www.bse.cn/disclosureInfoController/companyAnnouncement.do"
 
-    def fetch_announcements(self, start : int, end: int) -> list[Announcement]:
+    def fetch_announcements(self, start : int, end: int, *, title : str = '') -> list[Announcement]:
         """Beijing Stock Exchange: POST companyAnnouncement.do (POST JSON, paging by page."""
         # warmup
         r = self.session.get(self.REFERER, headers={"User-Agent": CHROME_UA})
@@ -290,7 +291,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
 
         while True:
             body = self._query_body(page, start, end)
-            r = request_with_timeouterror(self.session , 'post' , self.ANNOUNCE_URL, data=body, headers=headers , expansion=1)
+            r = request_with_timeouterror(self.session , 'post' , self.ANNOUNCE_URL, data=body, headers=headers , expansion=1, title=title)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, list) or not payload:
                 break

@@ -5,7 +5,7 @@ import random
 from typing import Iterable , Literal
 
 INVALID_THRESHOLD = 3
-lock_num = 2
+PROXY_MAX_CONCURRENT = 2
 
 class Proxy:
     """Single proxy address (``protocol://host:port``) with source tracking and verification history."""
@@ -128,11 +128,11 @@ class ProxyStats(Proxy):
         return self.valid
 
     @property
-    def stats(self) -> dict[Literal['occupied', 'error', 'success'], int]:
-        """Lazy-initialised usage counters: occupied (in-flight), error, and success counts."""
+    def stats(self) -> dict[Literal['running', 'error', 'success'], int]:
+        """Lazy-initialised usage counters: running (in-flight), error, and success counts."""
         if not hasattr(self, '_stats'):
-            self._stats : dict[Literal['occupied', 'error', 'success'], int] = {
-                'occupied': 0,
+            self._stats : dict[Literal['running', 'error', 'success'], int] = {
+                'running': 0,
                 'error': 0,
                 'success': 0,
             }
@@ -149,9 +149,19 @@ class ProxyStats(Proxy):
         return self.stats['error'] >= INVALID_THRESHOLD
 
     @property
+    def num_running(self) -> int:
+        """The number of running proxies"""
+        return self.stats['running']
+
+    @property
+    def num_slots(self) -> int:
+        """The number of slots available"""
+        return PROXY_MAX_CONCURRENT - self.num_running
+
+    @property
     def available(self) -> bool:
-        """Whether the proxy is available (valid and occupied < max concurrent)"""
-        return self.valid and self.stats['occupied'] < lock_num
+        """Whether the proxy is available (valid and running < max concurrent)"""
+        return self.valid and self.num_running < PROXY_MAX_CONCURRENT
 
     @property
     def total_count(self) -> int:
@@ -159,13 +169,13 @@ class ProxyStats(Proxy):
         return self.stats['success'] + self.stats['error']
 
     def acquire(self):
-        """Acquired, increment the occupied count"""
-        self.stats['occupied'] += 1
+        """Acquired, increment the running count"""
+        self.stats['running'] += 1
         return self
 
     def release(self, success: bool):
-        """Released, decrement the occupied count, and update the success or error count"""
-        self.stats['occupied'] -= 1
+        """Released, decrement the running count, and update the success or error count"""
+        self.stats['running'] -= 1
         if success:
             self.stats['success'] += 1
         else:
@@ -208,8 +218,10 @@ class ProxyStatsSet(ProxySet):
     def pick_one(self) -> ProxyStats | None:
         """Get available proxies"""
         available_proxies = [proxy for proxy in self.proxies if proxy.available]
-        if available_proxies:
-            proxy = random.choice(available_proxies)
+        max_slots = max(proxy.num_slots for proxy in available_proxies)
+        options = [proxy for proxy in available_proxies if proxy.num_slots == max_slots] or available_proxies
+        if options:
+            proxy = random.choice(options)
             proxy.acquire()
             return proxy
         return None

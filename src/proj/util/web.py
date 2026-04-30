@@ -6,7 +6,7 @@ import sys
 import time
 from contextlib import contextmanager
 from typing import Union , Iterable , Generator , TypeVar , Literal
-from curl_cffi import requests
+from curl_cffi import requests , CurlOpt
 
 from src.proj.log import Logger
 
@@ -24,7 +24,9 @@ def http_session(
     trust_env: bool = False,       # curl_cffi 默认不信任环境变量
     verify: bool = True,
     allow_redirects : bool = True,
-    timeout: float | tuple[float, float] = (30.0, 300.0),
+    timeout: float | tuple[float, float] = (15.0, 300.0),
+    low_speed_limit: int = 1 , # bytes/second
+    low_speed_time: int = 30, # seconds
     **kwargs,
 ) -> requests.Session:
     """
@@ -32,7 +34,11 @@ def http_session(
     Note: The Session is specified when it is created, and all subsequent requests will use this proxy.
     If you need to dynamically switch proxies, you can pass the proxies parameter in each request.
     """
-    session = requests.Session()
+    curl_opts = {
+        CurlOpt.LOW_SPEED_LIMIT: low_speed_limit,
+        CurlOpt.LOW_SPEED_TIME: low_speed_time,
+    }
+    session = requests.Session(curl_options=curl_opts)
     # set global headers
     session.headers.update({"User-Agent": CHROME_UA})
     # overall timeout (connect timeout + read timeout)
@@ -75,7 +81,9 @@ def timeout_expanding_sessions(session : requests.Session, expansion : float = 2
         with temporary_timeout_session(session, timeout):
             yield session
 
-def request_with_timeouterror(session: requests.Session, request_method: Literal['get', 'post'], *args, expansion : float = 2. , max_retry_count: int = 2, **kwargs) -> requests.Response:
+def request_with_timeouterror(
+    session: requests.Session, request_method: Literal['get', 'post'], *args, 
+    expansion : float = 2. , max_retry_count: int = 2, title : str = '' ,  **kwargs) -> requests.Response:
     """GET/POST with exponentially growing timeouts until success or retries exhausted."""
     if expansion < 1:
         Logger.alert1(f"expansion {expansion} is less than 1, setting to 1")
@@ -98,7 +106,7 @@ def request_with_timeouterror(session: requests.Session, request_method: Literal
         except (TimeoutError , requests.exceptions.Timeout) as e:
             if i == max_retry_count:
                 raise e
-            Logger.alert1(f"requests.Session(timeout={session.timeout}) encountered TimeoutError (expand {expansion} times to retry): {e!s}")
+            Logger.alert1(f"{title} >> encountered TimeoutError (timeout={session.timeout}) (expand {i} times to retry): {e!s}")
     raise
 
 def test_connection(target_url: str, proxy: str | None = None, timeout : float = 10. , fast_test: bool = False) -> bool:

@@ -13,7 +13,7 @@ model:
     - rtn_lag1_10 
 
 input:  # input specification ----------------------------------------------------------------
-  type: combo # [data , hidden , factor] , specify below
+  type: data # [data , hidden , factor] , specify below
 
   combo.types: [data , factor]
 

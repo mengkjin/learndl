@@ -207,16 +207,18 @@ class ModelPath:
         new_full_name = combine_full_name(**self.full_name_kwargs | {'model_clean_name' : new_clean_name})
         assert not ModelPath(new_full_name).base.exists() , f'{new_full_name} already exists , cannot rename to it!'
         
-        config_file = PATH.read_yaml(self.conf_file('model'))
-        config_file['model.name'] = new_clean_name
-        PATH.dump_yaml(config_file , self.conf_file('model'))
+        if (model_config_file := self.conf_file('model')).exists():
+            configs = PATH.read_yaml(model_config_file) | {'model.name' : new_clean_name}
+            PATH.dump_yaml(configs , model_config_file)
+
+        if (schedule_config_file := self.conf_file('schedule')).exists():
+            configs = PATH.read_yaml(schedule_config_file) | {'model.name' : new_clean_name}
+            PATH.dump_yaml(configs , schedule_config_file)
 
         if self.log_file.host_file.exists():
             self.log_file.rename(new_full_name)
-
         
         if self.base.exists():
-            
             config_file = PATH.read_yaml(self.conf_file('model'))
             config_file['model.name'] = new_clean_name
             PATH.dump_yaml(config_file , self.conf_file('model'))

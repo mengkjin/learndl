@@ -1012,7 +1012,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def get_missing_pred_dates(self) -> np.ndarray:
         """get missing prediction dates from records folder"""
         try:
-            return np.array(PATH.read_json(self.folder_records.joinpath('missing_pred_dates.json'))['missing_dates'])
+            path = self.folder_records.joinpath('missing_pred_dates.json')
+            if not path.exists():
+                return np.array([] , dtype=int)
+            return np.array(PATH.read_json(path)['missing_dates'])
         except Exception:
             return np.array([] , dtype=int)
 
