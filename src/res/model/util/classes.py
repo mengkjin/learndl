@@ -1390,6 +1390,11 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         '''test the model inside'''
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
+                print(f'batch_input_date0: {self.batch_input.date0}')
+                print(f'batch_idx: {self.batch_idx}')
+                print(f'batch_resumed: {self.trainer.batch_resumed}')
+                print(f'batch_aftermath: {self.trainer.batch_aftermath}')
+                print(f'batch_idx >= batch_resumed and batch_idx < batch_aftermath: {self.batch_idx >= self.trainer.batch_resumed and self.batch_idx < self.trainer.batch_aftermath}')
                 self.batch_forward()
                 self.batch_metrics()
     
