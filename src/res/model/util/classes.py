@@ -1388,6 +1388,8 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
 
     def test(self):
         '''test the model inside'''
+        Logger.note(f'model {self.model_str} test start' , vb_level = 'max')
+
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
                 print(f'batch_input_date0: {self.batch_input.date0}')
@@ -1397,6 +1399,8 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
                 print(f'batch_idx >= batch_resumed and batch_idx < batch_aftermath: {self.batch_idx >= self.trainer.batch_resumed and self.batch_idx < self.trainer.batch_aftermath}')
                 self.batch_forward()
                 self.batch_metrics()
+
+        Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
     
     def batch_forward(self) -> None: 
         if self.batch_idx >= self.trainer.batch_resumed and self.batch_idx < self.trainer.batch_aftermath: 

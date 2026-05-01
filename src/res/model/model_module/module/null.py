@@ -42,16 +42,5 @@ class NullPredictor(BasePredictorModel):
         """db model does not have fit stage"""
         raise NotImplementedError('null model does not have fit stage')
 
-    def test(self):
-        '''test the model inside'''
-        Logger.note(f'model {self.model_str} test start' , vb_level = 'max')
-
-        for _ in self.trainer.iter_model_submodels():
-            for _ in self.trainer.iter_test_dataloader():
-                self.batch_forward()
-                self.batch_metrics()
-
-        Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
-
     def collect(self , *args):
         return self.model_dict

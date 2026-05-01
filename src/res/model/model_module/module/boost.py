@@ -72,16 +72,6 @@ class BoostPredictor(BasePredictorModel):
 
         Logger.note(f'model {self.model_str} fit done' , vb_level = 'max')
 
-    def test(self):
-        Logger.note(f'model {self.model_str} test start' , vb_level = 'max')
-
-        for _ in self.trainer.iter_model_submodels():
-            for _ in self.trainer.iter_test_dataloader():
-                self.batch_forward()
-                self.batch_metrics()
-
-        Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
-
     def collect(self , submodel = 'best' , *args):
         self.model_dict.boost_dict = self.boost.to_dict()
         return self.model_dict
