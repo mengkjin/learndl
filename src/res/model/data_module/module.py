@@ -306,7 +306,7 @@ class DataModule(BaseDataModule):
 
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
         self.y_std = self.labels[:,self.d0:self.d1]
-        
+
         valid_x = x_full if self.config.module_type == 'nn' else {}
         valid_y = self.y_std if self.stage == 'fit' else None
 
@@ -353,7 +353,7 @@ class DataModule(BaseDataModule):
             y[~valid] = torch.nan
         w = None
         y = T.standardize(y , dim=0)
-        if self.stage != 'fit' and y.isnan().all().item() or no_weight: 
+        if no_weight or (self.stage != 'fit' and y.isnan().all().item()): 
             return y , w
         
         weight_scheme = self.config.weight_scheme(self.loader_param.stage , no_weight)
