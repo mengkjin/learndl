@@ -352,7 +352,9 @@ class BaseDataModule(ABC):
         return pd.concat(labels)
 
     def label_of_date(self , date : int) -> np.ndarray:
-        return self.y_std[:,self.y_date == date][...,0].squeeze().cpu().numpy()
+        label = self.y_std[:,self.y_date == date][...,0].squeeze().cpu().numpy()
+        print(label.shape)
+        return label
 
     @dataclass
     class LoaderParam:
