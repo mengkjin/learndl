@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import hashlib
 import pandas as pd
 from typing import Literal, Any
 from dataclasses import dataclass
@@ -234,6 +235,59 @@ class AnnouncementExporter:
     def export_path(self, date: int) -> Path:
         """``{yyyymmdd}.{SSE|SZSE|BSE}.feather``"""
         return DB.path('crawler' , f'announcement_{self.exchange}' , date)
+
+    def temp_attempt_path(self, task_key: str, attempt_id: str) -> Path:
+        """Per-attempt temp path used by async race executor."""
+        sample = self.export_path(CALENDAR.update_to())
+        temp_dir = sample.parent / "_temp_attempt"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        safe = hashlib.md5(attempt_id.encode("utf-8")).hexdigest()[:12]
+        return temp_dir / f"{self.exchange}_{task_key}_{safe}.feather"
+
+    def save_temp_attempt(
+        self,
+        task_key: str,
+        attempt_id: str,
+        data: pd.DataFrame | list[Announcement] | Announcement | None = None,
+    ) -> Path | None:
+        """Persist one successful attempt result only."""
+        if data is None:
+            return None
+        if isinstance(data, Announcement):
+            df = pd.DataFrame([data.to_dict()])
+        elif isinstance(data, list):
+            df = pd.DataFrame([ann.to_dict() for ann in data if ann])
+        else:
+            df = data.copy()
+        if df.empty:
+            return None
+        df["_attempt_id"] = attempt_id
+        df["_attempt_error"] = ""
+        path = self.temp_attempt_path(task_key, attempt_id)
+        with PathLock.get(path):
+            DB.save_df(df, path, empty_ok=True)
+        return path
+
+    def load_temp_attempt(self, task_key: str, attempt_id: str) -> pd.DataFrame:
+        path = self.temp_attempt_path(task_key, attempt_id)
+        if not path.exists():
+            return pd.DataFrame(columns=Announcement.df_columns() + ["_attempt_id", "_attempt_error"])
+        return DB.load_df(path)
+
+    def cleanup_temp_attempts(self, task_key: str, keep_attempt_id: str | None = None) -> list[Path]:
+        sample = self.export_path(CALENDAR.update_to())
+        temp_dir = sample.parent / "_temp_attempt"
+        if not temp_dir.exists():
+            return []
+        prefix = f"{self.exchange}_{task_key}_"
+        removed: list[Path] = []
+        keep_path = self.temp_attempt_path(task_key, keep_attempt_id) if keep_attempt_id else None
+        for path in temp_dir.glob(f"{prefix}*.feather"):
+            if keep_path is not None and path == keep_path:
+                continue
+            path.unlink(missing_ok=True)
+            removed.append(path)
+        return removed
 
     def save_data(self , data : pd.DataFrame | list[Announcement] | Announcement, start: int, end: int) -> None:
         """Save single exchange, single day data, and merge duplicates with existing file."""

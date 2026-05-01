@@ -5,12 +5,18 @@ Uses rotating proxies to fetch announcement metadata from the Shanghai and
 Shenzhen stock exchange websites.  Only active on CUDA servers
 (``MACHINE.cuda_server``); disabled on other machines.
 """
+import asyncio
+from collections import defaultdict
 from typing import Literal , Any , Iterable
 
-from .fetcher import FetcherTask , EXCHANGE_URLS
+
 from src.proj import Logger , CALENDAR , Proj , Dates , MACHINE
 from src.proj.util.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.proxy.caller import ProxyCallerList
+from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
+
+from .fetcher import FetcherTask , EXCHANGE_URLS
+from .async_race import AsyncProxyRaceExecutor , _ASYNC_LOG_VB_LEVEL
 
 __all__ = ["AnnouncementAgent"]
 
@@ -57,7 +63,7 @@ class AnnouncementAgent:
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         
-        success = cls.run_with_proxy(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
+        success = cls.run_with_proxy_async(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
         if success:
             Logger.success(f'{cls.__name__} Update at {Dates(end)}' , indent = indent , vb_level = vb_level)
         else:
@@ -76,6 +82,19 @@ class AnnouncementAgent:
         """get the ProxyPool(AutoRefreshProxyPool)"""
         with Logger.Timer(f"Warmup ProxyPool", indent = indent, vb_level = vb_level) as timer:
             proxy_pool = ProxyAPI.get_proxy_pool(urls , go_with_cached_proxies=go_with_cached_proxies)
+            timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
+        return proxy_pool
+
+    @classmethod
+    def get_async_proxy_pool(cls, urls: Iterable[str] | str = EXCHANGE_URLS.keys(), go_with_cached_proxies: bool = False, *, indent: int = 1, vb_level: Any = 1):
+        with Logger.Timer(f"Warmup AsyncProxyPool", indent=indent, vb_level=vb_level) as timer:
+            if isinstance(urls, str):
+                target_urls = [urls]
+            elif isinstance(urls, list):
+                target_urls = urls
+            else:
+                target_urls = list(urls)
+            proxy_pool = AsyncAdaptiveProxyPool(target_urls, go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
         return proxy_pool
 
@@ -103,9 +122,20 @@ class AnnouncementAgent:
 
     @classmethod
     def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
-                       workers: int = 10, fallback_to_raw_ip : bool = False , indent : int = 0 , vb_level : Any = 1) -> bool:
+                       workers: int = 10, fallback_to_raw_ip : bool = False , indent : int = 0 , vb_level : Any = 1,
+                       use_async: bool = False, race_ratio: float = 0.5, min_race_tasks: int = 2,
+                       max_replicas_per_task: int = 5, max_total_inflight_per_exchange: int = 20) -> bool:
         """parallel run all announcement tasks"""
         vb_level = Proj.vb(vb_level)
+        if use_async:
+            return cls.run_with_proxy_async(
+                start, end, step=step, redownload=redownload,
+                go_with_cached_proxies=go_with_cached_proxies, workers=workers,
+                fallback_to_raw_ip=fallback_to_raw_ip, indent=indent, vb_level=vb_level,
+                race_ratio=race_ratio, min_race_tasks=min_race_tasks,
+                max_replicas_per_task=max_replicas_per_task,
+                max_total_inflight_per_exchange=max_total_inflight_per_exchange,
+            )
         caller_list = cls.get_proxy_caller_list(
             start, end, step, redownload, use_proxy = True, 
             go_with_cached_proxies = go_with_cached_proxies , indent = indent, vb_level = vb_level)
@@ -114,5 +144,97 @@ class AnnouncementAgent:
             return all([result if isinstance(result, bool) else False for result in results])
         else:
             return True
+
+    @classmethod
+    async def _run_with_proxy_async(
+        cls,
+        start: int,
+        end: int,
+        step: int = 1,
+        redownload: bool = False,
+        *,
+        go_with_cached_proxies: bool = False,
+        workers: int = 10,
+        indent: int = 0,
+        vb_level: Any = 1,
+        race_ratio: float = 0.5,
+        min_race_tasks: int = 2,
+        max_replicas_per_task: int = 5,
+        max_total_inflight_per_exchange: int = 20,
+    ) -> bool:
+        vb_level = Proj.vb(vb_level)
+        tasks = FetcherTask.tasks_flat(start, end, step, redownload)
+        if not tasks:
+            return True
+        grouped_tasks: dict[str, list[FetcherTask]] = defaultdict(list)
+        for task in tasks:
+            grouped_tasks[task.exchange].append(task)
+        target_urls = sorted({task.url for task in tasks})
+        proxy_pool = cls.get_async_proxy_pool(
+            target_urls, go_with_cached_proxies=go_with_cached_proxies, indent=indent, vb_level=vb_level
+        )
+        all_ok = True
+
+        async def run_one_exchange(exchange: str, ex_tasks: list[FetcherTask]):
+            executor = AsyncProxyRaceExecutor(
+                proxy_pool,
+                race_ratio=race_ratio,
+                min_race_tasks=min_race_tasks,
+                max_replicas_per_task=max_replicas_per_task,
+                max_total_inflight_per_exchange=max_total_inflight_per_exchange,
+            )
+            ex_result = await executor.run_exchange_tasks(ex_tasks, workers=min(max(1, workers), 50))
+            for task in ex_tasks:
+                payload = ex_result["results"].get(task.title)
+                if payload is None:
+                    continue
+                task_key = f"{task.start}_{task.end}_{task.exchange}"
+                task.persist_payload(payload)
+                winner_attempt = ex_result.get("winner_attempt", {}).get(task.title)
+                task.exporter.cleanup_temp_attempts(task_key)
+                Logger.success(
+                    f"[crawler-task-finished] task={task.title} persisted_rows={len(payload)} winner={winner_attempt}",
+                    indent=indent, vb_level=_ASYNC_LOG_VB_LEVEL,
+                )
+            if ex_result["errors"]:
+                Logger.alert1(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks", indent=indent, vb_level=_ASYNC_LOG_VB_LEVEL)
+            return ex_result["ok"]
+
+        exchange_results = await asyncio.gather(*[
+            run_one_exchange(exchange, ex_tasks)
+            for exchange, ex_tasks in grouped_tasks.items()
+        ])
+        all_ok = all(exchange_results)
+        return all_ok
+
+    @classmethod
+    def run_with_proxy_async(
+        cls,
+        start: int,
+        end: int,
+        step: int = 1,
+        redownload: bool = False,
+        *,
+        go_with_cached_proxies: bool = False,
+        workers: int = 10,
+        fallback_to_raw_ip: bool = False,
+        indent: int = 0,
+        vb_level: Any = 1,
+        race_ratio: float = 0.5,
+        min_race_tasks: int = 2,
+        max_replicas_per_task: int = 5,
+        max_total_inflight_per_exchange: int = 20,
+    ) -> bool:
+        if fallback_to_raw_ip:
+            Logger.alert1("fallback_to_raw_ip is ignored in async mode")
+        return asyncio.run(
+            cls._run_with_proxy_async(
+                start, end, step=step, redownload=redownload,
+                go_with_cached_proxies=go_with_cached_proxies, workers=workers,
+                indent=indent, vb_level=vb_level, race_ratio=race_ratio, min_race_tasks=min_race_tasks,
+                max_replicas_per_task=max_replicas_per_task,
+                max_total_inflight_per_exchange=max_total_inflight_per_exchange,
+            )
+        )
 
     

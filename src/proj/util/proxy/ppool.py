@@ -1,10 +1,13 @@
 """Adaptive proxy pool: fetch, verify, refresh, and serve URLs for crawlers."""
 from __future__ import annotations
+import asyncio
 import random
 import threading
 import time
+
 from datetime import datetime , timedelta
-from typing import Iterable , Literal
+from typing import Iterable , Literal , Any
+from concurrent.futures import ThreadPoolExecutor , as_completed
 
 from src.proj.log import Logger
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
@@ -104,7 +107,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
         return not self.shutdown
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.url},{'adaptive' if self.adaptive else 'static'},refresh_attempt={self.refresh_attempt}/{self.refresh_max_attempts})"
+        return f"{self.__class__.__name__}({self.url},{len(self.proxies)} proxies,{'adaptive' if self.adaptive else 'static'},refresh_attempt={self.refresh_attempt}/{self.refresh_max_attempts})"
 
     def init_refresh_stats(self , refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2):
         """Initialise adaptive-refresh counters and thresholds."""
@@ -182,6 +185,18 @@ class ProxyStatsSetURL(ProxyStatsSet):
             self.refresh_enabled = False
             Logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
 
+    @classmethod
+    def from_urls(cls, urls: list[str] | str , * , max_workers: int = 10, **kwargs):
+        if isinstance(urls, str):
+            urls = [urls]
+        if len(urls) <= 1:
+            return {url: cls(url, **kwargs) for url in urls}
+        else:
+            print(f"Initialising {len(urls)} proxy sets in parallel")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(cls, url=url , **kwargs):url for url in urls}
+                return {futures[future]:future.result() for future in as_completed(futures)}
+
 class ProxyPool:
     """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""
 
@@ -195,13 +210,16 @@ class ProxyPool:
         self.lock = threading.Lock()
         self.condition = threading.Condition(self.lock)
         self.target_urls = target_urls if isinstance(target_urls , list) else [target_urls]
-        self.proxies = {url: ProxyStatsSetURL(url=url , **kwargs) for url in self.target_urls}
+        self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, **kwargs)
         
     def __len__(self) -> int:
         return len(self.target_urls)
 
     def __bool__(self) -> bool:
         return not self.shutdown
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.proxies})"
 
     @property
     def num_proxies(self) -> dict[str, int]:
@@ -234,10 +252,10 @@ class ProxyPool:
                 Logger.footnote(f"URL [{url}] is waiting for a proxy")
                 self.condition.wait()
 
-    def release(self, proxy: ProxyStats, success: bool) -> None:
+    def release(self, proxy: ProxyStats, success: bool, counted: bool = True , vb_level: Any = 1) -> None:
         """Release a proxy, and update the state of this usage."""
         with self.condition:
-            proxy.release(success)
+            proxy.release(success, counted=counted, vb_level=vb_level)
             # notify all waiting threads that the proxy state has changed
             self.condition.notify_all()
 
@@ -327,5 +345,74 @@ class AdaptiveProxyPool(ProxyPool):
     def test(cls , * , refresh_interval: int = 1 , refresh_max_attempts: int = 1 , refresh_threshold: float = 0.1):
         """Return an AdaptiveProxyPool pointing at the 'test' URL (uses synthetic fake proxies)."""
         return cls('test' , refresh_interval=refresh_interval , refresh_max_attempts=refresh_max_attempts , refresh_threshold=refresh_threshold)
+
+
+class AsyncProxyPool:
+    """Asyncio-native proxy pool corresponding to ``ProxyPool``."""
+
+    def __init__(self, target_urls: list[str] | str, *, go_with_cached_proxies: bool = False):
+        self.initiate(target_urls, go_with_cached_proxies=go_with_cached_proxies, adaptive=False)
+
+    def initiate(self, target_urls: list[str] | str, **kwargs):
+        if target_urls == 'test':
+            Logger.alert1("Using test mode and pseudo proxies")
+        self.lock = asyncio.Lock()
+        self.condition = asyncio.Condition(self.lock)
+        self.target_urls = target_urls if isinstance(target_urls, list) else [target_urls]
+        self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, **kwargs)
+
+    def __len__(self) -> int:
+        return len(self.target_urls)
+
+    @property
+    def shutdown(self) -> bool:
+        return all(proxy_set.shutdown for proxy_set in self.proxies.values())
+
+    @property
+    def num_proxies(self) -> dict[str, int]:
+        return {url: len(self.proxies[url]) for url in self.target_urls}
+
+    async def acquire_async(self, url: str) -> ProxyStats | None:
+        async with self.condition:
+            while True:
+                if not self.proxies[url].check_validity():
+                    return None
+                if proxy := self.proxies[url].pick_one():
+                    return proxy
+                Logger.footnote(f"URL [{url}] is waiting for a proxy")
+                await self.condition.wait()
+
+    async def release_async(self, proxy: ProxyStats, success: bool, *, counted: bool = True , vb_level: Any = 1) -> None:
+        async with self.condition:
+            proxy.release(success, counted=counted, vb_level=vb_level)
+            self.condition.notify_all()
+
+
+class AsyncAdaptiveProxyPool(AsyncProxyPool):
+    """Asyncio-native proxy pool corresponding to ``AdaptiveProxyPool``."""
+
+    def __init__(
+        self,
+        target_urls: list[str] | str,
+        *,
+        go_with_cached_proxies: bool = False,
+        refresh_interval: int = 5,
+        refresh_max_attempts: int = 10,
+        refresh_threshold: float = 0.2,
+    ):
+        self.initiate(
+            target_urls,
+            adaptive=True,
+            go_with_cached_proxies=go_with_cached_proxies,
+            refresh_interval=refresh_interval,
+            refresh_max_attempts=refresh_max_attempts,
+            refresh_threshold=refresh_threshold,
+        )
+
+    async def adaptive_refresh_async(self):
+        await asyncio.gather(*[
+            asyncio.to_thread(proxy_set.adaptive_refresh)
+            for proxy_set in self.proxies.values()
+        ])
 
     

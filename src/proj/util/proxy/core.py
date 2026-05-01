@@ -2,7 +2,8 @@
 from __future__ import annotations
 import re
 import random
-from typing import Iterable , Literal
+from typing import Iterable , Literal , Any
+from src.proj.log import Logger
 
 INVALID_THRESHOLD = 3
 PROXY_MAX_CONCURRENT = 2
@@ -173,13 +174,17 @@ class ProxyStats(Proxy):
         self.stats['running'] += 1
         return self
 
-    def release(self, success: bool):
-        """Released, decrement the running count, and update the success or error count"""
+    def release(self, success: bool, *, counted: bool = True , vb_level: Any = 1):
+        """Released, decrement running; optionally update success/error counters."""
         self.stats['running'] -= 1
+        if not counted:
+            return
         if success:
             self.stats['success'] += 1
         else:
             self.stats['error'] += 1
+            if self.stats['error'] >= INVALID_THRESHOLD:
+                Logger.alert1(f"Proxy {self.url} has reached INVALID_THRESHOLD ({INVALID_THRESHOLD}), and will be unavailable." , vb_level=vb_level)
 
     @classmethod
     def unique(cls, proxies: Iterable[ProxyStats]) -> list[ProxyStats]:

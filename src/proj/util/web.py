@@ -1,9 +1,10 @@
-"""HTTP clients: ``curl_cffi`` session factory, timeout retry helpers, and ``httpx`` with sane TLS defaults."""
+"""HTTP clients: sync/async ``curl_cffi`` session helpers and timeout retry wrappers."""
 
 import httpx
 import ssl
 import sys
 import time
+import asyncio
 from contextlib import contextmanager
 from typing import Union , Iterable , Generator , TypeVar , Literal
 from curl_cffi import requests , CurlOpt
@@ -54,8 +55,37 @@ def http_session(
         }
     return session
 
+def async_http_session(
+    *,
+    proxy: str | None = None,
+    trust_env: bool = False,
+    verify: bool = True,
+    allow_redirects : bool = True,
+    timeout: float | tuple[float, float] = (15.0, 300.0),
+    low_speed_limit: int = 1,
+    low_speed_time: int = 30,
+    **kwargs,
+) -> requests.AsyncSession:
+    """Create a reusable ``curl_cffi.requests.AsyncSession``."""
+    curl_opts = {
+        CurlOpt.LOW_SPEED_LIMIT: low_speed_limit,
+        CurlOpt.LOW_SPEED_TIME: low_speed_time,
+    }
+    session = requests.AsyncSession(curl_options=curl_opts)
+    session.headers.update({"User-Agent": CHROME_UA})
+    session.timeout = timeout
+    session.allow_redirects = allow_redirects
+    session.verify = verify
+    session.trust_env = trust_env
+    if proxy:
+        session.proxies = {
+            "http": proxy,
+            "https": proxy,
+        }
+    return session
+
 @contextmanager
-def temporary_timeout_session(session : requests.Session, new_timeout : float | tuple[float, float]):
+def temporary_timeout_session(session: requests.Session | requests.AsyncSession, new_timeout: float | tuple[float, float]):
     """Temporarily set ``session.timeout``; restore previous value after the block."""
     old_timeout = session.timeout
     session.timeout = new_timeout
@@ -64,7 +94,7 @@ def temporary_timeout_session(session : requests.Session, new_timeout : float | 
     finally:
         session.timeout = old_timeout
 
-def timeout_expanding_sessions(session : requests.Session, expansion : float = 2. , max_count : int = 1):
+def timeout_expanding_sessions(session: requests.Session | requests.AsyncSession, expansion: float = 2., max_count: int = 1):
     """
     automatically expand the timeout of the session by the given expansion factor and max count
     will return a generator of (max_count + 1) sessions with progressively longer timeouts
@@ -106,7 +136,43 @@ def request_with_timeouterror(
         except (TimeoutError , requests.exceptions.Timeout) as e:
             if i == max_retry_count:
                 raise e
-            Logger.alert1(f"{title} >> encountered TimeoutError (timeout={session.timeout}) (expand {i} times to retry): {e!s}")
+            Logger.stdout(f"{title} TimeoutError (expand {i} times to retry): {e!s}")
+    raise
+
+async def request_with_timeouterror_async(
+    session: requests.AsyncSession,
+    request_method: Literal['get', 'post'],
+    *args,
+    expansion: float = 2.,
+    max_retry_count: int = 2,
+    title: str = '',
+    **kwargs
+) -> requests.Response:
+    """Async GET/POST with exponentially growing timeout retry."""
+    if expansion < 1:
+        Logger.alert1(f"expansion {expansion} is less than 1, setting to 1")
+        expansion = 1
+    if max_retry_count < 1:
+        Logger.alert1(f"max_retry_count {max_retry_count} is less than 1, setting to 1")
+        max_retry_count = 1
+    match request_method:
+        case 'get':
+            method = session.get
+        case 'post':
+            method = session.post
+        case _:
+            raise ValueError(f"Invalid request method: {request_method}")
+    for i , _ in enumerate(timeout_expanding_sessions(session , expansion = expansion, max_count = max_retry_count)):
+        try:
+            r = await method(*args, **kwargs)
+            r.raise_for_status()
+            return r
+        except asyncio.CancelledError:
+            raise
+        except (TimeoutError , requests.exceptions.Timeout) as e:
+            if i == max_retry_count:
+                raise e
+            Logger.alert1(f"{title} TimeoutError (expand {i} times to retry): {e!s}")
     raise
 
 def test_connection(target_url: str, proxy: str | None = None, timeout : float = 10. , fast_test: bool = False) -> bool:

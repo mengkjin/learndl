@@ -53,14 +53,14 @@ class ProxyCaller:
         """Ban the caller"""
         self.banned = True
 
-    def proxied(self , *args: Any, **kwargs: Any) -> bool | Exception:
+    def proxied(self , *args: Any, vb_level: Any = 2, **kwargs: Any) -> bool | Exception:
         """Call the function with a proxy"""
         proxy = self.pool.acquire(self.url)
         if proxy is None:
             return ProxyDepletionException(self.url)
         self.result = self.func(proxy.url , *args, **kwargs)
         self.finished = not isinstance(self.result, Exception)
-        self.pool.release(proxy, False if isinstance(self.result, Exception) else self.result)
+        self.pool.release(proxy, False if isinstance(self.result, Exception) else self.result, vb_level=vb_level)
         return self.result
 
     def fallback(self , *args: Any, **kwargs: Any) -> bool | Exception:
