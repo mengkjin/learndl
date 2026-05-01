@@ -223,6 +223,8 @@ class ProxyStatsSet(ProxySet):
     def pick_one(self) -> ProxyStats | None:
         """Get available proxies"""
         available_proxies = [proxy for proxy in self.proxies if proxy.available]
+        if not available_proxies:
+            return None
         max_slots = max(proxy.num_slots for proxy in available_proxies)
         options = [proxy for proxy in available_proxies if proxy.num_slots == max_slots] or available_proxies
         if options:
