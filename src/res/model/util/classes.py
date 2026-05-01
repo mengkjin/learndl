@@ -1143,9 +1143,9 @@ class PredRecorder(ModelStreamLineWithTrainer):
         elif Const.Model.resume_test == 'last_pred_date':
             self.resumed_max_pred_date = max_pred_date
             self.resume_info = f', recognize past saved preds before prediction date {self.resumed_max_pred_date}'
-
     
     def append_batch_preds(self):
+        print(f'append_batch_preds: {self.pred_idx} in {self.pred_dict.keys()} or {self.batch_output.empty}')
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
             return
         df = self.batch_data.pred_df().dropna().query('date in @self.data.test_full_dates')
@@ -1157,13 +1157,14 @@ class PredRecorder(ModelStreamLineWithTrainer):
             df['pred'] = df[f'pred.{which_output}']
         df = df.assign(model_num = self.model_num , submodel = self.model_submodel , model_date = self.model_date , batch_idx = self.batch_idx)
         df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
-
+        print(df)
         self.pred_dict[self.pred_idx] = df
 
     def collect_model_preds(self):
         if not self.pred_dict:
             return self.empty_preds()
-        self.save_preds(pd.concat(self.pred_dict.values()) , self.model_date , self.model_num , append = True)
+        new_preds = pd.concat(self.pred_dict.values())
+        self.save_preds(new_preds , self.model_date , self.model_num , append = True)
         self.pred_dict.clear()
 
     def collect_avg_preds(self):
@@ -1392,11 +1393,6 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
 
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
-                print(f'batch_input_date0: {self.batch_input.date0}')
-                print(f'batch_idx: {self.batch_idx}')
-                print(f'batch_resumed: {self.trainer.batch_resumed}')
-                print(f'batch_aftermath: {self.trainer.batch_aftermath}')
-                print(f'batch_idx >= batch_resumed and batch_idx < batch_aftermath: {self.batch_idx >= self.trainer.batch_resumed and self.batch_idx < self.trainer.batch_aftermath}')
                 self.batch_forward()
                 self.batch_metrics()
 

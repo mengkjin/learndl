@@ -1,7 +1,6 @@
 import torch
 from typing import Any
 
-from src.proj import Logger
 from src.res.model.util import BasePredictorModel , BatchInput
 
 class NullPredictor(BasePredictorModel):
