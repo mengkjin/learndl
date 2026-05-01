@@ -353,7 +353,7 @@ class BaseDataModule(ABC):
 
     def label_of_date(self , date : int) -> np.ndarray:
         label = self.y_std[:,self.y_date == date][...,0].squeeze().cpu().numpy()
-        print(label.shape)
+        print(f'label shape at date {date}: {label.shape}')
         return label
 
     @dataclass
