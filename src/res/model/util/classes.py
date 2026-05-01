@@ -342,6 +342,18 @@ class BaseDataModule(ABC):
     def data_step(self) -> int:
         return self.config.fitting_step if self.stage in ['fit'] else 1
 
+    def y_label(self , dates : np.ndarray | list[int]) -> pd.DataFrame:
+        labels : list[pd.DataFrame] = []
+        for date in dates:
+            labels.append(pd.DataFrame({
+                'secid' : self.y_secid, 'date' : date,
+                'label' : self.label_of_date(date)
+            }))
+        return pd.concat(labels)
+
+    def label_of_date(self , date : int) -> np.ndarray:
+        return self.y_std[:,self.datas.y.date == date][...,0].squeeze().cpu().numpy()
+
     @dataclass
     class LoaderParam:
         stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
@@ -1145,12 +1157,9 @@ class PredRecorder(ModelStreamLineWithTrainer):
             self.resume_info = f', recognize past saved preds before prediction date {self.resumed_max_pred_date}'
     
     def append_batch_preds(self):
-        print(f'append_batch_preds: {self.pred_idx} in {self.pred_dict.keys()} or {self.batch_output.empty}')
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
             return
-        print(self.batch_data.pred_df())
-        print(self.data.test_full_dates)
-        df = self.batch_data.pred_df().dropna().query('date in @self.data.test_full_dates')
+        df = self.batch_data.pred_df().dropna(how = 'all').query('date in @self.data.test_full_dates')
         if df.empty:
             return
         if (which_output := self.trainer.model_param.get('which_output' , 0)) is None:
@@ -1159,7 +1168,6 @@ class PredRecorder(ModelStreamLineWithTrainer):
             df['pred'] = df[f'pred.{which_output}']
         df = df.assign(model_num = self.model_num , submodel = self.model_submodel , model_date = self.model_date , batch_idx = self.batch_idx)
         df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
-        print(df)
         self.pred_dict[self.pred_idx] = df
 
     def collect_model_preds(self):
@@ -1172,7 +1180,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def collect_avg_preds(self):
         self.save_avg_preds(self.model_date)
         
-    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
+    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False , recalculate_label : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
             return self.empty_preds()
@@ -1192,6 +1200,8 @@ class PredRecorder(ModelStreamLineWithTrainer):
             df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
             missing_dates = np.setdiff1d(pred_dates , df['date'].unique())
             self.update_missing_pred_dates(missing_dates)
+        if recalculate_label:
+            df = df.drop(columns = ['label']).merge(self.data.y_label(df['date'].unique()) , on = ['secid' , 'date'] , how = 'left')
         return df
 
     def get_avg_preds(self , pred_dates : np.ndarray , closest : bool = False) -> pd.DataFrame:

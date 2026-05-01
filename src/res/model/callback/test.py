@@ -50,7 +50,7 @@ class BasicTestResult(BaseCallBack):
         df = pd.concat(test_dfs) if test_dfs else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
-        preds = self.trainer.record.get_preds(target_dates)
+        preds = self.trainer.record.get_preds(target_dates , recalculate_label = True)
 
         grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
         def df_ic(subdf : pd.DataFrame , **kwargs):

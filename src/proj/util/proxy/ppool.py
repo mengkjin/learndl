@@ -192,7 +192,6 @@ class ProxyStatsSetURL(ProxyStatsSet):
         if len(urls) <= 1:
             return {url: cls(url, **kwargs) for url in urls}
         else:
-            print(f"Initialising {len(urls)} proxy sets in parallel")
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(cls, url=url , **kwargs):url for url in urls}
                 return {futures[future]:future.result() for future in as_completed(futures)}
