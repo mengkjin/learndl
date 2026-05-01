@@ -1148,6 +1148,8 @@ class PredRecorder(ModelStreamLineWithTrainer):
         print(f'append_batch_preds: {self.pred_idx} in {self.pred_dict.keys()} or {self.batch_output.empty}')
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
             return
+        print(self.batch_data.pred_df())
+        print(self.data.test_full_dates)
         df = self.batch_data.pred_df().dropna().query('date in @self.data.test_full_dates')
         if df.empty:
             return
