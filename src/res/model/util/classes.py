@@ -249,6 +249,7 @@ class BaseDataModule(ABC):
         self.model_date_list : np.ndarray
         self.test_full_dates : np.ndarray
         self.datas : ModuleData
+        self.labels : torch.Tensor
     @abstractmethod
     def setup(self , *args , **kwargs) -> None: 
         '''create train / valid / test dataloaders , perform in every different model_date / model_num'''
@@ -345,17 +346,18 @@ class BaseDataModule(ABC):
     def y_label(self , dates : np.ndarray | list[int]) -> pd.DataFrame:
         labels : list[pd.DataFrame] = []
         for date in dates:
-            labels.append(pd.DataFrame({
-                'secid' : self.y_secid, 'date' : date,
-                'label' : self.label_of_date(date)
-            }))
+            label = self.label_of_date(date)
+            if label.size > 0:
+                labels.append(pd.DataFrame({
+                    'secid' : self.datas.y.secid, 'date' : date,
+                    'label' : label.flatten()
+                }).dropna())
         return pd.concat(labels)
 
     def label_of_date(self , date : int) -> np.ndarray:
-        label = self.y_std[:,self.y_date == date][...,0].squeeze().cpu().numpy()
+        label = self.labels[:,self.datas.y.date == date][...,0].squeeze().cpu().numpy()
         print(f'label shape at date {date}: {label.shape}')
         return label
-
     @dataclass
     class LoaderParam:
         stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None

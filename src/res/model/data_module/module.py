@@ -113,6 +113,7 @@ class DataModule(BaseDataModule):
         
         self.config.update_data_param(self.datas.x)
         self.labels_n = int(self.datas.y.shape[-1])
+        self.labels = self.standardize_y(self.datas.y.values.squeeze(2)[...,:self.labels_n] , None , None , no_weight = True)[0]
 
         self.prenorm_operator = PrenormOperator(self.config , self.datas.norms)
         self.set_critical_dates()
@@ -303,11 +304,8 @@ class DataModule(BaseDataModule):
             self.empty_dataloader()
             return
 
-        x_full = {k:torch.Tensor(v.values[:,self.d0:self.d1]) for k,v in self.datas.x.items()}
-        y_full = torch.Tensor(self.datas.y.values[:,self.d0:self.d1]).squeeze(2)[...,:self.labels_n]
-
-        # standardized y with step == 1
-        self.y_std = self.standardize_y(y_full , None , None , no_weight = True)[0]
+        x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
+        self.y_std = self.labels[:,self.d0:self.d1]
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
         valid_y = self.y_std if self.stage == 'fit' else None
