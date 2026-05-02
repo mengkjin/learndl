@@ -3,13 +3,13 @@ Async scheduler for normal mode + race mode over a shared proxy pool.
 """
 import asyncio
 from typing import Any
-from src.proj import Logger
+from src.proj import Logger, Proj
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
 
 from .fetcher import FetcherTask
 from .util import Announcement
 
-_ASYNC_LOG_VB_LEVEL = 1
+_ASYNC_LOG_VB_LEVEL = 'always' if Proj.debug['show_asyncio_info'] else 'never'
 
 class AsyncProxyRaceExecutor:
     """Async scheduler for normal mode + race mode over a shared proxy pool."""

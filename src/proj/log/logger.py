@@ -30,9 +30,12 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
 }
 
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
-VB = Proj.vb
-
 ENTRY_POINT = Path(sys.argv[0]).stem
+
+WithVbLevel = Proj.vb.WithVbLevel
+WithVB = Proj.vb.WithVB
+verbose = Proj.verbose
+show_vb_level = Proj.debug['show_vb_level']
 
 def find_calling_module():
     """Find the calling module"""
@@ -56,9 +59,9 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_f
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
-    with VB.WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
-        fstr = stdout(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
+    with WithVbLevel(vb_level):
+        args = [f'{vb_level}' , *args] if show_vb_level else args
+        fstr = stdout(*args , indent = indent , color = color , write = verbose(vb_level), **kwargs)
     if to_log_file:
         add_to_log_file(fstr.unformatted())
     return fstr
@@ -69,9 +72,9 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs
     Use ``vb_level`` to control the verbosity of the message.
     kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
-    with VB.WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if Proj.show_vb_level else args
-        fstr = stderr(*args , indent = indent , color = color , write = not VB.ignore(vb_level), **kwargs)
+    with WithVbLevel(vb_level):
+        args = [f'{vb_level}' , *args] if show_vb_level else args
+        fstr = stderr(*args , indent = indent , color = color , write = verbose(vb_level), **kwargs)
     add_to_log_file(fstr.unformatted())
     return fstr
 
@@ -369,7 +372,7 @@ class Logger:
     @classmethod
     def test_logger(cls):
         import tqdm , pandas as pd , matplotlib.pyplot as plt
-        with VB.WithVB('max'):
+        with WithVB('max'):
             with cls.Paragraph('ParagraphI' , 1):
                 cls.stdout('This is a stdout message')
                 cls.stderr('This is a stderr message')
@@ -419,9 +422,12 @@ class Logger:
         """
         display the object
         """
+        if Proj.silence.silent or not verbose(vb_level):
+            return
         if caption is not None:
             cls.caption(caption , vb_level = vb_level)
-        Display(obj , vb_level = vb_level , **kwargs)
+        with Proj.vb.WithVbLevel(vb_level):
+            Display(obj , **kwargs)
 
     @classmethod
     def set_display_callbacks(cls , callbacks_before : list[Callable] | None = None, callbacks_after : list[Callable] | None = None):
@@ -575,7 +581,7 @@ class Logger:
                 if self.display:
                     Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
                     df = self.get_df(sort_on = self.sort_on , highlight = self.highlight)
-                    Display(df.loc[:,self.columns].head(self.n_head))
+                    Logger.display(df.loc[:,self.columns].head(self.n_head))
             return super().__exit__(type , value , trace)
 
         def get_df(self , sort_on = 'cumtime' , highlight = None):

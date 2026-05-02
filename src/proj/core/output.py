@@ -136,7 +136,7 @@ class FormatStr(str):
 
 def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
            sep = ' ' , end = '\n' , file = None , flush = False , write = True):
-    """custom stdout message , vb_level can be set to control display (minimum verbosity level to show the message)"""
+    """custom stdout message"""
     if Silence.silent or not write:
         return FormatStr.empty()
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)

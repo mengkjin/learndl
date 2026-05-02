@@ -5,8 +5,6 @@ from matplotlib.figure import Figure
 from IPython.display import display as raw_display
 from typing import Any , Callable
 
-from src.proj.env import Proj
-
 __all__ = ['Display']
 
 class Display:
@@ -60,25 +58,22 @@ class Display:
         cls._callbacks_after.clear()
 
     @classmethod
-    def display(cls , obj , vb_level : Any = 1 , **kwargs):
+    def display(cls , obj , **kwargs):
         """
         display the object
         """
-        if Proj.silence.silent or Proj.vb.ignore(vb_level):
-            return
-        with Proj.vb.WithVbLevel(vb_level):
-            for callback in cls._callbacks_before:
-                callback(obj)
-                
-            if isinstance(obj , Figure):
-                cls.figure(obj , **kwargs)
-            elif isinstance(obj , pd.DataFrame):
-                cls.data_frame(obj , **kwargs)
-            else:
-                raw_display(obj)
+        for callback in cls._callbacks_before:
+            callback(obj)
+            
+        if isinstance(obj , Figure):
+            cls.figure(obj , **kwargs)
+        elif isinstance(obj , pd.DataFrame):
+            cls.data_frame(obj , **kwargs)
+        else:
+            raw_display(obj)
 
-            for callback in cls._callbacks_after:
-                callback(obj)
+        for callback in cls._callbacks_after:
+            callback(obj)
 
     @staticmethod
     def data_frame(df : pd.DataFrame , **kwargs):

@@ -5,6 +5,7 @@ from typing import Any , Literal
 from src.__version__ import __version__
 from src.proj.core import Silence , NoInstanceMeta
 from .machine import MACHINE
+from .debug_mode import DebugMode
 from .verbosity import Verbosity
 from .variable import LogWriterFile , UniqueFileList , InstanceCollection
 
@@ -14,19 +15,20 @@ class ProjMeta(NoInstanceMeta):
     """Metaclass for ``Proj``: blocks direct instantiation and exposes module-level descriptors."""
     log_writer = LogWriterFile()
     
-
 class Proj(metaclass=ProjMeta):
     """Static entry point: ``Conf``, ``vb``, ``instances``, paths to log writer and file lists."""
     vb = Verbosity()
     silence = Silence()
-
-    debug_mode = MACHINE.config.get('constant/project' , 'debug_mode' , default = False)
-    show_vb_level = MACHINE.config.get('constant/project' , 'show_vb_level' , default = False)
+    debug = DebugMode()
 
     instances = InstanceCollection()
     email_attachments = UniqueFileList('email_attachments')
     exit_files = UniqueFileList('exit_files')
     version = __version__
+
+    @classmethod
+    def verbose(cls , vb_level : Literal['max','min','never','always'] | Any = 1):
+        return cls.debug['complete_verbosity'] or not cls.vb.ignore(vb_level)
 
     @classmethod
     def info(cls) -> dict[str, Any]:

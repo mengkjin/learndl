@@ -50,7 +50,7 @@ class BasicTestResult(BaseCallBack):
         df = pd.concat(test_dfs) if test_dfs else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
-        preds = self.trainer.record.get_preds(target_dates , recalculate_label = True).dropna()
+        preds = self.trainer.record.get_preds(target_dates).dropna()
 
         grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
         def df_ic(subdf : pd.DataFrame , **kwargs):
@@ -259,7 +259,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def display_export(self):
         with Logger.Paragraph('Display Analytic Results' , 3):
             for name , vb_level in self.table_vb_levels.items():
-                if Proj.vb.ignore(vb_level):
+                if not Proj.verbose(vb_level):
                     continue
                 df = self.test_results[name].copy()
                 df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
@@ -273,7 +273,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 Logger.display(df , caption = f'Table: {name.title()}:' , vb_level = vb_level)
 
             for name , vb_level in self.figure_vb_levels.items():
-                if Proj.vb.ignore(vb_level):
+                if not Proj.verbose(vb_level):
                     continue
                 Logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:' , vb_level = vb_level)
 

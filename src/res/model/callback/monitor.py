@@ -244,22 +244,36 @@ class SummaryWriter(BaseCallBack):
         self.writer.add_scalar('02.HyperParameter/LearnRate' , self.last_lr , self.step_index(step_type))
         
     def add_weight_norm(self , step_type : str = 'epoch'):
-        assert Proj.debug_mode and self.status.dataset == 'train' , f'DEBUG_MODE is not enabled or dataset is not train : {Proj.debug_mode} {self.status.dataset}'
+        assert Proj.debug and self.status.dataset == 'train' , \
+            f'debug_mode is not enabled or dataset is not train : {Proj.debug} {self.status.dataset}'
+        
+        if not Proj.debug['tsboard_weight_norm']:
+            return
+
         step = self.step_index(step_type)
         [self.writer.add_scalar(f'03.ModelWeights/Norm/{name}' , torch.norm(param.data , p=2) , step) for name , param in self.named_parameters() if param.data is not None]
 
     def add_weight_histogram(self , step_type : str = 'batch'):
-        assert Proj.debug_mode and self.status.dataset == 'train' , f'DEBUG_MODE is not enabled or dataset is not train : {Proj.debug_mode} {self.status.dataset}'
+        assert Proj.debug and self.status.dataset == 'train' , \
+            f'debug_mode is not enabled or dataset is not train : {Proj.debug} {self.status.dataset}'
+        if not Proj.debug['tsboard_weight_histogram']:
+            return
         step = self.step_index(step_type)
         [self.writer.add_histogram(f'03.ModelWeights/Histogram/{name}' , param.data , step) for name , param in self.named_parameters() if param.data is not None]
 
     def add_grad_norm(self , step_type : str = 'epoch'):
-        assert Proj.debug_mode and self.status.dataset == 'train' , f'DEBUG_MODE is not enabled or dataset is not train : {Proj.debug_mode} {self.status.dataset}'
+        assert Proj.debug and self.status.dataset == 'train' , \
+            f'debug_mode is not enabled or dataset is not train : {Proj.debug} {self.status.dataset}'
+        if not Proj.debug['tsboard_grad_norm']:
+            return
         step = self.step_index(step_type)
         [self.writer.add_scalar(f'04.ModelGradients/Norm/{name}' , torch.norm(param.grad , p=2) , step) for name , param in self.named_parameters() if param.grad is not None]
 
     def add_grad_histogram(self , step_type : str = 'batch'):
-        assert Proj.debug_mode and self.status.dataset == 'train' , f'DEBUG_MODE is not enabled or dataset is not train : {Proj.debug_mode} {self.status.dataset}'
+        assert Proj.debug and self.status.dataset == 'train' , \
+            f'debug_mode is not enabled or dataset is not train : {Proj.debug} {self.status.dataset}'
+        if not Proj.debug['tsboard_grad_histogram']:
+            return
         step = self.step_index(step_type)
         [self.writer.add_histogram(f'04.ModelGradients/Histogram/{name}' , param.grad , step) for name , param in self.named_parameters() if param.grad is not None]
 
@@ -321,9 +335,11 @@ class SummaryWriter(BaseCallBack):
                 self.add_hidden_correlation(hidden_correlations , step_type)
 
     def on_before_clip_gradients(self):
-        if Proj.debug_mode and self.batch_idx % self.DEBUG_STEP == 0:
+        if Proj.debug and self.batch_idx % self.DEBUG_STEP == 0:
             self.add_weight_histogram('batch')
             self.add_grad_histogram('batch')
+            self.add_weight_norm('batch')
+            self.add_grad_norm('batch')
 
     def on_train_epoch_start(self):
         self.add_lr('epoch')
