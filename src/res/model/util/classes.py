@@ -1234,7 +1234,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         if len(na_label_dates) == 0:
             return pred_df
         new_df = self.data.y_label(na_label_dates).rename(columns = {'label' : 'new_label'})
-        pred_df = pred_df.drop(columns = ['label']).merge(new_df , on = ['secid' , 'date'] , how = 'left')
+        pred_df = pred_df.merge(new_df , on = ['secid' , 'date'] , how = 'left')
         pred_df['label'] = pred_df['label'].where(pred_df['label'].notna(), pred_df['new_label'])
         if try_rewrite and 'path' in pred_df.columns:
             for path in pred_df['path'].unique():
