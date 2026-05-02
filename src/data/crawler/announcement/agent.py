@@ -16,7 +16,7 @@ from src.proj.util.proxy.caller import ProxyCallerList
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
 
 from .fetcher import FetcherTask , EXCHANGE_URLS
-from .async_race import AsyncProxyRaceExecutor , _ASYNC_LOG_VB_LEVEL
+from .async_race import AsyncProxyRaceExecutor
 
 __all__ = ["AnnouncementAgent"]
 
@@ -192,12 +192,12 @@ class AnnouncementAgent:
                 task.persist_payload(payload)
                 winner_attempt = ex_result.get("winner_attempt", {}).get(task.title)
                 task.exporter.cleanup_temp_attempts(task_key)
-                Logger.success(
+                executor.log(
                     f"[crawler-task-finished] task={task.title} persisted_rows={len(payload)} winner={winner_attempt}",
-                    indent=indent, vb_level=_ASYNC_LOG_VB_LEVEL,
+                    type='success'
                 )
             if ex_result["errors"]:
-                Logger.alert1(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks", indent=indent, vb_level=_ASYNC_LOG_VB_LEVEL)
+                executor.log(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks", type='alert')
             return ex_result["ok"]
 
         exchange_results = await asyncio.gather(*[
