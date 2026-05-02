@@ -120,8 +120,9 @@ class Logger:
             - Timer: Timer class for timing the code, show the time in the best way
             - Profiler: Profiler class for profiling the code, show the profile result in the best way
     """
-    _instance : 'Logger | Any' = None
+    _instance : Logger | Any = None
     _conclusions : dict[LOG_LEVEL_TYPE , list[str]] = {level : [] for level in LOG_LEVELS}
+    _displayer = Display()
 
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
@@ -427,7 +428,7 @@ class Logger:
         if caption is not None:
             cls.caption(caption , vb_level = vb_level)
         with Proj.vb.WithVbLevel(vb_level):
-            Display(obj , **kwargs)
+            cls._displayer(obj , **kwargs)
 
     @classmethod
     def set_display_callbacks(cls , callbacks_before : list[Callable] | None = None, callbacks_after : list[Callable] | None = None):
@@ -439,14 +440,14 @@ class Logger:
                 before the display, the callback_before will be called
                 after the display, the callback_after will be called
         """
-        Display.set_callbacks(callbacks_before , callbacks_after)
+        cls._displayer.set_callbacks(callbacks_before , callbacks_after)
 
     @classmethod
     def reset_display_callbacks(cls):
         """
         reset the callbacks before and after the display
         """
-        Display.reset_callbacks()
+        cls._displayer.reset_callbacks()
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""

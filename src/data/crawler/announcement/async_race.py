@@ -2,15 +2,24 @@
 Async scheduler for normal mode + race mode over a shared proxy pool.
 """
 import asyncio
-from typing import Any
+from typing import Any , Literal
 from src.proj import Logger, Proj
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
 
 from .fetcher import FetcherTask
 from .util import Announcement
 
-_ASYNC_LOG_VB_LEVEL = 'always' if Proj.debug['show_asyncio_info'] else 'never'
-
+def _async_log(*msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 'stdout'):
+    match type:
+        case 'success':
+            printer = Logger.success
+        case 'alert':
+            printer = Logger.alert1
+        case 'note':
+            printer = Logger.note
+        case 'stdout' | _:
+            printer = Logger.stdout
+    printer(*msgs, indent = 1, vb_level='always' if Proj.debug['show_asyncio_info'] else 'never')
 class AsyncProxyRaceExecutor:
     """Async scheduler for normal mode + race mode over a shared proxy pool."""
     def __init__(
@@ -45,15 +54,9 @@ class AsyncProxyRaceExecutor:
             # Save temp payload only for successful download attempts.
             if isinstance(value, list):
                 task.exporter.save_temp_attempt(task_key, attempt_id, value)
-                Logger.stdout(
-                    f"[race-attempt] saved success attempt={attempt_id} task={task.title} rows={len(value)}",
-                    vb_level=_ASYNC_LOG_VB_LEVEL,
-                )
+                _async_log(f"[race-attempt] saved success attempt={attempt_id} task={task.title} rows={len(value)}")
             else:
-                Logger.stdout(
-                    f"[race-attempt] no temp saved attempt={attempt_id} task={task.title} type={type(value)}",
-                    vb_level=_ASYNC_LOG_VB_LEVEL,
-                )
+                _async_log(f"[race-attempt] no temp saved attempt={attempt_id} task={task.title} type={type(value)}")
             if self._is_success(value):
                 await self._release_proxy(proxy_stats, True, counted=True)
                 return {"ok": True, "payload": value, "proxy": proxy, "attempt_id": attempt_id}
@@ -156,11 +159,11 @@ class AsyncProxyRaceExecutor:
                     task = task_map[title]
                     task_key = f"{task.start}_{task.end}_{task.exchange}"
                     task.exporter.cleanup_temp_attempts(task_key, keep_attempt_id=winner_attempt[title])
-                    Logger.success(
+                    _async_log(
                         f"[race-winner] task={title} winner={winner_attempt[title]} "
                         f"rows={len(ret['payload']) if isinstance(ret.get('payload'), list) else 'NA'} "
                         f"cancelled_replicas={cancel_count}" ,
-                        vb_level=_ASYNC_LOG_VB_LEVEL,
+                        type='success'
                     )
                 elif title not in errors:
                     errors[title] = ret.get("error") or RuntimeError("Unknown fetch error")
@@ -169,13 +172,7 @@ class AsyncProxyRaceExecutor:
                         task = task_map[title]
                         task_key = f"{task.start}_{task.end}_{task.exchange}"
                         task.exporter.cleanup_temp_attempts(task_key, keep_attempt_id=None)
-                        Logger.alert1(
-                            f"[race-failed] task={title} exhausted without winner" ,
-                            vb_level=_ASYNC_LOG_VB_LEVEL,
-                        )
+                        _async_log(f"[race-failed] task={title} exhausted without winner" , type='alert')
         ok = len(done_titles) == len(pending)
-        Logger.note(
-            f"[race-summary] task={title} total_tasks={len(pending)} success={len(done_titles)} failed={len(errors)}",
-            vb_level=_ASYNC_LOG_VB_LEVEL,
-        )
+        _async_log(f"[race-summary] task={title} total_tasks={len(pending)} success={len(done_titles)} failed={len(errors)}",type='note')
         return {"ok": ok, "results": results, "errors": errors, "winner_attempt": winner_attempt}

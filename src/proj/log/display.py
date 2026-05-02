@@ -3,29 +3,23 @@
 import pandas as pd
 from matplotlib.figure import Figure
 from IPython.display import display as raw_display
-from typing import Any , Callable
+from typing import Callable
 
 __all__ = ['Display']
 
 class Display:
-    """Display the object in the best way , vb_level can be set to control display"""
-    _instance = None
+    """Display the object in the best way"""
     _callbacks_before : list[Callable] = []
     _callbacks_after : list[Callable] = []
-    def __new__(cls , *args, **kwargs):
-        """only one instance of the display will be created"""
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
-    def __init__(self , obj = None , vb_level : Any = 1 , **kwargs):
+    def __init__(self , obj = None , **kwargs):
         """
         display the object if it is not None in the constructor
         example:
             Display(obj) # will create (or use the existing instance) a new instance of the display and also display the object
         """
         if obj is not None:
-            self(obj , vb_level = vb_level , **kwargs)
+            self(obj , **kwargs)
 
     def __call__(self , obj , **kwargs):
         """
