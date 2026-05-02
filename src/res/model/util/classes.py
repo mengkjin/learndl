@@ -1009,15 +1009,13 @@ class PredRecorder(ModelStreamLineWithTrainer):
 
     def update_missing_pred_dates(self , required_dates : np.ndarray | list[int] , existing_dates : np.ndarray | list[int] | None = None):
         """log missing prediction dates in records folder"""
-        if not isinstance(required_dates , list):
-            missing_dates = required_dates.tolist()
-        
         existing_missing_dates = self.get_missing_pred_dates()
-        missing_dates = np.union1d(missing_dates , existing_missing_dates)
+        missing_dates = np.union1d(required_dates , existing_missing_dates)
         if existing_dates is not None:
             missing_dates = np.setdiff1d(missing_dates , existing_dates)
 
-        PATH.dump_json({'missing_dates' : missing_dates} , self.folder_records.joinpath('missing_pred_dates.json') , overwrite = True)
+        PATH.dump_json({'missing_dates' : missing_dates.tolist()} , 
+                       self.folder_records.joinpath('missing_pred_dates.json') , overwrite = True)
 
     def get_missing_pred_dates(self) -> np.ndarray:
         """get missing prediction dates from records folder"""
