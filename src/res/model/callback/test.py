@@ -48,11 +48,9 @@ class BasicTestResult(BaseCallBack):
         if self.config.is_resuming and not (df := DB.load_df(self.path_test_df).dropna()).empty:
             test_dfs.append(df)
         df = pd.concat(test_dfs) if test_dfs else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
-        print(df.tail())
+
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
-        print(f'target_dates: {target_dates}')
-        print(f'y_date: {self.trainer.data.y_date}')
-        preds = self.trainer.record.get_preds(target_dates , recalculate_label = True)
+        preds = self.trainer.record.get_preds(target_dates , recalculate_label = True).dropna()
 
         grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
         def df_ic(subdf : pd.DataFrame , **kwargs):

@@ -355,9 +355,7 @@ class BaseDataModule(ABC):
         return pd.concat(labels)
 
     def label_of_date(self , date : int) -> np.ndarray:
-        label = self.labels[:,self.datas.y.date == date][...,0].squeeze().cpu().numpy()
-        print(f'label shape at date {date}: {label.shape}')
-        return label
+        return self.labels[:,self.datas.y.date == date][...,0].squeeze().cpu().numpy()
     @dataclass
     class LoaderParam:
         stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None

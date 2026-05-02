@@ -29,7 +29,6 @@ from src.data.crawler.announcement.fetcher import FetcherTask
 @ScriptTool("test_announcement_async_minimal")
 def main(date: int = 20260331, **kwargs):
     pool = ProxyAPI.get_proxy_pool('https://www.bse.cn', go_with_cached_proxies=False)
-    print(pool.proxies)
     asyncio.run(_main_async(date=date, pool=pool))
 
 
