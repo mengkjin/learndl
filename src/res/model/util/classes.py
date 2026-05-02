@@ -356,6 +356,7 @@ class BaseDataModule(ABC):
 
     def label_of_date(self , date : int) -> np.ndarray:
         return self.labels[:,self.datas.y.date == date][...,0].squeeze().cpu().numpy()
+
     @dataclass
     class LoaderParam:
         stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
@@ -947,11 +948,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
         
         DB.save_df(df , path , overwrite = True , vb_level = 'max')
-        existing_dates = df['date'].unique()
-        new_missing_dates = CALENDAR.range(min_pred_date , max_pred_date , 'td')
-        old_missing_dates = self.get_missing_pred_dates()
-        missing_dates = np.setdiff1d(np.union1d(new_missing_dates , old_missing_dates) , existing_dates)
-        self.reset_missing_pred_dates(missing_dates)
+        self.update_missing_pred_dates(CALENDAR.range(min_pred_date , max_pred_date , 'td') , df['date'].unique())
 
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
@@ -1010,19 +1007,18 @@ class PredRecorder(ModelStreamLineWithTrainer):
         return pd.DataFrame([[path , *path.name.split('.')[:3]] for path in self.folder_avg_preds.glob('*.feather')], columns = ['path' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
             astype({'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
 
-    def reset_missing_pred_dates(self , missing_dates : np.ndarray | list[int]):
+    def update_missing_pred_dates(self , required_dates : np.ndarray | list[int] , existing_dates : np.ndarray | list[int] | None = None):
         """log missing prediction dates in records folder"""
-        if not isinstance(missing_dates , list):
-            missing_dates = missing_dates.tolist()
+        if not isinstance(required_dates , list):
+            missing_dates = required_dates.tolist()
+        
+        existing_missing_dates = self.get_missing_pred_dates()
+        missing_dates = np.union1d(missing_dates , existing_missing_dates)
+        if existing_dates is not None:
+            missing_dates = np.setdiff1d(missing_dates , existing_dates)
+
         PATH.dump_json({'missing_dates' : missing_dates} , self.folder_records.joinpath('missing_pred_dates.json') , overwrite = True)
 
-    def update_missing_pred_dates(self , missing_dates : np.ndarray | list[int]):
-        """log missing prediction dates in records folder"""
-        if not isinstance(missing_dates , list):
-            missing_dates = missing_dates.tolist()
-        existing_missing_dates = self.get_missing_pred_dates()
-        self.reset_missing_pred_dates(np.union1d(missing_dates , existing_missing_dates))
-       
     def get_missing_pred_dates(self) -> np.ndarray:
         """get missing prediction dates from records folder"""
         try:
@@ -1182,7 +1178,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def collect_avg_preds(self):
         self.save_avg_preds(self.model_date)
         
-    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False , recalculate_label : bool = False) -> pd.DataFrame:
+    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         if len(pred_dates) == 0:
             return self.empty_preds()
@@ -1195,15 +1191,14 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min()')
                 closest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
                 pred_records = pred_records.query('max_pred_date == @closest_pred_date')
-                df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
+                df = DB.load_df({path:path for path in pred_records['path']} , key_column = 'path')
             else:
                 df = self.empty_preds()
         else:
-            df = DB.load_df(pred_records['path'].tolist() , key_column = None).query('date in @pred_dates')
-            missing_dates = np.setdiff1d(pred_dates , df['date'].unique())
-            self.update_missing_pred_dates(missing_dates)
-        if recalculate_label:
-            df = df.drop(columns = ['label']).merge(self.data.y_label(df['date'].unique()) , on = ['secid' , 'date'] , how = 'left')
+            df = DB.load_df({path:path for path in pred_records['path']} , key_column = 'path')
+            self.update_missing_pred_dates(pred_dates , df['date'].unique())
+        df = self.try_fill_na_label(df , try_rewrite = True).drop(columns = ['path'] , errors = 'ignore')
+        df = df.query('date in @pred_dates').reset_index(drop = True)
         return df
 
     def get_avg_preds(self , pred_dates : np.ndarray , closest : bool = False) -> pd.DataFrame:
@@ -1224,14 +1219,32 @@ class PredRecorder(ModelStreamLineWithTrainer):
                     avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
                     closest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
                     avg_pred_records = avg_pred_records.query('max_pred_date == @closest_avg_pred_date')
-                    df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
-                    df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
+                    df = DB.load_df({path:path for path in avg_pred_records['path']} , key_column = 'path')
                 else:
                     df = self.empty_preds()
         else:
-            df = DB.load_df(avg_pred_records['path'].tolist() , key_column = None)
-            df = df.query('date in @pred_dates') if not df.empty else self.empty_preds()
+            df = DB.load_df({path:path for path in avg_pred_records['path']} , key_column = 'path')
+        df = self.try_fill_na_label(df , try_rewrite = True).drop(columns = ['path'] , errors = 'ignore')
+        df = df.query('date in @pred_dates').reset_index(drop = True)
         return df
+
+    def try_fill_na_label(self , pred_df : pd.DataFrame , try_rewrite : bool = True) -> pd.DataFrame:
+        if pred_df.empty:
+            return pred_df
+        new_df = pred_df.assign(na_label = pred_df['label'].isna()).groupby('date')['na_label'].all().reset_index()
+        na_label_dates = new_df.query('na_label == True')['date'].unique()
+        if len(na_label_dates) == 0:
+            return pred_df
+        new_df = self.data.y_label(na_label_dates).rename(columns = {'label' : 'new_label'})
+        pred_df = pred_df.drop(columns = ['label']).merge(new_df , on = ['secid' , 'date'] , how = 'left')
+        pred_df['label'] = pred_df['label'].where(pred_df['label'].notna(), pred_df['new_label'])
+        if try_rewrite and 'path' in pred_df.columns:
+            for path in pred_df['path'].unique():
+                subdf = pred_df.query('path == @path').drop(columns = ['path']).reset_index(drop = True)
+                if not subdf.empty and subdf['new_label'].notna().any():
+                    Logger.stdout(f'{self.__class__.__name__} : rewriting na label for {path}' , vb_level = 2)
+                    DB.save_df(subdf.drop(columns = ['new_label']) , path , overwrite = True)
+        return pred_df.drop(columns = ['new_label']).reset_index(drop = True)
 
     def on_fit_model_end(self):
         self.append_retrained_model()
