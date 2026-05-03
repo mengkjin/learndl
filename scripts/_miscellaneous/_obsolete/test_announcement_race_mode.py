@@ -12,7 +12,7 @@ from src.proj.util import ScriptTool
 from src.data.crawler.announcement.agent import AnnouncementAgent
 
 @ScriptTool("test_announcement_race_mode")
-def main():
+def main(**kwargs):
     Proj.debug.start()
     AnnouncementAgent.update_all('update')
 
