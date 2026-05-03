@@ -7,7 +7,6 @@ import time
 
 from datetime import datetime , timedelta
 from typing import Iterable , Literal , Any
-from concurrent.futures import ThreadPoolExecutor , as_completed
 
 from src.proj.log import Logger
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
@@ -186,15 +185,11 @@ class ProxyStatsSetURL(ProxyStatsSet):
             Logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
 
     @classmethod
-    def from_urls(cls, urls: list[str] | str , * , max_workers: int = 10, **kwargs):
+    def from_urls(cls, urls: list[str] | str , **kwargs):
+        """Create a ProxyStatsSetURL for each url , do not use threading to create, or some proxy finder will be blocked"""
         if isinstance(urls, str):
             urls = [urls]
-        if len(urls) <= 1:
-            return {url: cls(url, **kwargs) for url in urls}
-        else:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {executor.submit(cls, url=url , **kwargs):url for url in urls}
-                return {futures[future]:future.result() for future in as_completed(futures)}
+        return {url: cls(url, **kwargs) for url in urls}
 
 class ProxyPool:
     """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""

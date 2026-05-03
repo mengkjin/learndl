@@ -73,7 +73,7 @@ class AsyncProxyRaceExecutor:
     async def run_exchange_tasks(self, tasks: list[FetcherTask], *, workers: int = 10) -> dict[str, Any]:
         if not tasks:
             return {"ok": True, "results": {}, "errors": {}}
-        pending = [task for task in tasks if not task.should_be_skipped]
+        pending = [task for task in tasks]
         if not pending:
             return {"ok": True, "results": {}, "errors": {}}
         inflight_by_task: dict[str, set[asyncio.Task]] = {task.title: set() for task in pending}
