@@ -35,7 +35,6 @@ ENTRY_POINT = Path(sys.argv[0]).stem
 WithVbLevel = Proj.vb.WithVbLevel
 WithVB = Proj.vb.WithVB
 verbose = Proj.verbose
-show_vb_level = Proj.debug['show_vb_level']
 
 def find_calling_module():
     """Find the calling module"""
@@ -60,7 +59,7 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_f
         sep , end , file , flush: same as stdout
     """
     with WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if show_vb_level else args
+        args = [f'{vb_level}' , *args] if Proj.debug['show_vb_level'] else args
         fstr = stdout(*args , indent = indent , color = color , write = verbose(vb_level), **kwargs)
     if to_log_file:
         add_to_log_file(fstr.unformatted())
@@ -73,7 +72,7 @@ def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs
     kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
     with WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if show_vb_level else args
+        args = [f'{vb_level}' , *args] if Proj.debug['show_vb_level'] else args
         fstr = stderr(*args , indent = indent , color = color , write = verbose(vb_level), **kwargs)
     add_to_log_file(fstr.unformatted())
     return fstr

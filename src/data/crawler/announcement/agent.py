@@ -54,16 +54,16 @@ class AnnouncementAgent:
     @classmethod
     def update_all(
         cls , update_type : Literal['recalc' , 'update' , 'rollback'] , * , 
-        indent : int = 1 , vb_level : Any = 1 , workers: int = 10, **kwargs
+        indent : int = 1 , vb_level : Any = 1 , workers: int = 10, redownload: bool = False, **kwargs
     ):
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             raise ValueError(f'Recalculate all is not supported for {cls.__name__}')
         elif update_type == 'update':
-            start , end , redownload = int(cls.START_DATE) , int(CALENDAR.update_to()) , False
+            start , end , redownload = int(cls.START_DATE) , int(CALENDAR.update_to()) , False or redownload
         elif update_type == 'rollback':
             rollback_date = CALENDAR.td(cls._rollback_date)
-            start , end , redownload = int(rollback_date) , int(CALENDAR.update_to()) , True
+            start , end , redownload = int(rollback_date) , int(CALENDAR.update_to()) , True or redownload
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         

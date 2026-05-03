@@ -277,7 +277,7 @@ class AnnouncementExporter:
         df["_attempt_error"] = ""
         path = self.temp_attempt_path(task_key, attempt_id)
         with PathLock.get(path):
-            DB.save_df(df, path, empty_ok=True)
+            DB.save_df(df, path, empty_ok=True , vb_level= 'always' if Proj.debug['show_asyncio_info'] else 'never')
         return path
 
     def load_temp_attempt(self, task_key: str, attempt_id: str) -> pd.DataFrame:

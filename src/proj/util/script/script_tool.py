@@ -96,17 +96,24 @@ class ScriptTool:
 
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
-        if self.source_mode == 'api':
-            from src.api.contract import filter_kwargs_explicit_only
-            sig = inspect.signature(func)
-            @wraps(func)
-            def _api_explicit_target(*args: Any , **kwargs: Any) -> Any:
-                """Strip ``email`` / ``task_id`` / etc. so ``AutoRunTask`` metadata never reaches API callables."""
-                return func(*args , **filter_kwargs_explicit_only(sig , kwargs))
+        # if self.source_mode == 'api':
+        #     from src.api.contract import filter_kwargs_explicit_only
+        #     sig = inspect.signature(func)
+        #     @wraps(func)
+        #     def _api_explicit_target(*args: Any , **kwargs: Any) -> Any:
+        #         """Strip ``email`` / ``task_id`` / etc. so ``AutoRunTask`` metadata never reaches API callables."""
+        #         return func(*args , **filter_kwargs_explicit_only(sig , kwargs))
 
-            inner = _api_explicit_target
-        else:
-            inner = func
+        #     inner = _api_explicit_target
+        # else:
+        #     inner = func
+
+        from src.api.contract import filter_kwargs_explicit_only
+        sig = inspect.signature(func)
+        @wraps(func)
+        def inner(*args: Any , **kwargs: Any) -> Any:
+            """Strip ``email`` / ``task_id`` / etc. so ``AutoRunTask`` metadata never reaches API callables."""
+            return func(*args , **filter_kwargs_explicit_only(sig , kwargs))
 
         @wraps(func)
         def wrapper(*args , **kwargs):

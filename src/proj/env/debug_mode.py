@@ -14,6 +14,7 @@ class DebugMode:
     def __init__(self):
         self.debug = MACHINE.config.get('constant/project' , 'debug_mode' , default = False)
         self.contents = defaultdict(bool)
+        self.contents.update(MACHINE.config.get('constant/preference/debug' , default = {}))
 
     def __bool__(self):
         return self.debug
