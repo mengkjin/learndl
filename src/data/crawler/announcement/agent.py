@@ -17,6 +17,7 @@ from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
 
 from .fetcher import FetcherTask , EXCHANGE_URLS
 from .async_race import AsyncProxyRaceExecutor
+from .util import fetch_log
 
 __all__ = ["AnnouncementAgent"]
 
@@ -186,7 +187,7 @@ class AnnouncementAgent:
                 max_replicas_per_task=max_replicas_per_task,
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
             )
-            executor.log(f"[async-race] Running {exchange} with {len(ex_tasks)} tasks and {workers} workers", type='stdout')
+            fetch_log(f"[async-race] Running {exchange} with {len(ex_tasks)} tasks and {workers} workers", type='stdout')
             ex_result = await executor.run_exchange_tasks(ex_tasks, workers=min(max(1, workers), 50))
             for task in ex_tasks:
                 payload = ex_result["results"].get(task.title)
@@ -196,12 +197,12 @@ class AnnouncementAgent:
                 task.persist_payload(payload)
                 winner_attempt = ex_result.get("winner_attempt", {}).get(task.title)
                 task.exporter.cleanup_temp_attempts(task_key)
-                executor.log(
+                fetch_log(
                     f"[crawler-task-finished] task={task.title} persisted_rows={len(payload)} winner={winner_attempt}",
                     type='success'
                 )
             if ex_result["errors"]:
-                executor.log(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks", type='alert')
+                fetch_log(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks", type='alert')
             return ex_result["ok"]
 
         exchange_results = await asyncio.gather(*[

@@ -18,7 +18,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import TypeVar
 
-from src.proj import CALENDAR , DB , Logger
+from src.proj import CALENDAR , DB , Logger , Proj
 
 BJTZ = ZoneInfo("Asia/Shanghai")
 
@@ -41,6 +41,18 @@ def parse_jsonp(text: str) -> object:
         Logger.error(f"Response is not JSONP format: {text}")
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
+
+def fetch_log(*msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 'stdout'):
+    match type:
+        case 'success':
+            printer = Logger.success
+        case 'alert':
+            printer = Logger.alert1
+        case 'note':
+            printer = Logger.note
+        case 'stdout' | _:
+            printer = Logger.stdout
+    printer(*msgs, indent = 1, vb_level='always' if Proj.debug['show_asyncio_info'] else 'never')
 
 @dataclass
 class Announcement:

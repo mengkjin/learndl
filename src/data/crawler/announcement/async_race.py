@@ -2,12 +2,11 @@
 Async scheduler for normal mode + race mode over a shared proxy pool.
 """
 import asyncio
-from typing import Any , Literal
-from src.proj import Logger, Proj
+from typing import Any
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
 
 from .fetcher import FetcherTask
-from .util import Announcement
+from .util import Announcement, fetch_log
 
 class AsyncProxyRaceExecutor:
     """Async scheduler for normal mode + race mode over a shared proxy pool."""
@@ -35,18 +34,6 @@ class AsyncProxyRaceExecutor:
     def _is_success(self, value: Any) -> bool:
         return isinstance(value, list)
 
-    def log(self, *msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 'stdout'):
-        match type:
-            case 'success':
-                printer = Logger.success
-            case 'alert':
-                printer = Logger.alert1
-            case 'note':
-                printer = Logger.note
-            case 'stdout' | _:
-                printer = Logger.stdout
-        printer(*msgs, indent = 1, vb_level='always' if Proj.debug['show_asyncio_info'] else 'always')
-
     async def _run_replica(self, task: FetcherTask, proxy_stats: ProxyStats, attempt_id: str):
         proxy = proxy_stats.url
         task_key = f"{task.start}_{task.end}_{task.exchange}"
@@ -55,9 +42,9 @@ class AsyncProxyRaceExecutor:
             # Save temp payload only for successful download attempts.
             if isinstance(value, list):
                 task.exporter.save_temp_attempt(task_key, attempt_id, value)
-                self.log(f"[race-attempt] saved success attempt={attempt_id} task={task.title} rows={len(value)}")
+                fetch_log(f"[race-attempt] saved success attempt={attempt_id} task={task.title} rows={len(value)}")
             else:
-                self.log(f"[race-attempt] no temp saved attempt={attempt_id} task={task.title} type={type(value)}")
+                fetch_log(f"[race-attempt] no temp saved attempt={attempt_id} task={task.title} type={type(value)}")
             if self._is_success(value):
                 await self._release_proxy(proxy_stats, True, counted=True)
                 return {"ok": True, "payload": value, "proxy": proxy, "attempt_id": attempt_id}
@@ -97,7 +84,7 @@ class AsyncProxyRaceExecutor:
         done_titles: set[str] = set()
         attempt_idx: dict[str, int] = {task.title: 0 for task in pending}
         max_workers = max(1, workers)
-        self.log(f"[race-run-exchange-tasks] max_workers={max_workers} max_total_inflight_per_exchange={self.max_total_inflight_per_exchange}", type='stdout')
+        fetch_log(f"[race-run-exchange-tasks] max_workers={max_workers} max_total_inflight_per_exchange={self.max_total_inflight_per_exchange}", type='stdout')
 
         def remaining_titles() -> list[str]:
             return [task.title for task in pending if task.title not in done_titles]
@@ -106,7 +93,7 @@ class AsyncProxyRaceExecutor:
             nonlocal pending
             total_inflight = sum(len(v) for v in inflight_by_task.values())
             cap = min(max_workers, self.max_total_inflight_per_exchange)
-            self.log(f"[race-fill-slots] total_inflight={total_inflight} cap={cap}", type='stdout')
+            fetch_log(f"[race-fill-slots] total_inflight={total_inflight} cap={cap}", type='stdout')
             while total_inflight < cap:
                 remaining = remaining_titles()
                 if not remaining:
@@ -162,7 +149,7 @@ class AsyncProxyRaceExecutor:
                     task = task_map[title]
                     task_key = f"{task.start}_{task.end}_{task.exchange}"
                     task.exporter.cleanup_temp_attempts(task_key, keep_attempt_id=winner_attempt[title])
-                    self.log(
+                    fetch_log(
                         f"[race-winner] task={title} winner={winner_attempt[title]} "
                         f"rows={len(ret['payload']) if isinstance(ret.get('payload'), list) else 'NA'} "
                         f"cancelled_replicas={cancel_count}" ,
@@ -175,7 +162,7 @@ class AsyncProxyRaceExecutor:
                         task = task_map[title]
                         task_key = f"{task.start}_{task.end}_{task.exchange}"
                         task.exporter.cleanup_temp_attempts(task_key, keep_attempt_id=None)
-                        self.log(f"[race-failed] task={title} exhausted without winner" , type='alert')
+                        fetch_log(f"[race-failed] task={title} exhausted without winner" , type='alert')
         ok = len(done_titles) == len(pending)
-        self.log(f"[race-summary] task={title} total_tasks={len(pending)} success={len(done_titles)} failed={len(errors)}",type='note')
+        fetch_log(f"[race-summary] task={title} total_tasks={len(pending)} success={len(done_titles)} failed={len(errors)}",type='note')
         return {"ok": ok, "results": results, "errors": errors, "winner_attempt": winner_attempt}

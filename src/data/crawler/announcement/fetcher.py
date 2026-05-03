@@ -28,7 +28,7 @@ from src.proj.util.web import (
     request_with_timeouterror_async,
 )
 from src.proj.util.error_handler import ErrorHandler
-from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter
+from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter , fetch_log
 
 EXCHANGES : list[str] = ['sse', 'szse', 'bse']
 EXCHANGE_URLS = {
@@ -101,17 +101,12 @@ class FetcherTask:
 
     async def fetch_payload_async(self, proxy: str | None, *, attempt_id: str | None = None) -> list[Announcement] | Exception:
         try:
-            print(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
-            await asyncio.sleep(random.random() * 3)
-            raise Exception("test error")
+            fetch_log(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
             payload = await self.fetch_date_async(proxy)
-            Logger.stdout(
-                f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}",
-                vb_level=2,
-            )
+            fetch_log(f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}")
             return payload
         except Exception as e:
-            Logger.alert1(f"[async-fetch] failed {self.title} proxy={proxy} attempt={attempt_id} error={e!s}", vb_level=2)
+            fetch_log(f"[async-fetch] failed {self.title} proxy={proxy} attempt={attempt_id} error={e!s}" , type='alert')
             return e
 
     def persist_payload(self, payload: list[Announcement]) -> bool:

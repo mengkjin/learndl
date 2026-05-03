@@ -23,3 +23,9 @@ class DebugMode:
 
     def __getitem__(self , key : str) -> bool:
         return self.debug and self.contents[key]
+    
+    def start(self):
+        self.debug = True
+
+    def stop(self):
+        self.debug = False
