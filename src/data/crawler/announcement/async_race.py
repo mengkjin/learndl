@@ -45,7 +45,7 @@ class AsyncProxyRaceExecutor:
                 printer = Logger.note
             case 'stdout' | _:
                 printer = Logger.stdout
-        printer(*msgs, indent = 1, vb_level='always' if Proj.debug['show_asyncio_info'] else 'never')
+        printer(*msgs, indent = 1, vb_level='always' if Proj.debug['show_asyncio_info'] else 'always')
 
     async def _run_replica(self, task: FetcherTask, proxy_stats: ProxyStats, attempt_id: str):
         proxy = proxy_stats.url
@@ -97,6 +97,7 @@ class AsyncProxyRaceExecutor:
         done_titles: set[str] = set()
         attempt_idx: dict[str, int] = {task.title: 0 for task in pending}
         max_workers = max(1, workers)
+        self.log(f"[race-run-exchange-tasks] max_workers={max_workers} max_total_inflight_per_exchange={self.max_total_inflight_per_exchange}", type='stdout')
 
         def remaining_titles() -> list[str]:
             return [task.title for task in pending if task.title not in done_titles]
@@ -105,6 +106,7 @@ class AsyncProxyRaceExecutor:
             nonlocal pending
             total_inflight = sum(len(v) for v in inflight_by_task.values())
             cap = min(max_workers, self.max_total_inflight_per_exchange)
+            self.log(f"[race-fill-slots] total_inflight={total_inflight} cap={cap}", type='stdout')
             while total_inflight < cap:
                 remaining = remaining_titles()
                 if not remaining:

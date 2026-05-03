@@ -101,7 +101,9 @@ class FetcherTask:
 
     async def fetch_payload_async(self, proxy: str | None, *, attempt_id: str | None = None) -> list[Announcement] | Exception:
         try:
-            Logger.stdout(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}", vb_level=2)
+            print(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
+            await asyncio.sleep(random.random() * 3)
+            raise Exception("test error")
             payload = await self.fetch_date_async(proxy)
             Logger.stdout(
                 f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}",

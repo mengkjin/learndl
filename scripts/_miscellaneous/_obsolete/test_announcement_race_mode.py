@@ -49,8 +49,8 @@ from src.data.crawler.announcement.agent import AnnouncementAgent
 
 @ScriptTool("test_announcement_race_mode")
 def main(
-    start: int = 20260401,
-    end: int = 20260401,
+    start: int = 20260406,
+    end: int = 20260407,
     workers: int = 10,
     race_ratio: float = 1.0,
     min_race_tasks: int = 999,
@@ -72,7 +72,7 @@ def main(
         min_race_tasks=min_race_tasks,
         max_replicas_per_task=max_replicas_per_task,
         max_total_inflight_per_exchange=max_total_inflight_per_exchange,
-        go_with_cached_proxies=False,
+        go_with_cached_proxies=True,
         redownload=False,
     )
     if ok:
