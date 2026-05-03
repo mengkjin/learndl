@@ -54,20 +54,20 @@ class AnnouncementAgent:
     @classmethod
     def update_all(
         cls , update_type : Literal['recalc' , 'update' , 'rollback'] , * , 
-        indent : int = 1 , vb_level : Any = 1 , workers: int = 10, redownload: bool = False, **kwargs
+        indent : int = 1 , vb_level : Any = 1 , workers: int = 10, force_update: int = 0, **kwargs
     ):
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             raise ValueError(f'Recalculate all is not supported for {cls.__name__}')
         elif update_type == 'update':
-            start , end , redownload = int(cls.START_DATE) , int(CALENDAR.update_to()) , False or redownload
+            start , end , redownload = int(cls.START_DATE) , int(CALENDAR.update_to()) , False
         elif update_type == 'rollback':
             rollback_date = CALENDAR.td(cls._rollback_date)
-            start , end , redownload = int(rollback_date) , int(CALENDAR.update_to()) , True or redownload
+            start , end , redownload = int(rollback_date) , int(CALENDAR.update_to()) , True
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         
-        success = cls.run_with_proxy_async(start, end, redownload = redownload , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
+        success = cls.run_with_proxy_async(start, end, redownload = redownload , force_update = force_update , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
         if success:
             Logger.success(f'{cls.__name__} Update at {Dates(end)}' , indent = indent , vb_level = vb_level)
         else:
@@ -104,11 +104,11 @@ class AnnouncementAgent:
 
     @classmethod
     def get_proxy_caller_list(
-        cls , start: int, end: int, step: int = 1, redownload: bool = False , * ,
+        cls , start: int, end: int, step: int = 1, redownload: bool = False , * , force_update: int = 0,
         use_proxy = True , go_with_cached_proxies = False, ignore_proxy_threshold : int = 0 , 
         indent : int = 1 , vb_level : Any = 1
     ) -> ProxyCallerList:
-        tasks = FetcherTask.tasks_flat(start, end, step, redownload)
+        tasks = FetcherTask.tasks_flat(start, end, step, redownload , force_update=force_update)
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
@@ -125,7 +125,7 @@ class AnnouncementAgent:
         return caller_list
 
     @classmethod
-    def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , go_with_cached_proxies: bool = False,
+    def run_with_proxy(cls , start: int, end: int, step: int = 1, redownload: bool = False , * , force_update: int = 0, go_with_cached_proxies: bool = False,
                        workers: int = 10, fallback_to_raw_ip : bool = False , indent : int = 0 , vb_level : Any = 1,
                        use_async: bool = False, race_ratio: float = 0.5, min_race_tasks: int = 2,
                        max_replicas_per_task: int = 5, max_total_inflight_per_exchange: int = 20) -> bool:
@@ -133,7 +133,7 @@ class AnnouncementAgent:
         vb_level = Proj.vb(vb_level)
         if use_async:
             return cls.run_with_proxy_async(
-                start, end, step=step, redownload=redownload,
+                start, end, step=step, redownload=redownload, force_update=force_update,
                 go_with_cached_proxies=go_with_cached_proxies, workers=workers,
                 fallback_to_raw_ip=fallback_to_raw_ip, indent=indent, vb_level=vb_level,
                 race_ratio=race_ratio, min_race_tasks=min_race_tasks,
@@ -141,7 +141,7 @@ class AnnouncementAgent:
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
             )
         caller_list = cls.get_proxy_caller_list(
-            start, end, step, redownload, use_proxy = True, 
+            start, end, step, redownload, force_update=force_update, use_proxy = True, 
             go_with_cached_proxies = go_with_cached_proxies , indent = indent, vb_level = vb_level)
         if caller_list:
             results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 50) , fallback_to_raw_ip=fallback_to_raw_ip)
@@ -157,6 +157,7 @@ class AnnouncementAgent:
         step: int = 1,
         redownload: bool = False,
         *,
+        force_update: int = 0,
         go_with_cached_proxies: bool = False,
         workers: int = 10,
         indent: int = 0,
@@ -167,7 +168,7 @@ class AnnouncementAgent:
         max_total_inflight_per_exchange: int = 20,
     ) -> bool:
         vb_level = Proj.vb(vb_level)
-        tasks = FetcherTask.tasks_flat(start, end, step, redownload)
+        tasks = FetcherTask.tasks_flat(start, end, step, redownload , force_update=force_update)
         if not tasks:
             return True
         grouped_tasks: dict[str, list[FetcherTask]] = defaultdict(list)
@@ -220,6 +221,7 @@ class AnnouncementAgent:
         step: int = 1,
         redownload: bool = False,
         *,
+        force_update: int = 0,
         go_with_cached_proxies: bool = False,
         workers: int = 10,
         fallback_to_raw_ip: bool = False,
@@ -234,7 +236,7 @@ class AnnouncementAgent:
             Logger.alert1("fallback_to_raw_ip is ignored in async mode")
         return asyncio.run(
             cls._run_with_proxy_async(
-                start, end, step=step, redownload=redownload,
+                start, end, step=step, redownload=redownload, force_update=force_update,
                 go_with_cached_proxies=go_with_cached_proxies, workers=workers,
                 indent=indent, vb_level=vb_level, race_ratio=race_ratio, min_race_tasks=min_race_tasks,
                 max_replicas_per_task=max_replicas_per_task,

@@ -170,12 +170,13 @@ class FetcherTask:
         return result
 
     @classmethod
-    def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False) -> list[FetcherTask]:
+    def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False, force_update: int = 0) -> list[FetcherTask]:
         tasks = []
-        for s, e in range_dates(start, end, step):
+        ranges = range_dates(start, end, step)
+        for i , (s, e) in enumerate(ranges):
             for exchange in EXCHANGES:
                 task = FetcherTask(exchange, s, e , redownload)
-                if not task.should_be_skipped:
+                if not task.should_be_skipped or (i >= (len(ranges) - force_update)):
                     tasks.append(task)
         if (len(tasks) >= 100):
             Logger.error(f"Too many tasks in {start}~{end}, be cautious!")

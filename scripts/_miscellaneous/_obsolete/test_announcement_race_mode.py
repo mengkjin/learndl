@@ -14,7 +14,7 @@ from src.data.crawler.announcement.agent import AnnouncementAgent
 @ScriptTool("test_announcement_race_mode")
 def main():
     Proj.debug.start()
-    AnnouncementAgent.update_all('update')
+    AnnouncementAgent.update_all('update', force_update=2)
 
 if __name__ == "__main__":
     main()
