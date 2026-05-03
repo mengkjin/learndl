@@ -949,6 +949,16 @@ class ModelConfig(BaseModelConfig):
         return end_date
 
     @property
+    def manual_deletion_required(self) -> bool:
+        return (
+            not self.short_test
+            and not self.is_resuming
+            and not self.base_path.is_null_model
+            and "fit" in self.queue_of_stages
+            and self.resumable
+        )
+
+    @property
     def queue_of_stages(self) -> list[Literal["data", "fit", "test"]]:
         """stage queue for training"""
         return getattr(self, "_queue_of_stages", [])
@@ -1122,21 +1132,19 @@ class ModelConfig(BaseModelConfig):
                     Logger.note(f"Options include: {candidates_indices}", vb_level=vb_level)
                     value = int(input(f"Which Model to Resume?"))
                     assert value in candidates_indices, (f"value {value} is not in candidates_indices {candidates_indices}")
-
+        
         match value:
             case 0:
-                ...  # don't change the base_path
+                if self.manual_deletion_required:
+                    value = int(np.setdiff1d(np.arange(1, max(candidates_indices) + 1),candidates_indices).min())
+                    self.base_path.with_new_index(value)
+                else:
+                    ...
             case _:
                 assert value > 0, f"value {value} must be greater than 0"
                 self.base_path.with_new_index(value)
 
-        if (
-            not self.short_test
-            and not self.is_resuming
-            and not self.base_path.is_null_model
-            and "fit" in self.queue_of_stages
-            and self.resumable
-        ):
+        if self.manual_deletion_required:
             Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")
             raise Exception(f"{self.base_path} resumable but choose not to resume!")
 

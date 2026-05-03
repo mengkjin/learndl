@@ -51,7 +51,10 @@ class AnnouncementAgent:
         cls._rollback_date = rollback_date
 
     @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , * , indent : int = 1 , vb_level : Any = 1 , workers: int = 3, **kwargs):
+    def update_all(
+        cls , update_type : Literal['recalc' , 'update' , 'rollback'] , * , 
+        indent : int = 1 , vb_level : Any = 1 , workers: int = 10, **kwargs
+    ):
         vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
             raise ValueError(f'Recalculate all is not supported for {cls.__name__}')
@@ -183,6 +186,7 @@ class AnnouncementAgent:
                 max_replicas_per_task=max_replicas_per_task,
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
             )
+            executor.log(f"[async-race] Running {exchange} with {len(ex_tasks)} tasks and {workers} workers", type='stdout')
             ex_result = await executor.run_exchange_tasks(ex_tasks, workers=min(max(1, workers), 50))
             for task in ex_tasks:
                 payload = ex_result["results"].get(task.title)
