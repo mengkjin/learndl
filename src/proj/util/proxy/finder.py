@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup , Tag
 from src.proj.core import Silence
 from src.proj.log import Logger
 from src.proj.env import MACHINE
+from src.proj.util.error_handler import retry_call
 from .core import ProxySet
 
 class BaseProxiesFinder(ABC):
@@ -23,9 +24,13 @@ class BaseProxiesFinder(ABC):
     def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Find proxies from free proxy list."""
         try:
-            return self.find_candidates(level_type=level_type).set_source(self.__class__.__name__)
+            proxies = retry_call(self.find_candidates, kwargs={'level_type': level_type}, attempts=3, base_delay=1.)
+            if isinstance(proxies, Exception):
+                raise proxies
+            proxies = proxies.set_source(self.__class__.__name__)
+            return proxies
         except Exception as e:
-            Logger.alert1(f"[!] Error occurred while finding proxies through {self}: {e}")
+            Logger.alert1(f"[!] Error occurred while finding proxies through {self} level_type={level_type}: {e}")
             return ProxySet()
 
     def __repr__(self) -> str:

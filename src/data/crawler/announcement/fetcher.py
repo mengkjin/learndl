@@ -172,13 +172,14 @@ class FetcherTask:
     @classmethod
     def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False) -> list[FetcherTask]:
         tasks = []
-        for start, end in range_dates(start, end, step):
+        for s, e in range_dates(start, end, step):
             for exchange in EXCHANGES:
-                task = FetcherTask(exchange, start, end , redownload)
+                task = FetcherTask(exchange, s, e , redownload)
                 if not task.should_be_skipped:
                     tasks.append(task)
         if (len(tasks) >= 100):
             Logger.error(f"Too many tasks in {start}~{end}, be cautious!")
+        Logger.stdout(f"Total Announcement Crawling Tasks: {len(tasks)} at {start}~{end} for {len(EXCHANGES)} exchanges")
         return tasks
 
 class AnnoucementFetcher(ABC):
