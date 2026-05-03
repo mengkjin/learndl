@@ -186,10 +186,13 @@ class ProxyStatsSetURL(ProxyStatsSet):
 
     @classmethod
     def from_urls(cls, urls: list[str] | str , **kwargs):
-        """Create a ProxyStatsSetURL for each url , do not use threading to create, or some proxy finder will be blocked"""
+        """
+        Create a ProxyStatsSetURL for each URL in the list.
+        do not use thread pool to create the proxy sets, because some of the proxy finders website will block the ip if too many requests are made.
+        """
         if isinstance(urls, str):
             urls = [urls]
-        return {url: cls(url, **kwargs) for url in urls}
+        return {url: cls(url = url, **kwargs) for url in urls}
 
 class ProxyPool:
     """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""
