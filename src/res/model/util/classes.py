@@ -1050,10 +1050,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
         """
         self.retrained_models.append((self.model_date , self.model_num))
 
-    def purge_retrained_model_preds(self , vb_level : Any = 2):
+    def purge_retrained_model_preds(self , vb_level : Any = 2) -> bool:
         """purge past predictions when trained new models"""
         if not self.retrained_models:
-            return
+            return False
         min_retrained_model_date = min([model_date for model_date , _ in self.retrained_models])
         pred_records = self.pred_records()
         purge_models = pred_records.query('model_date >= @min_retrained_model_date')
@@ -1071,8 +1071,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 self.save_preds(df , model_date , model_num)
                 
             Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
+            return True
         else:
             Logger.stdout(f'{self.__class__.__name__} : No retrained models found, no purge needed' , vb_level = vb_level)
+            return False
 
     def purge_outdated_model_preds(self , vb_level : Any = 2):
         archive_records = self.archive_model_records()
@@ -1082,7 +1084,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
         if df.empty:
             Logger.stdout(f'{self.__class__.__name__} : No outdated predictions found, no purge needed' , vb_level = vb_level)
-            return
+            return False
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
         Logger.display(df , caption = purge_info , vb_level = vb_level)
@@ -1090,9 +1092,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
             df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
             Path(path).unlink()
             self.save_preds(df , model_date , model_num)
+        return True
 
-    def purge_obsolete_model_preds(self , vb_level : Any = 2):
-        """purge obsolete model predictions"""
+    def purge_duplicated_model_preds(self , vb_level : Any = 2) -> bool:
+        """purge duplicated model predictions"""
         
         pred_records = self.pred_records()
         pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
@@ -1102,7 +1105,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         avg_pred_records = avg_pred_records.sort_values(by = ['model_date' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , False , True])
         obsolete_avg_records = avg_pred_records[avg_pred_records.duplicated(subset = ['model_date'])]
         if obsolete_records.empty and obsolete_avg_records.empty:
-            return
+            return False
         purge_info = f'Purged obsolete predictions'
         if not obsolete_records.empty:
             purge_info += f', {len(obsolete_records)} model preds'
@@ -1114,6 +1117,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 Path(path).unlink()
         purge_info += f' deleted!'
         Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
+        return True
 
     def setup_resuming_status(self , vb_level : Any = 2):
         """
@@ -1271,7 +1275,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         self.collect_avg_preds()
 
     def on_test_end(self):
-        self.purge_obsolete_model_preds()
+        self.purge_duplicated_model_preds()
         avg_pred_records = self.avg_pred_records()
         if not avg_pred_records.empty:
             Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 2)
