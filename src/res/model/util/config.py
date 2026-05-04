@@ -1194,6 +1194,7 @@ class ModelConfig(BaseModelConfig):
         info_strs.append((0, "Resuming", f"{self.is_resuming}"))
         if self.is_resuming:
             info_strs.append((1, "Resume Test", f"{Const.Model.resume_test}"))
+            info_strs.append((1, "Resume Test Start", f"{Const.Model.resume_test_start}"))
             info_strs.append((1, "Resume Perf", f"{Const.Model.resume_factor_perf}"))
             info_strs.append((1, "Resume FMP", f"{Const.Model.resume_fmp}"))
             info_strs.append((1, "Resume Account", f"{Const.Model.resume_fmp_account}"))

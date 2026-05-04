@@ -8,6 +8,7 @@ import time
 from datetime import datetime , timedelta
 from typing import Iterable , Literal , Any
 
+from src.proj.env import Proj
 from src.proj.log import Logger
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
 from .verifier import ProxyVerifier
@@ -30,6 +31,7 @@ def get_working_proxies(
         return get_test_proxies()
     Logger.highlight(f'Get working proxies for {target_url}' + (f' with dummy verification' if dummy else '') , vb_level = 0 if detail_level in ['all' , 'simple'] else 'max')
     finder = ProxyFinder()
+    finder_use_cache = True
     for _ in range(2):
         verified_proxies = ProxySet()
         for round in range(max_round + 1):
@@ -40,7 +42,12 @@ def get_working_proxies(
             timer_quick = Logger.Timer(f'{prefix}Quick Verify ({timeout/2:.1f}s) for {ProxyVerifier.QUICK_VERIFY_URL}', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
             timer_final = Logger.Timer(f'{prefix}Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
             with timer_find as timer:
-                cands = ProxyCache.get_cached_proxies('all').extend(start_with) if round == 0 else finder.find()
+                if round == 0:
+                    cands = ProxyCache.get_cached_proxies('all').extend(start_with)
+                else:
+                    # for a url, the first time to find proxies can use cache of other urls, but the next time should not use cache
+                    cands = finder.find(use_cache=finder_use_cache)
+                    finder_use_cache = False
                 timer.add_key_suffix(f', get {len(cands)} new proxies')
             if go_with_cached_proxies and round == 0:
                 return cands
@@ -246,7 +253,7 @@ class ProxyPool:
                     return proxy
 
                 # condition 3: if there are no available proxies, wait until a proxy is available
-                Logger.footnote(f"URL [{url}] is waiting for a proxy")
+                Logger.footnote(f"URL [{url}] is waiting for a proxy" , vb_level = Proj.vb.get('proxy'))
                 self.condition.wait()
 
     def release(self, proxy: ProxyStats, success: bool, counted: bool = True , vb_level: Any = 1) -> None:
@@ -376,7 +383,7 @@ class AsyncProxyPool:
                     return None
                 if proxy := self.proxies[url].pick_one():
                     return proxy
-                Logger.footnote(f"URL [{url}] is waiting for a proxy")
+                Logger.footnote(f"URL [{url}] is waiting for a proxy" , vb_level = Proj.vb.get('proxy'))
                 await self.condition.wait()
 
     async def release_async(self, proxy: ProxyStats, success: bool, *, counted: bool = True , vb_level: Any = 1) -> None:

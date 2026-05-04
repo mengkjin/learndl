@@ -404,14 +404,14 @@ class TrainerHookWrapper:
     @classmethod
     def wrap_single_hook(cls , trainer : BaseTrainer , hook : str):
         def wrapper(*args , **kwargs) -> None:
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.callback)
-            trainer.callback.at_enter(hook , Proj.vb.callback)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.get('callback'))
+            trainer.callback.at_enter(hook , Proj.vb.get('callback'))
             trainer.status.execute_hook(hook)
             getattr(trainer , f'_raw_{hook}')(*args , **kwargs)
             trainer.model.execute_hook(hook)
             trainer.record.execute_hook(hook)
-            trainer.callback.at_exit(hook , Proj.vb.callback)
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.callback)
+            trainer.callback.at_exit(hook , Proj.vb.get('callback'))
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.get('callback'))
         return wrapper
 
 class BaseTrainer(ModelStreamLine):
@@ -491,7 +491,12 @@ class BaseTrainer(ModelStreamLine):
         return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else np.inf
     @property
     def batch_resumed(self): 
-        if self.status.stage == 'test'  and self.batch_warm_up == 0 and self.config.is_resuming and Const.Model.resume_test == 'last_pred_date':
+        if (
+            self.status.stage == 'test' and 
+            self.batch_warm_up == 0 and 
+            self.config.is_resuming and  
+            Const.Model.resume_test and
+            Const.Model.resume_test_start == 'last_pred_date'):
             return sum(self.data.model_test_dates <= self.record.resumed_max_pred_date)
         else:
             return 0
@@ -1143,12 +1148,12 @@ class PredRecorder(ModelStreamLineWithTrainer):
         prev_models = valid_models.query('model_date < @closest_model_date')
         resumed_models = prev_models.query('max_pred_date <= @max_pred_date')[['model_date' , 'model_num']].reset_index(drop=True)
         self.resumed_models = resumed_models
-        if Const.Model.resume_test == 'last_model_date':
+        if Const.Model.resume_test_start == 'last_model_date':
             if not prev_models.empty:
                 max_pred_date = min(max_pred_date , prev_models['max_pred_date'].max())
             self.resumed_max_pred_date = max_pred_date
             self.resume_info = f', recognize past saved preds before model date {self.resumed_models["model_date"].max()} and prediction date {self.resumed_max_pred_date}'
-        elif Const.Model.resume_test == 'last_pred_date':
+        elif Const.Model.resume_test_start == 'last_pred_date':
             self.resumed_max_pred_date = max_pred_date
             self.resume_info = f', recognize past saved preds before prediction date {self.resumed_max_pred_date}'
     

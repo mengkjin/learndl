@@ -22,23 +22,19 @@ class FactorUpdateConfig:
     @property
     def start(self) -> int:
         """start date of factor update"""
-        if not hasattr(self , '_start'):
-            self._start = MACHINE.config.get('constant/default/factor' , 'update/start') if MACHINE.updatable else MACHINE.config.get('constant/default/factor' , 'update/test_start')
-        return self._start
+        return MACHINE.preference('factor' , 'update/start') if MACHINE.updatable else MACHINE.preference('factor' , 'update/test_start')
     @property
     def end(self) -> int:
         """end date of factor update"""
-        if not hasattr(self , '_end'):
-            self._end = MACHINE.config.get('constant/default/factor' , 'update/end') if MACHINE.updatable else MACHINE.config.get('constant/default/factor' , 'update/test_end')
-        return self._end
+        return MACHINE.preference('factor' , 'update/end') if MACHINE.updatable else MACHINE.preference('factor' , 'update/test_end')
     @property
     def step(self) -> int:
         """step of factor update"""
-        return MACHINE.config.get('constant/default/factor' , 'update/step')
+        return MACHINE.preference('factor' , 'update/step')
     @property
     def init_date(self) -> int:
         """uniforminit date of factor update"""
-        return MACHINE.config.get('constant/default/factor' , 'update/init_date')
+        return MACHINE.preference('factor' , 'update/init_date')
     @property
     def target_dates(self) -> np.ndarray:
         """target dates of factor update"""
@@ -292,9 +288,7 @@ class FMPConfig:
     @property
     def creator(self) -> dict[str , dict]:
         """default FMP config"""
-        if not hasattr(self , '_creator'):
-            self._creator = MACHINE.config.get('constant/default/factor' , 'factor_model_portfolio/creator')
-        return self._creator
+        return MACHINE.preference('factor' , 'factor_model_portfolio/creator')
 
 
 @singleton

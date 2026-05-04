@@ -28,7 +28,7 @@ from src.proj.util.web import (
     request_with_timeouterror_async,
 )
 from src.proj.util.error_handler import ErrorHandler
-from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter , fetch_log
+from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter , crawler_log
 
 EXCHANGES : list[str] = ['sse', 'szse', 'bse']
 EXCHANGE_URLS = {
@@ -101,12 +101,12 @@ class FetcherTask:
 
     async def fetch_payload_async(self, proxy: str | None, *, attempt_id: str | None = None) -> list[Announcement] | Exception:
         try:
-            fetch_log(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
+            crawler_log(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
             payload = await self.fetch_date_async(proxy)
-            fetch_log(f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}")
+            crawler_log(f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}")
             return payload
         except Exception as e:
-            fetch_log(f"[async-fetch] failed {self.title} proxy={proxy} attempt={attempt_id} error={e!s}" , type='alert')
+            crawler_log(f"[async-fetch] failed {self.title} proxy={proxy} attempt={attempt_id} error={e!s}" , type='alert')
             return e
 
     def persist_payload(self, payload: list[Announcement]) -> bool:

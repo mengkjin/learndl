@@ -148,9 +148,13 @@ def _machine_name_init() -> str:
         yaml.dump(machine_list, f)
     return name
 
+class _MissingConfElement:
+    """Missing config element"""
+
 class ConfFileLazyLoader:
     """Lazy loader for config files"""
     _root_path : Path
+    _missing_mark : str = 'missing_key'
     def __init__(self, name: str , root_path: Path):
         self._name = name
         self._root_path = root_path
@@ -171,14 +175,23 @@ class ConfFileLazyLoader:
         content = self._get_content(main_key)
         if not sub_key:
             return content
-        for arg in sub_key.split('/'):
-            if isinstance(content, dict):
-                if arg not in content and 'default' in kwargs:
-                    return kwargs['default']
-                content = content[arg]
-            else:
-                raise ValueError(f'{self.name} {content} is not a dict , cannot get {arg} from sub_key {sub_key}')
-        return content
+        if sub_key in content:
+            content = content[sub_key]
+        else:
+            for arg in sub_key.split('/'):
+                if isinstance(content, dict) and arg not in content:
+                    content = _MissingConfElement()
+                    break
+                elif isinstance(content, dict):
+                    content = content[arg]
+                else:
+                    raise ValueError(f'{self.name} {content} is not a dict , cannot get {arg} from sub_key {sub_key}')
+            self._set_content(main_key, sub_key, content)
+        
+        if isinstance(content, _MissingConfElement):
+            return kwargs['default']
+        else:
+            return content
 
     def _get_content(self, key: str) -> dict:
         """Load all ``.yaml`` / ``.json`` files under ``root_path`` into a stem-keyed dict.
@@ -190,12 +203,17 @@ class ConfFileLazyLoader:
             ValueError: If a non-file entry exists under ``root_path``.
             AssertionError: If a file is not YAML or JSON.
         """
-        if key in self._contents:
-            return self._contents[key]
-
-        path = self._root_path.joinpath(*key.split('/'))
-        self._contents[key] = _load_config_file(path)
+        if key not in self._contents:
+            path = self._root_path.joinpath(*key.split('/'))
+            self._contents[key] = _load_config_file(path)
         return self._contents[key]
+
+    def _set_content(self, key: str, sub_key: str , value: Any) -> None:
+        """Set the content of the config file by the main key and sub key"""
+        assert sub_key , 'sub_key cannot be empty'
+        assert key in self._contents, f'{key} does not exist in {self.name}'
+        assert sub_key not in self._contents[key], f'{sub_key} already exists in {key}'
+        self._contents[key][sub_key] = value
 
 class MACHINE:
     """
@@ -276,3 +294,8 @@ class MACHINE:
     def machine_main_path(cls , machine_name : str) -> Path:
         """Get the main path at another machine"""
         return Path(cls.secret.get('machines' , f'{machine_name}/main_path'))
+
+    @classmethod
+    def preference(cls, key: str , sub_key: str | None = None , **kwargs) -> Any:
+        """Get the preference content of the config file by the main key and sub key"""
+        return cls.config.get(f'constant/preference/{key}' , sub_key, **kwargs)

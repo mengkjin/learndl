@@ -42,7 +42,7 @@ def parse_jsonp(text: str) -> object:
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
 
-def fetch_log(*msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 'stdout'):
+def crawler_log(*msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 'stdout'):
     match type:
         case 'success':
             printer = Logger.success
@@ -52,7 +52,7 @@ def fetch_log(*msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 
             printer = Logger.note
         case 'stdout' | _:
             printer = Logger.stdout
-    printer(*msgs, indent = 1, vb_level='always' if Proj.debug['show_asyncio_info'] else 'never')
+    printer(*msgs, indent = 1, vb_level = Proj.vb.get('crawler'))
 
 @dataclass
 class Announcement:
@@ -277,7 +277,7 @@ class AnnouncementExporter:
         df["_attempt_error"] = ""
         path = self.temp_attempt_path(task_key, attempt_id)
         with PathLock.get(path):
-            DB.save_df(df, path, empty_ok=True , vb_level= 'always' if Proj.debug['show_asyncio_info'] else 'never')
+            DB.save_df(df, path, empty_ok=True , vb_level= Proj.vb.get('crawler'))
         return path
 
     def load_temp_attempt(self, task_key: str, attempt_id: str) -> pd.DataFrame:

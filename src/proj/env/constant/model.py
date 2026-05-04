@@ -19,44 +19,39 @@ class ModelConstants:
     """
 
     @property
-    def resume_test(self) -> Literal[False , 'last_model_date' , 'last_pred_date']:
+    def resume_test(self) -> bool:
         """resume option of model train: if resume testing"""
-        if not hasattr(self , '_resume_test'):
-            self._resume_test = MACHINE.config.get('constant/default/model' , 'resuming_options/testing')
-            assert self._resume_test in [False , 'last_model_date' , 'last_pred_date'] , f'Invalid value: {self._resume_test}'
-        return self._resume_test
+        value = MACHINE.preference('model' , 'resuming_options/testing')
+        assert isinstance(value , bool) , f'Invalid value: {value}'
+        return value
 
     @property
     def resume_test_start(self) -> Literal['last_model_date' , 'last_pred_date']:
         """resume option of model train: if resume testing"""
-        if not hasattr(self , '_resume_test_start'):
-            self._resume_test_start = MACHINE.config.get('constant/default/model' , 'resuming_options/testing_start')
-            assert self._resume_test_start in ['last_model_date' , 'last_pred_date'] , f'Invalid value: {self._resume_test_start}'
-        return self._resume_test_start
+        value = MACHINE.preference('model' , 'resuming_options/testing_start')
+        assert value in ['last_model_date' , 'last_pred_date'] , f'Invalid value: {value}'
+        return value
 
     @property
     def resume_fmp(self) -> Literal[False] | str:
         """resume option of model train: if resume test fmp"""
-        if not hasattr(self , '_resume_test_fmp'):
-            self._resume_test_fmp = MACHINE.config.get('constant/default/model' , 'resuming_options/fmp')
-            assert self._resume_test_fmp is False or (isinstance(self._resume_test_fmp , str) and self._resume_test_fmp.startswith('trailing_')) , f'Invalid value: {self._resume_test_fmp}'
-        return self._resume_test_fmp
+        value = MACHINE.preference('model' , 'resuming_options/fmp')
+        assert value is False or (isinstance(value , str) and value.startswith('trailing_')) , f'Invalid value: {value}'
+        return value
 
     @property
     def resume_fmp_account(self) -> bool:
         """Whether to resume FMP account backtests when resuming tests."""
-        if not hasattr(self , '_resume_test_fmp_account'):
-            self._resume_test_fmp_account = MACHINE.config.get('constant/default/model' , 'resuming_options/fmp_account')
-            assert isinstance(self._resume_test_fmp_account , bool) , f'Invalid value: {self._resume_test_fmp_account}'
-        return self._resume_test_fmp_account
+        value = MACHINE.preference('model' , 'resuming_options/fmp_account')
+        assert isinstance(value , bool) , f'Invalid value: {value}'
+        return value
 
     @property
     def resume_factor_perf(self) -> bool:
         """Whether to resume factor performance evaluation when resuming tests."""
-        if not hasattr(self , '_resume_test_factor_perf'):
-            self._resume_test_factor_perf = MACHINE.config.get('constant/default/model' , 'resuming_options/factor_perf')
-            assert isinstance(self._resume_test_factor_perf , bool) , f'Invalid value: {self._resume_test_factor_perf}'
-        return self._resume_test_factor_perf
+        value = MACHINE.preference('model' , 'resuming_options/factor_perf')
+        assert isinstance(value , bool) , f'Invalid value: {value}'
+        return value
 
 
     @property

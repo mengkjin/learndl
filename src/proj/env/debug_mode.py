@@ -1,8 +1,6 @@
 """Debug mode: container of debug mode contents."""
 from __future__ import annotations
 
-from collections import defaultdict
-
 from src.proj.core import singleton
 from .machine import MACHINE
 
@@ -12,9 +10,8 @@ __all__ = ['DebugMode']
 class DebugMode:
     """Context manager: set ``VB.vb_level`` for the block."""
     def __init__(self):
-        self.debug = MACHINE.config.get('constant/project' , 'debug_mode' , default = False)
-        self.contents = defaultdict(bool)
-        self.contents.update(MACHINE.config.get('constant/preference/debug' , default = {}))
+        self.debug : bool = bool(MACHINE.config.get('constant/project' , 'debug_mode' , default = False))
+        self.contents = MACHINE.preference('debug')
 
     def __bool__(self):
         return self.debug

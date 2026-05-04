@@ -1,12 +1,15 @@
 """Scrape public proxy lists (e.g. Zdaye) into ``ProxySet`` instances."""
-
+from __future__ import annotations
 import time
 import random
 from curl_cffi import requests
-from typing import Literal
+from typing import Callable, Any ,Literal
 
 from abc import ABC, abstractmethod
 from bs4 import BeautifulSoup , Tag
+from cachetools import TTLCache
+from cachetools.keys import hashkey
+from threading import RLock
 
 from src.proj.core import Silence
 from src.proj.log import Logger
@@ -14,23 +17,88 @@ from src.proj.env import MACHINE
 from src.proj.util.error_handler import retry_call
 from .core import ProxySet
 
+class ProxiesCache:
+    """Proxy Cache"""
+    @classmethod
+    def _default_condition(cls, value: Any) -> bool:
+        """Default cache condition: not None and not empty container (has __len__ and length > 0)"""
+        if value is None:
+            return False
+        if hasattr(value, '__len__'):
+            return len(value) > 0
+        return True  # objects that are not None and have no length (e.g. int, float) are cached by default
+
+    @classmethod
+    def cached_function(
+        cls,
+        ttl_seconds: int,
+        maxsize: int = 128,
+        condition: Callable[[Any], bool] | None = None,
+    ) -> Callable:
+        """
+        Factory function to create a wrapper function with conditional caching capability for a business function.
+
+        Args:
+            ttl_seconds: Cache item lifespan (seconds)
+            maxsize:     Maximum number of cache entries
+            condition:   Optional function to determine if the result should be cached. Default is to cache all non-None and non-empty containers.
+
+        Returns:
+            A decorator to decorate the target function. The decorated function accepts an additional bool keyword argument
+            `use_cache` (default is False), if set to False, force not to read the cache, but the calculation result
+            will still try to write to the cache (if the condition is met).
+        """
+        cache = TTLCache(maxsize=maxsize, ttl=ttl_seconds)
+        lock = RLock()
+
+        def decorator(func: Callable) -> Callable:
+            def wrapper(decorated_cls , *args, **kwargs) -> Any:
+                # generate cache key (based on all positional and keyword arguments, excluding use_cache)
+                use_cache = kwargs.pop('use_cache', False)
+                key = (decorated_cls , *hashkey(*args, **kwargs))
+
+                # 1. if allowed to use cache and key is in cache, return directly
+                with lock:
+                    if use_cache and key in cache:
+                        return cache[key]
+
+                # 2. call the real function (exceptions are not cached)
+                result = func(decorated_cls, *args, **kwargs)
+
+                # 3. determine if the result should be cached
+                should_cache = condition(result) if condition else cls._default_condition(result)
+
+                # 4. if the condition is met, write to cache (whether the cache read fails or the calculation is forced)
+                if should_cache:
+                    with lock:
+                        cache[key] = result
+
+                return result
+
+            return wrapper
+        return decorator
+
 class BaseProxiesFinder(ABC):
     """Auto discover HTTP proxies from public proxy list."""
+
+    @classmethod
     @abstractmethod
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    def find_candidates(cls , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         raise NotImplementedError
 
-    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    @classmethod
+    @ProxiesCache.cached_function(ttl_seconds=60 , condition=lambda x: len(x) > 0)
+    def find(cls , level_type: Literal["any" , "anonymous"] = "anonymous" , use_cache: bool = False) -> ProxySet:
         """Find proxies from free proxy list."""
         try:
-            proxies = retry_call(self.find_candidates, kwargs={'level_type': level_type}, attempts=3, base_delay=1.)
+            proxies = retry_call(cls.find_candidates, kwargs={'level_type': level_type}, attempts=3, base_delay=1.)
             if isinstance(proxies, Exception):
                 raise proxies
-            proxies = proxies.set_source(self.__class__.__name__)
+            proxies = proxies.set_source(cls.__name__)
             return proxies
         except Exception as e:
-            Logger.alert1(f"[!] Error occurred while finding proxies through {self} level_type={level_type}: {e}")
+            Logger.alert1(f"[!] Error occurred while finding proxies through {cls.__name__} level_type={level_type}: {e}")
             return ProxySet()
 
     def __repr__(self) -> str:
@@ -45,11 +113,12 @@ class ZDAYEFinder(BaseProxiesFinder):
     INTERVAL = 1.2
     last_request_time = 0
 
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    @classmethod
+    def find_candidates(cls , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Get free proxies from Zdaye API"""
         candidates = []
         for protocol in ["https" , "socks5" , "https" , "https"]:
-            candidates += self._get_zdaye_proxies(None, protocol, level_type , silent = True)
+            candidates += cls._get_zdaye_proxies(None, protocol, level_type , silent = True)
         return ProxySet(candidates)
 
     @classmethod
@@ -122,13 +191,15 @@ class FreeProxyListNetFinder(BaseProxiesFinder):
     """Auto discover HTTP proxies from public proxy list."""
     MAIN_PAGE = "https://free-proxy-list.net/"
     LIST_URLS = ["https://free-proxy-list.net/zh-cn/us-proxy.html"]
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+
+    @classmethod
+    def find_candidates(cls , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
-        for url in self.LIST_URLS:
+        for url in cls.LIST_URLS:
             r = requests.get(url)
             r.raise_for_status()
-            candidates = self._parse_proxy_table(r.text , level_type)
+            candidates = cls._parse_proxy_table(r.text , level_type)
         return ProxySet(candidates)
 
     @classmethod
@@ -159,13 +230,14 @@ class FreeProxyListCCFinder(BaseProxiesFinder):
     MAIN_PAGE = "https://freeproxylist.cc/"
     LIST_URLS = ["https://freeproxylist.cc/servers/" , *[f"https://freeproxylist.cc/servers/{i}.html" for i in range(2, 6)]]
 
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    @classmethod
+    def find_candidates(cls , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
-        for url in self.LIST_URLS:
+        for url in cls.LIST_URLS:
             r = requests.get(url)
             r.raise_for_status()
-            candidates += self._parse_proxy_table(r.text , level_type)
+            candidates += cls._parse_proxy_table(r.text , level_type)
         return ProxySet(candidates)
 
     @classmethod
@@ -196,14 +268,15 @@ class FreeProxyWorldFinder(BaseProxiesFinder):
     MAIN_PAGE = "freeproxy.world"
     FORMAT_URL = "freeproxy.world/?type={protocol}&anonymity={anonymity_level}&country=&speed=1000&port="
 
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    @classmethod
+    def find_candidates(cls , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
         for protocol in ['https' , 'socks5']:
-            url = self.FORMAT_URL.format(protocol = protocol , anonymity_level = 4 if level_type == "anonymous" else '')
+            url = cls.FORMAT_URL.format(protocol = protocol , anonymity_level = 4 if level_type == "anonymous" else '')
             r = requests.get(url)
             r.raise_for_status()
-            candidates += self._parse_proxy_table(r.text , protocol)
+            candidates += cls._parse_proxy_table(r.text , protocol)
         return ProxySet(candidates)
 
     @classmethod
@@ -237,10 +310,11 @@ class ProxiflyFinder(BaseProxiesFinder):
     }
     LIST_URLS = [f"https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/{protocol}/data.txt" for protocol in ["socks5" , "https"]]
 
-    def find_candidates(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    @classmethod
+    def find_candidates(cls , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
         """Fetch proxy candidates from free proxy list."""
         candidates = []
-        for url in self.LIST_URLS:
+        for url in cls.LIST_URLS:
             resp = requests.get(url, timeout=10.0)
             lines = [line.strip() for line in resp.text.splitlines() if line.strip()]
             candidates += random.sample(lines , min(100 , len(lines) // 2))
@@ -255,7 +329,7 @@ class FreeProxyFinder:
         'fpw': FreeProxyWorldFinder,
     }
     def __init__(self):
-        self.finders : dict[str, BaseProxiesFinder] = {name: finder_type() for name, finder_type in self.FINDERS_TYPE.items()}
+        self.finders : dict[str, type[BaseProxiesFinder]] = {name: finder_type for name, finder_type in self.FINDERS_TYPE.items()}
 
     def __len__(self) -> int:
         return len(self.finders)
@@ -266,9 +340,9 @@ class FreeProxyFinder:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({len(self)} finders)"
 
-    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous") -> ProxySet:
+    def find(self , level_type: Literal["any" , "anonymous"] = "anonymous" , use_cache: bool = False) -> ProxySet:
         """Collect proxies from all registered finders and return the deduplicated union."""
         proxies = ProxySet()
         for finder in self.finders.values():
-            proxies.extend(finder.find(level_type=level_type))
+            proxies.extend(finder.find(level_type=level_type, use_cache=use_cache))
         return proxies

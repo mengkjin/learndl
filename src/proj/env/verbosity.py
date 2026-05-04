@@ -52,12 +52,11 @@ class Verbosity:
     - ``is_max_level``: check if ``vb`` is at or above ``max``
     
     """
-    max = MACHINE.config.get('constant/preference/verbosity' , 'vb_max' , default = 10)
-    min = MACHINE.config.get('constant/preference/verbosity' , 'vb_min' , default = 0)
-    never = MACHINE.config.get('constant/preference/verbosity' , 'vb_never' , default = 99)
-    always = MACHINE.config.get('constant/preference/verbosity' , 'vb_always' , default = -99)
-    callback = MACHINE.config.get('constant/preference/verbosity' , 'vb_level_callback' , default = 10)
-
+    max = MACHINE.preference('verbosity' , 'basic/vb_max' , default = 10)
+    min = MACHINE.preference('verbosity' , 'basic/vb_min' , default = 0)
+    never = MACHINE.preference('verbosity' , 'basic/vb_never' , default = 99)
+    always = MACHINE.preference('verbosity' , 'basic/vb_always' , default = -99)
+    
     assert never > max > min > always , (never , max , min , always)
 
     WithVbLevel = WithVbLevel
@@ -85,7 +84,7 @@ class Verbosity:
     def vb(self) -> int:
         """Current global verbosity (clamped to ``min``..``max`` when set)."""
         if not hasattr(self , '_vb'):
-            self._vb = MACHINE.config.get('constant/preference/verbosity' , 'vb' , default = 1)
+            self._vb = MACHINE.preference('verbosity' , 'basic/vb' , default = 1)
         return self._vb
 
     @property
@@ -123,6 +122,14 @@ class Verbosity:
     def is_max_level(self):
         """Whether ``vb`` is at or above ``max``."""
         return self.vb >= self.max
+
+    def get(self , key: str) -> int:
+        """Get the verbosity level for a special purpose , mostly used for differentiating debug mode and normal mode"""
+        from src.proj.env.proj import Proj
+        value = MACHINE.preference('verbosity' , f'special/{key}/default')
+        if Proj.debug:
+            value = MACHINE.preference('verbosity' , f'special/{key}/debug')
+        return value
 
     def __eq__(self , other : int):
         return self.vb == other

@@ -1,7 +1,6 @@
 # options of debug mode, if not set, will use false
 complete_verbosity: false
 show_vb_level: true
-show_asyncio_info: true
 tsboard_weight_norm: true
 tsboard_weight_histogram: true
 tsboard_grad_norm: true
