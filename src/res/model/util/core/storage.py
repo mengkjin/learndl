@@ -10,7 +10,8 @@ from typing import Any , Literal , TypeVar
 
 from src.proj import Logger , PATH
 from src.proj.util import torch_load
-from .model_path import ModelDict , ModelPath
+from .model_file import ModelDict
+from .model_path import ModelPath
 
 T = TypeVar('T')
 class MemFileStorage:

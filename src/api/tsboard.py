@@ -57,7 +57,7 @@ def run_trained_models_tensorboard():
     Interactively pick a trained model with preserved tensorboard snapshots and launch TB.
     """
     from src.api.model import ModelAPI
-    from src.res.model.util.model_path import ModelPath
+    from src.res.model.util import ModelPath
     candidates = [ModelPath(model) for model in ModelAPI.available_models(include_short_test = True)]
     candidates = [model for model in candidates if model.snapshot('tensorboard').exists()]
     if len(candidates) == 0:

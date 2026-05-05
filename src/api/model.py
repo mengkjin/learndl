@@ -1,4 +1,4 @@
-from src.res.model.util.model_path import ModelPath
+from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
   ModelTrainer , ModelTestor , ModelPredictor , ModelHiddenExtractor , ModelPortfolioBuilder)
 from src.proj import PATH , MACHINE , Logger , Proj

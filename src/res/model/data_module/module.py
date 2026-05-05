@@ -8,7 +8,7 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Callable
 
-from src.proj import Logger , CALENDAR , MACHINE
+from src.proj import Logger , CALENDAR , MACHINE , Const
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
 from src.func import match_values
 from src.func import tensor as T
@@ -104,7 +104,8 @@ class DataModule(BaseDataModule):
             self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
             use_data = self.use_data ,
             factor_names = self.config.input_factor_names , 
-            factor_start_dt = CALENDAR.td(self.beg_date , -1).as_int() , factor_end_dt = self.end_date , 
+            factor_start_dt = self.factor_start_dt , 
+            factor_end_dt = self.factor_end_dt , 
             filter_secid = self.config.input_filter_secid , 
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
@@ -163,11 +164,34 @@ class DataModule(BaseDataModule):
 
     @property
     def beg_date(self):
-        return -1 if self.use_data == 'predict' else self.config.beg_date
+        return 19000101 if self.use_data == 'predict' else self.config.beg_date
 
     @property
     def end_date(self):
         return 99991231 if self.use_data == 'predict' else self.config.end_date
+
+    @property
+    def min_test_date(self):
+        if hasattr(self , 'test_full_dates'):
+            return self.test_full_dates.min() if len(self.test_full_dates) > 0 else 99991231
+        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names)
+
+    @property
+    def max_test_date(self):
+        if hasattr(self , 'test_full_dates'):
+            return self.test_full_dates.max() if len(self.test_full_dates) > 0 else 19000101
+        return ModuleData.max_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names)  
+
+    @property
+    def factor_start_dt(self):
+        beg_date = self.beg_date
+        if self.config.is_null_model and self.config.is_resuming and Const.Model.resume_test:
+            beg_date = max(beg_date , self.config.resumed_max_pred_date)
+        return CALENDAR.td(beg_date , -1).as_int()
+
+    @property
+    def factor_end_dt(self):
+        return self.end_date
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 

@@ -144,20 +144,20 @@ class DetailedAlphaAnalysis(BaseCallBack):
     }
 
     def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'reinforce'] , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
         assert all(task in FactorTestAPI.TEST_TYPES for task in tasks) , \
             f'TASKS must be a list of valid tasks: {FactorTestAPI.TEST_TYPES} , but got {tasks}'
 
         self.tasks = ','.join(tasks)
         self.factor_tasks = [task for task in tasks if task in ['factor']]
         self.fmp_tasks = [task for task in tasks if task not in ['factor']]
-        super().__init__(trainer , **kwargs)
 
         self.test_results : dict[str , pd.DataFrame] = {}
         self.test_figures : dict[str , Figure] = {}
         self.snap_folder.mkdir(exist_ok=True , parents=True)
 
     def __bool__(self):
-        return not self.turn_off and bool(self.tasks)
+        return bool(self.tasks)
         
     @property
     def snap_folder(self): return self.config.base_path.snapshot('detailed_alpha')

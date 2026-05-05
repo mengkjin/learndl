@@ -206,6 +206,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         This is the core compute path.  Called by ``load_with_extension`` for each
         missing date span.  Does not touch the disk.
         """
+        vb_level = Proj.vb(vb_level)
         if start is None:
             start = self.fit_start if self.type == 'fit' else self.predict_start
         if end is None:
@@ -256,7 +257,8 @@ class PreProcessor(metaclass=PreProcessorMeta):
         with Logger.Timer(f'[{self.key}] blocks norming' , indent = indent , vb_level = vb_level):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
-    def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None , indent : int = 3 , vb_level : Any = 'max') -> DataBlock:
+    def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None , 
+                            indent : int = 3 , vb_level : Any = 'max') -> DataBlock:
         """
         load data with extension , try dumped data first , then extend to the end date
         Args:
@@ -266,7 +268,10 @@ class PreProcessor(metaclass=PreProcessorMeta):
         """
         vb_level = Proj.vb(vb_level)
         
-        block = self.load_dump(indent = indent , vb_level = vb_level + 1).align_secid(secid , inplace = True)
+        block = self.load_dump(indent = indent , vb_level = vb_level + 1)
+        
+        block = block.align_secid(secid , inplace = True)
+
         if dates_for_query is None:
             dates_for_query = [self.load_start , self.load_end]
             start , end = self.load_start , self.load_end
@@ -274,13 +279,19 @@ class PreProcessor(metaclass=PreProcessorMeta):
             start , end = min(dates_for_query) , max(dates_for_query)
             self.enable_saving = False
         block = block.slice_date(start , end)
+
         if not block.empty:
             block_start , block_end = block.date[0] , block.date[-1]
             if block_end >= end and block_start <= start:
                 return block
             
         span_tuples : list[tuple[int,int]] = []
-        block_start , block_end = block.first_valid_date , block.last_valid_date
+        valid_dates = block.valid_dates
+        if len(valid_dates) == 0:
+            block_start , block_end = 99991231 , 19000101
+        else:
+            block_start , block_end = valid_dates[0] , valid_dates[-1]
+
         if block.empty:
             span_tuples.append((start , end))
         elif len(dates_for_query) > 0:
@@ -288,6 +299,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
                 span_tuples.append((start , CALENDAR.td(block_start , -1).td))
             if end > block_end:
                 span_tuples.append((CALENDAR.td(block_end , -self.EXTENSION_OVERLAY + 1).td , end))
+
         extentions : list[DataBlock] = []
         for span_start , span_end in span_tuples:
             span_load_start = CALENDAR.td(span_start , -self.CALCULATION_WINDOW + 1).td
@@ -297,7 +309,7 @@ class PreProcessor(metaclass=PreProcessorMeta):
         if not extentions:
             return block 
 
-        with Logger.Timer(f'[{self.key}] blocks merging' , indent = indent , vb_level = vb_level + 2):
+        with Logger.Timer(f'[{self.key}] blocks merging' , indent = indent , vb_level = vb_level + 1):
             block = block.merge_others(*extentions , inplace = True).slice_date(start , end)
 
         return block

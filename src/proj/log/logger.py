@@ -486,7 +486,7 @@ class Logger:
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Duration(since = self._init_time)}'
+            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Duration(since = self._init_time , high_precision = True)}'
 
     class Paragraph:
         """

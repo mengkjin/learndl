@@ -9,6 +9,8 @@ from typing import Any, Literal
 from src.proj import Proj , Logger
 from src.proj.util import Device , properties
 
+__all__ = ['BatchInput' , 'BatchOutput' , 'BatchData']
+
 def _object_shape(obj : Any) -> Any:
     if obj is None: 
         return None

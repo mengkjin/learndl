@@ -55,28 +55,28 @@ class BaseLoss(nn.Module):
         """
         raise NotImplementedError
 
-class LossMSE(BaseLoss):
+class MSE(BaseLoss):
     """Mean squared error loss.  Lower is better."""
     key = 'mse'
     multiheadlosses_capable = True
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return mse(*align_shape(label , pred , w) , dim)
 
-class LossPearson(BaseLoss):
+class PearsonLoss(BaseLoss):
     """Pearson correlation loss: ``exp(-pearson)``.  Lower is better."""
     key = 'pearson'
     multiheadlosses_capable = True
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return torch.exp(-pearson(*align_shape(label , pred , w) , dim))
 
-class LossCCC(BaseLoss):
+class CCCLoss(BaseLoss):
     """Concordance Correlation Coefficient (CCC) loss: ``exp(-ccc)``.  Lower is better."""
     key = 'ccc'
     multiheadlosses_capable = True
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return torch.exp(-ccc(*align_shape(label , pred , w) , dim))
 
-class LossHiddenCorrDeprecated(BaseLoss):
+class HiddenCorrDeprecated(BaseLoss):
     """Deprecated hidden-state correlation penalty.  Use ``LossHiddenCorr`` instead.
 
     Difference: this version uses ``square().mean()`` (Frobenius² mean);
@@ -91,7 +91,7 @@ class LossHiddenCorrDeprecated(BaseLoss):
         std_hidden = (hidden - hidden.mean(dim=0,keepdim=True)) / (hidden.std(dim=0,keepdim=True) + 1e-6)
         return std_hidden.T.cov().square().mean()
 
-class LossHiddenCorr(BaseLoss):
+class HiddenCorr(BaseLoss):
     """Hidden-state correlation penalty (Frobenius norm of the covariance matrix).
 
     Penalizes the Frobenius norm of the column-standardized covariance matrix
@@ -159,8 +159,8 @@ class CCCHiddenCorrLoss(BaseLoss):
     def __init__(self, lamb : float = 0.01):
         super().__init__()
         self.lamb = lamb
-        self.ccc_loss = LossCCC()
-        self.hidden_corr_loss = LossHiddenCorr()
+        self.ccc_loss = CCCLoss()
+        self.hidden_corr_loss = HiddenCorr()
 
     def forward(self , label : torch.Tensor , pred : torch.Tensor , hidden : torch.Tensor , **kwargs) -> dict[str,torch.Tensor]:
         return {
@@ -199,7 +199,12 @@ class ABCMLoss(BaseLoss):
         corr = self.corr_loss(betas)
         turnover = self.turnover_loss(betas , betas_peer)
 
-        return mse + rsquare + self.lamb * corr + turnover
+        return {
+            'mse' : mse ,
+            'rsquare' : rsquare ,
+            'corr' : self.lamb * corr ,
+            'turnover' : turnover
+        }
 
     def rsquare_loss(self, hiddens : torch.Tensor , label : torch.Tensor , **kwargs):
         """Compute ``1 - R²`` by projecting label onto the column space of hiddens."""
@@ -219,6 +224,29 @@ class ABCMLoss(BaseLoss):
         """L2 distance between current beta factors and peer (lagged) betas."""
         return (betas - betas_peer).norm()
 
+class SoftTopKLoss(BaseLoss):
+    """Soft Top-K loss.
+    
+    Args:
+        k: Top-K value.
+        **kwargs: Extra keyword arguments forwarded by some composite losses.
+    """
+    key = 'soft_topk'
+    def __init__(self, target_ratio : float = 0.05):
+        super().__init__()
+        self.target_ratio = target_ratio
+
+    def forward(self, pred : torch.Tensor , label : torch.Tensor , **kwargs):
+        pred = pred.view(-1)
+        label = label.view(-1)
+        
+        std = torch.std(pred) + 1e-8
+        temperature = std * (self.target_ratio * 10) 
+        
+        weights = F.softmax(pred / temperature, dim=0)
+        weighted_return = torch.sum(weights * label)
+        return -weighted_return
+
 class Loss:
     """Factory for ``BaseLoss`` instances.
 
@@ -230,7 +258,19 @@ class Loss:
         loss_fn = Loss.get('ccc')
         loss_fn = Loss.get('abcm', lamb=0.05)
     """
-    options = {cls.key : cls for cls in BaseLoss.__subclasses__() if cls.key != ''}
+    @classmethod
+    def options(cls) -> dict[str, type[BaseLoss]]:
+        if not hasattr(cls, '_options'):
+            options = {}
+            for subclass in BaseLoss.__subclasses__():
+                if not subclass.key:
+                    continue
+                if subclass.key in options:
+                    raise ValueError(f'{subclass.__name__}.key {subclass.key} is already registered, check for duplication')
+                options[subclass.key] = subclass
+            cls._options = options
+        return cls._options
+
     @classmethod
     def get(cls , name : str , **kwargs) -> BaseLoss:
         """Return an instantiated loss function by registry key.
@@ -242,4 +282,4 @@ class Loss:
         Returns:
             An instantiated ``BaseLoss`` subclass.
         """
-        return cls.options[name](**kwargs)
+        return cls.options()[name](**kwargs)

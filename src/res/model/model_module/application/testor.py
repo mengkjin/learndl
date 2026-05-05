@@ -2,7 +2,7 @@ import torch
 
 from src.proj import Logger
 from src.res.model.data_module import DataModule , get_realistic_batch_data
-from src.res.model.util import ModelConfig , BatchData
+from src.res.model.util import ModelConfig , BatchData , Metrics
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelTestor:
@@ -26,7 +26,7 @@ class ModelTestor:
         
         self.batch_input = self.data.predict_dataloader()[0]
         self.model = get_predictor_module(self.config).init_model(testor_mode = True)
-        self.metrics = self.config.metrics.new_all(self.model , self.config.model_param[0])
+        self.metrics = Metrics.from_config(self.config).new_all(self.model , self.config.model_param[0])
 
     def __repr__(self):
         return f'{self.__class__.__name__}(model={self.model}) , check [.model][.batch_input][.metrics]'

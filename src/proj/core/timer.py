@@ -6,7 +6,8 @@ from datetime import datetime , timedelta
 class Duration:
     """Non-negative elapsed seconds from either ``duration`` or time since ``since``."""
 
-    def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None):
+    def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None ,
+                 high_precision : bool = False):
         """
         Args:
             duration: Length of time; ``timedelta`` is converted to seconds.
@@ -26,6 +27,7 @@ class Duration:
                 dur = (datetime.now() - datetime.fromtimestamp(since)).total_seconds()
         assert dur >= 0 , f"duration must be a positive duration , but got {dur}"
         self.duration = dur
+        self.high_precision = high_precision
     def __repr__(self):
         return self.fmtstr
     @property
@@ -51,9 +53,9 @@ class Duration:
         
         # Store components in a dictionary for f-string formatting
         if self.duration < 1:
-            return '<1 Sec'
+            return f'{self.duration:.4f} Sec' if self.high_precision else '<1 Sec'
         elif self.duration < 60:
-            return f'{self.duration:.1f} Sec'
+            return f'{self.duration:.4f} Sec' if self.high_precision else f'{self.duration:.1f} Sec'
         else:
             days, remainder = divmod(self.duration, 86400) # 86400 seconds in a day
             hours, remainder = divmod(remainder, 3600)    # 3600 seconds in an hour
@@ -67,5 +69,5 @@ class Duration:
             if minutes >= 1:
                 fmtstrs.append(f'{minutes:.0f} Min')
             if seconds >= 1:
-                fmtstrs.append(f'{seconds:.0f} Sec')
+                fmtstrs.append(f'{seconds:.4f} Sec') if self.high_precision else fmtstrs.append(f'{seconds:.0f} Sec')
             return ' '.join(fmtstrs)

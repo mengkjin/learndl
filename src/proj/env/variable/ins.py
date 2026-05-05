@@ -7,7 +7,7 @@ from src.proj.core import singleton
 class _Trainer:
     """Descriptor returning ``BaseTrainer._instance``."""
     def __get__(self , instance, owner):
-        from src.res.model.util.classes import BaseTrainer
+        from src.res.model.util import BaseTrainer
         return BaseTrainer._trainer
 
 class _Account:

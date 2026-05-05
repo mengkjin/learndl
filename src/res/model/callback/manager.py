@@ -3,11 +3,11 @@ from typing import Any , Type
 
 from src.proj import Logger
 from src.res.model.util import BaseCallBack , BaseTrainer 
-from . import monitor, fit, test , nnspecific
-
-SEARCH_MODS = [fit , monitor , test]
+from . import monitor, fit, test , scheduler, nnspecific
 
 class CallBackManager(BaseCallBack):
+    CallbackModules = [fit , monitor , test , scheduler]
+
     def __init__(self , trainer , *args , **kwargs):
         super().__init__(trainer)   
         self.callbacks = self.get_callbacks(trainer)
@@ -27,7 +27,7 @@ class CallBackManager(BaseCallBack):
 
     @classmethod
     def get_callbacks(cls , trainer : BaseTrainer) -> list[BaseCallBack]:
-        available_cbs = [cb for cb in cls.get_available_cb_names() if not trainer.model.AVAILABLE_CALLBACKS or cb in trainer.model.AVAILABLE_CALLBACKS]
+        available_cbs = cls.get_available_callback_names(trainer.model.AVAILABLE_CALLBACKS)
         compulsory_cbs = trainer.model.COMPULSARY_CALLBACKS + [cb for cb in trainer.config.callbackes if cb not in trainer.model.COMPULSARY_CALLBACKS]
         use_cbs = [cb for cb in compulsory_cbs if cb in available_cbs]
 
@@ -41,22 +41,24 @@ class CallBackManager(BaseCallBack):
         return callbacks
 
     @classmethod
-    def get_available_cb_names(cls) -> list[str]:
-        cbs = []
-        for cb_mod in SEARCH_MODS:
-            for name , obj in inspect.getmembers(cb_mod , lambda x: inspect.isclass(x) and issubclass(x , BaseCallBack)):
-                cbs.append(name)
-        return cbs
+    def get_available_callback_names(cls , available_cbs : list[str] | None = None) -> list[str]:
+        callbacks = list(cls.get_callback_classes().keys())
+        return [name for name in callbacks if name in available_cbs] if available_cbs else callbacks
+
+    @classmethod
+    def get_callback_classes(cls) -> dict[str,Type[BaseCallBack]]:
+        if not hasattr(cls , '_general_callback_classes'):
+            cbs = {}
+            for cb_mod in cls.CallbackModules:
+                for name , obj in inspect.getmembers(cb_mod , lambda x: inspect.isclass(x) and issubclass(x , BaseCallBack)):
+                    assert name not in cbs , f'{name} is defined in {cb_mod} and {cbs[name].__module__}'
+                    cbs[name] = obj
+            cls._general_callback_classes = cbs
+        return cls._general_callback_classes
     
-    @staticmethod
-    def get_callback_class(cb_name : str) -> Type[BaseCallBack]:
-        for cb_mod in SEARCH_MODS:
-            if hasattr(cb_mod , cb_name): 
-                cb = getattr(cb_mod , cb_name)
-                assert issubclass(cb , BaseCallBack), f'{cb_name} is not a subclass of BaseCallBack'
-                return cb
-        else: # on success
-            raise KeyError(cb_name)
+    @classmethod
+    def get_callback_class(cls , cb_name : str) -> Type[BaseCallBack]:
+        return cls.get_callback_classes()[cb_name]
 
     @staticmethod
     def get_module_specific_callback(module_name : str) -> Type[BaseCallBack] | None:

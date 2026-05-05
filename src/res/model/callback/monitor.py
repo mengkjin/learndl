@@ -21,7 +21,7 @@ class CallbackTimer(BaseCallBack):
         self.record_start_time : dict[str,datetime] = {}
     def __bool__(self):
         """disable callback timer"""
-        return False # self.recording and not self.turn_off
+        return self.recording
     def at_enter(self , hook_name , vb_level : Any = 'max'):
         super().at_enter(hook_name , vb_level)
         if self.recording: 

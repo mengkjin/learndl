@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from src.func.metric import mse , pearson , ccc , spearman
 
-from .basic import align_shape
+from .basic import align_shape, first_output
 
 __all__ = ['Accuracy']
 
@@ -30,29 +30,50 @@ class BaseAccuracy(nn.Module):
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor | dict[str,torch.Tensor]:
         raise NotImplementedError
 
-class AccuracyMSE(BaseAccuracy):
+class MSEAccuracy(BaseAccuracy):
     """Negative MSE accuracy: ``-mse``.  Higher is better."""
     key = 'mse'
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return -mse(*align_shape(label , pred , w) , dim)
 
-class AccuracyPearson(BaseAccuracy):
+class Pearson(BaseAccuracy):
     """Pearson correlation accuracy.  Higher is better (range: [-1, 1])."""
     key = 'pearson'
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return pearson(*align_shape(label , pred , w) , dim)
 
-class AccuracyCCC(BaseAccuracy):
+class CCC(BaseAccuracy):
     """Concordance Correlation Coefficient (CCC) accuracy.  Higher is better."""
     key = 'ccc'
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return ccc(*align_shape(label , pred , w) , dim)
 
-class AccuracySpearman(BaseAccuracy):
+class Spearman(BaseAccuracy):
     """Spearman rank correlation accuracy.  Higher is better (range: [-1, 1])."""
     key = 'spearman'
     def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
         return spearman(*align_shape(label , pred , w) , dim)
+
+class LongAvg(BaseAccuracy):
+    """The average of the top 5% of predictions ."""
+    key = 'long_avg'
+    def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
+        label , pred , w = align_shape(label , pred , w)
+        pred0 = first_output(pred)
+        label0 = first_output(label).nan_to_num(0)
+        top_5_pct_mask = pred0.topk(int(len(pred0) * 0.05), dim = 0 , sorted = False).indices
+        return label0[top_5_pct_mask].mean()
+
+class LongShortDiff(BaseAccuracy):
+    """The average of the top 5% of predictions ."""
+    key = 'long_short'
+    def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
+        label , pred , w = align_shape(label , pred , w)
+        pred0 = first_output(pred)
+        label0 = first_output(label).nan_to_num(0)
+        top_5_pct_mask = pred0.topk(int(len(pred0) * 0.05), dim = 0 , largest = True , sorted = False).indices
+        bot_5_pct_mask = pred0.topk(int(len(pred0) * 0.05), dim = 0 , largest = False , sorted = False).indices
+        return label0[top_5_pct_mask].mean() - label0[bot_5_pct_mask].mean()
 
 class Accuracy:
     """Factory for ``BaseAccuracy`` instances.
@@ -64,7 +85,19 @@ class Accuracy:
 
         acc_fn = Accuracy.get('spearman')
     """
-    options = {cls.key : cls for cls in BaseAccuracy.__subclasses__() if cls.key != ''}
+    @classmethod
+    def options(cls) -> dict[str, type[BaseAccuracy]]:
+        if not hasattr(cls, '_options'):
+            options = {}
+            for subclass in BaseAccuracy.__subclasses__():
+                if not subclass.key:
+                    continue
+                if subclass.key in options:
+                    raise ValueError(f'{subclass.__name__}.key {subclass.key} is already registered, check for duplication')
+                options[subclass.key] = subclass
+            cls._options = options
+        return cls._options
+
     @classmethod
     def get(cls , name : str , **kwargs) -> BaseAccuracy:
         """Return an instantiated accuracy metric by registry key.
@@ -76,4 +109,4 @@ class Accuracy:
         Returns:
             An instantiated ``BaseAccuracy`` subclass.
         """
-        return cls.options[name](**kwargs)
+        return cls.options()[name](**kwargs)

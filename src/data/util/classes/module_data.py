@@ -178,7 +178,7 @@ class ModuleData:
         - ``'fit'`` mode: loads from 20070101 up to the last available ``'y'`` dump date.
         """
         start = CALENDAR.td(CALENDAR.updated() , -366).td if self.use_data == 'predict' else 20070101
-        end = DataBlock.last_data_date('y' , 'fit') if self.use_data == 'fit' else CALENDAR.updated()
+        end = DataBlock.max_data_date('y' , 'fit') if self.use_data == 'fit' else CALENDAR.updated()
         end = end or CALENDAR.updated()
         return start , end
 
@@ -291,7 +291,7 @@ class ModuleData:
         factor_title = f'{len(self.factor_names)} Factors' if len(self.factor_names) > 1 else f'Factor [{self.factor_names[0]}]'
         start = max(self.factor_start_dt or self.date[0] , self.date[0])
         end = min(self.factor_end_dt or self.date[-1] , self.date[-1])
-        with Logger.Timer(f'Load {factor_title} ({start} - {end})' , indent = self.indent , vb_level = self.vb_level + 2):
+        with Logger.Timer(f'Load {factor_title} ({start} - {end})' , indent = self.indent , vb_level = self.vb_level):
             from src.data.loader import FactorLoader
             self.blocks['factor'] = FactorLoader(self.factor_names).load(start , end , vb_level = 'never').align_secid_date(self.secid , self.date , inplace = True)
         return self
@@ -320,6 +320,44 @@ class ModuleData:
     def abbr(data_type : str):
         """Normalise a data-type key via ``data_type_abbr``."""
         return data_type_abbr(data_type)
+
+    @classmethod
+    def min_data_date(cls , data_type_list : list[str] , factor_names : list[str] | None = None) -> int | None:
+        """Return the minimum data date from the loaded blocks and factor names."""
+        from src.res.factor.calculator import StockFactorHierarchy
+        dates : list[int] = []
+        for data_type in ['y' , *data_type_list]:
+            fit_min_date = DataBlock.min_data_date(data_type , 'fit')
+            predict_min_date = DataBlock.min_data_date(data_type , 'predict')
+            if fit_min_date is None and predict_min_date is None:
+                return None
+            dates.append(min(fit_min_date or 99991231 , predict_min_date or 99991231))
+        if factor_names:
+            for factor_name in factor_names:
+                dates.append(StockFactorHierarchy.get_factor(factor_name).min_date)
+        if len(dates) == 0:
+            return None
+        else:
+            return CALENDAR.td_array([max(dates)] , backward = False)[0]
+
+    @classmethod
+    def max_data_date(cls , data_type_list : list[str] , factor_names : list[str] | None = None) -> int | None:
+        """Return the maximum data date from the loaded blocks and factor names."""
+        from src.res.factor.calculator import StockFactorHierarchy
+        dates : list[int] = []
+        for data_type in data_type_list:
+            fit_max_date = DataBlock.max_data_date(data_type , 'fit')
+            predict_max_date = DataBlock.max_data_date(data_type , 'predict')
+            if fit_max_date is None and predict_max_date is None:
+                return None
+            dates.append(max(fit_max_date or 19000101 , predict_max_date or 19000101))
+        if factor_names:
+            for factor_name in factor_names:
+                dates.append(StockFactorHierarchy.get_factor(factor_name).max_date)
+        if len(dates) == 0:
+            return None
+        else:
+            return CALENDAR.td_array([max(dates)] , backward = True)[0]
 
 class SecidFilter:
     """

@@ -25,3 +25,10 @@ def align_shape(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | 
         if w is not None:
             w = w[...,:last_dim]
     return label , pred , w
+
+def first_output(x : torch.Tensor):
+    """Get the first output of a tensor."""
+    if x.ndim == 1:
+        return x[0]
+    else:
+        return x[...,0]

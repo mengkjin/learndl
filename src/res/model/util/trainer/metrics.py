@@ -8,8 +8,7 @@ from typing import Any , Callable , Literal
 
 from src.proj import Logger , Proj
 from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
-
-from .batch import BatchData
+from src.res.model.util.core import ModelConfig , BatchData
 
 class Metrics:
     '''calculator of batch output'''
@@ -122,6 +121,7 @@ class Metrics:
 
     def new_attempt(self , attempt : int = 0 , **kwargs):
         self.attempt_metrics.new(attempt = attempt , **kwargs)
+        self.batch_metrics.reset_loss_weights()
 
     def new_epoch(self , dataset : Literal['train','valid','test'] , epoch : int , **kwargs):
         self.dataset : Literal['train','valid','test'] = dataset
@@ -156,6 +156,16 @@ class Metrics:
             return True
         best_metric = self.best_epoch_metric
         return best_metric > old_best_attempt if self.VAL_METRIC == 'accuracy' else best_metric < old_best_attempt
+
+    @classmethod
+    def from_config(cls , config : ModelConfig) -> Metrics:
+        return cls(
+            config.module_type,
+            config.nn_category,
+            config.criterion_loss,
+            config.criterion_accuracy,
+            config.criterion_multilosses,
+        )
 
 class GradientMode:
     def __init__(self , require_grad : bool = True):
@@ -227,7 +237,7 @@ class LossFunction(MetricFunction):
         if self.net is not None:
             for name in self.SearchList:
                 if hasattr(self.net , name):
-                    calculator : Any = getattr(self.net , name)
+                    calculator = getattr(self.net , name)
                     self.components['net_specific'] = LossComponent(calculator)
                     return self
 
@@ -374,7 +384,8 @@ class BatchMetrics:
         self.initiated = False
         self.collected = False
         self.accuracies : dict[str,float] = {}
-        self.losses : dict[str,Tensor] = {}
+        self.losses     : dict[str,Tensor] = {}
+        self.loss_weights : dict[str,float] = {}
 
     def __repr__(self):
         return f'{self.__class__.__name__}(key={self.key},accuracies={self.accuracies},losses={self.losses})'
@@ -391,6 +402,18 @@ class BatchMetrics:
         self.losses = losses
         self._total_loss = None
         self._total_accuracy = None
+
+    def set_loss_weights(self , loss_weights : dict[str,float]):
+        """
+        set the weights of the losses in calculation of total loss
+        allow dynamic weight scheme for different loss parts based on external factors, e.g. epoch number, convergence status, etc.
+        weights shall be reset when new attempt is set, which means in batch/epoch iteration the weights are sticky.
+        """
+        assert self.initiated , 'BatchMetrics is not initiated , please call new(batch_key) first'
+        self.loss_weights.update(loss_weights)
+
+    def reset_loss_weights(self):
+        self.loss_weights.clear()
 
     def close(self):
         assert self.collected , f'{self} is not collected before closing, please be appended to some metrics first'
@@ -409,7 +432,7 @@ class BatchMetrics:
         if not self.losses:
             return torch.Tensor([0.])
         if not hasattr(self , '_total_loss') or self._total_loss is None:
-            losses = torch.concatenate([value.flatten() for value in self.losses.values()])
+            losses = torch.concatenate([value.flatten() * self.loss_weights.get(key , 1.) for key,value in self.losses.items()])
             self._total_loss = losses.sum() if losses.numel() > 0 else torch.Tensor([0]).requires_grad_(True)
         return self._total_loss
 

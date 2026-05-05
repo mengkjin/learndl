@@ -3,7 +3,6 @@ ModelPath: The all-in-one model path class for model training and inference.
 """
 
 from __future__ import annotations
-import torch
 import numpy as np
 import pandas as pd
 import shutil
@@ -13,11 +12,11 @@ from typing import Any , Literal
 
 from src.proj import PATH , Logger , LogFile , DB , CALENDAR , Const
 from src.proj.core import strPath
-from src.proj.util import torch_load
 
-from .core import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
+from .func import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
+from .model_file import ModelFile
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'PredictionModel' , 'HiddenExtractionModel']
+__all__ = ['ModelPath' , 'HiddenPath' , 'PredictionModel' , 'HiddenExtractionModel']
 
 class ModelPath:
     f"""
@@ -288,7 +287,7 @@ class ModelPath:
                         
     def load_config(self):
         """load model config"""
-        from src.res.model.util.config import ModelConfig
+        from src.res.model.util.core import ModelConfig
         return ModelConfig(self.base , stage = 0 , resume = 1)
     def next_model_date(self):
         """next model date to train"""
@@ -413,60 +412,6 @@ class HiddenPath:
         possible_model_dates = self.model_dates()
         return possible_model_dates[possible_model_dates <= model_date].max()
 
-class ModelDict:
-    """model dictionary for nn/boost models"""
-    __slots__ = ['state_dict' , 'boost_head' , 'boost_dict']
-    def __init__(self ,
-                 state_dict  : dict[str,torch.Tensor] | None = None , 
-                 boost_head : dict[str,Any] | None = None ,
-                 boost_dict : dict[str,Any] | None = None) -> None:
-        self.state_dict = state_dict
-        self.boost_head = boost_head
-        self.boost_dict = boost_dict
-
-    def __repr__(self): return f'{self.__class__.__name__}(state_dict={self.state_dict},boost_head={self.boost_head},boost_dict={self.boost_dict})'
-
-    def reset(self) -> None:
-        """reset model dictionary"""
-        self.state_dict = None
-        self.boost_head = None
-        self.boost_dict = None
-
-    def save(self , path : strPath , stack = False) -> None:
-        """uniformly save model dictionary"""
-        if isinstance(path , str): 
-            path = Path(path)
-        path.mkdir(parents=True,exist_ok=True)
-        for key in self.__slots__:
-            if (value := getattr(self , key)) is not None:
-                torch.save(value , path.joinpath(f'{key}.stack.pt' if stack else f'{key}.pt'))
-
-    @property
-    def is_valid(self) -> bool:
-        """check if model dictionary is valid"""
-        if self.state_dict is not None:
-            assert self.boost_dict is None 
-        else:
-            assert self.boost_head is None
-        return True
-
-class ModelFile:
-    """model file for nn/boost models"""
-    def __init__(self , model_path : Path) -> None:
-        self.model_path = model_path
-    def __getitem__(self , key): return self.load(key)
-    def __repr__(self): return f'{self.__class__.__name__}(path={self.model_path})'
-    def load(self , key : str) -> Any:
-        """load model dictionary"""
-        assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
-        path = self.model_path.joinpath(f'{key}.pt')
-        return torch_load(path , map_location='cpu') if path.exists() else None
-    def exists(self) -> bool: 
-        """check if model file exists"""
-        return any([self.model_path.joinpath(f'{key}.pt').exists() for key in ModelDict.__slots__])
-    def model_dict(self) -> ModelDict:
-        """load model dictionary"""
-        return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
 
 class PredictionModel(ModelPath):
     '''

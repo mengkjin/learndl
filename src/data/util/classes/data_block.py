@@ -280,7 +280,9 @@ class DataBlock:
         """Array of dates for which at least one finite value exists across secid/inday/feature."""
         if self.empty:
             return np.array([],dtype = int)
-        return self.date[self.values.isfinite().any(dim = (0,2,3)).cpu().detach().numpy()] if self.initiated else np.array([],dtype = int)
+        with torch.no_grad():
+            mask = ~(self.values.isnan().all(dim = (0,2,3)).cpu().detach().numpy())
+        return self.date[mask]
 
     def set_flags(self , **kwargs):
         """
@@ -713,7 +715,24 @@ class DataBlock:
             return PATH.file_modified_time(path)
 
     @classmethod
-    def last_data_date(cls , key : str , type : Literal['fit' , 'predict']):
+    def min_data_date(cls , key : str , type : Literal['fit' , 'predict']) -> int | None:
+        """Return the minimum date stored in the preprocess dump for ``key`` / ``type``."""
+        try:
+            path = cls.path_preprocess(key , type)
+            if path.suffix == '.mmap':
+                return min(load_dict(path.joinpath('index.pt'))['date'])
+            elif path.suffix == '.pt':
+                return min(load_dict(path)['date'])
+            elif path.suffix == '.feather':
+                return pl.read_ipc(path).select('date').min().item()
+            else:
+                raise ValueError(f'Unsupported suffix: {path.suffix}')
+        except ModuleNotFoundError as e:
+            Logger.error(f'min_data_date({key , type}) error: ModuleNotFoundError: {e}')
+            return None
+
+    @classmethod
+    def max_data_date(cls , key : str , type : Literal['fit' , 'predict']) -> int | None:
         """Return the maximum date stored in the preprocess dump for ``key`` / ``type``."""
         try:
             path = cls.path_preprocess(key , type)
@@ -724,11 +743,11 @@ class DataBlock:
             elif path.suffix == '.pt':
                 return max(load_dict(path)['date'])
             elif path.suffix == '.feather':
-                return max(pd.read_feather(path)['date'])
+                return pl.read_ipc(path).select('date').max().item()
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
-            Logger.error(f'last_data_date({key , type}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'max_data_date({key , type}) error: ModuleNotFoundError: {e}')
             return None
 
     def ffill(self , if_fill : bool = True):

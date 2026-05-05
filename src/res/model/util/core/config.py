@@ -20,10 +20,10 @@ from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
-from .core import model_module_type, is_null_module_type
 from .model_path import ModelPath
-from .metrics import Metrics
-from .storage import Checkpoint, Deposition
+from .func import model_module_type, is_null_module_type
+
+__all__ = ['ModelConfig']
 
 def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> FlattenDict:
     """
@@ -741,7 +741,7 @@ class AlgoConfig:
         if value is not None:
             param[key] = value
 
-    def update_data_param(self, x_data: dict, config: "ModelConfig"):
+    def update_data_param(self, x_data: dict, config: ModelConfig):
         """when x_data is known , use it to fill some params(seq_len , input_dim , inday_dim , etc.) of nn module"""
         if not x_data:
             return self
@@ -825,6 +825,7 @@ class ModelConfig(BaseModelConfig):
         self.model_config = BaseModelConfig(base_path, module=module, schedule_name=schedule_name, override=override, **kwargs)
         self.algo_config = self.model_config.generate_algo_config()
         self.device = Device(try_cuda=self.try_cuda)
+        self.value_dict : dict[str, Any] = {}
         assert self.base_path, self.base_path
         assert self.model_config.base_path is self.base_path, f"{self.model_config.base_path} != {self.base_path}"
         assert self.algo_config.base_path is self.algo_config.base_path, f"{self.algo_config.base_path} != {self.algo_config.base_path}"
@@ -887,6 +888,15 @@ class ModelConfig(BaseModelConfig):
         if self.boost_head_config:
             self.boost_head_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.boost_head_config.model_module}") , **dump_kwargs)
         return self
+
+    def set_value(self, key: str, value: Any):
+        self.value_dict[key] = value
+
+    def get_value(self , key: str , **kwargs) -> Any:
+        if 'default' in kwargs:
+            return self.value_dict.get(key , kwargs['default'])
+        else:
+            return self.value_dict[key]
 
     @property
     def Param(self):
@@ -959,6 +969,14 @@ class ModelConfig(BaseModelConfig):
         )
 
     @property
+    def resumed_max_pred_date(self) -> int:
+        """
+        Resumed maximum predicted date for resumed testing.
+        Must be set by PredRecorder
+        """
+        return self.value_dict.get('resumed_max_pred_date' , 19000101)
+
+    @property
     def queue_of_stages(self) -> list[Literal["data", "fit", "test"]]:
         """stage queue for training"""
         return getattr(self, "_queue_of_stages", [])
@@ -1003,18 +1021,6 @@ class ModelConfig(BaseModelConfig):
             # includes test / predict / extract
             stg = "test"
         return None if no_weight else self.model_config.Param[f"train.criterion.weight"].get(stg, "equal")
-
-    def init_utils(self):
-        self.metrics = Metrics(
-            self.module_type,
-            self.nn_category,
-            self.criterion_loss,
-            self.criterion_accuracy,
-            self.criterion_multilosses,
-        )
-        self.checkpoint = Checkpoint(self.mem_storage)
-        self.deposition = Deposition(self.base_path)
-        return self
 
     @staticmethod
     def set_random_seed(seed=None):

@@ -415,7 +415,7 @@ class AlphaComponent:
     @classmethod
     def db_loads(cls , alpha : tuple[str,str,str | None] , name : str = 'alpha0' , 
                  normalize : bool = True , closest = True , direction : int = 1) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
-        from src.res.factor.util.classes import StockFactor
+        from src.res.factor.util import StockFactor
         def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
             date = _to_dates(date)
             src , key , col = alpha
@@ -430,7 +430,7 @@ class AlphaComponent:
     def factor_loads(cls , factor_name : str , name : str = 'alpha0' , 
                      normalize : bool = True , closest = True , direction : int = 1) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
         from src.res.factor.calculator import StockFactorHierarchy
-        from src.res.factor.util.classes import StockFactor
+        from src.res.factor.util import StockFactor
         def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
             date = _to_dates(date)
             df = StockFactorHierarchy.get_factor(factor_name).Loads(date , closest = closest)

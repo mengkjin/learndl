@@ -7,6 +7,11 @@ from src.proj.core import strPath
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
+__all__ = [
+    'TYPE_MODULE_TYPES' , 'MODULE_TYPES' ,
+    'parse_model_input' , 'combine_full_name' , 'split_full_name' , 
+    'model_module_type' , 'check_null_module_type' , 'is_null_module_type' , 'search_existing_models']
+
 TYPE_MODULE_TYPES = Literal['nn' , 'boost' , 'factor' ,'']
 MODULE_TYPES : list[TYPE_MODULE_TYPES] = ['nn' , 'boost' , 'factor' , '']
 
