@@ -244,7 +244,7 @@ class ModuleData:
         if len(self.blocks) <= 1:
             return self
         with Logger.Timer(f'Align {self.block_title}' , indent = self.indent , vb_level = self.vb_level + 1):
-            DataBlock.blocks_align(self.blocks , vb_level = self.vb_level + 2)
+            DataBlock.blocks_align(self.blocks , vb_level = 'never')
         index_lens = [block.shape[:2] for block in self.blocks.values()]
         if index_lens:
             assert all([lens == index_lens[0] for lens in index_lens]) , f'{[(name,block.shape) for name,block in self.blocks.items()]}'

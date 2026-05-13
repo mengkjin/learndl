@@ -3,10 +3,10 @@ from typing import Any , Type
 
 from src.proj import Logger
 from src.res.model.util import BaseCallBack , BaseTrainer 
-from . import monitor, fit, test , scheduler, nnspecific
+from . import monitor, fit, test, specific
 
 class CallBackManager(BaseCallBack):
-    CallbackModules = [fit , monitor , test , scheduler]
+    CallbackModules = [fit , monitor , test]
 
     def __init__(self , trainer , *args , **kwargs):
         super().__init__(trainer)   
@@ -32,12 +32,17 @@ class CallBackManager(BaseCallBack):
         use_cbs = [cb for cb in compulsory_cbs if cb in available_cbs]
 
         callback_classes = [cls.get_callback_class(cb) for cb in use_cbs]
-        if specific_cb := cls.get_module_specific_callback(trainer.config.model_module):
+        if specific_cb := specific.get_specific_cb(trainer.config.model_module):
             callback_classes.append(specific_cb)
 
         callback_classes = sorted(callback_classes, key=lambda x: x.CB_ORDER)
         callbacks = [cb_type(trainer , **trainer.config.callback_kwargs.get(cb_type.__name__ , {})) for cb_type in callback_classes]
         callbacks = [cb for cb in callbacks if cb]
+        callback_names = [cb.__class__.__name__ for cb in callbacks]
+        for cb in callbacks:
+            for conflict_cb in cb.ConflictCallbacks:
+                if conflict_cb in callback_names:
+                    raise TypeError(f'{cb.__class__.__name__} conflicts with {conflict_cb}')
         return callbacks
 
     @classmethod
@@ -51,6 +56,8 @@ class CallBackManager(BaseCallBack):
             cbs = {}
             for cb_mod in cls.CallbackModules:
                 for name , obj in inspect.getmembers(cb_mod , lambda x: inspect.isclass(x) and issubclass(x , BaseCallBack)):
+                    if obj is BaseCallBack:
+                        continue
                     assert name not in cbs , f'{name} is defined in {cb_mod} and {cbs[name].__module__}'
                     cbs[name] = obj
             cls._general_callback_classes = cbs
@@ -59,7 +66,3 @@ class CallBackManager(BaseCallBack):
     @classmethod
     def get_callback_class(cls , cb_name : str) -> Type[BaseCallBack]:
         return cls.get_callback_classes()[cb_name]
-
-    @staticmethod
-    def get_module_specific_callback(module_name : str) -> Type[BaseCallBack] | None:
-        return nnspecific.specific_cb(module_name)

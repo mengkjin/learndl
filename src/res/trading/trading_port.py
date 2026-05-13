@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any , Literal , Type , ClassVar
 
 from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates , Const
-from src.proj.util import dfs_to_excel , figs_to_pdf
+from src.proj.util import AsyncSaver
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -237,8 +237,8 @@ class TradingPort:
         figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
         if write_down:
-            dfs_to_excel(rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , indent = indent + 1 , vb_level = vb_level + 2)
-            figs_to_pdf(figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , indent = indent + 1 , vb_level = vb_level + 2)
+            AsyncSaver.dfs(rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , indent = indent + 1 , vb_level = vb_level + 2)
+            AsyncSaver.figs(figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , indent = indent + 1 , vb_level = vb_level + 2)
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:

@@ -40,6 +40,16 @@ class BoostPredictor(BasePredictorModel):
         self.init_model(*args , **kwargs)
         self.boost.load_dict(model_file['boost_dict'])
         return self
+
+    def ckpt_state_dict(self):
+        '''revert model to an earlier epoch drom checkpoint'''
+        return {
+            'epoch' : self.status.epoch,
+            'phase' : self.status.phase,
+        }
+
+    def load_state_dict(self , state_dict : dict):
+        return self
     
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''

@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from src.res.model.util import BaseCallBack , Optimizer
 
-class ResetOptimizer(BaseCallBack):
+class LearnRateReset(BaseCallBack):
     '''reset optimizer on some epoch , custom scheduler'''
     CB_KEY_PARAMS = ['num_reset' , 'trigger' , 'recover_level' , 'speedup2x']
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
@@ -36,4 +36,7 @@ class ResetOptimizer(BaseCallBack):
             shd_param = self.halved_param(shd_param)
 
         self.optimizer.scheduler = self.optimizer.load_scheduler(self.optimizer.optimizer , shd_param)
-        self.status.add_event('reset_learn_rate')
+        info = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
+        if self.speedup2x: 
+            info += ', and will speedup2x'
+        self.status.add_epoch_event('logging' , 'reset_learn_rate' , message = info)

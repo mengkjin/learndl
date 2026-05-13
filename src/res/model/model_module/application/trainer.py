@@ -1,7 +1,7 @@
 from contextlib import nullcontext
 from typing import Literal
 
-from src.proj import MACHINE , Logger , Proj 
+from src.proj import MACHINE , Logger , Proj , PATH
 from src.proj.core import strPath
 from src.proj.util import HtmlCatcher
 from src.res.model.callback import CallBackManager
@@ -82,12 +82,6 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def update_models(cls , force_update : bool = False):
-        # if not MACHINE.server:
-        #     Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
-        # else:
-        #     for model in PredictionModel.SelectModels():
-        #         with Logger.ParagraphI(f'Updating Model {model.model_path}'):
-        #             cls.initialize(0 , 1 , 0 , model.model_path).go()
         if not MACHINE.cuda_server:
             Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
@@ -194,3 +188,13 @@ class ModelTrainer(BaseTrainer):
     def all_resumable_models(cls , **kwargs) -> list[ModelPath]:
         available_models = cls.resumable_factors() + cls.resumable_models()
         return available_models
+
+    @staticmethod
+    def available_models(include_short_test : bool = False , include_factors : bool = False):
+        root_paths = [PATH.model_nn , PATH.model_boost]
+        if include_short_test:
+            root_paths.append(PATH.model_st)
+        if include_factors:
+            root_paths.append(PATH.model_factor)
+        bases = [f'{root.name}@{model.name}' for root in root_paths for model in root.iterdir() if model.is_dir() and not model.name.startswith('.')]
+        return bases

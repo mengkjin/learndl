@@ -60,8 +60,7 @@ class NNBoost(BasePredictorModel):
                 self.net.load_state_dict(prev_model_file['state_dict'])
                 transferred = True
         self.optimizer : Optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
-        self.checkpoint.new_model(self.model_param , self.model_date)
-        
+        self.checkpoint.new_model(**self.status.status)
         return self
 
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
@@ -71,6 +70,24 @@ class NNBoost(BasePredictorModel):
         self.init_model(*args , **kwargs)
         self.net.load_state_dict(model_file['state_dict'])
         self.boost.load_dict(model_file['boost_head'])
+        return self
+
+    def ckpt_state_dict(self):
+        '''state dict of model at epoch to be saved in checkpoint'''
+        return {
+            'epoch' : self.status.epoch,
+            'phase' : self.status.phase,
+            'net' : self.net.state_dict() ,
+            'boost' : self.boost.to_dict() ,
+            'optimizer' : self.optimizer.optimizer.state_dict() ,
+            'scheduler' : self.optimizer.scheduler.state_dict() ,
+        }
+
+    def load_state_dict(self , state_dict : dict):
+        self.net.load_state_dict(state_dict['net'])
+        self.boost.load_dict(state_dict['boost'])
+        self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
+        self.optimizer.scheduler.load_state_dict(state_dict['scheduler'])
         return self
 
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
@@ -116,8 +133,9 @@ class NNBoost(BasePredictorModel):
                 self.batch_forward_net()
                 self.batch_metrics()
 
+            self.checkpoint.auto_save(self.ckpt_state_dict())
             for submodel in self.submodels.values():  
-                submodel.assess(self.net , self.status.epoch , self.metrics)
+                submodel.assess(self.status , self.metrics)
             self.optimizer.scheduler_step(self.status.epoch)
         self.collect_net()
 
@@ -146,7 +164,7 @@ class NNBoost(BasePredictorModel):
     def collect(self , submodel = 'best' , *args):
         self.model_dict.boost_head = self.boost.to_dict()
         return self.model_dict
-    
+
     # additional actions at hook
     def on_test_model_start(self):
         set_grad_enabled(False)

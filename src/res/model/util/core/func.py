@@ -8,12 +8,18 @@ from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
 __all__ = [
-    'TYPE_MODULE_TYPES' , 'MODULE_TYPES' ,
+    'TYPE_MODULE_TYPES' , 'MODULE_TYPES' , 'epoch_key' , 'attempt_key' ,
     'parse_model_input' , 'combine_full_name' , 'split_full_name' , 
     'model_module_type' , 'check_null_module_type' , 'is_null_module_type' , 'search_existing_models']
 
 TYPE_MODULE_TYPES = Literal['nn' , 'boost' , 'factor' ,'']
 MODULE_TYPES : list[TYPE_MODULE_TYPES] = ['nn' , 'boost' , 'factor' , '']
+
+def epoch_key(epoch : int , phase : int = 0) -> str:
+    return f'Ph{phase} Ep{epoch}'
+
+def attempt_key(attempt : int , redo : int = 0) -> str:
+    return f'Trial{attempt}-{redo}'
 
 def parse_model_input(model_input : strPath | None) -> dict[str,Any]:
     """return full model name and root path of a given model input"""

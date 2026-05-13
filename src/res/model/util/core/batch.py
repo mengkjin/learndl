@@ -206,9 +206,11 @@ class BatchOutput:
     def shape(self):
         return properties.shape(self , self.keys())
     @property    
-    def empty(self): return len(self) == 0
+    def empty(self): 
+        return len(self) == 0
     @property
-    def device(self): return self.pred.device
+    def device(self): 
+        return self.pred.device
     @property
     def pred(self) -> torch.Tensor:
         if self.outputs is None: 
@@ -341,7 +343,7 @@ class BatchData:
         return df
 
     def loss_inputs(self , exclude_nan : bool = False):
-        label , pred , weight = self.input.y , self.output.pred , self.input.w
+        pred , label , weight = self.output.pred , self.input.y , self.input.w
         if label.ndim == 1: 
             label = label[:,None]
             if weight is not None:
@@ -350,7 +352,7 @@ class BatchData:
             pred  = pred[:,None]
         others = self.output.other
 
-        row_pos = self._slice_nonnan(label , pred , weight) if exclude_nan else None
+        row_pos = self._slice_nonnan(pred , label , weight) if exclude_nan else None
         if row_pos is not None:
             label = label[row_pos]
             pred = pred[row_pos]

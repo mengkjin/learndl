@@ -44,7 +44,7 @@ class NNPredictor(BasePredictorModel):
                 self.net.load_state_dict(prev_model_file['state_dict'])
                 transferred = True
         self.optimizer : Optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
-        self.checkpoint.new_model(self.model_param , self.model_date)
+        self.checkpoint.new_model(**self.status.status)
         return self
     
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
@@ -53,6 +53,22 @@ class NNPredictor(BasePredictorModel):
 
         self.init_model(*args , **kwargs)
         self.net.load_state_dict(model_file['state_dict'])
+        return self
+    
+    def ckpt_state_dict(self):
+        '''state dict of model at epoch to be saved in checkpoint'''
+        return {
+            'epoch' : self.status.epoch,
+            'phase' : self.status.phase,
+            'net' : self.net.state_dict() ,
+            'optimizer' : self.optimizer.optimizer.state_dict() ,
+            'scheduler' : self.optimizer.scheduler.state_dict() ,
+        }
+
+    def load_state_dict(self , state_dict : dict):
+        self.net.load_state_dict(state_dict['net'])
+        self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
+        self.optimizer.scheduler.load_state_dict(state_dict['scheduler'])
         return self
     
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
@@ -95,8 +111,9 @@ class NNPredictor(BasePredictorModel):
         set_grad_enabled(False)
     
     def on_validation_epoch_end(self):
+        self.checkpoint.auto_save(self.ckpt_state_dict())
         for submodel in self.submodels.values():  
-            submodel.assess(self.net , self.status.epoch , self.metrics)
+            submodel.assess(self.status , self.metrics)
 
     def on_test_model_start(self):
         set_grad_enabled(False)

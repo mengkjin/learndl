@@ -19,7 +19,8 @@ class BatchInputLoader:
         return f'{self.__class__.__name__}(length={len(self.loader)})'
 
     def __len__(self):  return len(self.loader)
-    def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
+    def __getitem__(self , i : int): 
+        return self.process(list(self.loader)[i] , i)
     def __iter__(self):
         for batch_i , batch_input in enumerate(self.loader):
             assert isinstance(batch_input , BatchInput) , f'{type(batch_input)} is not a BatchInput'

@@ -10,7 +10,7 @@ from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , Logger , DB , Proj
 from src.proj.core import strPath
-from src.proj.util import dfs_to_excel , figs_to_pdf , camel_to_snake
+from src.proj.util import AsyncSaver , camel_to_snake
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
@@ -156,7 +156,7 @@ class BaseFactorAnalyticTest(ABC):
         if self._test_path is not None:
             return self._test_path
         else:
-            rslt_dir = PATH.rslt_factor.joinpath(self.TEST_TYPE)
+            rslt_dir = PATH.rslt_factor.joinpath(str(self.TEST_TYPE))
             rslt_dir.mkdir(parents=True , exist_ok=True)
             return rslt_dir.joinpath(self.test_name)
 
@@ -208,8 +208,8 @@ class BaseFactorAnalyticTest(ABC):
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
-        dfs_to_excel(rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , print_prefix=f'{self.__class__.__name__} Analytic Datas')
-        figs_to_pdf(figs   , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , print_prefix=f'{self.__class__.__name__} Analytic Plots')
+        AsyncSaver.dfs(rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , print_prefix=f'{self.__class__.__name__} Analytic Datas')
+        AsyncSaver.figs(figs   , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , print_prefix=f'{self.__class__.__name__} Analytic Plots')
         return self
 
     def save(self , path : strPath):

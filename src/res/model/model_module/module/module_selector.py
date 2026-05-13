@@ -1,5 +1,4 @@
-from src.res.model.util import ModelConfig
-from src.res.model.util.core import is_null_module_type
+from src.res.model.util import ModelConfig , is_null_module_type
 
 from .nn import NNPredictor
 from .boost import BoostPredictor

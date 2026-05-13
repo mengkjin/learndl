@@ -118,13 +118,13 @@ class block_tra(nn.Module):
             self.probs = None
             final_pred = preds = self.predictors(x)
         if self.training and self.probs is not None and self.num_states > 1 and y is not None:
-            loss_opt_transport = self.loss_opt_transport(preds , y)
+            loss_opt_transport = self.loss_opt_transport(y , preds)
         else:
             loss_opt_transport = torch.Tensor([0])
             
         return final_pred , {'loss_opt_transport' : loss_opt_transport , 'hidden': preds , 'preds': preds}
     
-    def loss_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor:
+    def loss_opt_transport(self , label : Tensor , preds : Tensor) -> Tensor:
         """Sinkhorn optimal transport regularization loss for TRA.
 
         Penalizes the negative log-likelihood of the router assignment under

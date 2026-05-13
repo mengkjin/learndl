@@ -23,6 +23,16 @@ class NullPredictor(BasePredictorModel):
     def load_model(self , *args , **kwargs):
         '''call when testing new model'''
         return self.init_model(*args , **kwargs)
+
+    def ckpt_state_dict(self):
+        '''state dict of model at epoch to be saved in checkpoint'''
+        return {
+            'epoch' : self.status.epoch,
+            'phase' : self.status.phase,
+        }
+
+    def load_state_dict(self , state_dict : dict):
+        return self
     
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''

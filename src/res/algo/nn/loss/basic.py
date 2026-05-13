@@ -1,30 +1,23 @@
 """Shared utilities for loss and accuracy modules."""
 import torch
 
-def align_shape(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None):
-    """Truncate label, pred, and optional weight to a consistent last dimension.
-
-    When a model produces fewer output steps than the label (e.g. multi-horizon
-    prediction with partial output), this function trims all three tensors to
-    ``min(label.shape[-1], pred.shape[-1])`` along the last axis so that loss
-    computation does not fail due to shape mismatch.
-
-    Args:
-        label: Ground-truth tensor of arbitrary shape ``(..., T_label)``.
-        pred:  Model prediction tensor of arbitrary shape ``(..., T_pred)``.
-        w:     Optional sample weight tensor of shape ``(..., T_w)``.
-
-    Returns:
-        ``(label, pred, w)`` trimmed to the same last dimension size.
-        ``w`` is returned unchanged (``None``) when not provided.
+def mask_topx(tensor : torch.Tensor , x_percent : float , dim : int = 0 , ascending : bool = True , fill_nan : bool = False):
     """
-    if label.shape[-1] != pred.shape[-1]:
-        last_dim = min(label.shape[-1] , pred.shape[-1])
-        label = label[...,:last_dim]
-        pred = pred[...,:last_dim]
-        if w is not None:
-            w = w[...,:last_dim]
-    return label , pred , w
+    mask the top x% of the tensor in the specified dimension, ignoring NaN.
+    """
+    nan_pos = tensor.isnan()
+    non_nan_counts = (~nan_pos).sum(dim=dim)
+    
+    clean_tensor = torch.where(tensor.isnan() , -torch.inf if ascending else torch.inf , tensor)
+    ranks = clean_tensor.argsort(dim=dim, descending=ascending).argsort(dim=dim)
+    k_threshold = (non_nan_counts * x_percent).long()
+    mask = (ranks < k_threshold.unsqueeze(dim)) & (~tensor.isnan())
+    
+    if fill_nan:
+        mask = torch.where(mask , 1. , torch.nan)
+    else:
+        mask = mask.float()
+    return mask
 
 def first_output(x : torch.Tensor):
     """Get the first output of a tensor."""

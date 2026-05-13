@@ -9,6 +9,7 @@ from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
 class BaseCallBack(ModelStreamLineWithTrainer):
     CB_ORDER : int = 0
     CB_KEY_PARAMS : list[str] = []
+    ConflictCallbacks : list[str] = []
     def __init__(self , trainer : BaseTrainer , **kwargs) -> None:
         self.bound_with_trainer(trainer)
         self.kwargs = kwargs

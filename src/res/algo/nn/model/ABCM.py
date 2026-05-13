@@ -28,7 +28,7 @@ class Astgnn(nn.Module):
 
     The combined loss is::
 
-        MSE(pred, label[...,0])
+        MSE(pred, label[...,:1])
         + R²_loss(alphas, label[...,1])
         + loss_corr_lamb * corr_loss(betas)
         + turnover_loss(betas, betas_peer)
@@ -110,7 +110,7 @@ class Astgnn(nn.Module):
                          turnover penalty.
         """
         assert label.shape[-1] == 2 , label.shape
-        mse = F.mse_loss(pred.squeeze() , label[...,0].squeeze())
+        mse = F.mse_loss(pred.squeeze() , label[...,:1].squeeze())
         rsquare = self.rsquare_loss(alphas , label[...,1])
         corr = self.corr_loss(betas)
         turnover = self.turnover_loss(betas , betas_peer)

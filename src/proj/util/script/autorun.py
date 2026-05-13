@@ -7,9 +7,9 @@ from functools import wraps
 from pathlib import Path
 from typing import Any , Callable
 
-from src.proj.env import MACHINE
-from src.proj.env import Proj
+from src.proj.env import MACHINE , Proj
 from src.proj.log import Logger
+from src.proj.core import strPath
 from src.proj.cal import CALENDAR
 
 from .task_record import TaskRecorder
@@ -139,7 +139,7 @@ class AutoRunTask:
 
         self.kwargs = kwargs
         
-        self.exit_files : list[Path] = []
+        self.exit_files : list[strPath] = []
         self.error_messages : list[str] = []
         
         self.status = 'Starting'
@@ -163,6 +163,8 @@ class AutoRunTask:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        from src.proj.util import AsyncSaver
+        AsyncSaver.wait_all()
         self.end_time = datetime.now()
         if isinstance(self.func_return , Path):
             Proj.exit_files.append(self.func_return)
@@ -178,7 +180,7 @@ class AutoRunTask:
 
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         
-        self.exit_files = Proj.exit_files.pop_all()
+        self.exit_files = [p for p in Proj.exit_files.pop_all()]
 
         # send email if not forfeit task
         if not self.forfeit_task:

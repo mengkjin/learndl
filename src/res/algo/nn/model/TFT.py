@@ -422,17 +422,17 @@ class TemporalFusionTransformer(nn.Module):
         }
     
     @staticmethod
-    def loss(label : torch.Tensor , pred : torch.Tensor | None = None , w : torch.Tensor | None = None , dim = None , 
+    def loss(pred : torch.Tensor , label : torch.Tensor , weight : torch.Tensor | None = None , dim = None , 
              quantiles : list[float] = [0.1,0.5,0.9] , predictions : torch.Tensor | None = None , **kwargs):
         assert predictions is not None , f'predictions should be provided'
         assert predictions.shape[-1] == len(quantiles) , f'shape of predictions {predictions.shape} should be (...,{len(quantiles)})'
         if predictions.ndim == label.ndim + 1: 
             predictions = predictions.squeeze(-2)
         assert predictions.ndim == label.ndim == 2 , f'shape of predictions {predictions.shape} and label {label.shape} should be (...,1)'
-        if w is None:
+        if weight is None:
             w1 = 1.
         else:
-            w1 = w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
+            w1 = weight / weight.sum(dim=dim,keepdim=True) * (weight.numel() if dim is None else weight.size(dim=dim))
         
         losses = []
         label = label.expand_as(predictions)

@@ -8,8 +8,8 @@ from typing import Any
 from src.proj import Logger
 from src.res.algo.nn.optimizer import sam
 
-from src.res.model.util.core import ModelConfig
-from .metrics import BatchMetrics
+from src.res.model.util.config import ModelConfig
+from src.res.model.util.metric import BatchMetrics
 
 __all__ = ['Optimizer']
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from typing import Iterator
+from typing import Iterable
 
 from src.res.algo.boost import BoostInput
 from src.res.model.util import BatchInput , BatchOutput
@@ -60,14 +60,14 @@ def batch_x(batch_input : BatchInput , nn_to_calculate_hidden : nn.Module | None
     else:
         return batch_input.x
     
-def batch_loader_concat(batch_loader : Iterator[BatchInput] , nn_to_calculate_hidden : nn.Module | None = None):
+def batch_loader_concat(batch_loader : Iterable[BatchInput] , nn_to_calculate_hidden : nn.Module | None = None):
     new_batchs : list[BatchInput] = []
     for b in batch_loader:
         new_batch_data = BatchInput(batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.valid , b.y_date , b.y_secid)
         new_batchs.append(new_batch_data.cpu())
     return BatchInput.concat(*new_batchs)
 
-def batch_loader_to_boost_input(batch_loader : Iterator[BatchInput] , 
+def batch_loader_to_boost_input(batch_loader : Iterable[BatchInput] , 
                                 secid : np.ndarray | None = None ,
                                 date : np.ndarray | None = None , 
                                 nn_to_calculate_hidden : nn.Module | None = None):

@@ -1,6 +1,7 @@
 """Torch device selection, nested ``.to()``, and simple RAM usage string."""
 from __future__ import annotations
 import psutil , torch
+from copy import deepcopy
 from torch.nn import Module
 from typing import Any
 
@@ -16,18 +17,19 @@ if torch.backends.mps.is_available() == 'mps':
     # set memory allocation strategy
     torch.mps.set_per_process_memory_fraction(0.7)  # 使用60%的GPU内存
 
-def send_to(x : Any , device = None) -> Any:
+def send_to(x : Any , device = None , copy = False) -> Any:
     """Recursively move tensors/modules/containers to ``device``."""
-    if isinstance(x , torch.Tensor | Module):
-        return x.to(device)
+    if isinstance(x , torch.Tensor | Module) or hasattr(x , 'to'): # maybe modulelist ... self defined class
+        x_ = x.to(device)
+        if copy and x_ is x:
+            x_ = deepcopy(x_)
+        return x_
     if isinstance(x , (list,tuple)):
-        return type(x)(send_to(v , device) for v in x)
+        return type(x)(send_to(v , device, copy) for v in x)
     elif isinstance(x , (dict)):
-        return {k:send_to(v , device) for k,v in x.items()}
-    elif hasattr(x , 'to'): # maybe modulelist ... self defined class
-        return x.to(device)
+        return {k:send_to(v , device, copy) for k,v in x.items()}
     else:
-        return x
+        return deepcopy(x) if copy else x
     
 def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch.device:
     """Infer ``torch.device`` from tensor, module, or nested structure."""
@@ -109,7 +111,7 @@ class Device:
             Logger.stdout(f'Not using cuda or mps {self.device}')
 
     @staticmethod
-    def send_to(x : Any , device = None) -> Any:
+    def send_to(x : Any , device = None , copy = False) -> Any:
         """Module-level ``send_to`` bound for convenience."""
         return send_to(x , device)
 

@@ -214,15 +214,15 @@ class PreProcessor(metaclass=PreProcessorMeta):
         if start > end:
             return DataBlock()
 
-        with Logger.Timer(f'[{self.key}] blocks loading' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 2):
+        with Logger.Timer(f'[{self.key}] blocks loading' , indent = indent , vb_level = vb_level + 1 , enter_vb_level = vb_level + 2):
             load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
             block_dict = self.load_blocks(load_start, end, secid = secid, indent = indent + 1 , vb_level = vb_level + 2)
 
-        with Logger.Timer(f'[{self.key}] blocks process' , indent = indent , vb_level = vb_level + 1):
+        with Logger.Timer(f'[{self.key}] blocks process' , indent = indent , vb_level = vb_level + 2):
             block = self.process_blocks(block_dict)
             block = block.slice_date(start , end)
 
-        with Logger.Timer(f'[{self.key}] blocks masking' , indent = indent , vb_level = vb_level + 1):   
+        with Logger.Timer(f'[{self.key}] blocks masking' , indent = indent , vb_level = vb_level + 2):   
             block = block.mask_values(mask = self.mask)
             
         return block

@@ -1,87 +1,221 @@
 from __future__ import annotations
 
-
-import numpy as np
-import pandas as pd
-
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Literal
+from typing import Literal , Any
 
 from src.proj import Logger
-from .metrics import Metrics
+from src.res.model.util.core import epoch_key , attempt_key
 from .streamline import ModelStreamLine
 
+EventTypeType = Literal[
+    'new_attempt' , 'redo_attempt' , 'end_attempt' , 
+    'recall_ckpt' , 'new_phase_recall' , 'new_phase' , 
+    'milestone' , 'logging']
 @dataclass
-class _EndEpochStamp:
-    """End epoch stamp class, used to store the end epoch of the model stream line"""
-    name  : str
-    epoch : int # epoch of trigger
+class EpochEvent:
+    """Epoch event class, used to store the event of the epoch"""
+    type : EventTypeType
+    reason : str
+    epoch : int
+    phase : int = 0
+    effective_epoch : int = -1
+    message : str = ''
+    details : dict[str,Any] = field(default_factory=dict)
 
-class _FitLoopBreaker:
-    """Fit loop breaker class, used to break the fit loop when the epoch is too large or meet some conditions"""
+    def __post_init__(self):
+        if self.effective_epoch < 0:
+            self.effective_epoch = self.epoch
+
+    @property
+    def vb_level(self) -> Any:
+        if self.type in ['new_attempt' , 'redo_attempt' , 'end_attempt' , 'recall_ckpt' , 'new_phase_recall' , 'new_phase']:
+            return 1
+        elif self.type in ['milestone']:
+            return 2
+        elif self.type in ['logging']:
+            return 3
+        else:
+            raise ValueError(f'Invalid event type: {self.type}')
+
+    @property
+    def info(self) -> str:
+        if self.message:
+            return self.message
+        elif 'info' in self.details:
+            return self.details['info']
+        else:
+            info = f'Event {self.type} : [{self.reason}] at epoch {self.epoch}'
+            if self.effective_epoch != self.epoch:
+                info += f', effective at epoch {self.effective_epoch}'
+            return info
+            
+@dataclass
+class EpochRecord:
+    """Epoch event class, used to store the event of the epoch"""
+    attempt : int = 0
+    phase : int = 0
+    epoch : int = 0
+    redo : int = 0
+    events : list[EpochEvent] = field(default_factory=list)
+    details : dict[str,Any] = field(default_factory=dict)
+
+    @property
+    def continue_status(self) -> Literal['continue' , 'redo_attempt' , 'new_attempt' , 'end_attempt' , 'new_phase_recall' , 'new_phase' , 'recall_ckpt']:
+        event_types = list(set([event.type for event in self.events]))
+        if 'redo_attempt' in event_types:
+            return 'redo_attempt'
+        if 'new_attempt' in event_types:
+            return 'new_attempt'
+        if 'end_attempt' in event_types:
+            return 'end_attempt'
+        if 'new_phase_recall' in event_types:
+            return 'new_phase_recall'
+        if 'new_phase' in event_types:
+            return 'new_phase'
+        if 'recall_ckpt' in event_types:
+            return 'recall_ckpt'
+        return 'continue'
+
+    def find_event(self , event_type : EventTypeType , allow_multiple : bool = False) -> EpochEvent | None:
+        """find the first event of the given type"""
+        events = [event for event in self.events if event.type == event_type]
+        assert allow_multiple or len(events) <= 1 , f'Only one {event_type} event is allowed, but got {len(events)}'
+        return events[0] if events else None
+
+    def next_attempt(self , status : str | None = None) -> int:
+        status = status or self.continue_status
+        if status == 'new_attempt':
+            return self.attempt + 1
+        else:
+            return self.attempt
+
+    def next_redo(self , status : str | None = None) -> int:
+        status = status or self.continue_status
+        if status == 'redo_attempt':
+            return self.redo + 1
+        else:
+            return self.redo
+
+    def next_phase(self , status : str | None = None) -> int:
+        status = status or self.continue_status
+        if status in ['new_phase' , 'new_phase_recall']:
+            return self.phase + 1
+        elif status in ['new_attempt' , 'redo_attempt' , 'end_attempt']:
+            return 0
+        else:
+            return self.phase
+
+    def next_epoch(self , status : str | None = None) -> int:
+        status = status or self.continue_status
+        if status in ['continue' , 'new_phase']:
+            return self.epoch + 1
+        elif status in ['new_phase_recall' , 'recall_ckpt']:
+            recall_events = [event for event in self.events if event.type == status]
+            assert len(recall_events) == 1 , f'Only one recall_ckpt event is allowed, but got {len(recall_events)}'
+            return recall_events[0].effective_epoch + 1
+        elif status in ['new_attempt' , 'redo_attempt' , 'end_attempt']:
+            return 0
+        else:
+            raise ValueError(f'Invalid continue status: {status}')
+
+    def new_epoch(self) -> EpochRecord | None:
+        status = self.continue_status
+        attempt = self.next_attempt(status)
+        redo = self.next_redo(status)
+        phase = self.next_phase(status)
+        epoch = self.next_epoch(status)
+        if status == 'end_attempt':
+            return None
+        else:
+            return EpochRecord(attempt , phase , epoch , redo)
+
+class FittingEpochs:
+    """Fitting epochs class, used to store the epochs of the fitting"""
     def __init__(self , max_epoch : int = 200):
         self.max_epoch = max_epoch
-        self.status : list[_EndEpochStamp] = []
-    def __bool__(self): 
-        return len(self.status) > 0
-    def __repr__(self): 
-        return f'{self.__class__.__name__}(max_epoch={self.max_epoch},status={self.status})'  
-    def new_loop(self): 
-        self.status = []
-    def loop_end(self , epoch):
-        if epoch >= self.max_epoch - 1: 
-            self.add_status('Max Epoch' , epoch)
-    def add_status(self , status : str , epoch : int): 
-        self.status.append(_EndEpochStamp(status , epoch))
+        self.epochs : list[EpochRecord] = []
+        self.events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
+        self.attempt_events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
+    def __len__(self):
+        return len(self.epochs)
+    def __repr__(self):
+        return f'FittingEpochs(epochs={len(self.epochs)}, events=({", ".join([f"{k}={len(v)}" for k,v in self.events.items()])}))'
+    def __bool__(self):
+        return bool(self.epochs)
+    def clear(self):
+        """clear the epochs and events every time a new model is started, but keep the attempt events"""
+        self.epochs.clear()
+        self.events.clear()
+        self.attempt_events.clear()
     @property
-    def end_epochs(self) -> list[int]:
-        return [sta.epoch for sta in self.status]
+    def current_epoch(self) -> EpochRecord:
+        return self.epochs[-1]
     @property
-    def trigger_i(self) -> int:
-        return np.argmin(self.end_epochs).item()
+    def attempt(self) -> int:
+        return 0 if not self.epochs else self.epochs[-1].attempt
     @property
-    def trigger_ep(self) -> int:
-        return self.status[self.trigger_i].epoch
+    def redo(self) -> int:
+        return 0 if not self.epochs else self.epochs[-1].redo
     @property
-    def trigger_reason(self):
-        return self.status[self.trigger_i].name
-
+    def phase(self) -> int:
+        return 0 if not self.epochs else self.epochs[-1].phase
+    @property
+    def epoch(self) -> int:
+        return -1 if not self.epochs else self.epochs[-1].epoch
+    @property
+    def next_attempt(self) -> int:
+        return 0 if not self.epochs else self.epochs[-1].next_attempt()
+    @property
+    def next_redo(self) -> int:
+        return 0 if not self.epochs else self.epochs[-1].next_redo()
+    @property
+    def model_epoch(self) -> int:
+        return len(self.epochs) - 1
+    @property
+    def loop_end(self) -> bool:
+        if not hasattr(self , 'continue_status'):
+            return False
+        return self.continue_status == 'end_attempt'
+    def new_epoch(self):
+        if hasattr(self , 'continue_status') and self.continue_status in ['redo_attempt' , 'new_attempt']:
+            for type in self.attempt_events:
+                self.events[type].extend(self.attempt_events[type])
+            self.attempt_events.clear()
+        record = self.current_epoch.new_epoch() if self.epochs else EpochRecord()
+        assert record is not None , 'record is None'
+        self.epochs.append(record)
+    def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
+        effective_epoch = -1 if epoch is None else epoch
+        current_epoch = self.current_epoch
+        event = EpochEvent(type , reason , current_epoch.epoch , current_epoch.phase , effective_epoch , message , details or {})
+        self.attempt_events[type].append(event)
+        current_epoch.events.append(event)
+    def check_loop_end(self):
+        if self.epoch >= self.max_epoch - 1:
+            self.add_epoch_event('end_attempt' , 'Max Epoch' , message = f'Max Epoch ({self.max_epoch}) reached, force end attempt')
+        self.continue_status = self.current_epoch.continue_status
+    @property
+    def end_attempt_event(self) -> EpochEvent:
+        assert self.attempt_events['end_attempt'] , 'No end attempt event'
+        event = sorted(self.attempt_events['end_attempt'] , key = lambda x: (x.effective_epoch , x.epoch))[0]
+        return event
+    
 class TrainerStatus(ModelStreamLine):
     """Trainer status class, used to store the status of the trainer"""
-    def __init__(self , max_epoch : int = 200):
-        self.max_epoch : int = max_epoch
+    def __init__(self , max_epoch : int):
         self.stage   : Literal['data' , 'fit' , 'test'] = 'data'
         self.dataset : Literal['train' , 'valid' , 'test' , 'predict'] = 'train'
-        self.epoch   : int = -1
-        self.attempt : int = 0
-        self.round   : int = 0
-
-        self.epoch_model : int = -1
-        
         self.model_num  : int = -1
         self.model_date : int = -1
         self.model_submodel : str = 'best'
-        self.epoch_event : list[str] = []
 
-        self.best_attempt : tuple[int , Any] = (-1 , None)
-
-        self.fitted_model_num : int = 0
-
-        self.fit_loop_breaker = _FitLoopBreaker(self.max_epoch)
-        self.fit_iter_num : int = 0
-
-        self.start_times : dict[str,datetime] = {}
-        self.end_times : dict[str,datetime] = {}
-        self.test_summary : pd.DataFrame = pd.DataFrame()
-
-    def as_dict(self):
-        d = {k:getattr(self,k) for k in 
-             ['max_epoch' , 'stage' , 'dataset' , 'epoch' , 'attempt' , 
-              'round' , 'model_num' , 'model_date' , 'model_submodel' , 
-              'epoch_event' , 'best_attempt' , 'fitted_model_num']}
-        return d
-
+        self.fitting_epochs : FittingEpochs = FittingEpochs(max_epoch)
+        self.total_epochs : int = 0
+        self.total_models : int = 0
+        self.times : dict[str,datetime] = {}
+        
     def __repr__(self):
         return f'TrainerStatus({", ".join([f"{k}={v}" for k,v in self.status.items()])})'
 
@@ -93,53 +227,86 @@ class TrainerStatus(ModelStreamLine):
             'model_num' : self.model_num ,
             'model_date' : self.model_date ,
             'model_submodel' : self.model_submodel ,
-            'epoch' : self.epoch ,
             'attempt' : self.attempt ,
-            'round' : self.round
+            'redo' : self.redo ,
+            'phase' : self.phase ,
+            'epoch' : self.epoch ,
+            'next_attempt' : self.fitting_epochs.next_attempt ,
+            'next_redo' : self.fitting_epochs.next_redo ,
+            'epoch_key' : self.epoch_key ,
+            'model_epoch' : self.model_epoch ,
         }
-    def update_best_attempt(self , metrics : Metrics):
-        if metrics.better_attempt(self.best_attempt[1]):
-            self.best_attempt = (self.attempt , metrics.best_epoch_metric)
-            return True
-        return False
-    def stage_data(self): self.stage = 'data'
-    def stage_fit(self):  self.stage = 'fit'
-    def stage_test(self): self.stage = 'test'
-    def on_before_data_start(self):    self.start_times['data'] = datetime.now()
-    def on_after_data_end(self):       self.end_times['data'] = datetime.now()
-    def on_before_fit_start(self):     self.start_times['fit'] = datetime.now()
-    def on_after_fit_end(self):        self.end_times['fit'] = datetime.now()
-    def on_before_test_start(self):    self.start_times['test'] = datetime.now()
-    def on_after_test_end(self):       self.end_times['test'] = datetime.now()
-    def on_train_epoch_start(self): self.dataset = 'train'
-    def on_validation_epoch_start(self): self.dataset = 'valid'
-    def on_test_model_start(self): self.dataset = 'test'
-    def on_fit_model_start(self):
-        if self.fit_iter_num == 0:
-            Logger.note(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})')
-        self.fit_iter_num += 1
-        self.attempt = -1
-        self.best_attempt = (-1 , None)
-        self.epoch = -1
-        self.epoch_model = -1
-        self.new_attempt()
-    def on_fit_model_end(self):
-        self.fitted_model_num += 1
-    def on_fit_epoch_start(self):
-        self.epoch += 1
-        self.epoch_model += 1
-        self.epoch_event = []
-    def on_fit_epoch_end(self):
-        self.fit_loop_breaker.loop_end(self.epoch)
-    def new_attempt(self , event : Literal['new_attempt' , 'nanloss'] = 'new_attempt'):
-        self.epoch = -1
-        self.round = 0
-        self.epoch_event = []
-        self.fit_loop_breaker.new_loop()
-        self.add_event(event)
-        if event == 'new_attempt': 
-            self.attempt += 1        
+    @property
+    def loop_end(self) -> bool:
+        return self.fitting_epochs.loop_end
+    @property
+    def end_attempt_event(self) -> EpochEvent:
+        return self.fitting_epochs.end_attempt_event
+    @property
+    def current_epoch(self) -> EpochRecord:
+        return self.fitting_epochs.current_epoch
+    @property
+    def attempt(self) -> int:
+        return self.fitting_epochs.attempt
+    @property
+    def redo(self) -> int:
+        return self.fitting_epochs.redo
+    @property
+    def phase(self) -> int:
+        return self.fitting_epochs.phase
+    @property
+    def epoch(self) -> int:
+        return self.fitting_epochs.epoch
+    @property
+    def epoch_key(self) -> str:
+        return epoch_key(self.epoch , self.phase)
+    @property
+    def model_epoch(self) -> int:
+        return self.fitting_epochs.model_epoch
+    @property
+    def attempt_key(self) -> str:
+        return attempt_key(self.attempt , self.redo)
+    @property
+    def milestone_epoch(self) -> int:
+        return self._milestone_epoch
 
-    def add_event(self , event : str | None):
-        if event: 
-            self.epoch_event.append(event)
+    def set_milestone_epoch(self , epoch : int):
+        self._milestone_epoch = epoch
+    def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
+        self.fitting_epochs.add_epoch_event(type , reason , epoch , message , details)
+    
+    def stage_data(self): 
+        self.stage = 'data'
+    def stage_fit(self):  
+        self.stage = 'fit'
+    def stage_test(self): 
+        self.stage = 'test'
+    def on_before_data_start(self):  
+        self.times['data_start'] = datetime.now()
+    def on_after_data_end(self):    
+        self.times['data_end'] = datetime.now()
+    def on_before_fit_start(self):    
+        self.times['fit_start'] = datetime.now()
+    def on_after_fit_end(self):        
+        self.times['fit_end'] = datetime.now()
+    def on_before_test_start(self):    
+        self.times['test_start'] = datetime.now()
+    def on_after_test_end(self):      
+        self.times['test_end'] = datetime.now()
+    def on_train_epoch_start(self): 
+        self.dataset = 'train'
+    def on_validation_epoch_start(self): 
+        self.dataset = 'valid'
+    def on_test_model_start(self): 
+        self.dataset = 'test'
+    def on_fit_model_start(self):
+        Logger.only_once(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , object = self , printer = Logger.note)
+        self.times['model_start'] = datetime.now()
+        self.fitting_epochs.clear()
+        self.set_milestone_epoch(0)
+        self.total_models += 1
+    def on_fit_epoch_start(self):
+        self.fitting_epochs.new_epoch()
+        self.total_epochs += 1
+    def on_fit_epoch_end(self):
+        self.fitting_epochs.check_loop_end()

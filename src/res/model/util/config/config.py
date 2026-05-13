@@ -20,8 +20,7 @@ from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
-from .model_path import ModelPath
-from .func import model_module_type, is_null_module_type
+from src.res.model.util.core import ModelPath , model_module_type, is_null_module_type
 
 __all__ = ['ModelConfig']
 
@@ -578,14 +577,12 @@ class BaseModelConfig:
 
     @property
     def criterion_loss(self) -> dict[str, dict[str, Any]]:
-        kwargs = self["train.criterion.loss"]
+        kwargs : dict[str, dict[str, Any]] = self["train.criterion.loss"]
         assert len(kwargs) > 0, f"{kwargs} should be not empty"
         for k, v in kwargs.items():
             if v is None:
                 kwargs[k] = {}
-            if "lamb" not in v:
-                kwargs[k]["lamb"] = 1.0
-        return {k: v for k, v in kwargs.items() if v["lamb"] != 0}
+        return {k: v for k, v in kwargs.items() if v.get('lamb' , 1.0) != 0}
 
     @property
     def criterion_accuracy(self) -> dict[str, dict[str, Any]]:
@@ -824,14 +821,24 @@ class ModelConfig(BaseModelConfig):
         self.options = ModelConfigOptions(start, end, stage, resume, selection)
         self.model_config = BaseModelConfig(base_path, module=module, schedule_name=schedule_name, override=override, **kwargs)
         self.algo_config = self.model_config.generate_algo_config()
-        self.device = Device(try_cuda=self.try_cuda)
-        self.value_dict : dict[str, Any] = {}
         assert self.base_path, self.base_path
         assert self.model_config.base_path is self.base_path, f"{self.model_config.base_path} != {self.base_path}"
         assert self.algo_config.base_path is self.algo_config.base_path, f"{self.algo_config.base_path} != {self.algo_config.base_path}"
         
     def __repr__(self):
         return f"{self.__class__.__name__}(base_path={self.base_path})"
+
+    @property
+    def device(self):
+        if not hasattr(self , '_device'):
+            self._device = Device(try_cuda=self.try_cuda)
+        return self._device
+
+    @property
+    def value_dict(self) -> dict[str, Any]:
+        if not hasattr(self , '_value_dict'):
+            self._value_dict = {}
+        return self._value_dict
 
     @property
     def schedule_config(self) -> ScheduleConfig:

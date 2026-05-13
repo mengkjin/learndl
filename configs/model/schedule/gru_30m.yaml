@@ -20,7 +20,7 @@ input:  # input specification --------------------------------------------------
 
 train:
   criterion.loss: 
-      ccc_hcorr: {lamb : 0.1}
+      ccc_hcorr: {alpha : 0.1}
 
 algo:
   resnet_gru:

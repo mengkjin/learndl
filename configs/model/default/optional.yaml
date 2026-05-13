@@ -35,8 +35,8 @@ train.trainer.learn_rate: {'base' : 0.005 , 'transfer_multiplier' : {'encoder' :
 train.trainer.gradient.clip_value: null
 train.criterion.loss:
   ccc: {}
-  hidden_corr: {'lamb' : 0.0}
-  hidden_corr_deprecated: {'lamb' : 0.001}
+  hidden_corr: {'alpha' : 0.0}
+  hidden_corr_deprecated: {'alpha' : 0.001}
 train.criterion.accuracy:
   spearman: {which_output: [0] , which_label: [0]}
 train.criterion.weight: {'fit' : 'equal' , 'test' : 'equal'}
@@ -50,17 +50,17 @@ train.criterion.multilosses:
     gls: {}
     rws: {}
 
-callbacks.ResetOptimizer: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
+callbacks.LearnRateReset: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
 callbacks.CallbackTimer: {}
 callbacks.EarlyStoppage: {'patience' : 20}
-callbacks.ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-05}
-callbacks.EarlyExitRetrain: {'earliest' : 10 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+callbacks.ValidationConverge: {'patience' : 5}
+callbacks.BadAttemptRetrain: {'early_exit' : 10 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
 callbacks.NanLossRetrain: {'max_attempt' : 4}
 callbacks.BatchDisplay: {}
 callbacks.StatusDisplay: {}
 callbacks.SummaryWriter: {}
-callbacks.TrainConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
-callbacks.FitConverge: {'patience' : 5 , 'eps' : 1.0e-5}
+callbacks.TrainConverge: {'patience' : 5} 
+callbacks.FitConverge: {'patience' : 5}
 callbacks.CudaEmptyCache: {'batch_interval' : 20}
 callbacks.DetailedAlphaAnalysis: {}
 
@@ -74,7 +74,7 @@ conditional.short_test:
   callbacks.DetailedAlphaAnalysis:
     tasks: ['factor' , 't50']
 conditional.transformer:
-  callbacks.ResetOptimizer:
+  callbacks.LearnRateReset:
     num_reset: 1
     trigger: 60
     recover_level: 1.0

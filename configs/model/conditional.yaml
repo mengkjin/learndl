@@ -2,9 +2,22 @@ short_test:
   model.beg_date:   20241101
   model.end_date:   20250331 # 20240229
   model.window: 240
-  train.max_epoch:  3
+  train.max_epoch:  15
   input.filter.secid: random.200
   input.filter.date: 20230101-20250331
-  callbacks.DetailedAlphaAnalysis:  {tasks: ['factor' , 't50']}
+  callbacks.DetailedAlphaAnalysis:  {tasks: ['factor']}
+  train.callbacks:
+    - Global2TopFittingControl
+    - StatusDisplay
+    - SummaryWriter
+    - BasicTestResult
+    - DetailedAlphaAnalysis
+    - BadAttemptRetrain
+    - NanLossRetrain
+    - LearnRateReset
+  train.criterion.loss: 
+    global2top: {}
+  train.criterion.accuracy:     
+    global2top: {}
 transformer:
-  callbacks.ResetOptimizer:  {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }
+  callbacks.LearnRateReset:  {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }

@@ -3,15 +3,13 @@ from __future__ import annotations
 import itertools
 import numpy as np
 
-from abc import abstractmethod
 from typing import Any , final , Literal , Sized
-from torch.utils.tensorboard import SummaryWriter as TBSummaryWriter
 
-from src.proj import Proj , Logger , PATH , Const
+from src.proj import Proj , Logger , Const
 from src.proj.util import FilteredIterable
-from src.res.algo import AlgoModule
 
-from src.res.model.util.core import BatchOutput , BatchData , ModelConfig
+from src.res.model.util.core import BatchOutput , BatchData , epoch_key
+from src.res.model.util.config import ModelConfig
 from .streamline import ModelStreamLine
 
 __all__ = ['BaseTrainer' , 'ModelStreamLineWithTrainer']
@@ -73,49 +71,112 @@ class BaseTrainer(ModelStreamLine):
             self.init_data(use_data = use_data , **kwargs)
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
-            self.init_utils(**kwargs)
 
     def __bool__(self): return True
 
     def __repr__(self): 
         return f'{self.__class__.__name__}(path={self.config.base_path.base})'
         
-    @abstractmethod
+    # @abstractmethod
+    # def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
+    #     '''init configuration'''
+    #     self.config : ModelConfig
+    # @abstractmethod
+    # def init_model(self , **kwargs): 
+    #     '''init data_module'''
+    #     from src.res.model.util.trainer import BasePredictorModel
+    #     self.model : BasePredictorModel
+    # @abstractmethod
+    # def init_callbacks(self , **kwargs): 
+    #     '''init callbacks'''
+    #     from src.res.model.util.trainer import BaseCallBack
+    #     self.callback : BaseCallBack
+    # @abstractmethod
+    # def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
+    #     '''init data_module'''
+    #     from src.res.model.util.data import BaseDataModule
+    #     self.data : BaseDataModule
+
     def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
         '''init configuration'''
-        self.config : ModelConfig
-    @abstractmethod
-    def init_model(self , **kwargs): 
-        '''init data_module'''
-        from src.res.model.util.trainer import BasePredictorModel
-        self.model : BasePredictorModel
-    @abstractmethod
-    def init_callbacks(self , **kwargs): 
-        '''init callbacks'''
-        from src.res.model.util.trainer import BaseCallBack
-        self.callback : BaseCallBack
-    @abstractmethod
+        self.config   = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , min_key_len = 30 , **kwargs)
     def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
-        '''init data_module'''
-        from src.res.model.util.data import BaseDataModule
-        self.data : BaseDataModule
-
-    def init_utils(self , **kwargs):
-        from src.res.model.util.trainer import TrainerStatus , PredRecorder , Metrics
-        from src.res.model.util.core import Checkpoint , Deposition
-        self.status = TrainerStatus(self.config.max_epoch)
-        self.record = PredRecorder(self)
-        self.metrics = Metrics.from_config(self.config)
-        
-        self.checkpoint = Checkpoint(self.config.mem_storage)
-        self.deposition = Deposition(self.config.base_path)
+        assert use_data != 'predict' , 'use_data cannot be predict when training models'
+        from src.res.model.data_module import DataModule
+        self.data     = DataModule.initialize(self.config , use_data = use_data , min_key_len = 30)
+    def init_model(self , **kwargs):
+        from src.res.model.util.trainer import BasePredictorModel
+        self.model    = BasePredictorModel.initialize(self.config , self , min_key_len = 30 , **kwargs)
+    def init_callbacks(self , **kwargs) -> None: 
+        from src.res.model.callback.manager import CallBackManager
+        self.callback = CallBackManager.initialize(self , min_key_len = 30)
 
     @property
-    def device(self): return self.config.device
+    def writer(self): 
+        if not hasattr(self , '_writer'):
+            from torch.utils.tensorboard import SummaryWriter
+            tsboard_summary_name = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.attempt{self.status.attempt}-{self.status.redo}'
+            self._writer = SummaryWriter(self.config.base_path.snapshot('tensorboard' , tsboard_summary_name))
+        return self._writer
+
     @property
-    def base_path(self): return self.config.base_path
+    def status(self):
+        if not hasattr(self , '_status'):
+            from src.res.model.util.trainer import TrainerStatus
+            self._status = TrainerStatus(self.config.max_epoch)
+        return self._status
+
     @property
-    def queue_of_stages(self): return self.config.queue_of_stages
+    def texts(self):
+        if not hasattr(self , '_texts'):
+            from src.res.model.util.trainer import TrainerTexts
+            self._texts = TrainerTexts(self)
+        return self._texts
+
+    @property
+    def record(self):
+        if not hasattr(self , '_record'):
+            from src.res.model.util.trainer import PredRecorder
+            self._record = PredRecorder(self)
+        return self._record
+
+    @property
+    def metrics(self):
+        if not hasattr(self , '_metrics'):
+            from src.res.model.util.metric import Metrics
+            self._metrics = Metrics.from_config(self.config)
+        return self._metrics
+
+    @property
+    def container(self):
+        if not hasattr(self , '_container'):
+            from src.res.model.util.trainer import TrainerContainer
+            self._container = TrainerContainer()
+        return self._container
+
+    @property
+    def checkpoint(self):
+        if not hasattr(self , '_checkpoint'):
+            from src.res.model.util.core import Checkpoint
+            self._checkpoint = Checkpoint()
+        return self._checkpoint
+
+    @property
+    def deposition(self):
+        if not hasattr(self , '_deposition'):
+            from src.res.model.util.core import Deposition
+            self._deposition = Deposition(self.config.base_path)
+        return self._deposition
+
+    @property
+    def device(self): 
+        return self.config.device
+    @property
+    def base_path(self): 
+        return self.config.base_path
+    @property
+    def queue_of_stages(self): 
+        return self.config.queue_of_stages
     @property
     def batch_num(self): 
         assert isinstance(self.dataloader , Sized) , f'dataloader is not a Sized object: {self.dataloader}'
@@ -171,8 +232,8 @@ class BaseTrainer(ModelStreamLine):
             status = 'unknown'
         return self.config.base_path.rslt(f'{status}_output.html')
     @property
-    def model_tensorboad_dir(self):
-        return self.config.base_path.snapshot('tensorboard' , f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}')
+    def is_fitting(self): 
+        return self.status.stage == 'fit'
 
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -253,38 +314,37 @@ class BaseTrainer(ModelStreamLine):
         num_all_models = len(model_iter)
         iter_info = f'In stage [{self.status.stage}], number of all models (model_date x model_num) is {num_all_models}, '
         if self.config.is_resuming:
-            if self.status.stage == 'fit':
-                models_trained = np.full(len(model_iter) , True , dtype = bool)
-                for i , (model_date , model_num) in enumerate(model_iter):
-                    if not self.deposition.exists(model_num , model_date):
-                        models_trained[max(i,0):] = False
-                        break
-                condition = ~models_trained
-            elif self.status.stage == 'test':
-                resumed_models_finished = self.record.resumed_models.groupby(['model_date' , 'model_num']).groups
-                resumed = [(model_date , model_num) not in resumed_models_finished for model_date , model_num in model_iter]
-                condition = np.array(resumed)
-            else:
-                Logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')
-                condition = np.full(len(model_iter) , True , dtype = bool)
+            match self.status.stage:
+                case 'fit':
+                    models_trained = np.full(len(model_iter) , True , dtype = bool)
+                    for i , (model_date , model_num) in enumerate(model_iter):
+                        if not self.deposition.exists(model_num , model_date):
+                            models_trained[max(i,0):] = False
+                            break
+                    condition = ~models_trained
+                case 'test':
+                    resumed_models_finished = self.record.resumed_models.groupby(['model_date' , 'model_num']).groups
+                    resumed = [(model_date , model_num) not in resumed_models_finished for model_date , model_num in model_iter]
+                    condition = np.array(resumed)
+                case _:
+                    Logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')
+                    condition = np.full(len(model_iter) , True , dtype = bool)
             model_iter = FilteredIterable(model_iter , condition)
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
-        #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
-        #    model_iter = []
         else:
             iter_info += f'{num_all_models} to go!'
         Logger.note(iter_info , vb_level = 2)
         return model_iter
 
     def iter_model_submodels(self):
-        assert self.status.stage != 'fit' , f'{self.status.stage} is not allowed to iter model submodels'
+        assert not self.is_fitting , f'{self.status.stage} is not allowed to iter model submodels'
         for self.status.model_submodel in self.model_submodels: 
             self.on_test_submodel_start()
             yield self.status
             self.on_test_submodel_end()
 
     def iter_fit_epoches(self):
-        while not self.status.fit_loop_breaker:
+        while not self.status.loop_end:
             self.on_fit_epoch_start()
             yield self.status
             self.on_before_fit_epoch_end()
@@ -333,46 +393,40 @@ class BaseTrainer(ModelStreamLine):
         self.config.set_config_environment()
         
     def on_fit_model_start(self):
-        self.writer = TBSummaryWriter(self.model_tensorboad_dir)
         self.data.setup('fit' , self.model_param , self.model_date)
         self.model.new_model()
         self.metrics.new_model(self.model , self.model.complete_model_param , **self.status.status)
-        self.metrics.new_attempt(**self.status.status)
 
     def on_fit_model_end(self): 
-        if self.status.update_best_attempt(self.metrics): 
-            self.model.stack_model()
-        self.model.dump_model()
         self.metrics.collect_attempt()
         self.metrics.collect_model()
+        self.metrics.model_metrics.export(self.base_path.snapshot('metrics' , f'model.{self.model_num}.{self.model_date}.xlsx'))
+        self.model.stack_model()
+        self.model.dump_model()
         
-    def on_fit_epoch_start(self): ...
+        
+    def on_fit_epoch_start(self):
+        ...
 
     def on_fit_epoch_end(self): ...
 
     def on_train_epoch_start(self):
-        self.metrics.new_epoch(**self.status.status)
+        self.metrics.new_fit_epoch(**self.status.status)
 
     def on_train_epoch_end(self):
-        self.metrics.collect_epoch()
-        
+        ...
+
     def on_validation_epoch_start(self):
-        self.metrics.new_epoch(**self.status.status)
+        ...
 
     def on_validation_epoch_end(self):
-        self.metrics.collect_epoch()
+        self.metrics.collect_fit_epoch()
         
     def on_test_model_start(self):
         self.data.setup('test' , self.model_param , self.model_date)
 
     def on_test_submodel_start(self):
         self.model.load_model(submodel=self.model_submodel)
-        self.metrics.new_all(self.model , self.model.complete_model_param , **self.status.status)
-        
-    def on_test_submodel_end(self): 
-        self.metrics.collect_epoch()
-        self.metrics.collect_attempt()
-        self.metrics.collect_model()
 
     def on_test_batch_start(self):
         self.assert_date_equity()
@@ -391,21 +445,12 @@ class BaseTrainer(ModelStreamLine):
             Logger.error(f'Date equity assertion failed: {date0} != {date1}')
             raise ValueError(f'Date equity assertion failed: {date0} != {date1}')
 
-    @property
-    def penalty_kwargs(self): return {}
-    
-    @staticmethod
-    def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
-        return AlgoModule.available_modules(module_type)
-    @staticmethod
-    def available_models(include_short_test : bool = False , include_factors : bool = False):
-        root_paths = [PATH.model_nn , PATH.model_boost]
-        if include_short_test:
-            root_paths.append(PATH.model_st)
-        if include_factors:
-            root_paths.append(PATH.model_factor)
-        bases = [f'{root.name}@{model.name}' for root in root_paths for model in root.iterdir() if model.is_dir() and not model.name.startswith('.')]
-        return bases
+    def recall_ckpt(self , epoch : int , phase : int = 0 , message : str = '' , details : dict[str,Any] | None = None):
+        assert epoch >= 0 and epoch <= self.status.epoch , f'epoch {epoch} is out of range(0,{self.status.epoch})'
+        self.status.add_epoch_event('new_phase_recall' , f'Recall {epoch_key(epoch , phase)}' , epoch , message , details)
+        self.status.set_milestone_epoch(epoch + 1)
+        if epoch != self.status.epoch:
+            self.model.load_state_dict(self.checkpoint.load(epoch , phase))
 
 class ModelStreamLineWithTrainer(ModelStreamLine):
     def bound_with_trainer(self , trainer): 
@@ -416,6 +461,8 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def config(self): return self.trainer.config
     @property
     def status(self):  return self.trainer.status
+    @property
+    def container(self): return self.trainer.container
     @property
     def metrics(self):  return self.trainer.metrics
     @property
@@ -447,3 +494,5 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def model_submodel(self): return self.trainer.model_submodel
     @property
     def model_str(self): return self.trainer.model_str
+    @property
+    def is_fitting(self): return self.trainer.is_fitting

@@ -7,7 +7,8 @@ from typing import Any
 
 from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
-from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , ModelConfig
+from src.res.model.util.core import ModelDict , BatchInput , BatchOutput 
+from src.res.model.util.config import ModelConfig
 from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
 
 class BasePredictorModel(ModelStreamLineWithTrainer):
@@ -120,11 +121,19 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     @abstractmethod
     def new_model(self , *args , **kwargs):
         '''call when fitting new model'''
-        self.optimizer : Any
+        from src.res.model.util.trainer.optimizer import Optimizer
+        self.optimizer : Optimizer
         return self
     @abstractmethod
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
+        return self
+    @abstractmethod
+    def ckpt_state_dict(self) -> dict[str , Any]:
+        '''state dict of model at epoch to be saved in checkpoint'''
+    @abstractmethod
+    def load_state_dict(self , state_dict : dict):
+        '''load state dict of model from checkpoint'''
         return self
     @abstractmethod
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
@@ -135,17 +144,17 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     @abstractmethod
     def collect(self , submodel = 'best' , *args) -> ModelDict: 
         '''collect model params, called before stacking model'''
-
+    
     def stack_model(self):
         '''temporaly save self to somewhere'''
         self.trainer.on_before_save_model()
         for submodel in self.trainer.model_submodels:
-            self.deposition.stack_model(self.collect(submodel) , self.model_num , self.model_date , submodel) 
+            self.deposition.stack_model(self.collect(submodel) , self.status.attempt_key , self.model_num , self.model_date , submodel) 
 
     def dump_model(self):
         '''dump model to somewhere'''
         for submodel in self.trainer.model_submodels:
-            self.deposition.dump_stacked_model(self.model_num , self.model_date , submodel) 
+            self.deposition.dump_stacked_model(self.metrics.model_metrics.best_attempt() , self.model_num , self.model_date , submodel) 
 
     def test(self):
         '''test the model inside'''
@@ -154,24 +163,35 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
-                self.batch_metrics()
 
         Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
     
     def batch_forward(self) -> None: 
-        if self.batch_idx >= self.trainer.batch_resumed and self.batch_idx < self.trainer.batch_aftermath: 
+        if self.batch_idx >= self.trainer.batch_resumed: 
             self.batch_output = self(self.batch_input)
+            if self.batch_idx < self.trainer.batch_warm_up or self.batch_idx >= self.trainer.batch_aftermath:
+                self.batch_output = BatchOutput()
 
     def batch_metrics(self) -> None:
-        if self.batch_output.empty or self.batch_idx < self.trainer.batch_warm_up: 
+        if self.batch_output.empty: 
             return
-        batch_key = self.batch_idx if self.status.stage == 'fit' else self.trainer.batch_dates[self.batch_idx]
+        batch_key = self.batch_idx if self.is_fitting else self.trainer.batch_dates[self.batch_idx]
+        self.trainer.on_before_calculate_metrics()
         self.metrics.calculate(self.status.dataset , batch_key , self.batch_data)
+        self.trainer.on_after_calculate_metrics()
+        if self.status.dataset != 'train':
+            self.metrics.collect_calculation()
 
     def batch_backward(self) -> None:
-        if self.batch_input.empty: 
+        if self.batch_output.empty: 
             return
         assert self.status.dataset == 'train' , self.status.dataset
         self.trainer.on_before_backward()
         self.optimizer.backward(self.metrics.batch_metrics)
         self.trainer.on_after_backward()
+        if self.status.dataset == 'train':
+            self.metrics.collect_calculation()
+
+    def on_train_epoch_end(self):
+        self.checkpoint.auto_save(self.ckpt_state_dict())
+    

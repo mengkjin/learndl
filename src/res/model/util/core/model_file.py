@@ -31,14 +31,15 @@ class ModelDict:
         self.boost_head = None
         self.boost_dict = None
 
-    def save(self , path : strPath , stack = False) -> None:
+    def save(self , path : strPath) -> None:
         """uniformly save model dictionary"""
         if isinstance(path , str): 
             path = Path(path)
+        assert not path.exists() or path.is_dir() , f'{path} already exists or is not a directory'
         path.mkdir(parents=True,exist_ok=True)
         for key in self.__slots__:
             if (value := getattr(self , key)) is not None:
-                torch.save(value , path.joinpath(f'{key}.stack.pt' if stack else f'{key}.pt'))
+                torch.save(value , path.joinpath(f'{key}.pt'))
 
     @property
     def is_valid(self) -> bool:

@@ -287,7 +287,7 @@ class ModelPath:
                         
     def load_config(self):
         """load model config"""
-        from src.res.model.util.core import ModelConfig
+        from src.res.model.util.config import ModelConfig
         return ModelConfig(self.base , stage = 0 , resume = 1)
     def next_model_date(self):
         """next model date to train"""

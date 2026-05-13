@@ -3,4 +3,3 @@ from .batch import *
 from .model_path import *
 from .model_file import *
 from .storage import *
-from .config import *

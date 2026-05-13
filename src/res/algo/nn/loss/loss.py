@@ -4,15 +4,15 @@ All losses inherit from ``BaseLoss``.  The ``Loss`` class is the factory used
 by the training loop.  Loss values should be minimized (lower is better).
 
 Registry keys: 'mse', 'pearson', 'ccc', 'hidden_corr_deprecated',
-               'hidden_corr', 'quantile', 'ccc_hcorr', 'abcm'
+               'hidden_corr', 'quantile', 'ccc_hcorr', 'abcm' , 'global2top'
+! important: 'lamb' is a special keyword argument for loss functions, cannot be used as a key in the dictionary
 """
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Any, Literal
 
 from src.func.metric import mse , pearson , ccc
-
-from .basic import align_shape
 
 __all__ = ['Loss']
 
@@ -40,7 +40,7 @@ class BaseLoss(nn.Module):
         assert isinstance(output,torch.Tensor) or isinstance(output,dict) , f'output of {self.key} should be a tensor or a dict , but got {output}'
         return output
 
-    def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor | dict[str,torch.Tensor]:
+    def forward(self , pred : torch.Tensor , label : torch.Tensor , weight : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor | dict[str,torch.Tensor]:
         """Compute and return the loss value.
 
         Args:
@@ -59,22 +59,22 @@ class MSE(BaseLoss):
     """Mean squared error loss.  Lower is better."""
     key = 'mse'
     multiheadlosses_capable = True
-    def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
-        return mse(*align_shape(label , pred , w) , dim)
+    def forward(self , pred : torch.Tensor , label : torch.Tensor , weight : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
+        return mse(pred , label , weight , dim)
 
 class PearsonLoss(BaseLoss):
     """Pearson correlation loss: ``exp(-pearson)``.  Lower is better."""
     key = 'pearson'
     multiheadlosses_capable = True
-    def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
-        return torch.exp(-pearson(*align_shape(label , pred , w) , dim))
+    def forward(self , pred : torch.Tensor , label : torch.Tensor , weight : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
+        return torch.exp(-pearson(pred , label , weight , dim))
 
 class CCCLoss(BaseLoss):
     """Concordance Correlation Coefficient (CCC) loss: ``exp(-ccc)``.  Lower is better."""
     key = 'ccc'
     multiheadlosses_capable = True
-    def forward(self , label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
-        return torch.exp(-ccc(*align_shape(label , pred , w) , dim))
+    def forward(self , pred : torch.Tensor , label : torch.Tensor , weight : torch.Tensor | None = None , dim = None , **kwargs) -> torch.Tensor:
+        return torch.exp(-ccc(pred , label , weight , dim))
 
 class HiddenCorrDeprecated(BaseLoss):
     """Deprecated hidden-state correlation penalty.  Use ``LossHiddenCorr`` instead.
@@ -121,17 +121,17 @@ class LossQuantile(BaseLoss):
         w:           Optional per-sample weight tensor.
     """
     key = 'quantile'
-    def forward(self , label : torch.Tensor , predictions : torch.Tensor | None = None , w : torch.Tensor | None = None , dim = None ,
+    def forward(self , label : torch.Tensor , predictions : torch.Tensor | None = None , weight : torch.Tensor | None = None , dim = None ,
                 quantiles : list[float] = [0.1,0.5,0.9] , **kwargs) -> torch.Tensor:
         assert predictions is not None , f'predictions should be provided'
         assert predictions.shape[-1] == len(quantiles) , f'shape of predictions {predictions.shape} should be (...,{len(quantiles)})'
         if predictions.ndim == label.ndim + 1: 
             predictions = predictions.squeeze(-2)
         assert predictions.ndim == label.ndim == 2 , f'shape of predictions {predictions.shape} and label {label.shape} should be (...,1)'
-        if w is None:
+        if weight is None:
             w1 = 1.
         else:
-            w1 = w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
+            w1 = weight / weight.sum(dim=dim,keepdim=True) * (weight.numel() if dim is None else weight.size(dim=dim))
         
         losses = []
         label = label.expand_as(predictions)
@@ -149,23 +149,26 @@ class LossQuantile(BaseLoss):
 class CCCHiddenCorrLoss(BaseLoss):
     """Composite CCC + hidden-correlation penalty loss.
 
-    Total loss = ``CCC_loss(label, pred) + lamb * HiddenCorr_loss(hidden)``
+    Total loss = ``CCC_loss(pred, label) + alpha * HiddenCorr_loss(hidden)``
 
     Args:
-        lamb: Weighting coefficient for the hidden correlation penalty
+        alpha: Weighting coefficient for the hidden correlation penalty
               (default ``0.01``).
     """
     key = 'ccc_hcorr'
-    def __init__(self, lamb : float = 0.01):
+    def __init__(self, alpha : float = 0.01):
         super().__init__()
-        self.lamb = lamb
+        self.alpha = alpha
         self.ccc_loss = CCCLoss()
         self.hidden_corr_loss = HiddenCorr()
 
-    def forward(self , label : torch.Tensor , pred : torch.Tensor , hidden : torch.Tensor , **kwargs) -> dict[str,torch.Tensor]:
+    def forward(self , pred : torch.Tensor , label : torch.Tensor , hidden : torch.Tensor , weight : torch.Tensor | None = None , dim : int | None = None , **kwargs) -> dict[str,torch.Tensor]:
+        ccc = self.ccc_loss(pred , label , weight , dim)
+        hidden_corr = self.hidden_corr_loss(hidden = hidden)
+        assert isinstance(ccc, torch.Tensor) and isinstance(hidden_corr, torch.Tensor) , f'ccc and hidden_corr should be tensors'
         return {
-            'ccc' : self.ccc_loss.forward(label , pred) ,
-            'hidden_corr' : self.hidden_corr_loss.forward(hidden = hidden) * self.lamb
+            'ccc' : ccc ,
+            'hidden_corr' : hidden_corr * self.alpha
         }
 
 class ABCMLoss(BaseLoss):
@@ -176,25 +179,27 @@ class ABCMLoss(BaseLoss):
     2. **R² loss** — ``1 - R²`` of the alpha hidden states regressed on
        ``label[...,1]`` (maximizes explained variance)
     3. **Correlation penalty** — Frobenius norm of the beta hidden-state
-       covariance (scaled by ``lamb``); discourages redundant beta factors
+       covariance (scaled by ``alpha``); discourages redundant beta factors
     4. **Turnover penalty** — L2 distance between current and peer betas;
        encourages temporal stability of the risk factors
 
-    Total: ``MSE + R²_loss + lamb * corr_loss + turnover_loss``
+    Total: ``MSE + R²_loss + alpha * corr_loss + turnover_loss``
 
     Args:
-        lamb: Weight for the beta correlation penalty (default ``0.1``).
+        alpha: Weight for the beta correlation penalty (default ``0.1``).
 
     Reference: 基于神经网络的alpha因子和beta因子协同挖掘模型
     """
     key = 'abcm'
-    def __init__(self, lamb : float = 0.1):
+    def __init__(self, alpha : float = 0.1):
         super().__init__()
-        self.lamb = lamb
+        self.alpha = alpha
+        self.mse_loss = MSE()
 
-    def forward(self, pred : torch.Tensor , label : torch.Tensor , alphas : torch.Tensor , betas : torch.Tensor , betas_peer : torch.Tensor , **kwargs):
+    def forward(self, pred : torch.Tensor , label : torch.Tensor , alphas : torch.Tensor , betas : torch.Tensor , betas_peer : torch.Tensor , 
+                dim : int | None = None , **kwargs):
         assert label.shape[-1] == 2 , label.shape
-        mse = F.mse_loss(pred.squeeze() , label[...,0].squeeze())
+        mse = self.mse_loss(pred , label[...,:1] , dim = dim  , **kwargs)
         rsquare = self.rsquare_loss(alphas , label[...,1])
         corr = self.corr_loss(betas)
         turnover = self.turnover_loss(betas , betas_peer)
@@ -202,7 +207,7 @@ class ABCMLoss(BaseLoss):
         return {
             'mse' : mse ,
             'rsquare' : rsquare ,
-            'corr' : self.lamb * corr ,
+            'corr' : self.alpha * corr ,
             'turnover' : turnover
         }
 
@@ -236,16 +241,54 @@ class SoftTopKLoss(BaseLoss):
         super().__init__()
         self.target_ratio = target_ratio
 
-    def forward(self, pred : torch.Tensor , label : torch.Tensor , **kwargs):
-        pred = pred.view(-1)
-        label = label.view(-1)
-        
-        std = torch.std(pred) + 1e-8
+    def forward(self, pred : torch.Tensor , label : torch.Tensor , dim : int | None = None , **kwargs) -> torch.Tensor:
+        std = pred.std(dim = dim , keepdim=True) + 1e-8
         temperature = std * (self.target_ratio * 10) 
         
         weights = F.softmax(pred / temperature, dim=0)
         weighted_return = torch.sum(weights * label)
         return -weighted_return
+
+class ProgressiveGlobal2Top(BaseLoss):
+    """Progressive Global to Top-K loss."""
+    key = 'global2top'
+    def __init__(self, 
+        global_option : Literal['pearson', 'ccc' , 'mse'] = 'ccc', 
+        top_option : Literal['soft_topk'] = 'soft_topk', 
+        global_kwargs : dict[str,Any] | None = None , 
+        top_kwargs : dict[str,Any] | None = None , 
+        base_top_lambda : float = 1. ,
+    ):
+        super().__init__()
+        self.global_option = global_option
+        self.top_option = top_option
+        assert base_top_lambda > 0 , f'base_top_lambda must be positive'
+        match global_option:
+            case 'pearson':
+                self.global_loss = PearsonLoss(**(global_kwargs or {}))
+            case 'ccc':
+                self.global_loss = CCCLoss(**(global_kwargs or {}))
+            case 'mse':
+                self.global_loss = MSE(**(global_kwargs or {}))
+            case _:
+                raise ValueError(f'Invalid global option: {global_option}')
+        
+        match top_option:
+            case 'soft_topk':
+                self.top_loss = SoftTopKLoss(**(top_kwargs or {}))
+            case _:
+                raise ValueError(f'Invalid top option: {top_option}')
+        self.base_top_lambda = base_top_lambda
+
+    def forward(self, pred : torch.Tensor , label : torch.Tensor , **kwargs):
+        global_loss = self.global_loss(pred , label , **kwargs)
+        top_loss   = self.top_loss(pred , label , **kwargs)
+        assert isinstance(global_loss, torch.Tensor) and isinstance(top_loss, torch.Tensor) , f'global_loss and top_loss should be tensors'
+
+        return {
+            f'global.{self.global_option}' : global_loss ,
+            f'top.{self.top_option}' : self.base_top_lambda * top_loss
+        }
 
 class Loss:
     """Factory for ``BaseLoss`` instances.
@@ -256,7 +299,7 @@ class Loss:
     Usage::
 
         loss_fn = Loss.get('ccc')
-        loss_fn = Loss.get('abcm', lamb=0.05)
+        loss_fn = Loss.get('abcm', alpha=0.05)
     """
     @classmethod
     def options(cls) -> dict[str, type[BaseLoss]]:

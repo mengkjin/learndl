@@ -7,7 +7,7 @@ from torch import nn , no_grad
 from torch.optim.swa_utils import AveragedModel
 from typing import Any , Literal
 
-from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , Metrics
+from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , Metrics , EpochMetricResult , TrainerStatus
 
 def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
     '''get a subclass of _BaseEnsembler'''
@@ -29,10 +29,10 @@ class SWAEnsembler(ABC):
     @abstractmethod
     def reset(self): ...
     @abstractmethod
-    def assess(self , module , epoch : int , accuracy = 0. , loss = 0.): 
+    def assess(self , status : TrainerStatus , metrics : Metrics): 
         '''accuracy or loss to update assessment'''
     @abstractmethod
-    def collect(self , module , *args , **kwargs) -> nn.Module: 
+    def collect(self , trainer : BaseTrainer , *args , **kwargs) -> nn.Module: 
         '''output the final fittest model state dict'''
 
 class SWAModel:
@@ -86,20 +86,22 @@ class EnsembleBestOne(SWAEnsembler):
         super().__init__(ckpt , *args , **kwargs)
 
     def reset(self):
-        self.epoch_fix  = -1
-        self.metric_fix = None
+        self.best_epoch : EpochMetricResult | None = None
 
-    def assess(self , net , epoch : int , metrics : Metrics , accuracy = 0. , loss = 0.):
-        if metrics.better_epoch(self.metric_fix):
-            self.ckpt.disjoin(self , self.epoch_fix)
-            self.epoch_fix = epoch
-            self.metric_fix = metrics.last_epoch_metric # value
-            self.ckpt.join(self , epoch , net)
+    def assess(self , status : TrainerStatus , metrics : Metrics):
+        latest_epoch = metrics.attempt_metrics.latest_epoch()
+        if latest_epoch and metrics.compare_epochs(latest_epoch, self.best_epoch):
+            if self.best_epoch:
+                self.ckpt.disjoin(self , self.best_epoch.epoch , self.best_epoch.phase)
+            self.best_epoch = latest_epoch
+            self.ckpt.join(self , self.best_epoch.epoch , self.best_epoch.phase)
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         #return self.ckpt.load_epoch(self.epoch_fix)
         net : nn.Module = deepcopy(getattr(trainer.model , 'net'))
-        net.load_state_dict(self.ckpt.load_epoch(self.epoch_fix))
+        if not self.best_epoch:
+            return net
+        net.load_state_dict(self.ckpt.load(self.best_epoch.epoch , self.best_epoch.phase)['net'])
         return net
 
 class EnsembleSWABest(SWAEnsembler):
@@ -107,30 +109,28 @@ class EnsembleSWABest(SWAEnsembler):
     def __init__(self, ckpt : Checkpoint , n_best = 5 ,  *args , **kwargs) -> None:
         super().__init__(ckpt ,  *args , **kwargs)
         assert n_best > 0, n_best
-        self.n_best      = n_best
+        self.n_best      : int = n_best
 
     def reset(self):
-        self.metric_list = []
-        self.candidates  = []
+        self.top_epochs : list[EpochMetricResult] = []
         
-    def assess(self , net , epoch : int , metrics : Metrics , accuracy = 0. , loss = 0.):
-        if len(self.metric_list) == self.n_best :
-            arg = np.argmin(self.metric_list) if metrics.VAL_METRIC == 'accuracy' else np.argmax(self.metric_list)
-            if metrics.better_epoch(self.metric_list[arg]):
-                self.metric_list.pop(arg)
-                candid = self.candidates.pop(arg)
-                self.ckpt.disjoin(self , candid)
-
-        if len(self.metric_list) < self.n_best:
-            # self.metric_list.append(value)
-            self.metric_list.append(metrics.last_epoch_metric)
-            self.candidates.append(epoch)
-            self.ckpt.join(self , epoch , net)
+    def assess(self , status : TrainerStatus , metrics : Metrics):
+        latest_epoch = metrics.attempt_metrics.latest_epoch()
+        if not latest_epoch:
+            return
+        if len(self.top_epochs) < self.n_best:
+            self.top_epochs.append(latest_epoch)
+            self.ckpt.join(self , latest_epoch.epoch , latest_epoch.phase)
+        else:
+            arg = metrics.argmin_epochs(self.top_epochs)
+            if metrics.compare_epochs(latest_epoch, self.top_epochs[arg]):
+                drop_epoch = self.top_epochs.pop(arg)
+                self.ckpt.disjoin(self , drop_epoch.epoch , drop_epoch.phase)
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         swa = SWAModel(getattr(trainer.model , 'net'))
-        for epoch in self.candidates: 
-            swa.update_sd(self.ckpt.load_epoch(epoch))
+        for epoch in self.top_epochs: 
+            swa.update_sd(self.ckpt.load(epoch.epoch , epoch.phase)['net'])
         swa.update_bn(trainer)
         return swa.module.cpu()
     
@@ -139,35 +139,46 @@ class EnsembleSWALast(SWAEnsembler):
     def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 ,  *args , **kwargs) -> None:
         super().__init__(ckpt , *args , **kwargs)
         assert n_last > 0 and interval > 0, (n_last , interval)
-        self.n_last      = n_last
-        self.interval    = interval
-        self.left_epochs = (n_last // 2) * interval
+        self.n_last      : int = n_last
+        self.interval    : int = interval
+        self.left_epochs : int = (n_last // 2) * interval
 
     def reset(self):
-        self.epoch_fix   = -1
-        self.metric_fix  = None
-        self.candidates  = []
+        self.best_epoch  : EpochMetricResult | None = None
+        self.adjacent_epochs  : list[tuple[int,int]] = []
 
-    def assess(self , net , epoch : int , metrics : Metrics , accuracy = 0. , loss = 0.):
-        if metrics.better_epoch(self.metric_fix):
-            self.epoch_fix = epoch
-            self.metric_fix = metrics.last_epoch_metric 
+    def assess(self , status : TrainerStatus , metrics : Metrics):
+        latest_epoch = metrics.attempt_metrics.latest_epoch()
+        if not latest_epoch:
+            return
+        if not self.best_epoch or latest_epoch.phase > self.best_epoch.phase:
+            for ep , ph in self.adjacent_epochs:
+                self.ckpt.disjoin(self , ep , ph)
+            self.best_epoch = latest_epoch
+        elif metrics.compare_epochs(latest_epoch, self.best_epoch):
+            self.best_epoch = latest_epoch
+        if not self.best_epoch:
+            return
 
-        candidates = self._full_candidates(epoch)
-        [self.ckpt.disjoin(self , candid) for candid in self.candidates if candid < min(candidates)]
-        if epoch in candidates: 
-            self.ckpt.join(self , epoch , net)
-        self.candidates = candidates[:self.n_last]
+        adjacent_epochs = self.interval_epochs(self.best_epoch.epoch , latest_epoch.epoch , latest_epoch.phase)
+        epochs = [ep for ep , _ in adjacent_epochs]
+        if epochs:
+            [self.ckpt.disjoin(self , ep , ph) for ep , ph in self.adjacent_epochs if ep < min(epochs)]
+       
+        if latest_epoch.epoch in epochs: 
+            self.ckpt.join(self , latest_epoch.epoch , latest_epoch.phase)
+        self.adjacent_epochs = adjacent_epochs
 
-    def _full_candidates(self , epoch):
+    def interval_epochs(self , fix_epoch : int , epoch : int , phase : int = 0):
         epochs  = np.arange(self.interval , epoch + 1 , self.interval)
-        left    = epochs[epochs < self.epoch_fix]
-        right   = epochs[epochs > self.epoch_fix]
-        return [*left[-((self.n_last - 1) // 2):] , self.epoch_fix , *right]
+        left    = epochs[epochs < fix_epoch]
+        right   = epochs[epochs > fix_epoch]
+        epochs = [*left[-((self.n_last - 1) // 2):] , fix_epoch , *right]
+        return [(ep , phase) for ep in epochs]
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         swa = SWAModel(getattr(trainer.model , 'net'))
-        for epoch in self.candidates:  
-            swa.update_sd(self.ckpt.load_epoch(epoch))
+        for ep , ph in self.adjacent_epochs[:self.n_last]:  
+            swa.update_sd(self.ckpt.load(ep , ph)['net'])
         swa.update_bn(trainer)
         return swa.module.cpu()

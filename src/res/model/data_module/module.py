@@ -12,7 +12,7 @@ from src.proj import Logger , CALENDAR , MACHINE , Const
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
 from src.func import match_values
 from src.func import tensor as T
-from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , MemFileStorage , StoredFileLoader , HiddenPath
+from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , BufferStorage , StoredFileLoader , HiddenPath
 from .loader import BatchInputLoader
 from .prenorm import PrenormOperator
 
@@ -77,7 +77,7 @@ class DataModule(BaseDataModule):
         '''
         self.config   = ModelConfig(stage=0) if config is None else config
         self.use_data = use_data
-        self.storage  = MemFileStorage(self.config.mem_storage)
+        self.storage  = BufferStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
         if info:
             Logger.stdout_pairs({'Use Data' : use_data} , title = 'Module Data Initiated:' , vb_level=2 , min_key_len = min_key_len)
@@ -255,33 +255,34 @@ class DataModule(BaseDataModule):
         x_extend = max([seq_lens[xkey] * self.seq_steps[xkey] for xkey in x_keys]) if x_keys else 1
         d_extend = x_extend + y_extend - 1
 
-        if self.stage == 'fit':
-            model_date_col = (self.datas.date < self.model_date).sum()
-            self.d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - d_extend)
-            self.d1 = max(0 , model_date_col - self.config.skip_horizon)
-        elif self.stage in ['predict' , 'test']:
-            next_model_date = self.next_model_date(self.model_date)
+        match self.stage:
+            case 'fit':
+                model_date_col = (self.datas.date < self.model_date).sum()
+                self.d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - d_extend)
+                self.d1 = max(0 , model_date_col - self.config.skip_horizon)
+            case 'predict' | 'test':
+                next_model_date = self.next_model_date(self.model_date)
 
-            before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-y_extend:]
-            test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::self.data_step]
-            self.early_test_dates = test_dates[test_dates <= self.model_date][-(y_extend-1) // self.data_step:] if y_extend > 1 else test_dates[-1:-1]
-            self.model_test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
-            
-            test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-            
-            if test_dates.size == 0:
-                self.d0 = len(self.datas.date) - x_extend
-                self.d1 = len(self.datas.date) - 1
-            else:
-                self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
-                self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
-            test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
-        elif self.stage == 'extract':
-            model_date_col = (self.datas.date < self.model_date).sum()
-            self.d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - d_extend)
-            self.d1 = min(max(0 , model_date_col + self.loader_param.extract_forward_days) , len(self.datas.date))
-        else:
-            raise KeyError(self.stage)
+                before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-y_extend:]
+                test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::self.data_step]
+                self.early_test_dates = test_dates[test_dates <= self.model_date][-(y_extend-1) // self.data_step:] if y_extend > 1 else test_dates[-1:-1]
+                self.model_test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
+                
+                test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
+                
+                if test_dates.size == 0:
+                    self.d0 = len(self.datas.date) - x_extend
+                    self.d1 = len(self.datas.date) - 1
+                else:
+                    self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
+                    self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
+                test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
+            case 'extract':
+                model_date_col = (self.datas.date < self.model_date).sum()
+                self.d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - d_extend)
+                self.d1 = min(max(0 , model_date_col + self.loader_param.extract_forward_days) , len(self.datas.date))
+            case _:
+                raise KeyError(self.stage)
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
         if self.step_len <= 0:
@@ -332,7 +333,7 @@ class DataModule(BaseDataModule):
         self.y_std = self.labels[:,self.d0:self.d1]
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
-        valid_y = self.y_std if self.stage == 'fit' else None
+        valid_y = self.y_std if self.is_fitting else None
 
         valid_sampled = self.multiple_valid(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
         y_sampled , w_sampled = self.standardize_y(self.y_std , valid_sampled , self.step_idx)
@@ -411,7 +412,7 @@ class DataModule(BaseDataModule):
         return batch
     
     def empty_dataloader(self) -> None:
-        if self.stage == 'fit':
+        if self.is_fitting:
             self.loader_dict['train'] = StoredFileLoader(self.storage , [] , 'static')
             self.loader_dict['valid'] = StoredFileLoader(self.storage , [] , 'static')
         else:
@@ -490,7 +491,7 @@ class DataModule(BaseDataModule):
             return [posit[:,j][valid[:,j]] for j in range(beg , end)]
 
         sample_index = {}
-        if self.stage == 'fit':
+        if self.is_fitting:
             sep = int(l1 * train_ratio)
             if sample_method == 'total_shuffle':
                 pool = torch.Tensor(permutation(np.arange(valid.sum().item())))

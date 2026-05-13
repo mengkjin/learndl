@@ -26,7 +26,7 @@ class ModelTestor:
         
         self.batch_input = self.data.predict_dataloader()[0]
         self.model = get_predictor_module(self.config).init_model(testor_mode = True)
-        self.metrics = Metrics.from_config(self.config).new_all(self.model , self.config.model_param[0])
+        self.metrics = Metrics.from_config(self.config).new_model(self.model , self.config.model_param[0]).new_fit_epoch()
 
     def __repr__(self):
         return f'{self.__class__.__name__}(model={self.model}) , check [.model][.batch_input][.metrics]'
@@ -47,7 +47,7 @@ class ModelTestor:
         if not hasattr(self , 'outputs'): 
             self.try_forward()
         batch_data = BatchData(self.batch_input , self.output)
-        metrics = self.metrics.calculate('train' , batch_key = 'test' , batch_data = batch_data)
+        metrics = self.metrics.calculate('train' , batch_key = 'test' , batch_data = batch_data).collect_calculation()
         Logger.stdout(f'metric output : {metrics.batch_accuracy}')
         Logger.stdout(f'Test Metrics Success')
         return self

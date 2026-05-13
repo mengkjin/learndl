@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import Logger , DB , PATH , Const , CALENDAR
+from src.proj.util import AsyncSaver
 from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
 
 class PredRecorder(ModelStreamLineWithTrainer):
@@ -93,7 +94,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
         """maximum test date , considering the data and config"""
         return max(self.data.max_test_date , self.config.end_date)
 
-    def save_preds(self , df : pd.DataFrame , model_date : int , model_num : int , append = False):
+    def save_preds(self , df : pd.DataFrame , model_date : int , model_num : int , append = False , async_save : bool = False):
         if df.empty:
             return
         
@@ -105,14 +106,16 @@ class PredRecorder(ModelStreamLineWithTrainer):
             
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_preds.joinpath(f'{model_num}.{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        
-        DB.save_df(df , path , overwrite = True , vb_level = 'max')
         self.update_missing_pred_dates(CALENDAR.range(min_pred_date , max_pred_date , 'td') , df['date'].unique())
-
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
+        if async_save:
+            AsyncSaver.df(df , path , future_group = 'pred_recorder.save_preds' , vb_level = 'max')
+        else:
+            DB.save_df(df , path , overwrite = True , vb_level = 'max')
 
-    def save_avg_preds(self , model_date : int):
+    def save_avg_preds(self , model_date : int , async_save : bool = False):
+        AsyncSaver.wait_all('pred_recorder.save_avg_preds')
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
         df = DB.load_df(pred_paths , key_column = None)
         if df.empty:
@@ -120,7 +123,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        DB.save_df(df , path , overwrite = True , vb_level = 'max')
+        if async_save:
+            AsyncSaver.df(df , path , future_group = 'pred_recorder.save_avg_preds' , vb_level = 'max')
+        else:
+            DB.save_df(df , path , overwrite = True , vb_level = 'max')
 
     def update_avg_preds(self , pred_df : pd.DataFrame):
         if pred_df.empty:
@@ -142,9 +148,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
 
             min_pred_date , max_pred_date = new_df['date'].min() , new_df['date'].max()
             new_path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-            DB.save_df(new_df , new_path , overwrite = True , vb_level = 'max')
             if old_path and old_path != new_path:
                 old_path.unlink()
+            DB.save_df(new_df , new_path , overwrite = True , vb_level = 'max')
+            
         Logger.success(f'Updated avg preds for pred dates {pred_df["date"].unique()}')
         return avg_df
 
@@ -217,6 +224,7 @@ class PredRecorder(ModelStreamLineWithTrainer):
     def purge_retrained_model_preds(self , vb_level : Any = 2):
         """purge past predictions when trained new models"""
         if not self.retrained_models:
+            Logger.stdout(f'{self.__class__.__name__} : No retrained models, no purge needed' , vb_level = vb_level)
             return
         min_retrained_model_date = min([model_date for model_date , _ in self.retrained_models])
         pred_records = self.pred_records()
@@ -234,10 +242,10 @@ class PredRecorder(ModelStreamLineWithTrainer):
                 Path(path).unlink()
                 self.save_preds(df , model_date , model_num)
                 
-            Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
             self.has_purged_preds = True
         else:
-            Logger.stdout(f'{self.__class__.__name__} : No retrained models found, no purge needed' , vb_level = vb_level)
+            purge_info = f'{len(self.retrained_models)} models retrained, but no pred need to be purged'
+        Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
 
     def purge_outdated_model_preds(self , vb_level : Any = 2):
         archive_records = self.archive_model_records()
@@ -259,7 +267,8 @@ class PredRecorder(ModelStreamLineWithTrainer):
 
     def purge_duplicated_model_preds(self , vb_level : Any = 2):
         """purge duplicated model predictions"""
-        
+        AsyncSaver.wait_all('pred_recorder.save_preds')
+        AsyncSaver.wait_all('pred_recorder.save_avg_preds')
         pred_records = self.pred_records()
         pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
         obsolete_records = pred_records[pred_records.duplicated(subset = ['model_date' , 'model_num'])]
@@ -301,8 +310,8 @@ class PredRecorder(ModelStreamLineWithTrainer):
 
         closest_model_date = pred_records.groupby('model_num')['model_date'].max().min() # noqa: F841
         min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
-        if self.min_test_date < min_pred_date:
-            self.resume_info = f', but new test start {self.min_test_date} is earlier than saved preds {min_pred_date}, forfeiting resume preds'
+        if self.min_test_date < CALENDAR.td(min_pred_date , -5): # leave 5 days buffer for resume testing model
+            self.resume_info = f', but new test start {self.min_test_date} is too many days earlier than saved preds {min_pred_date}, forfeiting resume preds'
             self.resumed_max_pred_date = 19000101
             return
  
@@ -344,11 +353,11 @@ class PredRecorder(ModelStreamLineWithTrainer):
         if not self.pred_dict:
             return self.empty_preds()
         new_preds = pd.concat(self.pred_dict.values())
-        self.save_preds(new_preds , self.model_date , self.model_num , append = True)
+        self.save_preds(new_preds , self.model_date , self.model_num , append = True , async_save = True)
         self.pred_dict.clear()
 
     def collect_avg_preds(self):
-        self.save_avg_preds(self.model_date)
+        self.save_avg_preds(self.model_date , async_save = True)
         
     def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date

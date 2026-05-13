@@ -11,7 +11,8 @@ from typing import Any , Iterator , Literal
 from src.proj import Logger
 from src.data import ModuleData
 
-from src.res.model.util.core import ModelConfig , MemFileStorage , BatchInput
+from src.res.model.util.core import BufferStorage , BatchInput
+from src.res.model.util.config import ModelConfig
 from .buffer import BaseBuffer
 
 class BaseDataModule(ABC):
@@ -20,7 +21,7 @@ class BaseDataModule(ABC):
     def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
         self.config   : ModelConfig
         self.use_data : Literal['fit','predict','both'] 
-        self.storage  : MemFileStorage
+        self.storage  : BufferStorage
         self.buffer   : BaseBuffer
     @abstractmethod
     def prepare_data() -> None: 
@@ -74,6 +75,9 @@ class BaseDataModule(ABC):
     @property
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
         return self.loader_param.stage
+
+    @property
+    def is_fitting(self): return self.stage == 'fit'
 
     @property
     def input_keys(self) -> list[str]:
@@ -166,4 +170,5 @@ class BaseDataModule(ABC):
                 self.extract_forward_days  = None
         
     @property
-    def device(self): return self.config.device
+    def device(self): 
+        return self.config.device
