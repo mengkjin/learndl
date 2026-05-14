@@ -14,5 +14,8 @@ def get_specific_cb(module_name : str) -> Type[BaseCallBack] | None:
     elif nn_category == 'tra':
         from src.res.model.callback.specific.tra import SpecificCB_TRA
         return SpecificCB_TRA
+    elif module_name.endswith('_global2top'):
+        from src.res.model.callback.specific.global2top import SpecificCB_Global2Top
+        return SpecificCB_Global2Top
     else:
         return None

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from src.proj import PATH , Logger
 from typing import Callable , TypeAlias
 
@@ -8,7 +9,7 @@ DictLoader : TypeAlias = Callable[[] , dict] | dict
 
 class ModelConfigModifier:
     @classmethod
-    def rename_ResetOptimizer(cls , key : str , config : DictLoader):
+    def rename_ResetOptimizer(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith('.model'):
             return config
         if not isinstance(config , dict):
@@ -38,7 +39,7 @@ class ModelConfigModifier:
         return config
 
     @classmethod
-    def add_LearnRateReset(cls , key : str , config : DictLoader):
+    def add_LearnRateReset(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith('.model'):
             return config
         if not isinstance(config , dict):
@@ -49,7 +50,7 @@ class ModelConfigModifier:
         return config
 
     @classmethod
-    def rename_lamb(cls , key : str , config : DictLoader):
+    def rename_lamb(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith(('.model' , '.schedule')):
             return config
         if not isinstance(config , dict):
@@ -64,7 +65,7 @@ class ModelConfigModifier:
         return config
 
     @classmethod
-    def remove_eps_callback_param(cls , key : str , config : DictLoader):
+    def remove_eps_callback_param(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith(('.model' , '.schedule')):
             return config
         if not isinstance(config , dict):
@@ -78,7 +79,7 @@ class ModelConfigModifier:
         return config
 
     @classmethod
-    def replace_EarlyExitRetrain_with_BadAttemptRetrain(cls , key : str , config : DictLoader):
+    def replace_EarlyExitRetrain_with_BadAttemptRetrain(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith('.model'):
             return config
         if not isinstance(config , dict):
@@ -89,6 +90,7 @@ class ModelConfigModifier:
             'early_exit': 10,
             'min_ic': 0.05,
             'max_attempt': 4,
+            'max_nan_redo': 4,
             'lr_multiplier': [1 , 0.1 , 10 , 0.01 , 100 , 1],
         }
         if old_name in config:
@@ -106,6 +108,75 @@ class ModelConfigModifier:
         if 'EarlyExitRetrain' in config['train.callbacks']:
             config['train.callbacks'].remove('EarlyExitRetrain')
             Logger.success(f'{key}.train.callbacks has EarlyExitRetrain , removed')
+        return config
+
+    @classmethod
+    def change_BadAttemptRetrain_params(cls , key : str , config : DictLoader) -> DictLoader:
+        if not key.endswith('.model'):
+            return config
+        if not isinstance(config , dict):
+            config = config()
+        new_name = 'callbacks.BadAttemptRetrain'
+        default_value = {
+            'early_exit': 10,
+            'min_ic': 0.05,
+            'max_attempt': 4,
+            'max_nan_redo': 4,
+            'lr_multiplier': [1 , 0.1 , 10 , 0.01 , 100 , 1],
+        }
+        if new_name in config and not all(key in config[new_name] for key in default_value):
+            config[new_name] = default_value
+            Logger.success(f'{key}.{new_name} has been updated')
+        return config
+
+    @classmethod
+    def change_EarlyStoppage_params(cls , key : str , config : DictLoader) -> DictLoader:
+        if not key.endswith('.model'):
+            return config
+        if not isinstance(config , dict):
+            config = config()
+        new_name = 'callbacks.EarlyStoppage'
+        default_value = {
+            'peak_patience': 20,
+            'converge_patience': 5,
+            'converge_dataset': 'valid',
+        }
+        if new_name in config and not all(key in config[new_name] for key in default_value):
+            config[new_name] = default_value
+            Logger.success(f'{key}.{new_name} has been updated')
+        return config
+    
+    @classmethod
+    def remove_NanLossRetrain(cls , key : str , config : DictLoader) -> DictLoader:
+        if not key.endswith(('.model')):
+            return config
+        if not isinstance(config , dict):
+            config = config()
+        old_name = 'callbacks.NanLossRetrain'
+        if old_name in config:
+            config.pop(old_name)
+            Logger.success(f'{key}.{old_name} has been removed')
+         
+        if 'NanLossRetrain' in config['train.callbacks']:
+            config['train.callbacks'].remove('NanLossRetrain')
+            Logger.success(f'{key}.train.callbacks has NanLossRetrain , removed')
+        return config
+
+    @classmethod
+    def remove_old_callbacks(cls , key : str , config : DictLoader) -> DictLoader:
+        if not key.endswith('.model'):
+            return config
+        if not isinstance(config , dict):
+            config = config()
+        old_names = ['BatchDisplay' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge']
+
+        for old_name in old_names:
+            if f'callbacks.{old_name}' in config:
+                config.pop(f'callbacks.{old_name}')
+                Logger.success(f'{key}.callbacks.{old_name} has been removed')
+            if old_name in config['train.callbacks']:
+                config['train.callbacks'].remove(old_name)
+                Logger.success(f'{key}.train.callbacks has {old_name} , removed')
         return config
 
 class ModelConfigsBatchModifier:

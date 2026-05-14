@@ -50,7 +50,7 @@ class NNBoost(BasePredictorModel):
             self.submodels = {sub:choose_swa_method(sub)(self.checkpoint ,*args , **kwargs) for sub in self.config.submodels}
         return self
     
-    def new_model(self, lr_multiplier = 1. , *args , **kwargs):
+    def reload_model(self, lr_multiplier = 1. , *args , **kwargs):
         '''call when fitting new model'''
         self.init_model(*args , **kwargs)
         transferred = False
@@ -60,7 +60,6 @@ class NNBoost(BasePredictorModel):
                 self.net.load_state_dict(prev_model_file['state_dict'])
                 transferred = True
         self.optimizer : Optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
-        self.checkpoint.new_model(**self.status.status)
         return self
 
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
@@ -78,7 +77,6 @@ class NNBoost(BasePredictorModel):
             'epoch' : self.status.epoch,
             'phase' : self.status.phase,
             'net' : self.net.state_dict() ,
-            'boost' : self.boost.to_dict() ,
             'optimizer' : self.optimizer.optimizer.state_dict() ,
             'scheduler' : self.optimizer.scheduler.state_dict() ,
         }
@@ -132,8 +130,8 @@ class NNBoost(BasePredictorModel):
             for _ in self.trainer.iter_val_dataloader():
                 self.batch_forward_net()
                 self.batch_metrics()
-
             self.checkpoint.auto_save(self.ckpt_state_dict())
+
             for submodel in self.submodels.values():  
                 submodel.assess(self.status , self.metrics)
             self.optimizer.scheduler_step(self.status.epoch)

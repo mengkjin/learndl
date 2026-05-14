@@ -33,7 +33,7 @@ def _format_messages(messages : dict[str, str | dict] , indent : int = 0) -> lis
     return msgs
 
 class SummaryWriter(BaseCallBack):
-    """record metrics and parameters to tensorboard , and export test summary to a log file"""
+    """Tensorboard and Summary Writer"""
     DEBUG_STEP : int = 100 # record debug mode every step in batches
     HIDDEN_FEATURE_MODE : bool = True # enable hidden feature mode to record hidden features stats (accuracy and correlation)
     HIDDEN_FEATURE_STEP : int = 5 # record hidden features every step in epoches
@@ -119,8 +119,8 @@ class SummaryWriter(BaseCallBack):
 
     def add_epoch_events(self):
         prefix = self.TSBOARD_PREFIXIS['events']
-        if self.status.current_epoch.events:
-            for event in self.status.current_epoch.events:
+        if self.status.current.events:
+            for event in self.status.current.events:
                 self.writer.add_text(f'{prefix}/EventLog' , event.info , self.step_epoch)
             self.writer.add_scalar(f'{prefix}/Marker' , 1 , self.step_epoch)
         else:

@@ -997,21 +997,17 @@ class DataBlock:
         if len(blocks) <= 1:
             return blocks
         
-        block_title = f'{len(blocks)} DataBlocks' if len(blocks) > 3 else f'DataBlock [{",".join(blocks.keys())}]'
-        with Logger.Timer(f'Align {block_title}' , vb_level = vb_level):
-            # sligtly faster than .align(secid = secid , date = date)
-            if intersect_secid:  
-                newsecid = index_merge([blk.secid for blk in blocks.values()] , method = 'intersect')
-                
-            else:
-                newsecid = None
-            
-            newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start , max_value = end)
-            max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
-            newdate = newdate[newdate >= max_min_date]
-            
-            for blk in blocks.values():
-                blk.align_secid_date(newsecid , newdate , inplace = inplace)
+        if intersect_secid:  
+            newsecid = index_merge([blk.secid for blk in blocks.values()] , method = 'intersect')
+        else:
+            newsecid = None
+        
+        newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start , max_value = end)
+        max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
+        newdate = newdate[newdate >= max_min_date]
+        
+        for blk in blocks.values():
+            blk.align_secid_date(newsecid , newdate , inplace = inplace)
 
         return blocks
 

@@ -16,10 +16,22 @@ class ModelConfigsInspector:
             self.current_path_str = str(self.current_path.relative_to(PATH.main))
             yield self.current_path
 
-    def inspect_key_values(self , warning_list : list[str] | dict[str , bool]):
+    def inspect_key_values(self , warning_list : list[str] | dict[str , bool] | None = None):
         """
         warning_list is a list of strings or a dictionary of strings and whether to check full match
         """
+        if warning_list is None:
+            warning_list = {
+                'ResetOptimizer' : False , 
+                'lamb' : True , 
+                'eps' : True , 
+                'EarlyExitRetrain' : False ,
+                'NanLossRetrain' : False ,
+                'BatchDisplay' : False ,
+                'ValidationConverge' : False ,
+                'TrainConverge' : False ,
+                'FitConverge' : False ,
+            }
         if not isinstance(warning_list , dict):
             warning_list = {warn: False for warn in warning_list}
         full_match_list = [warn for warn in warning_list if warning_list[warn]]

@@ -28,6 +28,9 @@ class EpochEvent:
         if self.effective_epoch < 0:
             self.effective_epoch = self.epoch
 
+    def __repr__(self):
+        return f'EpochEvent(type={self.type}, reason={self.reason}, epoch={self.epoch}, phase={self.phase}, effective_epoch={self.effective_epoch}, message={self.message}, details={self.details}, vb_level={self.vb_level})'
+
     @property
     def vb_level(self) -> Any:
         if self.type in ['new_attempt' , 'redo_attempt' , 'end_attempt' , 'recall_ckpt' , 'new_phase_recall' , 'new_phase']:
@@ -61,6 +64,20 @@ class EpochRecord:
     events : list[EpochEvent] = field(default_factory=list)
     details : dict[str,Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        assert self.attempt >= 0 , 'attempt should be non-negative'
+        assert self.phase >= 0 , 'phase should be non-negative'
+        assert self.epoch >= -1 , 'epoch should be non-negative'
+        assert self.redo >= 0 , 'redo should be non-negative'
+
+    @property
+    def epoch_key(self) -> str:
+        return epoch_key(self.epoch , self.phase)
+
+    @property
+    def attempt_key(self) -> str:
+        return attempt_key(self.attempt , self.redo)
+
     @property
     def continue_status(self) -> Literal['continue' , 'redo_attempt' , 'new_attempt' , 'end_attempt' , 'new_phase_recall' , 'new_phase' , 'recall_ckpt']:
         event_types = list(set([event.type for event in self.events]))
@@ -83,6 +100,9 @@ class EpochRecord:
         events = [event for event in self.events if event.type == event_type]
         assert allow_multiple or len(events) <= 1 , f'Only one {event_type} event is allowed, but got {len(events)}'
         return events[0] if events else None
+
+    def add_event(self , event : EpochEvent):
+        self.events.append(event)
 
     def next_attempt(self , status : str | None = None) -> int:
         status = status or self.continue_status
@@ -135,7 +155,7 @@ class FittingEpochs:
     """Fitting epochs class, used to store the epochs of the fitting"""
     def __init__(self , max_epoch : int = 200):
         self.max_epoch = max_epoch
-        self.epochs : list[EpochRecord] = []
+        self.epochs : list[EpochRecord] = [EpochRecord(epoch = -1)]
         self.events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
         self.attempt_events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
     def __len__(self):
@@ -147,58 +167,49 @@ class FittingEpochs:
     def clear(self):
         """clear the epochs and events every time a new model is started, but keep the attempt events"""
         self.epochs.clear()
+        self.epochs.append(EpochRecord(epoch = -1))
         self.events.clear()
         self.attempt_events.clear()
+    def __getitem__(self , index : int) -> EpochRecord:
+        return self.epochs[index]
     @property
-    def current_epoch(self) -> EpochRecord:
+    def current(self) -> EpochRecord:
         return self.epochs[-1]
-    @property
-    def attempt(self) -> int:
-        return 0 if not self.epochs else self.epochs[-1].attempt
-    @property
-    def redo(self) -> int:
-        return 0 if not self.epochs else self.epochs[-1].redo
-    @property
-    def phase(self) -> int:
-        return 0 if not self.epochs else self.epochs[-1].phase
-    @property
-    def epoch(self) -> int:
-        return -1 if not self.epochs else self.epochs[-1].epoch
+
     @property
     def next_attempt(self) -> int:
-        return 0 if not self.epochs else self.epochs[-1].next_attempt()
+        return self.current.next_attempt()
     @property
     def next_redo(self) -> int:
-        return 0 if not self.epochs else self.epochs[-1].next_redo()
+        return self.current.next_redo()
+
     @property
     def model_epoch(self) -> int:
         return len(self.epochs) - 1
     @property
     def loop_end(self) -> bool:
-        if not hasattr(self , 'continue_status'):
-            return False
-        return self.continue_status == 'end_attempt'
+        return self.current.continue_status == 'end_attempt'
     def new_epoch(self):
-        if hasattr(self , 'continue_status') and self.continue_status in ['redo_attempt' , 'new_attempt']:
+        if self.current.continue_status in ['redo_attempt' , 'new_attempt']:
             for type in self.attempt_events:
                 self.events[type].extend(self.attempt_events[type])
             self.attempt_events.clear()
-        record = self.current_epoch.new_epoch() if self.epochs else EpochRecord()
+        record = self.current.new_epoch() if self.epochs else EpochRecord()
         assert record is not None , 'record is None'
         self.epochs.append(record)
     def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
         effective_epoch = -1 if epoch is None else epoch
-        current_epoch = self.current_epoch
+        current_epoch = self.current
         event = EpochEvent(type , reason , current_epoch.epoch , current_epoch.phase , effective_epoch , message , details or {})
         self.attempt_events[type].append(event)
-        current_epoch.events.append(event)
+        current_epoch.add_event(event)
     def check_loop_end(self):
-        if self.epoch >= self.max_epoch - 1:
+        if self.current.epoch >= self.max_epoch - 1:
             self.add_epoch_event('end_attempt' , 'Max Epoch' , message = f'Max Epoch ({self.max_epoch}) reached, force end attempt')
-        self.continue_status = self.current_epoch.continue_status
     @property
-    def end_attempt_event(self) -> EpochEvent:
-        assert self.attempt_events['end_attempt'] , 'No end attempt event'
+    def end_attempt_event(self) -> EpochEvent | None:
+        if not self.attempt_events['end_attempt']:
+            return None
         event = sorted(self.attempt_events['end_attempt'] , key = lambda x: (x.effective_epoch , x.epoch))[0]
         return event
     
@@ -218,6 +229,9 @@ class TrainerStatus(ModelStreamLine):
         
     def __repr__(self):
         return f'TrainerStatus({", ".join([f"{k}={v}" for k,v in self.status.items()])})'
+
+    def __getitem__(self , i : int) -> EpochRecord:
+        return self.fitting_epochs[i]
 
     @property
     def status(self):
@@ -240,32 +254,38 @@ class TrainerStatus(ModelStreamLine):
     def loop_end(self) -> bool:
         return self.fitting_epochs.loop_end
     @property
-    def end_attempt_event(self) -> EpochEvent:
+    def end_attempt_event(self) -> EpochEvent | None:
         return self.fitting_epochs.end_attempt_event
     @property
-    def current_epoch(self) -> EpochRecord:
-        return self.fitting_epochs.current_epoch
+    def current(self) -> EpochRecord:
+        return self.fitting_epochs.current
     @property
     def attempt(self) -> int:
-        return self.fitting_epochs.attempt
+        return self.current.attempt
     @property
     def redo(self) -> int:
-        return self.fitting_epochs.redo
+        return self.current.redo
     @property
     def phase(self) -> int:
-        return self.fitting_epochs.phase
+        return self.current.phase
     @property
     def epoch(self) -> int:
-        return self.fitting_epochs.epoch
+        return self.current.epoch
     @property
     def epoch_key(self) -> str:
-        return epoch_key(self.epoch , self.phase)
+        return self.current.epoch_key
+    @property
+    def attempt_key(self) -> str:
+        return self.current.attempt_key
+    @property
+    def next_attempt(self) -> int:
+        return self.current.next_attempt()
+    @property
+    def next_redo(self) -> int:
+        return self.current.next_redo()
     @property
     def model_epoch(self) -> int:
         return self.fitting_epochs.model_epoch
-    @property
-    def attempt_key(self) -> str:
-        return attempt_key(self.attempt , self.redo)
     @property
     def milestone_epoch(self) -> int:
         return self._milestone_epoch
@@ -308,5 +328,5 @@ class TrainerStatus(ModelStreamLine):
     def on_fit_epoch_start(self):
         self.fitting_epochs.new_epoch()
         self.total_epochs += 1
-    def on_fit_epoch_end(self):
-        self.fitting_epochs.check_loop_end()
+    def on_before_fit_epoch_end(self):
+        self.fitting_epochs.check_loop_end()    

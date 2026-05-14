@@ -16,7 +16,7 @@ class NullPredictor(BasePredictorModel):
         self.complete_model_param = {}
         return self
 
-    def new_model(self , *args , **kwargs):
+    def reload_model(self , *args , **kwargs):
         '''call when fitting/testing new model'''
         return self.init_model(*args , **kwargs)
     

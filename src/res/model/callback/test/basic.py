@@ -9,7 +9,7 @@ from src.proj.util import AsyncSaver
 from src.res.model.util import BaseCallBack
 
 class BasicTestResult(BaseCallBack):
-    '''basic test result summary'''
+    '''Basic Test of RankIC'''
     
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)

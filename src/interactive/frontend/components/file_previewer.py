@@ -9,7 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 import streamlit as st
 import base64
-import streamlit.components.v1 as components
 import pandas as pd
 
 from src.proj.core import strPath
@@ -72,7 +71,7 @@ class FilePreviewer:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 html_content = f.read()
-            components.html(html_content , height = 600 , scrolling=True)   
+            st.iframe(html_content , height = 600)   
         except Exception as e:
             st.error(f"Cannot preview HTML file: {str(e)}" , icon = ":material/error:")
 

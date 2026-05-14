@@ -9,20 +9,21 @@ from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
 class BaseCallBack(ModelStreamLineWithTrainer):
     CB_ORDER : int = 0
     CB_KEY_PARAMS : list[str] = []
+
+    # Override controls, rule out others when self is used.
+    OverrideCallbacks : list[str] = []
+
+    # Conflict controls, rule out self when others are used.
     ConflictCallbacks : list[str] = []
+    ConflictModuleTypes : list[str] = []
+    ConflictModuleNames : list[str] = []
+
     def __init__(self , trainer : BaseTrainer , **kwargs) -> None:
         self.bound_with_trainer(trainer)
         self.kwargs = kwargs
-        
-    def print_info(self , vb_level : Any = 2):
-        info = self.get_info()
-        info_str = f'CallBack {info[0]}({info[1]})'
-        if info[2]:
-            info_str += f', {info[2]}'
-        Logger.stdout(info_str , vb_level = vb_level)
-        return self
 
     def get_info(self) -> tuple[str , str , str]:
+        """return class name , class key parameters and class docstring"""
         args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS}
         info = ','.join([f'{k}={v}' for k,v in args.items()])
         return self.__class__.__name__ , info , self.__class__.__doc__ or ''

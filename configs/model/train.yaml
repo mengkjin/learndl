@@ -5,16 +5,11 @@ fitting_step:  5
 callbacks:
   - StatusDisplay
   - SummaryWriter
-  # - BatchDisplay
   - BasicTestResult
   - DetailedAlphaAnalysis
   - EarlyStoppage
   - BadAttemptRetrain
-  - NanLossRetrain
-  - ValidationConverge
   - LearnRateReset
-  # - TrainConverge
-  # - FitConverge
   # - CallbackTimer
   # - CudaEmptyCache
 

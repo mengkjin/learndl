@@ -3,7 +3,7 @@ from typing import Literal
 
 from src.proj import MACHINE , Logger , Proj , PATH
 from src.proj.core import strPath
-from src.proj.util import HtmlCatcher
+from src.proj.util import HtmlCatcher , AsyncSaver
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
 from src.res.model.util import BaseTrainer , BasePredictorModel , PredictionModel , ModelPath , ModelConfig
@@ -78,6 +78,7 @@ class ModelTrainer(BaseTrainer):
             if isinstance(catcher , HtmlCatcher):
                 catcher.set_export_files(trainer.html_catcher_export_path)
 
+            AsyncSaver.wait_all()
         return trainer
 
     @classmethod

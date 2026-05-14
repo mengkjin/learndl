@@ -49,7 +49,7 @@ class MetricFunction:
         return results
 
 class LossFunction(MetricFunction):
-    SearchList : list[str] = ['loss' , 'Loss' , 'loss_function']
+    SearchList : list[str] = ['loss' , 'Loss' , 'LossFunction' , 'loss_function' , 'losses' , 'Losses']
     ExcludeNan : bool = False
     def __init__(
         self , 
@@ -92,7 +92,7 @@ class LossFunction(MetricFunction):
         return losses
 
 class AccuracyFunction(MetricFunction):
-    SearchList : list[str] = []
+    SearchList : list[str] = ['accuracy' , 'Accuracy' , 'AccuracyFunction' , 'accuracy_function' , 'accuracies' , 'Accuracies']
     ExcludeNan : bool = True
     def __init__(
         self , 

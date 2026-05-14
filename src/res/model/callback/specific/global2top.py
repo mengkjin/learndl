@@ -57,7 +57,7 @@ def aggregator_factory(phase : Literal['global' , 'top'] , glb_climax : float | 
         raise ValueError(f'Invalid phase: {phase}')
     return _aggregator
 
-class Global2TopFittingControl(BaseCallBack):
+class SpecificCB_Global2Top(BaseCallBack):
     '''Fitting Control of Global2Top'''
     CB_KEY_PARAMS = ['protect' , 'plateau_patience' , 'converge_patience' , 'top_converge_alpha']
     OverrideCallbacks = ['EarlyStoppage']

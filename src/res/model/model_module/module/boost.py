@@ -28,7 +28,7 @@ class BoostPredictor(BasePredictorModel):
         self.complete_model_param = param
         return self
     
-    def new_model(self , *args , **kwargs):
+    def reload_model(self , *args , **kwargs):
         '''call when fitting new model'''
         return self.init_model(*args , **kwargs)
 

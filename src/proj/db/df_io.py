@@ -39,10 +39,14 @@ class dfIOHandler:
         """load dataframe from path"""
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
             return pd.DataFrame()
-        if DATAFRAME_SUFFIX == 'feather':
-            df = pd.read_feather(path)
-        else:
-            df = pd.read_parquet(path , engine='fastparquet')
+        try:
+            if DATAFRAME_SUFFIX == 'feather':
+                df = pd.read_feather(path)
+            else:
+                df = pd.read_parquet(path , engine='fastparquet')
+        except Exception as e:
+            Logger.error(f'Error loading {path}: {e}')
+            raise
         df = dfHandler.apply_mapper(df , mapper)
         return df
 

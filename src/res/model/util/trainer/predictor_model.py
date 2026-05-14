@@ -49,34 +49,6 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def multiloss_params(self): 
         return MultiHeadLosses.get_params(getattr(self , 'net' , None))
 
-    def reset(self):
-        self.trainer : BaseTrainer | Any = None
-        self._config : ModelConfig | Any = None
-        return self
-
-    def bound_with(self , binder : ModelConfig | BaseTrainer):
-        if isinstance(binder , ModelConfig):
-            return self.bound_with_config(binder)
-        else:
-            return self.bound_with_trainer(binder)
-
-    def bound_with_config(self , config : ModelConfig):
-        assert self.trainer is None , 'Cannot bound with config if bound with trainer first'
-        self._config = config
-        return self
-
-    def bound_with_trainer(self , trainer : BaseTrainer):
-        self.reset()
-        self.trainer = trainer
-        return self
-
-    @classmethod
-    def create_from_trainer(cls , trainer : BaseTrainer):
-        return cls().bound_with_trainer(trainer)
-
-    @property
-    def config(self):
-        return self.trainer.config if self.trainer else self._config
     @property
     def model_full_name(self):
         return f'{self.config.model_name}@{self.model_num}@{self.model_date}@{self.model_submodel}'
@@ -119,11 +91,12 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return self.deposition.load_model(model_num , model_date , submodel)
     
     @abstractmethod
-    def new_model(self , *args , **kwargs):
-        '''call when fitting new model'''
+    def reload_model(self , *args , **kwargs):
+        '''call when fitting new model or having new attempt, reload model parameters and initialize weights and optimizer'''
         from src.res.model.util.trainer.optimizer import Optimizer
         self.optimizer : Optimizer
         return self
+    
     @abstractmethod
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
@@ -144,17 +117,37 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     @abstractmethod
     def collect(self , submodel = 'best' , *args) -> ModelDict: 
         '''collect model params, called before stacking model'''
+
+    def new_model(self , *args , **kwargs):
+        '''call when fitting new model'''
+        self.reload_model(*args , **kwargs)
+        self.checkpoint.new_model(self.status.model_num , self.status.model_date , self.status.next_attempt , self.status.next_redo)
+        self.metrics.new_model(self , self.complete_model_param)
+        return self
+
+    def new_attempt(self , *args , **kwargs):
+        self.reload_model(*args , **kwargs)
+        self.checkpoint.new_model(self.status.model_num , self.status.model_date , self.status.next_attempt , self.status.next_redo)
+        self.metrics.new_attempt()
+        return self
     
     def stack_model(self):
         '''temporaly save self to somewhere'''
+        self.metrics.collect_attempt()
+        if self.metrics.epoch_train_metrics.nanloss:
+            # skip saving model when nan loss is encountered
+            return
         self.trainer.on_before_save_model()
         for submodel in self.trainer.model_submodels:
             self.deposition.stack_model(self.collect(submodel) , self.status.attempt_key , self.model_num , self.model_date , submodel) 
 
     def dump_model(self):
         '''dump model to somewhere'''
+        self.metrics.collect_model()
+        best_attempt = self.metrics.model_metrics.best_attempt()
+        Logger.highlight(f'Dump model {self.model_str} with best attempt {best_attempt}')
         for submodel in self.trainer.model_submodels:
-            self.deposition.dump_stacked_model(self.metrics.model_metrics.best_attempt() , self.model_num , self.model_date , submodel) 
+            self.deposition.dump_stacked_model(best_attempt , self.model_num , self.model_date , submodel) 
 
     def test(self):
         '''test the model inside'''
@@ -175,12 +168,9 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def batch_metrics(self) -> None:
         if self.batch_output.empty: 
             return
-        batch_key = self.batch_idx if self.is_fitting else self.trainer.batch_dates[self.batch_idx]
         self.trainer.on_before_calculate_metrics()
-        self.metrics.calculate(self.status.dataset , batch_key , self.batch_data)
+        self.metrics.calculate(self.status.dataset , self.batch_key , self.batch_data)
         self.trainer.on_after_calculate_metrics()
-        if self.status.dataset != 'train':
-            self.metrics.collect_calculation()
 
     def batch_backward(self) -> None:
         if self.batch_output.empty: 
@@ -189,9 +179,3 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         self.trainer.on_before_backward()
         self.optimizer.backward(self.metrics.batch_metrics)
         self.trainer.on_after_backward()
-        if self.status.dataset == 'train':
-            self.metrics.collect_calculation()
-
-    def on_train_epoch_end(self):
-        self.checkpoint.auto_save(self.ckpt_state_dict())
-    

@@ -20,8 +20,9 @@ class TrainerHookWrapper:
     The order of the hooks is:
     - callback enter hook
     - status hooks
-    - trainer hooks
+    - trainer hooks (self)
     - model hooks
+    - metrics hooks
     - predrecorder hooks
     - callback exit hooks
     """
@@ -45,6 +46,7 @@ class TrainerHookWrapper:
             trainer.status.execute_hook(hook)
             getattr(trainer , f'_raw_{hook}')(*args , **kwargs)
             trainer.model.execute_hook(hook)
+            trainer.metrics.execute_hook(hook)
             trainer.record.execute_hook(hook)
             trainer.callback.at_exit(hook , Proj.vb.get('callback'))
             Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.get('callback'))
@@ -71,31 +73,12 @@ class BaseTrainer(ModelStreamLine):
             self.init_data(use_data = use_data , **kwargs)
             self.init_model(**kwargs)
             self.init_callbacks(**kwargs)
+            self.init_utils(**kwargs)
 
     def __bool__(self): return True
 
     def __repr__(self): 
         return f'{self.__class__.__name__}(path={self.config.base_path.base})'
-        
-    # @abstractmethod
-    # def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
-    #     '''init configuration'''
-    #     self.config : ModelConfig
-    # @abstractmethod
-    # def init_model(self , **kwargs): 
-    #     '''init data_module'''
-    #     from src.res.model.util.trainer import BasePredictorModel
-    #     self.model : BasePredictorModel
-    # @abstractmethod
-    # def init_callbacks(self , **kwargs): 
-    #     '''init callbacks'''
-    #     from src.res.model.util.trainer import BaseCallBack
-    #     self.callback : BaseCallBack
-    # @abstractmethod
-    # def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
-    #     '''init data_module'''
-    #     from src.res.model.util.data import BaseDataModule
-    #     self.data : BaseDataModule
 
     def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
         '''init configuration'''
@@ -110,63 +93,56 @@ class BaseTrainer(ModelStreamLine):
     def init_callbacks(self , **kwargs) -> None: 
         from src.res.model.callback.manager import CallBackManager
         self.callback = CallBackManager.initialize(self , min_key_len = 30)
+    def init_utils(self , **kwargs):
+        from src.res.model.util.trainer import TrainerStatus , PredRecorder , TrainerTexts , TrainerContainer
+        self._status = TrainerStatus(self.config.max_epoch)
+        self._record = PredRecorder(self)
+        self._texts = TrainerTexts(self)
+        self._container = TrainerContainer()
 
+        from src.res.model.util.metric import TrainerMetrics
+        self._metrics = TrainerMetrics(self)
+
+        from src.res.model.util.core import Checkpoint , Deposition
+        self._checkpoint = Checkpoint()
+        self._deposition = Deposition(self.config.base_path)
+
+        from torch.utils.tensorboard import SummaryWriter
+        tsboard_summary_name = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.attempt{self._status.attempt}-{self._status.redo}'
+        self._writer = SummaryWriter(self.config.base_path.snapshot('tensorboard' , tsboard_summary_name))
+
+    @property
+    def status(self): 
+        """status of the trainer , class of TrainerStatus"""
+        return self._status
+    @property
+    def record(self): 
+        """record of the trainer , class of PredRecorder"""
+        return self._record
+    @property
+    def texts(self): 
+        """texts of the trainer , class of TrainerTexts"""
+        return self._texts
+    @property
+    def container(self): 
+        """container of the trainer , class of TrainerContainer"""
+        return self._container
+    @property
+    def metrics(self): 
+        """metrics of the trainer , class of Metrics"""
+        return self._metrics
+    @property
+    def checkpoint(self): 
+        """checkpoint of the trainer , class of Checkpoint"""
+        return self._checkpoint
+    @property
+    def deposition(self): 
+        """deposition of the trainer , class of Deposition"""
+        return self._deposition
     @property
     def writer(self): 
-        if not hasattr(self , '_writer'):
-            from torch.utils.tensorboard import SummaryWriter
-            tsboard_summary_name = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.attempt{self.status.attempt}-{self.status.redo}'
-            self._writer = SummaryWriter(self.config.base_path.snapshot('tensorboard' , tsboard_summary_name))
+        """writer of the trainer , class of SummaryWriter"""
         return self._writer
-
-    @property
-    def status(self):
-        if not hasattr(self , '_status'):
-            from src.res.model.util.trainer import TrainerStatus
-            self._status = TrainerStatus(self.config.max_epoch)
-        return self._status
-
-    @property
-    def texts(self):
-        if not hasattr(self , '_texts'):
-            from src.res.model.util.trainer import TrainerTexts
-            self._texts = TrainerTexts(self)
-        return self._texts
-
-    @property
-    def record(self):
-        if not hasattr(self , '_record'):
-            from src.res.model.util.trainer import PredRecorder
-            self._record = PredRecorder(self)
-        return self._record
-
-    @property
-    def metrics(self):
-        if not hasattr(self , '_metrics'):
-            from src.res.model.util.metric import Metrics
-            self._metrics = Metrics.from_config(self.config)
-        return self._metrics
-
-    @property
-    def container(self):
-        if not hasattr(self , '_container'):
-            from src.res.model.util.trainer import TrainerContainer
-            self._container = TrainerContainer()
-        return self._container
-
-    @property
-    def checkpoint(self):
-        if not hasattr(self , '_checkpoint'):
-            from src.res.model.util.core import Checkpoint
-            self._checkpoint = Checkpoint()
-        return self._checkpoint
-
-    @property
-    def deposition(self):
-        if not hasattr(self , '_deposition'):
-            from src.res.model.util.core import Deposition
-            self._deposition = Deposition(self.config.base_path)
-        return self._deposition
 
     @property
     def device(self): 
@@ -395,32 +371,10 @@ class BaseTrainer(ModelStreamLine):
     def on_fit_model_start(self):
         self.data.setup('fit' , self.model_param , self.model_date)
         self.model.new_model()
-        self.metrics.new_model(self.model , self.model.complete_model_param , **self.status.status)
 
     def on_fit_model_end(self): 
-        self.metrics.collect_attempt()
-        self.metrics.collect_model()
-        self.metrics.model_metrics.export(self.base_path.snapshot('metrics' , f'model.{self.model_num}.{self.model_date}.xlsx'))
         self.model.stack_model()
         self.model.dump_model()
-        
-        
-    def on_fit_epoch_start(self):
-        ...
-
-    def on_fit_epoch_end(self): ...
-
-    def on_train_epoch_start(self):
-        self.metrics.new_fit_epoch(**self.status.status)
-
-    def on_train_epoch_end(self):
-        ...
-
-    def on_validation_epoch_start(self):
-        ...
-
-    def on_validation_epoch_end(self):
-        self.metrics.collect_fit_epoch()
         
     def on_test_model_start(self):
         self.data.setup('test' , self.model_param , self.model_date)
@@ -453,12 +407,37 @@ class BaseTrainer(ModelStreamLine):
             self.model.load_state_dict(self.checkpoint.load(epoch , phase))
 
 class ModelStreamLineWithTrainer(ModelStreamLine):
-    def bound_with_trainer(self , trainer): 
-        self.trainer : BaseTrainer | Any = trainer
+    def reset(self):
+        self._trainer : BaseTrainer | Any = None
+        self._config : ModelConfig | Any = None
+        return self
+
+    def bound_with(self , binder : ModelConfig | BaseTrainer):
+        if isinstance(binder , ModelConfig):
+            return self.bound_with_config(binder)
+        else:
+            return self.bound_with_trainer(binder)
+
+    def bound_with_config(self , config : ModelConfig):
+        assert not getattr(self , '_trainer' , None) , 'Cannot bound with config if bound with trainer first'
+        self._config = config
+        return self
+
+    def bound_with_trainer(self , trainer : BaseTrainer):
+        self.reset()
+        self._trainer = trainer
         return self
 
     @property
-    def config(self): return self.trainer.config
+    def trainer(self):
+        if not getattr(self , '_trainer' , None):
+            raise ValueError('Trainer is not bound')
+        return self._trainer
+
+    @property
+    def config(self):
+        return self.trainer.config if getattr(self , '_trainer' , None) else self._config
+
     @property
     def status(self):  return self.trainer.status
     @property
@@ -496,3 +475,5 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def model_str(self): return self.trainer.model_str
     @property
     def is_fitting(self): return self.trainer.is_fitting
+    @property
+    def batch_key(self): return self.batch_idx if self.is_fitting else self.trainer.batch_dates[self.batch_idx]

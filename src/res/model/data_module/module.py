@@ -174,13 +174,13 @@ class DataModule(BaseDataModule):
     def min_test_date(self):
         if hasattr(self , 'test_full_dates'):
             return self.test_full_dates.min() if len(self.test_full_dates) > 0 else 99991231
-        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names)
+        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 99991231
 
     @property
     def max_test_date(self):
         if hasattr(self , 'test_full_dates'):
             return self.test_full_dates.max() if len(self.test_full_dates) > 0 else 19000101
-        return ModuleData.max_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names)  
+        return ModuleData.max_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 19000101
 
     @property
     def factor_start_dt(self):

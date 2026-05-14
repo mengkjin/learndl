@@ -15,7 +15,7 @@ def main(**kwargs):
     modifier = ModelConfigsBatchModifier()
     modifier.batch_modify()
     inspecter = ModelConfigsInspector()
-    inspecter.inspect_key_values({'ResetOptimizer' : False , 'lamb' : True , 'eps' : True , 'EarlyExitRetrain' : False})
+    inspecter.inspect_key_values()
 
 if __name__ == '__main__':
     main()

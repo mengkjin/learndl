@@ -2,7 +2,7 @@ from src.data import BlockLoader
 from src.res.model.util import BaseCallBack
 
 class SpecificCB_DSize(BaseCallBack):
-    '''in _dsize model fill [size] in batch_input.kwargs'''
+    '''In [_dsize], Fill [size] in batch_input.kwargs'''
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.size_block = None

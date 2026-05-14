@@ -9,7 +9,7 @@ from src.res.model.data_module import BatchInputLoader
 from src.res.model.util import BaseCallBack
 
 class CallbackTimer(BaseCallBack):
-    '''record time cost of callback hooks'''
+    '''Time Cost of Callback Hooks'''
     WITH_CB = True
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -35,7 +35,7 @@ class CallbackTimer(BaseCallBack):
             Logger.display(df , caption = 'Table: Callback Time Costs:')  
             
 class StatusDisplay(BaseCallBack):
-    '''display epoch and event information'''
+    '''Display Epoch and Event Information'''
     CB_ORDER : int = 100
 
     def __init__(self , trainer , **kwargs) -> None:
@@ -59,16 +59,16 @@ class StatusDisplay(BaseCallBack):
         if not self.display_progress:
             return
         if self.status.total_models <= self.config.model_num:
-            return Logger.stdout(self.trainer.texts.progress)
+            Logger.stdout(self.trainer.texts.progress)
         else:
-            return Logger.log_only(self.trainer.texts.progress)
+            Logger.log_only(self.trainer.texts.progress)
     
     def on_fit_epoch_end(self):
-        for event in self.status.current_epoch.events: 
+        for event in self.status.current.events: 
             if self.status.total_models <= self.config.model_num:
-                return Logger.stdout(event.info , color = 'cyan' , vb_level = event.vb_level)
+                Logger.stdout(event.info , color = 'cyan' , vb_level = event.vb_level)
             else:
-                return Logger.log_only(event.info , vb_level = event.vb_level)
+                Logger.log_only(event.info , vb_level = event.vb_level)
     
     def on_fit_model_end(self):
         model_summary = self.trainer.texts.model_summary

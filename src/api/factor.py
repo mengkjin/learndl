@@ -457,3 +457,28 @@ class FactorAPI:
             title = f'Resume Testing Factor {factor}'
             with Logger.Paragraph(title , 1) if Proj.vb.vb > 1 else Logger.Timer(title):
                 ModelAPI.test_factor(factor , resume = 1)
+
+    @classmethod
+    def recalculate_all_factors(cls , start : int | None = None , end : int | None = None , timeout : int = 10):
+        """
+        Recalculate factors via ``FactorCalculatorAPI``.
+
+        Args:
+          start : Start date for the recalculation.
+          end : End date for the recalculation.
+          timeout : Timeout for the recalculation.
+
+        Returns:
+          None
+
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [admin]
+          risk: destructive
+          lock_num: 1
+          disable_platforms: [macos , linux , windows]
+          execution_time: long
+          memory_usage: high
+        """
+        wrap_update(FactorCalculatorAPI.recalculate , 'recalculate all factors' , start = start , end = end , timeout = timeout)

@@ -3,7 +3,7 @@ import torch
 from src.res.model.util import BaseCallBack
 
 class CudaEmptyCache(BaseCallBack):
-    '''CudaEmptyCache every few batch (pretty slow)'''
+    '''Empty Cuda Cache Every Few Batches (Pretty Slow)'''
     CB_KEY_PARAMS = ['batch_interval']
     def __init__(self , trainer , batch_interval = 20 , **kwargs) -> None:
         super().__init__(trainer , **kwargs)

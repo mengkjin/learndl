@@ -33,14 +33,9 @@ train.skip_horizon: 20
 train.fitting_step: 5
 train.callbacks:
   - StatusDisplay
-  - BatchDisplay
   - BasicTestResult
   - DetailedAlphaAnalysis
   - EarlyStoppage
   - BadAttemptRetrain
-  - NanLossRetrain
-  - ValidationConverge
-  # - TrainConverge
-  # - FitConverge
   - CallbackTimer
   # - CudaEmptyCache

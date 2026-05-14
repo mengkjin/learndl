@@ -7,7 +7,7 @@ from torch import nn , no_grad
 from torch.optim.swa_utils import AveragedModel
 from typing import Any , Literal
 
-from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , Metrics , EpochMetricResult , TrainerStatus
+from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
 
 def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
     '''get a subclass of _BaseEnsembler'''
@@ -29,7 +29,7 @@ class SWAEnsembler(ABC):
     @abstractmethod
     def reset(self): ...
     @abstractmethod
-    def assess(self , status : TrainerStatus , metrics : Metrics): 
+    def assess(self , status : TrainerStatus , metrics : TrainerMetrics): 
         '''accuracy or loss to update assessment'''
     @abstractmethod
     def collect(self , trainer : BaseTrainer , *args , **kwargs) -> nn.Module: 
@@ -88,7 +88,7 @@ class EnsembleBestOne(SWAEnsembler):
     def reset(self):
         self.best_epoch : EpochMetricResult | None = None
 
-    def assess(self , status : TrainerStatus , metrics : Metrics):
+    def assess(self , status : TrainerStatus , metrics : TrainerMetrics):
         latest_epoch = metrics.attempt_metrics.latest_epoch()
         if latest_epoch and metrics.compare_epochs(latest_epoch, self.best_epoch):
             if self.best_epoch:
@@ -114,7 +114,7 @@ class EnsembleSWABest(SWAEnsembler):
     def reset(self):
         self.top_epochs : list[EpochMetricResult] = []
         
-    def assess(self , status : TrainerStatus , metrics : Metrics):
+    def assess(self , status : TrainerStatus , metrics : TrainerMetrics):
         latest_epoch = metrics.attempt_metrics.latest_epoch()
         if not latest_epoch:
             return
@@ -147,7 +147,7 @@ class EnsembleSWALast(SWAEnsembler):
         self.best_epoch  : EpochMetricResult | None = None
         self.adjacent_epochs  : list[tuple[int,int]] = []
 
-    def assess(self , status : TrainerStatus , metrics : Metrics):
+    def assess(self , status : TrainerStatus , metrics : TrainerMetrics):
         latest_epoch = metrics.attempt_metrics.latest_epoch()
         if not latest_epoch:
             return

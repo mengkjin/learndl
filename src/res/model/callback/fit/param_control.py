@@ -3,7 +3,7 @@ from copy import deepcopy
 from src.res.model.util import BaseCallBack , Optimizer
 
 class LearnRateReset(BaseCallBack):
-    '''reset optimizer on some epoch , custom scheduler'''
+    '''Learn Rate Scheduler of Periodic Reset'''
     CB_KEY_PARAMS = ['num_reset' , 'trigger' , 'recover_level' , 'speedup2x']
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
     def __init__(self, trainer, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True , **kwargs) -> None:

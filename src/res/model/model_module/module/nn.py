@@ -34,7 +34,7 @@ class NNPredictor(BasePredictorModel):
             self.submodels = {sub:choose_swa_method(sub)(self.checkpoint ,*args , **kwargs) for sub in self.config.submodels}
         return self
 
-    def new_model(self , lr_multiplier = 1. , *args , **kwargs):
+    def reload_model(self , lr_multiplier = 1. , *args , **kwargs):
         '''call when fitting/testing new model'''
         self.init_model(*args , **kwargs)
         transferred = False
@@ -43,14 +43,12 @@ class NNPredictor(BasePredictorModel):
             if prev_model_file.exists() and prev_model_file['state_dict']:
                 self.net.load_state_dict(prev_model_file['state_dict'])
                 transferred = True
-        self.optimizer : Optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
-        self.checkpoint.new_model(**self.status.status)
+        self.optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
         return self
     
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
         model_file = self.load_model_file(model_num , model_date , submodel)
-
         self.init_model(*args , **kwargs)
         self.net.load_state_dict(model_file['state_dict'])
         return self
