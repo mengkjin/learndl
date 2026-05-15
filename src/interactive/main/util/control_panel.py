@@ -251,8 +251,8 @@ class ControlPanelPopover(ABC):
         """Render the button + label into the persistent panel placeholder slot."""
         if self.key not in st.session_state:
             st.session_state[self.key] = st.empty()
-        with st.session_state[self.key]:
-            with st.popover(f'**{self.title}**' , icon = self.icon , width = 'stretch'):
+        with st.session_state[self.key].container(horizontal_alignment = 'center'):
+            with st.popover(f'**{self.title}**' , icon = self.icon , width = 'content'):
                 with st.container(key = f"control-panel-popover-container-{self.key}"):
                     self.popover(script_key = script_key)
 
@@ -289,7 +289,7 @@ class GlobalSettingsPopover(ControlPanelPopover):
     """
     key = f"global-settings-popover"
     icon = f":material/settings:"
-    title = f"**Settings**"
+    title = f"**Setting**"
 
     def popover(self , script_key : str | None = None) -> None:
         st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
@@ -411,12 +411,12 @@ class ControlPanel:
         _ , area , _ = st.columns(self.area_columns , gap = 'small' , vertical_alignment = 'center')
         min_cols , max_cols = Const.Pref.interactive.get('control_panel_popovers_columns' , [2 , 3])
 
-        with area.container(key = f"{self.control_panel_key}-popovers"):
+        with area.container(key = f"{self.control_panel_key}-popovers" , horizontal_alignment = 'center'):
             nrows = (len(self.popovers) / max_cols).__ceil__()
             ncols = max(min(len(self.popovers) , max_cols) , min_cols)
             popovers = list(self.popovers.values())
             for irow in range(nrows):
-                cols = st.columns(ncols , gap = 'large' , vertical_alignment = 'center')
+                cols = st.columns(ncols , gap = 'small' , vertical_alignment = 'center')
                 for icol , col in zip(range(ncols), cols):
                     if irow * ncols + icol >= len(popovers):
                         break

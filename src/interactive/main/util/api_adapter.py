@@ -1,7 +1,6 @@
 """Streamlit UI for browsing and running ``src.api`` endpoints with ``[API Interaction]``."""
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from typing import Any
 
@@ -12,6 +11,7 @@ from src.api.contract import APIEndpoint
 from src.interactive.frontend import subheader_expander , ParamInputsForm
 from src.interactive.main.util.script_detail import show_report_main , show_task_history
 from src.interactive.main.util.session_control import SC
+from src.interactive.main.util.components import param_control_buttons
 
 API_ADAPTER_SCRIPT_KEY = ".core/0.run_api_endpoint.py"
 
@@ -60,31 +60,47 @@ class stAPIEndpoint(APIEndpoint):
     def detail_tags(self) -> list:
         """get the tags for the api endpoint in the detail"""
         tags : list[sac.Tag] = []
-        risk_color = {
+        tags.append(sac.Tag(label=self.risk , color={
             "read_only": "green",
             "write": "yellow",
             "destructive": "red",
-        }[self.risk]
-        execution_color = {
+        }[self.risk]))
+        tags.append(sac.Tag(label=f'{self.execution_time} Execution' , color={
             "immediate": "green",
             "short": "green",
             "medium": "yellow",
             "long": "red",
-        }[self.execution_time]
-        memory_color = {
+        }[self.execution_time]))
+        tags.append(sac.Tag(label=f'{self.memory_usage} Memory' , color={
             "low": "green",
             "medium": "yellow",
             "high": "red",
-        }[self.memory_usage]
-        tags.append(sac.Tag(label=self.risk , color=risk_color))
-        tags.append(sac.Tag(label=f'{self.execution_time} Execution' , color=execution_color))
-        tags.append(sac.Tag(label=f'{self.memory_usage} Memory' , color=memory_color))
+        }[self.memory_usage]))
         tags.append(sac.Tag(label=", ".join(self.roles) , color='teal'))
         if self.lock_num >= 1:
             tags.append(sac.Tag(label=f'{self.lock_num} Locks' , color='orange'))
         if self.disable_platforms:
             tags.append(sac.Tag(label=f'{", ".join(self.disable_platforms)} Disabled' , color='gray'))
         return tags
+
+    @property
+    def arg_help_dict(self) -> dict[str, str]:
+        """parse the arg helps from the description of the api endpoint"""
+        param_keys = [p['name'] for p in self.parameters]
+        helps = {}
+        lines = [line.strip() for line in self.description.split('\n') if line.strip()]
+        args_start = False
+        for line in lines:
+            if line.lower().replace(' ', '').removesuffix(':') == 'args':
+                args_start = True
+            if line.lower().replace(' ', '').removesuffix(':') in ['return', 'returns' , '[apiinteraction]']:
+                break
+            if args_start and ':' in line:
+                key , value = line.split(':', 1)
+                key , value = key.strip(), value.strip()
+                if key in param_keys:
+                    helps[key] = value
+        return helps
 
 class stAPIEndpointList:
     """List of API Endpoints for Streamlit API Console"""
@@ -180,10 +196,6 @@ class stAPIEndpointList:
 
     def __bool__(self):
         return bool(self.endpoints)
-
-def _kwargs_dict_to_hex(d: dict[str, Any]) -> str:
-    """Serialize call kwargs for ``--api_kwargs_hex`` (no spaces; safe for ScriptCmd)."""
-    return json.dumps(d , separators = ("," , ":") , default = str).encode("utf-8").hex()
 
 def show_api_browser() -> stAPIEndpoint | None:
     """show the api browser , including the tree and detail of selected api endpoint"""
@@ -285,23 +297,8 @@ def show_endpoint_parameters(endpoint: stAPIEndpoint | None = None) -> None:
     subheader = subheader_expander(header , icon , True , help = help , key = wkey)
     
     with subheader:
-        param_controls = st.empty()
-        SC.param_inputs_form = ParamInputsForm.from_api_endpoint(endpoint , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
-        assert isinstance(SC.param_inputs_form, ParamInputsForm) , "ParamInputsForm is not initiated"
-        cols = param_controls.columns(6)
-        with cols[0]:
-            if st.button(":blue-badge[:material/refresh: **Reset Parameters**]", key = f"param-inputs-form-reset-param-button" , help = "Reset Parameters to Default" , type = 'tertiary'):
-                SC.script_params_cache.clear_cache(endpoint.runner_key)
-                SC.current_task_item = None
-                SC.param_inputs_form.reset_options()
-
-        with cols[1]:
-            if st.button(":blue-badge[:material/history: **Last Parameters**]", key = f"param-inputs-form-last-param-button" , help = "Set Parameters to Latest Task's Parameters" , type = 'tertiary'):
-                item = SC.get_latest_task_item(runner.script_key)
-                if item is not None:
-                    item_params = SC.param_inputs_form.cmd_to_param_values(cmd = item.cmd)
-                    SC.script_params_cache.update_cache(endpoint.runner_key, 'value', item_params)
-                    SC.param_inputs_form.reset_options()
+        param_control_buttons(runner)
+        SC.set_param_inputs_form(ParamInputsForm.from_api_endpoint(endpoint , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs())
 
     SC.refresh_run_button(runner)
 

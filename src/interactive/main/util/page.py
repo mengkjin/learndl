@@ -105,7 +105,7 @@ def _get_intro_page(page_name : str) -> dict:
         icon = PAGE_ICONS[page_name]
         help = PAGE_HELPS[page_name]
         st.session_state['app_intro_pages'][page_name] = {
-            'page' : st.Page(f'pages/{page_name}.py' , title = label , icon = icon) ,
+            'page' : st.Page(f'pages/{page_name}.py' , title = label , icon = icon , url_path = f'_intro_{page_name}') ,
             'label' : label ,
             'head' : label ,
             'icon' : icon ,

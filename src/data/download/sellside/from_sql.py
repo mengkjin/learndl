@@ -242,7 +242,8 @@ class SellsideSQLDownloader:
         Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
-        parallel([(self.download_period, inter) for inter in date_intervals], method = method, max_workers = self.MAX_WORKERS)
+        calls = [(self.download_period, inter) for inter in date_intervals]
+        parallel(calls, method = method, max_workers = self.MAX_WORKERS)
  
     def download_period(self , start : int , end : int):
         t0 = datetime.now()

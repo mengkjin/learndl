@@ -181,8 +181,10 @@ class StockFactorHierarchy:
         category1 : str | None = None 
         '''
         
-        def calculate_factor(obj : FactorCalculator):
+        def calculate_factor(obj : FactorCalculator) -> pd.Series:
             factor_value = obj.calc_factor(date)
+            if not isinstance(factor_value , pd.Series):
+                factor_value = factor_value.iloc[:,0]
             valid_ratio = len(factor_value.dropna()) / len(factor_value)
             if valid_ratio < 0.3: 
                 Logger.stdout(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}' , vb_level = vb_level)

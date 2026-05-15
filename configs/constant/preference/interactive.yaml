@@ -4,6 +4,7 @@ pending_features: []
 auto_refresh_interval: 0 # seconds
 
 navigation_position: "both" # "sidebar", "both"
+navigation_top_intro_only: true # true, false
 
 task_queue_backend_refresh_interval: 5 # seconds
 task_starting_timeout: 20 # seconds

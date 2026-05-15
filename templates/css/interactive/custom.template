@@ -285,6 +285,9 @@
 [data-baseweb="popover"] {
     padding: 10px !important;
 }
+div[data-testid="stPopoverBody"] {
+    min-width: 10rem !important;
+}
 div[class*="control-panel-popover-container"] {
     padding: 0 !important;
     margin: 0 !important;
@@ -396,12 +399,19 @@ div[data-testid*="stSidebarUserContent"] {
         }
     } 
     .stVerticalBlock[class*="sidebar-script-links"] {
+        & [class*="script-links-divider"] {
+            margin-top: -10px !important;
+            margin-bottom: -10px !important;
+            div {
+                pad: 0 !important;
+            }
+        }
         .stPageLink {
             margin-top: -5px !important;
             margin-bottom: -5px !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
-            padding-left: 10px !important;
+            padding-left: 0px !important;
             span {
                 font-size: 16px !important;
             }

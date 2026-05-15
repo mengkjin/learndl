@@ -95,6 +95,8 @@ class WidgetParamInput:
     prefix: str = ''
     enum: list[str] | None = None
     disabled: bool = False
+    annotation: str = ''
+    help_info: str = ''
 
     def __post_init__(self) -> None:
         """Initialise by copying *param* fields and building the option ↔ value transformers."""
@@ -107,9 +109,10 @@ class WidgetParamInput:
         return cls(runner_key, **param.as_dict())
 
     @classmethod
-    def from_endpoint_parameter(cls , runner_key : str , param : dict[str, Any]) -> WidgetParamInput:
+    def from_endpoint_parameter(cls , runner_key : str , param : dict[str, Any] , help_info_dict : dict[str, str] | None = None) -> WidgetParamInput:
         """Create a :class:`WidgetParamInput` from a :class:`APIEndpoint` parameter."""
-        return cls(runner_key = runner_key, **signature_row_to_input_param(param))
+        kwargs = signature_row_to_input_param(param, help_info_dict)
+        return cls(runner_key = runner_key, **kwargs)
 
     @property
     def ptype(self) -> type | list[str]:
@@ -294,20 +297,21 @@ class ParamInputsForm:
         self.cache = cache or ParamCache()
 
     @classmethod
-    def from_runner(cls , runner : ScriptRunner , cache : ParamCache | None = None, item : TaskItem | None = None) -> 'ParamInputsForm':
+    def from_runner(cls , runner : ScriptRunner , cache : ParamCache | None = None, item : TaskItem | None = None) -> ParamInputsForm:
         """Create a :class:`ParamInputsForm` from a :class:`ScriptRunner`."""
         widgets = [WidgetParamInput.from_script_param_input(runner.script_key, p) for p in runner.header.get_param_inputs()]
         return cls(runner.script_key, widgets, cache, item)
 
     @classmethod
-    def from_api_endpoint(cls , endpoint , cache : ParamCache | None = None, item : TaskItem | None = None) -> 'ParamInputsForm':
+    def from_api_endpoint(cls , endpoint , cache : ParamCache | None = None, item : TaskItem | None = None) -> ParamInputsForm:
         """Create a :class:`ParamInputsForm` from a :class:`APIEndpoint`."""
         from src.interactive.main.util.api_adapter import stAPIEndpoint
         assert isinstance(endpoint, stAPIEndpoint) , f"Endpoint {endpoint} is not a stAPIEndpoint"
         frozen_widget = WidgetParamInput(
             runner_key = endpoint.runner_key, 
             name = 'qualname', type = 'str' , desc = 'Endpoint Qualname' , default = endpoint.qualname , disabled = True)
-        widgets = [frozen_widget] + [WidgetParamInput.from_endpoint_parameter(endpoint.runner_key, p) for p in endpoint.parameters]
+        help_info_dict = endpoint.arg_help_dict
+        widgets = [frozen_widget] + [WidgetParamInput.from_endpoint_parameter(endpoint.runner_key, p , help_info_dict = help_info_dict) for p in endpoint.parameters]
         return cls(endpoint.runner_key, widgets, cache, item)
 
     def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , cmd : str | None = None) -> ParamInputsForm:
@@ -475,7 +479,13 @@ class ParamInputsForm:
         help_texts = []
         if param.required: 
             help_texts.append(f':red[**Required Parameter!**]')
-        if param.desc: 
+        if param.annotation: 
+            help_texts.append(f':blue[**{param.annotation}**]')
+        else:
+            help_texts.append(f':blue[**{param.type}**]')
+        if param.help_info:
+            help_texts.append(f'*{param.help_info}*')
+        elif param.desc: 
             help_texts.append(f'*{param.desc}*')
         return '\t'.join(help_texts)
 
@@ -722,13 +732,14 @@ def annotation_to_type_enum(
             return "float", None
     return "str", None
 
-def signature_row_to_input_param(row: dict[str, Any]) -> dict[str, Any]:
+def signature_row_to_input_param(row: dict[str, Any] , help_info_dict : dict[str, str] | None = None) -> dict[str, Any]:
     """Turn one ``{name, annotation, default, override?}`` row into a ``from_endpoint_parameter`` dict."""
     name = row["name"]
-    ann = str(row.get("annotation") or "")
+    ann = str(row.get("annotation" , ""))
     default = row.get("default", None)
     ovr = row["override"] if isinstance(row.get("override"), dict) else {}
     required = 'default' not in ovr and 'default' not in row
+    help_info = help_info_dict.get(name, "") if help_info_dict else ""
 
     eff_default = ovr["default"] if "default" in ovr else default
     desc = str(ovr.get("desc") or "")
@@ -762,6 +773,8 @@ def signature_row_to_input_param(row: dict[str, Any]) -> dict[str, Any]:
         "desc": desc,
         'required': required,
         "enum": enum,
+        "annotation": ann,
+        "help_info": help_info,
     }
     if eff_default is not None or "default" in row or "default" in ovr:
         out["default"] = eff_default

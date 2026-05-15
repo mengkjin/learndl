@@ -344,13 +344,13 @@ def _describe_api_callable(obj : Any , require_schema : bool = False) -> dict[st
     oaa : dict[str, Any] = schema.get('override_arg_attr') or {}
     params : list[dict[str, Any]] = []
     for name , p in explicit.items():
-        default = None if p.default is inspect.Parameter.empty else p.default
         row : dict[str, Any] = {
             'name': name ,
             'annotation': _annotation_repr(p.annotation) ,
-            'default': default ,
             'override': oaa.get(name) ,
         }
+        if p.default is not inspect.Parameter.empty:
+            row['default'] = p.default
         params.append(row)
     return {
         'description': _human_description_before_schema(doc) ,

@@ -81,7 +81,7 @@ class SessionControl:
     # for task detail page
     running_report_init : bool = True
     running_report_file_previewer : Path | None = None
-    param_inputs_form : Any = None
+
     script_params_cache : ParamCache = field(default_factory=ParamCache)
 
     # for config editor page
@@ -92,7 +92,7 @@ class SessionControl:
 
     placeholders : dict[str, Any] = field(default_factory=dict)
 
-    _instance : 'ClassVar[SessionControl | None]' = None
+    _instance : ClassVar[SessionControl | None] = None
 
     @property
     def current_runner(self) -> ScriptRunner | None:
@@ -294,6 +294,14 @@ class SessionControl:
             if pvalue.required and params.get(pname) is None:
                 return False
         return True
+
+    def set_param_inputs_form(self , param_inputs_form):
+        """set param inputs form"""
+        from src.interactive.frontend import ParamInputsForm
+        if not isinstance(param_inputs_form, ParamInputsForm):
+            Logger.error(f"param inputs form is not a ParamInputsForm: {param_inputs_form.__class__.__name__}")
+            raise ValueError("param inputs form is not a ParamInputsForm")
+        self.param_inputs_form = param_inputs_form
    
     @queue_refresh_trigger
     def click_queue_item(self , item : TaskItem):

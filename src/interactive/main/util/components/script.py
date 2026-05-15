@@ -18,11 +18,13 @@ from pathlib import Path
 from src.interactive.backend import ScriptRunner , TaskItem
 
 from src.interactive.frontend import (
-    FilePreviewer , YAMLFileEditor , ColoredText , subheader_expander , ParamInputsForm
+    FilePreviewer , YAMLFileEditor , ColoredText , subheader_expander , ParamInputsForm ,
 )
+
 
 from src.proj import PATH , MACHINE
 from src.interactive.main.util.session_control import SC
+from .param_control_buttons import param_control_buttons
 
 __all__ = [
     'show_task_history' , 'show_param_settings' , 'show_report_main'
@@ -244,30 +246,16 @@ def show_param_settings(runner : ScriptRunner | str | None) -> None:
     subheader = subheader_expander(header , icon , True , help = help , key = wkey)
 
     with subheader:
-        param_controls = st.empty()
-        SC.param_inputs_form = ParamInputsForm.from_runner(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
-        
+        if not empty_param:
+            param_control_buttons(runner)
+        SC.set_param_inputs_form(ParamInputsForm.from_runner(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs())
         if empty_param: 
             SC.refresh_run_button(runner)
             return
 
-        assert isinstance(SC.param_inputs_form, ParamInputsForm) , "ParamInputsForm is not initiated"
-        cols = param_controls.columns(6)
-        with cols[0]:
-            if st.button(":blue-badge[:material/refresh: **Reset Parameters**]", key = f"param-inputs-form-reset-param-button" , help = "Reset Parameters to Default" , type = 'tertiary'):
-                SC.script_params_cache.clear_cache(runner.script_key)
-                SC.current_task_item = None
-                SC.param_inputs_form.reset_options()
-                
-
-        with cols[1]:
-            if st.button(":blue-badge[:material/history: **Last Parameters**]", key = f"param-inputs-form-last-param-button" , help = "Set Parameters to Latest Task's Parameters" , type = 'tertiary'):
-                item = SC.get_latest_task_item(runner.script_key)
-                if item is not None:
-                    item_params = SC.param_inputs_form.cmd_to_param_values(cmd = item.cmd)
-                    SC.script_params_cache.update_cache(runner.script_key, 'value', item_params)
-                    SC.param_inputs_form.reset_options()
-
+        # param_control_buttons(runner)
+        # SC.set_param_inputs_form(ParamInputsForm.from_runner(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs())
+        
         params = SC.param_inputs_form.param_values
         if runner.header.file_editor:
             with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):

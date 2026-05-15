@@ -152,3 +152,13 @@ label[data-testid="stWidgetLabel"] > div:not([data-testid="stMarkdownContainer"]
     margin-top: -10px !important;
     padding-left: 15px !important;
 }
+.stButton p {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+.stPopover p {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}

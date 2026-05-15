@@ -19,6 +19,8 @@ class TrainerTexts(ModelStreamLineWithTrainer):
     @property
     def exit(self) -> str:
         if self.status.loop_end:
+            if self.status.end_attempt_event is None:
+                raise ValueError('end_attempt_event is None when loop end, check what happened')
             return self.status.end_attempt_event.reason
         else:
             return ''

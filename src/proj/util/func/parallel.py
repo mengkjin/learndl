@@ -8,7 +8,11 @@ __all__ = ['parallel' , 'FuncCall']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
 T = TypeVar('T')
-INPUT_TYPE = Callable[..., T] | tuple[Callable[..., T] , Iterable | None] | tuple[Callable[..., T] , list | tuple | None , dict | None]
+INPUT_TYPE = (
+    Callable[..., T] 
+    | tuple[Callable[..., T], Iterable[Any] | None] 
+    | tuple[Callable[..., T], list[Any] | tuple[Any, ...] | None, dict[str, Any] | None]
+)
 
 def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:
     """get parallel method index
@@ -29,7 +33,7 @@ def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] ,
         raise ValueError(f'method should be int or str , but got {type(method)}')
 
 def parallel(
-    inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , 
+    inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
     method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
     max_workers = MAX_WORKERS , ignore_error = False , **kwargs
 ) -> dict[Any , T]:
@@ -78,7 +82,7 @@ class FuncCall:
         return self.go()
 
     @staticmethod
-    def unwrap(func_input : INPUT_TYPE , **kwargs) -> tuple[Callable , list , dict]:
+    def unwrap(func_input : INPUT_TYPE[T] , **kwargs) -> tuple[Callable[..., T] , tuple[Any, ...] , dict[str, Any]]:
         """Normalize ``func_input`` into ``(callable, args, kwargs)``."""
         args = []
         if isinstance(func_input , Callable):
@@ -101,12 +105,12 @@ class FuncCall:
                 raise ValueError(f'func_input should be a tuple of length 2 or 3 , but got {len(func_input)}')
         else:
             raise ValueError(f'func_input should be a Callable or a tuple , but got {type(func_input)}')
-        return func , args , kwargs
+        return func , tuple(args) , kwargs
 
     @classmethod
-    def try_call(cls , func_input : INPUT_TYPE , key : Any | None = None , 
+    def try_call(cls , func_input : INPUT_TYPE[T] , key : Any | None = None , 
                  result_dict : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
-                 **kwargs) -> Any:
+                 **kwargs) -> T | None:
         """Invoke unwrapped func; store return in ``result_dict[key]`` on success."""
         func , args , kwargs = cls.unwrap(func_input , **kwargs)
         try:
@@ -120,7 +124,7 @@ class FuncCall:
             Logger.error(f'{key} >> {func}({args} , {kwargs}) generated an exception: {e}')
             raise
 
-    def go(self) -> Any:
+    def go(self) -> None:
         """Execute this instance's bound call with instance kwargs."""
         self.try_call(self.func_input , self.key , self.result_dict , self.catch_errors , **self.kwargs)
 
@@ -129,20 +133,13 @@ class FuncCall:
         return pool.submit(self.go)
 
     @classmethod
-    def from_func_calls(cls , inputs : Mapping[Any , INPUT_TYPE] | Iterable[INPUT_TYPE] , ignore_error : bool = False , **kwargs) -> tuple[dict[Any , Any] , list[FuncCall]]:
+    def from_func_calls(cls , inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
+                        ignore_error : bool = False , **kwargs) -> tuple[dict[Any , T] , list[FuncCall]]:
         """Build result dict and ``FuncCall`` list from a mapping or iterable."""
         iterance = inputs.items() if isinstance(inputs , dict) else enumerate(inputs)
-        result : dict[Any , Any] = {}
+        result = {}
         catch_errors = (Exception , ) if ignore_error else ()
         func_calls : list[FuncCall] = []
         for key , input in iterance:
             func_calls.append(FuncCall(input , key , result , catch_errors = catch_errors , **kwargs))
         return result , func_calls
-
-    @classmethod
-    def parallel(cls , inputs : Mapping[Any , INPUT_TYPE] , 
-                 method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
-                 max_workers = MAX_WORKERS , ignore_error : bool = False) -> dict[Any , T]:
-        """Convenience: delegate to module-level ``parallel``."""
-        return parallel(inputs , method , max_workers , ignore_error)
-
