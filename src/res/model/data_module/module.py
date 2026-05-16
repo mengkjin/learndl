@@ -12,9 +12,10 @@ from src.proj import Logger , CALENDAR , MACHINE , Const
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
 from src.func import match_values
 from src.func import tensor as T
-from src.res.model.util import BaseBuffer , BaseDataModule , BatchInput , ModelConfig , BufferStorage , StoredFileLoader , HiddenPath
-from .loader import BatchInputLoader
-from .prenorm import PrenormOperator
+from src.res.model.util import (
+    BaseDataModule , DataloaderParam , BatchInputLoader , PrenormOperator , BatchInput , ModelConfig , 
+    StoredTorchFileLoader , HiddenPath , BaseTrainer
+)
 
 __all__ = ['DataModule']
 
@@ -66,33 +67,27 @@ class DataModule(BaseDataModule):
     DataModule for model fitting / testing / predicting
     """
     _config_instance_for_batch_data : dict[ModelConfig,DataModule] = {}
-    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , 
-                 info : bool = False , min_key_len : int = -1 , **kwargs):
-        '''
-        1. load Package of BlockDatas of x , y , norms and index
-        2. Setup model_date dataloaders
-        3. Buffer dict for dynamic nn's
-        use_data: 'fit' , 'predict' , 'both' 
-            if 'predict' only load recent data
-        '''
-        self.config   = ModelConfig(stage=0) if config is None else config
-        self.use_data = use_data
-        self.storage  = BufferStorage(self.config.mem_storage)
-        self.buffer   = BaseBuffer(self.device)
-        if info:
-            Logger.stdout_pairs({'Use Data' : use_data} , title = 'Module Data Initiated:' , vb_level=2 , min_key_len = min_key_len)
-
+        
     def __repr__(self): 
         keys =  self.input_keys
         if len(keys) >= 5: 
             keys_str = f'[{keys[0]},...,{keys[-1]}({len(keys)})]'
         else:
             keys_str = str(keys)
-        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'
+        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'    
 
-    @property
-    def empty_x(self):
-        return self.datas.empty_x and not self.input_keys_hidden
+    @classmethod
+    def initialize(cls , config_or_trainer : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
+        if config_or_trainer is None:
+            config = ModelConfig(stage=0)
+        elif isinstance(config_or_trainer , BaseTrainer):
+            config = config_or_trainer.config
+        elif isinstance(config_or_trainer , ModelConfig):
+            config = config_or_trainer
+        else:
+            raise ValueError(f'Invalid config_or_trainer: {config_or_trainer}')
+        data = cls(config , use_data = use_data , *args , **kwargs)
+        return data
 
     @staticmethod
     def prepare_data(data_types : list[str] | None = None):
@@ -158,9 +153,13 @@ class DataModule(BaseDataModule):
 
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''
-        self.loader_dict : dict[str , StoredFileLoader]  = {}
+        self.loader_dict : dict[str , StoredTorchFileLoader]  = {}
         self.loader_dates : dict[str , list[int]] = {}
-        self.loader_param = self.LoaderParam()
+        self.loader_param = DataloaderParam()
+
+    @property
+    def empty_x(self):
+        return self.datas.empty_x and not self.input_keys_hidden
 
     @property
     def beg_date(self):
@@ -212,7 +211,7 @@ class DataModule(BaseDataModule):
         slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
         
         assert slens , (self.config.seq_lens | param.get('seqlens',{}) , self.input_keys)
-        loader_param = self.LoaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
+        loader_param = DataloaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
         if self.loader_param == loader_param: 
             return False
         self.loader_param = loader_param
@@ -408,15 +407,15 @@ class DataModule(BaseDataModule):
     
     def transfer_batch_to_device(self , batch : BatchInput , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':
-            batch = batch.to(self.device if device is None else device)
+            batch = batch.to(self.config.device if device is None else device)
         return batch
     
     def empty_dataloader(self) -> None:
         if self.is_fitting:
-            self.loader_dict['train'] = StoredFileLoader(self.storage , [] , 'static')
-            self.loader_dict['valid'] = StoredFileLoader(self.storage , [] , 'static')
+            self.loader_dict['train'] = StoredTorchFileLoader(self.storage , [] , 'static')
+            self.loader_dict['valid'] = StoredTorchFileLoader(self.storage , [] , 'static')
         else:
-            self.loader_dict[self.stage] = StoredFileLoader(self.storage , [] , 'static')
+            self.loader_dict[self.stage] = StoredTorchFileLoader(self.storage , [] , 'static')
             self.loader_dates[self.stage] = []
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
@@ -451,7 +450,7 @@ class DataModule(BaseDataModule):
                 if set_key in ['predict' , 'test' , 'extract']:
                     self.loader_dates[set_key].append(self.y_date[int(xindex1[0].item())])
                 
-            self.loader_dict[set_key] = StoredFileLoader(self.storage , batch_keys , shuf_opt)
+            self.loader_dict[set_key] = StoredTorchFileLoader(self.storage , batch_keys , shuf_opt)
 
     def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
         datas = []

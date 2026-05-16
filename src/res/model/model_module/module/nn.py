@@ -4,10 +4,10 @@ from typing import Any
 
 from src.proj import Logger
 from src.res.algo import AlgoModule
-from src.res.model.util import BasePredictorModel , BatchInput , Optimizer
+from src.res.model.util import PredictorModel , BatchInput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
 
-class NNPredictor(BasePredictorModel):
+class NNPredictor(PredictorModel):
     def init_model(self , 
                    model_module : str | None = None , 
                    model_param : dict | None = None , 

@@ -39,7 +39,7 @@ class BadAttemptRetrain(BaseCallBack):
     def on_train_epoch_end(self):
         self.is_nanloss = self.metrics.epoch_train_metrics.nanloss
 
-    def on_before_fit_epoch_end(self):
+    def on_fit_epoch_end_before(self):
         if not self.is_nanloss and (not self.status.loop_end or self.status.attempt >= self.max_attempt):
             return
         if self.is_nanloss and self.remain_nan_life <= 0:
@@ -47,16 +47,16 @@ class BadAttemptRetrain(BaseCallBack):
         if self.is_nanloss:
             Logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_life} chances.')
             self.remain_nan_life -= 1
-            message = f'{self.trainer.texts.model} {self.trainer.texts.attempt} {self.trainer.status.epoch_key} got nanloss! Redo current attempt {self.status.attempt}!'
+            message = f'{self.texts.model_key} {self.texts.attempt_key} {self.status.epoch_key} got nanloss! Redo current attempt {self.status.attempt}!'
             self.trigger_retrain('redo_attempt' , 'nanloss' , message)
         elif self.is_early_exit:
-            message = f'{self.trainer.texts.progress}, exit too early. Start new attempt {self.status.attempt+1}!'
+            message = f'{self.texts.progress}, exit too early. Start new attempt {self.status.attempt+1}!'
             self.trigger_retrain('new_attempt' , 'early_exit' , message , self.next_attempt_lr_multiplier)
         elif self.is_low_ic:
-            message = f'{self.trainer.texts.progress}, get a very low RankIC, Start new attempt {self.status.attempt+1}!'
+            message = f'{self.texts.progress}, get a very low RankIC, Start new attempt {self.status.attempt+1}!'
             self.trigger_retrain('new_attempt' , 'low_ic' , message , self.next_attempt_lr_multiplier)
 
     def trigger_retrain(self , event_type : Literal['new_attempt' , 'redo_attempt'] , reason : str , message : str = '' , new_lr_multiplier : float = 1.):
         self.model.stack_model()
         self.status.add_epoch_event(event_type , reason , message = message)
-        self.model.new_attempt(lr_multiplier = new_lr_multiplier)
+        self.trainer.new_attempt('attempt' , lr_multiplier = new_lr_multiplier)

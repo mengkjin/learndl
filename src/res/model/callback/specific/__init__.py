@@ -1,21 +1,25 @@
 from typing import Type
 
-from src.res.algo import AlgoModule
-from src.res.model.util import BaseCallBack
+from src.res.model.util import ModelConfig, BaseCallBack
 
-def get_specific_cb(module_name : str) -> Type[BaseCallBack] | None:
-    nn_category = AlgoModule.nn_category(module_name)
+def get_specific_cbs(config : ModelConfig) -> list[Type[BaseCallBack]]:
+    
+    nn_category = config.module_type
+    module_name = config.model_module
+    model_name = config.model_clean_name
+
+    cbs : list[Type[BaseCallBack]] = []
     if module_name == 'gru_dsize':
         from src.res.model.callback.specific.dsize import SpecificCB_DSize
-        return SpecificCB_DSize
-    elif nn_category == 'vae':
+        cbs.append(SpecificCB_DSize)
+    if nn_category == 'vae':
         from src.res.model.callback.specific.vae import SpecificCB_VAE
-        return SpecificCB_VAE
-    elif nn_category == 'tra':
+        cbs.append(SpecificCB_VAE)
+    if nn_category == 'tra':
         from src.res.model.callback.specific.tra import SpecificCB_TRA
-        return SpecificCB_TRA
-    elif module_name.endswith('_global2top'):
+        cbs.append(SpecificCB_TRA)
+    if module_name.endswith('_global2top') or model_name.endswith('_global2top'):
         from src.res.model.callback.specific.global2top import SpecificCB_Global2Top
-        return SpecificCB_Global2Top
-    else:
-        return None
+        cbs.append(SpecificCB_Global2Top)
+
+    return cbs

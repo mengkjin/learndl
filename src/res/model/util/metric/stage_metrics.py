@@ -375,11 +375,11 @@ class AttemptMetrics(AggregatedMetrics):
 
     @property
     def total_accuracies(self) -> list[float]:
-        return [df['total_accuracy'].item() for df in self.tables['valid_totals']]
+        return [df['total_accuracy'].item() for df in self.tables['valid_epoch_totals']]
 
     @property
     def total_losses(self) -> list[float]:
-        return [df['total_loss'].item() for df in self.tables['valid_totals']]
+        return [df['total_loss'].item() for df in self.tables['valid_epoch_totals']]
 
 class ModelMetrics(AggregatedMetrics):
     def new(self , stage : Literal['data' , 'fit' , 'test'] = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):

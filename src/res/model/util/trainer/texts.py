@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
-from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
+from .pipeline import TrainerPipeline
 
-class TrainerTexts(ModelStreamLineWithTrainer):
+class TrainerTexts(TrainerPipeline):
     """Status texts class, used to generate the texts of the status"""
-    def __init__(self , trainer : BaseTrainer):
+    def __init__(self , trainer):
         self.bound_with_trainer(trainer)
     @property
-    def model(self) -> str:
+    def model_key(self) -> str:
         return f'{self.config.model_name} #{self.model_num:d} @{self.model_date:4d}'
     @property
-    def attempt(self) -> str:
-        return f'{self.status.attempt_key}'
+    def attempt_key(self) -> str:
+        return self.status.attempt_key
     @property
     def model_epoch(self) -> str:
         return f'ModelEpoch#{self.status.model_epoch}'
@@ -26,7 +26,7 @@ class TrainerTexts(ModelStreamLineWithTrainer):
             return ''
     @property
     def info(self) -> str:
-        last_lr = self.trainer.model.optimizer.last_lr if hasattr(self.trainer.model , 'optimizer') else 0.
+        last_lr = self.model.optimizer.last_lr if hasattr(self.model , 'optimizer') else 0.
         best_epoch = self.metrics.attempt_metrics.best_epoch()
         if best_epoch is None:
             return 'Loss{:.4f}, TrainIC{:.4f}, ValidIC{:.4f}, LR{:.1e}'
@@ -38,7 +38,7 @@ class TrainerTexts(ModelStreamLineWithTrainer):
             best_epoch.epoch_key , valid_accuracies , best_epoch.valid_rankic , last_lr)
     @property
     def progress(self) -> str:
-        return f'{self.attempt} {self.status.epoch_key}: {self.info}'
+        return f'{self.attempt_key} {self.status.epoch_key}: {self.info}'
 
     @property
     def model_summary(self) -> str:
@@ -48,7 +48,7 @@ class TrainerTexts(ModelStreamLineWithTrainer):
         best_metrics = self.metrics.model_metrics.best_attempt_metrics()
         final_metrics = f'BestAttempt {best_attempt} TrainIC{best_metrics.train_rankic: .4f} ValidIC{best_metrics.valid_rankic: .4f}'
         final_time = f'Cost{model_time_cost / 60:5.1f}Min,{per_epoch:5.1f}Sec/Ep'
-        return f'{self.model}|{self.attempt} {self.model_epoch} {self.exit}|{final_metrics}|{final_time}'
+        return f'{self.model_key}|{self.attempt_key} {self.model_epoch} {self.exit}|{final_metrics}|{final_time}'
     @property
     def fit_summary(self) -> str:
         if self.is_fitting and self.status.total_epochs * self.status.total_models:

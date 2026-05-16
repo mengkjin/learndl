@@ -4,6 +4,7 @@ import shutil
 from torch import nn
 from datetime import datetime
 from typing import Any
+from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 
 from src.proj import LogFile , Duration , Proj , PATH
 from src.proj.util.func import AsyncSaver
@@ -64,8 +65,8 @@ class SummaryWriter(BaseCallBack):
 
     @property
     def last_lr(self) -> float |Any:
-        if hasattr(self.trainer.model , 'optimizer'):
-            return self.trainer.model.optimizer.last_lr
+        if hasattr(self.model , 'optimizer'):
+            return self.model.optimizer.last_lr
         return 0.
 
     @property
@@ -78,7 +79,7 @@ class SummaryWriter(BaseCallBack):
 
     @property
     def writer(self):
-        return self.trainer.writer
+        return self._writer
 
     @property
     def step_epoch(self) -> int:
@@ -89,10 +90,14 @@ class SummaryWriter(BaseCallBack):
         return self.epoch * self.trainer.batch_num + self.batch_idx
 
     def named_parameters(self) -> list[tuple[str,nn.Parameter]]:
-        net = self.trainer.model.net
+        net = self.model.net
         if not isinstance(net , nn.Module):
             return []
         return [(name , param) for name , param in net.named_parameters()]
+
+    def new_writer(self):
+        model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.next_attempt_key}'
+        self._writer = TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
 
     def add_metrics(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
@@ -204,6 +209,9 @@ class SummaryWriter(BaseCallBack):
                 self.hidden_correlations.clear()
                 self.add_hidden_correlation(hidden_correlations)
 
+    def on_new_attempt(self):
+        self.new_writer()
+
     def on_before_clip_gradients(self):
         if Proj.debug and self.batch_idx % self.DEBUG_STEP == 0:
             self.add_batch_weight_histogram()
@@ -236,7 +244,11 @@ class SummaryWriter(BaseCallBack):
         self.add_total_metric()
         self.add_epoch_events()
 
-    def on_after_fit_end(self):
+    def on_fit_model_end(self):
+        if self.texts.model_summary:
+            self.writer.add_text('Model Info' , self.texts.model_summary)
+
+    def on_fit_end_after(self):
         self.pack_tensorboard_dir()
 
     def on_summarize_model(self):

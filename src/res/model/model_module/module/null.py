@@ -1,9 +1,9 @@
 import torch
 from typing import Any
 
-from src.res.model.util import BasePredictorModel , BatchInput
+from src.res.model.util import PredictorModel , BatchInput
 
-class NullPredictor(BasePredictorModel):
+class NullPredictor(PredictorModel):
     """null predictor for factor / db module (just pass through the data)"""
     AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
 

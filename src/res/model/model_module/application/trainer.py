@@ -4,24 +4,11 @@ from typing import Literal
 from src.proj import MACHINE , Logger , Proj , PATH
 from src.proj.core import strPath
 from src.proj.util import HtmlCatcher , AsyncSaver
-from src.res.model.callback import CallBackManager
-from src.res.model.data_module import DataModule
-from src.res.model.util import BaseTrainer , BasePredictorModel , PredictionModel , ModelPath , ModelConfig
+from src.res.model.util import BaseTrainer , PredictionModel , ModelPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
 class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
-    def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
-        '''init configuration'''
-        self.config   = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , min_key_len = 30 , **kwargs)
-    def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
-        assert use_data != 'predict' , 'use_data cannot be predict when training models'
-        self.data     = DataModule.initialize(self.config , use_data = use_data , min_key_len = 30)
-    def init_model(self , **kwargs):
-        self.model    = BasePredictorModel.initialize(self.config , self , min_key_len = 30 , **kwargs)
-    def init_callbacks(self , **kwargs) -> None: 
-        self.callback = CallBackManager.initialize(self , min_key_len = 30)
-
     @classmethod
     def initialize(cls , base_path = None , * ,
                    module = None , schedule_name = None , override : dict | None = None , 

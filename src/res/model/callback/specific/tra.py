@@ -7,7 +7,8 @@ class SpecificCB_TRA(BaseCallBack):
         super().__init__(trainer , **kwargs)
         
     @property
-    def net(self) -> torch.nn.Module: return getattr(self.trainer.model , 'net')
+    def net(self) -> torch.nn.Module: 
+        return getattr(self.model , 'net')
     def fill_batch_data(self):
         self.i0 = self.batch_input.i[:,0].cpu()
         self.i1 = self.batch_input.i[:,1].cpu()

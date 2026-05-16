@@ -4,9 +4,9 @@ from inspect import currentframe
 from typing import Any
 
 from src.proj import Logger
-from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
+from .pipeline import TrainerPipeline
 
-class BaseCallBack(ModelStreamLineWithTrainer):
+class BaseCallBack(TrainerPipeline):
     CB_ORDER : int = 0
     CB_KEY_PARAMS : list[str] = []
 
@@ -18,7 +18,7 @@ class BaseCallBack(ModelStreamLineWithTrainer):
     ConflictModuleTypes : list[str] = []
     ConflictModuleNames : list[str] = []
 
-    def __init__(self , trainer : BaseTrainer , **kwargs) -> None:
+    def __init__(self , trainer , **kwargs) -> None:
         self.bound_with_trainer(trainer)
         self.kwargs = kwargs
 
@@ -52,6 +52,3 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         while not env.f_code.co_name.startswith('on_'): 
             env = getattr(env , 'f_back')
         return env.f_code.co_name
-
-    @property
-    def model(self): return self.trainer.model

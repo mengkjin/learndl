@@ -15,7 +15,7 @@ class LearnRateReset(BaseCallBack):
         self.trigger_intvl = max(trigger // 2 , 1) if speedup2x else trigger
     @property
     def optimizer(self) -> Optimizer: 
-        return self.trainer.model.optimizer
+        return self.model.optimizer
     @property
     def reset_epoch(self) -> bool:
         i = self.status.epoch + 1 - self.trigger

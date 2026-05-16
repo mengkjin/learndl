@@ -849,9 +849,8 @@ class ModelConfig(BaseModelConfig):
         return self.algo_config.boost_head_config
 
     @classmethod
-    def initialize(cls, base_path: ModelPath | strPath | None, *, vb_level : Any = 2, min_key_len = -1, **kwargs):
+    def initialize(cls, base_path: ModelPath | strPath | None, *, vb_level : Any = 2, min_key_len = 30, **kwargs):
         config = cls(base_path, **kwargs).start_model()
-        config.print_out(vb_level=vb_level, min_key_len=min_key_len)
         return config
 
     def process_parser(self, vb_level : Any = 1):
@@ -1199,6 +1198,9 @@ class ModelConfig(BaseModelConfig):
             info_strs.append((0, "Period", f"{self.beg_date} ~ {self.end_date}"))
             info_strs.append((0, "Interval", f"{self.interval} days"))
             info_strs.append((0, "Window", f"{self.window} days"))
+            if self.module_type == "nn":
+                info_strs.append((0, "Loss", f"{self.criterion_loss}"))
+                info_strs.append((0, "Accuracy", f"{self.criterion_accuracy}"))
             info_strs.append((0, "Sampling", f"{self.sample_method}"))
             info_strs.append((0, "Shuffling", f"{self.shuffle_option}"))
             info_strs.append((0, "Random Seed", f"{self.random_seed}"))

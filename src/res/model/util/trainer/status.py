@@ -7,7 +7,7 @@ from typing import Literal , Any
 
 from src.proj import Logger
 from src.res.model.util.core import epoch_key , attempt_key
-from .streamline import ModelStreamLine
+from .pipeline import BasePipeline
 
 EventTypeType = Literal[
     'new_attempt' , 'redo_attempt' , 'end_attempt' , 
@@ -213,7 +213,7 @@ class FittingEpochs:
         event = sorted(self.attempt_events['end_attempt'] , key = lambda x: (x.effective_epoch , x.epoch))[0]
         return event
     
-class TrainerStatus(ModelStreamLine):
+class TrainerStatus(BasePipeline):
     """Trainer status class, used to store the status of the trainer"""
     def __init__(self , max_epoch : int):
         self.stage   : Literal['data' , 'fit' , 'test'] = 'data'
@@ -223,6 +223,7 @@ class TrainerStatus(ModelStreamLine):
         self.model_submodel : str = 'best'
 
         self.fitting_epochs : FittingEpochs = FittingEpochs(max_epoch)
+        self.milestone_epochs : list[int] = []
         self.total_epochs : int = 0
         self.total_models : int = 0
         self.times : dict[str,datetime] = {}
@@ -284,34 +285,37 @@ class TrainerStatus(ModelStreamLine):
     def next_redo(self) -> int:
         return self.current.next_redo()
     @property
+    def next_attempt_key(self) -> str:
+        return attempt_key(self.next_attempt , self.next_redo)
+    @property
     def model_epoch(self) -> int:
         return self.fitting_epochs.model_epoch
     @property
     def milestone_epoch(self) -> int:
-        return self._milestone_epoch
+        return 0 if not self.milestone_epochs else self.milestone_epochs[-1]
+    @property
+    def model_status(self) -> str:
+        return f'{self.model_num}.{self.model_date}.{self.attempt_key}'
 
     def set_milestone_epoch(self , epoch : int):
-        self._milestone_epoch = epoch
+        self.milestone_epochs.append(epoch)
     def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
         self.fitting_epochs.add_epoch_event(type , reason , epoch , message , details)
     
-    def stage_data(self): 
+    def on_data_start_before(self):  
         self.stage = 'data'
-    def stage_fit(self):  
-        self.stage = 'fit'
-    def stage_test(self): 
-        self.stage = 'test'
-    def on_before_data_start(self):  
         self.times['data_start'] = datetime.now()
-    def on_after_data_end(self):    
+    def on_data_end_after(self):    
         self.times['data_end'] = datetime.now()
-    def on_before_fit_start(self):    
+    def on_fit_start_before(self):    
+        self.stage = 'fit'
         self.times['fit_start'] = datetime.now()
-    def on_after_fit_end(self):        
+    def on_fit_end_after(self):        
         self.times['fit_end'] = datetime.now()
-    def on_before_test_start(self):    
+    def on_test_start_before(self):    
+        self.stage = 'test'
         self.times['test_start'] = datetime.now()
-    def on_after_test_end(self):      
+    def on_test_end_after(self):      
         self.times['test_end'] = datetime.now()
     def on_train_epoch_start(self): 
         self.dataset = 'train'
@@ -323,10 +327,10 @@ class TrainerStatus(ModelStreamLine):
         Logger.only_once(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , object = self , printer = Logger.note)
         self.times['model_start'] = datetime.now()
         self.fitting_epochs.clear()
-        self.set_milestone_epoch(0)
+        self.milestone_epochs.clear()
         self.total_models += 1
     def on_fit_epoch_start(self):
         self.fitting_epochs.new_epoch()
         self.total_epochs += 1
-    def on_before_fit_epoch_end(self):
+    def on_fit_epoch_end_before(self):
         self.fitting_epochs.check_loop_end()    

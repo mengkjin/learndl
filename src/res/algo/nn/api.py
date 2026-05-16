@@ -41,8 +41,7 @@ AVAILABLE_NNS = {
     'risk_att_gru'      : Model.RiskAttGRU.risk_att_gru,
     'ple_gru'           : Model.PLE.ple_gru,
     'tft'               : Model.TFT.TemporalFusionTransformer,
-    'astgnn'            : Model.ABCM.Astgnn,
-    'gru_global2top'    : Model.global2top.gru_global2top,
+    'astgnn'            : Model.ABCM.Astgnn
 }
 
 def get_nn_module(module_name : str) -> nn.Module:

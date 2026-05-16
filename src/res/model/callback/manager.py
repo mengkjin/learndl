@@ -17,13 +17,14 @@ class CallBackManager(BaseCallBack):
     def at_exit(self, hook , vb_level : Any = 'max'):
         [cb.at_exit(hook , vb_level) for cb in self.callbacks]
 
-    @classmethod
-    def initialize(cls , trainer : BaseTrainer , * , vb_level : Any = 2 , min_key_len = -1):
-        cbm = cls(trainer)
-        infos = [cb.get_info() for cb in cbm.callbacks]
+    def print_out(self , vb_level : Any = 2 , min_key_len = -1):
+        infos = [cb.get_info() for cb in self.callbacks]
         infos_dict = {name:f'({param}), {doc}' if doc else f'({param})' for name , param , doc in infos}
-        Logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level=vb_level , min_key_len = min_key_len)
-        return cbm
+        Logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+
+    @classmethod
+    def initialize(cls , trainer : BaseTrainer):
+        return cls(trainer)
 
     @classmethod
     def get_callbacks(cls , trainer : BaseTrainer) -> list[BaseCallBack]:
@@ -40,8 +41,7 @@ class CallBackManager(BaseCallBack):
         use_cbs = [cb for cb in compulsory_cbs if cb in available_cbs]
 
         callback_classes = [cls.get_callback_class(cb) for cb in use_cbs]
-        if specific_cb := specific.get_specific_cb(trainer.config.model_module):
-            callback_classes.append(specific_cb)
+        callback_classes.extend(specific.get_specific_cbs(trainer.config))
 
         callback_classes = sorted(callback_classes, key=lambda x: x.CB_ORDER)
         callbacks = [cb_type(trainer , **trainer.config.callback_kwargs.get(cb_type.__name__ , {})) for cb_type in callback_classes]

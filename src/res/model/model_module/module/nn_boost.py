@@ -4,11 +4,11 @@ from typing import Any
 
 from src.proj import Logger
 from src.res.algo import AlgoModule
-from src.res.model.util import BasePredictorModel , BatchInput , BatchOutput , Optimizer
+from src.res.model.util import PredictorModel , BatchInput , BatchOutput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
-class NNBoost(BasePredictorModel):
+class NNBoost(PredictorModel):
     '''a group of ensemble models , of same net structure, still a nn model'''    
     AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
 

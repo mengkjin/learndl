@@ -2,14 +2,17 @@ import numpy as np
 from tqdm import tqdm
 
 from src.proj import Proj
-from src.res.model.util import BaseDataModule , BatchInput
+from src.res.model.util.core import BatchInput
+from .base_module import BaseDataModule
+
+__all__ = ['BatchInputLoader']
     
 class BatchInputLoader:
     '''wrap loader to impletement DataModule Callbacks'''
     def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
         self.loader      = raw_loader
         self.data_module = data_module
-        self.device      = data_module.device
+        self.device      = data_module.config.device
         self.tqdm        = tqdm
         self.desc        = desc
         self.enable_tqdm()

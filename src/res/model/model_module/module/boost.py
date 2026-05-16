@@ -2,10 +2,10 @@ import torch
 
 from src.proj import Logger
 from src.res.algo import AlgoModule
-from src.res.model.util import BasePredictorModel , BatchInput
+from src.res.model.util import PredictorModel , BatchInput
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
 
-class BoostPredictor(BasePredictorModel):
+class BoostPredictor(PredictorModel):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
 

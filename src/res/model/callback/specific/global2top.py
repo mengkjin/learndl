@@ -74,6 +74,17 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.converge_patience = converge_patience
         self.top_converge_alpha = top_converge_alpha
 
+    def override_configuration(self):
+        loss_criteria = {k:v for k,v in self.config.criterion_loss.items() if k == 'global2top'}
+        if not loss_criteria:
+            loss_criteria = {'global2top':{}}
+        self.config.model_config['train.criterion.loss'] = loss_criteria
+
+        accuracy_criteria = {k:v for k,v in self.config.criterion_accuracy.items() if k == 'global2top'}
+        if not accuracy_criteria:
+            accuracy_criteria = {'global2top':{}}
+        self.config.model_config['train.criterion.accuracy'] = accuracy_criteria
+
     def reset_record(self):
         self.valid_accuracies = pd.DataFrame()
         self.global_plateaued = False
@@ -165,11 +176,14 @@ class SpecificCB_Global2Top(BaseCallBack):
     def set_accuracy_verdict(self):
         aggregator = aggregator_factory(self.fitting_phase , glb_climax = None)
         self.metrics.set_accuracy_verdict(aggregator)
+
+    def on_configure_model(self):
+        self.override_configuration()
         
     def on_fit_model_start(self):
         self.reset_record()
 
-    def on_after_calculate_metrics(self):
+    def on_batch_metrics_after(self):
         self.set_loss_weights()
         self.set_accuracy_aggregator()
 

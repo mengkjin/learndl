@@ -9,9 +9,9 @@ from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput 
 from src.res.model.util.config import ModelConfig
-from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
+from .pipeline import TrainerPipeline
 
-class BasePredictorModel(ModelStreamLineWithTrainer):
+class PredictorModel(TrainerPipeline):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = []
     COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
@@ -38,13 +38,16 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return f'{self.__class__.__name__}(config={self.config})'
 
     @classmethod
-    def initialize(cls , config : ModelConfig , trainer : BaseTrainer | None = None , * , vb_level : Any = 2 , min_key_len = -1 , **kwargs):
+    def initialize(cls , config_or_trainer , **kwargs):
         from src.res.model.model_module.module import get_predictor_module
-        binder = config if trainer is None else trainer
+        binder = config_or_trainer
+        config = config_or_trainer if isinstance(config_or_trainer , ModelConfig) else config_or_trainer.config
         model = get_predictor_module(config , **kwargs).bound_with(binder)
-        infos = {'Module Type' : model.__class__.__name__}
-        Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
         return model
+
+    def print_out(self , vb_level : Any = 2 , min_key_len = 30):
+        infos = {'Module Type' : self.__class__.__name__}
+        Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     
     def multiloss_params(self): 
         return MultiHeadLosses.get_params(getattr(self , 'net' , None))
@@ -121,14 +124,6 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def new_model(self , *args , **kwargs):
         '''call when fitting new model'''
         self.reload_model(*args , **kwargs)
-        self.checkpoint.new_model(self.status.model_num , self.status.model_date , self.status.next_attempt , self.status.next_redo)
-        self.metrics.new_model(self , self.complete_model_param)
-        return self
-
-    def new_attempt(self , *args , **kwargs):
-        self.reload_model(*args , **kwargs)
-        self.checkpoint.new_model(self.status.model_num , self.status.model_date , self.status.next_attempt , self.status.next_redo)
-        self.metrics.new_attempt()
         return self
     
     def stack_model(self):
@@ -168,14 +163,14 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def batch_metrics(self) -> None:
         if self.batch_output.empty: 
             return
-        self.trainer.on_before_calculate_metrics()
+        self.trainer.on_batch_metrics_before()
         self.metrics.calculate(self.status.dataset , self.batch_key , self.batch_data)
-        self.trainer.on_after_calculate_metrics()
+        self.trainer.on_batch_metrics_after()
 
     def batch_backward(self) -> None:
         if self.batch_output.empty: 
             return
         assert self.status.dataset == 'train' , self.status.dataset
-        self.trainer.on_before_backward()
+        self.trainer.on_batch_backward_before()
         self.optimizer.backward(self.metrics.batch_metrics)
-        self.trainer.on_after_backward()
+        self.trainer.on_batch_backward_after()

@@ -16,10 +16,9 @@ Sub-modules:
     RiskAttGRU — GRU with risk-factor cross-attention
     TFT        — Temporal Fusion Transformer
     ABCM       — Alpha-Beta Co-Mining GRU
-    Global2Top — Global to Top-K GRU
 """
 from . import (
     CNN, TFT , ModernTCN , PatchTST , PLE , RNN , RiskAttGRU ,
     TSMixer , TRA , FactorVAE ,
-    Attention , ABCM , global2top ,
+    Attention , ABCM
 )

@@ -30,7 +30,7 @@ class BasicTestResult(BaseCallBack):
         df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
-        preds = self.trainer.record.get_preds(target_dates).dropna()
+        preds = self.record.get_preds(target_dates).dropna()
 
         grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
         def df_ic(subdf : pd.DataFrame , **kwargs):

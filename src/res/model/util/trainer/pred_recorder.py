@@ -7,14 +7,14 @@ from typing import Any
 
 from src.proj import Logger , DB , PATH , Const , CALENDAR
 from src.proj.util import AsyncSaver
-from .base_trainer import BaseTrainer , ModelStreamLineWithTrainer
+from .pipeline import TrainerPipeline
 
-class PredRecorder(ModelStreamLineWithTrainer):
+class PredRecorder(TrainerPipeline):
     """Trainer predictor recorder class, used to record the predictor results"""
     PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
     PRED_IDXS = ['secid' , 'date']
     PRED_COLS = ['pred' , 'label']
-    def __init__(self , trainer : BaseTrainer) -> None:
+    def __init__(self , trainer) -> None:
         self.bound_with_trainer(trainer)
         self.folder_preds.mkdir(exist_ok=True , parents=True)
         self.folder_avg_preds.mkdir(exist_ok=True , parents=True)

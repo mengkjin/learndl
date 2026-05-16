@@ -11,18 +11,36 @@ from typing import Any , Iterator , Literal
 from src.proj import Logger
 from src.data import ModuleData
 
-from src.res.model.util.core import BufferStorage , BatchInput
+from src.res.model.util.core import BatchInput
 from src.res.model.util.config import ModelConfig
-from .buffer import BaseBuffer
+from src.res.model.util.storage import TorchFileStorage
+from .dynamic_buffer import DynamicDataBuffer
+
+__all__ = ['BaseDataModule', 'DataloaderParam']
+
+@dataclass
+class DataloaderParam:
+    stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
+    model_date : int | Any = None
+    seqlens : dict[str,int] | Any = None
+    extract_backward_days : int | Any = None
+    extract_forward_days  : int | Any = None
+
+    def __post_init__(self):
+        assert self.stage is None or self.stage in ['fit' , 'test' , 'predict' , 'extract'] , self.stage
+        assert self.model_date is None or self.model_date > 0 , self.model_date
+        assert self.seqlens is None or self.seqlens , self.seqlens
+        if self.seqlens is None:
+            self.seqlens = {}
+        if self.stage != 'extract':
+            self.extract_backward_days = None 
+            self.extract_forward_days  = None
 
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
-    @abstractmethod
     def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
-        self.config   : ModelConfig
-        self.use_data : Literal['fit','predict','both'] 
-        self.storage  : BufferStorage
-        self.buffer   : BaseBuffer
+        self.config   : ModelConfig = config or ModelConfig(stage=0)
+        self.use_data : Literal['fit','predict','both'] = use_data
     @abstractmethod
     def prepare_data() -> None: 
         '''prepare all data in advance of training'''
@@ -53,18 +71,16 @@ class BaseDataModule(ABC):
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchInput]: 
         '''return predict dataloaders'''
-    @classmethod
-    def initialize(cls , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level : Any = 2 , min_key_len = -1 , **kwargs):
-        data = cls(config , use_data = use_data , *args , **kwargs)
-        Logger.stdout_pairs({'Use Data' : data.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
-        return data
+    
+    def print_out(self , vb_level : Any = 2 , min_key_len = 30):
+        Logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     def on_before_batch_transfer(self , batch , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch , device = None , dataloader_idx = None): return batch
     def on_after_batch_transfer(self , batch , dataloader_idx = None): return batch
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''
         self.loader_dict  = {}
-        self.loader_param = self.LoaderParam()
+        self.loader_param = DataloaderParam()
     def prev_model_date(self , model_date):
         prev_dates = self.model_date_list[self.model_date_list < model_date]
         return max(prev_dates) if len(prev_dates) > 0 else -1
@@ -75,6 +91,18 @@ class BaseDataModule(ABC):
     @property
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
         return self.loader_param.stage
+
+    @property
+    def storage(self):
+        if not hasattr(self , '_storage'):
+            self._storage = TorchFileStorage(self.config.mem_storage)
+        return self._storage
+
+    @property
+    def buffer(self):
+        if not hasattr(self , '_buffer'):
+            self._buffer = DynamicDataBuffer(self.config.device)
+        return self._buffer
 
     @property
     def is_fitting(self): return self.stage == 'fit'
@@ -150,25 +178,3 @@ class BaseDataModule(ABC):
 
     def label_of_date(self , date : int) -> np.ndarray:
         return self.labels[:,self.datas.y.date == date][...,0].squeeze().cpu().numpy()
-
-    @dataclass
-    class LoaderParam:
-        stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
-        model_date : int | Any = None
-        seqlens : dict[str,int] | Any = None
-        extract_backward_days : int | Any = None
-        extract_forward_days  : int | Any = None
-
-        def __post_init__(self):
-            assert self.stage is None or self.stage in ['fit' , 'test' , 'predict' , 'extract'] , self.stage
-            assert self.model_date is None or self.model_date > 0 , self.model_date
-            assert self.seqlens is None or self.seqlens , self.seqlens
-            if self.seqlens is None:
-                self.seqlens = {}
-            if self.stage != 'extract':
-                self.extract_backward_days = None 
-                self.extract_forward_days  = None
-        
-    @property
-    def device(self): 
-        return self.config.device

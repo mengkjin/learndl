@@ -3,16 +3,17 @@ from __future__ import annotations
 import itertools
 import numpy as np
 
-from typing import Any , final , Literal , Sized
+from functools import wraps
+from typing import Any , Literal , Sized , Callable
 
 from src.proj import Proj , Logger , Const
 from src.proj.util import FilteredIterable
 
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
 from src.res.model.util.config import ModelConfig
-from .streamline import ModelStreamLine
+from .pipeline import BasePipeline
 
-__all__ = ['BaseTrainer' , 'ModelStreamLineWithTrainer']
+__all__ = ['BaseTrainer']
 
 class TrainerHookWrapper:
     """
@@ -27,32 +28,34 @@ class TrainerHookWrapper:
     - callback exit hooks
     """
     wrapped_records : dict[int , bool] = {}
-    max_wrap_count = 1
 
     @classmethod
     def wrap(cls , trainer : BaseTrainer):
         key = id(trainer)
         assert not cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
         for hook in trainer.base_hooks():
-            setattr(trainer , f'_raw_{hook}' , getattr(trainer , hook))
-            setattr(trainer , hook , cls.wrap_single_hook(trainer , hook))
+            func = getattr(trainer , hook)
+            setattr(trainer , f'_raw_{hook}' , func)
+            setattr(trainer , hook , cls.wrap_single_hook(trainer , hook , func))
         cls.wrapped_records[key] = True
 
     @classmethod
-    def wrap_single_hook(cls , trainer : BaseTrainer , hook : str):
+    def wrap_single_hook(cls , trainer : BaseTrainer , hook : str , func : Callable):
+        @wraps(func)
         def wrapper(*args , **kwargs) -> None:
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = Proj.vb.get('callback'))
-            trainer.callback.at_enter(hook , Proj.vb.get('callback'))
+            vb_level = Proj.vb.get('callback')
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = vb_level)
+            trainer.callback.at_enter(hook , vb_level)
             trainer.status.execute_hook(hook)
-            getattr(trainer , f'_raw_{hook}')(*args , **kwargs)
+            func(*args , **kwargs)
             trainer.model.execute_hook(hook)
             trainer.metrics.execute_hook(hook)
             trainer.record.execute_hook(hook)
-            trainer.callback.at_exit(hook , Proj.vb.get('callback'))
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = Proj.vb.get('callback'))
+            trainer.callback.at_exit(hook , vb_level)
+            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = vb_level)
         return wrapper
 
-class BaseTrainer(ModelStreamLine):
+class BaseTrainer(BasePipeline):
     '''run through the whole process of training'''
     _trainer : BaseTrainer | None = None
 
@@ -63,54 +66,65 @@ class BaseTrainer(ModelStreamLine):
             cls._trainer = obj
         return cls._trainer
     
-    @final
     def __init__(self , base_path = None , * , 
                  module : str | None = None , schedule_name = None , 
                  override : dict | None = None , 
                  use_data : Literal['fit','predict','both'] = 'fit' , **kwargs):
-        with Logger.Paragraph('Stage [Setup]' , 2):
-            self.init_config(base_path = base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
-            self.init_data(use_data = use_data , **kwargs)
-            self.init_model(**kwargs)
-            self.init_callbacks(**kwargs)
-            self.init_utils(**kwargs)
+        assert use_data != 'predict' , 'use_data cannot be predict when training models'
+        self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
+        self._use_data : Literal['fit','both'] = use_data
+        self._kwargs = kwargs
 
-    def __bool__(self): return True
+    def __bool__(self): 
+        return True
 
     def __repr__(self): 
         return f'{self.__class__.__name__}(path={self.config.base_path.base})'
 
-    def init_config(self , base_path = None , * , module : str | None = None , schedule_name = None , override : dict | None = None , **kwargs) -> None:
-        '''init configuration'''
-        self.config   = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , min_key_len = 30 , **kwargs)
-    def init_data(self , use_data : Literal['fit','predict','both'] = 'fit' , **kwargs): 
-        assert use_data != 'predict' , 'use_data cannot be predict when training models'
+    def init_cores(self) -> None:
+        """
+        init core components of the trainer: config, data, model, callbacks
+        """
         from src.res.model.data_module import DataModule
-        self.data     = DataModule.initialize(self.config , use_data = use_data , min_key_len = 30)
-    def init_model(self , **kwargs):
-        from src.res.model.util.trainer import BasePredictorModel
-        self.model    = BasePredictorModel.initialize(self.config , self , min_key_len = 30 , **kwargs)
-    def init_callbacks(self , **kwargs) -> None: 
+        from src.res.model.util.trainer import PredictorModel
         from src.res.model.callback.manager import CallBackManager
-        self.callback = CallBackManager.initialize(self , min_key_len = 30)
-    def init_utils(self , **kwargs):
-        from src.res.model.util.trainer import TrainerStatus , PredRecorder , TrainerTexts , TrainerContainer
-        self._status = TrainerStatus(self.config.max_epoch)
-        self._record = PredRecorder(self)
-        self._texts = TrainerTexts(self)
-        self._container = TrainerContainer()
+        self._data     = DataModule.initialize(self , use_data = self._use_data)
+        self._model    = PredictorModel.initialize(self , **self._kwargs)
+        self._callback = CallBackManager.initialize(self)
 
+    def init_utils(self , **kwargs):
+        """
+        init utils of the trainer: status, record, texts, container, metrics, checkpoint, deposition
+        """
+        from src.res.model.util.trainer import TrainerStatus, PredRecorder, TrainerTexts
         from src.res.model.util.metric import TrainerMetrics
+        from src.res.model.util.storage import Checkpoint, Deposition, TypedContainer
+        
+        self._status = TrainerStatus(self.config.max_epoch)
+        self._texts = TrainerTexts(self)
+        self._record = PredRecorder(self)
         self._metrics = TrainerMetrics(self)
 
-        from src.res.model.util.core import Checkpoint , Deposition
         self._checkpoint = Checkpoint()
         self._deposition = Deposition(self.config.base_path)
+        self._container = TypedContainer()
 
-        from torch.utils.tensorboard import SummaryWriter
-        tsboard_summary_name = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.attempt{self._status.attempt}-{self._status.redo}'
-        self._writer = SummaryWriter(self.config.base_path.snapshot('tensorboard' , tsboard_summary_name))
-
+    @property
+    def config(self):
+        """config of the trainer , class of ModelConfig"""
+        return self._config
+    @property
+    def data(self):
+        """data of the trainer , class of DataModule"""
+        return self._data
+    @property
+    def model(self):
+        """model of the trainer , class of BasePredictorModel"""
+        return self._model
+    @property
+    def callback(self):
+        """callback of the trainer , class of CallBackManager, include all callbacks"""
+        return self._callback
     @property
     def status(self): 
         """status of the trainer , class of TrainerStatus"""
@@ -139,10 +153,6 @@ class BaseTrainer(ModelStreamLine):
     def deposition(self): 
         """deposition of the trainer , class of Deposition"""
         return self._deposition
-    @property
-    def writer(self): 
-        """writer of the trainer , class of SummaryWriter"""
-        return self._writer
 
     @property
     def device(self): 
@@ -210,28 +220,25 @@ class BaseTrainer(ModelStreamLine):
     @property
     def is_fitting(self): 
         return self.status.stage == 'fit'
-
+    
     def main_process(self):
         '''Main stage of data & fit & test'''
-        self.on_configure_model()
+        self.stage_setup()
 
         if not self.queue_of_stages:
             Logger.error("stage_queue is empty , please check src.proj.Proj.States.trainer")
             raise Exception("stage_queue is empty , please check src.proj.Proj.States.trainer")
 
         if 'data' in self.queue_of_stages:
-            with Logger.Paragraph('Stage [Data]' , 2):
-                self.stage_data()
+            self.stage_data()
 
         if 'fit' in self.queue_of_stages:  
-            with Logger.Paragraph('Stage [Fit]' , 2):
-                self.stage_fit()
+            self.stage_fit()
 
         if 'test' in self.queue_of_stages: 
-            with Logger.Paragraph('Stage [Test]' , 2):
-                self.stage_test()
+            self.stage_test()
         
-        self.on_summarize_model()
+        self.stage_complete()
 
         return self
 
@@ -239,48 +246,64 @@ class BaseTrainer(ModelStreamLine):
         '''alias of main_process'''
         return self.main_process()
 
+    def stage_setup(self):
+        '''stage of setting up'''
+        with Logger.Paragraph('Stage [Setup]' , 2):
+            self.init_cores()
+            self.init_utils()
+            self.on_configure_model()
+            self.print_out()
+
     def stage_data(self):
         '''stage of loading model data'''
-        self.on_before_data_start()
-        self.on_data_start()
-        self.data.load_data()
-        self.on_data_end()
-        self.on_after_data_end()
+        with Logger.Paragraph('Stage [Data]' , 2):
+            self.on_data_start_before()
+            self.on_data_start()
+            self.data.load_data()
+            self.on_data_end()
+            self.on_data_end_after()
         
     def stage_fit(self):
         '''stage of fitting'''
-        self.config.log_operation('fit' , 'start')
-        self.on_before_fit_start()
-        self.on_fit_start()
-        for self.status.model_date , self.status.model_num in self.iter_model_num_date():
-            if self.status.model_num == 0:
-                self.on_fit_model_date_start()
-            self.on_fit_model_start()
-            self.model.fit()
-            self.on_fit_model_end()
-            if self.status.model_num == self.config.model_num:
-                self.on_fit_model_date_end()
-        self.on_fit_end()
-        self.on_after_fit_end()
-        self.config.log_operation('fit' , 'end')
+        with Logger.Paragraph('Stage [Fit]' , 2):
+            self.config.log_operation('fit' , 'start')
+            self.on_fit_start_before()
+            self.on_fit_start()
+            for self.status.model_date , self.status.model_num in self.iter_model_num_date():
+                if self.status.model_num == 0:
+                    self.on_fit_model_date_start()
+                self.on_fit_model_start()
+                self.model.fit()
+                self.on_fit_model_end()
+                if self.status.model_num == self.config.model_num:
+                    self.on_fit_model_date_end()
+            self.on_fit_end()
+            self.on_fit_end_after()
+            self.config.log_operation('fit' , 'end')
 
     def stage_test(self):
         '''stage of testing'''
-        self.config.log_operation('test' , 'start')
-        self.on_before_test_start()
-        self.on_test_start()
-        for self.status.model_date , self.status.model_num in self.iter_model_num_date():
-            if self.status.model_num == 0:
-                self.on_test_model_date_start()
-            self.on_test_model_start()
-            self.model.test()
-            self.on_test_model_end()
-            if self.status.model_num == self.config.model_num_list[-1]:
-                self.on_test_model_date_end()
-        self.on_before_test_end()
-        self.on_test_end()
-        self.on_after_test_end()
-        self.config.log_operation('test' , 'end')
+        with Logger.Paragraph('Stage [Test]' , 2):
+            self.config.log_operation('test' , 'start')
+            self.on_test_start_before()
+            self.on_test_start()
+            for self.status.model_date , self.status.model_num in self.iter_model_num_date():
+                if self.status.model_num == 0:
+                    self.on_test_model_date_start()
+                self.on_test_model_start()
+                self.model.test()
+                self.on_test_model_end()
+                if self.status.model_num == self.config.model_num_list[-1]:
+                    self.on_test_model_date_end()
+            self.on_test_end_before()
+            self.on_test_end()
+            self.on_test_end_after()
+            self.config.log_operation('test' , 'end')
+
+    def stage_complete(self):
+        '''stage of completing'''
+        with Logger.Paragraph('Stage [Complete]' , 2):
+            self.on_summarize_model()
 
     def iter_model_num_date(self): 
         '''iter of model_date and model_num , considering is_resuming'''
@@ -323,7 +346,7 @@ class BaseTrainer(ModelStreamLine):
         while not self.status.loop_end:
             self.on_fit_epoch_start()
             yield self.status
-            self.on_before_fit_epoch_end()
+            self.on_fit_epoch_end_before()
             self.on_fit_epoch_end()
 
     def iter_dataloader(self):
@@ -370,7 +393,7 @@ class BaseTrainer(ModelStreamLine):
         
     def on_fit_model_start(self):
         self.data.setup('fit' , self.model_param , self.model_date)
-        self.model.new_model()
+        self.new_attempt('model')
 
     def on_fit_model_end(self): 
         self.model.stack_model()
@@ -399,81 +422,25 @@ class BaseTrainer(ModelStreamLine):
             Logger.error(f'Date equity assertion failed: {date0} != {date1}')
             raise ValueError(f'Date equity assertion failed: {date0} != {date1}')
 
+    def print_out(self):
+        self.config.print_out(vb_level = 2 , min_key_len = 30)
+        self.data.print_out(vb_level = 2 , min_key_len = 30)
+        self.model.print_out(vb_level = 2 , min_key_len = 30)
+        self.callback.print_out(vb_level = 2 , min_key_len = 30)
+
+    def new_attempt(self , type : Literal['model' , 'attempt'] , **kwargs):
+        self.model.new_model(**kwargs)
+        self.checkpoint.new_model(**self.status.status)
+        if type == 'attempt':
+            self.metrics.new_attempt()
+        elif type == 'model':
+            self.metrics.new_model(self.model , self.model.complete_model_param)
+        self.on_new_attempt()
+        
     def recall_ckpt(self , epoch : int , phase : int = 0 , message : str = '' , details : dict[str,Any] | None = None):
         assert epoch >= 0 and epoch <= self.status.epoch , f'epoch {epoch} is out of range(0,{self.status.epoch})'
         self.status.add_epoch_event('new_phase_recall' , f'Recall {epoch_key(epoch , phase)}' , epoch , message , details)
         self.status.set_milestone_epoch(epoch + 1)
         if epoch != self.status.epoch:
             self.model.load_state_dict(self.checkpoint.load(epoch , phase))
-
-class ModelStreamLineWithTrainer(ModelStreamLine):
-    def reset(self):
-        self._trainer : BaseTrainer | Any = None
-        self._config : ModelConfig | Any = None
-        return self
-
-    def bound_with(self , binder : ModelConfig | BaseTrainer):
-        if isinstance(binder , ModelConfig):
-            return self.bound_with_config(binder)
-        else:
-            return self.bound_with_trainer(binder)
-
-    def bound_with_config(self , config : ModelConfig):
-        assert not getattr(self , '_trainer' , None) , 'Cannot bound with config if bound with trainer first'
-        self._config = config
-        return self
-
-    def bound_with_trainer(self , trainer : BaseTrainer):
-        self.reset()
-        self._trainer = trainer
-        return self
-
-    @property
-    def trainer(self):
-        if not getattr(self , '_trainer' , None):
-            raise ValueError('Trainer is not bound')
-        return self._trainer
-
-    @property
-    def config(self):
-        return self.trainer.config if getattr(self , '_trainer' , None) else self._config
-
-    @property
-    def status(self):  return self.trainer.status
-    @property
-    def container(self): return self.trainer.container
-    @property
-    def metrics(self):  return self.trainer.metrics
-    @property
-    def checkpoint(self): return self.trainer.checkpoint
-    @property
-    def deposition(self): return self.trainer.deposition
-    @property
-    def device(self): return self.trainer.device
-    @property
-    def base_path(self): return self.trainer.base_path
-    @property
-    def data(self): return self.trainer.data
-    @property
-    def batch_input(self): return self.trainer.batch_input
-    @property
-    def batch_idx(self): return self.trainer.batch_idx
-    @property
-    def batch_output(self): return self.trainer.batch_output
-    @batch_output.setter
-    def batch_output(self , value : BatchOutput): 
-        self.trainer.batch_output = value
-    @property
-    def batch_data(self): return self.trainer.batch_data
-    @property
-    def model_date(self): return self.trainer.model_date
-    @property
-    def model_num(self): return self.trainer.model_num
-    @property
-    def model_submodel(self): return self.trainer.model_submodel
-    @property
-    def model_str(self): return self.trainer.model_str
-    @property
-    def is_fitting(self): return self.trainer.is_fitting
-    @property
-    def batch_key(self): return self.batch_idx if self.is_fitting else self.trainer.batch_dates[self.batch_idx]
+        self.on_new_phase()

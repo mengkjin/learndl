@@ -5,8 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from src.proj import Logger , Duration , Proj
-from src.res.model.data_module import BatchInputLoader
-from src.res.model.util import BaseCallBack
+from src.res.model.util import BaseCallBack , BatchInputLoader
 
 class CallbackTimer(BaseCallBack):
     '''Time Cost of Callback Hooks'''
@@ -59,9 +58,9 @@ class StatusDisplay(BaseCallBack):
         if not self.display_progress:
             return
         if self.status.total_models <= self.config.model_num:
-            Logger.stdout(self.trainer.texts.progress)
+            Logger.stdout(self.texts.progress)
         else:
-            Logger.log_only(self.trainer.texts.progress)
+            Logger.log_only(self.texts.progress)
     
     def on_fit_epoch_end(self):
         for event in self.status.current.events: 
@@ -71,18 +70,15 @@ class StatusDisplay(BaseCallBack):
                 Logger.log_only(event.info , vb_level = event.vb_level)
     
     def on_fit_model_end(self):
-        model_summary = self.trainer.texts.model_summary
+        model_summary = self.texts.model_summary
         if model_summary:
             Logger.remark(model_summary)
-        if self.trainer.writer:
-            self.trainer.writer.add_text('Model Info' , model_summary)
 
-    def on_after_fit_end(self):  
-        fit_summary = self.trainer.texts.fit_summary
-        if fit_summary:
-            Logger.highlight(fit_summary)
+    def on_fit_end_after(self):  
+        if self.texts.fit_summary:
+            Logger.highlight(self.texts.fit_summary)
     
-    def on_before_test_end(self): 
+    def on_test_end_before(self): 
         time_cost = datetime.now() - self.status.times['test_start']
         Logger.note(f'In Stage [{self.status.stage}], Finish iterating test batches! Cost {Duration(time_cost)}' , vb_level = 3)
 

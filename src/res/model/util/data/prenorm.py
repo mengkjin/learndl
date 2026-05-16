@@ -2,7 +2,7 @@ import torch
 from typing import Any
 from src.proj import Logger
 from src.data import DataBlockNorm
-from src.res.model.util import ModelConfig
+from src.res.model.util.config import ModelConfig
 
 from dataclasses import dataclass
 

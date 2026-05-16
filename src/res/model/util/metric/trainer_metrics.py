@@ -6,7 +6,7 @@ from typing import Any , Callable , Literal
 
 from src.res.model.util.core import BatchData
 from src.res.model.util.config import ModelConfig
-from src.res.model.util.trainer import BaseTrainer , ModelStreamLineWithTrainer
+from src.res.model.util.trainer import BaseTrainer , TrainerPipeline
 
 from .functions import LossFunction , AccuracyFunction , RankICFunction
 from .aggregator import MetricAggregator , AggregatorType
@@ -24,7 +24,7 @@ def _get_net(model : nn.Module | Any) -> nn.Module | None:
         return getattr(model , 'net')
     else:
         return None
-class TrainerMetrics(ModelStreamLineWithTrainer):
+class TrainerMetrics(TrainerPipeline):
     '''calculator of batch output'''
     MetricOptions : tuple[MetricTypes,...] = ('accuracy' , 'loss' , 'rankic')
     
@@ -37,12 +37,10 @@ class TrainerMetrics(ModelStreamLineWithTrainer):
         self.rankic_function = RankICFunction()
         self.aggregator = MetricAggregator()
         self.stage_metrics = {}
-        self.epoch_metrics = EpochMetrics(self.aggregator)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(loss={self.config.criterion_loss},metric={self.config.criterion_accuracy})'
 
-    
     @property
     def batch_metrics(self) -> BatchMetrics:
         if 'batch' not in self.stage_metrics:

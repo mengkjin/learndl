@@ -60,6 +60,8 @@ class AutoRunCatchers:
         'parameter is deprecated and will be removed in Pillow 13'
         'overflow encountered in reduce' ,
         'overflow encountered in multiply' ,
+        'Mean of empty slice' ,''
+        'invalid value encountered in scalar divide' ,
     ]
     def __init__(
         self , task_id : str | None = None , * , 

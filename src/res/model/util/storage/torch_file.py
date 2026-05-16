@@ -11,12 +11,10 @@ from typing import Any , Literal , TypeVar
 
 from src.proj import PATH
 from src.proj.util import torch_load , Device , AsyncSaver
-from .func import epoch_key
-from .model_file import ModelDict
-from .model_path import ModelPath
+from src.res.model.util.core import epoch_key, ModelDict, ModelPath
 
 T = TypeVar('T')
-class BufferStorage:
+class TorchFileStorage:
     '''Interface of mem or disk storage, methods'''
     def __init__(self , mem_storage : bool = False):
         self.is_mem = mem_storage
@@ -74,9 +72,9 @@ class BufferStorage:
             self.del_one(key)
         gc.collect()
 
-class StoredFileLoader:
+class StoredTorchFileLoader:
     ''''retrieve batch_input from a Storage'''
-    def __init__(self, loader_storage : BufferStorage , keys : list[str] , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
+    def __init__(self, loader_storage : TorchFileStorage , keys : list[str] , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
         self.storage = loader_storage
         self.shufopt = shuffle_option
         self.keys   = self.shuf(keys)
