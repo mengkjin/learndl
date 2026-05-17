@@ -3,7 +3,7 @@
 # do not modify this file directly (unless change code of TrainParam / TrainConfig)
 
 env.random_seed: null
-env.short_test: true
+env.short_test: false
 env.mem_storage: true
 env.allow_tf32: true
 env.detect_anomaly: false
@@ -12,9 +12,9 @@ env.precision: float
 model.name: null
 model.module: null
 model.labels:
-  - std_lag1_10
-  - rtn_lag1_10
-model.submodels: ['best' , 'swalast' , 'swabest']
+  - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+  # - rtn_lag1_10 
+model.submodels: ['best']
 model.beg_date: 20170103
 model.end_date: 99991231
 
