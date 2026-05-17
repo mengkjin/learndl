@@ -31,7 +31,7 @@ class ModelConfigModifier:
             config[new_name] = value
             Logger.success(f'{key}.{new_name} has been added')
 
-        for name in config:
+        for name in list(config.keys()):
             if 'ResetOptimizer' in name:
                 new_name = name.replace('ResetOptimizer' , 'LearnRateReset')
                 config[new_name] = config.pop(name)
@@ -70,7 +70,7 @@ class ModelConfigModifier:
             return config
         if not isinstance(config , dict):
             config = config()
-        for key in config:
+        for key in list(config.keys()):
             if key.startswith('callbacks.'):
                 param = config[key]
                 if 'eps' in param:
