@@ -2,6 +2,8 @@ from src.proj import Logger
 from src.res.model.util import ModelConfig , BatchInput
 from .module import DataModule
 
+__all__ = ['get_realistic_batch_data' , 'get_random_batch_data']
+
 def get_realistic_batch_data(input_data_types='day') -> BatchInput:
     '''
     get a sample of realistic batch_input , 'day' , 'day+style' , '15m+style' ...

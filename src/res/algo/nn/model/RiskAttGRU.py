@@ -104,7 +104,7 @@ class risk_att_gru(nn.Module):
         return z
     
 if __name__ == '__main__' :
-    from src.res.model.data_module import get_realistic_batch_data
+    from src.res.model.util import get_realistic_batch_data
     batch_input = get_realistic_batch_data('day+style+indus')
 
     rau = risk_att_gru(indus_embed=True)

@@ -240,12 +240,8 @@ class ControlPanelPopover(ABC):
             script_key: The currently active script key, or ``None`` when on
                 an intro page.
         """
-        st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
-                help="""Should use max verbosity or min? Not selected will use default.""")
-        st.toggle('**:blue[Disable Email]**', value=False , key = 'global-settings-disable-email'  , 
-                help="""If email after the script is complete? Not selected will use script header value.""")
-        st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 
-                help="""Should the script run silently? Not selected will use script header value.""")
+        st.toggle('**:blue[Some toggle]**', value=False , key = 'global-settings-some-toggle' , 
+                help="""Some help text.""")
 
     def show(self , script_key : str | None = None) -> None:
         """Render the button + label into the persistent panel placeholder slot."""
@@ -292,8 +288,10 @@ class GlobalSettingsPopover(ControlPanelPopover):
     title = f"**Setting**"
 
     def popover(self , script_key : str | None = None) -> None:
+        st.toggle('**:blue[Debug Mode]**', value=False , key = 'global-settings-debug-mode' , 
+                help="""Should use debug mode? Not selected will use default False.""")
         st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
-                help="""Should use max verbosity or min? Not selected will use default.""")
+                help="""Should use max verbosity or min? Not selected will use default False.""")
         st.toggle('**:blue[Disable Email]**', value=False , key = 'global-settings-disable-email'  , 
                 help="""If email after the script is complete? Not selected will use script header value.""")
         st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 

@@ -3,7 +3,7 @@ from tqdm import tqdm
 
 from src.proj import Proj
 from src.res.model.util.core import BatchInput
-from .base_module import BaseDataModule
+from .base import BaseDataModule
 
 __all__ = ['BatchInputLoader']
     
@@ -12,20 +12,30 @@ class BatchInputLoader:
     def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
         self.loader      = raw_loader
         self.data_module = data_module
-        self.device      = data_module.config.device
         self.tqdm        = tqdm
         self.desc        = desc
         self.enable_tqdm()
         self.filter_dates(exclude_dates , include_dates)
 
+    @property
+    def device(self):
+        return self.data_module.config.device
+
     def __repr__(self):
         return f'{self.__class__.__name__}(length={len(self.loader)})'
 
-    def __len__(self):  return len(self.loader)
-    def __getitem__(self , i : int): 
-        return self.process(list(self.loader)[i] , i)
+    def __len__(self):  
+        return len(self.loader)
+    def __getitem__(self , i : int) -> BatchInput: 
+        if i < 0:
+            i += len(self)
+        assert 0 <= i < len(self) , f'index {i} is out of range {len(self)}'
+        for idx , batch_input in self:
+            if idx == i:
+                return self.process(batch_input)
+        raise IndexError(f'index {i} is out of range {len(self)}')
     def __iter__(self):
-        for batch_i , batch_input in enumerate(self.loader):
+        for batch_input in self.loader:
             assert isinstance(batch_input , BatchInput) , f'{type(batch_input)} is not a BatchInput'
             if self.exclude_dates is not None or self.include_dates is not None:
                 batch_date  = batch_input.date0
@@ -33,12 +43,12 @@ class BatchInputLoader:
                     continue
                 if self.include_dates is not None and ~np.isin(batch_date , self.include_dates): 
                     continue
-            yield self.process(batch_input , batch_i)        
+            yield self.process(batch_input)        
     
-    def process(self , batch_input : BatchInput , batch_i : int) -> BatchInput:
-        batch_input = self.data_module.on_before_batch_transfer(batch_input , batch_i)
-        batch_input = self.data_module.transfer_batch_to_device(batch_input , self.device , batch_i)
-        batch_input = self.data_module.on_after_batch_transfer(batch_input , batch_i)
+    def process(self , batch_input : BatchInput) -> BatchInput:
+        batch_input = self.data_module.on_before_batch_transfer(batch_input)
+        batch_input = self.data_module.transfer_batch_to_device(batch_input , self.device)
+        batch_input = self.data_module.on_after_batch_transfer(batch_input)
         return batch_input
 
     def enable_tqdm(self , disable = False):

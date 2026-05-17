@@ -58,9 +58,9 @@ class Proj(metaclass=ProjMeta):
         #     os.environ[identifier] = "1"
 
         object = 'logger' if once_type == 'script' else 'os'
-        Logger.only_once(cls.info() , printer = Logger.stdout_pairs , title = 'Project Info:' , object = object , mark = identifier)
+        Logger.only_once(cls.info() , printer = 'stdout_pairs' , title = 'Project Info:' , object = object , mark = identifier)
         if MACHINE.cuda_server and not torch.cuda.is_available():
-            Logger.only_once(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status' , printer = Logger.error , object = object , mark = identifier)
+            Logger.only_once(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status' , printer = 'error' , object = object , mark = identifier)
 
 
     @classmethod

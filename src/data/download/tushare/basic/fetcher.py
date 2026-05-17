@@ -368,7 +368,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     def check_server_down(self) -> bool:
         """check if the tushare server is down"""
         if TS.server_down:
-            Logger.only_once(f'{self.__class__.__name__} will not update because Tushare server is down' , object = self , mark = 'tushare_server_down' , printer = Logger.error)
+            Logger.only_once(f'{self.__class__.__name__} will not update because Tushare server is down' , object = self , mark = 'tushare_server_down' , printer = 'error')
             return True
         return False
 

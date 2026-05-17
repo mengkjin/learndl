@@ -31,7 +31,6 @@ only initialize the core components: config , data , model , callbacks
 |----- for batch in iter_train_dataloader():
 |------- hook: on_train_batch_start
 |------- batch_forward()
-|------- hook: on_train_batch_end
 |------- hook: on_batch_metrics_before
 |------- batch_metrics()
 |------- hook: on_batch_metrics_after
@@ -39,7 +38,9 @@ only initialize the core components: config , data , model , callbacks
 |------- batch_backward()
 |------- hook: on_before_clip_gradients
 |------- clip_gradients()
+|------- optimizer.step()
 |------- hook: on_batch_backward_after
+|------- hook: on_train_batch_end
 |----- hook: on_fit_epoch_end_before
 |----- hook: on_train_epoch_end
 |----- hook: on_validation_epoch_start
@@ -53,12 +54,12 @@ only initialize the core components: config , data , model , callbacks
 |----- hook: on_validation_epoch_end
 |----- hook: on_fit_epoch_end_before
 |----- hook: on_fit_epoch_end
-|--- hook: on_before_save_model
 |--- hook: on_fit_model_end
 |--- hook: on_fit_model_date_end if model_num == model_num
 |- hook: on_fit_end_before
 |- hook: on_fit_end
 |- hook: on_fit_end_after
+|- special hook: on_before_save_model
 |- special hook: on_new_attempt
 |- special hook: on_new_phase
 
@@ -83,25 +84,32 @@ only initialize the core components: config , data , model , callbacks
 |- hook: on_test_end_after
 
 [Summarizing]
-|- on_summarize_model
+|- hook: on_summarize_model
+
+[Data Callback]
+|- hook: on_before_batch_transfer(batch : BatchInput): ...
+|- hook: on_after_batch_transfer(batch : BatchInput): ...
 """
 
 from __future__ import annotations
 
 from abc import ABC , ABCMeta
+from collections import defaultdict
+from typing import Any
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.res.model.util.config import ModelConfig
-from src.res.model.util.core import BatchOutput
+from src.res.model.util.core import BatchOutput , BatchInput
 
 __all__ = ['BasePipeline' , 'TrainerPipeline']
 
+def _hook_defining_class(obj, hook: str) -> type | None:
+    for cls in type(obj).__mro__:
+        if hook in cls.__dict__:
+            return cls
+    return None
 class _Pipeline(ABC):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
-    @staticmethod
-    def base_hooks():
-        return [hook for hook in dir(_Pipeline) if hook.startswith('on_')]
-
     # [Stage Setup]
     def on_configure_model(self): ...
     
@@ -170,14 +178,18 @@ class _Pipeline(ABC):
     # [Summarizing]
     def on_summarize_model(self): ...
 
+    # [Data Callback]
+    def on_before_batch_transfer(self , batch : BatchInput) -> BatchInput: return batch
+    def on_after_batch_transfer(self , batch : BatchInput) -> BatchInput: return batch
+
 class _PipelineMeta(ABCMeta): 
     def __new__(cls, name, bases, attrs):
         new_cls = super().__new__(cls, name, bases, attrs)
 
         # check if the class defines extra hooks
         current = set([hook for hook in dir(new_cls) if hook.startswith('on_')])
-        base_hooks = set(getattr(new_cls, 'base_hooks', lambda: [])())
-        extra = current - base_hooks
+        hook_names = set([hook for hook in dir(_Pipeline) if hook.startswith('on_')])
+        extra = current - hook_names
         if extra:
             Logger.warning(f'{new_cls.__name__} defines extra hooks: {extra}')
 
@@ -189,10 +201,60 @@ class _PipelineMeta(ABCMeta):
 
 class BasePipeline(_Pipeline, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
-    def execute_hook(self , hook : str):
-        getattr(self , hook)()
+    
+    def set_vb_level(self , vb_level : Any):
+        self._vb_level = Proj.vb(vb_level)
+    @property
+    def vb_level(self) -> int:
+        if not hasattr(self , '_vb_level'):
+            self._vb_level = 1
+        return self._vb_level
+    
+    def stdout(self , *args , add_vb : int = 0 , **kwargs):
+        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
+        Logger.stdout(f'{self.__class__.__name__} :' , *args , **kwargs)
+    def alert1(self , *args , add_vb : int = 0 , **kwargs):
+        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
+        Logger.alert1(f'{self.__class__.__name__}' , *args , **kwargs)
+    def note(self , *args , add_vb : int = 0 , color : str = 'lightblue' , **kwargs):
+        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
+        Logger.note(f'{self.__class__.__name__}' , *args , color = color , **kwargs)
+
+    def get_all_hooks(self):
+        if not hasattr(self , '_all_hooks'):
+            self._all_hooks = frozenset([hook for hook in dir(self) if hook.startswith('on_')])
+        return self._all_hooks
+
+    def get_implemented_hooks(self):
+        if not hasattr(self , '_implemented_hooks'):
+            implemented = []
+            for hook in self.get_all_hooks():
+                defining = _hook_defining_class(self, hook)
+                if defining is not None and defining is not _Pipeline:
+                    implemented.append(hook)
+            self._implemented_hooks = frozenset(implemented)
+        return self._implemented_hooks
+
+    def is_hook_implemented(self, hook: str) -> bool:
+        return hook in self.get_implemented_hooks()
+
+    def execute_hook(self , hook : str , *args , **kwargs):
+        if self.is_hook_implemented(hook):
+            getattr(self , hook)(*args , **kwargs)
+
+    @property
+    def cached_properties(self) -> dict[str,dict[str,Any]]:
+        if not hasattr(self , '_cached_properties'):
+            self._cached_properties = defaultdict(dict[str,Any])
+        return self._cached_properties
 
 class TrainerPipeline(BasePipeline):
+    @property
+    def vb_level(self) -> int:
+        if not hasattr(self , '_vb_level'):
+            self._vb_level = self.trainer.vb_level + 1
+        return self._vb_level
+
     def reset(self):
         self._trainer = None
         self._config = None
@@ -290,9 +352,6 @@ class TrainerPipeline(BasePipeline):
     @property
     def model_submodel(self): 
         return self.trainer.model_submodel
-    @property
-    def model_str(self): 
-        return self.trainer.model_str
     @property
     def is_fitting(self): 
         return self.trainer.is_fitting

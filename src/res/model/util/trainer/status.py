@@ -5,9 +5,10 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from typing import Literal , Any
 
-from src.proj import Logger
 from src.res.model.util.core import epoch_key , attempt_key
 from .pipeline import BasePipeline
+
+__all__ = ['EventTypeType' , 'EpochEvent' , 'EpochRecord' , 'FittingEpochs' , 'TrainerStatus']
 
 EventTypeType = Literal[
     'new_attempt' , 'redo_attempt' , 'end_attempt' , 
@@ -32,7 +33,7 @@ class EpochEvent:
         return f'EpochEvent(type={self.type}, reason={self.reason}, epoch={self.epoch}, phase={self.phase}, effective_epoch={self.effective_epoch}, message={self.message}, details={self.details}, vb_level={self.vb_level})'
 
     @property
-    def vb_level(self) -> Any:
+    def vb_level(self) -> int:
         if self.type in ['new_attempt' , 'redo_attempt' , 'end_attempt' , 'recall_ckpt' , 'new_phase_recall' , 'new_phase']:
             return 1
         elif self.type in ['milestone']:
@@ -153,8 +154,7 @@ class EpochRecord:
 
 class FittingEpochs:
     """Fitting epochs class, used to store the epochs of the fitting"""
-    def __init__(self , max_epoch : int = 200):
-        self.max_epoch = max_epoch
+    def __init__(self):
         self.epochs : list[EpochRecord] = [EpochRecord(epoch = -1)]
         self.events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
         self.attempt_events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
@@ -203,9 +203,9 @@ class FittingEpochs:
         event = EpochEvent(type , reason , current_epoch.epoch , current_epoch.phase , effective_epoch , message , details or {})
         self.attempt_events[type].append(event)
         current_epoch.add_event(event)
-    def check_loop_end(self):
-        if self.current.epoch >= self.max_epoch - 1:
-            self.add_epoch_event('end_attempt' , 'Max Epoch' , message = f'Max Epoch ({self.max_epoch}) reached, force end attempt')
+    def check_loop_end(self , max_epoch : int):
+        if self.current.epoch >= max_epoch - 1:
+            self.add_epoch_event('end_attempt' , 'Max Epoch' , message = f'Max Epoch ({max_epoch}) reached, force end attempt')
     @property
     def end_attempt_event(self) -> EpochEvent | None:
         if not self.attempt_events['end_attempt']:
@@ -215,14 +215,14 @@ class FittingEpochs:
     
 class TrainerStatus(BasePipeline):
     """Trainer status class, used to store the status of the trainer"""
-    def __init__(self , max_epoch : int):
-        self.stage   : Literal['data' , 'fit' , 'test'] = 'data'
+    def __init__(self):
+        self.stage   : Literal['setup' , 'data' , 'fit' , 'test' , 'summary'] = 'setup'
         self.dataset : Literal['train' , 'valid' , 'test' , 'predict'] = 'train'
         self.model_num  : int = -1
         self.model_date : int = -1
         self.model_submodel : str = 'best'
 
-        self.fitting_epochs : FittingEpochs = FittingEpochs(max_epoch)
+        self.fitting_epochs : FittingEpochs = FittingEpochs()
         self.milestone_epochs : list[int] = []
         self.total_epochs : int = 0
         self.total_models : int = 0
@@ -297,11 +297,13 @@ class TrainerStatus(BasePipeline):
     def model_status(self) -> str:
         return f'{self.model_num}.{self.model_date}.{self.attempt_key}'
 
+    def check_loop_end(self , max_epoch : int):
+        self.fitting_epochs.check_loop_end(max_epoch)   
     def set_milestone_epoch(self , epoch : int):
         self.milestone_epochs.append(epoch)
     def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
         self.fitting_epochs.add_epoch_event(type , reason , epoch , message , details)
-    
+
     def on_data_start_before(self):  
         self.stage = 'data'
         self.times['data_start'] = datetime.now()
@@ -317,6 +319,8 @@ class TrainerStatus(BasePipeline):
         self.times['test_start'] = datetime.now()
     def on_test_end_after(self):      
         self.times['test_end'] = datetime.now()
+    def on_summarize_model(self):
+        self.stage = 'summary'
     def on_train_epoch_start(self): 
         self.dataset = 'train'
     def on_validation_epoch_start(self): 
@@ -324,7 +328,9 @@ class TrainerStatus(BasePipeline):
     def on_test_model_start(self): 
         self.dataset = 'test'
     def on_fit_model_start(self):
-        Logger.only_once(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , object = self , printer = Logger.note)
+        if not hasattr(self , 'first_iteration_printed'):
+            self.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan')
+            self.first_iteration_printed = True
         self.times['model_start'] = datetime.now()
         self.fitting_epochs.clear()
         self.milestone_epochs.clear()
@@ -332,5 +338,4 @@ class TrainerStatus(BasePipeline):
     def on_fit_epoch_start(self):
         self.fitting_epochs.new_epoch()
         self.total_epochs += 1
-    def on_fit_epoch_end_before(self):
-        self.fitting_epochs.check_loop_end()    
+     

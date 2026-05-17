@@ -8,14 +8,18 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Callable
 
-from src.proj import Logger , CALENDAR , MACHINE , Const
+from src.proj import Logger , CALENDAR , MACHINE
 from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
 from src.func import match_values
 from src.func import tensor as T
-from src.res.model.util import (
-    BaseDataModule , DataloaderParam , BatchInputLoader , PrenormOperator , BatchInput , ModelConfig , 
-    StoredTorchFileLoader , HiddenPath , BaseTrainer
-)
+from src.res.model.util.config import ModelConfig
+from src.res.model.util.core import BatchInput , HiddenPath
+from src.res.model.util.storage import StoredTorchFileLoader
+from src.res.model.util.trainer import BaseTrainer
+
+from .prenorm import PrenormOperator
+from .base import BaseDataModule , DataloaderParam
+from .batch_input_loader import BatchInputLoader
 
 __all__ = ['DataModule']
 
@@ -67,32 +71,27 @@ class DataModule(BaseDataModule):
     DataModule for model fitting / testing / predicting
     """
     _config_instance_for_batch_data : dict[ModelConfig,DataModule] = {}
-        
-    def __repr__(self): 
-        keys =  self.input_keys
-        if len(keys) >= 5: 
-            keys_str = f'[{keys[0]},...,{keys[-1]}({len(keys)})]'
-        else:
-            keys_str = str(keys)
-        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'    
-
+    
     @classmethod
     def initialize(cls , config_or_trainer : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
+        
         if config_or_trainer is None:
             config = ModelConfig(stage=0)
+            vb_level = kwargs.pop('vb_level' , 1)
         elif isinstance(config_or_trainer , BaseTrainer):
             config = config_or_trainer.config
+            use_data = config_or_trainer.use_data
+            vb_level = vb_level = kwargs.pop('vb_level' , config_or_trainer.vb_level + 1)
         elif isinstance(config_or_trainer , ModelConfig):
             config = config_or_trainer
+            vb_level = kwargs.pop('vb_level' , 1)
         else:
             raise ValueError(f'Invalid config_or_trainer: {config_or_trainer}')
-        data = cls(config , use_data = use_data , *args , **kwargs)
+        data = cls(config , use_data = use_data , *args , vb_level = vb_level , **kwargs)
+        if isinstance(config_or_trainer , BaseTrainer):
+            for hook in ['on_before_batch_transfer' , 'on_after_batch_transfer']:
+                data.register_callbacks(hook , *config_or_trainer.callback.get_implemented_hook_callables(hook))
         return data
-
-    @staticmethod
-    def prepare_data(data_types : list[str] | None = None):
-        PreProcessorTask.update(predict = False , data_types = data_types)
-        PreProcessorTask.update(predict = True , data_types = data_types)
        
     def load_data(self):
         self.datas = ModuleData(
@@ -105,7 +104,7 @@ class DataModule(BaseDataModule):
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
         self.datas.load()
-        Logger.stdout(f'{self.__class__.__name__} : data shape is ' , self.datas.shape , vb_level = 'max')
+        self.stdout(f'data shape is ' , self.datas.shape , vb_level = 'max')
         
         self.config.update_data_param(self.datas.x)
         self.labels_n = int(self.datas.y.shape[-1])
@@ -116,8 +115,8 @@ class DataModule(BaseDataModule):
         self.reset_dataloaders()
 
         if self.empty_x:
-            Logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
-            Logger.note(f'{self.input_type} input keys: {self.input_keys}')
+            Logger.error(f'DataModule got empty x , fit and test stage will be skipped')
+            self.stdout(f'{self.input_type} input keys: {self.input_keys}' , add_vb = 1 , color = 'lightblue')
             if 'fit' in self.config.queue_of_stages:
                 self.config.queue_of_stages.remove('fit')
             if 'test' in self.config.queue_of_stages:
@@ -150,48 +149,7 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.interval]
-
-    def reset_dataloaders(self):
-        '''reset for every fit / test / predict'''
-        self.loader_dict : dict[str , StoredTorchFileLoader]  = {}
-        self.loader_dates : dict[str , list[int]] = {}
-        self.loader_param = DataloaderParam()
-
-    @property
-    def empty_x(self):
-        return self.datas.empty_x and not self.input_keys_hidden
-
-    @property
-    def beg_date(self):
-        return 19000101 if self.use_data == 'predict' else self.config.beg_date
-
-    @property
-    def end_date(self):
-        return 99991231 if self.use_data == 'predict' else self.config.end_date
-
-    @property
-    def min_test_date(self):
-        if hasattr(self , 'test_full_dates'):
-            return self.test_full_dates.min() if len(self.test_full_dates) > 0 else 99991231
-        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 99991231
-
-    @property
-    def max_test_date(self):
-        if hasattr(self , 'test_full_dates'):
-            return self.test_full_dates.max() if len(self.test_full_dates) > 0 else 19000101
-        return ModuleData.max_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 19000101
-
-    @property
-    def factor_start_dt(self):
-        beg_date = self.beg_date
-        if self.config.is_null_model and self.config.is_resuming and Const.Model.resume_test:
-            beg_date = max(beg_date , self.config.resumed_max_pred_date)
-        return CALENDAR.td(beg_date , -1).as_int()
-
-    @property
-    def factor_end_dt(self):
-        return self.end_date
-        
+   
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
@@ -295,34 +253,6 @@ class DataModule(BaseDataModule):
         if self.stage in ['predict' , 'test']:
             assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
 
-    @property
-    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
-        return self.config.input_type
-
-    @property
-    def input_keys_data(self) -> list[str]:
-        return [ModuleData.abbr(key) for key in self.config.input_data_types]
-
-    @property
-    def input_keys_factor(self) -> list[str]:
-        return [ModuleData.abbr(key) for key in self.config.input_factor_types]
-
-    @property
-    def input_keys_hidden(self) -> list[str]:
-        return [ModuleData.abbr(key) for key in self.config.input_hidden_types]
-
-    @property
-    def seq_steps(self) -> dict[str,int]:
-        return self.config.seq_steps
-
-    @property
-    def y_secid(self) -> np.ndarray:
-        return self.datas.y.secid
-
-    @property
-    def y_date(self) -> np.ndarray:
-        return self.datas.y.date[self.d0:self.d1]
-
     def setup_loader_create(self) -> None:
         if self.day_len == 0:
             self.empty_dataloader()
@@ -399,24 +329,11 @@ class DataModule(BaseDataModule):
     def predict_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
     def extract_dataloader(self) -> BatchInputLoader: 
-        return BatchInputLoader(self.loader_dict['extract'] , self , desc = 'Extract')
+        return BatchInputLoader(self.loader_dict['extract'] , self , tqdm = False , desc = 'Extract')
 
     def get_batch_input_of_date(self , date : int) -> BatchInput:
         assert self.stage in ['predict' , 'test' , 'extract'] , f'stage should be predict , test or extract, but got {self.stage}'
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
-    
-    def transfer_batch_to_device(self , batch : BatchInput , device = None , dataloader_idx = None):
-        if self.config.module_type == 'nn':
-            batch = batch.to(self.config.device if device is None else device)
-        return batch
-    
-    def empty_dataloader(self) -> None:
-        if self.is_fitting:
-            self.loader_dict['train'] = StoredTorchFileLoader(self.storage , [] , 'static')
-            self.loader_dict['valid'] = StoredTorchFileLoader(self.storage , [] , 'static')
-        else:
-            self.loader_dict[self.stage] = StoredTorchFileLoader(self.storage , [] , 'static')
-            self.loader_dates[self.stage] = []
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
         '''update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them'''   
@@ -521,3 +438,8 @@ class DataModule(BaseDataModule):
         module.setup('predict' , model_param , module.model_date_list[module.model_date_list < date][-1])
         dataloader = module.predict_dataloader()
         return dataloader.of_date(date)
+
+    @staticmethod
+    def prepare_data(data_types : list[str] | None = None):
+        PreProcessorTask.update(predict = False , data_types = data_types)
+        PreProcessorTask.update(predict = True , data_types = data_types)

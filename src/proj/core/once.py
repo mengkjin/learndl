@@ -45,6 +45,8 @@ class Once:
     @classmethod
     def run(cls, func: Callable, func_args : Iterable, func_kwargs : dict , mark: Any = 'default' , object: Any | None | Literal['os'] = None) -> Any:
         with cls.lock:
+            if object is None:
+                object = cls
             if object == 'os':
                 os_key = f'_learndl_once_identifier_{mark}'
                 execute_mark = os_key not in os.environ

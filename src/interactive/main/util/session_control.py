@@ -264,6 +264,7 @@ class SessionControl:
             New dict with global settings applied.
         """
         params = {**params} if params else {}
+        params['debug_mode'] = st.session_state.get('global-settings-debug-mode' , False)
         params['max_vb'] = st.session_state.get('global-settings-max-vb' , False)
         if st.session_state.get('global-settings-disable-email' , False):
             params['email'] = False

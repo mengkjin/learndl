@@ -5,8 +5,7 @@ import pandas as pd
 from typing import Any , ClassVar , Literal
 
 from src.proj import MACHINE , Logger , Proj , CALENDAR
-from src.res.model.util import ModelConfig , PredictionModel
-from src.res.model.data_module import DataModule
+from src.res.model.util import ModelConfig , PredictionModel , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelPredictor:

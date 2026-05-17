@@ -953,7 +953,7 @@ class TaskItem:
                 
         if changed and 'status' in changed:
             new_status = changed['status']
-            Logger.only_once(f"Task {self.id} status [{new_status.upper()}]" , object = self , mark = f'status_{new_status}' , printer = Logger.info)
+            Logger.only_once(f"Task {self.id} status [{new_status.upper()}]" , object = self , mark = f'status_{new_status}' , printer = 'info')
             if new_status == 'error' and 'exit_error' in changed:
                 Logger.stdout(f"exit_error : {changed['exit_error']}" , color = 'lightred' , indent = 1)
             if 'exit_files' in changed and changed['exit_files']:

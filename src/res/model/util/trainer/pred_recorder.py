@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import Any
 
 from src.proj import Logger , DB , PATH , Const , CALENDAR
 from src.proj.util import AsyncSaver
@@ -152,7 +151,7 @@ class PredRecorder(TrainerPipeline):
                 old_path.unlink()
             DB.save_df(new_df , new_path , overwrite = True , vb_level = 'max')
             
-        Logger.success(f'Updated avg preds for pred dates {pred_df["date"].unique()}')
+        self.note(f'Updated avg preds for pred dates {pred_df["date"].unique()}')
         return avg_df
 
     def archive_model_records(self):
@@ -221,10 +220,10 @@ class PredRecorder(TrainerPipeline):
     def has_purged_preds(self , value : bool):
         self._has_purged_preds = value
 
-    def purge_retrained_model_preds(self , vb_level : Any = 2):
+    def purge_retrained_model_preds(self):
         """purge past predictions when trained new models"""
         if not self.retrained_models:
-            Logger.stdout(f'{self.__class__.__name__} : No retrained models, no purge needed' , vb_level = vb_level)
+            self.stdout(f'No retrained models, no purge needed')
             return
         min_retrained_model_date = min([model_date for model_date , _ in self.retrained_models])
         pred_records = self.pred_records()
@@ -245,27 +244,27 @@ class PredRecorder(TrainerPipeline):
             self.has_purged_preds = True
         else:
             purge_info = f'{len(self.retrained_models)} models retrained, but no pred need to be purged'
-        Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
+        self.stdout(purge_info)
 
-    def purge_outdated_model_preds(self , vb_level : Any = 2):
+    def purge_outdated_model_preds(self):
         archive_records = self.archive_model_records()
         pred_records = self.pred_records()
         new_pred_records = archive_records.merge(pred_records , on=['model_num' , 'model_date'] , how='outer')
         new_pred_records['next_model_date'] = new_pred_records['next_model_date'].fillna(99991231)
         df = new_pred_records.query('min_pred_date <= model_date or max_pred_date > next_model_date')
         if df.empty:
-            Logger.stdout(f'{self.__class__.__name__} : No outdated predictions found, no purge needed' , vb_level = vb_level)
+            self.stdout(f'No outdated predictions found, no purge needed')
             return
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
-        Logger.display(df , caption = purge_info , vb_level = vb_level)
+        Logger.display(df , caption = purge_info , vb_level = self.vb_level)
         for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
             df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
             Path(path).unlink()
             self.save_preds(df , model_date , model_num)
         self.has_purged_preds = True
 
-    def purge_duplicated_model_preds(self , vb_level : Any = 2):
+    def purge_duplicated_model_preds(self):
         """purge duplicated model predictions"""
         AsyncSaver.wait_all('pred_recorder')
         pred_records = self.pred_records()
@@ -287,10 +286,10 @@ class PredRecorder(TrainerPipeline):
             for path in obsolete_avg_records['path']:
                 Path(path).unlink()
         purge_info += f' deleted!'
-        Logger.stdout(f'{self.__class__.__name__} : {purge_info}' , vb_level = vb_level)
+        self.stdout(purge_info)
         self.has_purged_preds = True
 
-    def setup_resuming_status(self , vb_level : Any = 2):
+    def setup_resuming_status(self):
         """
         setup resuming status for previous saved predictions
         notes:
@@ -422,14 +421,14 @@ class PredRecorder(TrainerPipeline):
             for path in pred_df['path'].unique():
                 subdf = pred_df.query('path == @path').drop(columns = ['path']).reset_index(drop = True)
                 if not subdf.empty and subdf['new_label'].notna().any():
-                    Logger.stdout(f'{self.__class__.__name__} : rewriting na label for {path}' , vb_level = 2)
+                    self.stdout(f'rewriting na label for {path}')
                     DB.save_df(subdf.drop(columns = ['new_label']) , path , overwrite = True)
         return pred_df.drop(columns = ['new_label']).reset_index(drop = True)
 
     def on_configure_model(self):
         self.setup_resuming_status()
         if self.resume_info:
-            Logger.stdout(f'{self.__class__.__name__} : Resume testing {self.resume_info}' , vb_level = 2)
+            self.stdout(f'Resume testing {self.resume_info}')
 
     def on_fit_model_end(self):
         self.append_retrained_model()
@@ -443,7 +442,7 @@ class PredRecorder(TrainerPipeline):
             self.setup_resuming_status()
             self.has_purged_preds = False
         if self.resume_info:
-            Logger.stdout(f'{self.__class__.__name__} : Resume testing {self.resume_info}' , vb_level = 2)
+            self.stdout(f'Resume testing {self.resume_info}')
     
     def on_test_batch_end(self): 
         self.append_batch_preds()
@@ -458,4 +457,4 @@ class PredRecorder(TrainerPipeline):
         self.purge_duplicated_model_preds()
         avg_pred_records = self.avg_pred_records()
         if not avg_pred_records.empty:
-            Logger.stdout(f'{self.__class__.__name__} : avg model preds updated to {avg_pred_records["max_pred_date"].max()}' , vb_level = 2)
+            self.stdout(f'avg model preds updated to {avg_pred_records["max_pred_date"].max()}')

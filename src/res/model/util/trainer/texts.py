@@ -37,6 +37,9 @@ class TrainerTexts(TrainerPipeline):
             self.metrics.attempt_metrics.latest('valid' , 'rankic') , 
             best_epoch.epoch_key , valid_accuracies , best_epoch.valid_rankic , last_lr)
     @property
+    def model_str(self): 
+        return f'{self.config.model_name}.{self.model_num}.{self.model_submodel}.{self.model_date}'
+    @property
     def progress(self) -> str:
         return f'{self.attempt_key} {self.status.epoch_key}: {self.info}'
 
@@ -55,6 +58,6 @@ class TrainerTexts(TrainerPipeline):
             fit_time_cost = (datetime.now() - self.status.times['fit_start']).total_seconds()
             per_model = fit_time_cost / 60 / self.status.total_models
             per_epoch = fit_time_cost / self.status.total_epochs
-            return f'Cost {fit_time_cost / 3600:.1f} Hours, {per_model:.1f} Min/model, {per_epoch:.1f} Sec/Epoch'
+            return f'Fitting Cost {fit_time_cost / 3600:.1f} Hours, {per_model:.1f} Min/model, {per_epoch:.1f} Sec/Epoch'
         else:
             return ''

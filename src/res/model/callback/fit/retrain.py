@@ -47,13 +47,13 @@ class BadAttemptRetrain(BaseCallBack):
         if self.is_nanloss:
             Logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_life} chances.')
             self.remain_nan_life -= 1
-            message = f'{self.texts.model_key} {self.texts.attempt_key} {self.status.epoch_key} got nanloss! Redo current attempt {self.status.attempt}!'
+            message = f'Get nanloss for {self.texts.attempt_key}. Redo current attempt {self.status.attempt}'
             self.trigger_retrain('redo_attempt' , 'nanloss' , message)
         elif self.is_early_exit:
-            message = f'{self.texts.progress}, exit too early. Start new attempt {self.status.attempt+1}!'
+            message = f'Exit too early for {self.texts.attempt_key}. Start new attempt {self.status.attempt+1} with lr multiplier {self.next_attempt_lr_multiplier}'
             self.trigger_retrain('new_attempt' , 'early_exit' , message , self.next_attempt_lr_multiplier)
         elif self.is_low_ic:
-            message = f'{self.texts.progress}, get a very low RankIC, Start new attempt {self.status.attempt+1}!'
+            message = f'Get a very low RankIC for {self.texts.attempt_key}. Start new attempt {self.status.attempt+1} with lr multiplier {self.next_attempt_lr_multiplier}'
             self.trigger_retrain('new_attempt' , 'low_ic' , message , self.next_attempt_lr_multiplier)
 
     def trigger_retrain(self , event_type : Literal['new_attempt' , 'redo_attempt'] , reason : str , message : str = '' , new_lr_multiplier : float = 1.):

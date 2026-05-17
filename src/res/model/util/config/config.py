@@ -62,7 +62,7 @@ class ScheduleConfig:
         config_path = cls.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
-            Logger.alert1(f'Using schedule name "{schedule_name}" to load config')
+            Logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb_level = 2)
         if schedule_name and config:
             if 'model.name' in config:
                 assert config['model.name'] == schedule_name, f"model.name {config['model.name']} is not the same as model_name {schedule_name}"
@@ -884,7 +884,7 @@ class ModelConfig(BaseModelConfig):
                 if (not self.short_test and not self.base_path.is_null_model and self.model_config.resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
-                Logger.alert1(f"{self.base_path} is cleared")
+                Logger.alert1(f"{self.base_path} is cleared" , vb_level = 2)
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}

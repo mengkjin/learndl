@@ -227,7 +227,7 @@ class AggregatedMetrics:
         if name in self.collected_tables:
             return self.collected_tables[name]
         if name not in self.tables:
-            Logger.only_once(f'{name} not found in {self.tables.keys()}', object = self , mark = 'get_table' , printer = Logger.alert1 , vb_level = 'max')
+            Logger.only_once(f'{name} not found in {self.tables.keys()}', object = self , mark = 'get_table' , printer = 'alert1' , vb_level = 'max')
         if not self.tables[name]:
             return pd.DataFrame()
         df = pd.concat(self.tables[name])

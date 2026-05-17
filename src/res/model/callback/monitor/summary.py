@@ -79,6 +79,9 @@ class SummaryWriter(BaseCallBack):
 
     @property
     def writer(self):
+        if not hasattr(self , '_writer') or self._writer is None:
+            model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.attempt_key}'
+            self._writer = TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
         return self._writer
 
     @property
@@ -95,9 +98,8 @@ class SummaryWriter(BaseCallBack):
             return []
         return [(name , param) for name , param in net.named_parameters()]
 
-    def new_writer(self):
-        model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.next_attempt_key}'
-        self._writer = TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
+    def reset_writer(self):
+        self._writer = None
 
     def add_metrics(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
@@ -210,7 +212,7 @@ class SummaryWriter(BaseCallBack):
                 self.add_hidden_correlation(hidden_correlations)
 
     def on_new_attempt(self):
-        self.new_writer()
+        self.reset_writer()
 
     def on_before_clip_gradients(self):
         if Proj.debug and self.batch_idx % self.DEBUG_STEP == 0:
@@ -282,4 +284,5 @@ class SummaryWriter(BaseCallBack):
         }
         msgs = _format_messages(messages , indent = 0)
         self.summary_log_file.write(test_name , *msgs)
+        self.note(f'Summary of model {test_name} is saved to {self.summary_log_file.current_file.relative_to(PATH.main)}')
     

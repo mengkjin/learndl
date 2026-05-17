@@ -6,7 +6,7 @@ import numpy as np
 from functools import wraps
 from typing import Any , Literal , Sized , Callable
 
-from src.proj import Proj , Logger , Const
+from src.proj import Logger , Const
 from src.proj.util import FilteredIterable
 
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
@@ -33,7 +33,7 @@ class TrainerHookWrapper:
     def wrap(cls , trainer : BaseTrainer):
         key = id(trainer)
         assert not cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
-        for hook in trainer.base_hooks():
+        for hook in trainer.get_all_hooks():
             func = getattr(trainer , hook)
             setattr(trainer , f'_raw_{hook}' , func)
             setattr(trainer , hook , cls.wrap_single_hook(trainer , hook , func))
@@ -43,16 +43,13 @@ class TrainerHookWrapper:
     def wrap_single_hook(cls , trainer : BaseTrainer , hook : str , func : Callable):
         @wraps(func)
         def wrapper(*args , **kwargs) -> None:
-            vb_level = Proj.vb.get('callback')
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} start' , vb_level = vb_level)
-            trainer.callback.at_enter(hook , vb_level)
-            trainer.status.execute_hook(hook)
+            trainer.callback.at_enter(hook , *args , **kwargs)
+            trainer.status.execute_hook(hook , *args , **kwargs)
             func(*args , **kwargs)
-            trainer.model.execute_hook(hook)
-            trainer.metrics.execute_hook(hook)
-            trainer.record.execute_hook(hook)
-            trainer.callback.at_exit(hook , vb_level)
-            Logger.stdout(f'{hook} of stage {trainer.status.stage} end' , vb_level = vb_level)
+            trainer.model.execute_hook(hook , *args , **kwargs)
+            trainer.metrics.execute_hook(hook , *args , **kwargs)
+            trainer.record.execute_hook(hook , *args , **kwargs)
+            trainer.callback.at_exit(hook , *args , **kwargs)
         return wrapper
 
 class BaseTrainer(BasePipeline):
@@ -69,8 +66,10 @@ class BaseTrainer(BasePipeline):
     def __init__(self , base_path = None , * , 
                  module : str | None = None , schedule_name = None , 
                  override : dict | None = None , 
-                 use_data : Literal['fit','predict','both'] = 'fit' , **kwargs):
+                 use_data : Literal['fit','predict','both'] = 'fit' , 
+                 vb_level : Any = 1 , **kwargs):
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
+        self.set_vb_level(vb_level)
         self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
         self._use_data : Literal['fit','both'] = use_data
         self._kwargs = kwargs
@@ -85,30 +84,37 @@ class BaseTrainer(BasePipeline):
         """
         init core components of the trainer: config, data, model, callbacks
         """
-        from src.res.model.data_module import DataModule
+        
+        from src.res.model.callback import ConsolidateCallBack
         from src.res.model.util.trainer import PredictorModel
-        from src.res.model.callback.manager import CallBackManager
-        self._data     = DataModule.initialize(self , use_data = self._use_data)
-        self._model    = PredictorModel.initialize(self , **self._kwargs)
-        self._callback = CallBackManager.initialize(self)
+        from src.res.model.util.data import DataModule
+        
+        self._model    = PredictorModel.initialize(self)
+        self._callback = ConsolidateCallBack.initialize(self)
+        self._data     = DataModule.initialize(self)
 
-    def init_utils(self , **kwargs):
+    def init_utils(self):
         """
         init utils of the trainer: status, record, texts, container, metrics, checkpoint, deposition
         """
-        from src.res.model.util.trainer import TrainerStatus, PredRecorder, TrainerTexts
+        from src.res.model.util.trainer import PredRecorder, TrainerTexts , TrainerStatus
         from src.res.model.util.metric import TrainerMetrics
         from src.res.model.util.storage import Checkpoint, Deposition, TypedContainer
         
-        self._status = TrainerStatus(self.config.max_epoch)
+        self._status  = TrainerStatus()
+        self._checkpoint = Checkpoint()
+        self._container = TypedContainer()
         self._texts = TrainerTexts(self)
         self._record = PredRecorder(self)
         self._metrics = TrainerMetrics(self)
+        self._deposition = Deposition(self)
 
-        self._checkpoint = Checkpoint()
-        self._deposition = Deposition(self.config.base_path)
-        self._container = TypedContainer()
-
+    @property
+    def use_data(self):
+        return self._use_data
+    @property
+    def input_model_kwargs(self):
+        return self._kwargs
     @property
     def config(self):
         """config of the trainer , class of ModelConfig"""
@@ -171,41 +177,60 @@ class BaseTrainer(BasePipeline):
     def batch_data(self): 
         return BatchData(self.batch_input , self.batch_output)
     @property
-    def batch_dates(self): 
-        return np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
+    def batch_dates(self) -> np.ndarray: 
+        if 'batch_dates' not in self.cached_properties['model_start']:
+            value = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
+            self.cached_properties['model_start']['batch_dates'] = value
+        return self.cached_properties['model_start']['batch_dates']
     @property
-    def batch_warm_up(self): 
-        return len(self.data.early_test_dates) if self.status.stage == 'test' else 0
+    def batch_warm_up(self) -> int: 
+        if 'batch_warm_up' not in self.cached_properties['model_start']:
+            value = len(self.data.early_test_dates) if self.status.stage == 'test' else 0
+            self.cached_properties['model_start']['batch_warm_up'] = value
+        return self.cached_properties['model_start']['batch_warm_up']
     @property
-    def batch_aftermath(self): 
-        return len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else np.inf
+    def batch_aftermath(self) -> int: 
+        if 'batch_aftermath' not in self.cached_properties['model_start']:
+            value = len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 100_000_000
+            self.cached_properties['model_start']['batch_aftermath'] = value
+        return self.cached_properties['model_start']['batch_aftermath']
     @property
-    def batch_resumed(self): 
-        if (
-            self.status.stage == 'test' and 
-            self.batch_warm_up == 0 and 
-            self.config.is_resuming and  
-            Const.Model.resume_test and
-            Const.Model.resume_test_start == 'last_pred_date'):
-            return sum(self.data.model_test_dates <= self.record.resumed_max_pred_date)
-        else:
-            return 0
+    def batch_resumed(self) -> int: 
+        if 'batch_resumed' not in self.cached_properties['model_start']:
+            if (
+                self.status.stage == 'test' and 
+                self.batch_warm_up == 0 and 
+                self.config.is_resuming and  
+                Const.Model.resume_test and
+                Const.Model.resume_test_start == 'last_pred_date'):
+                value = sum(self.data.model_test_dates <= self.record.resumed_max_pred_date)
+            else:
+                value = 0
+            self.cached_properties['model_start']['batch_resumed'] = value
+        return self.cached_properties['model_start']['batch_resumed']
+
     @property
-    def model_date(self): return self.status.model_date
+    def model_date(self): 
+        return self.status.model_date
     @property
-    def model_num(self): return self.status.model_num
+    def model_num(self): 
+        return self.status.model_num
     @property
-    def model_submodel(self): return self.status.model_submodel
+    def model_submodel(self): 
+        return self.status.model_submodel
+
     @property
-    def model_str(self): return f'{self.config.model_name}.{self.model_num}.{self.model_submodel}.{self.model_date}'
+    def prev_model_date(self): 
+        return self.data.prev_model_date(self.model_date)
     @property
-    def prev_model_date(self): return self.data.prev_model_date(self.model_date)
+    def model_param(self): 
+        return self.config.algo_config.params[self.model_num]
     @property
-    def model_param(self): return self.config.algo_config.params[self.model_num]
+    def model_submodels(self): 
+        return self.config.submodels
     @property
-    def model_submodels(self): return self.config.submodels
-    @property
-    def if_transfer(self): return self.config.transfer_training     
+    def if_transfer(self): 
+        return self.config.transfer_training     
     @property
     def html_catcher_export_path(self): 
         if 'fit' in self.queue_of_stages and 'test' in self.queue_of_stages:
@@ -225,10 +250,6 @@ class BaseTrainer(BasePipeline):
         '''Main stage of data & fit & test'''
         self.stage_setup()
 
-        if not self.queue_of_stages:
-            Logger.error("stage_queue is empty , please check src.proj.Proj.States.trainer")
-            raise Exception("stage_queue is empty , please check src.proj.Proj.States.trainer")
-
         if 'data' in self.queue_of_stages:
             self.stage_data()
 
@@ -238,7 +259,7 @@ class BaseTrainer(BasePipeline):
         if 'test' in self.queue_of_stages: 
             self.stage_test()
         
-        self.stage_complete()
+        self.stage_summary()
 
         return self
 
@@ -300,9 +321,9 @@ class BaseTrainer(BasePipeline):
             self.on_test_end_after()
             self.config.log_operation('test' , 'end')
 
-    def stage_complete(self):
-        '''stage of completing'''
-        with Logger.Paragraph('Stage [Complete]' , 2):
+    def stage_summary(self):
+        '''stage of summarizing'''
+        with Logger.Paragraph('Stage [Summary]' , 2):
             self.on_summarize_model()
 
     def iter_model_num_date(self): 
@@ -332,7 +353,7 @@ class BaseTrainer(BasePipeline):
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         else:
             iter_info += f'{num_all_models} to go!'
-        Logger.note(iter_info , vb_level = 2)
+        self.note(iter_info , add_vb = 1)
         return model_iter
 
     def iter_model_submodels(self):
@@ -392,16 +413,21 @@ class BaseTrainer(BasePipeline):
         self.config.set_config_environment()
         
     def on_fit_model_start(self):
+        self.cached_properties['model_start'].clear()
         self.data.setup('fit' , self.model_param , self.model_date)
         self.new_attempt('model')
+
+    def on_fit_epoch_end_before(self):
+        self.status.check_loop_end(self.config.max_epoch)
 
     def on_fit_model_end(self): 
         self.model.stack_model()
         self.model.dump_model()
         
     def on_test_model_start(self):
+        self.cached_properties['model_start'].clear()
         self.data.setup('test' , self.model_param , self.model_date)
-
+        
     def on_test_submodel_start(self):
         self.model.load_model(submodel=self.model_submodel)
 
@@ -412,14 +438,14 @@ class BaseTrainer(BasePipeline):
         date0 = self.batch_dates[self.batch_idx] 
         date1 = self.batch_input.date0 
         if not date0 == date1:
-            Logger.alert1(f'y_date: {self.data.y_date}')
-            Logger.alert1(f'batch_idx: {self.batch_idx}')
-            Logger.alert1(f'batch_dates: {self.batch_dates}')
-            Logger.alert1(f'early_test_dates: {self.data.early_test_dates}')
-            Logger.alert1(f'model_test_dates: {self.data.model_test_dates}')
-            Logger.alert1(f'batch_input.i: {self.batch_input.i[0]}')
-            Logger.alert1(f'batch_input.date0: {self.batch_input.date0}')
-            Logger.error(f'Date equity assertion failed: {date0} != {date1}')
+            self.alert1(f'y_date: {self.data.y_date}')
+            self.alert1(f'batch_idx: {self.batch_idx}')
+            self.alert1(f'batch_dates: {self.batch_dates}')
+            self.alert1(f'early_test_dates: {self.data.early_test_dates}')
+            self.alert1(f'model_test_dates: {self.data.model_test_dates}')
+            self.alert1(f'batch_input.i: {self.batch_input.i[0]}')
+            self.alert1(f'batch_input.date0: {self.batch_input.date0}')
+            self.alert1(f'Date equity assertion failed: {date0} != {date1}')
             raise ValueError(f'Date equity assertion failed: {date0} != {date1}')
 
     def print_out(self):

@@ -36,7 +36,7 @@ class LearnRateReset(BaseCallBack):
             shd_param = self.halved_param(shd_param)
 
         self.optimizer.scheduler = self.optimizer.load_scheduler(self.optimizer.optimizer , shd_param)
-        info = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
+        info = f'Reset learn rate and scheduler at {self.status.epoch_key} , effective at next epoch'
         if self.speedup2x: 
             info += ', and will speedup2x'
         self.status.add_epoch_event('logging' , 'reset_learn_rate' , message = info)

@@ -193,7 +193,7 @@ class ExpertNetwork(nn.Module):
         return self.expert(x)[0]
     
 if __name__ == '__main__' :
-    from src.res.model.data_module import get_realistic_batch_data
+    from src.res.model.util import get_realistic_batch_data
     batch_input = get_realistic_batch_data('day')
 
     rau = ple_gru(indus_embed=True)

@@ -55,7 +55,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
         return self.trainer.model_submodels
     @property
     def test_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
-    
+
+    def timer(self , key : str , indent : int = 0):
+        return Logger.Timer(key , indent = indent , vb_level = self.vb_level)
+
     def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
         if which == 'first':
             df = self.record.get_preds(pred_dates = pred_dates , model_num = 0 , closest = True)
@@ -93,45 +96,45 @@ class DetailedAlphaAnalysis(BaseCallBack):
             raise ValueError(f'Invalid resuming test fmp option: {Const.Model.resume_fmp}')
 
 
-    def factor_test(self , indent : int = 0 , vb_level : Any = 2):
+    def factor_test(self , indent : int = 0):
         with Logger.Paragraph('Factor Perf Test' , 3):
-            with Logger.Timer(f'FactorPerfTest.get_factor' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorPerfTest.get_factor' , indent = indent):
                 factor = self.get_factor_for_factor_test()
-            with Logger.Timer(f'FactorPerfTest.load_day_rets' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorPerfTest.load_day_rets' , indent = indent):
                 factor.day_returns()
-            with Logger.Timer(f'FactorPerfTest.within_benchmarks' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorPerfTest.within_benchmarks' , indent = indent):
                 factor.within_benchmarks()
 
             for task in self.factor_tasks:
-                Logger.divider(vb_level = vb_level)
+                Logger.divider(vb_level = self.vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
                                                  start = self.trainer.config.beg_date , end = self.trainer.config.end_date ,
-                                                 indent = indent , vb_level = vb_level,
+                                                 indent = indent , vb_level = self.vb_level,
                                                  title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
-    def fmp_test(self , indent : int = 0 , vb_level : Any = 2):
+    def fmp_test(self , indent : int = 0):
         with Logger.Paragraph('Factor FMP Test' , 3):
-            with Logger.Timer(f'FactorFMPTest.get_factor' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorFMPTest.get_factor' , indent = indent):
                 factor = self.get_factor_for_fmp_test()
-            with Logger.Timer(f'FactorFMPTest.load_alpha_models' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorFMPTest.load_alpha_models' , indent = indent):
                 factor.alpha_models()
-            with Logger.Timer(f'FactorFMPTest.load_risk_models' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorFMPTest.load_risk_models' , indent = indent):
                 factor.risk_model()
-            with Logger.Timer(f'FactorFMPTest.load_universe' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorFMPTest.load_universe' , indent = indent):
                 factor.universe(load = True)
-            with Logger.Timer(f'FactorFMPTest.load_day_quotes' , indent = indent , vb_level = vb_level):
+            with self.timer(f'FactorFMPTest.load_day_quotes' , indent = indent):
                 factor.day_quotes()
 
             for task in self.fmp_tasks:
-                Logger.divider(vb_level = vb_level)
+                Logger.divider(vb_level = self.vb_level)
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
                                                  start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
-                                                 indent = indent , vb_level = vb_level,
+                                                 indent = indent , vb_level = self.vb_level,
                                                  title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})

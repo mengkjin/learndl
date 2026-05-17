@@ -9,7 +9,7 @@ from src.proj import Logger
 from src.res.algo.nn.optimizer import sam
 
 from src.res.model.util.config import ModelConfig
-from src.res.model.util.metric import BatchMetrics
+from src.res.model.util.metric.stage_metrics import BatchMetrics
 
 __all__ = ['Optimizer']
 

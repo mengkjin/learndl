@@ -1,1 +1,1 @@
-from .manager import CallBackManager
+from .consolidate import ConsolidateCallBack

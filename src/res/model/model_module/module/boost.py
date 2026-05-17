@@ -1,6 +1,5 @@
 import torch
 
-from src.proj import Logger
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
@@ -68,7 +67,7 @@ class BoostPredictor(PredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        Logger.note(f'model {self.model_str} fit start' , vb_level = 'max')
+        self.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
 
         self.boost.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
 
@@ -80,7 +79,7 @@ class BoostPredictor(PredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        Logger.note(f'model {self.model_str} fit done' , vb_level = 'max')
+        self.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
 
     def collect(self , submodel = 'best' , *args):
         self.model_dict.boost_dict = self.boost.to_dict()

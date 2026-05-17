@@ -1,8 +1,7 @@
 from typing import Any
 
 from src.proj import Proj , CALENDAR
-from src.res.model.util import ModelPath , BatchData
-from src.res.model.data_module import DataModule
+from src.res.model.util import ModelPath , BatchData , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelCalculator:

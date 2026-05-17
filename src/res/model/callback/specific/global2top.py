@@ -3,6 +3,7 @@ import numpy as np
 
 from typing import Literal , Callable
 from src.res.model.util import BaseCallBack
+from src.res.model.util.core import epoch_key
 
 def arr_plateau(arr , n : int , eps = 0.) -> bool:
     '''Last n element of arr are all smaller than the previous one'''
@@ -75,15 +76,21 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.top_converge_alpha = top_converge_alpha
 
     def override_configuration(self):
-        loss_criteria = {k:v for k,v in self.config.criterion_loss.items() if k == 'global2top'}
-        if not loss_criteria:
-            loss_criteria = {'global2top':{}}
-        self.config.model_config['train.criterion.loss'] = loss_criteria
+        if (max_epoch := self.config.max_epoch) <= self.protect:
+            self.config.model_config['train.max_epoch'] = max_epoch + self.protect
+            self.alert1(f'overrides [max_epoch] {max_epoch} -> {max_epoch + self.protect}')
+            
+        loss_criteria = self.config.criterion_loss
+        if tuple(loss_criteria.keys()) != ('global2top',):
+            new_loss_criteria = {k:v for k,v in self.config.criterion_loss.items() if k == 'global2top'}
+            self.config.model_config['train.criterion.loss'] = new_loss_criteria or {'global2top':{}}
+            self.alert1(f'overrides [loss criteria] {loss_criteria} -> {self.config.criterion_loss}')
 
-        accuracy_criteria = {k:v for k,v in self.config.criterion_accuracy.items() if k == 'global2top'}
-        if not accuracy_criteria:
-            accuracy_criteria = {'global2top':{}}
-        self.config.model_config['train.criterion.accuracy'] = accuracy_criteria
+        accuracy_criteria = self.config.criterion_accuracy
+        if tuple(accuracy_criteria.keys()) != ('global2top',):
+            new_accuracy_criteria = {k:v for k,v in self.config.criterion_accuracy.items() if k == 'global2top'}
+            self.config.model_config['train.criterion.accuracy'] = new_accuracy_criteria or {'global2top':{}}
+            self.alert1(f'overrides [accuracy criteria] {accuracy_criteria} -> {self.config.criterion_accuracy}')
 
     def reset_record(self):
         self.valid_accuracies = pd.DataFrame()
@@ -142,12 +149,15 @@ class SpecificCB_Global2Top(BaseCallBack):
             self.metric_best_level = self.valid_accuracies.iloc[self.metric_best_epoch].to_dict()
             self.status.add_epoch_event(
                 'end_attempt' , 'EarlyStop' , epoch = self.metric_best_epoch , 
-                message = f'Global2Top Combined accuracy converged at epoch {self.metric_best_epoch}, force end attempt at epoch {self.status.epoch}'
+                message = f'Global2Top combined accuracy converged at {epoch_key(self.metric_best_epoch, 1)}, recognized at {self.status.epoch_key}'
             )
 
     def recall_global_climax(self):
         if self.fitting_phase == 'global' and self.global_plateaued:
-            self.trainer.recall_ckpt(self.global_climax_epoch , message = f'Global2Top global accuracy plateaued at epoch {self.global_climax_epoch} , recall ckpt at epoch {self.status.epoch}')
+            self.trainer.recall_ckpt(
+                self.global_climax_epoch , 0 , 
+                message = f'Global2Top global accuracy plateaued at {epoch_key(self.global_climax_epoch, 0)} , recall ckpt at {self.status.epoch_key}'
+            )
             self.fitting_phase = 'top'
     
     def set_loss_weights(self):

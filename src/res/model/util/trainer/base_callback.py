@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from inspect import currentframe
-from typing import Any
 
-from src.proj import Logger
+from src.proj import Proj
 from .pipeline import TrainerPipeline
+
+vb_level_callback = Proj.vb.get('callback')
 
 class BaseCallBack(TrainerPipeline):
     CB_ORDER : int = 0
@@ -41,11 +42,10 @@ class BaseCallBack(TrainerPipeline):
         self.at_exit(self.hook_stack.pop())
     def __bool__(self):
         return True
-    def at_enter(self , hook : str , vb_level : Any = 'max'):  
-        Logger.stdout(f'{hook} of callback {self.__class__.__name__} start' , vb_level = vb_level)
-    def at_exit(self , hook : str , vb_level : Any = 'max'): 
-        getattr(self , hook)()
-        Logger.stdout(f'{hook} of callback {self.__class__.__name__} end' , vb_level = vb_level)
+    def at_enter(self , hook : str , *args , **kwargs):  
+        ...
+    def at_exit(self , hook : str , *args , **kwargs): 
+        self.execute_hook(hook , *args , **kwargs)
 
     def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')

@@ -9,8 +9,7 @@ from itertools import product
 from typing import Any
 
 from src.proj import Logger , CALENDAR , Proj
-from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel
-from src.res.model.data_module import DataModule
+from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel , DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
 
 class ModelHiddenExtractor:

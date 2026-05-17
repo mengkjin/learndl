@@ -1,26 +1,41 @@
+from __future__ import annotations
 import inspect , itertools
-from typing import Any , Type
+from typing import Any , Type , Callable
 
-from src.proj import Logger
+from src.proj import Logger , Proj
 from src.res.model.util import BaseCallBack , BaseTrainer 
 from . import monitor, fit, test, specific
 
-class CallBackManager(BaseCallBack):
-    CallbackModules = [fit , monitor , test]
+VbLevelCallback = Proj.vb.get('callback')
+CallbackModules = frozenset([fit , monitor , test])
 
+class ConsolidateCallBack(BaseCallBack):
+    
     def __init__(self , trainer , *args , **kwargs):
         super().__init__(trainer)   
         self.callbacks = self.get_callbacks(trainer)
         
-    def at_enter(self , hook , vb_level : Any = 'max'):
-        [cb.at_enter(hook , vb_level) for cb in self.callbacks]
-    def at_exit(self, hook , vb_level : Any = 'max'):
-        [cb.at_exit(hook , vb_level) for cb in self.callbacks]
+    def at_enter(self , hook , *args , **kwargs):
+        self.stdout(f'In stage [{self.status.stage}], Hook {hook} start' , vb_level = VbLevelCallback)
+        for cb in self.callbacks:
+            if cb.is_hook_implemented(hook):
+                cb.stdout(f'{hook} start' , vb_level = VbLevelCallback)
+                cb.at_enter(hook , *args , **kwargs)
+
+    def at_exit(self, hook , *args , **kwargs):
+        for cb in self.callbacks:
+            if cb.is_hook_implemented(hook):
+                cb.stdout(f'{hook} end' , vb_level = VbLevelCallback)
+                cb.at_exit(hook , *args , **kwargs)
+        self.stdout(f'In stage [{self.status.stage}], Hook {hook} end' , vb_level = VbLevelCallback)
 
     def print_out(self , vb_level : Any = 2 , min_key_len = -1):
         infos = [cb.get_info() for cb in self.callbacks]
         infos_dict = {name:f'({param}), {doc}' if doc else f'({param})' for name , param , doc in infos}
         Logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+
+    def get_implemented_hook_callables(self , hook : str) -> list[Callable]:
+        return [getattr(cb , hook) for cb in self.callbacks if cb.is_hook_implemented(hook)]
 
     @classmethod
     def initialize(cls , trainer : BaseTrainer):
@@ -53,7 +68,6 @@ class CallBackManager(BaseCallBack):
         callbacks = list(cls.get_callback_classes().keys())
         return [name for name in callbacks if name in available_cbs] if available_cbs else callbacks
 
-
     @classmethod
     def check_callback_duplicates(cls , callbacks : list[BaseCallBack]):
         callback_names = [cb.__class__.__name__ for cb in callbacks]
@@ -63,7 +77,7 @@ class CallBackManager(BaseCallBack):
     def get_callback_classes(cls) -> dict[str,Type[BaseCallBack]]:
         if not hasattr(cls , '_general_callback_classes'):
             cbs = {}
-            for cb_mod in cls.CallbackModules:
+            for cb_mod in CallbackModules:
                 for name , obj in inspect.getmembers(cb_mod , lambda x: inspect.isclass(x) and issubclass(x , BaseCallBack)):
                     if obj is BaseCallBack:
                         continue

@@ -378,7 +378,7 @@ class SecidFilter:
         if value is None:
             self.filter = self.none
         else:
-            Logger.alert1(f'filtering secid for ModuleData: {value}')
+            Logger.alert1(f'filtering secid for ModuleData: {value}' , vb_level = 2)
             if value.startswith('random.'):
                 self.filter = partial(self.random , num = int(value.split('.')[1]))
             elif value.startswith('first.'):
@@ -445,7 +445,7 @@ class DateFilter:
         if value is None:
             self.filter = self.none
         else:
-            Logger.alert1(f'filtering date for ModuleData: {value}')
+            Logger.alert1(f'filtering date for ModuleData: {value}' , vb_level = 2)
 
             value = value.strip().replace('-', '~').replace(' ', '~')
             dates = value.split('~')

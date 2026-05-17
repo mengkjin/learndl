@@ -143,7 +143,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
     def check_validity(self) -> bool:
         """Return True if at least one valid proxy exists; log a one-time shutdown notice otherwise."""
         if self.shutdown:
-            Logger.only_once(f"ProxySet for URL {self.url} shutdown , all proxies are invalid and refresh is disabled" , object = self , mark = 'shutdown_info' , printer = Logger.alert2)
+            Logger.only_once(f"ProxySet for URL {self.url} shutdown , all proxies are invalid and refresh is disabled" , object = self , mark = 'shutdown_info' , printer = 'alert2')
             return False
         return self.valid_count > 0
 

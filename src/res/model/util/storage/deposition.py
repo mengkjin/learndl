@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 
-from typing import TypeVar
+from typing import TypeVar, Any
 
 from src.res.model.util.core import ModelDict, ModelPath
 
@@ -10,7 +10,12 @@ T = TypeVar('T')
 
 class Deposition:
     '''model saver'''
-    def __init__(self , base_path : ModelPath):
+    def __init__(self , base_path_like : ModelPath | Any):
+        if hasattr(base_path_like , 'base_path'):
+            base_path = getattr(base_path_like , 'base_path')
+        else:
+            base_path = ModelPath(base_path_like)
+        assert isinstance(base_path , ModelPath) , f'base_path should be a ModelPath object, but got {type(base_path)} (out from {base_path_like})'
         self.base_path = base_path
 
     def shrink_key(self , key : str) -> str:

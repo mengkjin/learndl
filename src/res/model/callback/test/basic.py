@@ -26,7 +26,7 @@ class BasicTestResult(BaseCallBack):
     @property
     def path_result(self): return self.config.base_path.rslt('basic_test.xlsx')
 
-    def complete_test_df(self , vb_level : Any = 3) -> pd.DataFrame:
+    def complete_test_df(self) -> pd.DataFrame:
         df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
@@ -46,7 +46,7 @@ class BasicTestResult(BaseCallBack):
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         
         AsyncSaver.df(df , self.path_test_df , copy_for_safety = False , overwrite = True , vb_level = 'never')
-        Logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = vb_level) 
+        Logger.footnote(f'{self.__class__.__name__} : Basic Test Result saved to {self.path_test_df}' , vb_level = self.vb_level + 1) 
 
         return df
 
@@ -96,7 +96,7 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            Logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:' , vb_level = 2)
+            Logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:' , vb_level = self.vb_level)
             
             # export excel
             rslt = {'test_summary' : test_summary , 'test_by_model' : df_model}

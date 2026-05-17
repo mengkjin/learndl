@@ -1,8 +1,7 @@
 import torch
 
 from src.proj import Logger
-from src.res.model.data_module import DataModule , get_realistic_batch_data
-from src.res.model.util import ModelConfig , BatchData , TrainerMetrics
+from src.res.model.util import ModelConfig , BatchData , TrainerMetrics , DataModule , get_realistic_batch_data
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelTestor:

@@ -160,8 +160,9 @@ class AutoRunTask:
         self.catchers.enter(self.task_full_name , self.task_name , self.init_time)
         self.status = 'Running'
         self.set_verbosity()
+        self.set_debug_mode()
         Proj.print_info(once_type = 'script')
-        Logger.divider()
+        Logger.divider(vb_level = 1)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -304,6 +305,11 @@ class AutoRunTask:
         if self.kwargs.get('max_vb' , False):
             self.verbosity = Proj.vb.max
         Proj.vb.set_vb(self.verbosity)
+
+    def set_debug_mode(self):
+        """set the debug mode of the task"""
+        if self.kwargs.get('debug_mode' , False):
+            Proj.debug.start()
 
     def send_email(self):
         """send email with attachment if in server and email is True"""

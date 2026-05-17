@@ -1,7 +1,7 @@
 """Debug mode: container of debug mode contents."""
 from __future__ import annotations
 
-from src.proj.core import singleton
+from src.proj.core import singleton , stderr
 from .machine import MACHINE
 
 __all__ = ['DebugMode']
@@ -9,21 +9,32 @@ __all__ = ['DebugMode']
 @singleton
 class DebugMode:
     """Context manager: set ``VB.vb_level`` for the block."""
-    def __init__(self):
-        self.debug : bool = bool(MACHINE.config.get('constant/project' , 'debug_mode' , default = False))
-        self.contents = MACHINE.preference('debug')
+
+    @property
+    def contents(self) -> dict[str, bool]:
+        if not hasattr(self , '_contents'):
+            self._contents = MACHINE.preference('debug')
+        return self._contents
+    
+    @property
+    def debug_mode(self) -> bool:
+        if not hasattr(self , '_debug_mode'):
+            self._debug_mode = bool(MACHINE.config.get('constant/project' , 'debug_mode' , default = False))
+        return self._debug_mode
 
     def __bool__(self):
-        return self.debug
+        return self.debug_mode
 
     def __repr__(self):
-        return f'DebugMode(debug={self.debug})'
+        return f'DebugMode(debug={self.debug_mode})'
 
     def __getitem__(self , key : str) -> bool:
-        return self.debug and self.contents[key]
+        return self.debug_mode and self.contents[key]
     
     def start(self):
-        self.debug = True
+        self._debug_mode = True
+        stderr(f'Project Debug Mode Changed to True' , color = 'lightred' , bold = True)
 
     def stop(self):
-        self.debug = False
+        self._debug_mode = False
+        stderr(f'Project Debug Mode Changed to False' , color = 'lightred' , bold = True)

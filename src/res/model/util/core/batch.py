@@ -166,8 +166,7 @@ class BatchInput:
         if data_type == 'random':
             return cls.random()
         else:
-            from src.res.model.util import ModelConfig
-            from src.res.model.data_module.module import DataModule
+            from src.res.model.util import ModelConfig , DataModule
 
             override = {
                 'model.module':'gru',

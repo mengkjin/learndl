@@ -59,14 +59,14 @@ class dfHandler:
             df[reassign_date_col] = date
 
         if df.empty:
-            Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = Logger.alert1 , indent = indent , vb_level = vb_level)
+            Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = 'alert1' , indent = indent , vb_level = vb_level)
         else:
             na_cols : pd.Series | Any = df.isna().all()
             if na_cols.all():
-                Logger.only_once(f'{syntax} is all-NA' , mark = f'{syntax} all_na' , printer = Logger.alert1 , indent = indent , vb_level = vb_level)
+                Logger.only_once(f'{syntax} is all-NA' , mark = f'{syntax} all_na' , printer = 'alert1' , indent = indent , vb_level = vb_level)
             elif check_na_cols and na_cols.any():
                 Logger.only_once(f'{syntax} has columns [{str(df.columns[na_cols])}] all-NA' , mark = f'{syntax} all_cols_na' , 
-                                 printer = Logger.alert1 , indent = indent , vb_level = vb_level)
+                                 printer = 'alert1' , indent = indent , vb_level = vb_level)
 
         df = cls.reset_index_pandas(df , reset_index)
         if ignored_fields: 
@@ -89,7 +89,7 @@ class dfHandler:
                 df = df.with_columns(pl.lit(date).alias(reassign_date_col))
 
         if len(df) == 0:
-            Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = Logger.alert1 , indent = indent , vb_level = vb_level)
+            Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = 'alert1' , indent = indent , vb_level = vb_level)
         else:
             def is_all_na_column(col: pl.Series) -> bool:
                 if col.dtype in (pl.Float32, pl.Float64):
@@ -99,11 +99,11 @@ class dfHandler:
             all_na_flags = [is_all_na_column(df[col]) for col in df.columns]
             all_na = all(all_na_flags)
             if all_na:
-                Logger.only_once(f'{syntax} is all-NA' , mark = f'{syntax} all_na' , printer = Logger.alert1 , indent = indent , vb_level = vb_level)
+                Logger.only_once(f'{syntax} is all-NA' , mark = f'{syntax} all_na' , printer = 'alert1' , indent = indent , vb_level = vb_level)
             elif check_na_cols and any(all_na_flags):
                 na_cols = [col for col, flag in zip(df.columns, all_na_flags) if flag]
                 Logger.only_once(f'{syntax} has columns [{na_cols}] all-NA' , mark = f'{syntax} all_cols_na' , 
-                                 printer = Logger.alert1 , indent = indent , vb_level = vb_level)
+                                 printer = 'alert1' , indent = indent , vb_level = vb_level)
 
         if ignored_fields: 
             cols_to_drop = [c for c in ignored_fields if c in df.columns]

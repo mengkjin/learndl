@@ -2,7 +2,6 @@ import torch
 from torch import set_grad_enabled
 from typing import Any
 
-from src.proj import Logger
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput , BatchOutput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
@@ -115,7 +114,7 @@ class NNBoost(PredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        Logger.note(f'model {self.model_str} fit start' , vb_level = 'max')
+        self.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
         # fit net
         for _ in self.trainer.iter_fit_epoches():
             self.net.train()
@@ -149,7 +148,7 @@ class NNBoost(PredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        Logger.note(f'model {self.model_str} fit done' , vb_level = 'max')
+        self.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
 
     def batch_forward_net(self) -> None: 
         self.batch_output = BatchOutput(self.forward_net(self.batch_input))

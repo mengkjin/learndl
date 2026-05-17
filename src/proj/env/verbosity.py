@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any , Literal
 from src.proj.core import stderr , singleton
 
+from .debug_mode import DebugMode
 from .machine import MACHINE
 
 __all__ = ['Verbosity']
@@ -83,6 +84,10 @@ class Verbosity:
     @property
     def vb(self) -> int:
         """Current global verbosity (clamped to ``min``..``max`` when set)."""
+        if not hasattr(self , '_debug'):
+            self._debug = DebugMode()
+        if self._debug.debug_mode:
+            return self.max
         if not hasattr(self , '_vb'):
             self._vb = MACHINE.preference('verbosity' , 'basic/vb' , default = 1)
         return self._vb

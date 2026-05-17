@@ -8,22 +8,22 @@ from typing import Any
 from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput 
-from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
+from .base_trainer import BaseTrainer
 
 class PredictorModel(TrainerPipeline):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = []
     COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
     
-    def __init__(self, *args , **kwargs) -> None:
+    def __init__(self, *args , vb_level : Any = 1 , **kwargs) -> None:
         self.reset()
         self.net : torch.nn.Module | Any = None
         self.model_dict = ModelDict()
 
     def __call__(self , input : BatchInput | torch.Tensor | Any | int | None , *args , **kwargs):
         if isinstance(input , int):
-            from src.res.model.data_module import DataModule
+            from src.res.model.util import DataModule
             input = DataModule.get_date_batch_data(self.config , input)
             output = self.forward(input , *args , **kwargs)
         elif input is None or len(input) == 0:
@@ -41,7 +41,12 @@ class PredictorModel(TrainerPipeline):
     def initialize(cls , config_or_trainer , **kwargs):
         from src.res.model.model_module.module import get_predictor_module
         binder = config_or_trainer
-        config = config_or_trainer if isinstance(config_or_trainer , ModelConfig) else config_or_trainer.config
+        if isinstance(config_or_trainer , BaseTrainer):
+            config = config_or_trainer.config
+            kwargs = config_or_trainer.input_model_kwargs | kwargs
+        else:
+            config = config_or_trainer
+            kwargs = kwargs
         model = get_predictor_module(config , **kwargs).bound_with(binder)
         return model
 
@@ -140,19 +145,19 @@ class PredictorModel(TrainerPipeline):
         '''dump model to somewhere'''
         self.metrics.collect_model()
         best_attempt = self.metrics.model_metrics.best_attempt()
-        Logger.highlight(f'Dump model {self.model_str} with best attempt {best_attempt}')
+        self.stdout(f'Dump model {self.texts.model_str} with best attempt {best_attempt}' , color = 'cyan')
         for submodel in self.trainer.model_submodels:
             self.deposition.dump_stacked_model(best_attempt , self.model_num , self.model_date , submodel) 
 
     def test(self):
         '''test the model inside'''
-        Logger.note(f'model {self.model_str} test start' , vb_level = 'max')
+        self.note(f'model {self.texts.model_str} test start' , vb_level = 'max')
 
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
 
-        Logger.note(f'model {self.model_str} test done' , vb_level = 'max')
+        self.note(f'model {self.texts.model_str} test done' , vb_level = 'max')
     
     def batch_forward(self) -> None: 
         if self.batch_idx >= self.trainer.batch_resumed: 

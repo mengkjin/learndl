@@ -55,7 +55,7 @@ class EarlyStoppage(BaseCallBack):
     def add_stop_event(self , reason : str , effect_epoch : EpochRecord):
         self.status.add_epoch_event(
             'end_attempt' , reason.replace(' ' , '') , epoch = effect_epoch.epoch , 
-            message = f'Early stoppage due to {reason} at epoch {effect_epoch.epoch_key}, recognized at epoch {self.status.epoch_key}'
+            message = f'Early stoppage due to {reason} at {effect_epoch.epoch_key}, recognized at {self.status.epoch_key}'
         )
 
     def on_fit_model_start(self):
