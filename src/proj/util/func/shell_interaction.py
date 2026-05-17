@@ -46,7 +46,7 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
     Logger.stdout(main_str , end = '')
     if log_path is not None:
         log_path.parent.mkdir(parents = True , exist_ok = True)
-        with open(log_path, 'a') as log_file:
+        with open(log_path, 'a' , encoding='utf-8') as log_file:
             log_file.write(main_str)
 
 def check_process_status(pid):

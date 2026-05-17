@@ -75,7 +75,7 @@ class ScheduledTask:
         if not root_path:
             return self
         self.task_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.task_path, 'w') as f:
+        with open(self.task_path, 'w' , encoding='utf-8') as f:
             f.write(self.cmdline)
         Logger.success(f"ScheduledTask {self.task_path} distributed")
         return self

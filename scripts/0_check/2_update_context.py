@@ -69,7 +69,7 @@ STALE_RE = re.compile(r'<!--\s*STALE\s*:\s*(.*?)\s*-->', re.IGNORECASE)
 # ---------------------------------------------------------------------------
 
 def load_index() -> list[dict[str, Any]]:
-    with open(INDEX_PATH, encoding='utf-8') as f:
+    with open(INDEX_PATH, 'r' , encoding='utf-8') as f:
         return yaml.safe_load(f) or []
 
 def files_to_affected_docs(changed: list[str], index: list[dict]) -> list[tuple[dict, list[str]]]:

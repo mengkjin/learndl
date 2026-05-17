@@ -91,7 +91,7 @@ class XgBoost(BasicBoostModel):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json') 
             model.save_model(model_path)
-            with open(model_path, 'r') as file: 
+            with open(model_path, 'r' , encoding='utf-8') as file: 
                 model_dict = json.load(file)  
         return model_dict
     
@@ -99,7 +99,7 @@ class XgBoost(BasicBoostModel):
     def boost_from_dict(model_dict : dict):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json')
-            with open(model_path, 'w') as file: 
+            with open(model_path, 'w' , encoding='utf-8') as file: 
                 json.dump(model_dict , file, indent=4)
             model = xgboost.Booster(model_file=model_path)
         return model

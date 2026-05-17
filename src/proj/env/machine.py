@@ -30,7 +30,7 @@ def _load_config_file(path: Path) -> dict:
     else:
         raise FileNotFoundError(f'{path} does not exist')
     
-    with open(path , 'r') as f:
+    with open(path , 'r' , encoding='utf-8') as f:
         if path.suffix == '.yaml':
             content = yaml.safe_load(f)
         elif path.suffix == '.json':
@@ -110,7 +110,7 @@ def _machine_name_init() -> str:
     name = socket.gethostname().split('.')[0]
     machine_list = _load_config_file(SECRET_PATH.joinpath('machines.yaml'))
     if name in machine_list:
-        with open(name_path, 'w') as f:
+        with open(name_path, 'w' , encoding='utf-8') as f:
             yaml.dump({'name': name}, f)
         return name
 
@@ -142,9 +142,9 @@ def _machine_name_init() -> str:
             user_inputs[attr] = value
     assert all(attr in user_inputs for attr in required_attributes) , f"Missing attributes: {set(required_attributes) - set(user_inputs)}"
     machine_list[name] = user_inputs
-    with open(name_path, 'w') as f:
+    with open(name_path, 'w' , encoding='utf-8') as f:
         yaml.dump(user_inputs, f)
-    with open(SECRET_PATH.joinpath('machines.yaml'), 'w') as f:
+    with open(SECRET_PATH.joinpath('machines.yaml'), 'w' , encoding='utf-8') as f:
         yaml.dump(machine_list, f)
     return name
 

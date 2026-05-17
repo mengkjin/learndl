@@ -18,7 +18,7 @@ def suspend_this_machine(log_path = default_log_path):
     do_suspend = not running_scripts and not MACHINE.is_windows
     log_path.parent.mkdir(parents = True , exist_ok = True)
     time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(log_path, 'a') as log_file:
+    with open(log_path, 'a' , encoding='utf-8') as log_file:
         if running_scripts:
             main_str = f'{time_str} : Suspension aborted due to running scripts: {running_scripts}\n'
         elif MACHINE.is_windows:

@@ -92,7 +92,7 @@ class CatBoost(BasicBoostModel):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json') 
             model.save_model(model_path , format='json')
-            with open(model_path, 'r') as file: 
+            with open(model_path, 'r' , encoding='utf-8') as file: 
                 model_dict = json.load(file)  
         return model_dict
     
@@ -100,7 +100,7 @@ class CatBoost(BasicBoostModel):
     def boost_from_dict(model_dict : dict):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json')
-            with open(model_path, 'w') as file: 
+            with open(model_path, 'w' , encoding='utf-8') as file: 
                 json.dump(model_dict , file, indent=4)
             model = catboost.CatBoost()
             model.load_model(model_path , format= 'json')

@@ -22,13 +22,13 @@ class ArrayMeta:
     @classmethod
     def from_json(cls, json_path: strPath) -> ArrayMeta:
         """Load metadata written by ``to_json``."""
-        with open(json_path, 'r') as f:
+        with open(json_path, 'r' , encoding='utf-8') as f:
             meta = json.load(f)
         return cls(array_type=meta['array_type'], dtype=meta['dtype'], shape=meta['shape'])
 
     def to_json(self, json_path: strPath):
         """Persist ``array_type``, ``dtype``, and ``shape`` to JSON."""
-        with open(json_path, 'w') as f:
+        with open(json_path, 'w' , encoding='utf-8') as f:
             json.dump(self.__dict__, f, indent=2)
 
 class ArrayMemoryMap:

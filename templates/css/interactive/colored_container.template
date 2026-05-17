@@ -1,4 +1,3 @@
-/* Keyed via ``st.container(key=...colored-container-<color>...)`` — see ``colored_container.py``. */
 .stVerticalBlock[class*="colored-container-blue"] {
     background-color: #dbeafe !important;
     border: 1px solid #93c5fd !important;

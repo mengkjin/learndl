@@ -178,7 +178,7 @@ class YAMLFileEditor:
             return ''
         file_path = self.get_file_path(file_path)
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding='utf-8') as f:
                 self.state.load_content = f.read() or ''
             self.state.load_status = 'success'
         except Exception as e:
@@ -193,7 +193,7 @@ class YAMLFileEditor:
             if self.state.edit_content is None:
                 raise ValueError("Edit content is None")
             yaml.safe_load(self.state.edit_content)
-            with open(file_path, "w") as f:
+            with open(file_path, "w" , encoding='utf-8') as f:
                 f.write(self.state.edit_content)
             self.state.save_status = 'success'
             st.success(f"File saved successfully : {file_path}")

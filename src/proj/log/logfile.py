@@ -190,7 +190,7 @@ class LogFile:
         """write a log entry to log file"""
         if not entry:
             return
-        with open(self.log_file , 'a') as f:
+        with open(self.log_file , 'a' , encoding='utf-8') as f:
             portalocker.lock(f, portalocker.LOCK_EX)
             f.write('\n'.join(entry.to_lines()) + '\n')
 
@@ -205,7 +205,7 @@ class LogFile:
         read_files = reversed(self.candidates) if from_latest else self.candidates
         entries : list[LogEntry] = []
         for file in read_files:
-            with open(file , 'r') as f:
+            with open(file , 'r' , encoding='utf-8') as f:
                 lines = f.readlines()
             entries.extend(LogEntry.from_lines(lines , from_latest = from_latest , pattern = pattern))
             if max_entries > 0 and len(entries) > max_entries:

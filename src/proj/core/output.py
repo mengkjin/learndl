@@ -122,7 +122,7 @@ class FormatStr(str):
         """Write formatted text to stdout, stderr, and/or append to a file path."""
         msg = self.formatted(**kwargs) + end
         if file:
-            with open(file , 'a') as f:
+            with open(file , 'a' , encoding='utf-8') as f:
                 f.write(msg)
                 if flush:
                     f.flush()

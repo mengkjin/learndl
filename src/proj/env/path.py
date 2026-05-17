@@ -115,7 +115,7 @@ class PATH:
         if not yaml_file.exists():
             sys.stderr.write(f'\u001b[31m\u001b[1m{yaml_file} does not exist!\u001b[0m\n')
             return {}
-        with open(yaml_file ,'r' , **kwargs) as f:
+        with open(yaml_file ,'r' , encoding='utf-8' , **kwargs) as f:
             d = yaml.safe_load(f)
         return d
 
@@ -134,7 +134,7 @@ class PATH:
         yaml_file.parent.mkdir(parents=True, exist_ok=True)
         assert yaml_file.suffix == '.yaml' , yaml_file
         assert not yaml_file.exists() or not yaml_file.stat().st_size or overwrite , f'{yaml_file} already exists'
-        with open(yaml_file , 'w') as f:
+        with open(yaml_file , 'w' , encoding='utf-8' , **kwargs) as f:
             yaml.dump(data ,  f , Dumper = cls.IndentedDumper , indent = indent , **kwargs)
 
     @staticmethod
@@ -158,7 +158,7 @@ class PATH:
         json_file.parent.mkdir(parents=True, exist_ok=True)
         assert json_file.suffix == '.json' , json_file
         assert not json_file.exists() or not json_file.stat().st_size or overwrite , f'{json_file} already exists'
-        with open(json_file , 'w' , **kwargs) as f:
+        with open(json_file , 'w' , encoding='utf-8' , **kwargs) as f:
             json.dump(data , f , ensure_ascii = ensure_ascii , indent = indent , **kwargs)
 
     @staticmethod

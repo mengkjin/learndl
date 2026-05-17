@@ -19,7 +19,7 @@ def main():
         main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to saver'
         main_str += f' aborted due to running scripts: {running_scripts}\n'
         Logger.stdout(main_str , end = '')
-        with open(log_path, 'a') as log_file:
+        with open(log_path, 'a' , encoding='utf-8') as log_file:
             log_file.write(main_str)
     else:
         change_power_mode('power-saver' , log_path , True)
