@@ -204,9 +204,12 @@ class BaseModelConfig:
             self.override["env.short_test"] = True
         if "env.short_test" in self.override:
             self.Param['env.short_test'] = self.override.pop("env.short_test")
+        print(f'short_test: {self.Param['env.short_test']}')
         if self.short_test:
             Logger.alert1(f'Short test is enabled, will update conditional config' , vb_level = 2)
             self.Param.update(self.Param.get("conditional.short_test", {}))
+
+        raise Exception('test')
 
         self.Param.update(self.schedule_config.Param)
         if self.model_module == "transformer":
@@ -367,6 +370,8 @@ class BaseModelConfig:
 
     @property
     def short_test(self) -> bool:
+        print(self.base_path)
+        print(self['env.short_test'])
         if self.base_path:
             return self.base_path.is_short_test
         else:
