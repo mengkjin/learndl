@@ -194,6 +194,8 @@ class BaseModelConfig:
             self["model.module"] = model_modules[0]
 
         # deal with short_test given short_test model path / override / should be short_test
+        print(f'override: {self.override}')
+        print(f'should_be_short_test: {self.should_be_short_test}')
         if self.base_path and self.base_path.is_short_test:
             self.override["env.short_test"] = True
         elif (short_test := self.override.pop("short_test", None)) is not None:
