@@ -350,7 +350,7 @@ class BaseModelConfig:
 
     @property
     def should_be_short_test(self):
-        return not self.base_path and not MACHINE.cuda_server
+        return not MACHINE.cuda_server
 
     @property
     def nn_category(self) -> str | None:

@@ -64,9 +64,9 @@ class SpecificCB_Global2Top(BaseCallBack):
     OverrideCallbacks = ['EarlyStoppage']
     ConflictModuleTypes = ['factor']
     def __init__(self , trainer , 
-        protect : int = 3 , 
-        plateau_patience : int = 2 , 
-        converge_patience : int = 4 ,
+        protect : int = 10 , 
+        plateau_patience : int = 10 , 
+        converge_patience : int = 10 ,
         top_converge_alpha : float = 0.6 ,**kwargs) -> None:
         super().__init__(trainer , **kwargs)
         assert 0 <= top_converge_alpha <= 1 , f'top_converge_alpha must be between 0 and 1 and is {top_converge_alpha}'
