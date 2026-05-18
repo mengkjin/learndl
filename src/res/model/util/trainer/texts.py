@@ -5,8 +5,8 @@ from .pipeline import TrainerPipeline
 
 class TrainerTexts(TrainerPipeline):
     """Status texts class, used to generate the texts of the status"""
-    def __init__(self , trainer):
-        self.bound_with_trainer(trainer)
+    def __init__(self , trainer_or_config):
+        self.bound_with(trainer_or_config)
     @property
     def model_key(self) -> str:
         return f'{self.config.model_name} #{self.model_num:d} @{self.model_date:4d}'

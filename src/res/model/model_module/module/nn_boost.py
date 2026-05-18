@@ -9,8 +9,6 @@ from src.res.model.model_module.util.data_transform import batch_data_to_boost_i
 
 class NNBoost(PredictorModel):
     '''a group of ensemble models , of same net structure, still a nn model'''    
-    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
-
     @property
     def boost_param(self): 
         assert self.config.boost_head , f'{self.config.boost_head} is not a valid boost head'

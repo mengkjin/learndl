@@ -2,53 +2,45 @@ from __future__ import annotations
 
 class FutureUtils:
     @classmethod
-    def assert_trainer(cls , config_or_trainer):
-        from src.res.model.util.trainer import BaseTrainer
-        assert isinstance(config_or_trainer , BaseTrainer) , f'config_or_trainer must be BaseTrainer, but got {type(config_or_trainer)}'
-    @classmethod
-    def model(cls , config_or_trainer):
+    def model(cls , trainer_or_config):
         from src.res.model.util.trainer import PredictorModel
-        return PredictorModel.initialize(config_or_trainer)
+        return PredictorModel.initialize(trainer_or_config)
     @classmethod
-    def callback(cls , config_or_trainer):
+    def callback(cls , trainer_or_config):
         from src.res.model.callback import ConsolidateCallBack
-        return ConsolidateCallBack.initialize(config_or_trainer)
+        return ConsolidateCallBack.initialize(trainer_or_config)
     @classmethod
-    def data(cls , config_or_trainer):  
+    def data(cls , trainer_or_config):  
         from src.res.model.util.data import DataModule
-        return DataModule.initialize(config_or_trainer)
+        return DataModule.initialize(trainer_or_config)
     @classmethod
-    def status(cls , config_or_trainer):
+    def status(cls , trainer_or_config):
         from src.res.model.util.trainer import TrainerStatus
         return TrainerStatus()
     @classmethod
-    def record(cls , config_or_trainer):
-        cls.assert_trainer(config_or_trainer)
+    def record(cls , trainer_or_config):
         from src.res.model.util.trainer import PredRecorder
-        return PredRecorder(config_or_trainer)
+        return PredRecorder(trainer_or_config)
     @classmethod
-    def texts(cls , config_or_trainer):
-        cls.assert_trainer(config_or_trainer)
+    def texts(cls , trainer_or_config):
         from src.res.model.util.trainer import TrainerTexts
-        return TrainerTexts(config_or_trainer)
+        return TrainerTexts(trainer_or_config)
     @classmethod
-    def container(cls , config_or_trainer):
-        cls.assert_trainer(config_or_trainer)
+    def container(cls , trainer_or_config):
         from src.res.model.util.storage import TypedContainer
         return TypedContainer()
     @classmethod
-    def metrics(cls , config_or_trainer):
+    def metrics(cls , trainer_or_config):
         from src.res.model.util.metric import TrainerMetrics
-        return TrainerMetrics(config_or_trainer)
+        return TrainerMetrics(trainer_or_config)
     @classmethod
-    def checkpoint(cls , config_or_trainer):
-        cls.assert_trainer(config_or_trainer)
+    def checkpoint(cls , trainer_or_config):
         from src.res.model.util.storage import Checkpoint
         return Checkpoint()
     @classmethod
-    def deposition(cls , config_or_trainer):
+    def deposition(cls , trainer_or_config):
         from src.res.model.util.storage import Deposition
-        return Deposition(config_or_trainer)
+        return Deposition(trainer_or_config)
     @classmethod
-    def get_util(cls , name : str , config_or_trainer):
-        return getattr(cls , name)(config_or_trainer)
+    def get_util(cls , name : str , trainer_or_config):
+        return getattr(cls , name)(trainer_or_config)

@@ -73,24 +73,24 @@ class DataModule(BaseDataModule):
     _config_instance_for_batch_data : dict[ModelConfig,DataModule] = {}
     
     @classmethod
-    def initialize(cls , config_or_trainer : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
+    def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
         
-        if config_or_trainer is None:
+        if trainer_or_config is None:
             config = ModelConfig(stage=0)
             vb_level = kwargs.pop('vb_level' , 1)
-        elif isinstance(config_or_trainer , BaseTrainer):
-            config = config_or_trainer.config
-            use_data = config_or_trainer.use_data
-            vb_level = vb_level = kwargs.pop('vb_level' , config_or_trainer.vb_level + 1)
-        elif isinstance(config_or_trainer , ModelConfig):
-            config = config_or_trainer
+        elif isinstance(trainer_or_config , BaseTrainer):
+            config = trainer_or_config.config
+            use_data = trainer_or_config.use_data
+            vb_level = vb_level = kwargs.pop('vb_level' , trainer_or_config.vb_level + 1)
+        elif isinstance(trainer_or_config , ModelConfig):
+            config = trainer_or_config
             vb_level = kwargs.pop('vb_level' , 1)
         else:
-            raise ValueError(f'Invalid config_or_trainer: {config_or_trainer}')
+            raise ValueError(f'Invalid trainer_or_config: {trainer_or_config}')
         data = cls(config , use_data = use_data , *args , vb_level = vb_level , **kwargs)
-        if isinstance(config_or_trainer , BaseTrainer):
+        if isinstance(trainer_or_config , BaseTrainer):
             for hook in ['on_before_batch_transfer' , 'on_after_batch_transfer']:
-                data.register_callbacks(hook , *config_or_trainer.callback.get_implemented_hook_callables(hook))
+                data.register_callbacks(hook , *trainer_or_config.callback.get_implemented_hook_callables(hook))
         return data
        
     def load_data(self):

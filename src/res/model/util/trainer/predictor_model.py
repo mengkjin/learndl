@@ -8,12 +8,12 @@ from typing import Any
 from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput 
+from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
 
 class PredictorModel(TrainerPipeline):
     '''a group of ensemble models , of same net structure'''
-    AVAILABLE_CALLBACKS = []
     COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
     
     def __init__(self, *args , vb_level : Any = 1 , **kwargs) -> None:
@@ -38,14 +38,14 @@ class PredictorModel(TrainerPipeline):
         return f'{self.__class__.__name__}(config={self.config})'
 
     @classmethod
-    def initialize(cls , config_or_trainer , **kwargs):
+    def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig , **kwargs):
         from src.res.model.model_module.module import get_predictor_module
-        binder = config_or_trainer
-        if isinstance(config_or_trainer , BaseTrainer):
-            config = config_or_trainer.config
-            kwargs = config_or_trainer.input_model_kwargs | kwargs
+        binder = trainer_or_config
+        if isinstance(trainer_or_config , BaseTrainer):
+            config = trainer_or_config.config
+            kwargs = trainer_or_config.input_model_kwargs | kwargs
         else:
-            config = config_or_trainer
+            config = trainer_or_config
             kwargs = kwargs
         model = get_predictor_module(config , **kwargs).bound_with(binder)
         return model

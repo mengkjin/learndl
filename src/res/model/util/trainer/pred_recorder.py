@@ -6,15 +6,17 @@ from pathlib import Path
 
 from src.proj import Logger , DB , PATH , Const , CALENDAR
 from src.proj.util import AsyncSaver
+from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
+from .base_trainer import BaseTrainer
 
 class PredRecorder(TrainerPipeline):
     """Trainer predictor recorder class, used to record the predictor results"""
     PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
     PRED_IDXS = ['secid' , 'date']
     PRED_COLS = ['pred' , 'label']
-    def __init__(self , trainer) -> None:
-        self.bound_with_trainer(trainer)
+    def __init__(self , trainer_or_config : BaseTrainer | ModelConfig) -> None:
+        self.bound_with(trainer_or_config)
         self.folder_preds.mkdir(exist_ok=True , parents=True)
         self.folder_avg_preds.mkdir(exist_ok=True , parents=True)
 
@@ -71,7 +73,7 @@ class PredRecorder(TrainerPipeline):
     @property
     def snap_folder(self) -> Path: 
         """folder to save model predictions"""
-        return self.config.base_path.snapshot('pred_recorder')
+        return self.base_path.snapshot('pred_recorder')
     @property
     def folder_preds(self) -> Path:
         """folder to save model predictions"""
