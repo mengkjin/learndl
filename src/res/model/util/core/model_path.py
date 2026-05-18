@@ -108,6 +108,10 @@ class ModelPath:
                     raise ValueError(f'Invalid module type [{self.module_type}]')
 
     @property
+    def relative_base(self) -> str:
+        return str(self.base.relative_to(PATH.model))
+
+    @property
     def root_path(self) -> Path:
         return self.base.parent
 
@@ -133,7 +137,6 @@ class ModelPath:
     def model_submodels(self):
         """model submodels"""
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
-    
 
     def with_new_index(self , index : int):
         assert index > 0 , f'index {index} must be greater than 0'
@@ -255,13 +258,25 @@ class ModelPath:
             return []
         else:
             candidates = []
-            for path in self.root_path.glob('^!.*/$'):
+            for path in self.root_path.glob('*'):
+                if path.is_file() or path.name.startswith('./$@'):
+                    continue
                 model_path = self if path == self.base else ModelPath(path)
-                if model_path.model_clean_name == self.model_clean_name:
+                if model_path.model_clean_name == self.model_clean_name and model_path.is_resumable:
                     candidates.append(model_path)
             if sort:
                 candidates.sort(key = lambda x: x.model_name_index)
             return candidates
+
+    def find_resumable_candidates_indices(self) -> list[int]:
+        candidates = self.find_resumable_candidates(sort = False)
+        return [mp.model_name_index for mp in candidates]
+
+    def find_new_index(self) -> int:
+        candidates_indices = self.find_resumable_candidates_indices()
+        if not candidates_indices:
+            return 1
+        return int(np.setdiff1d(np.arange(1, max(candidates_indices) + 2),candidates_indices).min())
 
     def iter_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231):
         if not self.archive().exists():

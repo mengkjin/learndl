@@ -87,7 +87,7 @@ class ConsolidateCallBack(BaseCallBack):
         callback_available = [True for _ in callbacks]
         for i , j in itertools.product(range(len(callbacks)) , range(len(callbacks))):
             if callbacks[i].__class__.__name__ in callbacks[j].OverrideCallbacks:
-                Logger.alert1(f'{callbacks[j].__class__.__name__} overrides {callbacks[i].__class__.__name__}')
+                Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, overridden by callback [{callbacks[j].__class__.__name__}]!')
                 callback_available[i] = False
         
         callbacks = [cb for i, cb in enumerate(callbacks) if callback_available[i]]
@@ -101,14 +101,14 @@ class ConsolidateCallBack(BaseCallBack):
         callback_available = [True for _ in callbacks]
         for i in range(len(callbacks)):
             if module_type in callbacks[i].ConflictModuleTypes:
-                Logger.alert1(f'{callbacks[i].__class__.__name__} conflicts with module type [{module_type}]')
+                Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module type [{module_type}]')
                 callback_available[i] = False
             if module_name in callbacks[i].ConflictModuleNames:
-                Logger.alert1(f'{callbacks[i].__class__.__name__} conflicts with module name [{module_name}]')
+                Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module name [{module_name}]')
                 callback_available[i] = False
             for j in range(len(callbacks)):
                 if callbacks[j].__class__.__name__ in callbacks[i].ConflictCallbacks:
-                    Logger.alert1(f'{callbacks[i].__class__.__name__} conflicts with {callbacks[j].__class__.__name__}')
+                    Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with callback [{callbacks[j].__class__.__name__}]')
                     callback_available[i] = False
         
         callbacks = [cb for i, cb in enumerate(callbacks) if callback_available[i]]

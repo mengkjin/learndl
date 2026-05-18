@@ -18,6 +18,8 @@ class CallbackTimer(BaseCallBack):
     def __bool__(self):
         """disable callback timer"""
         return self.recording
+    def get_implemented_hooks(self):
+        return self.cached_properties.get('pipeline_hooks' , 'implemented_hooks' , self.get_all_hooks)
     def at_enter(self , hook_name , *args , **kwargs):
         super().at_enter(hook_name , *args , **kwargs)
         if self.recording and hook_name != 'on_summarize_model': 
@@ -26,8 +28,6 @@ class CallbackTimer(BaseCallBack):
         if self.recording and hook_name != 'on_summarize_model': 
             self.record_hook_durations[hook_name].append((datetime.now() - self.record_start_time[hook_name]).total_seconds())
         super().at_exit(hook_name , *args , **kwargs)
-    def is_hook_implemented(self, hook: str) -> bool:
-        return True
     def on_summarize_model(self):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']

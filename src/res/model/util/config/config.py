@@ -1117,42 +1117,33 @@ class ModelConfig(BaseModelConfig , BaseModule):
         0: don't change the base_path
         """
         assert value in [-1, 0], f"initial selection must be -1 or 0, got {value}"
+        candidates = self.base_path.find_resumable_candidates_indices()
         if value == -1:
-            candidates = self.base_path.find_resumable_candidates()
-            candidates_indices = sorted([mp.model_name_index for mp in candidates])
-            if self.short_test or self.base_path.is_null_model or not candidates:
-                value = 0
+            if self.short_test or self.base_path.is_null_model:
+                ...
             elif "fit" in self.queue_of_stages and not self.is_resuming:
-                print(f'self.base_path: {self.base_path}')
-                print(f'candidates_indices: {candidates_indices}')
-                print(f'self.base_path.model_name_index: {self.base_path.model_name_index}')
-                if self.base_path.model_name_index not in candidates_indices:
-                    value = 0
-                else:
-                    value = int(np.setdiff1d(np.arange(1, max(candidates_indices) + 1),candidates_indices).min())
-                    Logger.note(f"ModelPath(s) of {self.model_clean_name} exists, will create a new ModelPath with index {value} to Train New!", vb_level=vb_level)
-                print(f'value: {value}')
+                if self.base_path.model_name_index in candidates:
+                    value = self.base_path.find_new_index()
+                    Logger.note(f"ModelPath {self.base_path} is resumable, will create a new ModelPath with index {value} to Train New!", vb_level=vb_level)
             else:
-                if len(candidates_indices) == 1:
-                    value = candidates_indices[0]
+                if len(candidates) == 1:
+                    value = candidates[0]
                 else:
                     Logger.note(f"Multiple ModelPath of {self.model_clean_name} exists, input number to choose!", vb_level=vb_level)
-                    Logger.note(f"Options include: {candidates_indices}", vb_level=vb_level)
+                    Logger.note(f"Options include: {candidates}", vb_level=vb_level)
                     value = int(input(f"Which Model to Resume?"))
-                    assert value in candidates_indices, (f"value {value} is not in candidates_indices {candidates_indices}")
+                    assert value in candidates, (f"value {value} is not in candidates_indices {candidates}")
+        elif value == 0:
+            if self.manual_deletion_required:
+                value = self.base_path.find_new_index()
+
+        assert value != 0, f"value {value} is not valid"
         
-        match value:
-            case 0:
-                if self.manual_deletion_required:
-                    value = int(np.setdiff1d(np.arange(1, max(candidates_indices) + 1),candidates_indices).min())
-                    self.base_path.with_new_index(value)
-                else:
-                    ...
-                print(f'value: {value}')
-                print(f'self.base_path: {self.base_path}')
-            case _:
-                assert value > 0, f"value {value} must be greater than 0"
-                self.base_path.with_new_index(value)
+        if value > 0:
+            old_base = self.base_path.relative_base
+            self.base_path.with_new_index(value)
+            new_base = self.base_path.relative_base
+            Logger.alert2(f'ModelPath.base {old_base} is replaced by {new_base} due to resumability!')
 
         if self.manual_deletion_required:
             Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")

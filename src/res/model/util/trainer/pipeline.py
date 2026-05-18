@@ -202,19 +202,19 @@ class _PipelineMeta(ABCMeta):
 class BasePipeline(_Pipeline, BaseModule, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
     def get_all_hooks(self):
-        if not hasattr(self , '_all_hooks'):
-            self._all_hooks = frozenset([hook for hook in dir(self) if hook.startswith('on_')])
-        return self._all_hooks
+        return self.cached_properties.get(
+            'pipeline_hooks' , 'all_hooks' , 
+            lambda: frozenset([hook for hook in dir(self) if hook.startswith('on_')]))
 
     def get_implemented_hooks(self):
-        if not hasattr(self , '_implemented_hooks'):
+        if not self.cached_properties.has('pipeline_hooks' , 'implemented_hooks'):
             implemented = []
             for hook in self.get_all_hooks():
                 defining = _hook_defining_class(self, hook)
                 if defining is not None and defining is not _Pipeline:
                     implemented.append(hook)
-            self._implemented_hooks = frozenset(implemented)
-        return self._implemented_hooks
+            self.cached_properties.set_value('pipeline_hooks' , 'implemented_hooks' , frozenset(implemented))
+        return self.cached_properties.get('pipeline_hooks' , 'implemented_hooks')
 
     def is_hook_implemented(self, hook: str) -> bool:
         return hook in self.get_implemented_hooks()

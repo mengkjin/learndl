@@ -39,6 +39,8 @@ def parse_model_input(model_input : strPath | None) -> dict[str,Any]:
         else:
             return parse_model_input(f'{model_input.parent.name}@{model_input.name}')
     elif isinstance(model_input , str):
+        if model_input.startswith('models/'):
+            model_input = model_input.removeprefix('models/')
         st , module_type , module_name , model_clean_name , index = split_full_name(model_input.replace('/' , '@').replace('\\' , '@'))
         full_name = combine_full_name(st , module_type , module_name , model_clean_name , index)
         return {
@@ -52,16 +54,16 @@ def parse_model_input(model_input : strPath | None) -> dict[str,Any]:
     else:
         raise ValueError(f'Invalid model input [{model_input}]')
 
-def combine_full_name(st : str , module_type : str , model_module : str , model_clean_name : str , model_name_index : str | int) -> str:
+def combine_full_name(st : str , module_type : str , module_name : str , model_clean_name : str , model_name_index : str | int) -> str:
     """
-    combine a full model name into (st , module_type , model_module , model_clean_name , model_name_index)
+    combine a full model name into (st , module_type , module_name , model_clean_name , model_name_index)
     """
     if is_null_module_type(module_type):
-        assert model_module == model_clean_name , f'model_module {model_module} and model_clean_name {model_clean_name} are not the same a {module_type} model'
+        assert module_name == model_clean_name , f'module_name {module_name} and model_clean_name {model_clean_name} are not the same a {module_type} model'
         assert model_name_index == '' or (isinstance(model_name_index , int) and model_name_index == 0), f'model_name_index {model_name_index} is not empty as a {module_type} model'
-        name = f'{module_type}@{model_module}'
+        name = f'{module_type}@{module_name}'
     else:
-        name = f'{module_type}@{model_module}@{model_clean_name}'
+        name = f'{module_type}@{module_name}@{model_clean_name}'
     if (isinstance(model_name_index , str) and model_name_index) or (isinstance(model_name_index , int) and model_name_index >= 2):
         name = f'{name}@{model_name_index}'
     if st:
@@ -99,8 +101,8 @@ def split_module_type_prefix(text : str) -> tuple[TYPE_MODULE_TYPES,str]:
         remain : str = match.group(2)
         assert module_type in ['nn' , 'boost' , 'factor'] , f'Invalid module type [{module_type}]'
     else:
-        model_module = text.split('@')[0]
-        module_type = model_module_type(model_module)
+        module_name = text.split('@')[0]
+        module_type = model_module_type(module_name)
         if module_type == '':
             module_type , remain = search_existing_models(text)
         else:
@@ -118,51 +120,51 @@ def split_full_name(text : str) -> tuple[str,TYPE_MODULE_TYPES,str,str,str]:
         module_type , remain = split_module_type_prefix(remain)
         remain , model_name_index = split_digits_suffix(remain)
         if '@' in remain:
-            model_module , model_clean_name = remain.split('@' , 1)
+            module_name , model_clean_name = remain.split('@' , 1)
         else:
-            assert is_null_module_type(module_type) , f'Invalid module type [{module_type}] when model_module/model_clean_name is {remain}'
-            model_module = remain
+            assert is_null_module_type(module_type) , f'Invalid module type [{module_type}] when module_name/model_clean_name is {remain}'
+            module_name = remain
             model_clean_name = remain
         if is_null_module_type(module_type):
-            assert model_module == model_clean_name , f'model_module {model_module} and model_clean_name {model_clean_name} are not the same for {text} as a {module_type} model'
+            assert module_name == model_clean_name , f'module_name {module_name} and model_clean_name {model_clean_name} are not the same for {text} as a {module_type} model'
             assert model_name_index == '' , f'model_name_index {model_name_index} is not empty for {text} as a {module_type} model'
     except ValueError as e:
         Logger.error(f'Failed to split full name [{text}] : {e}')
         raise
-    return st , module_type , model_module , model_clean_name , model_name_index
+    return st , module_type , module_name , model_clean_name , model_name_index
 
-def model_module_type(model_module : str) -> TYPE_MODULE_TYPES:
+def model_module_type(module_name : str) -> TYPE_MODULE_TYPES:
     f"""
-    detect module type from various forms of model_module if it is a valid nn / boost / factor / db type
+    detect module type from various forms of module_name if it is a valid nn / boost / factor / db type
     if nn / nn@nn_module_name / nn_module_name , it is a valid nn type
     if boost / boost@boost_module_name / boost_module_name , it is a valid boost type
     if factor / factor@factor_module_name / factor_module_name , it is a valid factor type
     if db / db@db_module_name / db_module_name , it is a valid db type
-    if model_module is not a valid type, return ''
+    if module_name is not a valid type, return ''
     """
-    if model_module in MODULE_TYPES:
-        return model_module
-    elif '@' in model_module:
-        match = re.match(r'^(nn|boost|db|factor)\@(.*)$', model_module)
-        assert match , f'Invalid module type for [{model_module}]'
-        module_type , model_module = match.group(1) , match.group(2)
+    if module_name in MODULE_TYPES:
+        return module_name
+    elif '@' in module_name:
+        match = re.match(r'^(nn|boost|db|factor)\@(.*)$', module_name)
+        assert match , f'Invalid module type for [{module_name}]'
+        module_type , module_name = match.group(1) , match.group(2)
         assert module_type in MODULE_TYPES , f'Invalid module type [{module_type}]'
         return module_type
     else:
-        module_type = AlgoModule.module_type(model_module , raise_error = False)
+        module_type = AlgoModule.module_type(module_name , raise_error = False)
         if module_type == '':
-            module_type = check_null_module_type(model_module)
+            module_type = check_null_module_type(module_name)
         return module_type
 
-def check_null_module_type(model_module : str) -> TYPE_MODULE_TYPES:
-    """detect module type from model_module if it is not a valid nn / boost type. If one is both, return factor first"""
-    if model_module == 'factor' or model_module.startswith('factor@') or model_module in FactorCalculator.all_factors():
+def check_null_module_type(module_name : str) -> TYPE_MODULE_TYPES:
+    """detect module type from module_name if it is not a valid nn / boost type. If one is both, return factor first"""
+    if module_name == 'factor' or module_name.startswith('factor@') or module_name in FactorCalculator.all_factors():
         return 'factor'
     else:
         return ''
 
 def is_null_module_type(module_type : str) -> bool:
-    """check if model_module is a valid null module type"""
+    """check if module_name is a valid null module type"""
     return module_type in ['factor']
 
 def search_existing_models(model_name : str) -> tuple[TYPE_MODULE_TYPES,str]:
