@@ -1136,6 +1136,8 @@ class ModelConfig(BaseModelConfig , BaseModule):
         elif value == 0:
             if self.manual_deletion_required:
                 value = self.base_path.find_new_index()
+            else:
+                value = -1
 
         assert value != 0, f"value {value} is not valid"
         
