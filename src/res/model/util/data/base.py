@@ -37,6 +37,22 @@ class DataloaderParam:
             self.extract_backward_days = None 
             self.extract_forward_days  = None
 
+class DataCallbacks:
+    def __init__(self):
+        self.callbacks = defaultdict(list)
+    def register_callbacks(self , hook_name : str , *callbacks : Callable):
+        assert hook_name in ['on_before_batch_transfer' , 'on_after_batch_transfer'] , hook_name
+        for callback in callbacks:
+            self.callbacks[hook_name].append(callback)
+    def on_before_batch_transfer(self , batch : BatchInput) -> BatchInput: 
+        for callback in self.callbacks['on_before_batch_transfer']:
+            batch = callback(batch)
+        return batch
+    def on_after_batch_transfer(self , batch : BatchInput) -> BatchInput: 
+        for callback in self.callbacks['on_after_batch_transfer']:
+            batch = callback(batch)
+        return batch
+
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
    
@@ -81,25 +97,19 @@ class BaseDataModule(ABC):
     def predict_dataloader(self)-> Iterator[BatchInput]: 
         '''return predict dataloaders'''
     @property
-    def callback_dict(self) -> dict[str,list[Callable]]:
-        if not hasattr(self , '_callback_dict'):
-            self._callback_dict = defaultdict(list)
-        return self._callback_dict
+    def data_callbacks(self) -> DataCallbacks:
+        if not hasattr(self , '_data_callbacks'):
+            self._data_callbacks = DataCallbacks()
+        return self._data_callbacks
     def register_callbacks(self , hook_name : str , *callbacks : Callable):
-        assert hook_name in ['on_before_batch_transfer' , 'on_after_batch_transfer'] , hook_name
-        for callback in callbacks:
-            self.callback_dict[hook_name].append(callback)
+        self.data_callbacks.register_callbacks(hook_name , *callbacks)
     
     def print_out(self , vb_level : Any = 2 , min_key_len = 30):
         Logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     def on_before_batch_transfer(self , batch : BatchInput) -> BatchInput: 
-        for callback in self.callback_dict['on_before_batch_transfer']:
-            batch = callback(batch)
-        return batch
+        return self.data_callbacks.on_before_batch_transfer(batch)
     def on_after_batch_transfer(self , batch : BatchInput) -> BatchInput: 
-        for callback in self.callback_dict['on_after_batch_transfer']:
-            batch = callback(batch)
-        return batch
+        return self.data_callbacks.on_after_batch_transfer(batch)
     def transfer_batch_to_device(self , batch : BatchInput , device = None):
         if self.config.module_type == 'nn':
             batch = batch.to(self.config.device if device is None else device)
