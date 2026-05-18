@@ -62,13 +62,13 @@ class PredictorModel(TrainerPipeline):
         return f'{self.config.model_name}@{self.model_num}@{self.model_date}@{self.model_submodel}'
     @property
     def model_num(self):
-        return self.trainer.model_num if self.trainer else self._model_num
+        return self.trainer.model_num if self.bounded_with_trainer else self._model_num
     @property
     def model_date(self):
-        return self.trainer.model_date if self.trainer else self._model_date
+        return self.trainer.model_date if self.bounded_with_trainer else self._model_date
     @property
     def model_submodel(self):
-        return self.trainer.model_submodel if self.trainer else self._model_submodel
+        return self.trainer.model_submodel if self.bounded_with_trainer else self._model_submodel
     @property
     def model_param(self): return self.config.model_param[self.model_num]
     @property
