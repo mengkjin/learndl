@@ -94,12 +94,11 @@ only initialize the core components: config , data , model , callbacks
 from __future__ import annotations
 
 from abc import ABC , ABCMeta
-from collections import defaultdict
 from typing import Any
 
-from src.proj import Logger , Proj
+from src.proj import Logger
 from src.res.model.util.config import ModelConfig
-from src.res.model.util.core import BatchOutput , BatchInput
+from src.res.model.util.core import BatchOutput , BatchInput , BaseModule
 from .future_utils import FutureUtils
 
 __all__ = ['BasePipeline' , 'TrainerPipeline']
@@ -200,27 +199,8 @@ class _PipelineMeta(ABCMeta):
             Logger.warning(f'{new_cls.__name__} defines placeholder names for hooks: {placeholder_names}')
         return new_cls
 
-class BasePipeline(_Pipeline, metaclass=_PipelineMeta):
+class BasePipeline(_Pipeline, BaseModule, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
-    
-    def set_vb_level(self , vb_level : Any):
-        self._vb_level = Proj.vb(vb_level)
-    @property
-    def vb_level(self) -> int:
-        if not hasattr(self , '_vb_level'):
-            self._vb_level = 1
-        return self._vb_level
-    
-    def stdout(self , *args , add_vb : int = 0 , **kwargs):
-        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
-        Logger.stdout(f'{self.__class__.__name__} :' , *args , **kwargs)
-    def note(self , *args , add_vb : int = 0 , color : str = 'lightblue' , **kwargs):
-        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
-        Logger.stdout(f'{self.__class__.__name__} :' , *args , color = color , **kwargs)
-    def alert1(self , *args , add_vb : int = 0 , color : str = 'lightyellow' , to_log_file : bool = True , **kwargs):
-        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
-        Logger.stdout(f'{self.__class__.__name__} Caution:' , *args , color = color , to_log_file = to_log_file , **kwargs)
-
     def get_all_hooks(self):
         if not hasattr(self , '_all_hooks'):
             self._all_hooks = frozenset([hook for hook in dir(self) if hook.startswith('on_')])
@@ -243,23 +223,15 @@ class BasePipeline(_Pipeline, metaclass=_PipelineMeta):
         if self.is_hook_implemented(hook):
             getattr(self , hook)(*args , **kwargs)
 
-    @property
-    def cached_properties(self) -> dict[str,dict[str,Any]]:
-        if not hasattr(self , '_cached_properties'):
-            self._cached_properties = defaultdict(dict[str,Any])
-        return self._cached_properties
-
 class TrainerPipeline(BasePipeline):
     @property
-    def vb_level(self) -> int:
-        if not hasattr(self , '_vb_level'):
-            self._vb_level = self.trainer.vb_level + 1
-        return self._vb_level
+    def binder(self):
+        return self.trainer if self.bounded_with_trainer else self.config
 
     def reset(self):
         self._trainer = None
         self._config = None
-        self._config_bound_utils = {}
+        self.cached_properties.clear_all()
         return self
 
     def bound_with(self , binder):
@@ -279,10 +251,6 @@ class TrainerPipeline(BasePipeline):
         assert isinstance(trainer , BaseTrainer) , f'trainer must be an instance of BaseTrainer, but got {type(trainer)}'
         self._trainer = trainer
         return self
-
-    @property
-    def binder(self):
-        return self.trainer if self.bounded_with_trainer else self.config
 
     @property
     def bounded_with_config(self) -> bool:
@@ -308,11 +276,7 @@ class TrainerPipeline(BasePipeline):
         return config
 
     def get_config_bound_util(self , name : str) -> Any:
-        if not hasattr(self , f'_config_bound_utils'):
-            self._config_bound_utils : dict[str,Any] = {}
-        if name not in self._config_bound_utils:
-            self._config_bound_utils[name] = FutureUtils.get_util(name , self.config)
-        return self._config_bound_utils[name]
+        return self.cached_properties.get('config_bound_utils' , name , lambda: FutureUtils.get_util(name , self.config))
     
     @property
     def model(self): 

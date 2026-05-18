@@ -1,77 +1,37 @@
 from __future__ import annotations
 
-import gc , torch
 import numpy as np
 import pandas as pd
+import gc , torch
 
-from numpy.random import permutation
-from torch.utils.data import BatchSampler
 from typing import Any , Literal , Callable
 
-from src.proj import Logger , CALENDAR , MACHINE
-from src.data import DataBlockNorm , PreProcessorTask , ModuleData , DataBlock
-from src.func import match_values
-from src.func import tensor as T
-from src.res.model.util.config import ModelConfig
-from src.res.model.util.core import BatchInput , HiddenPath
-from src.res.model.util.storage import StoredTorchFileLoader
-from src.res.model.util.trainer import BaseTrainer
+from src.proj import Logger , CALENDAR , Const, MACHINE
+from src.data import PreProcessorTask , ModuleData , DataBlock
 
-from .prenorm import PrenormOperator
-from .base import BaseDataModule , DataloaderParam
-from .batch_input_loader import BatchInputLoader
+from src.func import match_values
+from src.res.model.util.core import BatchInput , BaseModule , HiddenPath
+from src.res.model.util.config import ModelConfig
+from src.res.model.util.storage import TorchFileStorage , StoredTorchFileLoader
+from src.res.model.util.trainer import BaseTrainer
+from .dynamic_buffer import DynamicDataBuffer
+from .batch_input_loader import DataloaderParam , BatchInputLoader
+from .data_callback import DataCallbacks
+from .operations import PrenormOperator , DataOperator
 
 __all__ = ['DataModule']
 
-def rolling_rotation(x : torch.Tensor , index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , seqlen : int = 1 , step : int = 1 , dim = 1 , squeeze_out = True) -> torch.Tensor:
-    '''rotate [stock , date , inday , feature] to [sample , rolling sequence (by step) , inday , feature]'''
-    assert x.ndim == 4 , x.ndim
-    assert len(index0) == len(index1) , (index0 , index1)
-    assert index1.max() < x.shape[dim] , (index1.max() , x.shape)
-    assert index1.min() >= seqlen * step - 1 , (index1.min() , seqlen , step)
-    
-    try:
-        start = max(0 , index1.min().item() - seqlen * step + 1)
-        end = min(x.shape[dim] , index1.max().item() + 1)
-        new_index1 = index1 - start + 1 - seqlen * step
-        new_x = x[:,start:end].unfold(dim , seqlen * step , 1)[index0 , new_index1].\
-            permute(0,3,1,2)[:,step-1::step] # [stock , seqlen (by step) , inday , feature]
-    except MemoryError:
-        new_x = torch.stack([x[index0 , index1 + (i + 1 - seqlen) * step] for i in range(seqlen)],dim=dim)
-    
-    assert new_x.shape[1] == seqlen , (new_x.shape[1] , seqlen)
-    if squeeze_out: 
-        new_x = new_x.squeeze(-2)
-    return new_x
-
-def finite_position(data : torch.Tensor , index1 : torch.Tensor | None = None , 
-                    seqlen : int = 1 , step : int = 1 , endpoint_nonzero = False , all_valid = True) -> torch.Tensor:
-    '''return finite position (with shape of len(index[0]) * step_len) the first 2 dims'''
-    if index1 is None: 
-        index1 = torch.arange(data.shape[1])
-    assert data.ndim > 2 , data.ndim
-    sum_dim = tuple(range(2,data.ndim))
-    agg = data.sum(sum_dim).isfinite()
-    if seqlen * step > 1:
-        agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
-    try:
-        predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
-        valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
-    except MemoryError:
-        predicate = torch.multiply if all_valid else torch.add
-        valid = torch.full_like((agg[:,:len(index1)]), all_valid)
-        for i in range(seqlen):
-            valid = predicate(valid , agg[:,index1 + i * step])
-    if endpoint_nonzero: 
-        valid *= data[:,index1].not_equal(0).all(sum_dim)     
-    return valid
-
-class DataModule(BaseDataModule):    
+class DataModule(BaseModule):
     """
     DataModule for model fitting / testing / predicting
     """
     _config_instance_for_batch_data : dict[ModelConfig,DataModule] = {}
-    
+   
+    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level : Any = 1 , **kwargs):
+        self.set_vb_level(vb_level)
+        self.config   : ModelConfig = config or ModelConfig(stage=0)
+        self.use_data : Literal['fit','predict','both'] = use_data
+
     @classmethod
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
         
@@ -92,8 +52,20 @@ class DataModule(BaseDataModule):
             for hook in ['on_before_batch_transfer' , 'on_after_batch_transfer']:
                 data.register_callbacks(hook , *trainer_or_config.callback.get_implemented_hook_callables(hook))
         return data
-       
+
+    def print_out(self , vb_level : Any = 2 , min_key_len = 30):
+        Logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+
+    def __repr__(self): 
+        keys =  self.input_keys
+        if len(keys) >= 5: 
+            keys_str = f'[{keys[0]},...,{keys[-1]}({len(keys)})]'
+        else:
+            keys_str = str(keys)
+        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'    
+    
     def load_data(self):
+        '''load prepared data at training begin , only load data once in a fitting'''
         self.datas = ModuleData(
             self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
             use_data = self.use_data ,
@@ -107,15 +79,17 @@ class DataModule(BaseDataModule):
         self.stdout(f'Data loaded , shape: {self.datas.shape}' , vb_level = 'max')
         
         self.config.update_data_param(self.datas.x)
-        self.labels_n = int(self.datas.y.shape[-1])
-        self.labels = self.standardize_y(self.datas.y.values.squeeze(2)[...,:self.labels_n] , None , None , no_weight = True)[0]
-
-        self.prenorm_operator = PrenormOperator(self.config , self.datas.norms)
+        
         self.set_critical_dates()
-        self.reset_dataloaders()
+        self.loader_dict : dict[str , StoredTorchFileLoader]  = {}
+        self.loader_dates : dict[str , list[int]] = {}
+        self.loader_param = DataloaderParam()
+        self.data_operator = DataOperator(self.config , self.loader_param)
+        self.prenorm_operator = PrenormOperator(self.config , self.datas.norms)
+        self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2) , no_weight = True)[0]
 
         if self.empty_x:
-            Logger.error(f'DataModule got empty x , fit and test stage will be skipped')
+            self.alert2(f'DataModule got empty x , fit and test stage will be skipped')
             self.note(f'{self.input_type} input keys: {self.input_keys}' , add_vb = 1)
             if 'fit' in self.config.queue_of_stages:
                 self.config.queue_of_stages.remove('fit')
@@ -149,7 +123,7 @@ class DataModule(BaseDataModule):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.interval]
-   
+
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
@@ -172,8 +146,10 @@ class DataModule(BaseDataModule):
         loader_param = DataloaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
         if self.loader_param == loader_param: 
             return False
-        self.loader_param = loader_param
-        return True
+        else:
+            self.loader_param = loader_param
+            self.data_operator = DataOperator(self.config , loader_param)
+            return True
 
     def setup_input_prepare(self):
         '''additional input prepare for hidden input'''
@@ -203,13 +179,11 @@ class DataModule(BaseDataModule):
         self.config.update_data_param(self.datas.x)
 
     def setup_loader_prepare(self):
-        seq_lens = self.seq_lens
-        x_keys = self.input_keys
-        y_keys = [k for k in seq_lens.keys() if k not in x_keys]
-        assert all([seq_lens[xkey] > 0 for xkey in x_keys]) , (seq_lens , x_keys)
-        assert all([seq_lens[ykey] > 0 for ykey in y_keys]) , (seq_lens , y_keys)
-        y_extend = max([seq_lens[ykey] for ykey in y_keys]) if y_keys else 1
-        x_extend = max([seq_lens[xkey] * self.seq_steps[xkey] for xkey in x_keys]) if x_keys else 1
+        assert all(k > 0 for k in self.seq_lens.values()) , self.seq_lens
+        assert all(k > 0 for k in self.seq_steps.values()) , self.seq_steps
+        y_keys = [k for k in self.seq_lens.keys() if k not in self.input_keys]
+        y_extend = max([self.seq_lens[y] for y in y_keys]) if y_keys else 1
+        x_extend = max([self.seq_lens[x] * self.seq_steps[x] for x in self.input_keys]) if self.input_keys else 1
         d_extend = x_extend + y_extend - 1
 
         match self.stage:
@@ -255,7 +229,7 @@ class DataModule(BaseDataModule):
 
     def setup_loader_create(self) -> None:
         if self.day_len == 0:
-            self.empty_dataloader()
+            self.emptry_dataloader()
             return
 
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
@@ -264,8 +238,8 @@ class DataModule(BaseDataModule):
         valid_x = x_full if self.config.module_type == 'nn' else {}
         valid_y = self.y_std if self.is_fitting else None
 
-        valid_sampled = self.multiple_valid(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
-        y_sampled , w_sampled = self.standardize_y(self.y_std , valid_sampled , self.step_idx)
+        valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
+        y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_sampled , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
         self.static_dataloader(x_full , y_sampled , w_sampled , valid_sampled)
@@ -273,52 +247,6 @@ class DataModule(BaseDataModule):
         if self.config.gc_collect_each_model:
             gc.collect() 
             torch.cuda.empty_cache()
-
-    def multiple_valid(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
-        '''
-        return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
-        x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
-        others : rolling window non-nan , default as self.seqy
-        '''
-        valid_y = None if y is None else finite_position(y, index1 , 1)
-
-        if x:
-            finites = torch.stack(
-                [finite_position(v,index1,self.seq_lens[k],self.seq_steps[k],k in DataBlockNorm.DIVLAST,all_valid) for k , v in x.items()] ,
-                dim = -1
-            )
-            valid_x = finites.all(dim=-1) if all_valid else finites.any(dim=-1)
-        else:
-            valid_x = None
-
-        if valid_y is None and valid_x is None:
-            return None
-        elif valid_y is None:
-            return valid_x
-        elif valid_x is None:
-            return valid_y
-        else:
-            return valid_x * valid_y
-        
-    def standardize_y(self , y : torch.Tensor , valid : torch.Tensor | None , index1 : torch.Tensor | None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
-        '''standardize y and weight'''
-        y = y[:,index1].clone() if index1 is not None else y.clone()
-        if valid is not None: 
-            y[~valid] = torch.nan
-        w = None
-        y = T.standardize(y , dim=0)
-        if no_weight or (self.stage != 'fit' and y.isnan().all().item()): 
-            return y , w
-        
-        weight_scheme = self.config.weight_scheme(self.loader_param.stage , no_weight)
-        assert weight_scheme in ['equal' , 'top' , None] , weight_scheme
-        if weight_scheme == 'top':
-            w = torch.ones_like(y)
-            try: 
-                w[y > T.nanmedian(y , dim=0 , keepdim=True)] = 2
-            except Exception:    
-                w[y > T.nanmedian(y)] = 2
-        return y, w
 
     def train_dataloader(self)   -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['train'] , self , desc = 'Train')
@@ -331,6 +259,70 @@ class DataModule(BaseDataModule):
     def extract_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['extract'] , self , tqdm = False , desc = 'Extract')
 
+    @property
+    def data_callbacks(self) -> DataCallbacks:
+        if not hasattr(self , '_data_callbacks'):
+            self._data_callbacks = DataCallbacks()
+        return self._data_callbacks
+    def register_callbacks(self , hook_name : str , *callbacks : Callable):
+        self.data_callbacks.register_callbacks(hook_name , *callbacks)
+    def on_before_batch_transfer(self , batch : BatchInput) -> BatchInput: 
+        return self.data_callbacks.on_before_batch_transfer(batch)
+    def on_after_batch_transfer(self , batch : BatchInput) -> BatchInput: 
+        return self.data_callbacks.on_after_batch_transfer(batch)
+    def transfer_batch_to_device(self , batch : BatchInput , device = None) -> BatchInput:
+        if self.config.module_type == 'nn':
+            batch = batch.to(self.config.device if device is None else device)
+        return batch
+
+    def emptry_dataloader(self) -> None:
+        if self.is_fitting:
+            self.loader_dict['train'] = StoredTorchFileLoader(self.storage , [] , 'static')
+            self.loader_dict['valid'] = StoredTorchFileLoader(self.storage , [] , 'static')
+        else:
+            self.loader_dict[self.stage] = StoredTorchFileLoader(self.storage , [] , 'static')
+            self.loader_dates[self.stage] = []
+
+    def prev_model_date(self , model_date):
+        prev_dates = self.model_date_list[self.model_date_list < model_date]
+        return max(prev_dates) if len(prev_dates) > 0 else -1
+    def next_model_date(self , model_date):
+        late_dates = self.model_date_list[self.model_date_list > model_date]
+        return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
+
+    def y_label(self , dates : np.ndarray | list[int]) -> pd.DataFrame:
+        labels : list[pd.DataFrame] = []
+        for date in dates:
+            label = self.label_of_date(date)
+            if label.size > 0:
+                labels.append(pd.DataFrame({
+                    'secid' : self.datas.y.secid, 'date' : date,
+                    'label' : label.flatten()
+                }).dropna())
+        return pd.concat(labels)
+
+    def label_of_date(self , date : int) -> np.ndarray:
+        if not hasattr(self , 'labels_np'):
+            self.labels_np = self.labels.cpu().numpy()
+        return self.labels_np[:,self.datas.y.date == date][...,0].squeeze()
+
+    def valid_position(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
+        '''
+        return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
+        x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
+        others : rolling window non-nan , default as self.seqy
+        '''
+        valids : list[torch.Tensor] = []
+        if x:
+            finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
+            valids.append(finites.all(dim=-1) if all_valid else finites.any(dim=-1))
+        if y is not None:
+            valids.append(self.data_operator.finite_position(None , y, index1))
+        if valids:
+            return torch.stack(valids , dim = -1).all(dim = -1)
+        else:
+            return None
+
     def get_batch_input_of_date(self , date : int) -> BatchInput:
         assert self.stage in ['predict' , 'test' , 'extract'] , f'stage should be predict , test or extract, but got {self.stage}'
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
@@ -340,8 +332,7 @@ class DataModule(BaseDataModule):
         if valid is None: 
             valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx
-        sample_index = self.split_sample(valid , index0 , index1 , self.config.sample_method , 
-                                         self.config.train_ratio , self.config.batch_size)
+        sample_index = self.data_operator.split_sample(valid , index0 , index1)
         self.storage.del_group(self.stage)
         self.loader_dates[self.stage] = []
         for set_key , set_samples in sample_index.items():
@@ -372,9 +363,7 @@ class DataModule(BaseDataModule):
     def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
         datas = []
         for model_data_type , data in x.items():
-            slen = self.seq_lens[model_data_type]
-            step = self.seq_steps[model_data_type]
-            data = rolling_rotation(data , index0 , index1 , slen , step)
+            data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)
             datas.append(data)
         return datas
@@ -383,51 +372,128 @@ class DataModule(BaseDataModule):
         if y is None:
             return None
         return y[index0 , index1]
-        
-    def prenorm(self , x : torch.Tensor, key : str) -> torch.Tensor:
-        """return panel-normalized x"""
-        return self.prenorm_operator.prenorm(key , x)
 
-    def split_sample(self , valid : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor ,
-                     sample_method : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential' ,
-                     train_ratio   : float = 0.8 , batch_size : int = 2000) -> dict[str,list[torch.Tensor]]:
-        '''
-        update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
-        sample_tensor should be boolean tensor , True indicates non
+    @property
+    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
+        return self.loader_param.stage
 
-        train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
-        test sample method: sequential
-        '''
-        l0 , l1 = valid.shape[:2]
-        pos = torch.stack([index0.repeat_interleave(l1) , index1.repeat(l0)] , -1).reshape(l0,l1,2)
-        
-        def shuffle_sampling(i , bs = batch_size):
-            return [i[p] for p in BatchSampler(permutation(np.arange(len(i))) , bs , drop_last=False)]
-        def sequential_sampling(beg , end , posit = pos , valid = valid):
-            return [posit[:,j][valid[:,j]] for j in range(beg , end)]
+    @property
+    def storage(self):
+        return self.cached_properties.get('data_module' , 'storage' , lambda: TorchFileStorage(self.config.mem_storage))
 
-        sample_index = {}
-        if self.is_fitting:
-            sep = int(l1 * train_ratio)
-            if sample_method == 'total_shuffle':
-                pool = torch.Tensor(permutation(np.arange(valid.sum().item())))
-                sep = int(len(pool) * train_ratio)
-                sample_index['train'] = shuffle_sampling(pos[valid][pool[:sep]])
-                sample_index['valid'] = shuffle_sampling(pos[valid][pool[sep:]])
-            elif sample_method == 'both_shuffle':
-                sample_index['train'] = shuffle_sampling(pos[:,:sep][valid[:,:sep]])
-                sample_index['valid'] = shuffle_sampling(pos[:,sep:][valid[:,sep:]])
-            elif sample_method == 'train_shuffle':
-                sample_index['train'] = shuffle_sampling(pos[:,:sep][valid[:,:sep]])
-                sample_index['valid'] = sequential_sampling(sep , l1)
-            else:
-                sample_index['train'] = sequential_sampling(0 , sep)
-                sample_index['valid'] = sequential_sampling(sep , l1)
-        else:
-            sample_index[self.stage] = sequential_sampling(0 , l1)
+    @property
+    def buffer(self):
+        return self.cached_properties.get('data_module' , 'buffer' , lambda: DynamicDataBuffer(self.config.device))
 
-        return sample_index    
+    @property
+    def is_fitting(self): 
+        return self.stage == 'fit'
 
+    @property
+    def input_keys(self) -> list[str]:
+        input_keys = [key for value in self.config.input_keys_all.values() for key in value]
+        if self.config.module_type == 'factor':
+            input_keys.append('factor')
+        return input_keys
+
+    @property
+    def input_keys_all(self) -> dict[str,list[str]]:
+        input_keys = {key : [*value] for key , value in self.config.input_keys_all.items()}
+        if self.config.module_type == 'factor':
+            input_keys['factor'] = ['factor']
+        input_keys = {key : value for key , value in input_keys.items() if value}
+        assert len(input_keys) > 0 , (self.config.input_keys_all , self.config.module_type)
+        return input_keys
+
+    @property
+    def input_keys_subkeys(self) -> dict[str,str]:
+        try:
+            subkeys = {f'{key}.{subkey}' : str(list(self.datas.x[subkey].feature)) for key , value in self.input_keys_all.items() for subkey in value if subkey in self.datas.x}
+        except Exception as e:
+            self.alert2(f'Error getting input keys subkeys: {e}')
+            self.alert2(f'Input keys: {self.input_keys}')
+            return {f'{key}.{subkey}' : subkey for key , value in self.input_keys_all.items() for subkey in value}
+        return subkeys
+
+    @property
+    def model_date(self) -> int:
+        return self.loader_param.model_date
+
+    @property
+    def seq_lens(self) -> dict[str,int]:
+        return self.loader_param.seqlens
+
+    @property
+    def y_secid(self) -> np.ndarray:
+        return self.datas.y.secid
+
+    @property
+    def y_date(self) -> np.ndarray:
+        return self.datas.y.date[self.d0:self.d1]
+
+    @property
+    def day_len(self) -> int:
+        return self.d1 - self.d0
+
+    @property
+    def data_step(self) -> int:
+        return self.config.fitting_step if self.stage in ['fit'] else 1
+
+    @property
+    def empty_x(self):
+        return self.datas.empty_x and not self.input_keys_hidden
+
+    @property
+    def beg_date(self):
+        return 19000101 if self.use_data == 'predict' else self.config.beg_date
+
+    @property
+    def end_date(self):
+        return 99991231 if self.use_data == 'predict' else self.config.end_date
+
+    @property
+    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+        return self.config.input_type
+
+    @property
+    def input_keys_data(self) -> list[str]:
+        return [ModuleData.abbr(key) for key in self.config.input_data_types]
+
+    @property
+    def input_keys_factor(self) -> list[str]:
+        return [ModuleData.abbr(key) for key in self.config.input_factor_types]
+
+    @property
+    def input_keys_hidden(self) -> list[str]:
+        return [ModuleData.abbr(key) for key in self.config.input_hidden_types]
+
+    @property
+    def seq_steps(self) -> dict[str,int]:
+        return self.config.seq_steps
+
+    @property
+    def min_test_date(self):
+        if hasattr(self , 'test_full_dates'):
+            return self.test_full_dates.min() if len(self.test_full_dates) > 0 else 99991231
+        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 99991231
+
+    @property
+    def max_test_date(self):
+        if hasattr(self , 'test_full_dates'):
+            return self.test_full_dates.max() if len(self.test_full_dates) > 0 else 19000101
+        return ModuleData.max_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 19000101
+
+    @property
+    def factor_start_dt(self):
+        beg_date = self.beg_date
+        if self.config.is_null_model and self.config.is_resuming and Const.Model.resume_test:
+            beg_date = max(beg_date , self.config.resumed_max_pred_date)
+        return CALENDAR.td(beg_date , -1).as_int()
+
+    @property
+    def factor_end_dt(self):
+        return self.end_date
+    
     @classmethod
     def get_date_batch_data(cls , config : ModelConfig , date : int , model_num : int = 0) -> BatchInput:
         if config not in cls._config_instance_for_batch_data:

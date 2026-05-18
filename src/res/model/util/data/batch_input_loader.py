@@ -1,15 +1,36 @@
 import numpy as np
+from dataclasses import dataclass
 from tqdm import tqdm
+from typing import Any , Literal
 
 from src.proj import Proj
 from src.res.model.util.core import BatchInput
-from .base import BaseDataModule
 
-__all__ = ['BatchInputLoader']
+__all__ = ['BatchInputLoader' , 'DataloaderParam']
+
+@dataclass
+class DataloaderParam:
+    stage : Literal['fit' , 'test' , 'predict' , 'extract'] = 'fit'
+    model_date : int | Any = None
+    seqlens : dict[str,int] | Any = None
+    extract_backward_days : int | Any = None
+    extract_forward_days  : int | Any = None
+
+    def __post_init__(self):
+        assert self.stage in ['fit' , 'test' , 'predict' , 'extract'] , self.stage
+        assert self.model_date is None or self.model_date > 0 , self.model_date
+        assert self.seqlens is None or self.seqlens , self.seqlens
+        if self.seqlens is None:
+            self.seqlens = {}
+        if self.stage != 'extract':
+            self.extract_backward_days = None 
+            self.extract_forward_days  = None
     
 class BatchInputLoader:
     '''wrap loader to impletement DataModule Callbacks'''
-    def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
+    def __init__(self , raw_loader , data_module , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
+        from src.res.model.util.data import DataModule
+        assert isinstance(data_module , DataModule) , f'data_module must be an instance of BaseDataModule, but got {type(data_module)}'
         self.loader      = raw_loader
         self.data_module = data_module
         self.tqdm        = tqdm

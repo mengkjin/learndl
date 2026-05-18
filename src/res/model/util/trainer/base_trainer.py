@@ -169,25 +169,16 @@ class BaseTrainer(BasePipeline):
         return BatchData(self.batch_input , self.batch_output)
     @property
     def batch_dates(self) -> np.ndarray: 
-        if 'batch_dates' not in self.cached_properties['model_start']:
-            value = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
-            self.cached_properties['model_start']['batch_dates'] = value
-        return self.cached_properties['model_start']['batch_dates']
+        return self.cached_properties.get('model_start' , 'batch_dates' , lambda: np.concatenate([self.data.early_test_dates , self.data.model_test_dates]))
     @property
     def batch_warm_up(self) -> int: 
-        if 'batch_warm_up' not in self.cached_properties['model_start']:
-            value = len(self.data.early_test_dates) if self.status.stage == 'test' else 0
-            self.cached_properties['model_start']['batch_warm_up'] = value
-        return self.cached_properties['model_start']['batch_warm_up']
+        return self.cached_properties.get('model_start' , 'batch_warm_up' , lambda: len(self.data.early_test_dates) if self.status.stage == 'test' else 0)
     @property
     def batch_aftermath(self) -> int: 
-        if 'batch_aftermath' not in self.cached_properties['model_start']:
-            value = len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 100_000_000
-            self.cached_properties['model_start']['batch_aftermath'] = value
-        return self.cached_properties['model_start']['batch_aftermath']
+        return self.cached_properties.get('model_start' , 'batch_aftermath' , lambda: len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 100_000_000)
     @property
     def batch_resumed(self) -> int: 
-        if 'batch_resumed' not in self.cached_properties['model_start']:
+        if not self.cached_properties.has('model_start' , 'batch_resumed'):
             if (
                 self.status.stage == 'test' and 
                 self.batch_warm_up == 0 and 
@@ -197,8 +188,8 @@ class BaseTrainer(BasePipeline):
                 value = sum(self.data.model_test_dates <= self.record.resumed_max_pred_date)
             else:
                 value = 0
-            self.cached_properties['model_start']['batch_resumed'] = value
-        return self.cached_properties['model_start']['batch_resumed']
+            self.cached_properties.set_value('model_start' , 'batch_resumed' , value)
+        return self.cached_properties.get('model_start' , 'batch_resumed')
 
     @property
     def model_date(self): 
@@ -404,7 +395,7 @@ class BaseTrainer(BasePipeline):
         self.config.set_config_environment()
         
     def on_fit_model_start(self):
-        self.cached_properties['model_start'].clear()
+        self.cached_properties.clear('model_start')
         self.data.setup('fit' , self.model_param , self.model_date)
         self.new_attempt('model')
 
@@ -416,7 +407,7 @@ class BaseTrainer(BasePipeline):
         self.model.dump_model()
         
     def on_test_model_start(self):
-        self.cached_properties['model_start'].clear()
+        self.cached_properties.clear('model_start')
         self.data.setup('test' , self.model_param , self.model_date)
         
     def on_test_submodel_start(self):

@@ -20,7 +20,7 @@ from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
-from src.res.model.util.core import ModelPath , model_module_type, is_null_module_type
+from src.res.model.util.core import ModelPath , BaseModule , model_module_type, is_null_module_type
 
 __all__ = ['ModelConfig']
 
@@ -356,12 +356,6 @@ class BaseModelConfig:
     @property
     def nn_category(self) -> str | None:
         return AlgoModule.nn_category(self.model_module)
-
-    @property
-    def resumable(self) -> bool:
-        if not self.base_path:
-            return False
-        return self.base_path.conf_file('model').exists()
 
     @property
     def short_test(self) -> bool:
@@ -808,7 +802,7 @@ class ModelConfigOptions:
     resume: int = -1
     selection: int = -1
 
-class ModelConfig(BaseModelConfig):
+class ModelConfig(BaseModelConfig , BaseModule):
     def __init__(
         self,
         base_path: ModelPath | strPath | None = None, *,
@@ -847,7 +841,7 @@ class ModelConfig(BaseModelConfig):
         return self.algo_config.boost_head_config
 
     @classmethod
-    def initialize(cls, base_path: ModelPath | strPath | None, *, vb_level : Any = 2, min_key_len = 30, **kwargs):
+    def initialize(cls, base_path: ModelPath | strPath | None, **kwargs):
         config = cls(base_path, **kwargs).start_model()
         return config
 
@@ -879,7 +873,7 @@ class ModelConfig(BaseModelConfig):
         self.process_parser()
         if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():
-                if (not self.short_test and not self.base_path.is_null_model and self.model_config.resumable):
+                if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
                 Logger.alert1(f"{self.base_path} is cleared" , vb_level = 2)
@@ -969,7 +963,7 @@ class ModelConfig(BaseModelConfig):
             and not self.is_resuming
             and not self.base_path.is_null_model
             and "fit" in self.queue_of_stages
-            and self.resumable
+            and self.base_path.is_resumable
         )
 
     @property
@@ -1129,11 +1123,15 @@ class ModelConfig(BaseModelConfig):
             if self.short_test or self.base_path.is_null_model or not candidates:
                 value = 0
             elif "fit" in self.queue_of_stages and not self.is_resuming:
+                print(f'self.base_path: {self.base_path}')
+                print(f'candidates_indices: {candidates_indices}')
+                print(f'self.base_path.model_name_index: {self.base_path.model_name_index}')
                 if self.base_path.model_name_index not in candidates_indices:
                     value = 0
                 else:
                     value = int(np.setdiff1d(np.arange(1, max(candidates_indices) + 1),candidates_indices).min())
                     Logger.note(f"ModelPath(s) of {self.model_clean_name} exists, will create a new ModelPath with index {value} to Train New!", vb_level=vb_level)
+                print(f'value: {value}')
             else:
                 if len(candidates_indices) == 1:
                     value = candidates_indices[0]
@@ -1150,6 +1148,8 @@ class ModelConfig(BaseModelConfig):
                     self.base_path.with_new_index(value)
                 else:
                     ...
+                print(f'value: {value}')
+                print(f'self.base_path: {self.base_path}')
             case _:
                 assert value > 0, f"value {value} must be greater than 0"
                 self.base_path.with_new_index(value)

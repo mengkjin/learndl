@@ -382,8 +382,8 @@ class AttemptMetrics(AggregatedMetrics):
         return [df['total_loss'].item() for df in self.tables['valid_epoch_totals']]
 
 class ModelMetrics(AggregatedMetrics):
-    def new(self , stage : Literal['data' , 'fit' , 'test'] = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):
-        assert stage != 'data' , 'data stage is not allowed to be used for model metrics'
+    def new(self , stage : Literal['fit' , 'test'] | Any = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):
+        assert stage in ['fit' , 'test'] , f'[{stage}] stage is not allowed to be used for model metrics'
         super().new(stage = stage , model_num = model_num , model_date = model_date , submodel = submodel)
         self.attempt_metric_results : list[EpochMetricResult | None] = []
         self.accuracy_verdict : dict[str,float] | Callable[[dict[str,float]],float] | None = None

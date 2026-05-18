@@ -1,6 +1,6 @@
 from src.proj import Logger
 from src.res.model.util import ModelConfig , BatchInput
-from .module import DataModule
+from .data_module import DataModule
 
 __all__ = ['get_realistic_batch_data' , 'get_random_batch_data']
 
