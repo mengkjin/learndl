@@ -80,21 +80,24 @@ class BaseDataModule(ABC):
     @abstractmethod
     def predict_dataloader(self)-> Iterator[BatchInput]: 
         '''return predict dataloaders'''
-    def register_callbacks(self , hook_name : str , *callbacks : Callable):
+    @property
+    def callback_dict(self) -> dict[str,list[Callable]]:
         if not hasattr(self , '_callback_dict'):
             self._callback_dict = defaultdict(list)
+        return self._callback_dict
+    def register_callbacks(self , hook_name : str , *callbacks : Callable):
         assert hook_name in ['on_before_batch_transfer' , 'on_after_batch_transfer'] , hook_name
         for callback in callbacks:
-            self._callback_dict[hook_name].append(callback)
+            self.callback_dict[hook_name].append(callback)
     
     def print_out(self , vb_level : Any = 2 , min_key_len = 30):
         Logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     def on_before_batch_transfer(self , batch : BatchInput) -> BatchInput: 
-        for callback in self._callback_dict['on_before_batch_transfer']:
+        for callback in self.callback_dict['on_before_batch_transfer']:
             batch = callback(batch)
         return batch
     def on_after_batch_transfer(self , batch : BatchInput) -> BatchInput: 
-        for callback in self._callback_dict['on_after_batch_transfer']:
+        for callback in self.callback_dict['on_after_batch_transfer']:
             batch = callback(batch)
         return batch
     def transfer_batch_to_device(self , batch : BatchInput , device = None):
