@@ -279,9 +279,21 @@ class TrainerPipeline(BasePipeline):
         return self
 
     @property
+    def binder(self):
+        return self.trainer if self.bounded_with_trainer else self.config
+
+    @property
+    def bounded_with_config(self) -> bool:
+        return getattr(self , '_config' , None) is not None
+
+    @property
+    def bounded_with_trainer(self) -> bool:
+        return getattr(self , '_trainer' , None) is not None
+
+    @property
     def trainer(self):
         from src.res.model.util.trainer import BaseTrainer
-        if not hasattr(self , '_trainer') or self._trainer is None:
+        if not self.bounded_with_trainer:
             raise ValueError('Trainer is not bound')
         else:
             assert isinstance(self._trainer , BaseTrainer) , f'trainer must be an instance of BaseTrainer, but got {type(self._trainer)}'
@@ -294,10 +306,22 @@ class TrainerPipeline(BasePipeline):
         return config
     @property
     def model(self): 
-        return self.trainer.model
+        if self.bounded_with_trainer:
+            return self.trainer.model
+        else:
+            if not hasattr(self , '_model'):
+                from src.res.model.util.trainer import PredictorModel
+                self._model = PredictorModel.initialize(self.config)
+            return self._model
     @property
     def data(self): 
-        return self.trainer.data
+        if self.bounded_with_trainer:
+            return self.trainer.data
+        else:
+            if not hasattr(self , '_data'):
+                from src.res.model.util.data import DataModule
+                self._data = DataModule.initialize(self.config)
+            return self._data
     @property
     def status(self):  
         return self.trainer.status
@@ -309,13 +333,13 @@ class TrainerPipeline(BasePipeline):
         return self.trainer.container
     @property
     def metrics(self):  
-        return self.trainer.metrics
+        return self.binder.metrics
     @property
     def checkpoint(self): 
-        return self.trainer.checkpoint
+        return self.binder.checkpoint
     @property
     def deposition(self): 
-        return self.trainer.deposition
+        return self.binder.deposition
     @property
     def texts(self): 
         return self.trainer.texts
@@ -324,10 +348,10 @@ class TrainerPipeline(BasePipeline):
         return self.trainer.record
     @property
     def device(self): 
-        return self.trainer.device
+        return self.binder.device
     @property
     def base_path(self): 
-        return self.trainer.base_path
+        return self.binder.base_path
     @property
     def batch_input(self): 
         return self.trainer.batch_input

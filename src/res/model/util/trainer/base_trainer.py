@@ -159,7 +159,6 @@ class BaseTrainer(BasePipeline):
     def deposition(self): 
         """deposition of the trainer , class of Deposition"""
         return self._deposition
-
     @property
     def device(self): 
         return self.config.device

@@ -839,6 +839,26 @@ class ModelConfig(BaseModelConfig):
         return self._value_dict
 
     @property
+    def metrics(self):  
+        if not hasattr(self , '_metrics'):
+            from src.res.model.util.metric import TrainerMetrics
+            self._metrics = TrainerMetrics(self)
+        return self._metrics
+    @property
+    def checkpoint(self): 
+        if not hasattr(self , '_checkpoint'):
+            from src.res.model.util.storage import Checkpoint
+            self._checkpoint = Checkpoint()
+        return self._checkpoint
+
+    @property
+    def deposition(self):
+        if not hasattr(self , '_deposition'):
+            from src.res.model.util.storage import Deposition
+            self._deposition = Deposition(self.base_path)
+        return self._deposition
+
+    @property
     def schedule_config(self) -> ScheduleConfig:
         return self.model_config.schedule_config
 
