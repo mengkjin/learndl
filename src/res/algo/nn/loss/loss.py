@@ -257,6 +257,7 @@ class ProgressiveGlobal2Top(BaseLoss):
         top_option : Literal['soft_topk'] = 'soft_topk', 
         global_kwargs : dict[str,Any] | None = None , 
         top_kwargs : dict[str,Any] | None = None , 
+        hidden_corr_lambda : float = 0.01 ,
         base_top_lambda : float = 1. ,
     ):
         super().__init__()
@@ -272,6 +273,7 @@ class ProgressiveGlobal2Top(BaseLoss):
                 self.global_loss = MSE(**(global_kwargs or {}))
             case _:
                 raise ValueError(f'Invalid global option: {global_option}')
+        self.hidden_corr_loss = HiddenCorr()
         
         match top_option:
             case 'soft_topk':
@@ -279,14 +281,19 @@ class ProgressiveGlobal2Top(BaseLoss):
             case _:
                 raise ValueError(f'Invalid top option: {top_option}')
         self.base_top_lambda = base_top_lambda
+        self.hidden_corr_lambda = hidden_corr_lambda
 
-    def forward(self, pred : torch.Tensor , label : torch.Tensor , **kwargs):
+    def forward(self, pred : torch.Tensor , label : torch.Tensor , hidden : torch.Tensor | list | tuple , **kwargs):
         global_loss = self.global_loss(pred , label , **kwargs)
+        hidden_corr = self.hidden_corr_loss(hidden = hidden)
         top_loss   = self.top_loss(pred , label , **kwargs)
-        assert isinstance(global_loss, torch.Tensor) and isinstance(top_loss, torch.Tensor) , f'global_loss and top_loss should be tensors'
+        assert isinstance(global_loss, torch.Tensor) , f'global_loss should be a tensor'
+        assert isinstance(hidden_corr, torch.Tensor) , f'hidden_corr should be a tensor'
+        assert isinstance(top_loss, torch.Tensor) , f'top_loss should be a tensor'
 
         return {
             f'global.{self.global_option}' : global_loss ,
+            f'global.hidden_corr' : hidden_corr * self.hidden_corr_lambda ,
             f'top.{self.top_option}' : self.base_top_lambda * top_loss
         }
 
