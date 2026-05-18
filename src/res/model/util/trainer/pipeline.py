@@ -100,6 +100,7 @@ from typing import Any
 from src.proj import Logger , Proj
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.core import BatchOutput , BatchInput
+from .future_utils import FutureUtils
 
 __all__ = ['BasePipeline' , 'TrainerPipeline']
 
@@ -213,12 +214,12 @@ class BasePipeline(_Pipeline, metaclass=_PipelineMeta):
     def stdout(self , *args , add_vb : int = 0 , **kwargs):
         kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
         Logger.stdout(f'{self.__class__.__name__} :' , *args , **kwargs)
-    def alert1(self , *args , add_vb : int = 0 , **kwargs):
-        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
-        Logger.alert1(f'{self.__class__.__name__}' , *args , **kwargs)
     def note(self , *args , add_vb : int = 0 , color : str = 'lightblue' , **kwargs):
         kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
-        Logger.note(f'{self.__class__.__name__}' , *args , color = color , **kwargs)
+        Logger.stdout(f'{self.__class__.__name__} :' , *args , color = color , **kwargs)
+    def alert1(self , *args , add_vb : int = 0 , color : str = 'lightyellow' , to_log_file : bool = True , **kwargs):
+        kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
+        Logger.stdout(f'{self.__class__.__name__} Caution:' , *args , color = color , to_log_file = to_log_file , **kwargs)
 
     def get_all_hooks(self):
         if not hasattr(self , '_all_hooks'):
@@ -258,6 +259,7 @@ class TrainerPipeline(BasePipeline):
     def reset(self):
         self._trainer = None
         self._config = None
+        self._config_bound_utils = {}
         return self
 
     def bound_with(self , binder):
@@ -304,48 +306,44 @@ class TrainerPipeline(BasePipeline):
         config = self.trainer.config if getattr(self , '_trainer' , None) else self._config
         assert isinstance(config , ModelConfig) , f'config must be an instance of ModelConfig, but got {type(config)}'
         return config
+
+    def get_config_bound_util(self , name : str) -> Any:
+        if not hasattr(self , f'_config_bound_utils'):
+            self._config_bound_utils : dict[str,Any] = {}
+        if name not in self._config_bound_utils:
+            self._config_bound_utils[name] = FutureUtils.get_util(name , self.config)
+        return self._config_bound_utils[name]
+    
     @property
     def model(self): 
-        if self.bounded_with_trainer:
-            return self.trainer.model
-        else:
-            if not hasattr(self , '_model'):
-                from src.res.model.util.trainer import PredictorModel
-                self._model = PredictorModel.initialize(self.config)
-            return self._model
+        return self.trainer.model if self.bounded_with_trainer else self.get_config_bound_util('model')
     @property
     def data(self): 
-        if self.bounded_with_trainer:
-            return self.trainer.data
-        else:
-            if not hasattr(self , '_data'):
-                from src.res.model.util.data import DataModule
-                self._data = DataModule.initialize(self.config)
-            return self._data
+        return self.trainer.data if self.bounded_with_trainer else self.get_config_bound_util('data')
     @property
     def status(self):  
-        return self.trainer.status
+        return self.trainer.status if self.bounded_with_trainer else self.get_config_bound_util('status')
     @property
     def callback(self): 
-        return self.trainer.callback
+        return self.trainer.callback if self.bounded_with_trainer else self.get_config_bound_util('callback')
     @property
     def container(self): 
-        return self.trainer.container
+        return self.trainer.container if self.bounded_with_trainer else self.get_config_bound_util('container')
     @property
     def metrics(self):  
-        return self.binder.metrics
+        return self.trainer.metrics if self.bounded_with_trainer else self.get_config_bound_util('metrics')
     @property
     def checkpoint(self): 
-        return self.binder.checkpoint
+        return self.trainer.checkpoint if self.bounded_with_trainer else self.get_config_bound_util('checkpoint')
     @property
     def deposition(self): 
-        return self.binder.deposition
+        return self.trainer.deposition if self.bounded_with_trainer else self.get_config_bound_util('deposition')
     @property
     def texts(self): 
-        return self.trainer.texts
+        return self.trainer.texts if self.bounded_with_trainer else self.get_config_bound_util('texts')
     @property
     def record(self): 
-        return self.trainer.record
+        return self.trainer.record if self.bounded_with_trainer else self.get_config_bound_util('record')
     @property
     def device(self): 
         return self.binder.device

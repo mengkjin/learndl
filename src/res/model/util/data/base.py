@@ -140,13 +140,14 @@ class BaseDataModule(ABC):
     def vb_level(self) -> int:
         return self._vb_level
     def stdout(self , *args , add_vb : int = 0 , **kwargs):
-        if 'vb_level' not in kwargs:
-            kwargs['vb_level'] = self.vb_level + add_vb
+        kwargs['vb_level'] = kwargs.get('vb_level', self.vb_level) + add_vb
         Logger.stdout(f'{self.__class__.__name__} :' , *args , **kwargs)
-    def alert1(self , *args , **kwargs):
-        if 'vb_level' not in kwargs:
-            kwargs['vb_level'] = self.vb_level
-        Logger.alert1(f'{self.__class__.__name__}' , *args , **kwargs)
+    def note(self , *args , add_vb : int = 0 , color : str = 'lightblue' , **kwargs):
+        kwargs['vb_level'] = kwargs.get('vb_level', self.vb_level) + add_vb
+        Logger.note(f'{self.__class__.__name__}' , *args , color = color , **kwargs)
+    def alert1(self , *args , add_vb : int = 0 , color : str = 'lightyellow' , to_log_file : bool = True , **kwargs):
+        kwargs['vb_level'] = kwargs.get('vb_level', self.vb_level) + add_vb
+        Logger.stdout(f'{self.__class__.__name__} Caution:' , *args , color = color , to_log_file = to_log_file , **kwargs)
 
     @property
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
@@ -165,7 +166,8 @@ class BaseDataModule(ABC):
         return self._buffer
 
     @property
-    def is_fitting(self): return self.stage == 'fit'
+    def is_fitting(self): 
+        return self.stage == 'fit'
 
     @property
     def input_keys(self) -> list[str]:

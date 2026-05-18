@@ -3,7 +3,7 @@ import inspect , itertools
 from typing import Any , Type , Callable
 
 from src.proj import Logger , Proj
-from src.res.model.util import BaseCallBack , BaseTrainer 
+from src.res.model.util import BaseCallBack , BaseTrainer , ModelConfig
 from . import monitor, fit, test, specific
 
 VbLevelCallback = Proj.vb.get('callback')
@@ -12,6 +12,7 @@ CallbackModules = frozenset([fit , monitor , test])
 class ConsolidateCallBack(BaseCallBack):
     
     def __init__(self , trainer , *args , **kwargs):
+        assert isinstance(trainer , BaseTrainer) , f'trainer must be BaseTrainer, but got {type(trainer)}'
         super().__init__(trainer)   
         self.callbacks = self.get_callbacks(trainer)
         
@@ -38,7 +39,8 @@ class ConsolidateCallBack(BaseCallBack):
         return [getattr(cb , hook) for cb in self.callbacks if cb.is_hook_implemented(hook)]
 
     @classmethod
-    def initialize(cls , trainer : BaseTrainer):
+    def initialize(cls , trainer : BaseTrainer | ModelConfig):
+        assert isinstance(trainer , BaseTrainer) , f'trainer must be BaseTrainer, but got {type(trainer)}'
         return cls(trainer)
 
     @classmethod

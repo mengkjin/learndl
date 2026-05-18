@@ -20,7 +20,7 @@ class BaseCallBack(TrainerPipeline):
     ConflictModuleNames : list[str] = []
 
     def __init__(self , trainer , **kwargs) -> None:
-        self.bound_with_trainer(trainer)
+        self.bound_with(trainer)
         self.kwargs = kwargs
 
     def get_info(self) -> tuple[str , str , str]:

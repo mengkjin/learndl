@@ -104,7 +104,7 @@ class DataModule(BaseDataModule):
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
         self.datas.load()
-        self.stdout(f'data shape is ' , self.datas.shape , vb_level = 'max')
+        self.stdout(f'Data loaded , shape: {self.datas.shape}' , vb_level = 'max')
         
         self.config.update_data_param(self.datas.x)
         self.labels_n = int(self.datas.y.shape[-1])
@@ -116,7 +116,7 @@ class DataModule(BaseDataModule):
 
         if self.empty_x:
             Logger.error(f'DataModule got empty x , fit and test stage will be skipped')
-            self.stdout(f'{self.input_type} input keys: {self.input_keys}' , add_vb = 1 , color = 'lightblue')
+            self.note(f'{self.input_type} input keys: {self.input_keys}' , add_vb = 1)
             if 'fit' in self.config.queue_of_stages:
                 self.config.queue_of_stages.remove('fit')
             if 'test' in self.config.queue_of_stages:
@@ -132,9 +132,9 @@ class DataModule(BaseDataModule):
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
             Logger.error(f'dates is not align with calendar dates!')
             if len(np.setdiff1d(dates , calendar_dates)) > 0:
-                Logger.alert2(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
+                self.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
             if len(np.setdiff1d(calendar_dates , dates)) > 0:
-                Logger.alert2(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
+                self.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
             if not MACHINE.platform_coding:
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
@@ -243,9 +243,9 @@ class DataModule(BaseDataModule):
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
         if self.step_len <= 0:
-            Logger.alert2(f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , d1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
+            self.alert1(f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , d1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
             if self.stage in ['predict' , 'test']:
-                Logger.alert2(f'Test dates: {test_dates}')
+                self.alert1(f'Test dates: {test_dates}')
             raise ValueError(f'Step length is less than 0')
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * self.data_step , [0])
         self.date_idx = self.d0 + self.step_idx

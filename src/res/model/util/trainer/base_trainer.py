@@ -12,6 +12,7 @@ from src.proj.util import FilteredIterable
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
 from src.res.model.util.config import ModelConfig
 from .pipeline import BasePipeline
+from .future_utils import FutureUtils
 
 __all__ = ['BaseTrainer']
 
@@ -84,30 +85,21 @@ class BaseTrainer(BasePipeline):
         """
         init core components of the trainer: config, data, model, callbacks
         """
-        
-        from src.res.model.callback import ConsolidateCallBack
-        from src.res.model.util.trainer import PredictorModel
-        from src.res.model.util.data import DataModule
-        
-        self._model    = PredictorModel.initialize(self)
-        self._callback = ConsolidateCallBack.initialize(self)
-        self._data     = DataModule.initialize(self)
+        self._model    = FutureUtils.model(self)
+        self._callback = FutureUtils.callback(self)
+        self._data     = FutureUtils.data(self)
 
     def init_utils(self):
         """
         init utils of the trainer: status, record, texts, container, metrics, checkpoint, deposition
         """
-        from src.res.model.util.trainer import PredRecorder, TrainerTexts , TrainerStatus
-        from src.res.model.util.metric import TrainerMetrics
-        from src.res.model.util.storage import Checkpoint, Deposition, TypedContainer
-        
-        self._status  = TrainerStatus()
-        self._checkpoint = Checkpoint()
-        self._container = TypedContainer()
-        self._texts = TrainerTexts(self)
-        self._record = PredRecorder(self)
-        self._metrics = TrainerMetrics(self)
-        self._deposition = Deposition(self)
+        self._status     = FutureUtils.status(self)
+        self._checkpoint = FutureUtils.checkpoint(self)
+        self._container  = FutureUtils.container(self)
+        self._texts      = FutureUtils.texts(self)
+        self._record     = FutureUtils.record(self)
+        self._metrics    = FutureUtils.metrics(self)
+        self._deposition = FutureUtils.deposition(self)
 
     @property
     def use_data(self):
