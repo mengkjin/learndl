@@ -243,12 +243,12 @@ class DFCollection(_df_collection):
         Note: called automatically by ``get_multiple_days``; callers do not
         normally need to invoke this directly.
         """
-        # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
         dates_to_do = list(self.data_frames.keys())
         if len(dates_to_do) == 0:
             return
         df0 = self.long_frame.loc[~self.long_frame.index.isin(dates_to_do)]
-        dfs = [df for df in self.data_frames.values()if df is not None and not df.empty]
+        dfs = [df0] + [df for df in self.data_frames.values() if df is not None and not df.empty]
+        dfs = [df for df in dfs if df is not None and not df.empty]
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
             self.long_frame = pd.concat([df0 , *dfs], copy=False).sort_index()

@@ -1118,7 +1118,8 @@ class ModelConfig(BaseModelConfig , BaseModule):
             old_base = self.base_path.relative_base
             self.base_path.with_new_index(value)
             new_base = self.base_path.relative_base
-            Logger.alert2(f'ModelPath.base {old_base} is replaced by {new_base} due to resumability!')
+            if old_base != new_base:
+                Logger.alert2(f'ModelPath.base {old_base} is replaced by {new_base} due to resumability!')
 
         if self.manual_deletion_required:
             Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")

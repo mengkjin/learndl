@@ -1,14 +1,20 @@
+from __future__ import annotations
 import pandas as pd
 
+from collections import defaultdict
 from typing import Any
-from dataclasses import dataclass
-from functools import cached_property
+from dataclasses import dataclass , field
+from threading import Lock
 
-from src.proj import singleton
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
 from src.func.transform import time_weight , apply_ols
+
+# Guard creation of per-(n_months, date) locks so two threads never get different
+# Lock instances for the same cache key (defaultdict is not thread-safe alone).
+FF3_fit_lock_keeper : Lock = Lock()
+FF3_fit_locks : dict[tuple[int,int],Lock] = defaultdict(Lock)
 
 @dataclass
 class FF3_Model:
@@ -16,6 +22,7 @@ class FF3_Model:
     mkt : pd.DataFrame | pd.Series
     hml : pd.DataFrame | pd.Series
     smb : pd.DataFrame | pd.Series
+    lock : Lock = field(default_factory=Lock)
 
     def __post_init__(self):
         ...
@@ -31,19 +38,39 @@ class FF3_Model:
         self.resid = self.stk - self.pred
         self.r2    = 1 - (self.resid ** 2).sum() / (self.stk ** 2).sum()
         return self
+
+    def resid_mom(self , half_life_ratio = 0.5):
+        with self.lock:
+            return (self.resid * time_weight(len(self.resid) , int(half_life_ratio * len(self.resid)))[:,None]).sum()
+
+    def alpha(self):
+        with self.lock:
+            return pd.Series(self.coef[0] , index = self.stk.columns)
+    
+    def resid_vol(self):
+        with self.lock:
+            return self.resid.std()
+    
+    def resid_skew(self):
+        with self.lock:
+            return self.resid.skew()
+    
+    def resid_kurt(self):
+        with self.lock:
+            return self.resid.kurt()
     
 class FamaFrench3:
-    N_MONTHS : int = -1
-    def __init__(self , date : int):
-        assert self.N_MONTHS > 0 , self.N_MONTHS
+    """
+    thread safe Fama-French 3-Factor Model
+    """
+    _cache_models : dict[tuple[int,int],FF3_Model] = {}
+    
+    def __init__(self , n_months : int , date : int):
+        assert n_months in [1, 2, 3, 6, 12], f'n_months must be in [1, 2, 3, 6, 12] , got {n_months}'
         assert date > 0 , f'date must be greater than 0 , got {date}'
-        if getattr(self, 'date' , None) is None or self.date != int(date):
-            self.date = date
-            self.fit()
-
-    @cached_property
-    def date(self):
-        return -1
+        self.n_months = n_months
+        self.date = date
+        self.fit()
 
     @staticmethod
     def group_ret(df : pd.DataFrame) -> pd.Series:
@@ -68,8 +95,8 @@ class FamaFrench3:
         ret_L = cls.group_ret(df.loc[bp_rank < 1/3])
         return (ret_H - ret_L).rename('hml')
 
-    def fit(self , half_life = 0 , min_finite_ratio = 0.25):
-        start , end = DATAVENDOR.CALENDAR.td_start_end(self.date , self.N_MONTHS , 'm')
+    def fit(self):
+        start , end = DATAVENDOR.CALENDAR.td_start_end(self.date , self.n_months , 'm')
 
         rets = DATAVENDOR.TRADE.get_returns(start , end , mask = False , pivot = False).rename(columns={'pctchange':'ret'})
         mv   = DATAVENDOR.TRADE.get_mv(start , end , mv_type = 'circ_mv' , pivot = False , prev=True).rename(columns={'circ_mv':'mv'})
@@ -84,275 +111,258 @@ class FamaFrench3:
         self.model = FF3_Model(stk , mkt , hml , smb).fit()
         return self
     
-    @staticmethod
-    def select_ff3(n_months : int):
-        if n_months == 1:
-            return FF3_1m
-        elif n_months == 2:
-            return FF3_2m
-        elif n_months == 3:
-            return FF3_3m
-        elif n_months == 6:
-            return FF3_6m
-        elif n_months == 12:
-            return FF3_12m
-        else:
-            raise ValueError(f'n_months must be in [1, 2, 3, 6, 12] , got {n_months}')
-        
-    def resid_mom(self , half_life_ratio = 0.5):
-        return (self.model.resid * time_weight(len(self.model.resid) , int(half_life_ratio * len(self.model.resid)))[:,None]).sum()
-    
-    def r2(self):
-        return self.model.r2
-    
-    def alpha(self):
-        return pd.Series(self.model.coef[0] , index = self.model.stk.columns)
-    
-    def resid_vol(self):
-        return self.model.resid.std()
-    
-    def resid_skew(self):
-        return self.model.resid.skew()
-    
-    def resid_kurt(self):
-        return self.model.resid.kurt()
-
-@singleton    
-class FF3_1m(FamaFrench3):
-    N_MONTHS = 1
-@singleton
-class FF3_2m(FamaFrench3):
-    N_MONTHS = 2
-@singleton
-class FF3_3m(FamaFrench3):
-    N_MONTHS = 3    
-@singleton
-class FF3_6m(FamaFrench3):
-    N_MONTHS = 6
-@singleton
-class FF3_12m(FamaFrench3):
-    N_MONTHS = 12
-
-def select_ff3(n_months : int):
-    if n_months == 1:
-        return FF3_1m
-    elif n_months == 2:
-        return FF3_2m
-    elif n_months == 3:
-        return FF3_3m
-    elif n_months == 6:
-        return FF3_6m
-    elif n_months == 12:
-        return FF3_12m
-    else:
-        raise ValueError(f'n_months must be in [1, 2, 3, 6, 12] , got {n_months}')
+    @classmethod
+    def get_ff3_model(cls , n_months : int , date : int) -> FF3_Model:
+        key = (n_months, date)
+        # Fast path: model is immutable after fit; concurrent reads need no lock.
+        if key in cls._cache_models:
+            return cls._cache_models[key]
+        with FF3_fit_lock_keeper:
+            lock = FF3_fit_locks[key]
+        with lock:
+            # Must re-check inside lock: Factor.Factor / updater run many ff_* factors
+            # on the same date in a thread pool; an outer "not in cache" lets every
+            # waiter repeat the expensive fit() unless we guard the dict here.
+            if key not in cls._cache_models:
+                cls._cache_models[key] = FamaFrench3(n_months, date).model
+            return cls._cache_models[key]
 
 class ff_mom_1m(MomentumFactor):
     init_date = 20110101
     description = '1个月ff3残差动量'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(1)(date).resid_mom()
+        ff3 = FamaFrench3.get_ff3_model(1, date)
+        return ff3.resid_mom()
     
 class ff_mom_2m(MomentumFactor):
     init_date = 20110101
     description = '2个月ff3残差动量'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(2)(date).resid_mom()
+        ff3 = FamaFrench3.get_ff3_model(2, date)
+        return ff3.resid_mom()
     
 class ff_mom_3m(MomentumFactor):
     init_date = 20110101
     description = '3个月ff3残差动量'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(3)(date).resid_mom()
+        ff3 = FamaFrench3.get_ff3_model(3, date)
+        return ff3.resid_mom()
     
 class ff_mom_6m(MomentumFactor):
     init_date = 20110101
     description = '6个月ff3残差动量'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(6)(date).resid_mom()
+        ff3 = FamaFrench3.get_ff3_model(6, date)
+        return ff3.resid_mom()
     
 class ff_mom_12m(MomentumFactor):
     init_date = 20110101
     description = '12个月ff3残差动量'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(12)(date).resid_mom()
+        ff3 = FamaFrench3.get_ff3_model(12, date)
+        return ff3.resid_mom()
     
 class ff_r2_1m(CorrelationFactor):
     init_date = 20110101
     description = '1个月ff3模型R2'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(1)(date).r2()
+        ff3 = FamaFrench3.get_ff3_model(1, date)
+        return ff3.r2
     
 class ff_r2_2m(CorrelationFactor):
     init_date = 20110101
     description = '2个月ff3模型R2'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(2)(date).r2()
+        ff3 = FamaFrench3.get_ff3_model(2, date)
+        return ff3.r2
     
 class ff_r2_3m(CorrelationFactor):
     init_date = 20110101
     description = '3个月ff3模型R2'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(3)(date).r2()
+        ff3 = FamaFrench3.get_ff3_model(3, date)
+        return ff3.r2
     
 class ff_r2_6m(CorrelationFactor):
     init_date = 20110101
     description = '6个月ff3模型R2'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(6)(date).r2()
+        ff3 = FamaFrench3.get_ff3_model(6, date)
+        return ff3.r2
     
 class ff_r2_12m(CorrelationFactor):
     init_date = 20110101
     description = '12个月ff3模型R2'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(12)(date).r2()    
+        ff3 = FamaFrench3.get_ff3_model(12, date)
+        return ff3.r2
     
 class ff_alpha_1m(MomentumFactor):
     init_date = 20110101
     description = '1个月ff3模型alpha'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(1)(date).alpha()
+        ff3 = FamaFrench3.get_ff3_model(1, date)
+        return ff3.alpha()
     
 class ff_alpha_2m(MomentumFactor):
     init_date = 20110101
     description = '2个月ff3模型alpha'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(2)(date).alpha()
+        ff3 = FamaFrench3.get_ff3_model(2, date)
+        return ff3.alpha()
     
 class ff_alpha_3m(MomentumFactor):
     init_date = 20110101
     description = '3个月ff3模型alpha'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(3)(date).alpha()
+        ff3 = FamaFrench3.get_ff3_model(3, date)
+        return ff3.alpha()
     
 class ff_alpha_6m(MomentumFactor):
     init_date = 20110101
     description = '6个月ff3模型alpha'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(6)(date).alpha()
+        ff3 = FamaFrench3.get_ff3_model(6, date)
+        return ff3.alpha()
     
 class ff_alpha_12m(MomentumFactor):
     init_date = 20110101
     description = '12个月ff3模型alpha'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(12)(date).alpha()
+        ff3 = FamaFrench3.get_ff3_model(12, date)
+        return ff3.alpha()
     
 class ff_resvol_1m(VolatilityFactor):
     init_date = 20110101
     description = '1个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(1)(date).resid_vol()
+        ff3 = FamaFrench3.get_ff3_model(1, date)
+        return ff3.resid_vol()
     
 class ff_resvol_2m(VolatilityFactor):
     init_date = 20110101
     description = '2个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(2)(date).resid_vol()
+        ff3 = FamaFrench3.get_ff3_model(2, date)
+        return ff3.resid_vol()
     
 class ff_resvol_3m(VolatilityFactor):
     init_date = 20110101
     description = '3个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(3)(date).resid_vol()
+        ff3 = FamaFrench3.get_ff3_model(3, date)
+        return ff3.resid_vol()
     
 class ff_resvol_6m(VolatilityFactor):
     init_date = 20110101
     description = '6个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(6)(date).resid_vol()
+        ff3 = FamaFrench3.get_ff3_model(6, date)
+        return ff3.resid_vol()
     
 class ff_resvol_12m(VolatilityFactor):
     init_date = 20110101
     description = '12个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(12)(date).resid_vol()
+        ff3 = FamaFrench3.get_ff3_model(12, date)
+        return ff3.resid_vol()
 
 class ff_resskew_1m(VolatilityFactor):
     init_date = 20110101
     description = '1个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(1)(date).resid_skew()
+        ff3 = FamaFrench3.get_ff3_model(1, date)
+        return ff3.resid_skew()
 
 class ff_resskew_2m(VolatilityFactor):
     init_date = 20110101
     description = '2个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(2)(date).resid_skew()
+        ff3 = FamaFrench3.get_ff3_model(2, date)
+        return ff3.resid_skew()
     
 class ff_resskew_3m(VolatilityFactor):
     init_date = 20110101
     description = '3个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(3)(date).resid_skew()
+        ff3 = FamaFrench3.get_ff3_model(3, date)
+        return ff3.resid_skew()
     
 class ff_resskew_6m(VolatilityFactor):
     init_date = 20110101
     description = '6个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(6)(date).resid_skew()
+        ff3 = FamaFrench3.get_ff3_model(6, date)
+        return ff3.resid_skew()
     
 class ff_resskew_12m(VolatilityFactor):
     init_date = 20110101
     description = '12个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(12)(date).resid_skew()
+        ff3 = FamaFrench3.get_ff3_model(12, date)
+        return ff3.resid_skew()
     
 class ff_reskurt_1m(VolatilityFactor):
     init_date = 20110101
     description = '1个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(1)(date).resid_kurt()
+        ff3 = FamaFrench3.get_ff3_model(1, date)
+        return ff3.resid_kurt()
     
 class ff_reskurt_2m(VolatilityFactor):
     init_date = 20110101
     description = '2个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(2)(date).resid_kurt()
+        ff3 = FamaFrench3.get_ff3_model(2, date)
+        return ff3.resid_kurt()
     
 class ff_reskurt_3m(VolatilityFactor):
     init_date = 20110101
     description = '3个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(3)(date).resid_kurt()
+        ff3 = FamaFrench3.get_ff3_model(3, date)
+        return ff3.resid_kurt()
     
 class ff_reskurt_6m(VolatilityFactor):
     init_date = 20110101
     description = '6个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(6)(date).resid_kurt()
+        ff3 = FamaFrench3.get_ff3_model(6, date)
+        return ff3.resid_kurt()
     
 class ff_reskurt_12m(VolatilityFactor):
     init_date = 20110101
     description = '12个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
-        return FamaFrench3.select_ff3(12)(date).resid_kurt()
+        ff3 = FamaFrench3.get_ff3_model(12, date)
+        return ff3.resid_kurt()
