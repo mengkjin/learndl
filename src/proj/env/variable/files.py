@@ -39,10 +39,8 @@ class UniqueFileList:
 
     def alter1(self , *args , **kwargs):
         """Forward to ``Logger.alert1`` (lazy import to avoid cycles)."""
-        if not hasattr(self , '_alert1'):
-            from src.proj.log import Logger
-            self._alert1 = Logger.alert1
-        self._alert1(*args , **kwargs)
+        from src.proj.log import Logger
+        Logger.alert1(*args , **kwargs)
 
     @property
     def file_list(self):

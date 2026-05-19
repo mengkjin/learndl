@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 
 from abc import ABCMeta , abstractmethod
+from functools import cached_property
 from typing import Literal , Type , Any
 from src.proj import Logger , CALENDAR , DB , Dates , Proj
 from src.data.loader.data_vendor import DATAVENDOR
@@ -38,15 +39,6 @@ class CustomIndexName:
         """Return ``owner.__name__.lower()`` as the index name."""
         return owner.__name__.lower()
 
-class CustomIndexPortClass:
-    """Descriptor that lazily imports and caches the ``Port`` class."""
-    def __get__(self , instance , owner):
-        """Return the ``Port`` class (lazy import to avoid circular dependencies)."""
-        if not hasattr(self , '_Port'):
-            from src.res.factor.util.classes.port import Port
-            self._Port = Port
-        return self._Port
-
 class CustomIndex(metaclass=CustomIndexMeta):
     """
     Abstract base class for custom benchmark indices.
@@ -60,7 +52,6 @@ class CustomIndex(metaclass=CustomIndexMeta):
     """
     START_DATE : int = START_DATE
     index_name = CustomIndexName()
-    PortClass = CustomIndexPortClass()
 
     @abstractmethod
     def rebalance_dates(self) -> np.ndarray:
@@ -70,12 +61,10 @@ class CustomIndex(metaclass=CustomIndexMeta):
     def rebalance_portfolio(self , date : int) -> pd.DataFrame:
         """get index portfolio"""
 
-    @property
+    @cached_property
     def reb_dates(self) -> np.ndarray:
         """Cached rebalance date array (computed on first access)."""
-        if not hasattr(self , '_reb_dates'):
-            self._reb_dates = self.rebalance_dates()
-        return self._reb_dates
+        return self.rebalance_dates()
 
     @property
     def target_path(self):
@@ -85,30 +74,31 @@ class CustomIndex(metaclass=CustomIndexMeta):
     @property
     def current_portfolio(self):
         """The most recently evolved portfolio object, or None if not yet computed."""
-        if not hasattr(self , '_current_portfolio'):
-            return None
-        else:
+        from src.res.factor.util.classes.port import Port
+        if hasattr(self , '_current_portfolio'):
+            assert isinstance(self._current_portfolio , Port) , f'current_portfolio is not a Port instance: {type(self._current_portfolio)}'
             return self._current_portfolio
+        return None
 
     @current_portfolio.setter
     def current_portfolio(self , port):
-        assert isinstance(port , self.PortClass) , f'port is not a {self.PortClass} instance: {type(port)}'
         self._current_portfolio = port
 
     def index_portfolio(self , date : int):
         """get index portfolio"""
+        from src.res.factor.util.classes.port import Port
         if self.current_portfolio is not None and self.current_portfolio.date == date:
             return self.current_portfolio
         reb_dates = self.reb_dates
         prev_reb_date = 99991231 if (len(reb_dates) == 0 or min(reb_dates) > date) else max(reb_dates[reb_dates <= date])
         if prev_reb_date > date:
-            port = self.PortClass(pd.DataFrame() , date , self.index_name)
+            port = Port(pd.DataFrame() , date , self.index_name)
         elif prev_reb_date == date:
-            port = self.PortClass(self.rebalance_portfolio(date) , date , self.index_name)
+            port = Port(self.rebalance_portfolio(date) , date , self.index_name)
         elif self.current_portfolio is not None and self.current_portfolio.date >= prev_reb_date:
             port = self.current_portfolio.evolve_to_date(date)
         else:
-            prev_reb_port = self.PortClass(self.rebalance_portfolio(prev_reb_date) , prev_reb_date , self.index_name)
+            prev_reb_port = Port(self.rebalance_portfolio(prev_reb_date) , prev_reb_date , self.index_name)
             port = prev_reb_port.evolve_to_date(date)
         self.current_portfolio = port
         return self.current_portfolio

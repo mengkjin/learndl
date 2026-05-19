@@ -94,6 +94,7 @@ only initialize the core components: config , data , model , callbacks
 from __future__ import annotations
 
 from abc import ABC , ABCMeta
+from functools import cached_property
 from typing import Any
 
 from src.proj import Logger
@@ -201,23 +202,21 @@ class _PipelineMeta(ABCMeta):
 
 class BasePipeline(_Pipeline, BaseModule, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
-    def get_all_hooks(self):
-        return self.cached_properties.get(
-            'pipeline_hooks' , 'all_hooks' , 
-            lambda: frozenset([hook for hook in dir(self) if hook.startswith('on_')]))
+    @cached_property
+    def all_hooks(self):
+        return frozenset([hook for hook in dir(self) if hook.startswith('on_')])
 
-    def get_implemented_hooks(self):
-        if not self.cached_properties.has('pipeline_hooks' , 'implemented_hooks'):
-            implemented = []
-            for hook in self.get_all_hooks():
-                defining = _hook_defining_class(self, hook)
-                if defining is not None and defining is not _Pipeline:
-                    implemented.append(hook)
-            self.cached_properties.set_value('pipeline_hooks' , 'implemented_hooks' , frozenset(implemented))
-        return self.cached_properties.get('pipeline_hooks' , 'implemented_hooks')
+    @cached_property
+    def implemented_hooks(self):
+        implemented = []
+        for hook in self.all_hooks:
+            defining = _hook_defining_class(self, hook)
+            if defining is not None and defining is not _Pipeline:
+                implemented.append(hook)
+        return frozenset(implemented)
 
     def is_hook_implemented(self, hook: str) -> bool:
-        return hook in self.get_implemented_hooks()
+        return hook in self.implemented_hooks
 
     def execute_hook(self , hook : str , *args , **kwargs):
         if self.is_hook_implemented(hook):
@@ -276,7 +275,7 @@ class TrainerPipeline(BasePipeline):
         return config
 
     def get_config_bound_util(self , name : str) -> Any:
-        return self.cached_properties.get('config_bound_utils' , name , lambda: FutureUtils.get_util(name , self.config))
+        return self.cached_properties.query('config_bound_utils' , name , lambda: FutureUtils.get_util(name , self.config))
     
     @property
     def model(self): 

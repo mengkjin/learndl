@@ -227,6 +227,8 @@ class TrainerStatus(BasePipeline):
         self.total_epochs : int = 0
         self.total_models : int = 0
         self.times : dict[str,datetime] = {}
+
+        self.first_iteration_printed = False
         
     def __repr__(self):
         return f'TrainerStatus({", ".join([f"{k}={v}" for k,v in self.status.items()])})'
@@ -328,7 +330,7 @@ class TrainerStatus(BasePipeline):
     def on_test_model_start(self): 
         self.dataset = 'test'
     def on_fit_model_start(self):
-        if not hasattr(self , 'first_iteration_printed'):
+        if not self.first_iteration_printed:
             self.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan')
             self.first_iteration_printed = True
         self.times['model_start'] = datetime.now()

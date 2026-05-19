@@ -4,6 +4,7 @@ import pandas as pd
 
 from copy import deepcopy
 from dataclasses import dataclass
+from functools import cached_property
 from scipy.stats import rankdata
 from typing import Any , Literal , Callable , Union , Sequence
 
@@ -452,11 +453,9 @@ class AlphaCombination:
             self.name = 'combined_alpha'
             self.components = [*alpha] if isinstance(alpha , Sequence) else [alpha]
 
-    @property
+    @cached_property
     def alpha_components(self) -> list[AlphaComponent]:
-        if not hasattr(self , '_alpha_components'):
-            self._alpha_components = [AlphaComponent(component) for component in self.components]
-        return self._alpha_components
+        return [AlphaComponent(component) for component in self.components]
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components})'

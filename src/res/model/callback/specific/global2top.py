@@ -65,7 +65,7 @@ class SpecificCB_Global2Top(BaseCallBack):
     ConflictModuleTypes = ['factor']
     def __init__(self , trainer , 
         protect : int = 10 , 
-        plateau_patience : int = 10 , 
+        plateau_patience : int = 20 , 
         converge_patience : int = 10 ,
         top_converge_alpha : float = 0.6 ,**kwargs) -> None:
         super().__init__(trainer , **kwargs)

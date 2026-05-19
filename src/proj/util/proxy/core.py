@@ -2,6 +2,7 @@
 from __future__ import annotations
 import re
 import random
+from functools import cached_property
 from typing import Iterable , Literal , Any
 from src.proj.log import Logger
 
@@ -16,12 +17,10 @@ class Proxy:
         proxy.set_source(source)
         return proxy
 
-    @property
+    @cached_property
     def verified(self) -> list[str]:
         """URLs for which this proxy has been successfully verified."""
-        if not hasattr(self, '_verified'):
-            self._verified: list[str] = []
-        return self._verified
+        return []
 
     def __str__(self) -> str:
         return self.url
@@ -128,16 +127,14 @@ class ProxyStats(Proxy):
     def __bool__(self) -> bool:
         return self.valid
 
-    @property
+    @cached_property
     def stats(self) -> dict[Literal['running', 'error', 'success'], int]:
         """Lazy-initialised usage counters: running (in-flight), error, and success counts."""
-        if not hasattr(self, '_stats'):
-            self._stats : dict[Literal['running', 'error', 'success'], int] = {
-                'running': 0,
-                'error': 0,
-                'success': 0,
-            }
-        return self._stats
+        return {
+            'running': 0,
+            'error': 0,
+            'success': 0,
+        }
 
     @property
     def valid(self) -> bool:

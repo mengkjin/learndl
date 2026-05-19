@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from abc import abstractmethod
+from functools import cached_property
 from typing import Any
 
 from src.proj import Logger , Const
@@ -54,16 +55,12 @@ class BasicCreatorConfig:
         Logger.stdout(f'{cls.__name__}.init_from: {kwargs_str}' , indent = indent , vb_level = vb_level)
         return cls(**use_kwargs)
 
-    @property
+    @cached_property
     def alpha_sorter(self) -> AlphaComposite:
-        if not hasattr(self , '_sorter_alpha'):
-            self._sorter_alpha = AlphaComposite([alpha for alpha in self.sorter if alpha != 'self'])
-        return self._sorter_alpha   
-    @property
+        return AlphaComposite([alpha for alpha in self.sorter if alpha != 'self'])
+    @cached_property
     def alpha_screener(self) -> AlphaScreener:
-        if not hasattr(self , '_screener_alpha'):
-            self._screener_alpha = AlphaScreener([alpha for alpha in self.screener if alpha != 'self'] , ratio = self.screen_ratio)
-        return self._screener_alpha
+        return AlphaScreener([alpha for alpha in self.screener if alpha != 'self'] , ratio = self.screen_ratio)
 
     def get_sorting_alpha(self , model_date : int , alpha_model : AlphaModel | Amodel) -> Amodel:
         alpha_composite = self.alpha_sorter.get(model_date , alpha_model if 'self' in self.sorter else None)

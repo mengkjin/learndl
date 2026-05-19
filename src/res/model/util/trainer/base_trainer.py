@@ -34,7 +34,7 @@ class TrainerHookWrapper:
     def wrap(cls , trainer : BaseTrainer):
         key = id(trainer)
         assert not cls.wrapped_records.get(key , False) , f'Hooks already wrapped for {trainer.__class__.__name__}'
-        for hook in trainer.get_all_hooks():
+        for hook in trainer.all_hooks:
             func = getattr(trainer , hook)
             setattr(trainer , f'_raw_{hook}' , func)
             setattr(trainer , hook , cls.wrap_single_hook(trainer , hook , func))
@@ -169,13 +169,13 @@ class BaseTrainer(BasePipeline):
         return BatchData(self.batch_input , self.batch_output)
     @property
     def batch_dates(self) -> np.ndarray: 
-        return self.cached_properties.get('model_start' , 'batch_dates' , lambda: np.concatenate([self.data.early_test_dates , self.data.model_test_dates]))
+        return self.cached_properties.query('model_start' , 'batch_dates' , lambda: np.concatenate([self.data.early_test_dates , self.data.model_test_dates]))
     @property
     def batch_warm_up(self) -> int: 
-        return self.cached_properties.get('model_start' , 'batch_warm_up' , lambda: len(self.data.early_test_dates) if self.status.stage == 'test' else 0)
+        return self.cached_properties.query('model_start' , 'batch_warm_up' , lambda: len(self.data.early_test_dates) if self.status.stage == 'test' else 0)
     @property
     def batch_aftermath(self) -> int: 
-        return self.cached_properties.get('model_start' , 'batch_aftermath' , lambda: len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 100_000_000)
+        return self.cached_properties.query('model_start' , 'batch_aftermath' , lambda: len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 100_000_000)
     @property
     def batch_resumed(self) -> int: 
         if not self.cached_properties.has('model_start' , 'batch_resumed'):
@@ -185,10 +185,10 @@ class BaseTrainer(BasePipeline):
                 self.config.is_resuming and  
                 Const.Model.resume_test and
                 Const.Model.resume_test_start == 'last_pred_date'):
-                value = sum(self.data.model_test_dates <= self.record.resumed_max_pred_date)
+                value = sum(self.data.model_test_dates <= self.config.resumed_max_pred_date)
             else:
                 value = 0
-            self.cached_properties.set_value('model_start' , 'batch_resumed' , value)
+            self.cached_properties.set('model_start' , 'batch_resumed' , value)
         return self.cached_properties.get('model_start' , 'batch_resumed')
 
     @property

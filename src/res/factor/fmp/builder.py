@@ -2,6 +2,7 @@ import itertools
 import numpy as np
 
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
@@ -102,15 +103,9 @@ class PortfolioBuilder:
         dates = self.alpha.available_dates()
         return dates.min() if len(dates) > 0 else 99991231
 
-    @property
+    @cached_property
     def resumed_portfolio_end_date(self) -> int:
-        if not hasattr(self , '_resumed_portfolio_end_date'):
-            self._resumed_portfolio_end_date = -1
-        return self._resumed_portfolio_end_date
-
-    @resumed_portfolio_end_date.setter
-    def resumed_portfolio_end_date(self , value : int):
-        self._resumed_portfolio_end_date = value
+        return -1
 
     @property
     def resume_path_portfolio(self):
@@ -343,11 +338,9 @@ class PortfolioGroupBuilder:
     def category_title(self):
         return category_title(self.category)
     
-    @property
+    @cached_property
     def port_name_nchar(self):
-        if not hasattr(self , '_port_name_nchar'):
-            self._port_name_nchar = np.max([len(builder.full_name) for builder in self.builders])
-        return self._port_name_nchar
+        return np.max([len(builder.full_name) for builder in self.builders])
 
     def build(self):
         self.builders_info()

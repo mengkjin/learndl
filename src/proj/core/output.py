@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime
+from functools import cached_property
 from typing import Any
 
 from .silence import Silence
@@ -78,15 +79,9 @@ class FormatStr(str):
             cls._empty = cls()
         return cls._empty
 
-    @property
+    @cached_property
     def level_prefix(self) -> FormatStr | None:
-        if not hasattr(self , '_level_prefix') or self._level_prefix is None:
-            return None
-        return self._level_prefix
-
-    @level_prefix.setter
-    def level_prefix(self , value : FormatStr | None):
-        self._level_prefix = value
+        return None
 
     @classmethod
     def indent_str(cls , indent : int = 0) -> str:

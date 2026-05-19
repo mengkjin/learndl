@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import re
 from dataclasses import dataclass
+from functools import cached_property
 from deap import gp , creator , tools , base
 from deap.algorithms import varAnd
 from typing import Any , Literal , Sequence , Callable
@@ -29,9 +30,9 @@ class BaseIndividual(gp.PrimitiveTree):
     def __repr__(self):
         return f'BaseIndividual(syntax={self.syntax}, purified={self.purified}, metrics={self.metrics}, fit_value={self.fit_value})'
 
-    @property
+    @cached_property
     def purified(self) -> bool:
-        return getattr(self , '_purified' , False)
+        return False
 
     def prune(self):
         Ipos = [re.match(prim.name , r'^_I_[0-9]+_$') for prim in self]
@@ -57,13 +58,16 @@ class BaseIndividual(gp.PrimitiveTree):
     def change_state(self , direction : Literal['purify' , 'revert']):
         if self.purified == (direction == 'purify'):
             return self
-        new_syntax = self.pure_syntax if direction == 'purify' else self.raw_syntax
+        if direction == 'purify':
+            new_syntax = self.pure_syntax
+        else:
+            new_syntax = self.raw_syntax or self.syntax
         raw_syntax = self.syntax if direction == 'purify' else None
         new_ind    = self.from_string(new_syntax , pset=self.pset_pur if direction == 'purify' else self.pset_raw)
         fit_value  = self.fit_value
         metrics    = self.metrics
         self.__init__([*new_ind])
-        self._purified = direction == 'purify'
+        self.purified = direction == 'purify'
         self.raw_syntax = raw_syntax
         if metrics is not None:
             self.metrics = metrics
@@ -79,15 +83,13 @@ class BaseIndividual(gp.PrimitiveTree):
     def syntax(self) -> str:
         return str(self)
 
-    @property
-    def raw_syntax(self) -> str:
-        if not hasattr(self , '_raw_syntax') or self._raw_syntax is None:
-            return self.syntax
-        return self._raw_syntax
+    @cached_property
+    def raw_syntax(self) -> str | None:
+        return None
 
-    @raw_syntax.setter
-    def raw_syntax(self , value : str | None):
-        self._raw_syntax = value
+    @property
+    def pure_syntax(self) -> str:
+        return self.trim_syntax(self.syntax)
 
     @property
     def fit_value(self) -> tuple | None:
@@ -115,13 +117,9 @@ class BaseIndividual(gp.PrimitiveTree):
         syntax = re.sub(r'_I_[0-9]+_','',syntax)
         return syntax
 
-    @property
-    def pure_syntax(self) -> str:
-        return self.trim_syntax(self.syntax)
-
     def to_record(self) -> SyntaxRecord:
         self.purify()
-        return SyntaxRecord(self.syntax , self.raw_syntax , self.metrics , self.if_valid , self.fit_value)
+        return SyntaxRecord(self.syntax , self.raw_syntax or self.syntax , self.metrics , self.if_valid , self.fit_value)
 
     @classmethod
     def from_syntax(cls , syntax : str , raw_syntax : str | None = None , 

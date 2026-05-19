@@ -1,6 +1,7 @@
 """Global verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers."""
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any , Literal
 from src.proj.core import stderr , singleton
 
@@ -10,18 +11,22 @@ from .machine import MACHINE
 __all__ = ['Verbosity']
 
 class WithVbLevel:
-    """Context manager: set ``VB.vb_level`` for the block."""
+    """
+    Context manager: set ``VB.vb_level`` for the block.
+    Set temporary per-thread logical level used by ``Logger`` wrappers.
+    """
+        
 
     def __init__(self , vb_level : int | None | Literal['max','min','never','always'] | Any):
         self.VB = Verbosity()
         self.vb_level = self.VB(vb_level)
 
     def __enter__(self):
-        self.VB.set_vb_level(self.vb_level)
+        self.VB.vb_level = self.vb_level
         return self
 
     def __exit__(self , exc_type , exc_value , exc_traceback):
-        self.VB.set_vb_level(None)
+        self.VB.vb_level = None
 
 class WithVB:
     """Context manager: temporarily replace global ``vb`` and restore on exit."""
@@ -81,23 +86,24 @@ class Verbosity:
             raise ValueError(f'Invalid argument type: {type(value)}: {value}')
         return v + add_value
 
+    @cached_property
+    def debug(self):
+        """Debug mode"""
+        return DebugMode()
+
     @property
     def vb(self) -> int:
         """Current global verbosity (clamped to ``min``..``max`` when set)."""
-        if not hasattr(self , '_debug'):
-            self._debug = DebugMode()
-        if self._debug.debug_mode:
+        if self.debug.debug_mode:
             return self.max
         if not hasattr(self , '_vb'):
             self._vb = MACHINE.preference('verbosity' , 'basic/vb' , default = 1)
         return self._vb
 
-    @property
+    @cached_property
     def vb_level(self) -> int | None:
         """Per-context override set by ``WithVbLevel``; ``None`` means use ``vb`` only."""
-        if not hasattr(self , '_vb_level'):
-            self._vb_level = None
-        return self._vb_level
+        return None
 
     def set_vb(self , value : int | None = None):
         """Persist new global ``vb``; no-op if ``value`` is ``None``."""
@@ -110,10 +116,6 @@ class Verbosity:
         else:
             stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
         self._vb = value
-
-    def set_vb_level(self , value : int | None = None):
-        """Set temporary per-thread logical level used by ``Logger`` wrappers."""
-        self._vb_level = value
 
     def ignore(self , vb_level : int | Literal['max','min','never','always'] | Any = 1):
         """Return True if output at ``vb_level`` should be suppressed given current ``vb``."""

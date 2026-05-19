@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import Literal
 
 from src.proj import CALENDAR , singleton
@@ -62,16 +63,9 @@ class _pead_calculator:
             self.calc_ann_cal()
             self.calc_pead_quotes()
     
-    @property
+    @cached_property
     def date(self):
-        if not hasattr(self , '_date'):
-            return -1
-        else:
-            return self._date
-
-    @date.setter
-    def date(self , date : int):
-        self._date = date
+        return -1
 
     def calc_ann_cal(self):
         ann_cal = get_profit_ann_dt(self.date).set_index(['date','secid'])

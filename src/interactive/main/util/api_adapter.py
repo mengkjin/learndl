@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import cached_property
 from typing import Any
 
 import streamlit as st
@@ -116,6 +117,7 @@ class stAPIEndpointList:
             return full_list.filter(needle)
         return full_list
 
+    @cached_property
     def sac_tree_items(self) -> list:
         """get the sac (streamlit ant design) tree items for the api endpoint list"""
         grouped: dict[str, list[stAPIEndpoint]] = defaultdict(list)
@@ -134,8 +136,21 @@ class stAPIEndpointList:
                     "disabled": True ,
                 }
             )
-        self._sac_tree_items = items
-        return self._sac_tree_items
+        return items
+
+    @cached_property
+    def sac_tree_options(self) -> list[str]:
+        """get the sac (streamlit ant design) tree options for the api endpoint list"""
+        return self._preorder_tree_options(self.sac_tree_items)
+
+    @property
+    def first_option(self) -> str | None:
+        """get the first option for the api endpoint list (except the group), to be selected by default"""
+        options = self.sac_tree_options
+        for option in options:
+            if option and not option.startswith('__group__/'):
+                return option
+        return None
 
     @classmethod
     def _preorder_tree_options(cls , items: list[dict[str, Any]]) -> list[str]:
@@ -147,22 +162,6 @@ class stAPIEndpointList:
                 if isinstance(ch , dict):
                     labels.extend(cls._preorder_tree_options([ch]))
         return labels
-
-    def sac_tree_options(self) -> list[str]:
-        """get the sac (streamlit ant design) tree options for the api endpoint list"""
-        if not hasattr(self , "_sac_tree_options"):
-            self.sac_tree_items()
-        self._sac_tree_options = self._preorder_tree_options(self._sac_tree_items)
-        return self._sac_tree_options
-
-    @property
-    def first_option(self) -> str | None:
-        """get the first option for the api endpoint list (except the group), to be selected by default"""
-        options = self.sac_tree_options()
-        for option in options:
-            if option and not option.startswith('__group__/'):
-                return option
-        return None
 
     def filter(self , needle: str) -> stAPIEndpointList:
         """filter the api endpoint list by needle"""
@@ -215,8 +214,8 @@ def show_api_browser() -> stAPIEndpoint | None:
                     st.info("No exposed API endpoints found (check ``expose: true`` in contracts).")
                     return
 
-                tree_items = endpoints.sac_tree_items()
-                tree_options = endpoints.sac_tree_options()
+                tree_items = endpoints.sac_tree_items
+                tree_options = endpoints.sac_tree_options
                 first_option = endpoints.first_option
                 if first_option is None:
                     st.warning("No selectable API leaves in tree.")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from functools import cached_property
 from pathlib import Path
 
 from src.proj import Logger , DB , PATH , Const , CALENDAR
@@ -28,18 +29,12 @@ class PredRecorder(TrainerPipeline):
         """unique index for each prediction batch"""
         return f'{self.model_num}.{self.model_date}.{self.model_submodel}.{self.batch_idx}'
 
-    @property
+    @cached_property
     def pred_dict(self) -> dict[str,pd.DataFrame]:
         """stored predictions for each batch"""
-        if not hasattr(self , '_preds_dict'):
-            self._preds_dict = {}
-        return self._preds_dict
+        return {}
 
-    @pred_dict.setter
-    def pred_dict(self , value : dict[str,pd.DataFrame]):
-        self._preds_dict = value
-
-    @property
+    @cached_property
     def resumed_models(self) -> pd.DataFrame:
         """
         Resumed models in testing, these models are finished and will not be loaded and tested again. 
@@ -47,29 +42,7 @@ class PredRecorder(TrainerPipeline):
 
         The dataframe is the same for both scenarios of resuming testing from last pred date and last model date.
         """
-        if not hasattr(self , '_resumed_models'):
-            self._resumed_models = pd.DataFrame(columns = ['model_num' , 'model_date'])
-        return self._resumed_models
-
-    @resumed_models.setter
-    def resumed_models(self , value : pd.DataFrame):
-        self._resumed_models = value
-
-    @property
-    def resumed_max_pred_date(self) -> int:
-        """
-        Resumed maximum predicted date for resumed testing. if not set, will be 19000101.
-        Before this date, the predictions will not be tested again, but the model might be loaded to test dates before this date.
-        
-        In scenario of resuming testing from last pred date, this date is min(last predicted date, date before min(missing pred dates)).
-        In scenario of resuming testing from last model date, this date is max(predicted dates of all models before last model date).
-        """
-        return self.config.resumed_max_pred_date
-
-    @resumed_max_pred_date.setter
-    def resumed_max_pred_date(self , value : int):
-        self.config.set_value('resumed_max_pred_date' , int(value))
-
+        return pd.DataFrame(columns = ['model_num' , 'model_date'])
     @property
     def snap_folder(self) -> Path: 
         """folder to save model predictions"""
@@ -194,12 +167,10 @@ class PredRecorder(TrainerPipeline):
         except Exception:
             return np.array([] , dtype=int)
 
-    @property
+    @cached_property
     def retrained_models(self) -> list[tuple[int,int]]:
         """retrained models for resumed testing , must be tested"""
-        if not hasattr(self , '_retrained_models'):
-            self._retrained_models = []
-        return self._retrained_models
+        return []
 
     @classmethod
     def empty_preds(cls) -> pd.DataFrame:
@@ -212,15 +183,9 @@ class PredRecorder(TrainerPipeline):
         """
         self.retrained_models.append((self.model_date , self.model_num))
 
-    @property
+    @cached_property
     def has_purged_preds(self) -> bool:
-        if not hasattr(self , '_has_purged_preds'):
-            self._has_purged_preds = False
-        return self._has_purged_preds
-
-    @has_purged_preds.setter
-    def has_purged_preds(self , value : bool):
-        self._has_purged_preds = value
+        return False
 
     def purge_retrained_model_preds(self):
         """purge past predictions when trained new models"""
@@ -305,14 +270,14 @@ class PredRecorder(TrainerPipeline):
         pred_records = self.pred_records().query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
         if pred_records.empty:
             self.resume_info = f', no saved preds found'
-            self.resumed_max_pred_date = 19000101
+            self.config.resumed_max_pred_date = 19000101
             return
 
         closest_model_date = pred_records.groupby('model_num')['model_date'].max().min() # noqa: F841
         min_pred_date = pred_records.groupby('model_num')['min_pred_date'].min().max()
         if self.min_test_date < CALENDAR.td(min_pred_date , -5): # leave 5 days buffer for resume testing model
             self.resume_info = f', but new test start {self.min_test_date} is too many days earlier than saved preds {min_pred_date}, forfeiting resume preds'
-            self.resumed_max_pred_date = 19000101
+            self.config.resumed_max_pred_date = 19000101
             return
  
         missing_dates = CALENDAR.slice(self.get_missing_pred_dates() , self.min_test_date , self.max_test_date)
@@ -329,11 +294,11 @@ class PredRecorder(TrainerPipeline):
         if Const.Model.resume_test_start == 'last_model_date':
             if not prev_models.empty:
                 max_pred_date = min(max_pred_date , prev_models['max_pred_date'].max())
-            self.resumed_max_pred_date = max_pred_date
-            self.resume_info = f', recognize past saved preds before model date {self.resumed_models["model_date"].max()} and prediction date {self.resumed_max_pred_date}'
+            self.config.resumed_max_pred_date = max_pred_date
+            self.resume_info = f', recognize past saved preds before model date {self.resumed_models["model_date"].max()} and prediction date {self.config.resumed_max_pred_date}'
         elif Const.Model.resume_test_start == 'last_pred_date':
-            self.resumed_max_pred_date = max_pred_date
-            self.resume_info = f', recognize past saved preds before prediction date {self.resumed_max_pred_date}'
+            self.config.resumed_max_pred_date = max_pred_date
+            self.resume_info = f', recognize past saved preds before prediction date {self.config.resumed_max_pred_date}'
     
     def append_batch_preds(self):
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 

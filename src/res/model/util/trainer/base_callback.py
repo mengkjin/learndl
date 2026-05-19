@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cached_property
 from inspect import currentframe
 
 from src.proj import Proj
@@ -29,11 +30,9 @@ class BaseCallBack(TrainerPipeline):
         info = ','.join([f'{k}={v}' for k,v in args.items()])
         return self.__class__.__name__ , info , self.__class__.__doc__ or ''
 
-    @property
+    @cached_property
     def hook_stack(self) -> list[str]:
-        if not hasattr(self , '_hook_stack'):
-            self._hook_stack = []
-        return self._hook_stack
+        return []
 
     def __enter__(self): 
         self.hook_stack.append(self.trace_hook_name())

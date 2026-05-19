@@ -3,14 +3,16 @@ from __future__ import annotations
 import sys , re , platform , warnings , shutil
 import pandas as pd
 
-from typing import Any ,Literal , IO , Union , Callable
 from abc import ABC, abstractmethod
-from io import StringIO , TextIOWrapper
-from pathlib import Path
 from dataclasses import dataclass , field
 from datetime import datetime
+from functools import cached_property
+from io import StringIO , TextIOWrapper
 from matplotlib.figure import Figure
+from pathlib import Path
 from string import Template
+from typing import Any ,Literal , IO , Union , Callable
+
 
 from src.proj.env import PATH , MACHINE , Proj
 from src.proj.core import Duration , str_to_html , dataframe_to_html , figure_to_html , strPath
@@ -173,24 +175,15 @@ class OutputCatcher(ABC):
         """Get the contents of the output catcher"""
         ...
 
-    @property
+    @cached_property
     def contents(self) -> Any:
         """Get the contents of the output catcher"""
-        if not hasattr(self , '_contents'):
-            self._contents = self.get_contents()
-        return self._contents
+        return self.get_contents()
 
-    @contents.setter
-    def contents(self, value : Any) -> None:
-        """Override cached contents (e.g. after context exit)."""
-        self._contents = value
-
-    @property
+    @cached_property
     def export_file_list(self) -> list[Path]:
         """Get the export file list, usually the default path and the user provided path"""
-        if not hasattr(self , '_export_file_list'):
-            self._export_file_list : list[Path] = []
-        return self._export_file_list
+        return []
 
     def set_export_files(self , export_file_list : list[strPath] | strPath | None = None):
         """Replace export targets with normalized ``Path`` list."""
@@ -516,28 +509,26 @@ class HtmlCatcher(OutputCatcher):
         return True
     
     def __repr__(self):
-        return f"{self.__class__.__name__}(title={self.title},primary={self.is_primary})"
+        return f"{self.__class__.__name__}(title={self.full_title},primary={self.is_primary})"
+
+    @cached_property
+    def title(self) -> str | None:
+        """Get the export file list of the catcher"""
+        return None
 
     @property
-    def title(self) -> str:
-        """Get the export file list of the catcher"""
-        if not hasattr(self , '_title'):
-            self._title = None
-        title = self._title if self._title else 'html_catcher'
+    def full_title(self) -> str:
+        """Get the full title of the catcher"""
+        title = self.title or 'html_catcher'
         if self.add_time_to_title:
             time_str = self.init_time.strftime("%Y%m%d%H%M%S")
             title = f'{title} at {time_str}'
         return title
 
-    @title.setter
-    def title(self , value : str | None):
-        """Set the title of the catcher"""
-        self._title = value
-
     @property
     def filename(self) -> str:
         """Get the filename of the catcher"""
-        return f'{self.title.replace(" " , "_")}.html'
+        return f'{self.full_title.replace(" " , "_")}.html'
 
     @property
     def is_running(self):
@@ -549,18 +540,10 @@ class HtmlCatcher(OutputCatcher):
         """Check if the catcher is the primary instance"""
         return self.__class__.PrimaryInstance is self
 
-    @property
+    @cached_property
     def start_point(self) -> int | None:
         """Get the start point of output index in the primary instance's output list"""
-        if not hasattr(self , '_start_point'):
-            self._start_point = None
-        return self._start_point
-
-    @start_point.setter
-    def start_point(self , value : int):
-        """Set the start point of output index in the primary instance's output list"""
-        assert not self.is_primary , f"Start point can only be set for secondary instances"
-        self._start_point = value
+        return None
 
     def set_attrs(self , title : str | None = None , category : str | None = None):
         """
@@ -674,7 +657,7 @@ class HtmlCatcher(OutputCatcher):
        
     def html_head(self) -> str:
         """Generate the html head , including the styles of the html file, and basic information of the catcher"""
-        title = self.title.title()
+        title = self.full_title.title()
         
         key_width = 80
         if self.kwargs:
@@ -815,26 +798,24 @@ class MarkdownCatcher(OutputCatcher):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(title={self.title})'
 
-    @property
-    def title(self) -> str:
+    @cached_property
+    def title(self) -> str | None:
         """Get the export file list of the catcher"""
-        if not hasattr(self , '_title'):
-            self._title = None
-        title = self._title if self._title else 'markdown_catcher'
+        return None
+
+    @cached_property
+    def full_title(self) -> str:
+        """Get the full title of the catcher"""
+        title = self.title or 'markdown_catcher'
         if self.add_time_to_title:
             time_str = self.init_time.strftime("%Y%m%d%H%M%S")
             title = f'{title} at {time_str}'
         return title
 
-    @title.setter
-    def title(self , value : str | None):
-        """Set the title of the catcher"""
-        self._title = value
-
     @property
     def filename(self) -> str:
         """Get the filename of the catcher"""
-        return f'{self.title.replace(" " , "_")}.md'
+        return f'{self.full_title.replace(" " , "_")}.md'
 
     def __enter__(self):
         self.start_time = datetime.now()
@@ -873,7 +854,7 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file = open(self.running_filename, 'w', encoding='utf-8')
         self.markdown_writer = MarkdownWriter(self.markdown_file, self.seperating_by)
 
-        self.markdown_writer.header(self.title)
+        self.markdown_writer.header(self.full_title)
 
     def close_markdown_file(self):
         """generate the markdown footer , including the finish time, duration, and stats of the catcher, then flush and close the file"""

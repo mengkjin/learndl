@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import gc , torch
 
+from functools import cached_property
 from typing import Any , Literal , Callable
 
 from src.proj import Logger , CALENDAR , Const, MACHINE
@@ -259,11 +260,9 @@ class DataModule(BaseModule):
     def extract_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['extract'] , self , tqdm = False , desc = 'Extract')
 
-    @property
+    @cached_property
     def data_callbacks(self) -> DataCallbacks:
-        if not hasattr(self , '_data_callbacks'):
-            self._data_callbacks = DataCallbacks()
-        return self._data_callbacks
+        return DataCallbacks()
     def register_callbacks(self , hook_name : str , *callbacks : Callable):
         self.data_callbacks.register_callbacks(hook_name , *callbacks)
     def on_before_batch_transfer(self , batch : BatchInput) -> BatchInput: 
@@ -301,9 +300,11 @@ class DataModule(BaseModule):
                 }).dropna())
         return pd.concat(labels)
 
+    @cached_property
+    def labels_np(self) -> np.ndarray:
+        return self.labels.cpu().numpy()
+
     def label_of_date(self , date : int) -> np.ndarray:
-        if not hasattr(self , 'labels_np'):
-            self.labels_np = self.labels.cpu().numpy()
         return self.labels_np[:,self.datas.y.date == date][...,0].squeeze()
 
     def valid_position(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
@@ -377,13 +378,13 @@ class DataModule(BaseModule):
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
         return self.loader_param.stage
 
-    @property
+    @cached_property
     def storage(self):
-        return self.cached_properties.get('data_module' , 'storage' , lambda: TorchFileStorage(self.config.mem_storage))
+        return TorchFileStorage(self.config.mem_storage)
 
-    @property
+    @cached_property
     def buffer(self):
-        return self.cached_properties.get('data_module' , 'buffer' , lambda: DynamicDataBuffer(self.config.device))
+        return DynamicDataBuffer(self.config.device)
 
     @property
     def is_fitting(self): 

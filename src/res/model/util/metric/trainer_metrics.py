@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 
+from functools import cached_property
 from torch import nn
 from typing import Any , Callable , Literal
 
@@ -93,20 +94,15 @@ class TrainerMetrics(TrainerPipeline):
     @property
     def which_label(self) -> int | list[int] | None: 
         return self.model_param.get('which_label' , None)
-    @property
+    @cached_property
     def ignore_loss(self) -> list[str]:
-        if not hasattr(self , '_ignore_loss'):
-            self._ignore_loss = []
-            if (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors' , False):
-                self._ignore_loss.extend(['hidden_corr' , 'hidden_corr_deprecated'])
-        return self._ignore_loss
-
-    @property
+        ignore_loss = []
+        if (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors' , False):
+            ignore_loss.extend(['hidden_corr' , 'hidden_corr_deprecated'])
+        return ignore_loss
+    @cached_property
     def ignore_accuracy(self) -> list[str]:
-        if not hasattr(self , '_ignore_accuracy'):
-            self._ignore_accuracy = []
-        return self._ignore_accuracy
-
+        return []
     def calculate(self , dataset : Literal['train','valid','test','predict'] , batch_key : Any , batch_data : BatchData):
         '''Calculate loss(with gradient), penalty , accuracy'''
         if dataset not in ['train' , 'valid' , 'test']:

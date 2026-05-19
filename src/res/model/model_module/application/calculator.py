@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import Any
 
 from src.proj import Proj , CALENDAR
@@ -28,16 +29,10 @@ class ModelCalculator:
     def __call__(self , date : int , model_num : int = 0 , model_submodel : str = 'best'):
         return self.calculate(date , model_num , model_submodel)
 
-    @property
+    @cached_property
     def model_keys(self) -> tuple[int , int , str]:
         """model_num , model_date , model_submodel of the current model"""
-        if not hasattr(self , '_model_keys'):
-            self._model_keys = (-1 , -1 , 'best')
-        return self._model_keys
-
-    @model_keys.setter
-    def model_keys(self , value : tuple[int , int , str]):
-        self._model_keys = value
+        return (-1 , -1 , 'best')
 
     def _get_model_date(self , date : int) -> int:
         """get the closest model date before the query date"""

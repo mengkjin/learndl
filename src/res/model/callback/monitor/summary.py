@@ -1,9 +1,11 @@
 import torch
 import shutil
 
-from torch import nn
+
 from datetime import datetime
+from functools import cached_property
 from typing import Any
+from torch import nn
 from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 
 from src.proj import LogFile , Duration , Proj , PATH
@@ -77,12 +79,10 @@ class SummaryWriter(BaseCallBack):
     def batch_idx(self) -> int:
         return self.trainer.batch_idx
 
-    @property
+    @cached_property
     def writer(self):
-        if not hasattr(self , '_writer') or self._writer is None:
-            model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.attempt_key}'
-            self._writer = TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
-        return self._writer
+        model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.attempt_key}'
+        return TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
 
     @property
     def step_epoch(self) -> int:
@@ -99,7 +99,7 @@ class SummaryWriter(BaseCallBack):
         return [(name , param) for name , param in net.named_parameters()]
 
     def reset_writer(self):
-        self._writer = None
+        del self.writer
 
     def add_metrics(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']

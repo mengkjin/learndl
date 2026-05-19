@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import shutil
 from datetime import datetime , timedelta
+from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
@@ -115,11 +116,9 @@ class ModelPath:
     def root_path(self) -> Path:
         return self.base.parent
 
-    @property
+    @cached_property
     def log_file(self) -> LogFile:
-        if not hasattr(self , '_log_file'):
-            self._log_file = LogFile.initialize('model' , 'operation' , f'{self.full_name}')
-        return self._log_file
+        return LogFile.initialize('model' , 'operation' , f'{self.full_name}')
 
     @property
     def is_resumable(self) -> bool:

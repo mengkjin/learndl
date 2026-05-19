@@ -12,6 +12,7 @@ import tushare as ts
 import numpy as np
 import pandas as pd
 
+from functools import cached_property
 from typing import Literal , Callable , TypeVar
 from src.proj import CALENDAR , MACHINE
 from src.data.util import secid_adjust
@@ -39,17 +40,13 @@ class TushareUtils:
     def token(self):
         return MACHINE.secret.get('accounts' , 'tushare/token')
 
-    @property
+    @cached_property
     def api(self):
-        if not hasattr(self , '_pro'):
-            self._pro = ts.pro_api(self.token)
-        return self._pro
+        return ts.pro_api(self.token)
 
-    @property
+    @cached_property
     def lock(self) -> threading.Lock:
-        if not hasattr(self , '_lock'):
-            self._lock = threading.Lock()
-        return self._lock
+        return threading.Lock()
 
     def locked(self , func : Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
@@ -58,16 +55,10 @@ class TushareUtils:
                 return func(*args, **kwargs)
         return wrapper
 
-    @property
-    def server_down(self):
-        if not hasattr(self , '_server_down'):
-            self._server_down = _server_down
-        return self._server_down
+    @cached_property
+    def server_down(self) -> bool:
+        return _server_down
 
-    @server_down.setter
-    def server_down(self , value: bool):
-        self._server_down = value
-        
     def get_api(self):
         return ts.pro_api(self.token)
 

@@ -12,6 +12,7 @@ import asyncio
 import random
 from curl_cffi import requests
 from datetime import datetime
+from functools import cached_property
 from typing import Any , Literal
 from urllib.parse import urlencode
 from abc import ABC, abstractmethod
@@ -75,11 +76,9 @@ class FetcherTask:
     def should_be_skipped(self) -> bool:
         return self.exporter.should_skip_download(self.start, self.end, redownload=self.redownload)
 
-    @property
+    @cached_property
     def proxy_pool(self):
-        if not hasattr(self, '_proxy_pool'):
-            self._proxy_pool = ProxyAPI.get_proxy_pool(URL_KEYS)
-        return self._proxy_pool
+        return ProxyAPI.get_proxy_pool(URL_KEYS)
 
     def fetch_date(self, proxy: str | None) -> list[Announcement] | Exception:
         fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, proxy)
@@ -197,15 +196,9 @@ class AnnoucementFetcher(ABC):
         self.session = http_session(proxy=self.proxy , trust_env = self.proxy is None)
         return self.session
 
-    @property
+    @cached_property
     def session(self) -> requests.Session:
-        if not hasattr(self, '_session'):
-            self._session = self.init_session()
-        return self._session
-
-    @session.setter
-    def session(self, session: requests.Session):   
-        self._session = session
+        return http_session(proxy=self.proxy , trust_env = self.proxy is None)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.proxy})"
@@ -256,15 +249,9 @@ class AsyncAnnoucementFetcher(ABC):
         self.session = async_http_session(proxy=self.proxy , trust_env=self.proxy is None)
         return self.session
 
-    @property
+    @cached_property
     def session(self) -> requests.AsyncSession:
-        if not hasattr(self, '_session'):
-            self._session = self.init_session()
-        return self._session
-
-    @session.setter
-    def session(self, session: requests.AsyncSession):
-        self._session = session
+        return async_http_session(proxy=self.proxy , trust_env=self.proxy is None)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.proxy})"

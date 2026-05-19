@@ -2,6 +2,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
+from functools import cached_property
 from typing import Any , Iterable
 
 from src.proj import Logger , CALENDAR , Dates , Proj
@@ -23,17 +24,13 @@ class ModelPortfolioBuilder:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.reg_model})'
 
-    @property
+    @cached_property
     def updated_fmp_dates(self) -> list[Any]:
-        if not hasattr(self , '_updated_fmp_dates'):
-            self._updated_fmp_dates = []
-        return self._updated_fmp_dates
+        return []
 
-    @property
+    @cached_property
     def updated_account_dates(self) -> list[Any]:
-        if not hasattr(self , '_updated_account_dates'):
-            self._updated_account_dates = []
-        return self._updated_account_dates
+        return []
     
     def pred_factor(self , dates : int | list[int] | np.ndarray):
         dates = [dates] if not isinstance(dates , Iterable) else dates

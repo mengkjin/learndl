@@ -24,7 +24,7 @@ import torch
 import numpy as np
 
 from copy import deepcopy
-from functools import partial
+from functools import partial , cached_property
 from typing import Any , Literal
 
 from src.proj import Logger , Proj , CALENDAR , Dates
@@ -97,29 +97,23 @@ class ModuleData:
     @property
     def PrePros(self):
         """Lazy accessor for the ``PrePros`` registry (avoids circular imports at module load)."""
-        if not hasattr(self , '_prepros'):
-            from src.data.preprocess import PrePros
-            self._prepros = PrePros
-        return self._prepros
+        from src.data.preprocess import PrePros
+        return PrePros
 
     @property
     def load_keys(self):
         """All block keys to be loaded: ``['y', *data_type_list]``."""
         return ['y' , *self.data_type_list]
 
-    @property
+    @cached_property
     def x(self) -> dict[str,DataBlock]:
         """All blocks except ``'y'`` (the feature/input blocks)."""
-        if not hasattr(self , '_x') or self._x is None:
-            self._x = {key:value for key,value in self.blocks.items() if key != 'y'}
-        return self._x
+        return {key:value for key,value in self.blocks.items() if key != 'y'}
 
-    @property
+    @cached_property
     def y(self) -> DataBlock:
         """The label block, feature-aligned to ``y_labels``."""
-        if not hasattr(self , '_y') or self._y is None:
-            self._y = self.blocks['y'].align_feature(self.y_labels)
-        return self._y
+        return self.blocks['y'].align_feature(self.y_labels)
 
     @property
     def empty_x(self):
@@ -146,12 +140,10 @@ class ModuleData:
         """True when disk caching is active (``use_data`` is ``'fit'``/``'both'`` and cache key exists)."""
         return bool(self.datacache) # and self.use_data in ['fit' , 'both'] 
 
-    @property
+    @cached_property
     def loaded(self):
         """True after ``load()`` has been called successfully."""
-        if not hasattr(self , '_loaded'):
-            self._loaded = False
-        return self._loaded
+        return False
 
     @property
     def block_title(self):
@@ -201,8 +193,8 @@ class ModuleData:
         return self
 
     def init_data(self):
-        self._x = None
-        self._y = None
+        self.__dict__.pop('x', None)
+        self.__dict__.pop('y', None)
         self.blocks = {}
         self.norms = {}
         return self

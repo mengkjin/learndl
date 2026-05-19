@@ -73,14 +73,11 @@ class PredictorModel(TrainerPipeline):
     def model_param(self): return self.config.model_param[self.model_num]
     @property
     def complete_model_param(self) -> dict[str,Any]:
-        if not hasattr(self , '_complete_model_param') or self._complete_model_param is None:
-            return self.model_param
-        else:
-            return self._complete_model_param
+        param = self.cached_properties.query('complete_model_param' , lambda: None)
+        return self.model_param if param is None else param
     @complete_model_param.setter
     def complete_model_param(self , value : dict[str,Any] | None):
-        self._complete_model_param : dict[str,Any] | None = value
-    
+        self.cached_properties.set('complete_model_param' , value)    
     def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
         if model_num is not None: 

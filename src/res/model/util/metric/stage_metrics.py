@@ -31,37 +31,12 @@ class BatchMetrics:
     def __init__(self , aggregator : MetricAggregator) -> None:
         self.aggregator = aggregator
         self.metrics : dict[str,Any] = {}
+        self.initiated = False
+        self.collected = False
+        self.key = {}
 
     def __repr__(self):
         return f'{self.__class__.__name__}(key={self.key},accuracies={self.accuracies},losses={self.losses})'
-
-    @property
-    def initiated(self) -> bool:
-        if not hasattr(self , '_initiated'):
-            self._initiated = False
-        return self._initiated
-
-    @property
-    def collected(self) -> bool:
-        if not hasattr(self , '_collected'):
-            self._collected = False
-        return self._collected
-
-    @property
-    def key(self) -> dict[str,Any]:
-        if not hasattr(self , '_key'):
-            self._key = {}
-        return self._key
-
-    def set_initiated(self , initiated : bool):
-        self._initiated = initiated
-
-    def set_collected(self , collected : bool):
-        self._collected = collected
-
-    def set_key(self , key : dict[str,Any]):
-        self.key.clear()
-        self.key.update(key)
 
     def set_metrics(self , key : Literal['accuracies' , 'losses' , 'rankic' , 'total_loss' , 'total_accuracy' , 'total_loss_item' , 'loss_weights'] , metrics : Any):
         match key:
@@ -90,9 +65,9 @@ class BatchMetrics:
 
     def new(self , batch_key : Any = None , **kwargs):
         assert not self.initiated , f'{self} is already initiated , please call close() first'
-        self.set_initiated(True)
-        self.set_collected(False)
-        self.set_key({'batch':batch_key})
+        self.initiated = True
+        self.collected = False
+        self.key = {'batch':batch_key}
         self.reset_metrics(['total_loss' , 'total_accuracy' , 'total_loss_item'])
 
     def set_values(self , losses : dict[str,Tensor] , accuracies : dict[str,float] , rankic : Tensor):
@@ -102,11 +77,11 @@ class BatchMetrics:
         self.set_metrics('rankic' , rankic)
 
     def collect(self):
-        self.set_collected(True)
+        self.collected = True
 
     def close(self):
         assert self.collected , f'{self} is not collected before closing, please be appended to some metrics first'
-        self.set_initiated(False)
+        self.initiated = False
         self.reset_metrics(['total_loss' , 'total_accuracy'])
 
     @property
@@ -175,35 +150,17 @@ class AggregatedMetrics:
         self.indices : dict[str,list[str|Any]] = defaultdict(list)
         self.tables : dict[str,list[pd.DataFrame]] = defaultdict(list)
         self.collected_tables : dict[str,pd.DataFrame] = {}
+        self.initiated = False
+        self.collected = False
+        self.key = {}
     def __repr__(self):
         return f'{self.__class__.__name__}(key={self.key},tables={self.tables.keys()})'
-    @property
-    def initiated(self) -> bool:
-        if not hasattr(self , '_initiated'):
-            self._initiated = False
-        return self._initiated
-    @property
-    def collected(self) -> bool:
-        if not hasattr(self , '_collected'):
-            self._collected = False
-        return self._collected
-    @property
-    def key(self) -> dict[str,Any]:
-        if not hasattr(self , '_key'):
-            self._key = {}
-        return self._key
-    def set_initiated(self , initiated : bool):
-        self._initiated = initiated
-    def set_collected(self , collected : bool):
-        self._collected = collected
-    def set_key(self , key : dict[str,Any]):
-        self.key.clear()
-        self.key.update(key)
+
     def new(self , **kwargs):
         assert not self.initiated , f'{self} is already initiated , please call close() first'
-        self.set_initiated(True)
-        self.set_collected(False)
-        self.set_key(kwargs)
+        self.initiated = True
+        self.collected = False
+        self.key = kwargs
         self.indices.clear()
         self.tables.clear()
         self.collected_tables.clear()
@@ -217,11 +174,11 @@ class AggregatedMetrics:
     def collect(self):
         for name in self.tables:
             self.collected_tables[name] = self.get_table(name)
-        self.set_collected(True)
+        self.collected = True
         
     def close(self):
         assert self.collected , f'{self} is not collected before closing, please be appended to some metrics first'
-        self.set_initiated(False)
+        self.initiated = False
 
     def get_table(self , name : str) -> pd.DataFrame:
         if name in self.collected_tables:
@@ -252,7 +209,7 @@ class EpochMetrics(AggregatedMetrics):
             self.collected_tables[name] = self.get_table(name)
         for name in ['accuracies' , 'losses' , 'weights' , 'totals']:
             self.collected_tables[f'epoch_{name}'] = self.get_epoch_table(name)
-        self.set_collected(True)
+        self.collected = True
 
     def get_epoch_table(self , name : Literal['accuracies' , 'losses' , 'weights' , 'totals'] | str) -> pd.DataFrame:
         if f'epoch_{name}' in self.collected_tables:

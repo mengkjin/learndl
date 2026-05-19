@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 
+from functools import cached_property
 from typing import Any , ClassVar , Literal
 
 from src.proj import MACHINE , Logger , Proj , CALENDAR
@@ -38,27 +39,17 @@ class ModelPredictor:
             self.predict_dates([date])
         return self.cached_df.query('date == @date')
 
-    @property
+    @cached_property
     def cached_df(self) -> pd.DataFrame:
-        if not hasattr(self , '_cached_df'):
-            self._cached_df = pd.DataFrame()
-        return self._cached_df
+        return pd.DataFrame()
 
-    @cached_df.setter
-    def cached_df(self , value : pd.DataFrame):
-        self._cached_df = value
-
-    @property
+    @cached_property
     def current_update_dates(self) -> list[Any]:
-        if not hasattr(self , '_current_update_dates'):
-            self._current_update_dates = []
-        return self._current_update_dates
+        return []
 
-    @property
+    @cached_property
     def current_deploy_dates(self) -> list[Any]:
-        if not hasattr(self , '_current_deploy_dates'):
-            self._current_deploy_dates = []
-        return self._current_deploy_dates
+        return []
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None):
         '''get update dates and predict these dates'''

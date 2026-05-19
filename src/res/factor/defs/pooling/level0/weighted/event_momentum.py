@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from functools import cached_property
 from typing import Literal , Any
 
 from src.proj import CALENDAR
@@ -268,13 +269,11 @@ class MarketEventMomentumFactorWeight:
     def factor_weight_full(self):
         return self.event_factor_weight.full_weights
 
-    def eval_event_signal(self):
-        self.event_signal = EventSignal().eval()
-        return self
+    @cached_property
+    def event_signal(self):
+        return EventSignal().eval()
         
     def eval_event_perf(self , start : int , end : int):
-        if not hasattr(self , 'event_signal'):
-            self.eval_event_signal()
         relative_dates = self.event_signal.relative_dates(start , end)
         dfs = [sfactor.eval_grp_perf(relative_dates , self.event_signal , excess = True).grp_perf for sfactor in self.factors.values()]
         self.event_perf = pd.concat(dfs).reset_index(drop = True)

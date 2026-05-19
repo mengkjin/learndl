@@ -11,6 +11,7 @@ import os, random, torch
 import numpy as np
 
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Type
 
@@ -96,7 +97,7 @@ class ScheduleConfig:
         path = cls.find_path(None, model_name)
         return True if path else False
 
-class BaseModelConfig:
+class BaseModelConfig(BaseModule):
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
     REQUIRED_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "required.yaml"))
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
@@ -129,14 +130,6 @@ class BaseModelConfig:
 
     def __setitem__(self, key: str, value: Any):
         self.Param[key] = value
-
-    @property
-    def Param(self):
-        return self._model_param
-
-    @Param.setter
-    def Param(self, value: FlattenDict):
-        self._model_param = value
 
     def resumed_config_param(self) -> FlattenDict | None:
         if (self.base_path and not self.base_path.is_null_model and not self.short_test):
@@ -172,7 +165,7 @@ class BaseModelConfig:
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
             if self.force_module:
-                Logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config")
+                self.alert1(f"force_module [{self.force_module}] is provided, will use it to load config")
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
             assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
@@ -203,12 +196,12 @@ class BaseModelConfig:
         if "env.short_test" in self.override:
             self.Param['env.short_test'] = self.override.pop("env.short_test")
         if self.short_test:
-            Logger.alert1(f'Short test is enabled, will update conditional config' , vb_level = 2)
+            self.alert1(f'Short test is enabled, will update conditional config' , add_vb = 1)
             self.Param.update(self.Param.get("conditional.short_test", {}))
 
         self.Param.update(self.schedule_config.Param)
         if self.model_module == "transformer":
-            Logger.alert1(f'Model module is transformer, will update conditional config' , vb_level = 2)
+            self.alert1(f'Model module is transformer, will update conditional config' , add_vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))
         
         self.Param.update(self.override)
@@ -226,7 +219,7 @@ class BaseModelConfig:
 
         # check short_test is set correctly
         if self.should_be_short_test and not self.short_test:
-            Logger.alert1("Should be at server or short_test, but short_test is False now!")
+            self.alert1("Should be at server or short_test, but short_test is False now!")
 
         # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
@@ -262,7 +255,7 @@ class BaseModelConfig:
 
         redundant_keys = np.setdiff1d(list(self.Param.keys()), list(self.REQUIRED_CONFIG_PARAM.keys()) + list(self.OPTIONAL_CONFIG_PARAM.keys())).tolist()
         if redundant_keys:
-            Logger.alert1(f"{redundant_keys} in config files are not in default config params")
+            self.alert1(f"{redundant_keys} in config files are not in default config params")
 
         return self
 
@@ -289,7 +282,7 @@ class BaseModelConfig:
         return model_name
 
     def generate_algo_config(self):
-        model_param = AlgoConfig(
+        algo_config = AlgoConfig(
             self.base_path,
             start_with_none=self.start_with_none,
             module=self.model_module,
@@ -299,34 +292,16 @@ class BaseModelConfig:
             override={k: v for k, v in self.override.items() if k not in self.Param.keys()},
         ).expand()
         # reversely update specific params in model_param to self.Param
-        self.Param.update(model_param.Param)
-        return model_param
+        self.Param.update(algo_config.Param)
+        return algo_config
 
     @property
-    def base_path(self):
-        return self._base
+    def base_path(self) -> ModelPath:
+        return self.cached_properties.get('base_path')
 
     @base_path.setter
     def base_path(self, value: ModelPath):
-        self._base = value
-
-    @property
-    def full_module_name(self):
-        """get module_type@model_module out of model configs"""
-        if not hasattr(self, "_full_module_name") or self._full_module_name is None:
-            mod_str = str(self["model.module"]).lower().replace(" ", "").replace("/", "@")
-            module_type = model_module_type(mod_str)
-            if mod_str.startswith(f"{module_type}@"):
-                model_module = mod_str.removeprefix(f"{module_type}@")
-            elif mod_str == module_type:
-                model_module = self[f"model.module.{module_type}"]
-                assert model_module, f"model.module.{module_type} is empty!"
-            else:
-                model_module = mod_str
-            assert model_module, f"model_module is empty after parsing for {mod_str}"
-            assert "@" not in model_module, f"model_module {model_module} contains @"
-            self._full_module_name = f"{module_type}@{model_module}"
-        return self._full_module_name
+        self.cached_properties.set('base_path' , value)
 
     @property
     def module_type(self):
@@ -339,7 +314,25 @@ class BaseModelConfig:
     @model_module.setter
     def model_module(self, value: str):
         self["model.module"] = value.lower()
-        self._full_module_name = None
+        self.cached_properties.set('full_module_name' , None)
+
+    @property
+    def full_module_name(self) -> str:
+        """get module_type@model_module out of model configs"""
+        if not self.cached_properties.has('full_module_name') or self.cached_properties.get('full_module_name') is None:
+            mod_str = str(self["model.module"]).lower().replace(" ", "").replace("/", "@")
+            module_type = model_module_type(mod_str)
+            if mod_str.startswith(f"{module_type}@"):
+                model_module = mod_str.removeprefix(f"{module_type}@")
+            elif mod_str == module_type:
+                model_module = self[f"model.module.{module_type}"]
+                assert model_module, f"model.module.{module_type} is empty!"
+            else:
+                model_module = mod_str
+            assert model_module, f"model_module is empty after parsing for {mod_str}"
+            assert "@" not in model_module, f"model_module {model_module} contains @"
+            self.cached_properties.set('full_module_name' , f"{module_type}@{model_module}")
+        return self.cached_properties.get('full_module_name')
 
     @property
     def model_name(self) -> str:
@@ -631,7 +624,7 @@ class BaseModelConfig:
     def gc_collect_each_model(self) -> bool:
         return self.module_type == "nn"
 
-class AlgoConfig:
+class AlgoConfig(BaseModule):
     def __init__(
         self,
         base_path: ModelPath | strPath | None,
@@ -660,11 +653,11 @@ class AlgoConfig:
 
     def load_params(self):
         if self.base_path.is_null_model:
-            self.model_param = get_config_dict(None)
+            self.Param = get_config_dict(None)
         elif self.base_path and not self.start_with_none and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
-            self.model_param = get_config_dict(conf_file)
+            self.Param = get_config_dict(conf_file)
         else:
-            self.model_param = get_config_dict(self.source_conf_file())
+            self.Param = get_config_dict(self.source_conf_file())
         return self
 
     def source_conf_file(self) -> Path:
@@ -675,8 +668,8 @@ class AlgoConfig:
         return path if path.exists() else default_path
 
     def override_params(self):
-        self.model_param.update(self.schedule_config.get(f"algo.{self.model_module}", {}))
-        self.model_param.update(self.override)
+        self.Param.update(self.schedule_config.get(f"algo.{self.model_module}", {}))
+        self.Param.update(self.override)
         return self
 
     def check_validity(self):
@@ -747,20 +740,16 @@ class AlgoConfig:
         return self
 
     @property
-    def base_path(self):
-        return self._base
+    def base_path(self) -> ModelPath:
+        return self.cached_properties.get('base_path')
 
     @base_path.setter
     def base_path(self, value: ModelPath):
-        self._base = value
+        self.cached_properties.set('base_path' , value)
 
     @property
     def model_name(self) -> str:
         return self.base_path.model_name
-
-    @property
-    def Param(self):
-        return self.model_param
 
     @property
     def module_type(self):
@@ -768,28 +757,27 @@ class AlgoConfig:
 
     @property
     def model_module(self):
-        if not hasattr(self, "_model_module"):
-            self._model_module = None
-        return self._model_module if self._model_module else self.base_path.model_module
-
+        if model_module := self.cached_properties.query('model_module' , lambda: None):
+            return model_module
+        return self.base_path.model_module
+        
     @model_module.setter
     def model_module(self, value: str | None):
-        self._model_module = value
+        self.cached_properties.set('model_module' , value)
 
     @property
     def boost_head(self) -> str:
-        if not hasattr(self, "_boost_head"):
-            self._boost_head = ""
-        return self._boost_head
+        return self.cached_properties.query('boost_head' , lambda: "")
 
     @boost_head.setter
     def boost_head(self, value: bool | str | None):
         if not value or self.module_type != "nn":
-            self._boost_head = ""
+            self.cached_properties.set('boost_head' , "")
         else:
-            self._boost_head = value = "lgbm" if value is True else value
-            assert AlgoModule.is_valid(self._boost_head, "boost"), f"{self._boost_head} is not a valid boost module"
-
+            value = "lgbm" if value is True else value
+            assert AlgoModule.is_valid(value, "boost"), f"{value} is not a valid boost module"
+            self.cached_properties.set('boost_head' , value)
+            
     @property
     def max_num_output(self) -> int:
         return max(self.Param.get("num_output", [1]))
@@ -820,17 +808,13 @@ class ModelConfig(BaseModelConfig , BaseModule):
     def __repr__(self):
         return f"{self.__class__.__name__}(base_path={self.base_path})"
 
-    @property
+    @cached_property
     def device(self):
-        if not hasattr(self , '_device'):
-            self._device = Device(try_cuda=self.try_cuda)
-        return self._device
+        return Device(try_cuda=self.try_cuda)
 
-    @property
+    @cached_property
     def value_dict(self) -> dict[str, Any]:
-        if not hasattr(self , '_value_dict'):
-            self._value_dict = {}
-        return self._value_dict
+        return {}
 
     @property
     def schedule_config(self) -> ScheduleConfig:
@@ -876,7 +860,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
-                Logger.alert1(f"{self.base_path} is cleared" , vb_level = 2)
+                self.alert1(f"{self.base_path} is cleared" , add_vb = 1)
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}
@@ -889,12 +873,6 @@ class ModelConfig(BaseModelConfig , BaseModule):
 
     def set_value(self, key: str, value: Any):
         self.value_dict[key] = value
-
-    def get_value(self , key: str , **kwargs) -> Any:
-        if 'default' in kwargs:
-            return self.value_dict.get(key , kwargs['default'])
-        else:
-            return self.value_dict[key]
 
     @property
     def Param(self):
@@ -966,30 +944,25 @@ class ModelConfig(BaseModelConfig , BaseModule):
             and self.base_path.is_resumable
         )
 
-    @property
+    @cached_property
     def resumed_max_pred_date(self) -> int:
         """
-        Resumed maximum predicted date for resumed testing.
-        Must be set by PredRecorder
+        Resumed maximum predicted date for resumed testing. if not set, will be 19000101.
+        Before this date, the predictions will not be tested again, but the model might be loaded to test dates before this date.
+        
+        In scenario of resuming testing from last pred date, this date is min(last predicted date, date before min(missing pred dates)).
+        In scenario of resuming testing from last model date, this date is max(predicted dates of all models before last model date).
         """
-        return self.value_dict.get('resumed_max_pred_date' , 19000101)
+        return 19000101
 
-    @property
+    @cached_property
     def queue_of_stages(self) -> list[Literal["data", "fit", "test"]]:
         """stage queue for training"""
-        return getattr(self, "_queue_of_stages", [])
+        return []
 
-    @queue_of_stages.setter
-    def queue_of_stages(self, value: list[Literal["data", "fit", "test"]]):
-        self._queue_of_stages = value
-
-    @property
+    @cached_property
     def is_resuming(self) -> bool:
-        return getattr(self, "_is_resuming", False)
-
-    @is_resuming.setter
-    def is_resuming(self, value: bool):
-        self._is_resuming = value
+        return False
 
     def log_operation(self, operation: str, sub_operation: str):
         assert operation in ["fit", "test"], f"operation {operation} is not valid"

@@ -18,6 +18,7 @@ import numpy as np
 
 from abc import abstractmethod , ABCMeta
 from datetime import datetime
+from functools import cached_property
 from typing import Any , Type , Literal
 
 from src.proj import Proj , Logger , CALENDAR , Dates , Duration , Const
@@ -142,17 +143,10 @@ class PreProcessor(metaclass=PreProcessorMeta):
         """Return the class name as the string representation."""
         return f'{self.__class__.__name__}'
 
-    @property
+    @cached_property
     def enable_saving(self) -> bool:
         """Whether this instance is allowed to write dump/norm files to disk."""
-        if not hasattr(self , '_enable_dump_save'):
-            self._enable_dump_save = True
-        return self._enable_dump_save
-
-    @enable_saving.setter
-    def enable_saving(self , value : bool):
-        """Disable dump saving (set automatically when loading for a query rather than a full update)."""
-        self._enable_dump_save = value
+        return True
 
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...

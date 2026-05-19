@@ -2,6 +2,7 @@ import pandas as pd
 
 from typing import Any
 from dataclasses import dataclass
+from functools import cached_property
 
 from src.proj import singleton
 from src.data import DATAVENDOR
@@ -40,16 +41,9 @@ class FamaFrench3:
             self.date = date
             self.fit()
 
-    @property
+    @cached_property
     def date(self):
-        if not hasattr(self, '_date'):
-            return -1
-        else:
-            return self._date
-    
-    @date.setter
-    def date(self , date : int):
-        self._date = date
+        return -1
 
     @staticmethod
     def group_ret(df : pd.DataFrame) -> pd.Series:

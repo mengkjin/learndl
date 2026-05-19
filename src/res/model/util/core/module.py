@@ -1,39 +1,89 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Callable, TypeVar
+from functools import cached_property
+from typing import Any, Callable, TypeVar, overload
 from src.proj import Proj , Logger
 
 T = TypeVar('T')
+_MISSING = object()
 class ModuleCachedProperties:
-    """Module cached properties"""
+    """GroupedModule cached properties"""
     def __init__(self):
         self._cached_properties = defaultdict(dict)
     def __repr__(self):
         return f'ModuleCachedProperties(cached_properties={self._cached_properties})'
-    def get_group(self , group : str) -> dict[str,Any]:
-        return self._cached_properties[group]
     def group_keys(self , group : str) -> list[str]:
         return list(self._cached_properties[group].keys())
-    def set_value(self , group : str , key : str , value : Any):
-        self._cached_properties[group][key] = value
-    def get_value(self , group : str , key : str) -> Any:
-        try:
-            return self._cached_properties[group][key]
-        except KeyError:
-            raise KeyError(f'{group} {key} not found in cached_properties, current keys: {self.group_keys(group)}')
     def clear_all(self):
         self._cached_properties.clear()
     def clear(self , group : str):
         self._cached_properties[group].clear()
-    def pop(self , group : str , key : str):
-        self._cached_properties[group].pop(key)
-    def has(self , group : str , key : str) -> bool:
+    @overload
+    def set(self, key: str, value: Any, /) -> None: ...
+    @overload
+    def set(self, group: str, key: str, value: Any, /) -> None: ...
+    def set(
+        self,
+        group: str,
+        key: str | None = None,
+        value: Any = _MISSING,
+    ) -> None:
+        if value is _MISSING:
+            value = key  # type: ignore[assignment]
+            key = group
+            group = ''
+        self._cached_properties[group][key] = value
+    @overload
+    def get(self, key: str, /) -> Any: ...
+    @overload
+    def get(self, group: str, key: str, /) -> Any: ...
+    def get(self , group : str , key : str | None = None) -> Any:
+        if key is None:
+            group , key = '' , group
+        try:
+            return self._cached_properties[group][key]
+        except KeyError:
+            raise KeyError(
+                f'{group} {key} not found in cached_properties, '
+                f'current keys: {self.group_keys(group)}'
+            )
+    
+    @overload
+    def has(self, key: str, /) -> bool: ...
+    @overload
+    def has(self, group: str, key: str, /) -> bool: ...
+    def has(self, group: str, key: str | None = None) -> bool:
+        if key is None:
+            key, group = group, ''
         return key in self._cached_properties[group]
-    def get(self , group : str , key : str , default_generator : Callable[[],T] | None = None , *args , **kwargs) -> T:
-        if not self.has(group , key) and default_generator is not None:
-            self.set_value(group , key , default_generator(*args , **kwargs))
-        return self.get_value(group , key)
+
+    @overload
+    def pop(self, key: str, /) -> Any: ...
+    @overload
+    def pop(self, group: str, key: str, /) -> Any: ...
+    def pop(self, group: str, key: str | None = None) -> Any:
+        if key is None:
+            key, group = group, ''
+        return self._cached_properties[group].pop(key)
+    @overload
+    def query(self, key: str, default_generator: Callable[[], T], /) -> T: ...
+    @overload
+    def query(self, group: str, key: str, default_generator: Callable[[], T], /) -> T: ...
+    def query(
+        self, group: str, key: str | Callable[[], T] , 
+        default_generator: Callable[[], T] | None = None,
+    ) -> T:
+        if callable(key) and default_generator is None:
+            default_generator = key
+            group, key = '' , group
+        elif callable(key):
+            raise ValueError(f'Only one of key or default_generator can be callable, but got {key} and {default_generator}')
+
+        if not self.has(group, key):
+            assert default_generator is not None , f'default_generator is required when {group} {key} is not found'
+            self.set(group, key, default_generator())
+        return self.get(group, key)
 
 class BaseModule:
     """
@@ -46,13 +96,21 @@ class BaseModule:
             return getattr(self , '_binder')
         else:
             return None
+    @cached_property
+    def cached_properties(self) -> ModuleCachedProperties:
+        """
+        grouped cached properties for the module
+        Will store properties in miscellaneous groups. Use '' as group name for properties that only calucate once
+        e.g. 'pipeline_hooks' , 'model_start' , 'data_module' , etc.
+        """
+        return ModuleCachedProperties()
     def set_vb_level(self , vb_level : Any):
-        self._vb_level = Proj.vb(vb_level)
+        self.cached_properties.set('vb_level' , Proj.vb(vb_level))
     @property
     def vb_level(self) -> int:
-        if not hasattr(self , '_vb_level'):
+        if not self.cached_properties.has('vb_level'):
             return getattr(self.binder, 'vb_level' , 0) + 1
-        return self._vb_level
+        return self.cached_properties.get('vb_level')
     
     def stdout(self , *args , add_vb : int = 0 , **kwargs):
         kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', self.vb_level) , add_vb)
@@ -66,14 +124,3 @@ class BaseModule:
     def alert2(self , *args , add_vb : int = 0 , color : str = 'lightred' , to_log_file : bool = True , **kwargs):
         kwargs['vb_level'] = Proj.vb(kwargs.get('vb_level', 0) , add_vb)
         Logger.stdout(f'{self.__class__.__name__} RedAlert:' , *args , color = color , to_log_file = to_log_file , **kwargs)
-    
-    # @property
-    # def cached_properties(self) -> dict[str,dict[str,Any]]:
-    #     if not hasattr(self , '_cached_properties'):
-    #         self._cached_properties = defaultdict(dict[str,Any])
-    #     return self._cached_properties
-    @property
-    def cached_properties(self) -> ModuleCachedProperties:
-        if not hasattr(self , '_cached_properties'):
-            self._cached_properties = ModuleCachedProperties()
-        return self._cached_properties

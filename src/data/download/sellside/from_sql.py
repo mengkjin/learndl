@@ -9,6 +9,7 @@ import sqlalchemy
 from string import Template
 from dataclasses import dataclass
 from datetime import datetime
+from functools import cached_property
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
@@ -169,11 +170,9 @@ class SellsideSQLDownloader:
     def use_connection_key(self) -> str:
         return self.connection_key if self.connection_key else self.factor_src
 
-    @property
+    @cached_property
     def connection(self) -> Connection:
-        if not hasattr(self , '_connection'):
-            self._connection = Connection.connection(self.use_connection_key)
-        return self._connection
+        return Connection.connection(self.use_connection_key)
 
     def sqlline_start_dt(self) -> str:
         if self.factor_src == 'haitong':

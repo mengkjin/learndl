@@ -18,6 +18,7 @@ import pandas as pd
 import warnings
 
 from copy import deepcopy
+from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal , Iterable
 
@@ -548,37 +549,22 @@ class StockFactor:
             assert isinstance(cache_factor_stats , CacheFactorStats) , f'cache_factor_stats must be a CacheFactorStats , but got {type(cache_factor_stats)} : {cache_factor_stats}'
             self.cache_factor_stats = cache_factor_stats
 
-        if pseudo_date is not None:
-            self.set_pseudo_date(pseudo_date)
+        self.set_pseudo_date(pseudo_date)
         return self
 
-    @property
+    @cached_property
     def input_df(self) -> pd.DataFrame | None:
         """
         return the input DataFrame of the factor
         """
-        if not hasattr(self , '_df'):
-            self._df = None
-        return self._df
-
-    @input_df.setter
-    def input_df(self , df : pd.DataFrame | None):
-        """set the input DataFrame of the factor"""
-        self._df = df
+        return None
     
-    @property
+    @cached_property
     def input_blk(self) -> DataBlock | None:
         """
         return the input DataBlock of the factor
         """
-        if not hasattr(self , '_blk'):
-            self._blk = None
-        return self._blk
-    
-    @input_blk.setter
-    def input_blk(self , blk : DataBlock | None):
-        """set the input DataBlock of the factor"""
-        self._blk = blk
+        return None
 
     def copy(self): 
         """
@@ -720,10 +706,7 @@ class StockFactor:
         """
         return the unique date of the factor
         """
-        if self.pseudo_date is not None:
-            return self.pseudo_date
-        else:
-            return self.data_date
+        return self.data_date if self.pseudo_date is None else self.pseudo_date
 
     @property
     def data_date(self) -> np.ndarray:
@@ -735,24 +718,21 @@ class StockFactor:
         else:
             return prior_input.index.get_level_values('date').unique().to_numpy()
 
-    @property
+    @cached_property
     def pseudo_date(self) -> np.ndarray | None:
         """
         return the pseudo date of the factor
         """
-        if not hasattr(self , '_pseudo_date'):
-            return None
-        return self._pseudo_date
+        return None
 
-    @pseudo_date.setter
-    def pseudo_date(self , date : np.ndarray | None):
-        if date is not None:
-            Logger.alert1(f'Setting {self} pseudo date to {date}' , indent = 1 , vb_level = 'max')
+    def set_pseudo_date(self , pseudo_date : np.ndarray | None = None):
+        """
+        return a factor with the pseudo date
+        """
+        if pseudo_date is not None and not np.array_equal(self.data_date , pseudo_date):
+            Logger.alert1(f'Setting {self} pseudo date to {pseudo_date}' , indent = 1 , vb_level = 'max')
             Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 'max')
-        self._pseudo_date = date
-
-    def set_pseudo_date(self , date : np.ndarray | None = None):
-        self._pseudo_date = date
+            self.pseudo_date = pseudo_date
         return self
         
     @property

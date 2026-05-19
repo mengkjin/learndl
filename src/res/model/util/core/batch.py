@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import torch.nn as nn
 from dataclasses import dataclass , field
+from functools import cached_property
 from typing import Any, Literal
 
 from src.proj import Proj , Logger
@@ -86,17 +87,13 @@ class BatchInput:
         return f'{self.__class__.__name__}:\n' + \
             '\n'.join([f'{k} : {shape}' for k,shape in self.shape.items()])
 
-    @property
+    @cached_property
     def date(self) -> np.ndarray:
-        if not hasattr(self , '_date'):
-            self._date = self.y_date[self.i.cpu()[:,1]]
-        return self._date
+        return self.y_date[self.i.cpu()[:,1]]
     
-    @property
+    @cached_property
     def secid(self) -> np.ndarray:
-        if not hasattr(self , '_secid'):
-            self._secid = self.y_secid[self.i.cpu()[:,0]]
-        return self._secid
+        return self.y_secid[self.i.cpu()[:,0]]
     
     @property
     def date0(self) -> int:

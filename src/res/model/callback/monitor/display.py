@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime
+from functools import cached_property
 from typing import Any
 
 from src.proj import Logger , Duration , Proj
@@ -13,13 +14,14 @@ class CallbackTimer(BaseCallBack):
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.recording = Proj.vb.is_max_level
-        self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.get_implemented_hooks()}
+        self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.implemented_hooks}
         self.record_start_time : dict[str,datetime] = {}
     def __bool__(self):
         """disable callback timer"""
         return self.recording
-    def get_implemented_hooks(self):
-        return self.cached_properties.get('pipeline_hooks' , 'implemented_hooks' , self.get_all_hooks)
+    @cached_property
+    def implemented_hooks(self):
+        return self.all_hooks
     def at_enter(self , hook_name , *args , **kwargs):
         super().at_enter(hook_name , *args , **kwargs)
         if self.recording and hook_name != 'on_summarize_model': 

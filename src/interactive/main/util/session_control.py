@@ -12,7 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 from dataclasses import dataclass , field
-from functools import wraps
+from functools import wraps , cached_property
 from typing import Any , ClassVar , Callable , Literal
 from pathlib import Path
 from datetime import datetime
@@ -136,21 +136,17 @@ class SessionControl:
             return inner_func
         return wrapper
 
-    @property
+    @cached_property
     def intro_pages(self) -> dict:
         """get intro pages"""
         from src.interactive.main.util.page import intro_pages
-        if not hasattr(self, '_intro_pages'):
-            self._intro_pages = intro_pages()
-        return self._intro_pages
+        return intro_pages()
 
-    @property
+    @cached_property
     def script_pages(self) -> dict:
         """get script pages"""
         from src.interactive.main.util.page import script_pages
-        if not hasattr(self, '_script_pages'):
-            self._script_pages = script_pages()
-        return self._script_pages
+        return script_pages()
 
     def get_page(self , page_name : str) -> dict:
         """get page"""
@@ -182,7 +178,7 @@ class SessionControl:
         self_page = self.get_page(page_name) 
         
         st.header(f"*_:red[{self_page['icon']}] :rainbow[{self_page['head']}]_*" , help = self_page['help'])
-        self.get_control_panel().show(self.current_script)
+        self.control_panel.show(self.current_script)
         return self_page
     
     def get_script_runner(self , script_key : str) -> ScriptRunner:
@@ -204,16 +200,15 @@ class SessionControl:
             raise ValueError(f"Script {script_key} not found in SC.script_runners")
         return runner
 
-    def get_control_panel(self):
-        """Return the shared :class:`ControlPanel`, creating it once per session."""
+    @cached_property
+    def control_panel(self):
+        """get control panel"""
         from src.interactive.main.util.control_panel import ControlPanel
-        if not hasattr(self, '_control_panel'):
-            self._control_panel = ControlPanel()
-        return self._control_panel
+        return ControlPanel()
 
     def refresh_run_button(self , runner : ScriptRunner):
         """refresh run button"""
-        SC.get_control_panel().buttons['script-runner-run'].refresh(runner)
+        self.control_panel.buttons['script-runner-run'].refresh(runner)
     
     def get_task_item(self , task_id : str | None = None) -> TaskItem | None:
         """Look up *task_id* in the queue; returns ``None`` if not found."""

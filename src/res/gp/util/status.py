@@ -1,3 +1,4 @@
+from functools import cached_property
 from .syntax import SyntaxRecord
 class gpStatus:
     def __init__(self , n_iter : int , n_gen : int , start_iter : int = 0 , start_gen : int = 0 , train : bool = True , **kwargs) -> None:
@@ -13,30 +14,28 @@ class gpStatus:
         self.historybook : dict[str, SyntaxRecord] = {}
 
     def iter_iteration(self):
-        for self._i_iter in range(self.start_iter, self.n_iter):
-            yield self._i_iter
+        for self.i_iter in range(self.start_iter, self.n_iter):
+            yield self.i_iter
 
     def iter_generation(self):
-        if self._i_iter == self.start_iter:
-            for self._i_gen in range(self.start_gen, self.n_gen):
-                yield self._i_gen
+        if self.i_iter == self.start_iter:
+            for self.i_gen in range(self.start_gen, self.n_gen):
+                yield self.i_gen
         else:
-            for self._i_gen in range(0, self.n_gen):
-                yield self._i_gen
+            for self.i_gen in range(0, self.n_gen):
+                yield self.i_gen
+
+    @cached_property
+    def i_iter(self) -> int:
+        return self.start_iter
+
+    @cached_property
+    def i_gen(self) -> int:
+        return self.iter_start_gen
 
     @property
-    def i_iter(self) -> int:
-        if not hasattr(self , '_i_iter'):
-            self._i_iter = self.start_iter
-        return self._i_iter
-    @property
-    def i_gen(self) -> int:
-        if not hasattr(self , '_i_gen'):
-            self._i_gen = self.iter_start_gen
-        return self._i_gen
-    @property
     def iter_start_gen(self) -> int:
-        return self.start_gen if self._i_iter == self.start_iter else 0
+        return self.start_gen if self.i_iter == self.start_iter else 0
 
     def update_forbidden(self , forbidden : list) -> list[str]:
         self.forbidden = list(set(self.forbidden + [str(fbd) for fbd in forbidden]))

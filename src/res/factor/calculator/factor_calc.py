@@ -5,8 +5,10 @@ import re
 
 from importlib import import_module
 from abc import abstractmethod
-from typing import Any , Callable , Literal , Type , Generator
+from functools import cached_property
 from pathlib import Path
+from typing import Any , Callable , Literal , Type , Generator
+
 
 from ..util import StockFactor
 
@@ -1118,13 +1120,16 @@ class WeightedPoolingCalculator(PoolingCalculator):
             Logger.alert1(f'Purging pooling weight of {cls.factor_name}!')
             DB.path('pooling_weight' , cls.db_key).unlink(missing_ok = True)
 
+    @cached_property
+    def loaded_weight(self) -> pd.DataFrame:
+        """loaded pooling weight"""
+        return self.load_pooling_weight()
+
     def get_pooling_weight(self , date : int) -> pd.DataFrame:
         """get pooling weight of a given date"""
-        if not hasattr(self , '_loaded_weight'):
-            self._loaded_weight = self.load_pooling_weight()
-        weight = self._loaded_weight.query('date == @date').set_index('date')
+        weight = self.loaded_weight.query('date == @date').set_index('date')
         if weight.empty:
-            Logger.error(f'pooling weight is empty for {date} , has dates: {self._loaded_weight["date"].unique()}')
+            Logger.error(f'pooling weight is empty for {date} , has dates: {self.loaded_weight["date"].unique()}')
             Logger.error(f'Call {self.__class__.__name__}.update_all_pooling_weight(date = {date}) to update pooling weight first')
             raise ValueError(f'pooling weight is empty for {date}')
         return weight

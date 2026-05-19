@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 
 from dataclasses import dataclass , asdict
+from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
@@ -406,15 +407,9 @@ class PortfolioAccountant:
     def port_dates(self):
         return self.portfolio.available_dates()
 
-    @property
+    @cached_property
     def resume_path(self) -> strPath | None:
-        if not hasattr(self , '_resume_path'):
-            self._resume_path = None
-        return Path(self._resume_path) if self._resume_path else None
-
-    @resume_path.setter
-    def resume_path(self , value : strPath | None):
-        self._resume_path = Path(value) if value else None
+        return None
 
     def accounting(self , 
                    config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
@@ -572,19 +567,16 @@ class PortfolioAccountManager:
     def account_names(self):
         return list(self.accounts.keys())
 
-    @property
+    @cached_property
     def dir_loaded(self):
-        if not hasattr(self , '_dir_loaded'):
-            self._dir_loaded = False
-        return self._dir_loaded
+        return False
 
-    @property
+    @cached_property
     def account_paths(self):
-        if not hasattr(self , '_account_paths'):
-            self._account_paths = {path.stem:path for path in self.account_dir.iterdir()}
-            assert all(path.name.endswith(tuple(DB.tar_suffixes)) for path in self._account_paths.values()), \
-                f'{self.account_dir} contains non-tar files : {list(set(path.name for path in self.account_dir.iterdir()) - set(DB.tar_suffixes))}'
-        return self._account_paths
+        account_paths = {path.stem:path for path in self.account_dir.iterdir()}
+        assert all(path.name.endswith(tuple(DB.tar_suffixes)) for path in account_paths.values()), \
+            f'{self.account_dir} contains non-tar files : {list(set(path.name for path in self.account_dir.iterdir()) - set(DB.tar_suffixes))}'
+        return account_paths
 
     def load_dir_metas(self):
         for name , path in self.account_paths.items():

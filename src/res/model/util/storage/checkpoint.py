@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import gc
 
+from concurrent.futures import Future
 from dataclasses import dataclass , field
 from pathlib import Path
-from concurrent.futures import Future
 from typing import Any
 
 from src.proj import PATH
@@ -18,19 +18,18 @@ class CkptEpochRecord:
     state_dict : dict | None = None
     srcs : list = field(default_factory=list)
 
+    def __post_init__(self):
+        self.saved = False
+
     def __bool__(self):
         return len(self.srcs) > 0
 
     def save(self):
-        assert self.state_dict is not None , 'state_dict should not be None when saving'
-        self._future = AsyncSaver.torch(self.state_dict , self.path , copy_for_safety = False )
+        if self.saved:
+            return self
+        self.future : Future = AsyncSaver.torch(self.state_dict , self.path , copy_for_safety = False)
+        self.saved = True
         return self
-
-    @property
-    def future(self) -> Future:
-        if not hasattr(self , '_future'):
-            self.save()
-        return self._future
 
     def add_src(self , src : Any):
         if src in self.srcs:
@@ -50,8 +49,8 @@ class CkptEpochRecord:
 
     def clear(self):
         self.state_dict = None
-        if hasattr(self , '_future'):
-            self._future.cancel()
+        if hasattr(self , 'future'):
+            self.future.cancel()
         self.path.unlink(missing_ok=True)
         self.srcs.clear()
         return self

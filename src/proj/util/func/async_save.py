@@ -75,14 +75,14 @@ class AsyncSaver:
     _futures : dict[Future , str] = {}
 
     @classmethod
-    def _ensure_executor(cls) -> concurrent.futures.ThreadPoolExecutor:
+    def executor(cls) -> concurrent.futures.ThreadPoolExecutor:
         """
         ensure the executor is created
         """
         with cls._executor_lock:
-            if not hasattr(cls , 'async_save_executor'):
-                cls.async_save_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        return cls.async_save_executor
+            if not hasattr(cls , '_executor'):
+                cls._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        return cls._executor
 
     @classmethod
     def _register_future(cls , future : Future , future_group : str | None = None) -> None:
@@ -104,8 +104,7 @@ class AsyncSaver:
         """
         submit the function to the executor
         """
-        executor = cls._ensure_executor()
-        future = executor.submit(func , *args , **kwargs)
+        future = cls.executor().submit(func , *args , **kwargs)
         cls._register_future(future , future_group)
         return future
 
@@ -158,8 +157,8 @@ class AsyncSaver:
         shutdown the executor
         """
         with cls._executor_lock:
-            if hasattr(cls , 'async_save_executor'):
-                cls.async_save_executor.shutdown(wait=wait , cancel_futures=cancel_futures)
+            if hasattr(cls , '_executor'):
+                cls._executor.shutdown(wait=wait , cancel_futures=cancel_futures)
 
         with cls._futures_lock:
             cls._futures.clear()

@@ -9,17 +9,16 @@ __all__ = ['DebugMode']
 @singleton
 class DebugMode:
     """Context manager: set ``VB.vb_level`` for the block."""
+    def __init__(self):
+        self._contents = MACHINE.preference('debug')
+        self._debug_mode = bool(MACHINE.config.get('constant/project' , 'debug_mode' , default = False))
 
     @property
     def contents(self) -> dict[str, bool]:
-        if not hasattr(self , '_contents'):
-            self._contents = MACHINE.preference('debug')
         return self._contents
     
     @property
     def debug_mode(self) -> bool:
-        if not hasattr(self , '_debug_mode'):
-            self._debug_mode = bool(MACHINE.config.get('constant/project' , 'debug_mode' , default = False))
         return self._debug_mode
 
     def __bool__(self):

@@ -13,7 +13,7 @@ class ConsolidateCallBack(BaseCallBack):
     '''consolidate all callbacks into one'''
     def __init__(self , trainer_or_config : BaseTrainer | ModelConfig , *args , **kwargs):
         super().__init__(trainer_or_config)   
-        self.callbacks = self.get_callbacks(trainer_or_config)
+        self.init_callbacks()
         
     def at_enter(self , hook , *args , **kwargs):
         self.stdout(f'In stage [{self.status.stage}], Hook {hook} start' , vb_level = VbLevelCallback)
@@ -41,63 +41,31 @@ class ConsolidateCallBack(BaseCallBack):
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig):
         return cls(trainer_or_config)
 
-    @classmethod
-    def get_callbacks(cls , trainer_or_config : BaseTrainer | ModelConfig) -> list[BaseCallBack]:
-        callbacks = cls.get_callbacks_by_order(trainer_or_config)
-        cls.check_callback_duplicates(callbacks)
-        callbacks = cls.deal_callback_overrides(trainer_or_config , callbacks)
-        callbacks = cls.deal_callback_conflicts(trainer_or_config , callbacks)
+    def init_callbacks(self):
+        callbacks = self.get_callbacks_by_order()
+        callbacks = self.resolving_callbacks(callbacks)
+        self.callbacks = callbacks
+
+    def get_callbacks_by_order(self) -> list[BaseCallBack]:
+        callback_classes = [self.get_callback_class(cb) for cb in self.config.callbackes]
+        callback_classes.extend(specific.get_specific_cbs(self.config))
+
+        callback_kwargs = self.config.callback_kwargs
+        callbacks = [cls(self.binder , **callback_kwargs.get(cls.__name__ , {})) for cls in callback_classes]
+        callbacks = sorted([cb for cb in callbacks if cb] , key=lambda x: x.CB_ORDER)
         return callbacks
 
-    @classmethod
-    def get_callbacks_by_order(cls , trainer_or_config : BaseTrainer | ModelConfig) -> list[BaseCallBack]:
-        config = trainer_or_config.config if isinstance(trainer_or_config , BaseTrainer) else trainer_or_config
-        callback_classes = [cls.get_callback_class(cb) for cb in config.callbackes]
-        callback_classes.extend(specific.get_specific_cbs(config))
-
-        callback_classes = sorted(callback_classes, key=lambda x: x.CB_ORDER)
-        callbacks = [cb_class(trainer_or_config , **config.callback_kwargs.get(cb_class.__name__ , {})) for cb_class in callback_classes]
-        callbacks = [cb for cb in callbacks if cb]
-        return callbacks
-
-    @classmethod
-    def check_callback_duplicates(cls , callbacks : list[BaseCallBack]):
-        callback_names = [cb.__class__.__name__ for cb in callbacks]
-        assert len(callback_names) == len(set(callback_names)) , f'duplicate callback names: {callback_names}'
-    
-    @classmethod
-    def get_callback_classes(cls) -> dict[str,Type[BaseCallBack]]:
-        if not hasattr(cls , '_general_callback_classes'):
-            cbs = {}
-            for cb_mod in CallbackModules:
-                for name , obj in inspect.getmembers(cb_mod , lambda x: inspect.isclass(x) and issubclass(x , BaseCallBack)):
-                    if obj is BaseCallBack:
-                        continue
-                    assert name not in cbs , f'{name} is defined in {cb_mod} and {cbs[name].__module__}'
-                    cbs[name] = obj
-            cls._general_callback_classes = cbs
-        return cls._general_callback_classes
-    
-    @classmethod
-    def get_callback_class(cls , cb_name : str) -> Type[BaseCallBack]:
-        return cls.get_callback_classes()[cb_name]
-
-    @classmethod
-    def deal_callback_overrides(cls , trainer_or_config : BaseTrainer | ModelConfig , callbacks : list[BaseCallBack]) -> list[BaseCallBack]:
+    def resolving_callbacks(self , callbacks : list[BaseCallBack]) -> list[BaseCallBack]:
         callback_available = [True for _ in callbacks]
+        # resolve overrides
         for i , j in itertools.product(range(len(callbacks)) , range(len(callbacks))):
             if callbacks[i].__class__.__name__ in callbacks[j].OverrideCallbacks:
                 Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, overridden by callback [{callbacks[j].__class__.__name__}]!')
                 callback_available[i] = False
-        
-        callbacks = [cb for i, cb in enumerate(callbacks) if callback_available[i]]
-        return callbacks
 
-    @classmethod
-    def deal_callback_conflicts(cls , trainer_or_config : BaseTrainer | ModelConfig , callbacks : list[BaseCallBack]) -> list[BaseCallBack]:
-        config = trainer_or_config.config if isinstance(trainer_or_config , BaseTrainer) else trainer_or_config
-        module_type = config.module_type
-        module_name = config.model_module
+        # resolve conflicts
+        module_type = self.config.module_type
+        module_name = self.config.model_module
         callback_available = [True for _ in callbacks]
         for i in range(len(callbacks)):
             if module_type in callbacks[i].ConflictModuleTypes:
@@ -113,3 +81,20 @@ class ConsolidateCallBack(BaseCallBack):
         
         callbacks = [cb for i, cb in enumerate(callbacks) if callback_available[i]]
         return callbacks
+
+    @classmethod
+    def _get_callback_classes(cls) -> dict[str,Type[BaseCallBack]]:
+        if not hasattr(cls , '_callback_classes'):
+            cbs = {}
+            for cb_mod in CallbackModules:
+                for name , obj in inspect.getmembers(cb_mod , lambda x: inspect.isclass(x) and issubclass(x , BaseCallBack)):
+                    if obj is BaseCallBack:
+                        continue
+                    assert name not in cbs , f'{name} is defined in {cb_mod} and {cbs[name].__module__}'
+                    cbs[name] = obj
+            cls._callback_classes = cbs
+        return cls._callback_classes
+    
+    @classmethod
+    def get_callback_class(cls , cb_name : str) -> Type[BaseCallBack]:
+        return cls._get_callback_classes()[cb_name]

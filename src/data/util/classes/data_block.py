@@ -13,6 +13,7 @@ import xarray as xr
 from copy import deepcopy
 
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any , ClassVar , Literal , Iterable
 
@@ -292,9 +293,7 @@ class DataBlock:
         if not self.initiated:
             # will not set flags if the block is not initiated
             return self
-        if not hasattr(self , '_flags'):
-            self._flags = {}
-        self._flags.update(kwargs)
+        self.flags.update(kwargs)
         return self
 
     def check_flags(self , **kwargs):
@@ -304,17 +303,9 @@ class DataBlock:
                 raise ValueError(f'Invalid flags: {self.flags} , compare to {kwargs} try set then first before checking!')
         return self
 
-    @property
+    @cached_property
     def flags(self):
-        if not hasattr(self , '_flags'):
-            self._flags = {}
-        return self._flags
-
-    def clear_flags(self):
-        """Remove all metadata flags from this block."""
-        if hasattr(self , '_flags'):
-            self._flags.clear()
-        return self
+        return {}
     
     def date_within(self , start : int | None = None , end : int | None = None , interval = 1) -> np.ndarray:
         """Return the subset of ``self.date`` within ``[start, end]``, optionally strided."""
@@ -662,27 +653,15 @@ class DataBlock:
         return df
 
 
-    @property
+    @cached_property
     def price_adjusted(self): 
         """Return flag of if the price is adjusted by adjfactor"""
-        if not hasattr(self , '_price_adjusted'):
-            self._price_adjusted = False
-        return self._price_adjusted
+        return False
 
-    @price_adjusted.setter
-    def price_adjusted(self , value : bool):
-        self._price_adjusted = value
-
-    @property
+    @cached_property
     def volume_adjusted(self): 
         """Return flag of if the volume is adjusted by adjfactor"""
-        if not hasattr(self , '_volume_adjusted'):
-            self._volume_adjusted = False
-        return self._volume_adjusted
-
-    @volume_adjusted.setter
-    def volume_adjusted(self , value : bool):
-        self._volume_adjusted = value
+        return False
 
     @staticmethod
     def data_type_abbr(key : str): 
@@ -793,7 +772,7 @@ class DataBlock:
         have been transformed is not accidentally re-saved as raw data.
         """
         if self.flags.get('category') == 'raw':
-            self.clear_flags()
+            self.flags.clear()
         return self
 
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 ,

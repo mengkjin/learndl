@@ -3,6 +3,7 @@ from __future__ import annotations
 import portalocker , re
 from dataclasses import dataclass , field
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 
 from src.proj.core import strPath
@@ -138,15 +139,9 @@ class LogFile:
     def candidates(self) -> list[Path]:
         return [self.host_file] + self.rotation_files
 
-    @property
+    @cached_property
     def rotation_files(self) -> list[Path]:
-        if not hasattr(self , '_rotation_files'):
-            self._rotation_files = []
-        return self._rotation_files
-
-    @rotation_files.setter
-    def rotation_files(self , value : list[Path]):
-        self._rotation_files = value
+        return []
 
     @property
     def date_suffix(self) -> str:
