@@ -2,10 +2,24 @@
 Self defined TradeDate class, used to represent a date and its closest trading date.
 """
 import numpy as np
+import pandas as pd
+from src.proj.env import MACHINE
 from typing import Any
 from .basic import BasicCalendar
 
 BC = BasicCalendar()
+cds = BC._cds
+dup = cds[np.bincount(np.searchsorted(np.unique(cds), cds)) > 1]  # 或更简单：
+
+idx = pd.Index(cds)
+if not idx.is_unique:
+    print("unique:", idx.is_unique, "len:", len(cds), "nunique:", idx.nunique())
+    print(pd.Series(cds).value_counts().head(20))
+
+reserved = pd.DataFrame(MACHINE.config.get('constant/data/calendar'))
+if not reserved.empty:
+    print(reserved.head(), reserved.dtypes)
+    print(reserved['calendar'].duplicated().sum())
 
 class TradeDate:
     """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""

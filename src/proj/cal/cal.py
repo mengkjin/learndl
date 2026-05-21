@@ -18,12 +18,10 @@ from src.proj.core import NoInstanceMeta
 from src.proj.env import PATH
 import src.proj.db as DB
 
-from .basic import BasicCalendar , BJ_TZ
-from .trade_date import TradeDate
+from .basic import BJ_TZ
+from .trade_date import TradeDate , BC
 
 __all__ = ['CALENDAR', 'Dates']
-
-BC = BasicCalendar()
 
 DateType = Union[int, TradeDate]
 DateTypeWithNone = Union[int, TradeDate, None]
