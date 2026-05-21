@@ -87,7 +87,7 @@ class DataModule(BaseModule):
         self.loader_param = DataloaderParam()
         self.data_operator = DataOperator(self.config , self.loader_param)
         self.prenorm_operator = PrenormOperator(self.config , self.datas.norms)
-        self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2) , no_weight = True)[0]
+        self.labels = self.datas.y.values.squeeze(2).clone()
 
         if self.empty_x:
             self.alert2(f'DataModule got empty x , fit and test stage will be skipped')
@@ -234,7 +234,9 @@ class DataModule(BaseModule):
             return
 
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
-        self.y_std = self.labels[:,self.d0:self.d1]
+        y_full = self.datas.y.values.squeeze(2)
+        
+        self.y_std = self.data_operator.standardize_y(y_full , no_weight = True)[0]
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
         valid_y = self.y_std if self.is_fitting else None
@@ -352,8 +354,8 @@ class DataModule(BaseModule):
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
-                batch_key = f'{set_key}.{bnum}'
 
+                batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)
                 batch_keys.append(batch_key)
                 if set_key in ['predict' , 'test' , 'extract']:

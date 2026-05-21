@@ -55,8 +55,9 @@ def wrap_update(update_func : Callable[..., T] , message : str , skip : bool = F
         Logger.warning(f'Process [{message.title()}] is Skipped')
     else:
         with Logger.Paragraph(message , 3):
-            return update_func(*args , **kwargs)
+            ret = update_func(*args , **kwargs)
     record.close()
+    return ret
         
 
 def print_update_records():

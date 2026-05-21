@@ -32,20 +32,27 @@ class Prenormer:
     def __bool__(self):
         return self.divlast or self.histnorm or self.channelnorm
 
-    def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None) -> torch.Tensor:
+    def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | Any = None) -> torch.Tensor:
         """
         return panel-normalized x
         1.divlast: divide by the last value, get seq-mormalized x
         2.histnorm: normalized by history avg and std
         3.channelnorm: normalized by channel avg
         """
-        if self.divlast and x.shape[-2] > 1:
+        option_divlast = self.divlast and x.shape[-2] > 1
+        option_histnorm = self.histnorm and histnorm is not None
+        option_channelnorm = self.channelnorm and x.ndim > 2
+        assert not (option_histnorm and option_channelnorm) , f'histnorm and channelnorm cannot be used together'
+        if option_divlast:
             x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if self.histnorm and histnorm is not None:
+        if option_histnorm:
             x = x - histnorm.avg[-x.shape[-2]:]
             x = x / (histnorm.std[-x.shape[-2]:] + 1e-6)
-        if self.channelnorm and x.ndim > 2:
-            x = x / (x.mean(dim = tuple(range(1 , x.ndim - 1)), keepdim = True) + 1e-6) - 1
+            if option_divlast:
+                x[:,-1] = 0
+        if option_channelnorm:
+            norm_dim = tuple(range(1 , x.ndim - 1))
+            x = x / x.mean(dim = norm_dim, keepdim = True) + 1e-6 - 1
         return x
 
     @classmethod
@@ -55,7 +62,7 @@ class Prenormer:
             name = name ,
             divlast = prenorm_method.get('divlast'  , False) and (name in DataBlockNorm.DIVLAST) ,
             histnorm = prenorm_method.get('histnorm' , False) and (name in DataBlockNorm.HISTNORM) ,
-            channelnorm = prenorm_method.get('channelnorm' , True)
+            channelnorm = prenorm_method.get('channelnorm' , False)
         )
 
 
@@ -112,7 +119,7 @@ class DataOperator:
         '''standardize y and weight'''
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if valid is not None: 
-            y[~valid] = torch.nan
+            y.nan_to_num_(0)[~valid] = torch.nan
         w = None
         y = standardize(y , dim=0)
         if no_weight or (self.stage != 'fit' and y.isnan().all().item()): 
