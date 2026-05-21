@@ -8,6 +8,8 @@ from .trading import TradingAPI
 from .summary import SummaryAPI
 from .notification import NotificationAPI
 
+from .util import wrap_update , print_update_records
+
 class UpdateAPI:
     @classmethod
     def daily(cls):
@@ -42,10 +44,11 @@ class UpdateAPI:
         FactorAPI.update_factor_stats()
         FactorAPI.export_factor_table()
         with Proj.vb.WithVB(1):
-            ModelAPI.resume_testing()
+            wrap_update(ModelAPI.resume_testing , 'resume testing')
         TradingAPI.update()
         SummaryAPI.update()
         NotificationAPI.update()
+        print_update_records()
         Proj.print_disk_info()
 
     @classmethod
@@ -78,6 +81,7 @@ class UpdateAPI:
         FactorAPI.rollback_pooling_factors(rollback_date , timeout = 10)
         FactorAPI.rollback_factor_stats(rollback_date)
         FactorAPI.export_factor_table()
+        print_update_records()
 
     @classmethod
     def weekly(cls):
@@ -99,5 +103,6 @@ class UpdateAPI:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
         ModelAPI.update_models()
+        print_update_records()
 
     
