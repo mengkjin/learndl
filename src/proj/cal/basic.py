@@ -134,3 +134,5 @@ class BasicCalendar:
             return np.array([], dtype=np.int64)
         start = max(0, last - n + 1)
         return c[start : last + 1].astype(np.int64, copy=False)
+
+BC = BasicCalendar()

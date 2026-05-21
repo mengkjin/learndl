@@ -124,6 +124,9 @@ class FuncCall:
         except Exception as e:
             Logger.error(f'{key} >> {func}({args} , {kwargs}) generate an exception: {e}')
             Logger.print_exc(e)
+            from src.proj.cal.trade_date import BC
+            print('BC._cd_pd_index.is_unique:' , BC._cd_pd_index.is_unique)
+            print('BC._cd_pd_index.duplicated:' , BC._cd_pd_index[BC._cd_pd_index.duplicated()])
             raise
 
     def go(self) -> None:

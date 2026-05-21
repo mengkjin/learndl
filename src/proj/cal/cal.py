@@ -18,8 +18,8 @@ from src.proj.core import NoInstanceMeta
 from src.proj.env import PATH
 import src.proj.db as DB
 
-from .basic import BJ_TZ
-from .trade_date import TradeDate , BC
+from .basic import BJ_TZ , BC
+from .trade_date import TradeDate
 
 __all__ = ['CALENDAR', 'Dates']
 

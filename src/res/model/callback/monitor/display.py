@@ -62,7 +62,7 @@ class StatusDisplay(BaseCallBack):
     def on_validation_epoch_end(self):
         if not self.display_progress:
             return
-        if self.status.total_models <= self.config.model_num:
+        if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
             Logger.stdout(self.texts.progress , vb_level = self.vb_level)
         else:
             Logger.log_only(self.texts.progress , vb_level = self.vb_level)
@@ -72,7 +72,7 @@ class StatusDisplay(BaseCallBack):
     
     def on_fit_epoch_end(self):
         for event in self.status.current.events: 
-            if self.status.total_models <= self.config.model_num:
+            if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
                 Logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , vb_level = max(event.vb_level , self.vb_level))
             else:
                 Logger.log_only(f'Epoch Event : {event.info}' , vb_level = max(event.vb_level , self.vb_level))
@@ -118,7 +118,7 @@ class StatusDisplay(BaseCallBack):
         if not self.display_progress:
             return
         dump_info = f'Dump model {self.texts.model_str} with best attempt {self.metrics.model_metrics.best_attempt()}'
-        if self.status.total_models <= self.config.model_num:
+        if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
             self.stdout(dump_info , color = 'cyan')
         else:
             Logger.log_only(dump_info , vb_level = self.vb_level)
