@@ -65,8 +65,6 @@ class BoostPredictor(PredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        self.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
-
         self.boost.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
 
         for _ in self.trainer.iter_train_dataloader():
@@ -76,8 +74,6 @@ class BoostPredictor(PredictorModel):
         for _ in self.trainer.iter_val_dataloader():
             self.batch_forward()
             self.batch_metrics()
-
-        self.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
 
     def collect(self , submodel = 'best' , *args):
         self.model_dict.boost_dict = self.boost.to_dict()

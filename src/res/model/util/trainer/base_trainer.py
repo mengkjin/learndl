@@ -338,13 +338,18 @@ class BaseTrainer(BasePipeline):
         self.note(iter_info , add_vb = 1)
         return model_iter
 
+    def iter_model_submodels_on_save(self):
+        assert self.is_fitting , f'{self.status.stage} is not allowed to iter model submodels on save'
+        for self.status.model_submodel in self.model_submodels: 
+            yield self.status
+            
     def iter_model_submodels(self):
         assert not self.is_fitting , f'{self.status.stage} is not allowed to iter model submodels'
         for self.status.model_submodel in self.model_submodels: 
             self.on_test_submodel_start()
             yield self.status
             self.on_test_submodel_end()
-
+        
     def iter_fit_epoches(self):
         while not self.status.loop_end:
             self.on_fit_epoch_start()

@@ -51,16 +51,12 @@ def get_pead_df(date : int , price_type : Literal['open' , 'low'] , rank_pct : b
 
     return pred_df
 
-class _pead_calculator:
+class PeadCalculator:
     """
     Thread-safe, per-date cache for PEAD intermediate data (ann calendar + quotes).
-
-    Replaces the old @singleton instance: one global object could not serve
-    different dates concurrently, and parallel pead_* factors on the same date
-    could race on __init__ or repeat heavy I/O.
     """
     running_days = 20
-    _cache : dict[int , _pead_calculator] = {}
+    _cache : dict[int , PeadCalculator] = {}
 
     def __init__(self , date : int):
         assert date > 0 , f'date must be positive integer , got {date}'
@@ -70,7 +66,7 @@ class _pead_calculator:
         self.calc_pead_quotes()
 
     @classmethod
-    def get(cls , date : int) -> _pead_calculator:
+    def get(cls , date : int) -> PeadCalculator:
         # Fast path: ann_cal / quotes are fixed after build; concurrent reads need no lock.
         if date in cls._cache:
             return cls._cache[date]
@@ -135,7 +131,7 @@ class pead_aog(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('open' , rank_pct = False)
+        pead_df = PeadCalculator.get(date).pead_df('open' , rank_pct = False)
         return pead_df.iloc[:,-1]
     
 class pead_alg(MomentumFactor):
@@ -144,7 +140,7 @@ class pead_alg(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('low' , rank_pct = False)
+        pead_df = PeadCalculator.get(date).pead_df('low' , rank_pct = False)
         return pead_df.iloc[:,-1]
 
 class pead_aog_rank(MomentumFactor):
@@ -153,7 +149,7 @@ class pead_aog_rank(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('open' , rank_pct = True)
+        pead_df = PeadCalculator.get(date).pead_df('open' , rank_pct = True)
         return pead_df.iloc[:,-1]
 
 class pead_alg_rank(MomentumFactor):
@@ -162,7 +158,7 @@ class pead_alg_rank(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('low' , rank_pct = True)
+        pead_df = PeadCalculator.get(date).pead_df('low' , rank_pct = True)
         return pead_df.iloc[:,-1]
 
 class pead_aog_rank_demax(MomentumFactor):
@@ -171,7 +167,7 @@ class pead_aog_rank_demax(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('open')
+        pead_df = PeadCalculator.get(date).pead_df('open')
         return pead_df.iloc[:,-1] - pead_df.iloc[:,:-1].max(axis = 1)
 
 class pead_alg_rank_demax(MomentumFactor):
@@ -180,7 +176,7 @@ class pead_alg_rank_demax(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('low')
+        pead_df = PeadCalculator.get(date).pead_df('low')
         return pead_df.iloc[:,-1] - pead_df.iloc[:,:-1].max(axis = 1)
 
 class pead_aog_rank_quantile(MomentumFactor):
@@ -189,7 +185,7 @@ class pead_aog_rank_quantile(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('open')
+        pead_df = PeadCalculator.get(date).pead_df('open')
         return pead_df.iloc[:,:-1].quantile(0.2 , axis = 1)
 
 class pead_alg_rank_quantile(MomentumFactor):
@@ -198,5 +194,5 @@ class pead_alg_rank_quantile(MomentumFactor):
     preprocess = False
 
     def calc_factor(self , date : int):
-        pead_df = _pead_calculator.get(date).pead_df('low')
+        pead_df = PeadCalculator.get(date).pead_df('low')
         return pead_df.iloc[:,:-1].quantile(0.2 , axis = 1)

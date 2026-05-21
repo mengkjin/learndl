@@ -52,7 +52,7 @@ class ConsolidateCallBack(BaseCallBack):
 
         callback_kwargs = self.config.callback_kwargs
         callbacks = [cls(self.binder , **callback_kwargs.get(cls.__name__ , {})) for cls in callback_classes]
-        callbacks = sorted([cb for cb in callbacks if cb] , key=lambda x: x.CB_ORDER)
+        callbacks = sorted([cb for cb in callbacks if cb] , key=lambda x: x.CB_ORDER) # remove !bool(callbacks) and sort by CB_ORDER
         return callbacks
 
     def resolving_callbacks(self , callbacks : list[BaseCallBack]) -> list[BaseCallBack]:

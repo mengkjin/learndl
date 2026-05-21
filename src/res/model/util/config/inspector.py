@@ -31,6 +31,7 @@ class ModelConfigsInspector:
                 'ValidationConverge' : False ,
                 'TrainConverge' : False ,
                 'FitConverge' : False ,
+                'CudaEmptyCache' : False ,
             }
         if not isinstance(warning_list , dict):
             warning_list = {warn: False for warn in warning_list}

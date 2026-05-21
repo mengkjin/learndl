@@ -3,6 +3,6 @@ CallbackTimer:      {}
 EarlyStoppage:      {'peak_patience' : 20 , 'converge_patience' : 5 , 'converge_dataset' : 'valid'}
 BadAttemptRetrain:  {'early_exit' : 10 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
 StatusDisplay:      {}
-SummaryWriter:       {}
+SummaryWriter:      {}
 DetailedAlphaAnalysis:  {}
-CudaEmptyCache:     {'batch_interval' : 20}
+MemoryOptimization: {'batch_interval' : 20}

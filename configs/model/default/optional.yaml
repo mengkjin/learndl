@@ -9,6 +9,7 @@ model.module.boost: xgboost
 model.module.boost.optuna: false
 model.module.boost.optuna.trials: 10
 model.module.factor: null
+model.module.nn_boost: lgbm
 model.interval: null
 model.interval.nn: 120
 model.interval.boost: 20
@@ -17,6 +18,13 @@ model.window: null
 model.window.nn: 2400
 model.window.boost: 240
 
+input.data.types: day
+input.hidden.types:
+  - gru_day_V0.0.best
+  - gru_day_V0.1.best
+input.factor.types:
+  fundament: [quality]
+input.combo.types: [data , factor]
 input.sequence.lens: {day: 30, style: 30, indus: 30 , factor: 1, hidden: 1 , 'week' : 50} 
 input.sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1 , 'week' : 1}
 input.filter.secid: null
@@ -56,7 +64,7 @@ callbacks.EarlyStoppage: {'peak_patience' : 20 , 'converge_patience' : 5 , 'conv
 callbacks.BadAttemptRetrain: {'early_exit' : 10 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
 callbacks.StatusDisplay: {}
 callbacks.SummaryWriter: {}
-callbacks.CudaEmptyCache: {'batch_interval' : 20}
+callbacks.MemoryOptimization: {'batch_interval' : 20}
 callbacks.DetailedAlphaAnalysis: {}
 
 conditional.short_test:

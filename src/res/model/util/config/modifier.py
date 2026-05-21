@@ -179,6 +179,33 @@ class ModelConfigModifier:
                 Logger.success(f'{key}.train.callbacks has {old_name} , removed')
         return config
 
+    @classmethod
+    def rename_CudaEmptyCache_to_MemoryOptimization(cls , key : str , config : DictLoader) -> DictLoader:
+        if not key.endswith('.model'):
+            return config
+        if not isinstance(config , dict):
+            config = config()
+        old_name = 'callbacks.CudaEmptyCache'
+        new_name = 'callbacks.MemoryOptimization'
+        default_value = {
+            'batch_interval': 20,
+        }
+        if old_name in config:
+            value = config.pop(old_name)
+            Logger.success(f'{key}.{old_name} has been removed')
+        else:
+            value = default_value
+        if new_name not in config:
+            config[new_name] = value
+            Logger.success(f'{key}.{new_name} has been added')
+
+        for name in list(config.keys()):
+            if 'CudaEmptyCache' in name:
+                new_name = name.replace('CudaEmptyCache' , 'MemoryOptimization')
+                config[new_name] = config.pop(name)
+                Logger.success(f'{key}.{name} has been renamed to {new_name}')
+        return config
+
 class ModelConfigsBatchModifier:
     def __init__(self):
         self.root = PATH.model

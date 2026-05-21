@@ -112,7 +112,6 @@ class NNBoost(PredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        self.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
         # fit net
         for _ in self.trainer.iter_fit_epoches():
             self.net.train()
@@ -146,8 +145,6 @@ class NNBoost(PredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        self.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
-
     def batch_forward_net(self) -> None: 
         self.batch_output = BatchOutput(self.forward_net(self.batch_input))
 
@@ -164,5 +161,5 @@ class NNBoost(PredictorModel):
     def on_test_model_start(self):
         set_grad_enabled(False)
 
-    def on_before_save_model(self):
+    def on_before_stack_model(self):
         self.net = self.net.cpu()

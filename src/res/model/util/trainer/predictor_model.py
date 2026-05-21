@@ -134,28 +134,25 @@ class PredictorModel(TrainerPipeline):
         if self.metrics.epoch_train_metrics.nanloss:
             # skip saving model when nan loss is encountered
             return
-        self.trainer.on_before_save_model()
-        for submodel in self.trainer.model_submodels:
-            self.deposition.stack_model(self.collect(submodel) , self.status.attempt_key , self.model_num , self.model_date , submodel) 
+        self.trainer.on_before_stack_model()
+        for _ in self.trainer.iter_model_submodels_on_save():
+            model_dict = self.collect(self.model_submodel)
+            self.deposition.stack_model(model_dict , self.status.attempt_key , self.model_num , self.model_date , self.model_submodel) 
 
     def dump_model(self):
         '''dump model to somewhere'''
         self.metrics.collect_model()
+        self.trainer.on_before_dump_model()
         best_attempt = self.metrics.model_metrics.best_attempt()
-        self.stdout(f'Dump model {self.texts.model_str} with best attempt {best_attempt}' , color = 'cyan')
-        for submodel in self.trainer.model_submodels:
-            self.deposition.dump_stacked_model(best_attempt , self.model_num , self.model_date , submodel) 
+        for _ in self.trainer.iter_model_submodels_on_save():
+            self.deposition.dump_stacked_model(best_attempt , self.model_num , self.model_date , self.model_submodel) 
 
     def test(self):
         '''test the model inside'''
-        self.note(f'model {self.texts.model_str} test start' , vb_level = 'max')
-
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
 
-        self.note(f'model {self.texts.model_str} test done' , vb_level = 'max')
-    
     def batch_forward(self) -> None: 
         if self.batch_idx >= self.trainer.batch_resumed: 
             self.batch_output = self(self.batch_input)

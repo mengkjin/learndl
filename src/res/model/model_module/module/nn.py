@@ -76,8 +76,6 @@ class NNPredictor(PredictorModel):
         return self.net(x , *args , **kwargs)
 
     def fit(self):
-        self.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
-
         for _ in self.trainer.iter_fit_epoches():
             for _ in self.trainer.iter_train_dataloader():
                 self.batch_forward()
@@ -87,8 +85,6 @@ class NNPredictor(PredictorModel):
             for _ in self.trainer.iter_val_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
-
-        self.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)
@@ -115,5 +111,5 @@ class NNPredictor(PredictorModel):
     def on_test_model_start(self):
         set_grad_enabled(False)
 
-    def on_before_save_model(self):
+    def on_before_stack_model(self):
         self.net = self.net.cpu()

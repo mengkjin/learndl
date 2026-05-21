@@ -5,6 +5,7 @@ module        : gru
 # boost : can be boost / boost@{lgbm} ... / {lgbm} ...
 # factor : can be factor / factor@{factor_name} ... / {factor_name}
 # db : can be db / db@{mapping_name} ... / {mapping_name}
+# nn_boost : can be nn_boost / nn_boost@{lgbm} ... 
 
 labels: 
   # rtn : raw return | std : standardized return | res : risk model residual
@@ -12,7 +13,7 @@ labels:
   - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
   # - rtn_lag1_10 
 
-submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
+submodels     : [best] # for nn list[Literal['best' , 'swalast' , 'swabest']] , for other only ['best']
 beg_date      : 20170103 # model start date
 end_date      : 99991231 # model end date
 
@@ -26,6 +27,8 @@ module.boost.optuna        : False   # for boost module, if True, use optuna to 
 module.boost.optuna.trials : 10      # for boost module with optuna, use this to specify the number of trials for optuna
 
 module.factor              : null    # if module is Literal['factor'] , use this to specify the factor module
+
+module.nn_boost            : lgbm    # if module is Literal['nn_boost'] , use this to specify the boost module
 
 # model update interval in days , nn is prefered to be 120 , others is prefered to be 20 , but is up to you
 interval         : null 

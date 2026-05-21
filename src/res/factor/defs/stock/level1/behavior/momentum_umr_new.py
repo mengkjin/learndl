@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from threading import Lock
 from src.proj import CALENDAR , DB , Const
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
@@ -10,13 +11,18 @@ from src.func.linalg import symmetric_orth_np
 
 __all__ = ['umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m']
 
+
 _cached_data = {}
+_cached_lock = Lock()
 
 def get_market_event_dates(events = ['high_level_switch' , 'platform_breakout' , 'selloff_rebound']):
-    if 'market_event_dates' not in _cached_data:
-        market_events = [DB.load('market_factor' , event).query(f'{event} == 1')['date'].to_numpy() for event in events]
-        market_event_dates = np.unique(np.concatenate(market_events)) if market_events else np.array([] , dtype = int)
-        _cached_data['market_event_dates'] = market_event_dates
+    if 'market_event_dates' in _cached_data:
+        return _cached_data['market_event_dates']
+    with _cached_lock:
+        if 'market_event_dates' not in _cached_data:
+            market_events = [DB.load('market_factor' , event).query(f'{event} == 1')['date'].to_numpy() for event in events]
+            market_event_dates = np.unique(np.concatenate(market_events)) if market_events else np.array([] , dtype = int)
+            _cached_data['market_event_dates'] = market_event_dates
     return _cached_data['market_event_dates']  
 
 def calc_umr_new(date , n_months : int , risk_window : int = 10):

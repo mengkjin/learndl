@@ -19,13 +19,6 @@ model.beg_date: 20170103
 model.end_date: 99991231
 
 input.type: data
-input.data.types: day
-input.hidden.types:
-  - gru_day_V0.0.best
-  - gru_day_V0.1.best
-input.factor.types:
-  fundament: [quality]
-input.combo.types: [data , factor]
 
 train.max_epoch: 200
 train.batch_size: 10000
@@ -38,4 +31,4 @@ train.callbacks:
   - EarlyStoppage
   - BadAttemptRetrain
   - CallbackTimer
-  # - CudaEmptyCache
+  - MemoryOptimization

@@ -66,6 +66,9 @@ class StatusDisplay(BaseCallBack):
             Logger.stdout(self.texts.progress , vb_level = self.vb_level)
         else:
             Logger.log_only(self.texts.progress , vb_level = self.vb_level)
+
+    def on_fit_model_start(self):
+        self.model.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
     
     def on_fit_epoch_end(self):
         for event in self.status.current.events: 
@@ -75,6 +78,7 @@ class StatusDisplay(BaseCallBack):
                 Logger.log_only(f'Epoch Event : {event.info}' , vb_level = max(event.vb_level , self.vb_level))
     
     def on_fit_model_end(self):
+        self.model.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
         model_summary = self.texts.model_summary
         if model_summary:
             Logger.remark(model_summary)
@@ -82,6 +86,12 @@ class StatusDisplay(BaseCallBack):
     def on_fit_end_after(self):  
         if self.texts.fit_summary:
             self.note(f'In Stage [{self.status.stage}], Finish All Process! {self.texts.fit_summary}')
+
+    def on_test_model_start(self):
+        self.model.note(f'model {self.texts.model_str} test start' , vb_level = 'max')
+
+    def on_test_model_end(self):
+        self.model.note(f'model {self.texts.model_str} test done' , vb_level = 'max')
     
     def on_test_end_before(self): 
         time_cost = datetime.now() - self.status.times['test_start']
@@ -103,6 +113,15 @@ class StatusDisplay(BaseCallBack):
     def on_validation_batch_end(self):   
         if self.dataloader_info: 
             self.dataloader.display(f'Valid {self.status.epoch_key} accuracy : {self.metrics.batch_accuracy:.5f}')
+
+    def on_before_dump_model(self):
+        if not self.display_progress:
+            return
+        dump_info = f'Dump model {self.texts.model_str} with best attempt {self.metrics.model_metrics.best_attempt()}'
+        if self.status.total_models <= self.config.model_num:
+            self.stdout(dump_info , color = 'cyan')
+        else:
+            Logger.log_only(dump_info , vb_level = self.vb_level)
 
     def on_test_batch_end(self):         
         if self.dataloader_info: 
