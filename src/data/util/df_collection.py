@@ -158,9 +158,6 @@ class _df_collection(ABC):
         with self._lock:
             if df is not None and date not in self.dates:
                 date = int(date)
-                if df.index.unique().size != 1:
-                    print(f'when adding df of date {date}, df index must be unique, got {df.index.unique()} unique values, got stop here')
-                    raise ValueError('stop here')
                 self.dates.append(date)
                 self.last_added_date = date
                 self.add_one_day(date , df)
@@ -290,12 +287,13 @@ class DFCollection(_df_collection):
         dates_to_do = list(self.data_frames.keys())
         if len(dates_to_do) == 0:
             return
+
         df0 = self.long_frame.loc[~self.long_frame.index.isin(dates_to_do)]
         dfs = [df0] + [df for df in self.data_frames.values() if df is not None and not df.empty]
         dfs = [df for df in dfs if df is not None and not df.empty]
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
-            self.long_frame = pd.concat([df0 , *dfs], copy=False).sort_index()
+            self.long_frame = pd.concat(dfs, copy=False).sort_index()
         self.data_frames.clear()
 
 class PLDFCollection(_df_collection):
