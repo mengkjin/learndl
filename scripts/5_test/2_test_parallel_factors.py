@@ -54,7 +54,7 @@ def _resolve_date(date: int | None) -> int:
     return int(date)
 
 
-def _pick_factors_for_date(date: int, n_factors: int , pick_pead : bool = True) -> list[str]:
+def _pick_factors_for_date(date: int, n_factors: int , pick_pead : bool = False) -> list[str]:
     """
     First ``n_factors`` updatable stock calculators with ``init_date <= date``.
 

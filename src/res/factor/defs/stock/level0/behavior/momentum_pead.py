@@ -36,6 +36,12 @@ def get_pead_df(date : int , price_type : Literal['open' , 'low'] , rank_pct : b
 
     quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['preclose' , price_type])
     mv = DATAVENDOR.TRADE.get_mv(start , end , 'circ_mv')
+    if not quotes.index.is_unique:
+        print(quotes.index[quotes.index.duplicated()])
+        raise ValueError('for PEAD, quotes index must be unique, got stop here')
+    if not mv.index.is_unique:
+        print(mv.index[mv.index.duplicated()])
+        raise ValueError('for PEAD, mv index must be unique, got stop here')
 
     quotes['circ_mv'] = mv['circ_mv']
     quotes['pct_change'] = quotes[price_type] / quotes['preclose'] - 1
