@@ -101,7 +101,10 @@ class TradeDataAccess(DateDataAccess):
         if not qte.index.is_unique:
             print(qte.index)
             print(qte.index[qte.index.duplicated()])
-
+            counts = self.collections['trd'].long_frame.groupby('date').count()
+            print(counts)
+            print(counts[counts > 8000])
+            
             raise ValueError('quotes index must be unique, got stop here')
         return qte
     

@@ -158,6 +158,9 @@ class _df_collection(ABC):
         with self._lock:
             if df is not None and date not in self.dates:
                 date = int(date)
+                if df.index.unique().size != 1:
+                    print(f'when adding df of date {date}, df index must be unique, got {df.index.unique()} unique values, got stop here')
+                    raise ValueError('stop here')
                 self.dates.append(date)
                 self.last_added_date = date
                 self.add_one_day(date , df)
