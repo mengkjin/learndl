@@ -162,6 +162,31 @@ class _df_collection(ABC):
                 self.last_added_date = date
                 self.add_one_day(date , df)
 
+    def add_long_frame(self , long_frame : pd.DataFrame):
+        """
+        Bulk-insert a pre-built long-format DataFrame into the cache.
+
+        Existing rows for dates already present in ``long_frame`` are
+        replaced; new dates are appended and the result is kept sorted.
+        """
+        if long_frame.empty:
+            return
+        # Must hold ``_lock`` — same as ``gets`` / ``to_long_frame`` (used from parallel factor jobs).
+        with self._lock:
+            long_frame = long_frame.reset_index([i for i in long_frame.index.names if i] , drop = False).dropna(how = 'all').set_index(self.date_key)
+            if self.long_frame.empty:
+                self.long_frame = long_frame
+            else:
+                df0 = self.long_frame.loc[~self.long_frame.index.isin(long_frame.index)]
+                self.long_frame = pd.concat([df0 , long_frame] , copy = False)
+            self.long_frame = self.long_frame.sort_index()
+            for d in pd.Index(self.long_frame.index).astype(np.int64).unique():
+                d = int(d)
+                if d not in self.dates:
+                    self.dates.append(d)
+                    self.last_added_date = d
+                self.data_frames.pop(d , None)
+
     def truncate(self):
         '''truncate the df collection to the max_len , reorder the dates'''
         with self._lock:
@@ -248,31 +273,6 @@ class DFCollection(_df_collection):
         df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
         return df
 
-    def add_long_frame(self , long_frame : pd.DataFrame):
-        """
-        Bulk-insert a pre-built long-format DataFrame into the cache.
-
-        Existing rows for dates already present in ``long_frame`` are
-        replaced; new dates are appended and the result is kept sorted.
-        """
-        if long_frame.empty:
-            return
-        # Must hold ``_lock`` — same as ``gets`` / ``to_long_frame`` (used from parallel factor jobs).
-        with self._lock:
-            long_frame = long_frame.reset_index([i for i in long_frame.index.names if i] , drop = False).dropna(how = 'all').set_index(self.date_key)
-            if self.long_frame.empty:
-                self.long_frame = long_frame
-            else:
-                df0 = self.long_frame.loc[~self.long_frame.index.isin(long_frame.index)]
-                self.long_frame = pd.concat([df0 , long_frame] , copy = False)
-            self.long_frame = self.long_frame.sort_index()
-            for d in pd.Index(self.long_frame.index).astype(np.int64).unique():
-                d = int(d)
-                if d not in self.dates:
-                    self.dates.append(d)
-                    self.last_added_date = d
-                self.data_frames.pop(d , None)
-
     def to_long_frame(self):
         """
         Flush the per-date ``data_frames`` dict into ``long_frame``.
@@ -284,17 +284,16 @@ class DFCollection(_df_collection):
         Note: called automatically by ``get_multiple_days``; callers do not
         normally need to invoke this directly.
         """
-        with self._lock:
-            dates_to_do = list(self.data_frames.keys())
-            if len(dates_to_do) == 0:
-                return
-            df0 = self.long_frame.loc[~self.long_frame.index.isin(dates_to_do)]
-            dfs = [df0] + [df for df in self.data_frames.values() if df is not None and not df.empty]
-            dfs = [df for df in dfs if df is not None and not df.empty]
-            with warnings.catch_warnings():
-                warnings.simplefilter(action='ignore', category=FutureWarning)
-                self.long_frame = pd.concat([df0 , *dfs], copy=False).sort_index()
-            self.data_frames.clear()
+        dates_to_do = list(self.data_frames.keys())
+        if len(dates_to_do) == 0:
+            return
+        df0 = self.long_frame.loc[~self.long_frame.index.isin(dates_to_do)]
+        dfs = [df0] + [df for df in self.data_frames.values() if df is not None and not df.empty]
+        dfs = [df for df in dfs if df is not None and not df.empty]
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            self.long_frame = pd.concat([df0 , *dfs], copy=False).sort_index()
+        self.data_frames.clear()
 
 class PLDFCollection(_df_collection):
     """
