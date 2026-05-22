@@ -9,6 +9,7 @@ All underlying singletons (``TRADE``, ``RISK``, ``BS``/``IS``/``CF``/``INDI``/``
 ``ANALYST``, ``MKLINE``, ``EXPO``, ``INFO``) are exposed as class attributes so
 callers can access specialised methods directly if needed.
 """
+import threading
 import torch
 import numpy as np
 import pandas as pd
@@ -67,13 +68,15 @@ class DataVendor:
     
     def __init__(self):
         """Initialise per-date caches and load the full stock listing at startup."""
+        # Protects ``day_secids`` and lazy ``_block_*`` attrs (parallel factor updates).
+        self._lock = threading.Lock()
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.day_secids : dict[int,np.ndarray] = {}
 
         self.init_stocks()
 
     def data_storage_control(self):
-        """Truncate all underlying singleton caches to free memory."""
+        """Truncate all underlying singleton caches to free memory (call before each parallel job group)."""
         self.TRADE.truncate()
         self.RISK.truncate()
 
@@ -93,9 +96,10 @@ class DataVendor:
         """get secid of all stocks or at a specific date"""
         if date is None: 
             return np.unique(self.all_stocks['secid'].to_numpy(int))
-        if date not in self.day_secids:
-            self.day_secids[date] = self.INFO.get_secid(date)
-        return self.day_secids[date]
+        with self._lock:
+            if date not in self.day_secids:
+                self.day_secids[date] = self.INFO.get_secid(date)
+            return self.day_secids[date]
 
     def db_loads_callback(self , df : pd.DataFrame | pl.DataFrame , db_src : str , db_key : str):
         """Receive bulk-loaded trade_ts data from ``DB.loads`` and forward it to ``TRADE``'s cache."""
@@ -197,28 +201,33 @@ class DataVendor:
         target_start , target_end = self.cd(target_start , -extend) , self.cd(target_end , extend)
         target_start , target_end = min(target_start , CALENDAR.update_to()) , min(target_end , CALENDAR.update_to())
 
-        block0 : DataBlock = getattr(self , f'_block_{data_key}' , DataBlock())
-        loaded_start , loaded_end = block0.min_date , block0.max_date
-        
-        block0 = block0.extend_to(db_src , db_key , target_start , target_end , inplace = True)
+        with self._lock:
+            block0 : DataBlock = getattr(self , f'_block_{data_key}' , DataBlock())
+            loaded_start , loaded_end = block0.min_date , block0.max_date
 
-        if data_key == 'daily_quotes':
-            block0 = block0.adjust_price()
-        
-        Logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
-        setattr(self , f'_block_{data_key}' , block0)
+            block0 = block0.extend_to(db_src , db_key , target_start , target_end , inplace = True)
+
+            if data_key == 'daily_quotes':
+                block0 = block0.adjust_price()
+
+            Logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
+            setattr(self , f'_block_{data_key}' , block0)
 
     def update_return_block(self , start : int , end : int):
         """Compute and cache the daily return DataBlock for [start, end] if not already loaded."""
         td_within = self.td_within(start , end , updated = True)
-        daily_ret = getattr(self , f'_block_daily_ret' , DataBlock())
-        if daily_ret.date is None or not np.isin(td_within , daily_ret.date).all():
-            pre_start_dt = CALENDAR.cd(start , -20)
-            extend_td_within = self.td_within(pre_start_dt , end)
-            blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).ffill()
-            rtn = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan)
-            blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
-            blk = blk.align_date(blk.date_within(start , end) , inplace = True)
+        with self._lock:
+            daily_ret = getattr(self , f'_block_daily_ret' , DataBlock())
+            if daily_ret.date is not None and np.isin(td_within , daily_ret.date).all():
+                return
+        # Build outside lock; ``get_quotes_block`` acquires ``_lock`` for its own cache.
+        pre_start_dt = CALENDAR.cd(start , -20)
+        extend_td_within = self.td_within(pre_start_dt , end)
+        blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).ffill()
+        rtn = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan)
+        blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
+        blk = blk.align_date(blk.date_within(start , end) , inplace = True)
+        with self._lock:
             setattr(self , f'_block_daily_ret' , blk)
 
     def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:

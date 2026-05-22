@@ -81,34 +81,41 @@ class DateDataAccess(ABC):
             return pd.DataFrame()
         if isinstance(dates , int):
             dates = [dates]
-        for date in self.collections[data_type].date_diffs(dates , True):
-            self.collections[data_type].add(date , self.data_loader(date , data_type))
+        # overwrite=True: reload every requested date (double-checked in ``ensure_dates``).
+        self.collections[data_type].ensure_dates(
+            dates , lambda d: self.data_loader(d , data_type) , overwrite = True)
 
     def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return the cached DataFrame for a single ``date``, loading from DB if missing."""
-        if overwrite or int(date) not in self.collections[data_type]:
-            self.collections[data_type].add(date , self.data_loader(date , data_type))
-        return self.collections[data_type].get(date , field , rename_date_key = rename_date_key)
+        collection = self.collections[data_type]
+        if overwrite or int(date) not in collection:
+            collection.ensure_dates(
+                [date] , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+        return collection.get(date , field , rename_date_key = rename_date_key)
 
     def gets(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return a multi-date DataFrame for ``data_type``, loading any missing dates from DB."""
         dates = np.array([int(d) for d in dates])
-        for date in self.collections[data_type].date_diffs(dates , overwrite):
-            self.collections[data_type].add(date , self.data_loader(date , data_type))
-        return self.collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
+        collection = self.collections[data_type]
+        collection.ensure_dates(
+            dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+        return collection.gets(dates , field , rename_date_key = rename_date_key)
     
     def get_pl(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``get`` — returns a ``pl.DataFrame`` from ``PLDFCollection``."""
-        if overwrite or int(date) not in self.pl_collections[data_type]:
-            self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
-        return self.pl_collections[data_type].get(date , field , rename_date_key = rename_date_key)
+        collection = self.pl_collections[data_type]
+        if overwrite or int(date) not in collection:
+            collection.ensure_dates(
+                [date] , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+        return collection.get(date , field , rename_date_key = rename_date_key)
 
     def gets_pl(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``gets`` — returns a multi-date ``pl.DataFrame``."""
         dates = np.array([int(d) for d in dates])
-        for date in self.pl_collections[data_type].date_diffs(dates , overwrite):
-            self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
-        return self.pl_collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
+        collection = self.pl_collections[data_type]
+        collection.ensure_dates(
+            dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+        return collection.gets(dates , field , rename_date_key = rename_date_key)
     
     def get_specific_data(self , start : int | TradeDate , end : int | TradeDate ,
                           data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True ,

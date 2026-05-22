@@ -13,7 +13,7 @@ PLDFCollection
 
 Both classes inherit the thread-safe ``add`` / ``get`` / ``gets`` /
 ``truncate`` interface from the abstract base ``_df_collection``.
-All public methods acquire a module-level ``threading.Lock``.
+Each instance uses its own ``threading.Lock`` (no cross-instance ordering).
 """
 import threading
 import warnings
@@ -22,12 +22,11 @@ import pandas as pd
 import polars as pl
 
 from abc import ABC , abstractmethod
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
 from src.proj import TradeDate
-
-lock = threading.Lock()
 
 class _df_collection(ABC):
     """
@@ -45,6 +44,8 @@ class _df_collection(ABC):
         ``'inner_date_key'`` when not provided.
     """
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
+        # Per-instance lock: TRADE / FINA / EXPO caches can load in parallel across collections.
+        self._lock = threading.Lock()
         self.max_len = max_len
         self.dates : list[int] = []
         self.last_added_date = -1
@@ -80,14 +81,17 @@ class _df_collection(ABC):
         return len(self.dates)
 
     def __contains__(self , date : int | TradeDate):
-        """Support ``date in collection`` membership test."""
-        return int(date) in self.dates
+        """Support ``date in collection`` membership test (reads ``dates`` under lock)."""
+        with self._lock:
+            return int(date) in self.dates
 
     @property
     def last_added_data(self):
         '''return the last added df'''
-        with lock:
-            return self.get(self.last_added_date)
+        with self._lock:
+            # Do not call ``get()`` here — it would re-acquire ``_lock`` (non-reentrant).
+            df = self.get_one_day(self.last_added_date)
+            return self.reform_df(df , rename_date_key = 'date')
 
     def date_diffs(self , dates : list[int | TradeDate] | np.ndarray , overwrite = False):
         """
@@ -101,11 +105,40 @@ class _df_collection(ABC):
             If True, return ``dates`` unchanged (treat all as missing).
         """
         dates = np.array([int(d) for d in dates])
-        return dates if overwrite else np.setdiff1d(dates , self.dates)
+        # Snapshot ``dates`` under lock so concurrent add/truncate cannot skew the diff.
+        with self._lock:
+            return dates if overwrite else np.setdiff1d(dates , self.dates)
+
+    def ensure_dates(
+        self ,
+        dates : list[int | TradeDate] | np.ndarray ,
+        loader : Callable[[int], pd.DataFrame | None] ,
+        overwrite : bool = False ,
+    ) -> None:
+        """
+        Load missing dates via ``loader`` using double-checked locking.
+
+        DB I/O runs outside the lock; only cache insertion is serialized. Another
+        thread may load the same date first — the second insert is skipped.
+        """
+        for date in np.asarray(dates, dtype=np.int64):
+            date = int(date)
+            with self._lock:
+                if not overwrite and date in self.dates:
+                    continue
+            df = loader(date)
+            if df is None:
+                continue
+            with self._lock:
+                if overwrite or date not in self.dates:
+                    if date not in self.dates:
+                        self.dates.append(date)
+                        self.last_added_date = date
+                    self.add_one_day(date , df)
 
     def get(self , date : int | TradeDate , field = None , rename_date_key : str | None = 'date'):
         '''get a DataFrame with given (1) date , fields and set_index'''
-        with lock:
+        with self._lock:
             date = int(date)
             df = self.get_one_day(date)
             df = self.reform_df(df , field , rename_date_key = rename_date_key)
@@ -113,7 +146,7 @@ class _df_collection(ABC):
 
     def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False):
         '''get a DataFrame with given (many) dates , fields and set_index'''
-        with lock:
+        with self._lock:
             assert self.max_len <= -1 or len(dates) <= self.max_len , f'No more than {self.max_len} dates , got {len(dates)}'
             df = self.get_multiple_days(dates)
             df = self.reform_df(df , field , rename_date_key = rename_date_key)
@@ -122,7 +155,7 @@ class _df_collection(ABC):
         return df
 
     def add(self , date : int | TradeDate , df : pd.DataFrame | None):
-        with lock:
+        with self._lock:
             if df is not None and date not in self.dates:
                 date = int(date)
                 self.dates.append(date)
@@ -131,7 +164,7 @@ class _df_collection(ABC):
 
     def truncate(self):
         '''truncate the df collection to the max_len , reorder the dates'''
-        with lock:
+        with self._lock:
             if len(self) > self.max_len > 0:
                 self.dates = sorted(self.dates)[-self.max_len:]
                 [self.data_frames.pop(key) for key in self.data_frames if key not in self.dates]
@@ -164,11 +197,11 @@ class _df_collection(ABC):
         return df
 
     def columns(self):
-        if not self:
-            return []
-        elif isinstance(self.long_frame , pd.DataFrame) and not self.long_frame.empty:
-            return self.long_frame.columns.tolist()
-        else:
+        with self._lock:
+            if not self.dates:
+                return []
+            if isinstance(self.long_frame , pd.DataFrame) and not self.long_frame.empty:
+                return self.long_frame.columns.tolist()
             columns = self.data_frames[self.dates[0]].columns
             return columns if isinstance(columns , list) else columns.tolist()
 
@@ -224,13 +257,21 @@ class DFCollection(_df_collection):
         """
         if long_frame.empty:
             return
-        long_frame = long_frame.reset_index([i for i in long_frame.index.names if i] , drop = False).dropna(how = 'all').set_index(self.date_key)
-        if self.long_frame.empty:
-            self.long_frame = long_frame
-        else:
-            df0 = self.long_frame.loc[~self.long_frame.index.isin(long_frame.index)]
-            self.long_frame = pd.concat([df0 , long_frame] , copy = False)
-        self.long_frame = self.long_frame.sort_index()
+        # Must hold ``_lock`` — same as ``gets`` / ``to_long_frame`` (used from parallel factor jobs).
+        with self._lock:
+            long_frame = long_frame.reset_index([i for i in long_frame.index.names if i] , drop = False).dropna(how = 'all').set_index(self.date_key)
+            if self.long_frame.empty:
+                self.long_frame = long_frame
+            else:
+                df0 = self.long_frame.loc[~self.long_frame.index.isin(long_frame.index)]
+                self.long_frame = pd.concat([df0 , long_frame] , copy = False)
+            self.long_frame = self.long_frame.sort_index()
+            for d in pd.Index(self.long_frame.index).astype(np.int64).unique():
+                d = int(d)
+                if d not in self.dates:
+                    self.dates.append(d)
+                    self.last_added_date = d
+                self.data_frames.pop(d , None)
 
     def to_long_frame(self):
         """

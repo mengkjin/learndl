@@ -87,7 +87,7 @@ class DataModule(BaseModule):
         self.loader_param = DataloaderParam()
         self.data_operator = DataOperator(self.config , self.loader_param)
         self.prenorm_operator = PrenormOperator(self.config , self.datas.norms)
-        self.labels = self.datas.y.values.squeeze(2).clone()
+        self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2).clone() , no_weight = True)[0]
 
         if self.empty_x:
             self.alert2(f'DataModule got empty x , fit and test stage will be skipped')
@@ -234,9 +234,10 @@ class DataModule(BaseModule):
             return
 
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
-        y_full = self.datas.y.values.squeeze(2)
-        
-        self.y_std = self.data_operator.standardize_y(y_full , no_weight = True)[0]
+        self.y_std = self.labels[:,self.d0:self.d1]
+
+        x_shapes = [x.shape[:2] for x in x_full.values()]
+        assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
         valid_y = self.y_std if self.is_fitting else None
