@@ -99,7 +99,9 @@ class TradeDataAccess(DateDataAccess):
             qte = qte.pivot_table(field , 'date' , 'secid')
 
         if not qte.index.is_unique:
+            print(qte.index)
             print(qte.index[qte.index.duplicated()])
+
             raise ValueError('quotes index must be unique, got stop here')
         return qte
     
