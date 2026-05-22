@@ -6,7 +6,7 @@
 # content: |
 #   Run up to N stock factors on a single trading day with thread pool vs for-loop.
 #   Use after DataVendor / DFCollection thread-safety changes to verify jobs complete.
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   date:
@@ -54,7 +54,7 @@ def _resolve_date(date: int | None) -> int:
     return int(date)
 
 
-def _pick_factors_for_date(date: int, n_factors: int) -> list[str]:
+def _pick_factors_for_date(date: int, n_factors: int , pick_pead : bool = True) -> list[str]:
     """
     First ``n_factors`` updatable stock calculators with ``init_date <= date``.
 
@@ -64,6 +64,8 @@ def _pick_factors_for_date(date: int, n_factors: int) -> list[str]:
     names: list[str] = []
     for calc in calcs:
         if int(date) < int(calc.init_date):
+            continue
+        if pick_pead and not calc.factor_name.lower().startswith('pead_'):
             continue
         names.append(calc.factor_name)
         if len(names) >= n_factors and n_factors > 0:
