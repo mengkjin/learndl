@@ -20,43 +20,6 @@ def get_profit_ann_dt(date : int):
     ann_dt = ann_dt[positive_yoy.reindex(ann_dt.index) > 0]
     return ann_dt.reset_index(drop=False)
 
-def get_pead_df(date : int , price_type : Literal['open' , 'low'] , rank_pct : bool = True , running_days : int = 20):
-    ann_cal = get_profit_ann_dt(date).set_index(['date','secid'])
-    dates = ann_cal.index.get_level_values('date').to_numpy()
-
-    end = dates.max()
-    ann_cal['0'] = dates
-    for i in range(running_days):
-        dates = CALENDAR.td_array(dates , -1)
-        ann_cal[f'-{i+1}'] = dates
-    start = CALENDAR.td(dates.min() , -20)
-    ann_cal = ann_cal.reset_index('date' , drop = True).\
-        melt(var_name = 'prev_day' , value_name = 'date' , ignore_index = False).\
-        reset_index(drop = False).set_index(['date' , 'secid']).astype({'prev_day':int})
-
-    quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['preclose' , price_type])
-    mv = DATAVENDOR.TRADE.get_mv(start , end , 'circ_mv')
-    if not quotes.index.is_unique:
-        print(quotes.index[quotes.index.duplicated()])
-        raise ValueError('for PEAD, quotes index must be unique, got stop here')
-    if not mv.index.is_unique:
-        print(mv.index[mv.index.duplicated()])
-        raise ValueError('for PEAD, mv index must be unique, got stop here')
-
-    quotes['circ_mv'] = mv['circ_mv']
-    quotes['pct_change'] = quotes[price_type] / quotes['preclose'] - 1
-
-    quotes['market_pct_change'] = quotes.groupby('date').apply(lambda x: (x['pct_change'] * x['circ_mv']).sum() / x['circ_mv'].sum()).\
-        loc[quotes.index.get_level_values('date')].values
-    quotes['act_pct_change'] = quotes['pct_change'] - quotes['market_pct_change']
-    if rank_pct:
-        quotes['act_pct_change'] = quotes.groupby('date')['act_pct_change'].rank(pct=True)
-    
-    pred_df = ann_cal.assign(act_pct_change = quotes['act_pct_change'].reindex(ann_cal.index))
-    pred_df = pred_df.reset_index().pivot_table(index = ['secid'] , columns = 'prev_day' , values = 'act_pct_change')
-
-    return pred_df
-
 class PeadCalculator:
     """
     Thread-safe, per-date cache for PEAD intermediate data (ann calendar + quotes).
@@ -106,6 +69,13 @@ class PeadCalculator:
     def calc_pead_quotes(self):
         quotes = DATAVENDOR.TRADE.get_quotes(self.start , self.end , ['preclose' , 'open' , 'low'])
         mv = DATAVENDOR.TRADE.get_mv(self.start , self.end , 'circ_mv')
+
+        if not quotes.index.is_unique:
+            print(quotes.index[quotes.index.duplicated()])
+            raise ValueError('for PEAD, quotes index must be unique, got stop here')
+        if not mv.index.is_unique:
+            print(mv.index[mv.index.duplicated()])
+            raise ValueError('for PEAD, mv index must be unique, got stop here')
 
         quotes['circ_mv'] = mv['circ_mv']
         quotes['open_rtn'] = quotes['open'] / quotes['preclose'] - 1

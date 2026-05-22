@@ -97,6 +97,10 @@ class TradeDataAccess(DateDataAccess):
                     qte[p] = qte[p] * adj
         if pivot: 
             qte = qte.pivot_table(field , 'date' , 'secid')
+
+        if not qte.index.is_unique:
+            print(qte.index[qte.index.duplicated()])
+            raise ValueError('quotes index must be unique, got stop here')
         return qte
     
     def get_adjfactor(
@@ -211,7 +215,12 @@ class TradeDataAccess(DateDataAccess):
         mv_type : Literal['circ_mv' , 'total_mv'] = 'circ_mv' , prev = True , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return circulating or total market cap (unit: 万元 / 10,000 CNY)."""
-        return self.get_val_data(start , end , mv_type , prev = prev , pivot = pivot , drop_old = drop_old)
+        mv = self.get_val_data(start , end , mv_type , prev = prev , pivot = pivot , drop_old = drop_old)
+
+        if not mv.index.is_unique:
+            print(mv.index[mv.index.duplicated()])
+            raise ValueError('mv index must be unique, got stop here')
+        return mv
 
     def get_market_return(
         self , start : int | TradeDate , end : int | TradeDate ,
