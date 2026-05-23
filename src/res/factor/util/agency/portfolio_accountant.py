@@ -474,11 +474,11 @@ class PortfolioAccountant:
             return self
             
         if self.config.daily:
-            period_st = DATAVENDOR.td_array(model_dates , 1)
+            period_st = CALENDAR.td_array(model_dates , 1)
             period_ed = period_st
         else:
             model_dates = np.intersect1d(model_dates , self.port_dates)
-            period_st = DATAVENDOR.td_array(model_dates , 1)
+            period_st = CALENDAR.td_array(model_dates , 1)
             period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1)]])
 
         assert np.all(model_dates < period_st) , (model_dates , period_st)

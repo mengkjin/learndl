@@ -1,10 +1,15 @@
 """Run many callables in-process, threaded, or multiprocessed with shared result dict."""
 from __future__ import annotations
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+
+import multiprocessing as mp
+
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from datetime import datetime
 from typing import Any , Callable , Literal , Mapping , Iterable , TypeVar
+
 from src.proj import MACHINE , Logger
 
-__all__ = ['parallel' , 'FuncCall']
+__all__ = ['parallel' , 'FuncCall' , 'is_main_process']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
 T = TypeVar('T')
@@ -13,6 +18,12 @@ INPUT_TYPE = (
     | tuple[Callable[..., T], Iterable[Any] | None] 
     | tuple[Callable[..., T], list[Any] | tuple[Any, ...] | None, dict[str, Any] | None]
 )
+
+
+def is_main_process() -> bool:
+    """True only in the process that launched the job (not a ``ProcessPoolExecutor`` worker)."""
+    return mp.current_process().name == 'MainProcess'
+
 
 def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:
     """get parallel method index
@@ -35,7 +46,7 @@ def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] ,
 def parallel(
     inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
     method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
-    max_workers = MAX_WORKERS , ignore_error = False , **kwargs
+    max_workers = MAX_WORKERS , ignore_error = False , timeout : float = -1 , indent : int = 0 , **kwargs
 ) -> dict[Any , T]:
     """Execute ``FuncCall`` inputs; populate and return the shared results dict.
 
@@ -52,13 +63,23 @@ def parallel(
     method = get_method(method if len(func_calls) > 1 else 0 , max_workers)
 
     if method == 0:
-        [func_call() for func_call in func_calls]
+        remaining_timeout = timeout * 3600
+        start_time = datetime.now()
+        for func_call in func_calls:
+            func_call()
+            remaining_timeout = remaining_timeout - (datetime.now() - start_time).total_seconds()
+            if remaining_timeout <= 0 and timeout > 0:
+                Logger.alert1(f'Timeout reached, {timeout} hours passed, stopping parallel', indent = indent)
+                break
     else:
         PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
-            futures = [func_call.submit(pool) for func_call in func_calls]
-            for future in as_completed(futures):
-                future.result()
+            futures = [(func_call , func_call.submit(pool)) for func_call in func_calls]
+            for func_call , future in futures:
+                # Process pool: child cannot mutate parent ``result_dict``; use Future return value.
+                returned = future.result()
+                if func_call.key is not None:
+                    result[func_call.key] = returned
     return result
 
 class FuncCall:
@@ -129,9 +150,9 @@ class FuncCall:
             print('BC._cd_pd_index.duplicated:' , BC._cd_pd_index[BC._cd_pd_index.duplicated()])
             raise
 
-    def go(self) -> None:
+    def go(self) -> Any:
         """Execute this instance's bound call with instance kwargs."""
-        self.try_call(self.func_input , self.key , self.result_dict , self.catch_errors , **self.kwargs)
+        return self.try_call(self.func_input , self.key , self.result_dict , self.catch_errors , **self.kwargs)
 
     def submit(self , pool : ThreadPoolExecutor | ProcessPoolExecutor):
         """Submit ``go`` to an executor; returns the Future."""

@@ -4,7 +4,7 @@
 # date: 2026-05-21
 # description: Smoke test parallel stock factor update
 # content: |
-#   Run up to N stock factors on a single trading day with thread pool vs for-loop.
+#   Run up to N stock factors on a single trading day with process pool vs for-loop.
 #   Use after DataVendor / DFCollection thread-safety changes to verify jobs complete.
 # email: True
 # mode: shell
@@ -20,8 +20,8 @@
 #       required: False
 #       default: 20
 #   compare:
-#       type: [forloop, thread, both]
-#       desc: forloop only, thread pool only, or run both and print timing
+#       type: [forloop, process, both]
+#       desc: forloop only, process pool only, or run both and print timing
 #       required: False
 #       default: both
 #   overwrite:
@@ -43,9 +43,9 @@ from typing import Any
 from src.proj import CALENDAR, Logger, Proj
 from src.proj.util import ScriptTool
 from src.res.factor.api import FactorCalculatorAPI
-from src.res.factor.calculator.updater import _JobFactorDate
+from src.res.factor.calculator.update_jobs import UpdateJobDate
 
-COMPARE_MODES = ('forloop', 'thread', 'both')
+COMPARE_MODES = ('forloop', 'process', 'both')
 
 
 def _resolve_date(date: int | None) -> int:
@@ -117,8 +117,8 @@ def _collect_jobs_force(date: int, factors: list[str], overwrite: bool) -> int:
         if int(date) < calc.init_date:
             Logger.alert1(f'Skip {name}: date {date} < init_date {calc.init_date}')
             continue
-        stock.jobs.append(_JobFactorDate(calc, date, overwrite, vb))
-    stock.jobs.sort(key=lambda x: x.sort_key())
+        stock.jobs.append(UpdateJobDate(calc, date, overwrite, vb))
+    stock.jobs.sort_jobs()
     return len(stock.jobs)
 
 
@@ -126,16 +126,16 @@ def _run_once(
     date: int,
     factors: list[str],
     *,
-    use_thread: bool,
+    use_process: bool,
     overwrite: bool,
     force_jobs: bool,
 ) -> dict[str, Any]:
     """Run ``StockFactorUpdater`` for one day; restore ``multi_thread`` afterward."""
     stock = FactorCalculatorAPI.Stock
     stock.jobs.clear()
-    prev_mt = stock.multi_thread
-    stock.multi_thread = use_thread
-    mode = 'thread' if use_thread else 'forloop'
+    prev_mp = stock.groups_multiprocessing
+    stock.groups_multiprocessing = use_process
+    mode = 'process' if use_process else 'forloop'
     Logger.note(f'Parallel smoke test: mode={mode}, date={date}, n_factors={len(factors)}, overwrite={overwrite}')
     Logger.stdout(f'Factors: {factors}', indent=1)
     t0 = time.perf_counter()
@@ -147,8 +147,8 @@ def _run_once(
             stock.before_process_jobs(
                 start=date, end=date, all=False, selected_factors=factors, overwrite=overwrite,
             )
-            for group, jobs in stock.grouped_jobs():
-                stock.process_group_jobs(group, jobs, indent=2, vb_level=2)
+            for level, level_jobs in stock.leveled_jobs():
+                stock.process_group_jobs(level, level_jobs, indent=2, vb_level=2, timeout=-1)
             stock.after_process_jobs(indent=1, vb_level=1)
         else:
             stock.process_jobs(
@@ -162,7 +162,7 @@ def _run_once(
                 timeout=-1,
             )
     finally:
-        stock.multi_thread = prev_mt
+        stock.groups_multiprocessing = prev_mp
     elapsed = time.perf_counter() - t0
     failed = [j for j in stock.jobs if not j.done]
     ok = len(stock.jobs) - len(failed)
@@ -196,7 +196,7 @@ def _print_summary(results: list[dict[str, Any]]) -> None:
 @ScriptTool('test_parallel_factors', lock_num=0)
 def main(
     date: int | None = None,
-    n_factors: int | None = -1,
+    n_factors: int | None = 60,
     compare: str | None = 'both',
     overwrite: bool | None = True,
     lookback_td: int | None = 10,
@@ -223,11 +223,11 @@ def main(
     results: list[dict[str, Any]] = []
     if compare in ('forloop', 'both'):
         results.append(
-            _run_once(date, factors, use_thread=False, overwrite=overwrite, force_jobs=force_jobs),
+            _run_once(date, factors, use_process=False, overwrite=overwrite, force_jobs=force_jobs),
         )
-    if compare in ('thread', 'both'):
+    if compare in ('process', 'both'):
         results.append(
-            _run_once(date, factors, use_thread=True, overwrite=overwrite, force_jobs=force_jobs),
+            _run_once(date, factors, use_process=True, overwrite=overwrite, force_jobs=force_jobs),
         )
 
     _print_summary(results)

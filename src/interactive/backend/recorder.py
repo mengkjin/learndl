@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from src.proj.util import argparse_dict
+from src.proj.util.func import is_main_process
 from .task import TaskItem , TaskDatabase
 
 class BackendTaskRecorder:
@@ -57,6 +58,9 @@ class BackendTaskRecorder:
         task_id : str | None = parsed_kwargs.pop('task_id' , None)
         if task_id:
             self._task_id = task_id
+        elif not is_main_process():
+            # Process-pool workers: no Streamlit task DB / queue registration.
+            self._task_id = ''
         else:
             task_item = TaskItem.create(None , self.task_db , source=parsed_kwargs.get('source' , None) , queue = True)
             self._task_id = task_item.id
@@ -124,6 +128,8 @@ class BackendTaskRecorder:
 
     def __enter__(self) -> BackendTaskRecorder:
         """Enter the recording context; returns self."""
+        if not self._task_id:
+            return self
         start_time = datetime.now().timestamp()
         pid = os.getpid()
         self.task_db.update_task(
@@ -133,6 +139,8 @@ class BackendTaskRecorder:
 
     def __exit__(self , exc_type : type[BaseException] | None , exc_value : BaseException | None , exc_traceback : Any) -> None:
         """Persist final task status and exit metadata to the database on context exit."""
+        if not self._task_id:
+            return
         self.update_msg['end_time'] = datetime.now().timestamp()
         if exc_type is None:
             self.update_msg['status'] = 'error' if self.exit_msg.code else 'complete'
@@ -199,8 +207,8 @@ class BackendTaskRecorder:
 
     def _func_return(self , func_return : Any | None = None) -> None:
         """Extract exit metadata from the wrapped function's return value into update_msg."""
-        if not self.task_id:
-            raise ValueError('task_id is not set')
+        if not self._task_id:
+            return
         exit_msg = self.ExitMessage.from_return(func_return)
         self.exit_msg = exit_msg
         if exit_msg.message:

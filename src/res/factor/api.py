@@ -20,11 +20,11 @@ class RiskModelUpdater:
         TuShareCNE5_Calculator.rollback(rollback_date)
 
 class FactorCalculatorAPI:
-    Stock = StockFactorUpdater
-    Market = MarketFactorUpdater
-    Affiliate = AffiliateFactorUpdater
-    Pooling = PoolingFactorUpdater
-    Stats = FactorStatsUpdater
+    Stock = StockFactorUpdater()
+    Market = MarketFactorUpdater()
+    Affiliate = AffiliateFactorUpdater()
+    Pooling = PoolingFactorUpdater()
+    Stats = FactorStatsUpdater()
 
     @classmethod
     def update(cls , **kwargs):

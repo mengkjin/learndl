@@ -29,6 +29,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.proj import PATH , Logger , Duration
+from src.proj.util.func import is_main_process
 from src.proj.core import strPath
 from src.proj.util import ScriptCmd , DBConnHandler , Email , properties , check_process_status , kill_process
 
@@ -893,6 +894,10 @@ class TaskItem:
             active queue, or None to skip queue registration.
         """
         if script is None:
+            if not is_main_process():
+                item = cls('__mp_worker__' , cmd = '' , status = 'running' , start_time = timestamp() , source = source)
+                item.set_task_db(task_db)   
+                return item
             try:
                 script = sys.modules['__main__'].__file__
                 assert script , 'script is not found'

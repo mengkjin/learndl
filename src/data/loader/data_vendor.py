@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
+from functools import cached_property
 from typing import Any , Literal
 
 from src.proj import Logger , CALENDAR , Proj , DB , Dates , singleton , Const
@@ -70,10 +71,42 @@ class DataVendor:
         """Initialise per-date caches and load the full stock listing at startup."""
         # Protects ``day_secids`` and lazy ``_block_*`` attrs (parallel factor updates).
         self._lock = threading.Lock()
+        self.initiated = False
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.day_secids : dict[int,np.ndarray] = {}
+        self.blocks_cache : dict[str,DataBlock] = {}
 
-        self.init_stocks()
+    @cached_property
+    def all_stocks(self) -> pd.DataFrame:
+        """get all the stocks"""
+        return self.INFO.get_desc(set_index=False , listed = True , exchange = ['SZSE', 'SSE', 'BSE'])
+    
+    @cached_property
+    def st_stocks(self) -> pd.DataFrame:
+        """get the st stocks"""
+        return self.INFO.get_st()
+
+    def clear_all(self):
+        """clear all the data in the collection"""
+        self.TRADE.clear_all()
+        self.INFO.clear_all()
+        self.RISK.clear_all()
+        self.INDI.clear_all()
+        self.BS.clear_all()
+        self.IS.clear_all()
+        self.CF.clear_all()
+        self.FINA.clear_all()
+        self.ANALYST.clear_all()
+        self.MKLINE.clear_all()
+        self.EXPO.clear_all()
+        self.CUSTOM_DATA.clear()
+
+        self.blocks_cache.clear()
+        self.day_quotes.clear()
+        self.day_secids.clear()
+        self.__dict__.clear()
+
+        self.initiated = False
 
     def data_storage_control(self):
         """Truncate all underlying singleton caches to free memory (call before each parallel job group)."""
@@ -85,12 +118,6 @@ class DataVendor:
         self.IS.truncate()
         self.CF.truncate()
         self.FINA.truncate()
-
-    def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        """Load the full stock description and ST status into ``all_stocks``/``st_stocks``."""
-        with Proj.silence:
-            self.all_stocks = self.INFO.get_desc(set_index=False , listed = listed , exchange = exchange)
-            self.st_stocks = self.INFO.get_st()
 
     def secid(self , date : int | None = None) -> np.ndarray: 
         """get secid of all stocks or at a specific date"""
@@ -123,13 +150,12 @@ class DataVendor:
         return dates
     
     @staticmethod
-    def td_array(date , offset : int = 0): return CALENDAR.td_array(date , offset)
-    
-    @staticmethod
-    def td(date , offset : int = 0): return CALENDAR.td(date , offset).as_int()
+    def td(date , offset : int = 0): 
+        return CALENDAR.td(date , offset).as_int()
 
     @staticmethod
-    def cd(date , offset : int = 0): return CALENDAR.cd(date , offset)
+    def cd(date , offset : int = 0): 
+        return CALENDAR.cd(date , offset)
 
     @classmethod
     def real_factor(cls , factor_type : Literal['pred' , 'factor'] , names : str | list[str] | np.ndarray ,
@@ -202,7 +228,7 @@ class DataVendor:
         target_start , target_end = min(target_start , CALENDAR.update_to()) , min(target_end , CALENDAR.update_to())
 
         with self._lock:
-            block0 : DataBlock = getattr(self , f'_block_{data_key}' , DataBlock())
+            block0 = self.blocks_cache.get(data_key , DataBlock())
             loaded_start , loaded_end = block0.min_date , block0.max_date
 
             block0 = block0.extend_to(db_src , db_key , target_start , target_end , inplace = True)
@@ -211,13 +237,13 @@ class DataVendor:
                 block0 = block0.adjust_price()
 
             Logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
-            setattr(self , f'_block_{data_key}' , block0)
+            self.blocks_cache[data_key] = block0
 
     def update_return_block(self , start : int , end : int):
         """Compute and cache the daily return DataBlock for [start, end] if not already loaded."""
         td_within = self.td_within(start , end , updated = True)
         with self._lock:
-            daily_ret = getattr(self , f'_block_daily_ret' , DataBlock())
+            daily_ret = self.blocks_cache.get('daily_ret' , DataBlock())
             if daily_ret.date is not None and np.isin(td_within , daily_ret.date).all():
                 return
         # Build outside lock; ``get_quotes_block`` acquires ``_lock`` for its own cache.
@@ -228,25 +254,25 @@ class DataVendor:
         blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
         blk = blk.align_date(blk.date_within(start , end) , inplace = True)
         with self._lock:
-            setattr(self , f'_block_daily_ret' , blk)
+            self.blocks_cache['daily_ret'] = blk
 
     def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
         """Return a price-adjusted OHLCV DataBlock covering ``dates`` (lazy-loaded and cached)."""
         with Proj.silence:
             self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend = extend)
-        return getattr(self , f'_block_daily_quotes' , DataBlock())
+        return self.blocks_cache.get('daily_quotes' , DataBlock())
 
     def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
         """Return the CNE5 risk model exposure DataBlock covering ``dates``."""
         with Proj.silence:
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend = extend)
-        return getattr(self , f'_block_risk_exp' , DataBlock())
+        return self.blocks_cache.get('risk_exp' , DataBlock())
 
     def get_returns_block(self , start : int , end : int):
         """Return the daily close/vwap return DataBlock for [start, end] (lazy-loaded)."""
         with Proj.silence:
             self.update_return_block(start , end)
-        return getattr(self , f'_block_daily_ret' , DataBlock())
+        return self.blocks_cache.get('daily_ret' , DataBlock())
     
     def day_quote(self , date : int | Any , price : Literal['close' , 'vwap' , 'open'] = 'close'):
         """Return a ``(secid, price)`` DataFrame for a single date, with adjfactor applied."""
@@ -338,10 +364,10 @@ class DataVendor:
         relabels dates forward to maintain point-in-time correctness.
         """
         if prev :
-            date = self.td_array(date , -1)
+            date = CALENDAR.td_array(date , -1)
         blk = self.get_risk_exp(date).align(secid , date , ['weight'])
         if prev :
-            blk.date = self.td_array(blk.date , 1)
+            blk.date = CALENDAR.td_array(blk.date , 1)
         return blk
 
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):

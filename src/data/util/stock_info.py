@@ -36,17 +36,31 @@ class InfoDataAccess:
         Industry membership history: ``secid``, ``in_date``, ``indus``.
     """
     def __init__(self) -> None:
-        self.desc = DB.load('information_ts' , 'description') 
-        self.desc['list_dt'] = np.maximum(self.desc['list_dt'] , CALENDAR.calendar_start())
+        self.initiated = False
 
-        self.cname = DB.load('information_ts' , 'change_name') 
-        self.cname = self.cname.query('secid >= 0').sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
+    def ensure_initiation(self):
+        """ensure the data is initiated"""
+        if self.initiated:
+            return
+        self._desc : pd.DataFrame | Any = DB.load('information_ts' , 'description') 
+        self._desc['list_dt'] = np.maximum(self._desc['list_dt'] , CALENDAR.calendar_start())
 
-        self.indus_dict = pd.DataFrame(MACHINE.config.get('constant/data/industry/tushare'))
-        self.indus_data = DB.load('information_ts' , 'industry') 
+        self._cname : pd.DataFrame | Any = DB.load('information_ts' , 'change_name') 
+        self._cname = self._cname.query('secid >= 0').sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
 
-        self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
-        self.indus_data = self.indus_data.sort_values(['secid','in_date'])
+        self._indus_dict : pd.DataFrame | Any = pd.DataFrame(MACHINE.config.get('constant/data/industry/tushare'))
+        self._indus_data : pd.DataFrame | Any = DB.load('information_ts' , 'industry') 
+
+        self._indus_data['indus'] = self._indus_dict.loc[self._indus_data['l2_name'],'indus'].values
+        self._indus_data = self._indus_data.sort_values(['secid','in_date'])
+
+    def clear_all(self):
+        """clear all the data"""
+        self._desc = None
+        self._cname = None
+        self._indus_dict = None
+        self._indus_data = None
+        self.initiated = False
 
     def get_desc(self , date : int | TradeDate | None = None , set_index : bool = True , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         """
@@ -64,7 +78,8 @@ class InfoDataAccess:
         exchange : list[str]
             Keep only these exchange codes.
         """
-        desc = self.desc
+        self.ensure_initiation()
+        desc = self._desc
         if date is not None: 
             desc = desc.loc[(desc['list_dt'] <= int(date)) & (desc['delist_dt'] > int(date))]
         if listed: 
@@ -77,6 +92,7 @@ class InfoDataAccess:
 
     def get_secid(self , date : int | None = None) -> np.ndarray:
         """Return a sorted unique array of integer ``secid`` values listed on ``date``."""
+        self.ensure_initiation()
         return np.unique(self.get_desc(date , set_index=False)['secid'].to_numpy(int))
     
     def get_st(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST']):
@@ -89,7 +105,8 @@ class InfoDataAccess:
 
         Returns a DataFrame with columns: ``secid``, ``entry_dt``, ``remove_dt``, ``ann_dt``.
         """
-        new_cname = self.cname[self.cname['change_reason'].isin(reason)]
+        self.ensure_initiation()
+        new_cname = self._cname[self._cname['change_reason'].isin(reason)]
         if date is not None: 
             new_cname = new_cname.query('start_date <= @date').copy().drop_duplicates('secid' , keep = 'last')
         return new_cname.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
@@ -102,6 +119,7 @@ class InfoDataAccess:
         callers can build look-ahead-free masks (e.g. ``offset=21`` gives a
         21-day post-IPO exclusion window).
         """
+        self.ensure_initiation()
         desc = self.get_desc(date)
         if offset != 0: 
             desc['list_dt'] = CALENDAR.td_array(desc['list_dt'] , offset)
@@ -114,11 +132,12 @@ class InfoDataAccess:
         Similar to ``get_st`` but returns the full ``cname`` subset without
         deduplication, giving a history of all status events.
         """
+        self.ensure_initiation()
         if date is None: 
-            new_cname = self.cname.copy()
+            new_cname = self._cname.copy()
         else:
             date = int(date)
-            new_cname = self.cname.query('start_date <= @date').copy().drop_duplicates('secid' , keep = 'last')
+            new_cname = self._cname.query('start_date <= @date').copy().drop_duplicates('secid' , keep = 'last')
         new_cname = new_cname[new_cname['change_reason'].isin(reason)]
         return new_cname
     
@@ -129,10 +148,11 @@ class InfoDataAccess:
         Point-in-time: only records with ``in_date <= date`` are considered.
         Returns a secid-indexed DataFrame with a single ``indus`` column.
         """
+        self.ensure_initiation()
         if date is None: 
-            df = self.indus_data.copy()
+            df = self._indus_data.copy()
         else:
-            df = self.indus_data[self.indus_data['in_date'] <= int(date)]
+            df = self._indus_data[self._indus_data['in_date'] <= int(date)]
         df = df.groupby('secid')[['indus']].last()
         return df
 
@@ -149,6 +169,7 @@ class InfoDataAccess:
         na_industry_as : scalar, optional
             Fill value for secids without an industry assignment.
         """
+        self.ensure_initiation()
         if df.empty:
             return df
         df = df.join(self.get_indus(date) , on = 'secid' , how = 'left')
@@ -165,6 +186,7 @@ class InfoDataAccess:
         NaN and all other cells are 0.  Add this to a value DataFrame to blank out
         pre-listing observations.
         """
+        self.ensure_initiation()
         list_dt = self.get_list_dt(date = reference_date , offset = list_dt_offset).\
             reindex(df.columns.values).fillna(99991231).astype(int).reset_index()['list_dt']
         df_date = pd.DataFrame(np.tile(df.index.to_numpy()[:, None], (1, df.shape[1])), index=df.index, columns=df.columns)
@@ -188,6 +210,7 @@ class InfoDataAccess:
         reference_date : int | None
             Date used to look up listing dates.  Defaults to ``df.index.max()``.
         """
+        self.ensure_initiation()
         if not mask: 
             return df
         pivoted = df.columns.name == 'secid' and df.index.name == 'date'
@@ -210,6 +233,6 @@ class InfoDataAccess:
     def secname(self , secid : np.ndarray | list[int]):
         """Return a numpy array of security names (``sec_name``) for the given secids."""
         secid = np.array(secid) if isinstance(secid , list) else secid
-        return self.desc.drop_duplicates('secid').set_index('secid').reindex(secid)['sec_name'].to_numpy()
+        return self._desc.drop_duplicates('secid').set_index('secid').reindex(secid)['sec_name'].to_numpy()
     
 INFO = InfoDataAccess()

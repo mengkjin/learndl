@@ -66,6 +66,13 @@ class DateDataAccess(ABC):
     def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
         """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""
 
+    def clear_all(self):
+        """clear all the data in the collection"""
+        for collection in self.collections.values():
+            collection.clear()
+        for collection in self.pl_collections.values():
+            collection.clear()
+
     def truncate(self , data_type : str | None = None):
         """Truncate the cache for ``data_type`` (or all types when None) to ``MAX_LEN``."""
         data_type_list = [data_type] if isinstance(data_type , str) else list(self.DB_KEYS.keys())

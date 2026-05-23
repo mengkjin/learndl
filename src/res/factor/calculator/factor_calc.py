@@ -621,6 +621,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             conditions.append(attr == v)
         return not conditions or all(conditions)
 
+    @classmethod
+    def get(cls , factor_name : str) -> FactorCalculator:
+        """get a factor calculator by factor name"""
+        cls.import_definitions()
+        return cls.registry[factor_name]()
+
 class StockFactorCalculator(FactorCalculator):
     """base class of factor calculator"""
     def calc_history(self , date : int) -> pd.DataFrame:

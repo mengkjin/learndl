@@ -4,6 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
+from src.proj import CALENDAR
 from src.data import DATAVENDOR 
 
 from .basic import eval_stats , eval_ic_stats , eval_qtile_by_day
@@ -130,7 +131,7 @@ def calc_pnl_curve(
     pnl = factor.eval_weighted_pnl(nday , lag , group_num , ret_type , direction)
     pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
     pnl = pd.concat([pnl.groupby(['factor_name' , 'weight_type'])['date'].min().reset_index().assign(cum_ret = 0.) , pnl])
-    pnl['date'] = DATAVENDOR.td_array(pnl['date'] , lag + nday - 1)
+    pnl['date'] = CALENDAR.td_array(pnl['date'] , lag + nday - 1)
     return pnl
 
 def calc_style_corr(

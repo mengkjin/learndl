@@ -162,6 +162,14 @@ class _df_collection(ABC):
                 self.last_added_date = date
                 self.add_one_day(date , df)
 
+    def clear(self):
+        """clear the df collection"""
+        with self._lock:
+            self.dates = []
+            self.last_added_date = -1
+            self.data_frames.clear()
+            self.long_frame = pd.DataFrame()
+
     def add_long_frame(self , long_frame : pd.DataFrame):
         """
         Bulk-insert a pre-built long-format DataFrame into the cache.
