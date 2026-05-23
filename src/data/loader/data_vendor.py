@@ -104,8 +104,8 @@ class DataVendor:
         self.blocks_cache.clear()
         self.day_quotes.clear()
         self.day_secids.clear()
-        del self.all_stocks
-        del self.st_stocks
+        self.__dict__.pop('all_stocks' , None)
+        self.__dict__.pop('st_stocks' , None)
 
         self.initiated = False
 
