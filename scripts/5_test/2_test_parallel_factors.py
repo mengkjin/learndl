@@ -197,7 +197,7 @@ def _print_summary(results: list[dict[str, Any]]) -> None:
 def main(
     date: int | None = None,
     n_factors: int | None = 60,
-    compare: str | None = 'both',
+    compare: str | None = 'process',
     overwrite: bool | None = True,
     lookback_td: int | None = 10,
     **kwargs,

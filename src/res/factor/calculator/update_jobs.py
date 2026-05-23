@@ -124,6 +124,8 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
     Rebuilds jobs in the worker, runs :meth:`BaseUpdateJobList.process`, and returns
     a serializable report for the parent process.
     """
+    from src.proj.util.catcher import MPOutputCatcher
+
     jobs = [_job_from_spec(s) for s in payload['specs']]
     chunk = BaseUpdateJobList(
         payload['name'] , jobs ,
@@ -132,7 +134,10 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
         indent=payload['indent'] ,
         timeout=payload['timeout'],
     )
-    return chunk.process(in_worker=True)
+    try:
+        return chunk.process(in_worker=True)
+    finally:
+        MPOutputCatcher.export_current_task(payload['name'])
 
 
 class BaseUpdateJobList:

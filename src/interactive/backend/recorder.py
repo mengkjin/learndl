@@ -52,22 +52,24 @@ class BackendTaskRecorder:
         - any other type (converted to str)
     '''
     def __init__(self , **kwargs) -> None:
-        """Initialise recorder, resolve or auto-create the task_id, and capture PID."""
-        self.task_db = TaskDatabase()
+        """Store kwargs; task DB registration happens in :meth:`_resolve_task_id` / :meth:`__enter__`."""
         parsed_kwargs = self.parse_kwargs(kwargs)
         task_id : str | None = parsed_kwargs.pop('task_id' , None)
-        if task_id:
-            self._task_id = task_id
-        elif not is_main_process():
-            # Process-pool workers: no Streamlit task DB / queue registration.
-            self._task_id = ''
-        else:
-            task_item = TaskItem.create(None , self.task_db , source=parsed_kwargs.get('source' , None) , queue = True)
-            self._task_id = task_item.id
+        self._task_id = task_id or ''
+        self._pending_source = parsed_kwargs.get('source' , None)
+        self.task_db : TaskDatabase | None = None
         self.update_msg : dict[str , Any] = {}
         self.params = parsed_kwargs
         if 'email' in self.params:
             self.params['email'] = bool(self.params['email'])
+
+    def resolve_task_id(self):
+        """Create task row on first use in the main process only."""
+        if not self._task_id and is_main_process():
+            self.task_db = TaskDatabase()
+            task_item = TaskItem.create(None , self.task_db , source=self._pending_source , queue = True)
+            self._task_id = task_item.id
+        return self
 
     def __repr__(self) -> str:
         """Return a human-readable representation of the recorder."""
@@ -128,8 +130,11 @@ class BackendTaskRecorder:
 
     def __enter__(self) -> BackendTaskRecorder:
         """Enter the recording context; returns self."""
+        self.resolve_task_id()
         if not self._task_id:
             return self
+        if self.task_db is None:
+            self.task_db = TaskDatabase()
         start_time = datetime.now().timestamp()
         pid = os.getpid()
         self.task_db.update_task(
@@ -139,7 +144,7 @@ class BackendTaskRecorder:
 
     def __exit__(self , exc_type : type[BaseException] | None , exc_value : BaseException | None , exc_traceback : Any) -> None:
         """Persist final task status and exit metadata to the database on context exit."""
-        if not self._task_id:
+        if not self._task_id or self.task_db is None:
             return
         self.update_msg['end_time'] = datetime.now().timestamp()
         if exc_type is None:

@@ -117,9 +117,8 @@ class ScriptLockMultiple:
         self.timeout = timeout
         self.wait_time = wait_time
         self.vb_level = vb_level
-        self.acquired_locks = []  # 存储已获取的锁文件
+        self.acquired_locks = []  # get lock files
         self._has_wait_message = False
-        self.lock_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def lock_dir(self):
@@ -167,7 +166,8 @@ class ScriptLockMultiple:
         """enter context to get lock"""
         if self.lock_num <= 0:
             return self
-            
+
+        self.lock_dir.mkdir(parents=True, exist_ok=True)
         start_time = datetime.now()
         self._has_wait_message = False
         

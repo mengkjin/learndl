@@ -3,11 +3,12 @@
 import inspect , os
 from pathlib import Path
 
-from functools import wraps
+from functools import wraps , cached_property
 from typing import Any , Callable , Literal
 
 from src.proj.env import PATH
 from src.proj.log import Logger
+from src.proj.util.func import is_main_process
 
 from .autorun import AutoRunTask
 from .script_lock import ScriptLockMultiple
@@ -70,14 +71,15 @@ class ScriptTool:
         interaction : dict[str, Any] | None = None ,
         **kwargs
     ):  
-
-        from src.interactive.backend import BackendTaskRecorder
-
         self.task_name = task_name
         self.task_key = task_key
         self.lock_name = lock_name
         self.source_mode = source_mode
         self.interaction = interaction
+        self._recorder_kwargs = kwargs
+        self._forfeit_if_done = forfeit_if_done
+        self._markdown_catcher = markdown_catcher
+        self._verbosity = verbosity
 
         ln , lt = lock_num , lock_timeout
         if source_mode == 'api' and interaction:
@@ -85,28 +87,33 @@ class ScriptTool:
                 ln = int(interaction['lock_num'])
             if interaction.get('lock_timeout') is not None:
                 lt = int(interaction['lock_timeout'])
-        
-        self.backend_recorder = BackendTaskRecorder(**kwargs)
-        self.script_lock = ScriptLockMultiple(lock_name or task_name , ln , lt)
-        self.autorun_task = AutoRunTask(task_name , task_key , forfeit_if_done , verbosity , task_id = self.task_id , markdown_catcher = markdown_catcher)
+        self._lock_num = ln
+        self._lock_timeout = lt
 
-        # set current working directory to main
         os.chdir(str(PATH.main))
 
+    @cached_property
+    def backend_recorder(self):
+        """Get the backend recorder"""
+        from src.interactive.backend import BackendTaskRecorder
+        backend_recorder = BackendTaskRecorder(**self._recorder_kwargs).resolve_task_id()
+        return backend_recorder
+
+    @cached_property
+    def script_lock(self):
+        """Get the script lock"""
+        return ScriptLockMultiple(self.lock_name or self.task_name , self._lock_num , self._lock_timeout)
+
+    @cached_property
+    def autorun_task(self):
+        """Get the autorun task"""
+        return AutoRunTask(
+            self.task_name , self.task_key , self._forfeit_if_done , self._verbosity ,
+            task_id = self.backend_recorder.task_id , markdown_catcher = self._markdown_catcher,
+        )
 
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
-        # if self.source_mode == 'api':
-        #     from src.api.contract import filter_kwargs_explicit_only
-        #     sig = inspect.signature(func)
-        #     @wraps(func)
-        #     def _api_explicit_target(*args: Any , **kwargs: Any) -> Any:
-        #         """Strip ``email`` / ``task_id`` / etc. so ``AutoRunTask`` metadata never reaches API callables."""
-        #         return func(*args , **filter_kwargs_explicit_only(sig , kwargs))
-
-        #     inner = _api_explicit_target
-        # else:
-        #     inner = func
 
         from src.api.contract import filter_kwargs_explicit_only
         sig = inspect.signature(func)
@@ -117,6 +124,8 @@ class ScriptTool:
 
         @wraps(func)
         def wrapper(*args , **kwargs):
+            if not is_main_process():
+                return inner(*args , **kwargs)
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
             if self.source_mode == 'api':
                 data = self.interaction

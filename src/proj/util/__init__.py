@@ -5,7 +5,7 @@ from .func import *
 
 from .catcher import (
     IOCatcher , LogWriter , WarningCatcher ,
-    HtmlCatcher , MarkdownCatcher , CrashProtectorCatcher)
+    MPOutputCatcher , HtmlCatcher , MarkdownCatcher , CrashProtectorCatcher)
 from .shared_sync import SharedSync
 from .emailer import Email
 from .device import Device , MemoryPrinter

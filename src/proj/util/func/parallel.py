@@ -6,8 +6,10 @@ import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
 from typing import Any , Callable , Literal , Mapping , Iterable , TypeVar
+from uuid import uuid4
 
 from src.proj import MACHINE , Logger
+from src.proj.util.catcher import MPOutputCatcher
 
 __all__ = ['parallel' , 'FuncCall' , 'is_main_process']
 
@@ -46,7 +48,8 @@ def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] ,
 def parallel(
     inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
     method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
-    max_workers = MAX_WORKERS , ignore_error = False , timeout : float = -1 , indent : int = 0 , **kwargs
+    max_workers = MAX_WORKERS , ignore_error = False , timeout : float = -1 , indent : int = 0 ,
+    capture_mp_output : bool = False , keep_mp_output_on_error : bool = False , **kwargs
 ) -> dict[Any , T]:
     """Execute ``FuncCall`` inputs; populate and return the shared results dict.
 
@@ -55,13 +58,16 @@ def parallel(
         method: for-loop, thread pool, or process pool (ignored for a single call).
         max_workers: Worker cap for pool executors.
         ignore_error: If True, swallow exceptions per call and log them.
+        capture_mp_output: When ``method='process'``, capture worker logs to disk and merge into
+            ``HtmlCatcher.PrimaryInstance`` after the pool shuts down.
+        keep_mp_output_on_error: If True, keep ``logs/catcher/mp_output/{run_id}`` when merge finds no files.
 
     Returns:
         Dict filled by successful ``try_call`` executions.
     """
     result , func_calls = FuncCall.from_func_calls(inputs , ignore_error = ignore_error , **kwargs)
     method = get_method(method if len(func_calls) > 1 else 0 , max_workers)
-
+    
     if method == 0:
         remaining_timeout = timeout * 3600
         start_time = datetime.now()
@@ -71,15 +77,25 @@ def parallel(
             if remaining_timeout <= 0 and timeout > 0:
                 Logger.alert1(f'Timeout reached, {timeout} hours passed, stopping parallel', indent = indent)
                 break
-    else:
-        PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
-        with PoolExecutor(max_workers=max_workers) as pool:
+    elif method == 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = [(func_call , func_call.submit(pool)) for func_call in func_calls]
             for func_call , future in futures:
-                # Process pool: child cannot mutate parent ``result_dict``; use Future return value.
+                # Thread pool: child can mutate parent ``result_dict``; use Future return value.
                 returned = future.result()
-                if func_call.key is not None:
-                    result[func_call.key] = returned
+    elif method == 2:
+        mp_run_id = uuid4().hex[:12] if capture_mp_output else None
+        mp_kwargs = {'initializer': MPOutputCatcher.pool_initializer,'initargs': (mp_run_id ,)}
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers , **mp_kwargs) as pool:
+                futures = [(func_call , func_call.submit(pool)) for func_call in func_calls]
+                for func_call , future in futures:
+                    # Process pool: child cannot mutate parent ``result_dict``; use Future return value.
+                    returned = future.result()
+                    if func_call.key is not None:
+                        result[func_call.key] = returned
+        finally:
+            MPOutputCatcher.merge_into_html(mp_run_id , keep_on_error=keep_mp_output_on_error)
     return result
 
 class FuncCall:

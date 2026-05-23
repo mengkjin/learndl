@@ -179,8 +179,11 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                 name: (run_job_chunk_payload , [chunk.to_payload()])
                 for name , chunk in group_jobs.items()
             }
-            DATAVENDOR.clear_all()
-            results = parallel(process_inputs , method = 'process' , timeout = timeout , indent = indent)
+            DATAVENDOR.data_storage_control()
+            results = parallel(
+                process_inputs , method = 'process' , timeout = timeout , indent = indent ,
+                capture_mp_output = True ,
+            )
             for name , report in results.items():
                 group_jobs[name].apply_report(report)
             level_jobs.regenerate_jobs()
