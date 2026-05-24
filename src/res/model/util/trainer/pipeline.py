@@ -226,6 +226,10 @@ class BasePipeline(_Pipeline, BaseModule, metaclass=_PipelineMeta):
 
 class TrainerPipeline(BasePipeline):
     @property
+    def is_bounded(self):
+        return self._trainer is not None or self._config is not None
+        
+    @property
     def binder(self):
         return self.trainer if self.bounded_with_trainer else self.config
 

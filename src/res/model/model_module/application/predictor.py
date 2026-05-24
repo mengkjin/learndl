@@ -1,43 +1,34 @@
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
 
 from functools import cached_property
-from typing import Any , ClassVar , Literal
+from typing import Any , ClassVar
 
 from src.proj import MACHINE , Logger , Proj , CALENDAR
-from src.res.model.util import ModelConfig , PredictionModel , DataModule
+from src.res.model.util import PredictorPath , ModelConfig , DataModule , BatchData
 from src.res.model.model_module.module import get_predictor_module
 
-class ModelPredictor:
+class ArchivedPredictorModel:
     '''for a model to predict recent/history data'''
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
-    def __init__(self , reg_model : PredictionModel , use_data : Literal['fit' , 'predict' , 'both'] = 'both'):
-        self.reg_model = reg_model
-        self.use_data : Literal['fit' , 'predict' , 'both'] = use_data
-
-        self.model_name = self.reg_model.model_name
-        self.model_submodel = self.reg_model.submodel
-
-        if self.reg_model.num == 'all': 
-            self.model_nums = self.reg_model.model_nums
-        elif isinstance(self.reg_model.num , (int , str)): 
-            self.model_nums = [int(self.reg_model.num)]
-        else:
-            self.model_nums = list(self.reg_model.num)
-
-        self.config = ModelConfig(self.model_name , stage=2 , resume=1).start_model()
-        self.model = get_predictor_module(self.config)
+    def __init__(self , predictor_path : PredictorPath):
+        self.path = predictor_path
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(reg_model={str(self.reg_model)})'
+        return f'{self.__class__.__name__}(path={self.path})'
 
     def __call__(self , date : int):
         if self.cached_df.empty or date not in self.cached_df['date'].unique():
             self.predict_dates([date])
         return self.cached_df.query('date == @date')
+
+    @property
+    def model_name(self) -> str:
+        return self.path.model_name
 
     @cached_property
     def cached_df(self) -> pd.DataFrame:
@@ -50,45 +41,102 @@ class ModelPredictor:
     @cached_property
     def current_deploy_dates(self) -> list[Any]:
         return []
+
+    @cached_property
+    def config(self) -> ModelConfig:
+        return ModelConfig(self.model_name , stage=2 , resume=1).start_model()
+
+    @cached_property
+    def model(self):
+        return get_predictor_module(self.config)
+
+    @cached_property
+    def model_dates(self) -> np.ndarray:
+        return self.path.model_dates
+
+    @cached_property
+    def model_nums(self) -> np.ndarray:
+        return self.path.model_nums
+
+    @cached_property
+    def model_submodels(self) -> np.ndarray:
+        return self.path.model_submodels
+
+    def load_data(self , min_date : int | None = None , max_date : int | None = None):
+        updated = CALENDAR.updated()
+        min_date = min_date or 20170101
+        max_date = max_date or updated
+        if min_date > CALENDAR.today(-100):
+            use_data = 'predict'
+        elif max_date < updated:
+            use_data = 'fit'
+        else:
+            use_data = 'both'
+
+        if not hasattr(self , 'data_module'):
+            self.data_module = DataModule(self.config , use_data).load_data() 
+        elif self.data_module.use_data != 'both' and self.data_module.use_data != use_data:
+            self.data_module = DataModule(self.config , 'both').load_data() 
+        return self
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None):
         '''get update dates and predict these dates'''
         assert update != overwrite , 'update and overwrite must be different here'
         
-        dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start , end)
+        dates = CALENDAR.slice(CALENDAR.diffs(self.path.pred_target_dates , self.path.pred_dates if update else []) , start , end)
         with Proj.silence:
             self.predict_dates(dates)
         self.save_preds()
         self.deploy()
+
+    def batch_data(self , date : int , model_num : int , submodel : str , model_date : int | None = None):
+        """calculate the batch data of a given date"""
+        assert model_num in self.model_nums , f'model_num {model_num} not in {self.model_nums}'
+        assert submodel in self.model_submodels , f'submodel {submodel} not in {self.model_submodels}'
+        if model_date is None:
+            prev_model_dates = self.model_dates[self.model_dates < date]
+            model_date = prev_model_dates[-1] if len(prev_model_dates) > 0 else self.model_dates[0]
+        assert model_date is not None and model_date in self.model_dates , f'model_date {model_date} not in {self.model_dates}'
+        model_param = self.config.model_param[model_num]
+        with Logger.Timer('load data'):
+            self.load_data(date)
+            self.data_module.setup('retrospective' , model_param , date)
+        with Logger.Timer('load model'):
+            model = self.model.load_model(model_num , model_date , self.path.use_submodel , model_param = model_param , cache_model = True)
+        with Logger.Timer('load dataloader'):
+            self.dataloader = self.data_module.retrospective_dataloader()
+        with Logger.Timer('load batch_input'):
+            batch_input = self.dataloader.of_date(date)
+        with Logger.Timer('predict'):
+            batch_output = model(batch_input)
+        return BatchData(batch_input , batch_output)
 
     def predict_dates(self , dates : np.ndarray | list[int]):
         '''predict recent days'''
         if len(dates) == 0: 
             return self
         dates = np.array(dates)
-        use_data0 = 'both' if min(dates) <= CALENDAR.today(-100) else 'predict'
-        use_data1 = self.use_data 
-        self.data_module  = DataModule(self.config , use_data0 if self.use_data == 'both' else use_data1).load_data() 
+        self.load_data(dates.min())
         pred_dates = dates[dates <= max(self.data_module.test_full_dates)]
         if pred_dates.size == 0: 
             return self
-        assert any(self.reg_model.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
+        assert any(self.path.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
-                                'model_date' : [max(self.reg_model.model_dates[self.reg_model.model_dates < d]) for d in pred_dates] , 
+                                'model_date' : [max(self.path.model_dates[self.path.model_dates < d]) for d in pred_dates] , 
                                 'calculated' : 0})
         torch.set_grad_enabled(False)
         df_list : list[pd.DataFrame] = []
         
         for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
-            for model_num in self.model_nums:
+            for model_num in self.path.use_model_nums:
                 model_param = self.config.model_param[model_num]
                 assert isinstance(model_date , int) , model_date
-                self.data_module.setup('predict' ,  model_param , model_date)
-                model = self.model.load_model(model_num , model_date , self.model_submodel , model_param = model_param)
+                self.data_module.setup('retrospective' ,  model_param , model_date)
+                model = self.model.load_model(model_num , model_date , self.path.use_submodel , model_param = model_param)
                 
                 tdates = self.data_module.model_test_dates
                 within = np.isin(tdates , df_sub.query('calculated == 0')['pred_dates'])
-                loader = self.data_module.predict_dataloader()
+                loader = self.data_module.retrospective_dataloader()
 
                 for tdate , do_calc , batch_input in zip(tdates , within , loader):
                     if not do_calc or len(batch_input) == 0: 
@@ -108,7 +156,7 @@ class ModelPredictor:
             return self
         for date , subdf in df.groupby(date_col):
             subdf = subdf.drop(columns='date').set_index(secid_col)
-            self.reg_model.save_pred(subdf , date , overwrite , indent = 2 , vb_level = 3)
+            self.path.save_pred(subdf , date , overwrite , indent = 2 , vb_level = 3)
             self.current_update_dates.append(date)
         return self
 
@@ -121,20 +169,20 @@ class ModelPredictor:
         if MACHINE.hfm_factor_dir is None: 
             return self
         try:
-            path_deploy = MACHINE.hfm_factor_dir.joinpath(self.reg_model.pred_name)
+            path_deploy = MACHINE.hfm_factor_dir.joinpath(self.path.pred_name)
             path_deploy.parent.mkdir(parents=True,exist_ok=True)
             if overwrite:
-                dates = self.reg_model.pred_dates
+                dates = self.path.pred_dates
             else:
                 deployed_dates = [int(path.name.removesuffix('.txt').split('_')[-1]) for path in path_deploy.glob('*.txt')]
-                dates = np.setdiff1d(self.reg_model.pred_dates , deployed_dates)
+                dates = np.setdiff1d(self.path.pred_dates , deployed_dates)
 
             for date in dates:
-                df = self.reg_model.load_pred(date , vb_level = 'never')
-                df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
+                df = self.path.load_pred(date , vb_level = 'never')
+                df.to_csv(path_deploy.joinpath(f'{self.path.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
                 self.current_deploy_dates.append(date)
         except OSError as e:
-            Logger.error(f'{self.reg_model.pred_name} deploy error: {e}')
+            Logger.error(f'{self.path.pred_name} deploy error: {e}')
 
         return self
     
@@ -151,17 +199,17 @@ class ModelPredictor:
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
 
     @classmethod
-    def get_model(cls , model_name : str , use_data : Literal['fit' , 'predict' , 'both'] = 'both'):
-        model = PredictionModel.SelectModels(model_name)[0]
-        return cls(model , use_data)
-    
+    def get_model(cls , model_name : str):
+        model = PredictorPath.SelectModels(model_name)[0]
+        return cls(model)
+
     @classmethod
     def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
         if start is not None or end is not None:
             Logger.stdout(f'Update from {start} to {end}' , indent = indent + 1 , vb_level = vb_level)
-        models = PredictionModel.SelectModels(model_name)
+        models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
@@ -184,7 +232,7 @@ class ModelPredictor:
         Logger.note(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
         if start is not None or end is not None:
             Logger.stdout(f'Recalculate from {start} to {end}' , indent = indent + 1 , vb_level = vb_level)
-        models = PredictionModel.SelectModels(model_name)
+        models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:

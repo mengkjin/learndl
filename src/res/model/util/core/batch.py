@@ -383,3 +383,7 @@ class BatchData:
             [Logger.stdout(arg) for arg in args]
         return ~nanpos
 
+    @property
+    def batch_date(self) -> int:
+        return self.input.date0
+

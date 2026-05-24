@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 from tqdm import tqdm
-from typing import Any , Literal
+from typing import Any , Literal , Sequence
 
 from src.proj import Proj
 from src.res.model.util.core import BatchInput
@@ -10,14 +10,16 @@ __all__ = ['BatchInputLoader' , 'DataloaderParam']
 
 @dataclass
 class DataloaderParam:
-    stage : Literal['fit' , 'test' , 'predict' , 'extract'] = 'fit'
+    stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] = 'fit'
     model_date : int | Any = None
     seqlens : dict[str,int] | Any = None
     extract_backward_days : int | Any = None
     extract_forward_days  : int | Any = None
 
     def __post_init__(self):
-        assert self.stage in ['fit' , 'test' , 'predict' , 'extract'] , self.stage
+        assert self.stage in ['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , self.stage
+        if self.stage == 'retrospective':
+            self.model_date = self.model_date // 10000 * 10000 + 101
         assert self.model_date is None or self.model_date > 0 , self.model_date
         assert self.seqlens is None or self.seqlens , self.seqlens
         if self.seqlens is None:
@@ -28,7 +30,7 @@ class DataloaderParam:
     
 class BatchInputLoader:
     '''wrap loader to impletement DataModule Callbacks'''
-    def __init__(self , raw_loader , data_module , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
+    def __init__(self , raw_loader : Sequence[BatchInput] , data_module , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
         from src.res.model.util.data import DataModule
         assert isinstance(data_module , DataModule) , f'data_module must be an instance of BaseDataModule, but got {type(data_module)}'
         self.loader      = raw_loader
@@ -51,7 +53,7 @@ class BatchInputLoader:
         if i < 0:
             i += len(self)
         assert 0 <= i < len(self) , f'index {i} is out of range {len(self)}'
-        for idx , batch_input in self:
+        for idx , batch_input in enumerate(self.loader):
             if idx == i:
                 return self.process(batch_input)
         raise IndexError(f'index {i} is out of range {len(self)}')
@@ -90,9 +92,13 @@ class BatchInputLoader:
         self.include_dates = include_dates
         return self
 
+    @property
+    def batch_dates(self) -> list[int]:
+        return [batch_input.date0 for batch_input in self.loader]
+
     def of_date(self , date : int):
         assert self.data_module.config.sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.sample_method , self.data_module.stage)
-        for batch_input in self:
+        for batch_input in self.loader:
             if batch_input.date0 == date:
-                return batch_input
-        raise ValueError(f'date {date} not found in loader')
+                return self.process(batch_input)
+        raise ValueError(f'date {date} not found in loader of dates {self.batch_dates}')

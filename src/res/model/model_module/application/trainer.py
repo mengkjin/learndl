@@ -4,7 +4,7 @@ from typing import Literal
 from src.proj import MACHINE , Logger , Proj , PATH
 from src.proj.core import strPath
 from src.proj.util import HtmlCatcher , AsyncSaver
-from src.res.model.util import BaseTrainer , PredictionModel , ModelPath
+from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
 class ModelTrainer(BaseTrainer):
@@ -74,9 +74,9 @@ class ModelTrainer(BaseTrainer):
             Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
-            for model in PredictionModel.SelectModels():
-                cls.GO(base_path = model.model_path , 
-                       title = f'Updating Model {model.model_path.model_name}' , paragraph = True ,
+            for model in PredictorPath.SelectModels():
+                cls.GO(base_path = model , 
+                       title = f'Updating Model {model.model_name}' , paragraph = True ,
                        check_operation = None if force_update else 'update_models' ,
                        log_operation = 'update_models' , use_data = 'both' ,
                        stage = 0 , resume = 1 , selection = 0)
@@ -168,7 +168,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def resumable_models(cls , registered : bool = True , **kwargs) -> list[ModelPath]:
         if registered:
-            return [pred_model.model_path for pred_model in PredictionModel.SelectModels() if pred_model.model_path.is_resumable]
+            return [pred_model for pred_model in PredictorPath.SelectModels() if pred_model.is_resumable]
         else:
             return [ModelPath(model) for model in cls.available_models()]
 

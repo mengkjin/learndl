@@ -4,7 +4,7 @@ import gc , torch
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal , TypeVar
+from typing import Any , Literal , TypeVar , Sequence
 
 from src.proj import PATH
 from src.proj.util import torch_load , Device
@@ -68,7 +68,7 @@ class TorchFileStorage:
             self.del_one(key)
         gc.collect()
 
-class StoredTorchFileLoader:
+class StoredTorchFileLoader(Sequence):
     ''''retrieve batch_input from a Storage'''
     def __init__(self, loader_storage : TorchFileStorage , keys : list[str] , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
         self.storage = loader_storage

@@ -59,13 +59,15 @@ class NNBoost(PredictorModel):
         self.optimizer : Optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
         return self
 
-    def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
+    def load_model(self , model_num = None , model_date = None , submodel = None , *args , cache_model = False , **kwargs):
         '''call when fitting/testing new model'''
         model_file = self.load_model_file(model_num , model_date , submodel)
         assert self.model_submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
-        self.init_model(*args , **kwargs)
-        self.net.load_state_dict(model_file['state_dict'])
-        self.boost.load_dict(model_file['boost_head'])
+        if not cache_model or self.current_model_file.model_path != model_file.model_path:
+            self.init_model(*args , **kwargs)
+            self.net.load_state_dict(model_file['state_dict'])
+            self.boost.load_dict(model_file['boost_head'])
+            self.current_model_file = model_file
         return self
 
     def ckpt_state_dict(self):

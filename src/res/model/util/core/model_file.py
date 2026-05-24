@@ -52,7 +52,9 @@ class ModelDict:
 
 class ModelFile:
     """model file for nn/boost models"""
-    def __init__(self , model_path : Path) -> None:
+    def __init__(self , model_path : Path | None) -> None:
+        if model_path is None:
+            model_path = Path('')
         self.model_path = model_path
     def __getitem__(self , key): return self.load(key)
     def __repr__(self): return f'{self.__class__.__name__}(path={self.model_path})'

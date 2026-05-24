@@ -17,7 +17,7 @@ from src.proj.core import strPath
 from .func import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 from .model_file import ModelFile
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'PredictionModel' , 'HiddenExtractionModel']
+__all__ = ['ModelPath' , 'HiddenPath' , 'PredictionModel' , 'HiddenExtractionModel' , 'PredictorPath']
 
 class ModelPath:
     f"""
@@ -589,3 +589,151 @@ class HiddenExtractionModel(ModelPath):
         if isinstance(hidden_names , str): 
             hidden_names = [hidden_names]
         return [cls(key) for key in hidden_names]
+
+class PredictorPath(ModelPath):
+    '''
+    for a prediction model to predict recent/history data
+    model dict stored in configs/proj/model_settings.yaml file under prediction section
+    '''
+    START_DATE = 20170101
+    FMP_STEP = 5
+    MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
+
+    def __init__(
+        self, model_input : strPath | None | Any , 
+        model_num : int | list[int] | range | Literal['all'] | Any ,
+        submodel : str = 'best' ,
+        pred_name : str | None = None ,
+    ) -> None:
+        super().__init__(model_input)
+        self._model_num = model_num
+        self._submodel = submodel
+        self._pred_name = pred_name
+
+    def __repr__(self) -> str:  
+        return f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},submodel={self._submodel},model_num={str(self._model_num)})'
+    
+    @property
+    def is_stored_strategy(self) -> bool:
+        return self.pred_name in self.MODEL_DICT
+
+    @property
+    def start(self) -> int:
+        return self.START_DATE
+
+    @property
+    def pred_name(self) -> str:
+        if self._pred_name is None:
+            self._pred_name = self.model_name
+        return self._pred_name
+
+    @property
+    def use_model_nums(self) -> np.ndarray:
+        if self._model_num == 'all':
+            return self.model_nums
+        elif isinstance(self._model_num , (int , str)):
+            return np.array([int(self._model_num)])
+        else:
+            return np.array(self._model_num)
+
+    @property
+    def use_submodel(self) -> str:
+        return self._submodel
+
+    @classmethod
+    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictorPath]:
+        """select prediction models"""
+        if pred_names is None: 
+            pred_names = list(cls.MODEL_DICT.keys())
+        if isinstance(pred_names , str): 
+            pred_names = [pred_names]
+        paths = []
+        for key in pred_names:
+            if key in cls.MODEL_DICT:
+                reg_dict = cls.MODEL_DICT[key]
+                name     = reg_dict['name']
+                num      = reg_dict['num']
+                submodel = reg_dict['submodel']
+                paths.append(cls(name , num , submodel , pred_name = key))
+        return paths
+
+    @classmethod
+    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path | Any]:
+        paths : list[Path] = []
+        for model in cls.SelectModels(pred_names):
+            paths.extend(model.collect_model_archives(start_model_date , end_model_date))
+        return paths
+
+    @classmethod
+    def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
+        files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
+        path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
+        DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
+        return path
+
+    @classmethod
+    def UnpackModelArchives(cls , path : strPath | None = None , delete_tar = True , overwrite = False) -> None:
+        if path is None:
+            paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
+            paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]
+        else:
+            paths = [Path(path)]
+        
+        for path in paths:
+            DB.unpack_files_from_tar(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
+            if delete_tar:
+                path.unlink()
+            
+    @property
+    def pred_dates(self) -> np.ndarray:
+        """model pred dates"""
+        return DB.dates('pred' , self.pred_name)
+    
+    @property
+    def pred_target_dates(self) -> np.ndarray:
+        """model pred target dates"""
+        start = max(self.start , int(CALENDAR.td(min(self.model_dates) , 1)))
+        end = None
+        return CALENDAR.range(start , end , 'td' , updated = True)
+    
+    @property
+    def fmp_dates(self) -> np.ndarray:
+        """model factor portfolio dates"""
+        return DB.dir_dates(PATH.fmp.joinpath(self.pred_name))
+    
+    @property
+    def fmp_target_dates(self) -> np.ndarray:
+        """model factor portfolio target dates"""
+        return self.pred_target_dates[::self.FMP_STEP]
+    
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : Any = 'max' , reason : str = '') -> None:
+        """save model pred"""
+        df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
+        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
+
+    def load_pred(self , date : int , closest = False , indent = 1 , vb_level : Any = 'max' , **kwargs) -> pd.DataFrame:
+        """load model pred"""
+        df = DB.load('pred' , self.pred_name , date , closest = closest , indent = indent , vb_level = vb_level , **kwargs)
+        if not df.empty and self.pred_name not in df.columns:
+            assert self.model_clean_name in df.columns or self.model_name in df.columns , \
+                f'{self.pred_name} / {self.model_clean_name} / {self.model_name} not in df.columns : {df.columns}'
+            df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
+            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 'max' , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
+        return df
+
+    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : Any = 2) -> None:
+        """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
+        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
+        DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = indent , vb_level = vb_level)
+
+    def load_fmp(self , date : int , vb_level : Any = 2 , **kwargs) -> pd.DataFrame:
+        """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
+        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
+        if not path.exists(): 
+            Logger.alert1(f'{path} does not exist' , vb_level = vb_level)
+        return DB.load_df(path)
+    
+    @property
+    def account_dir(self) -> Path:
+        """model factor portfolio account directory"""
+        return PATH.fmp_account.joinpath(self.pred_name)

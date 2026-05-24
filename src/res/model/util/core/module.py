@@ -7,12 +7,12 @@ from src.proj import Proj , Logger
 
 T = TypeVar('T')
 _MISSING = object()
-class ModuleCachedProperties:
+class GroupedCachedProperties:
     """GroupedModule cached properties"""
     def __init__(self):
         self._cached_properties = defaultdict(dict)
     def __repr__(self):
-        return f'ModuleCachedProperties(cached_properties={self._cached_properties})'
+        return f'{self.__class__.__name__}(cached_properties={self._cached_properties})'
     def group_keys(self , group : str) -> list[str]:
         return list(self._cached_properties[group].keys())
     def clear_all(self):
@@ -97,13 +97,13 @@ class BaseModule:
         else:
             return None
     @cached_property
-    def cached_properties(self) -> ModuleCachedProperties:
+    def cached_properties(self) -> GroupedCachedProperties:
         """
         grouped cached properties for the module
         Will store properties in miscellaneous groups. Use '' as group name for properties that only calucate once
         e.g. 'pipeline_hooks' , 'model_start' , 'data_module' , etc.
         """
-        return ModuleCachedProperties()
+        return GroupedCachedProperties()
     def set_vb_level(self , vb_level : Any):
         self.cached_properties.set('vb_level' , Proj.vb(vb_level))
     @property

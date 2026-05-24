@@ -1,6 +1,6 @@
 from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
-  ModelTrainer , ModelTestor , ModelPredictor , ModelHiddenExtractor , ModelPortfolioBuilder)
+  ModelTrainer , ModelTestor , ArchivedPredictorModel , ModelHiddenExtractor , ModelPortfolioBuilder)
 from src.proj import PATH , MACHINE , Logger , Proj
 from src.data import PreProcessorTask
 
@@ -24,7 +24,7 @@ class ModelAPI:
         '''
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
         wrap_update(ModelHiddenExtractor.update , 'update hidden')
-        wrap_update(ModelPredictor.update , 'update predictors')
+        wrap_update(ArchivedPredictorModel.update , 'update predictors')
         wrap_update(ModelPortfolioBuilder.update , 'update predictor portfolios')
     
     @classmethod
@@ -107,7 +107,7 @@ class ModelAPI:
           memory_usage: medium
         '''
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
-        wrap_update(ModelPredictor.update , 'update predictors')
+        wrap_update(ArchivedPredictorModel.update , 'update predictors')
 
     @classmethod
     def recalculate_preds(cls , start : int | None = None , end : int | None = None):
@@ -128,7 +128,7 @@ class ModelAPI:
           execution_time: long
           memory_usage: medium
         '''
-        wrap_update(ModelPredictor.recalculate , 'recalculate all predictors' , start = start , end = end)
+        wrap_update(ArchivedPredictorModel.recalculate , 'recalculate all predictors' , start = start , end = end)
     
     @classmethod
     def test_models(cls , module : str = 'tra_lstm' , data_types : str = 'day'):

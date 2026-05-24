@@ -45,11 +45,13 @@ class NNPredictor(PredictorModel):
         self.optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
         return self
     
-    def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
+    def load_model(self , model_num = None , model_date = None , submodel = None , *args , cache_model = False , **kwargs):
         '''call when testing new model'''
         model_file = self.load_model_file(model_num , model_date , submodel)
-        self.init_model(*args , **kwargs)
-        self.net.load_state_dict(model_file['state_dict'])
+        if not cache_model or self.current_model_file.model_path != model_file.model_path:
+            self.init_model(*args , **kwargs)
+            self.net.load_state_dict(model_file['state_dict'])
+            self.current_model_file = model_file
         return self
     
     def ckpt_state_dict(self):

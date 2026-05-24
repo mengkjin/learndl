@@ -3,11 +3,12 @@ from __future__ import annotations
 import torch
 
 from abc import abstractmethod
+from functools import cached_property
 from typing import Any
 
 from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
-from src.res.model.util.core import ModelDict , BatchInput , BatchOutput 
+from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , ModelFile
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
@@ -33,9 +34,9 @@ class PredictorModel(TrainerPipeline):
         return BatchOutput(output)
     
     def __repr__(self): 
-        if self.trainer is None and self._config is None:
+        if not self.is_bounded:
             return f'{self.__class__.__name__}(not bounded to trainer or config)'
-        return f'{self.__class__.__name__}(config={self.config})'
+        return f'{self.__class__.__name__}(binder={self.binder})'
 
     @classmethod
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig , **kwargs):
@@ -78,6 +79,10 @@ class PredictorModel(TrainerPipeline):
     @complete_model_param.setter
     def complete_model_param(self , value : dict[str,Any] | None):
         self.cached_properties.set('complete_model_param' , value)    
+    @cached_property
+    def current_model_file(self):
+        return ModelFile(None)
+
     def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
         if model_num is not None: 

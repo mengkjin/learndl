@@ -41,6 +41,9 @@ class FactorUpdateConfig:
         from src.proj import CALENDAR
         return CALENDAR.slice(CALENDAR.range(self.init_date , None , 'td' , step = self.step) , self.start , self.end)
     
+    def get(self , key) -> Any:
+        return MACHINE.preference('factor' , f'update/{key}')
+
 @singleton
 class RiskModelConfig:
     """

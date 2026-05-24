@@ -5,6 +5,7 @@ import pandas as pd
 import polars as pl
 
 from datetime import datetime
+from functools import cached_property
 from typing import Any , Generator , Literal
 
 from src.proj import Logger , Proj , CALENDAR , SingletonMeta , Const
@@ -21,13 +22,11 @@ __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdate
 
 CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
-MAX_PROCESS_NUM = 4
-MIN_PROCESS_NUM = 2 # only if groups_multiprocessing is True
+MAX_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/max_workers')
+MIN_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/min_workers')
 
 class BaseFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
-    groups_multiprocessing : bool = False
-    jobs_multithreading : bool = not groups_multiprocessing and False
     update_type : Literal['stock' , 'pooling' , 'affiliate' , 'market' , 'stats']
 
     def __init__(self):
@@ -36,6 +35,14 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     def __repr__(self):
         n_jobs = len(self.jobs) if self.jobs is not None else 0
         return f'{self.name}({n_jobs} jobs)'
+
+    @cached_property
+    def groups_multiprocessing(self) -> bool:
+        return Const.Factor.UPDATE.get(f'update_groups_multiprocessing/{self.update_type}')
+
+    @cached_property
+    def jobs_multithreading(self) -> int:
+        return not self.groups_multiprocessing and Const.Factor.UPDATE.get(f'update_jobs_multithreading')
 
     @property
     def name(self) -> str:
@@ -223,8 +230,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             Logger.note(f'Fixing : {updater.name} {factors} from {start} to {end}!')
             updater.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , timeout = timeout)
 
-    @classmethod
-    def eval_coverage(cls , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
+    def eval_coverage(self , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
         """
         update update jobs for all factors between start and end date
         **kwargs:
@@ -241,10 +247,10 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             valid_count = factor.loc[:,calc.factor_name].notna().sum()
             return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
             
-        for calc in cls.calculators(selected_factors = selected_factors , **kwargs):
+        for calc in self.calculators(selected_factors = selected_factors , **kwargs):
             dates = calc.stored_dates()
             calls = {date:(load_fac , {'calc' : calc , 'date' : date}) for date in dates}
-            factor_coverage = parallel(calls , method = cls.jobs_multithreading)
+            factor_coverage = parallel(calls , method = self.jobs_multithreading)
             dfs.extend(list(factor_coverage.values()))
 
         df = pd.concat(dfs)
@@ -305,7 +311,6 @@ def _split_multiple_jobs(all_jobs : dict[tuple , BaseUpdateJobList] , num_chunks
 class StockFactorUpdater(BaseFactorUpdater):
     """manager of factor update jobs"""
     update_type = 'stock'
-    groups_multiprocessing = True
 
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and date"""
@@ -332,7 +337,6 @@ class StockFactorUpdater(BaseFactorUpdater):
 class MarketFactorUpdater(BaseFactorUpdater):
     """manager of market factor update jobs"""
     update_type = 'market'
-    groups_multiprocessing = False
 
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and date"""
@@ -345,7 +349,6 @@ class MarketFactorUpdater(BaseFactorUpdater):
 class PoolingFactorUpdater(BaseFactorUpdater):
     """manager of pooling factor update jobs"""
     update_type = 'pooling'
-    groups_multiprocessing = False
 
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and factor_name"""
@@ -358,7 +361,6 @@ class PoolingFactorUpdater(BaseFactorUpdater):
 class AffiliateFactorUpdater(BaseFactorUpdater):
     """manager of affiliate factor update jobs"""
     update_type = 'affiliate'
-    groups_multiprocessing = False
 
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and factor_name"""
@@ -371,7 +373,6 @@ class AffiliateFactorUpdater(BaseFactorUpdater):
 class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""
     update_type = 'stats'
-    groups_multiprocessing = True
 
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and date"""

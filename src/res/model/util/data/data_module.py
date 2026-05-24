@@ -32,6 +32,8 @@ class DataModule(BaseModule):
         self.set_vb_level(vb_level)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
         self.use_data : Literal['fit','predict','both'] = use_data
+        if self.config not in self._config_instance_for_batch_data and self.use_data == 'both':
+            self._config_instance_for_batch_data[self.config] = self
 
     @classmethod
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
@@ -125,7 +127,7 @@ class DataModule(BaseModule):
             else:
                 self.model_date_list = dates[::self.config.interval]
 
-    def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
+    def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
         if self.setup_new_param(stage , param , model_date , **kwargs):
@@ -134,9 +136,9 @@ class DataModule(BaseModule):
             self.setup_loader_create()
 
     def setup_new_param(
-            self , stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
+            self , stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160
+            model_date = -1 , extract_backward_days = 500 , extract_forward_days = 160
         ) -> bool:
         stage = 'predict' if self.use_data == 'predict' else stage
         slens = self.config.seq_lens | param.get('seqlens',{})
@@ -192,14 +194,16 @@ class DataModule(BaseModule):
                 model_date_col = (self.datas.date < self.model_date).sum()
                 self.d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - d_extend)
                 self.d1 = max(0 , model_date_col - self.config.skip_horizon)
-            case 'predict' | 'test':
+            case 'predict' | 'test' | 'retrospective':
                 next_model_date = self.next_model_date(self.model_date)
 
-                before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-y_extend:]
-                test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::self.data_step]
-                self.early_test_dates = test_dates[test_dates <= self.model_date][-(y_extend-1) // self.data_step:] if y_extend > 1 else test_dates[-1:-1]
-                self.model_test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
-                
+                if self.stage == 'retrospective':
+                    full_test_dates = self.datas.date
+                else:
+                    before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-y_extend:]
+                    full_test_dates = np.concatenate([before_test_dates , self.test_full_dates])
+                self.early_test_dates = full_test_dates[full_test_dates <= self.model_date][-(y_extend-1):] if y_extend > 1 else full_test_dates[-1:-1]
+                self.model_test_dates = full_test_dates[(full_test_dates > self.model_date) * (full_test_dates <= next_model_date)]
                 test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
                 
                 if test_dates.size == 0:
@@ -218,7 +222,9 @@ class DataModule(BaseModule):
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
         if self.step_len <= 0:
-            self.alert1(f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , d1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
+            self.alert1(
+                f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , '
+                f'd1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
             if self.stage in ['predict' , 'test']:
                 self.alert1(f'Test dates: {test_dates}')
             raise ValueError(f'Step length is less than 0')
@@ -262,6 +268,8 @@ class DataModule(BaseModule):
         return BatchInputLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
     def extract_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['extract'] , self , tqdm = False , desc = 'Extract')
+    def retrospective_dataloader(self) -> BatchInputLoader: 
+        return BatchInputLoader(self.loader_dict['retrospective'] , self , tqdm = False , desc = 'Retrospective')
 
     @cached_property
     def data_callbacks(self) -> DataCallbacks:
@@ -285,10 +293,15 @@ class DataModule(BaseModule):
             self.loader_dict[self.stage] = StoredTorchFileLoader(self.storage , [] , 'static')
             self.loader_dates[self.stage] = []
 
-    def prev_model_date(self , model_date):
+    def prev_model_date(self , model_date) -> int:
+        if self.stage == 'retrospective':
+            return model_date - 10000
         prev_dates = self.model_date_list[self.model_date_list < model_date]
         return max(prev_dates) if len(prev_dates) > 0 else -1
-    def next_model_date(self , model_date):
+
+    def next_model_date(self , model_date) -> int:
+        if self.stage == 'retrospective':
+            return model_date + 10000
         late_dates = self.model_date_list[self.model_date_list > model_date]
         return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
 
@@ -328,7 +341,7 @@ class DataModule(BaseModule):
             return None
 
     def get_batch_input_of_date(self , date : int) -> BatchInput:
-        assert self.stage in ['predict' , 'test' , 'extract'] , f'stage should be predict , test or extract, but got {self.stage}'
+        assert self.stage in ['predict' , 'test' , 'extract' , 'retrospective'] , f'stage should be predict , test or extract, but got {self.stage}'
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
@@ -340,7 +353,7 @@ class DataModule(BaseModule):
         self.storage.del_group(self.stage)
         self.loader_dates[self.stage] = []
         for set_key , set_samples in sample_index.items():
-            assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract'] , set_key
+            assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract' , 'retrospective'] , set_key
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_keys : list[str] = []
             for bnum , b_i in enumerate(set_samples):
@@ -359,7 +372,7 @@ class DataModule(BaseModule):
                 batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)
                 batch_keys.append(batch_key)
-                if set_key in ['predict' , 'test' , 'extract']:
+                if set_key in ['predict' , 'test' , 'extract' , 'retrospective']:
                     self.loader_dates[set_key].append(self.y_date[int(xindex1[0].item())])
                 
             self.loader_dict[set_key] = StoredTorchFileLoader(self.storage , batch_keys , shuf_opt)
@@ -378,7 +391,7 @@ class DataModule(BaseModule):
         return y[index0 , index1]
 
     @property
-    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
+    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective']:
         return self.loader_param.stage
 
     @cached_property

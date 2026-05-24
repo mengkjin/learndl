@@ -20,5 +20,4 @@ def get_predictor_module(module : str | ModelConfig , *args , **kwargs):
     else:
         raise ValueError(f'invalid module type: {module_type}')
     predictor = mod(*args , **kwargs).bound_with(module)
-    return predictor
-    
+    return predictor    
