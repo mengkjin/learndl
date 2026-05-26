@@ -328,8 +328,17 @@ class FactorStats:
     def append_stat(self , params : dict[str,Any] , stat : pd.DataFrame , keys : list[str] | None = None):
         if stat.empty:
             return
-        if not self.get_stat(params).empty:
-            stat = pd.concat([self.get_stat(params) , stat])
+        old_stat = self.get_stat(params)
+        if not old_stat.empty:
+            from src.proj.util.catcher import WarningCatcher
+            try:
+                with WarningCatcher(['behavior of DataFrame concatenation']):
+                    stat = pd.concat([old_stat , stat])
+            except Exception as e:
+                Logger.error(f'Error concatenating stats: {e}')
+                print(old_stat)
+                print(stat)
+                return
         index_names = [key for key in stat.index.names if key is not None]
         if index_names:
             stat = stat.reset_index(drop=False)
