@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import io
+import os
+from uuid import uuid4
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -67,21 +69,39 @@ class dfIOHandler:
         """save dataframe to path"""
         if isinstance(df , pd.DataFrame) and None in df.index.names:
             df = df.reset_index(None , drop = True)
+        # Atomic write for filesystem paths: write to a temp file in the same directory,
+        # then replace the target path. Prevents partially-written files on crashes.
+        tmp_path: Path | None = None
+        target_path: Path | None = None
+        if isinstance(path, (str, Path)):
+            target_path = Path(path)
+            tmp_path = target_path.with_name(
+                f"{target_path.name}.tmp.{os.getpid()}.{uuid4().hex[:8]}"
+            )
         try:
+            write_path = tmp_path if tmp_path is not None else path
             if isinstance(df , pd.DataFrame) and DATAFRAME_SUFFIX == 'feather':
-                df.to_feather(path)
+                df.to_feather(write_path)
             elif isinstance(df , pd.DataFrame) and DATAFRAME_SUFFIX == 'parquet':
-                df.to_parquet(path , engine='fastparquet')
+                df.to_parquet(write_path , engine='fastparquet')
             elif isinstance(df , pl.DataFrame) and DATAFRAME_SUFFIX == 'feather':
-                df.write_ipc(path)
+                df.write_ipc(write_path)
             elif isinstance(df , pl.DataFrame) and DATAFRAME_SUFFIX == 'parquet':
-                df.write_parquet(path)
+                df.write_parquet(write_path)
             else:
                 raise ValueError(f'Unsupported dataframe type {type(df)} with suffix {DATAFRAME_SUFFIX}')
+            if tmp_path is not None and target_path is not None:
+                os.replace(tmp_path, target_path)
         except Exception as e:
             Logger.error(f'Error saving {path}: {e}')
             Logger.display(df , caption = 'Error saving DataFrame')
             raise
+        finally:
+            if tmp_path is not None and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    ...
 
     @classmethod
     def to_path_dict(cls , paths : strPaths) -> dict[int | Any, Path]:
