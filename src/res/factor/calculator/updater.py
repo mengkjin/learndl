@@ -374,6 +374,11 @@ class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""
     update_type = 'stats'
 
+    @cached_property
+    def groups_multiprocessing(self) -> bool:
+        """factor stats update does not support multiprocessing, always return False"""
+        return False
+
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and date"""
         year_jobs = level_jobs.split_by(split_keys = ['year'])
