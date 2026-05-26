@@ -4,7 +4,6 @@ from datetime import datetime
 
 from src.proj.core import strPath
 from src.proj.env import PATH
-from src.proj.log import Logger
 
 from ..sqlite import DBConnHandler
 

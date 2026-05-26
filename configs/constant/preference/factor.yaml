@@ -11,7 +11,7 @@ update:
     market: false
     affiliate: false
     pooling: false
-    stats: true
+    stats: false
     max_workers: 4
     min_workers: 2
   update_jobs_multithreading: false # computational intensive tasks are not suitable for multithreading
