@@ -922,9 +922,9 @@ class StockFactor:
         if fut_ret: 
             df = append_fut_ret(df , nday , lag , ret_type)
             if valid_fut_ret:
-                df['valid'] = df['group_ret'].notna()
-                df['valid_group'] = df.groupby(['date' , 'factor_name'])['valid'].transform('any')
-                df = df.query('valid_group').drop(columns=['valid' , 'valid_group'])
+                df['valid'] = df['ret'].notna()
+                df['valid_date'] = df.groupby(['date'])['valid'].transform('any')
+                df = df.query('valid_date').drop(columns=['valid' , 'valid_date'])
         if ffmv:    
             df = append_ffmv(df)
         return df   
