@@ -95,19 +95,26 @@ class ModuleLogger:
     def __init__(self , module : type[BaseModule] | BaseModule):
         self.module = module
 
+    @property
+    def name(self) -> str:
+        if isinstance(self.module , BaseModule):
+            return self.module.__class__.__name__
+        else:
+            return self.module.__name__
+
     def grep_kwargs(self , id : int | None = None , vb : int | None = None , **kwargs):
         if isinstance(self.module , BaseModule):
             if vb is not None:
                 kwargs['vb_level'] = kwargs.get('vb_level', self.module.vb_level + vb)
             if id is not None:
                 kwargs['indent'] = kwargs.get('indent', self.module.indent + id)
-            kwargs['prefixes'] = [f'{self.module.__class__.__name__} >>']
+            
         else:
             if vb is not None:
                 kwargs['vb_level'] = kwargs.get('vb_level', vb + 1)
             if id is not None:
                 kwargs['indent'] = kwargs.get('indent', id)
-            kwargs['prefixes'] = [f'{self.module.__name__} >>']
+        kwargs['prefixes'] = [f'{self.name} >>']
         return kwargs
 
     def stdout(self , *args , id : int | None = 0 , vb : int | None = 0 , no_prefix : bool = False , **kwargs):
@@ -230,7 +237,7 @@ class ModuleLogger:
         kwargs.pop('prefixes' , None)
         kwargs['enter_vb_level'] = 'max' if enter_vb is None else enter_vb
         kwargs['timer_prefix'] = False
-        return Logger.Timer(f'{self.__class__.__name__} Timer({key})' , **kwargs)
+        return Logger.Timer(f'{self.name} Timer({key})' , **kwargs)
 
     def paragraph(self , *args , **kwargs):
         """create a paragraph context manager"""
