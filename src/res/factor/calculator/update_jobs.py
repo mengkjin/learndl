@@ -217,6 +217,9 @@ class BaseUpdateJobList(BaseModule):
     def append(self , job : BaseUpdateJob) -> None:
         self.jobs.append(job)
 
+    def extend(self , jobs : list[BaseUpdateJob]) -> None:
+        self.jobs.extend(jobs)
+
     def sort_jobs(self) -> None:
         self.jobs.sort(key=lambda x: x.sort_key())
 

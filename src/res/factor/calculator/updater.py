@@ -178,14 +178,11 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
             # Strip calculators before pickling; worker rebuilds from specs and returns a report.
             for chunk in group_jobs.values():
                 chunk.degenerate_jobs()
-            process_inputs = {
-                name: (run_job_chunk_payload , [chunk.to_payload()])
-                for name , chunk in group_jobs.items()
-            }
+            process_inputs = {name: (run_job_chunk_payload , [chunk.to_payload()]) for name , chunk in group_jobs.items()}
             DATAVENDOR.data_storage_control()
             results = parallel(
-                process_inputs , method = 'process' , timeout = timeout , indent = self.indent + 2 , vb_level = self.vb_level + 2 ,
-                capture_mp_output = True ,
+                process_inputs , method = 'process' , timeout = timeout , 
+                indent = self.indent + 2 , capture_mp_output = True ,
             )
             for name , report in results.items():
                 group_jobs[name].apply_report(report)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+from multiprocessing.context import BaseContext
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime
@@ -11,7 +12,7 @@ from uuid import uuid4
 from src.proj import MACHINE , Logger
 from src.proj.util.catcher import MPOutputCatcher
 
-__all__ = ['parallel' , 'FuncCall' , 'is_main_process']
+__all__ = ['parallel' , 'FuncCall' , 'is_main_process' , 'process_pool_context']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
 T = TypeVar('T')
@@ -26,6 +27,11 @@ def is_main_process() -> bool:
     """True only in the process that launched the job (not a ``ProcessPoolExecutor`` worker)."""
     return mp.current_process().name == 'MainProcess'
 
+
+def process_pool_context() -> BaseContext:
+    """Multiprocessing context for ``ProcessPoolExecutor`` (avoid fork in a threaded parent)."""
+    # Python 3.12+ deprecates fork() when the parent process has threads; forkserver/spawn are safe.
+    return mp.get_context('spawn' if MACHINE.is_windows else 'forkserver')
 
 def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:
     """get parallel method index
@@ -87,7 +93,9 @@ def parallel(
         mp_run_id = uuid4().hex[:12] if capture_mp_output else None
         mp_kwargs = {'initializer': MPOutputCatcher.pool_initializer,'initargs': (mp_run_id ,)}
         try:
-            with ProcessPoolExecutor(max_workers=max_workers , **mp_kwargs) as pool:
+            with ProcessPoolExecutor(
+                max_workers=max_workers , mp_context=process_pool_context() , **mp_kwargs
+            ) as pool:
                 futures = [(func_call , func_call.submit(pool)) for func_call in func_calls]
                 for func_call , future in futures:
                     # Process pool: child cannot mutate parent ``result_dict``; use Future return value.
