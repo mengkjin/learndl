@@ -250,7 +250,6 @@ class ArchivedPredictorModel(BaseModule):
         dates = np.array(dates)
         self.load_data(dates.min() , dates.max())
         pred_dates = dates[dates <= max(self.data.test_full_dates)]
-        print(dates , pred_dates)
         if pred_dates.size == 0: 
             return self
         assert any(self.path.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
@@ -259,20 +258,18 @@ class ArchivedPredictorModel(BaseModule):
                                 'calculated' : 0})
         torch.set_grad_enabled(False)
         df_list : list[pd.DataFrame] = []
-        
         for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
+            assert isinstance(model_date , int) and model_date in self.model_dates , \
+                f'model_date {model_date} not in {self.model_dates}'
             for model_num in self.path.use_model_nums:
                 model_param = self.config.model_param[model_num]
-                assert isinstance(model_date , int) , model_date
-                self.data.setup('retrospective' ,  model_param , model_date)
+                tdates = df_sub['pred_dates'].unique()
+                self.data.setup('retrospective' ,  model_param , model_date , retro_start_date = tdates.min() , retro_end_date = tdates.max())
                 model = self.model.load_model(model_num , model_date , self.path.use_submodel , model_param = model_param)
                 
-                tdates = self.data.model_test_dates
-                within = np.isin(tdates , df_sub.query('calculated == 0')['pred_dates'])
-                loader = self.data.retrospective_dataloader()
-
-                for tdate , do_calc , batch_input in zip(tdates , within , loader):
-                    if not do_calc or len(batch_input) == 0: 
+                for batch_input in self.data.retrospective_dataloader():
+                    tdate = batch_input.date0
+                    if tdate not in pred_dates or len(batch_input) == 0: 
                         continue
                     df = model.get_batch_data(batch_input).pred_df(colnames = self.model_name , model_num = model_num)
                     df_list.append(df)
