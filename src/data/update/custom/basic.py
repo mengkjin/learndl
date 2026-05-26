@@ -26,7 +26,7 @@ class BasicCustomUpdaterMeta(type):
     def __new__(cls , name , bases , dct):
         """Create the class and register it (excluding the abstract base itself)."""
         new_cls = super().__new__(cls , name , bases , dct)
-        if name != 'BasicUpdater':
+        if name != 'BasicCustomUpdater':
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
             assert 'update_all' in new_cls.__dict__  , \
