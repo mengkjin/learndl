@@ -910,7 +910,7 @@ class StockFactor:
 
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
                         nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close' ,
-                        dates : np.ndarray | None = None) -> pd.DataFrame:
+                        valid_fut_ret = True , dates : np.ndarray | None = None) -> pd.DataFrame:
         """
         return the factor data with additional columns
         """
@@ -921,6 +921,10 @@ class StockFactor:
             df = append_indus(df)
         if fut_ret: 
             df = append_fut_ret(df , nday , lag , ret_type)
+            if valid_fut_ret:
+                df['valid'] = df['group_ret'].notna()
+                df['valid_group'] = df.groupby(['date' , 'factor_name'])['valid'].transform('any')
+                df = df.query('valid_group').drop(columns=['valid' , 'valid_group'])
         if ffmv:    
             df = append_ffmv(df)
         return df   
@@ -984,8 +988,6 @@ class StockFactor:
         calc_dates = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date
         if len(calc_dates) > 0:
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
-            # assert not np.any(np.isinf(df['ret'])), f'inf values in factor data ret : {df[np.isinf(df).any(axis=1)]}'
-            print(df)
             df = self._eval_group_perf(df , self.factor_names , group_num , excess)
             df['start'] = CALENDAR.td_array(df['date'] , lag)
             df['end']   = CALENDAR.td_array(df['date'] , lag + nday - 1)
