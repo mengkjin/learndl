@@ -15,11 +15,17 @@ class DataloaderParam:
     seqlens : dict[str,int] | Any = None
     extract_backward_days : int | Any = None
     extract_forward_days  : int | Any = None
+    retro_start_date : int | Any = None
+    retro_end_date : int | Any = None
 
     def __post_init__(self):
         assert self.stage in ['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , self.stage
         if self.stage == 'retrospective':
-            self.model_date = self.model_date // 10000 * 10000 + 101
+            if self.retro_start_date is None:
+                self.retro_start_date = self.model_date // 10000 * 10000 + 101
+            if self.retro_end_date is None:
+                self.retro_end_date = self.model_date // 10000 * 10000 + 1231
+            assert self.retro_start_date <= self.retro_end_date , (self.retro_start_date , self.retro_end_date)
         assert self.model_date is None or self.model_date > 0 , self.model_date
         assert self.seqlens is None or self.seqlens , self.seqlens
         if self.seqlens is None:
@@ -27,7 +33,19 @@ class DataloaderParam:
         if self.stage != 'extract':
             self.extract_backward_days = None 
             self.extract_forward_days  = None
-    
+
+    def __eq__(self , other : Any) -> bool:
+        assert isinstance(other , DataloaderParam) , f'must compare with instance of DataloaderParam, but got {type(other)}'
+        if self.stage != other.stage:
+            return False
+        match_attrs = ['seqlens']
+        if self.stage == 'extract':
+            match_attrs.extend(['model_date' , 'extract_backward_days' , 'extract_forward_days'])
+        elif self.stage == 'retrospective':
+            match_attrs.extend(['retro_start_date' , 'retro_end_date'])
+        else:
+            match_attrs.append('model_date')
+        return all([getattr(self , attr) == getattr(other , attr) for attr in match_attrs])
 class BatchInputLoader:
     '''wrap loader to impletement DataModule Callbacks'''
     def __init__(self , raw_loader : Sequence[BatchInput] , data_module , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:

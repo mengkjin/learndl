@@ -27,8 +27,8 @@ class PreProcessorTask:
     Called from scripts or the CLI; uses argparse for the ``--confirm`` flag.
     """
     @classmethod
-    def update(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , indent : int = 0 , vb_level : Any = 1 ,
-               force_update : bool = False):
+    def update(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , 
+               indent : int = 0 , vb_level : Any = 1 , force_update : bool = False):
         """
         Run the preprocessing update for all (or selected) registered processors.
 
@@ -63,6 +63,6 @@ class PreProcessorTask:
         Logger.stdout(f'Will process {keys} from {Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , indent = indent + 1 , vb_level = vb_level + 1)
 
         for key in keys:
-            proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict')
-            proc.update(force_update = force_update , indent = indent + 1 , vb_level = vb_level + 1)
+            proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)
+            proc.update(force_update = force_update)
             Logger.divider(vb_level = vb_level + 3)

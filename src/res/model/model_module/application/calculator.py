@@ -2,18 +2,22 @@ from functools import cached_property
 from typing import Any
 
 from src.proj import Proj , CALENDAR
+from src.proj.util import BaseModule
 from src.res.model.util import ModelPath , BatchData , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
-class ModelCalculator:
+class ModelCalculator(BaseModule):
     '''for a model_name/model_path to get batch_data easily'''
-    def __init__(self , model : str | ModelPath | Any):
+    def __init__(self , model : str | ModelPath | Any , * , indent : int = 0 , vb_level : Any = 1):
         self.model_path = ModelPath(model)
         
         self.config = self.model_path.load_config()
         self.model = get_predictor_module(self.config)
         with Proj.silence:
             self.data_module  = DataModule(self.config , 'both').load_data() 
+
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.model_path})'

@@ -8,9 +8,9 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import Proj , Logger , CALENDAR , DB , Dates , Const
+from src.proj import Logger , CALENDAR , DB , Dates , Const
 from src.proj.core import strPath
-from src.proj.util import parallel
+from src.proj.util import parallel , BaseModule
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -371,7 +371,7 @@ class PortfolioAccount:
             return pd.DataFrame()
         return pd.concat({name : account.eval_period_ret() for name , account in accounts.items()}, axis = 1)
 
-class PortfolioAccountant:
+class PortfolioAccountant(BaseModule):
     """
     portfolio accountant for a portfolio , one portfolio has only one accountant
     portfolio : Portfolio
@@ -382,18 +382,21 @@ class PortfolioAccountant:
     """
     _instances = {}
 
-    def __new__(cls, portfolio: Portfolio):
+    def __new__(cls, portfolio: Portfolio , *args , **kwargs):
         key = id(portfolio)
         if key not in cls._instances:
             instance = super().__new__(cls)
             cls._instances[key] = instance
         return cls._instances[key]
     
-    def __init__(self , portfolio : Portfolio):
+    def __init__(self , portfolio : Portfolio , * , indent : int = 1 , vb_level : Any = 2):
         self.portfolio = portfolio
         self.account = PortfolioAccount()
         if not hasattr(portfolio , 'cached_accounts'):
             self.cached_accounts : dict[str , PortfolioAccount] = {}
+        
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(portfolio={self.portfolio})'
@@ -411,13 +414,14 @@ class PortfolioAccountant:
     def resume_path(self) -> strPath | None:
         return None
 
-    def accounting(self , 
-                   config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
-                   start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
-                   trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
-                   daily = False , cache = False , with_index : dict[str,Any] | None = None ,
-                   resume_path : strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
-                   indent : int = 0 , vb_level : Any = 1):
+    def accounting(
+        self , 
+        config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
+        start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
+        trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
+        daily = False , cache = False , with_index : dict[str,Any] | None = None ,
+        resume_path : strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+    ):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
             config = config_or_benchmark
@@ -428,7 +432,6 @@ class PortfolioAccountant:
         self.account.config = config
         self.resume_path = resume_path
 
-        vb_level = Proj.vb(vb_level)
         if Const.Model.resume_fmp_account:
             self.resumed_account = PortfolioAccount.load(self.resume_path)
             if resume_drop_last:
@@ -442,21 +445,20 @@ class PortfolioAccountant:
 
             if not self.resumed_account.empty:
                 Logger.success(f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
-                               indent = indent + 1 , vb_level = 'max')
+                               indent = self.indent + 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
-        self.go(cache = cache , indent = indent , vb_level = vb_level)
+        self.go(cache = cache)
         self.account.with_index(with_index)
         if save_after:
-            self.account.save(self.resume_path , indent = indent , vb_level = vb_level + 1)
+            self.account.save(self.resume_path , indent = self.indent , vb_level = self.vb_level + 1)
         return self
 
     @property
     def config(self) -> AccountConfig:
         return self.account.config
     
-    def go(self , cache = False , indent : int = 1 , vb_level : Any = 2):
-        vb_level = Proj.vb(vb_level)
+    def go(self , cache = False):
         if cache and self.config.key in self.cached_accounts:
             self.account = self.cached_accounts[self.config.key]
             return self
@@ -490,8 +492,7 @@ class PortfolioAccountant:
             'analytic':None , 'attribution':None}).set_index('model_date')
 
         port_old = Port.none_port(model_dates[0])
-        Logger.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}' , 
-                      indent = indent , vb_level = vb_level)
+        self.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}')
         for i , (mdate , ed) in enumerate(zip(model_dates , period_ed)):
             port_new = self.portfolio.get(mdate) if self.portfolio.has(mdate) else port_old
             bench = self.benchmark.get(mdate , True)
@@ -512,8 +513,7 @@ class PortfolioAccountant:
                 df.loc[mdate , 'attribution'] = RISK_MODEL.get(mdate).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
             if i > 0 and ((i + 1) % 100 == 0 or i == len(df) - 2):
-                Logger.stdout(f'{self.config.name} accounting {i + 1} / {len(df) - 1} at {mdate}' , 
-                              indent = indent , vb_level = vb_level + 2)
+                self.stdout(f'{self.config.name} accounting {i + 1} / {len(df) - 1} at {mdate}' , add_vb = 2)
 
         df['pf']  = df['pf'] - df['turn'] * self.config.trade_cost
         df['excess'] = df['pf'] - df['bm']
@@ -548,16 +548,20 @@ class PortfolioAccountant:
         rets['overnight_vwap'] = overnight_vwap
         return rets
 
-class PortfolioAccountManager:
+class PortfolioAccountManager(BaseModule):
     """
     Manage portfolio accounts in a directory.
     """
-    def __init__(self , account_dir : strPath):
+    def __init__(self , account_dir : strPath , * , indent : int = 0 , vb_level : Any = 1):
         self.account_dir = Path(account_dir)
         self.account_dir.mkdir(exist_ok=True)
 
         self.accounts : dict[str , PortfolioAccount] = {}
         self.account_metas : dict[str , dict[str, Any]] = {}
+
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
+
         self.load_dir_metas()
 
     def __repr__(self):
@@ -645,7 +649,7 @@ class PortfolioAccountManager:
                 plot = True , display = True , **kwargs):
         dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}
         if not dfs: 
-            Logger.stdout(f'No {category} accounts to account!')
+            self.stdout(f'No {category} accounts to account!')
         account = PortfolioAccount.Total(*dfs.values())
         
         if account.empty: 

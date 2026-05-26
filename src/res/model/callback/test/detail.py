@@ -56,9 +56,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def test_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
 
-    def timer(self , key : str , indent : int = 0):
-        return Logger.Timer(key , indent = indent , vb_level = self.vb_level)
-
     def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
         if which == 'first':
             df = self.record.get_preds(pred_dates = pred_dates , model_num = 0 , closest = True)

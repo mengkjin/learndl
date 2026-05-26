@@ -6,14 +6,15 @@ import pandas as pd
 from typing import Any
 from .basic import BC
 
-cds = BC._cds
-dup = cds[np.bincount(np.searchsorted(np.unique(cds), cds)) > 1]  # 或更简单：
-
-idx = pd.Index(cds)
+idx = pd.Index(BC._cds)
 if not idx.is_unique:
-    print("unique:", idx.is_unique, "len:", len(cds), "nunique:", idx.nunique())
-    print(pd.Series(cds).value_counts().head(20))
-    raise ValueError('stop here')
+    info = f'''
+    unique: {idx.is_unique}
+    len: {len(BC._cds)}
+    nunique: {idx.nunique()}
+    value_counts: {pd.Series(BC._cds).value_counts().head(20)}
+    '''
+    raise ValueError(info)
 
 class TradeDate:
     """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""

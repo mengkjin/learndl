@@ -15,45 +15,53 @@ FactorCategory1Loader
 """
 import pandas as pd
 
-from dataclasses import dataclass
 from typing import Any , Literal
 
-from src.proj import PATH , Logger , DB , Proj , CALENDAR , Const
+from src.proj import PATH , DB , CALENDAR , Const
+from src.proj.util import BaseModule
 from src.data.util import DataBlock
-
-@dataclass
-class BlockLoader:
+class BlockLoader(BaseModule):
     """
     Loader for block data of db_src , db_key
     example:
         loader = BlockLoader(db_src = 'trade_ts' , db_key = 'day')
         block = loader.load(start = 20250101 , end = 20250331)
     """
-    db_src  : str
-    db_key  : str | list | None = None
-    feature : list | None = None
-    use_alt : bool = True
-
-    def __post_init__(self):
+    def __init__(
+        self , 
+        db_src : str , 
+        db_key : str | list | None = None , 
+        feature : list | None = None , 
+        use_alt : bool = True , * , 
+        indent : int = 1 , vb_level : Any = 1):
+        self.db_src = db_src
+        self.db_key = db_key
+        self.feature = feature
+        self.use_alt = use_alt
         assert self.src_path.exists() , f'{self.src_path} not exists'
         for key in self.iter_keys():
             assert self.src_path.joinpath(key).exists() , f'{key} not exists in {self.src_path}'
+
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(db_src={self.db_src},db_key={self.db_key},feature={self.feature},use_alt={self.use_alt})'
 
     @property
     def src_path(self):
         """Filesystem path to the ``db_src`` database directory."""
         return DB.DBPath.Parent(self.db_src)
 
-    def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
+    def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
         """Load all configured DB keys and merge them into a single DataBlock."""
         sub_blocks = []
-        vb_level = Proj.vb(vb_level)
-        with Logger.Timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , indent = indent , vb_level = vb_level , enter_vb_level=vb_level+1):
+        with self.timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , add_vb = 1 , add_enter_vb = 1):
             for db_key in self.iter_keys():
-                with Logger.Timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , indent = indent +1 , vb_level = vb_level + 1):
+                with self.timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , add_indent = 1 , add_vb = 1):
                     blk = DataBlock.load_raw(self.db_src , db_key , start , end , feature = self.feature , use_alt = self.use_alt , vb_level = 'max')
                     sub_blocks.append(blk)
-        with Logger.Timer(f'{self.db_src} blocks merging ({len(sub_blocks)})' , silent = len(sub_blocks) <= 1 , indent = indent , vb_level = vb_level): 
+        with self.timer(f'{self.db_src} blocks merging ({len(sub_blocks)})' , silent = len(sub_blocks) <= 1): 
             block = DataBlock.merge(sub_blocks , inplace = True)
         return block
 
@@ -65,26 +73,32 @@ class BlockLoader:
             return self.db_key
         else:
             return [self.db_key]
-@dataclass
-class FrameLoader:
+
+class FrameLoader(BaseModule):
     """
     Loader for frame data of db_src , db_key
     example:
         loader = FrameLoader(db_src = 'trade_ts' , db_key = 'day')
         df = loader.load(start = 20250101 , end = 20250331)
     """
-    db_src  : str
-    db_key  : str
-    reserved_src : list[str] | None = None
-    use_alt : bool = True
+    def __init__(self , db_src : str , db_key : str , reserved_src : list[str] | None = None , use_alt : bool = True , * , indent : int = 1 , vb_level : Any = 1):
+        self.db_src = db_src
+        self.db_key = db_key
+        self.reserved_src = reserved_src
+        self.use_alt = use_alt
 
-    def __post_init__(self):
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
-    
-    def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> pd.DataFrame:
+
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(db_src={self.db_src},db_key={self.db_key},reserved_src={self.reserved_src},use_alt={self.use_alt})'
+        
+    def load(self , start : int | None = None , end : int | None = None , **kwargs) -> pd.DataFrame:
         """Load frame data from database"""
-        df = DB.loads(self.db_src , self.db_key , start = start , end = end , use_alt = self.use_alt , indent = indent , vb_level = vb_level)
+        df = DB.loads(self.db_src , self.db_key , start = start , end = end , use_alt = self.use_alt , indent = self.indent , vb_level = self.vb_level , **kwargs)
         return df
     
 class FactorLoader(BlockLoader):
@@ -98,31 +112,31 @@ class FactorLoader(BlockLoader):
         self , 
         names : str | list[str] , 
         normalize = False , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' , * ,
+        indent : int = 1 , vb_level : Any = 1 ,
         **kwargs
     ):
-        super().__init__('factor')
+        super().__init__('factor' , indent = indent , vb_level = vb_level)
         self.names = names if isinstance(names , list) else [names]
         self.normalize = normalize
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
         self.kwargs = kwargs
         
-    def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
+    def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
-        vb_level = Proj.vb(vb_level)
-        with Logger.Timer(f'factor blocks reading [{len(self.names)} factors]' , indent = indent , vb_level = vb_level):
+        with self.timer(f'factor blocks reading [{len(self.names)} factors]'):
             dates = CALENDAR.range(start , end , 'td')
             for calc in FactorCalculator.iter(selected_factors = self.names , **self.kwargs):
-                df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = indent + 1 , vb_level = vb_level + 1)
+                df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         if not [fac for fac in factors if not fac.empty]:
             if self.kwargs.get('notice_empty', True):
-                Logger.alert1(f'no factors found for {self.names} within {start} - {end}')
+                self.alert1(f'no factors found for {self.names} within {start} - {end}')
             return DataBlock()
-        with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1 , indent = indent , vb_level = vb_level): 
+        with self.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
             df = pd.concat([fac for fac in factors if not fac.empty])
             df = df.pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_pandas(df)
@@ -139,32 +153,32 @@ class FactorCategory1Loader(BlockLoader):
         self , 
         category1 : str , 
         normalize = False , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' , * , 
+        indent : int = 1 , vb_level : Any = 1 ,
         **kwargs
     ):
-        super().__init__('factor')
+        super().__init__('factor' , indent = indent , vb_level = vb_level)
         self.category1 = category1
         self.normalize = normalize
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
         self.kwargs = kwargs
         
-    def load(self , start : int | None = None , end : int | None = None , indent = 1 , vb_level : Any = 1) -> DataBlock:
+    def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
         """Load factor data , alias for load"""
         from src.res.factor.calculator import FactorCalculator
         factors : list[pd.DataFrame] = []
-        vb_level = Proj.vb(vb_level)
-        with Logger.Timer(f'factor blocks reading [{self.category0} , {self.category1}]' , indent = indent , vb_level = vb_level):
+        with self.timer(f'factor blocks reading [{self.category0} , {self.category1}]'):
             dates = CALENDAR.range(start , end , 'td')
             for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
-                df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = indent + 1 , vb_level = vb_level + 1)
+                df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         factors = [fac for fac in factors if not fac.empty]
         if not factors:
             if self.kwargs.get('notice_empty', True):
-                Logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}' , vb_level = vb_level)
+                self.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}')
             return DataBlock()
-        with Logger.Timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1, indent = indent , vb_level = vb_level): 
+        with self.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
             df = pd.concat([fac for fac in factors if not fac.empty])
             df = df.pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_pandas(df)

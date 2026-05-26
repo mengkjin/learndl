@@ -245,8 +245,9 @@ class BatchOutput:
             self.outputs = pred
         return self
     
-    def pred_df(self , secid : np.ndarray | Any , date : np.ndarray | Any , narrow_df = False , 
-                colnames : str | list | None = None , **kwargs):
+    def pred_df(self , secid : np.ndarray | Any , date : np.ndarray | Any , * , 
+                narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' ,
+                **kwargs):
         pred = self.pred.cpu().numpy()
         if pred.ndim == 1: 
             pred = pred[:,None]
@@ -258,6 +259,8 @@ class BatchOutput:
             columns = [colnames]
         else: 
             columns = colnames
+        if colname_prefix:
+            columns = [f'{colname_prefix}.{col}' for col in columns]
         assert pred.shape[-1] == len(columns) , (pred.shape , columns)
 
         df = pd.DataFrame({'secid' : secid , 'date' : date , **{col:pred[:,i] for i,col in enumerate(columns)}})
@@ -268,8 +271,9 @@ class BatchOutput:
             df = df.melt(['secid','date'] , var_name='feature')
         return df.assign(**kwargs)
         
-    def hidden_df(self , secid : np.ndarray , date : np.ndarray , narrow_df = False ,
-                  colnames : str | list | None = None , **kwargs):
+    def hidden_df(self , secid : np.ndarray , date : np.ndarray , * , 
+                  narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' ,
+                  **kwargs):
         '''kwargs will be used in df.assign(**kwargs)'''
         full_hidden : torch.Tensor | Any = self.other['hidden']
         full_hidden = full_hidden.cpu().numpy()
@@ -282,6 +286,8 @@ class BatchOutput:
             columns = [colnames]
         else: 
             columns = colnames
+        if colname_prefix:
+            columns = [f'{colname_prefix}.{col}' for col in columns]
         assert full_hidden.shape[-1] == len(columns) , (full_hidden.shape , columns)
 
         df = pd.DataFrame({'secid' : secid , 'date' : date , **{col:full_hidden[:,i] for i,col in enumerate(columns)}})
@@ -333,9 +339,40 @@ class BatchData:
     def device(self): 
         return self.input.device
 
-    def pred_df(self , narrow_df = False , colnames : str | list | None = None , **kwargs):
-        df = self.output.pred_df(self.input.secid , self.input.date , narrow_df , colnames , **kwargs)
-        df['label'] = self.input.label0
+    def pred_df(self , * , narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' , label : bool = True , **kwargs):
+        df = self.output.pred_df(
+            self.input.secid , self.input.date , 
+            narrow_df = narrow_df , colnames = colnames , colname_prefix = colname_prefix , 
+            **kwargs)
+        if label:
+            df['label'] = self.input.label0
+        return df
+
+    def hidden_df(self , * , narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' , **kwargs):
+        df = self.output.hidden_df(
+            self.input.secid , self.input.date , 
+            narrow_df = narrow_df , colnames = colnames , colname_prefix = colname_prefix , 
+            **kwargs)
+        return df
+
+    def hidden_df_pl(self , colname_prefix : str = ''):
+        """
+        get hidden dataframe in polars format
+        Args:
+            colname_prefix : str = '', the prefix of the column names
+        Returns:
+            pl.DataFrame
+        """
+        full_hidden : torch.Tensor | Any = self.output.hidden
+        full_hidden = full_hidden.cpu().numpy()
+
+        assert full_hidden.ndim == 2 , full_hidden.shape
+        columns = [f'hidden.{i}' for i in range(full_hidden.shape[-1])]
+        if colname_prefix:
+            columns = [f'{colname_prefix}.{col}' for col in columns]
+        assert full_hidden.shape[-1] == len(columns) , (full_hidden.shape , columns)
+        import polars as pl
+        df = pl.DataFrame({'secid' : self.input.secid , 'date' : self.input.date , **{col:full_hidden[:,i] for i,col in enumerate(columns)}})
         return df
 
     def loss_inputs(self , exclude_nan : bool = False):

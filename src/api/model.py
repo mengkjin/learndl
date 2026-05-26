@@ -1,6 +1,6 @@
 from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
-  ModelTrainer , ModelTestor , ArchivedPredictorModel , ModelHiddenExtractor , ModelPortfolioBuilder)
+  ModelTrainer , ModelTestor , ArchivedPredictorModel , ModelPortfolioBuilder)
 from src.proj import PATH , MACHINE , Logger , Proj
 from src.data import PreProcessorTask
 
@@ -23,7 +23,6 @@ class ModelAPI:
           memory_usage: medium
         '''
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
-        wrap_update(ModelHiddenExtractor.update , 'update hidden')
         wrap_update(ArchivedPredictorModel.update , 'update predictors')
         wrap_update(ModelPortfolioBuilder.update , 'update predictor portfolios')
     
@@ -72,24 +71,6 @@ class ModelAPI:
           memory_usage: medium
         '''
         ModelTrainer.resume_testing(force_resume = force_resume)
-
-    @classmethod
-    def update_hidden(cls):
-        '''
-        Update hidden features for hidden feature models for both laptop and server:
-
-        [API Interaction]:
-          expose: true
-          email: true
-          roles: [developer, admin]
-          risk: write
-          lock_num: 1
-          disable_platforms: []
-          execution_time: short
-          memory_usage: medium
-        '''
-        wrap_update(cls.prepare_predict_data , 'prepare predict data')
-        wrap_update(ModelHiddenExtractor.update , 'update hidden')
     
     @classmethod
     def update_preds(cls):

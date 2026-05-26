@@ -6,14 +6,15 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Logger , Dates , Proj
+from src.proj import Duration , Logger , Dates
 from src.proj.core import strPath
+from src.proj.util import BaseModule
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name , category_title)
 
-class PortfolioBuilder:
+class PortfolioBuilder(BaseModule):
     '''
     category : str but in BUILDER_TYPES
     alpha : AlphaModel
@@ -81,8 +82,8 @@ class PortfolioBuilder:
         self.build_on     = build_on 
 
         self.resume_path  = resume_path
-        self.indent       = indent
-        self.vb_level     = Proj.vb(vb_level)
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
@@ -198,7 +199,7 @@ class PortfolioBuilder:
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
-class PortfolioGroupBuilder:
+class PortfolioGroupBuilder(BaseModule):
     '''
     parallel_kwargs:
         can have list of builder_kwargs' components, but cannot overlap with builder_kwargs
@@ -273,8 +274,6 @@ class PortfolioGroupBuilder:
             'daily' : daily , 
             'trade_engine' : trade_engine}
 
-        self.indent = indent
-        self.vb_level = Proj.vb(vb_level)
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None and resume else None
         self.caller = caller
@@ -283,6 +282,9 @@ class PortfolioGroupBuilder:
 
         self.builders : list[PortfolioBuilder] = []
         self.accounted = False
+
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
 
     @property
     def n_builders(self):
@@ -309,7 +311,7 @@ class PortfolioGroupBuilder:
                       indent = self.indent , vb_level = self.vb_level)
     
     def builders_setup(self):
-        with Logger.Timer(f'{self.class_name}.setup' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 3):
+        with self.timer('setup' , add_enter_vb=3):
             self.builders.clear()
             self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
@@ -321,7 +323,7 @@ class PortfolioGroupBuilder:
     def builders_resume(self):
         if self.resume_path is None:
             return
-        with Logger.Timer(f'{self.class_name}.resume' , indent = self.indent , vb_level = self.vb_level):
+        with self.timer('resume'):
             for builder in self.builders:
                 builder.load_portfolio(start = self.start , end = self.end)
         return self
@@ -329,7 +331,7 @@ class PortfolioGroupBuilder:
     def save_portfolios(self):
         if self.resume_path is None:
             return
-        with Logger.Timer(f'{self.class_name}.export' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 2):
+        with self.timer('export' , add_enter_vb=2):
             for builder in self.builders:
                 builder.save_portfolio(append = True)
         return self
@@ -351,7 +353,7 @@ class PortfolioGroupBuilder:
 
         t0 = datetime.now()
  
-        Logger.stdout(f'{self.class_name}.build start...' , indent = self.indent , vb_level = self.vb_level + 3)
+        self.stdout('build start...' , add_vb = 3)
         iter_date_builder = self.iter_date_builder()
         for opt_count , (date , builder) in enumerate(iter_date_builder):
             builder.build(date)
@@ -359,8 +361,7 @@ class PortfolioGroupBuilder:
                 self.print_build_info(date , opt_count , builder)
 
         secs = (datetime.now() - t0).total_seconds()
-        Logger.stdout(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building' , 
-                      indent = self.indent , vb_level = self.vb_level)
+        self.stdout(f'build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
         self.save_portfolios()
         return self
 
@@ -370,14 +371,14 @@ class PortfolioGroupBuilder:
     def print_build_info(self , date : int , opt_count : int , builder : PortfolioBuilder):
         time_cost = {k:float(np.round(v*1000,2)) for k,v in builder.creations[-1].timecost.items()}
         time_cost_str = ', '.join([f'{k}: {v:.1f}' for k,v in time_cost.items()])
-        Logger.stdout(f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]' + 
-                      f' Finished at {date} , time costs (ms) {time_cost_str}' , indent = self.indent + 1 , vb_level = self.vb_level + 3)
+        self.stdout(f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]' + 
+                    f' Finished at {date} , time costs (ms) {time_cost_str}' , add_indent = 1 , add_vb = 3)
         return self
     
     def accounting(self):
-        with Logger.Timer(f'{self.class_name} accounting' , indent = self.indent , vb_level = self.vb_level , enter_vb_level = self.vb_level + 1):
+        with self.timer('accounting' , add_enter_vb=1):
             for builder in self.builders:
-                with Logger.Timer(f'{builder.portfolio.name} accounting' , indent = self.indent + 1 , vb_level = self.vb_level + 1 , enter_vb_level = self.vb_level + 2):
+                with self.timer(f'{builder.portfolio.name}.accounting' , add_indent=1 , add_vb=1 , add_enter_vb=2):
                     builder.accounting(self.start , self.end , **self.acc_kwargs)
         self.accounted = True
         return self

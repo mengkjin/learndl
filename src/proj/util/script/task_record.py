@@ -197,34 +197,3 @@ class TaskRecorder:
     def restore_backup(self , backup_path : strPath):
         self.clear_database()
         self.conn_handler.restore(backup_path , delete_backup = True)
-    
-# 使用示例
-if __name__ == "__main__":
-    # 创建记录器实例
-    recorder = TaskRecorder('autorun')
-    
-    # 标记任务完成
-    recorder.mark_finished("data_processing", "task_001", "数据处理完成")
-    recorder.mark_failed("data_processing", "task_002", "数据清洗失败")
-    
-    # 检查任务是否完成
-    Logger.stdout(f"task_001 是否完成: {recorder.is_finished('data_processing', 'task_001')}")
-    Logger.stdout(f"task_003 是否完成: {recorder.is_finished('data_processing', 'task_003')}")
-    
-    # 获取任务信息
-    task_info = recorder.get_task_info("data_processing", "task_001")
-    Logger.stdout(f"任务信息: {task_info}")
-    
-    # 获取所有已完成任务
-    finished_tasks = recorder.get_finished_tasks("data_processing")
-    Logger.stdout(f"已完成任务: {finished_tasks}")
-    
-    # 获取所有任务组
-    groups = recorder.get_task_types()
-    Logger.stdout(f"所有任务组: {groups}")
-    
-    # 删除任务
-    recorder.delete_task("data_processing", "task_002")
-    
-    # 清空任务组
-    # recorder.clear_task_group("data_processing")

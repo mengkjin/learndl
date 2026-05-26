@@ -3,6 +3,7 @@
 from .basic import *
 from .func import *
 
+from .module import *
 from .catcher import (
     IOCatcher , LogWriter , WarningCatcher ,
     MPOutputCatcher , HtmlCatcher , MarkdownCatcher , CrashProtectorCatcher)

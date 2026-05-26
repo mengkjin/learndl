@@ -9,12 +9,13 @@ from itertools import product
 from typing import Any
 
 from src.proj import Logger , CALENDAR , Proj
+from src.proj.util import BaseModule
 from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel , DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
 
-class ModelHiddenExtractor:
+class ModelHiddenExtractor(BaseModule):
     '''for a model to predict recent/history data'''
-    def __init__(self , model : HiddenExtractionModel , backward_days = 300 , forward_days = 160):
+    def __init__(self , model : HiddenExtractionModel , backward_days = 300 , forward_days = 160 , * , indent : int = 0 , vb_level : Any = 1):
         self.hidden_model = model
         self.backward_days = backward_days
         self.forward_days  = forward_days
@@ -22,6 +23,8 @@ class ModelHiddenExtractor:
         self.model  = get_predictor_module(self.config)
         assert isinstance(self.model , NNPredictor) , self.model
         # self.load_model_data() # must load data before loading model, to get input_dim parameter
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
     
     def __repr__(self):
         return f'{self.__class__.__name__}({self.hidden_model})'
@@ -56,12 +59,12 @@ class ModelHiddenExtractor:
     def model_dates(self):
         return self.model_path.model_dates
         
-    def load_model_data(self , indent : int = 1 , vb_level : Any = 2):
+    def load_model_data(self):
         if not getattr(self , 'data_loaded' , False):
             with Proj.silence:
                 self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
-            Logger.stdout(f'Load Model Data for Hidden Model {self.hidden_name} successfully!' , indent = indent , vb_level = vb_level)
+            self.stdout(f'Load Model Data for Hidden Model {self.hidden_name} successfully!' , add_indent = 1 , add_vb = 1)
 
     def model_iter(self , model_dates : list | np.ndarray | int | None = None , update = True):
         if model_dates is None: 
@@ -80,8 +83,7 @@ class ModelHiddenExtractor:
         return model_iter
 
     def extract_hidden(self , model_dates : list | np.ndarray | int | None = None ,
-                       update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb(vb_level)
+                       update = True , overwrite = False):
         model_iter = self.model_iter(model_dates , update)
         self._current_update_dates = []
         with torch.no_grad():
@@ -90,14 +92,14 @@ class ModelHiddenExtractor:
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
                     time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                    Logger.skipping(f'{hidden_path.hidden_key} already updated at {time_str}!' , indent = indent + 1 , vb_level = vb_level)
+                    Logger.skipping(f'{hidden_path.hidden_key} already updated at {time_str}!' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                     continue
-                self.model_hidden(hidden_path , model_date , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
+                self.model_hidden(hidden_path , model_date , overwrite)
                 self._current_update_dates.append(model_date)
         return self
     
-    def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame | None:
-        self.load_model_data(indent = indent , vb_level = vb_level)
+    def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False) -> pd.DataFrame | None:
+        self.load_model_data()
         model_num , submodel = hidden_path.model_num , hidden_path.submodel
         self.model.load_model(model_num , model_date , submodel)
 
@@ -125,7 +127,7 @@ class ModelHiddenExtractor:
             hiddens.insert(0 , old_hidden_df)
         hidden_df = pd.concat(hiddens , axis=0).drop_duplicates(['secid','date']).sort_values(['secid','date'])
         self.hidden_df = hidden_df
-        hidden_path.save_hidden_df(hidden_df , model_date , indent = indent , vb_level = vb_level)
+        hidden_path.save_hidden_df(hidden_df , model_date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     @classmethod
     def SelectModel(cls , model_name : str) -> ModelHiddenExtractor:
@@ -139,10 +141,10 @@ class ModelHiddenExtractor:
         if model_name is None: 
             Logger.stdout(f'model_name is None, update all hidden models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
         for model in models:
-            extractor = cls(model)
-            extractor.extract_hidden(update = update , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 1)
+            extractor = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
+            extractor.extract_hidden(update = update , overwrite = overwrite)
             if extractor._current_update_dates:
-                Logger.success(f'Update hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
+                Logger.stdout(f'Update hidden feature extraction for {model} , len={len(extractor._current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
                 Logger.skipping(f'Hidden feature extraction for {model} is up to date' , indent = indent + 1 , vb_level = vb_level)
         return extractor

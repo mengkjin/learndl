@@ -9,7 +9,7 @@ import shutil
 from datetime import datetime , timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , Self , cast
 
 from src.proj import PATH , Logger , LogFile , DB , CALENDAR , Const
 from src.proj.core import strPath
@@ -36,9 +36,9 @@ class ModelPath:
     
     """
 
-    def __new__(cls , model_input : ModelPath | strPath | None , *args , **kwargs) -> ModelPath:
+    def __new__(cls , model_input : ModelPath | strPath | None , *args , **kwargs) -> Self:
         if isinstance(model_input , ModelPath):
-            return model_input
+            return cast(Self , model_input)
         else:
             return super().__new__(cls)
 
@@ -611,7 +611,14 @@ class PredictorPath(ModelPath):
         self._pred_name = pred_name
 
     def __repr__(self) -> str:  
-        return f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},submodel={self._submodel},model_num={str(self._model_num)})'
+        return (
+            f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},'
+            f'model_num={str(self._model_num)},submodel={self._submodel})'
+        )
+
+    def to_model(self):
+        from src.res.model.model_module.application import ArchivedPredictorModel
+        return ArchivedPredictorModel(self)
     
     @property
     def is_stored_strategy(self) -> bool:
@@ -639,50 +646,6 @@ class PredictorPath(ModelPath):
     @property
     def use_submodel(self) -> str:
         return self._submodel
-
-    @classmethod
-    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictorPath]:
-        """select prediction models"""
-        if pred_names is None: 
-            pred_names = list(cls.MODEL_DICT.keys())
-        if isinstance(pred_names , str): 
-            pred_names = [pred_names]
-        paths = []
-        for key in pred_names:
-            if key in cls.MODEL_DICT:
-                reg_dict = cls.MODEL_DICT[key]
-                name     = reg_dict['name']
-                num      = reg_dict['num']
-                submodel = reg_dict['submodel']
-                paths.append(cls(name , num , submodel , pred_name = key))
-        return paths
-
-    @classmethod
-    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path | Any]:
-        paths : list[Path] = []
-        for model in cls.SelectModels(pred_names):
-            paths.extend(model.collect_model_archives(start_model_date , end_model_date))
-        return paths
-
-    @classmethod
-    def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
-        files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
-        path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
-        DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
-        return path
-
-    @classmethod
-    def UnpackModelArchives(cls , path : strPath | None = None , delete_tar = True , overwrite = False) -> None:
-        if path is None:
-            paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
-            paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]
-        else:
-            paths = [Path(path)]
-        
-        for path in paths:
-            DB.unpack_files_from_tar(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
-            if delete_tar:
-                path.unlink()
             
     @property
     def pred_dates(self) -> np.ndarray:
@@ -737,3 +700,47 @@ class PredictorPath(ModelPath):
     def account_dir(self) -> Path:
         """model factor portfolio account directory"""
         return PATH.fmp_account.joinpath(self.pred_name)
+
+    @classmethod
+    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictorPath]:
+        """select prediction models"""
+        if pred_names is None: 
+            pred_names = list(cls.MODEL_DICT.keys())
+        if isinstance(pred_names , str): 
+            pred_names = [pred_names]
+        paths = []
+        for key in pred_names:
+            if key in cls.MODEL_DICT:
+                reg_dict = cls.MODEL_DICT[key]
+                name     = reg_dict['name']
+                num      = reg_dict['num']
+                submodel = reg_dict['submodel']
+                paths.append(cls(name , num , submodel , pred_name = key))
+        return paths
+
+    @classmethod
+    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path | Any]:
+        paths : list[Path] = []
+        for model in cls.SelectModels(pred_names):
+            paths.extend(model.collect_model_archives(start_model_date , end_model_date))
+        return paths
+
+    @classmethod
+    def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
+        files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
+        path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
+        DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
+        return path
+
+    @classmethod
+    def UnpackModelArchives(cls , path : strPath | None = None , delete_tar = True , overwrite = False) -> None:
+        if path is None:
+            paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
+            paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]
+        else:
+            paths = [Path(path)]
+        
+        for path in paths:
+            DB.unpack_files_from_tar(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
+            if delete_tar:
+                path.unlink()

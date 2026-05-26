@@ -8,7 +8,7 @@ from typing import Any
 
 from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
-from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , ModelFile
+from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , BatchData , ModelFile
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
@@ -22,17 +22,17 @@ class PredictorModel(TrainerPipeline):
         self.net : torch.nn.Module | Any = None
         self.model_dict = ModelDict()
 
-    def __call__(self , input : BatchInput | torch.Tensor | Any | int | None , *args , **kwargs):
-        if isinstance(input , int):
-            from src.res.model.util import DataModule
-            input = DataModule.get_date_batch_data(self.config , input)
-            output = self.forward(input , *args , **kwargs)
-        elif input is None or len(input) == 0:
+    def __call__(self , input : BatchInput | torch.Tensor | Any | None , *args , **kwargs):
+        if input is None or len(input) == 0:
             output = None
         else:
             output = self.forward(input , *args , **kwargs)
         return BatchOutput(output)
-    
+
+    def get_batch_data(self , input : BatchInput , *args , **kwargs):
+        output = BatchOutput(self.forward(input , *args , **kwargs))
+        return BatchData(input , output)
+
     def __repr__(self): 
         if not self.is_bounded:
             return f'{self.__class__.__name__}(not bounded to trainer or config)'

@@ -47,7 +47,7 @@ class InputElement:
         return InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
 
     def get_datablock(self , start : int = 20100101 , end : int = 20241231) -> DataBlock:
-        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature]).load(start , end , vb_level = 'never')
+        block = BlockLoader(self.db_src , self.db_key , feature = [self.feature] , vb_level = 'never').load(start , end)
         return self.adjust_datablock(block)
 
     def adjust_datablock(self , block : DataBlock , cp_block : DataBlock | None = None) -> DataBlock:
@@ -97,7 +97,7 @@ def get_features_block(src : str , key : str , features : list[str] | None , sta
     '''
     secid = DATAVENDOR.secid(end)
     dates = CALENDAR.range(start , end , 'td')
-    block = BlockLoader(src , key , feature = features).load(start , end , vb_level = 'never').\
+    block = BlockLoader(src , key , feature = features , vb_level = 'never').load(start , end).\
         align_secid_date(secid , dates , inplace = True)
     return block
 
@@ -181,7 +181,7 @@ def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device 
     '''
     secid = DATAVENDOR.secid(end)
     dates = CALENDAR.range(start , end , 'td')
-    block = BlockLoader('models' , 'tushare_cne5_exp').load(start , end , vb_level = 'never').\
+    block = BlockLoader('models' , 'tushare_cne5_exp' , vb_level = 'never').load(start , end).\
         align_secid_date(secid , dates , inplace = True)
     values = block.loc(feature = Const.Factor.RISK.indus + ['size']).squeeze().to(device)
     return values

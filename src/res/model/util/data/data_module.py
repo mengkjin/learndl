@@ -8,10 +8,11 @@ from functools import cached_property
 from typing import Any , Literal , Callable
 
 from src.proj import Logger , CALENDAR , Const, MACHINE
+from src.proj.util import BaseModule
 from src.data import PreProcessorTask , ModuleData , DataBlock
 
 from src.func import match_values
-from src.res.model.util.core import BatchInput , BaseModule , HiddenPath
+from src.res.model.util.core import BatchInput , HiddenPath
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.storage import TorchFileStorage , StoredTorchFileLoader
 from src.res.model.util.trainer import BaseTrainer
@@ -26,18 +27,14 @@ class DataModule(BaseModule):
     """
     DataModule for model fitting / testing / predicting
     """
-    _config_instance_for_batch_data : dict[ModelConfig,DataModule] = {}
    
     def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level : Any = 1 , **kwargs):
         self.set_vb_level(vb_level)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
-        self.use_data : Literal['fit','predict','both'] = use_data
-        if self.config not in self._config_instance_for_batch_data and self.use_data == 'both':
-            self._config_instance_for_batch_data[self.config] = self
+        self._use_data : Literal['fit','predict','both'] = use_data
 
     @classmethod
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
-        
         if trainer_or_config is None:
             config = ModelConfig(stage=0)
             vb_level = kwargs.pop('vb_level' , 1)
@@ -69,9 +66,9 @@ class DataModule(BaseModule):
     
     def load_data(self):
         '''load prepared data at training begin , only load data once in a fitting'''
-        self.datas = ModuleData(
+        self.datas = ModuleData.initialize(
             self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
-            use_data = self.use_data ,
+            use_data = self._use_data ,
             factor_names = self.config.input_factor_names , 
             factor_start_dt = self.factor_start_dt , 
             factor_end_dt = self.factor_end_dt , 
@@ -130,15 +127,24 @@ class DataModule(BaseModule):
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
+        """
+        setup data module for a given stage
+        other kwargs:
+            retro_start_date : int | None = None # start date for retrospective data , None means year start of model date
+            retro_end_date : int | None = None # end date for retrospective data , None means year end of model date
+            extract_backward_days : int = 500 # backward days for extract data
+            extract_forward_days : int = 160 # forward days for extract data
+        """
         if self.setup_new_param(stage , param , model_date , **kwargs):
-            self.setup_input_prepare()
-            self.setup_loader_prepare()
+            self.setup_loader_kwargs()
+            self.setup_loader_inputs()
             self.setup_loader_create()
 
     def setup_new_param(
             self , stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date = -1 , extract_backward_days = 500 , extract_forward_days = 160
+            model_date : int = -1 , extract_backward_days = 500 , extract_forward_days = 160 ,
+            retro_start_date : int | None = None , retro_end_date : int | None = None
         ) -> bool:
         stage = 'predict' if self.use_data == 'predict' else stage
         slens = self.config.seq_lens | param.get('seqlens',{})
@@ -146,7 +152,7 @@ class DataModule(BaseModule):
         slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
         
         assert slens , (self.config.seq_lens | param.get('seqlens',{}) , self.input_keys)
-        loader_param = DataloaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
+        loader_param = DataloaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days , retro_start_date , retro_end_date)
         if self.loader_param == loader_param: 
             return False
         else:
@@ -154,34 +160,7 @@ class DataModule(BaseModule):
             self.data_operator = DataOperator(self.config , loader_param)
             return True
 
-    def setup_input_prepare(self):
-        '''additional input prepare for hidden input'''
-        self.setup_input_prepare_hidden()
-
-    def setup_input_prepare_hidden(self):
-        '''additional input prepare for hidden input , load hidden data if needed'''
-        if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
-            return
-        hidden_max_date : int | Any = None
-        hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
-        for hidden_key in self.input_keys_hidden:
-            hidden_path = HiddenPath.from_key(hidden_key)
-            if hidden_key in hidden_input and hidden_input[hidden_key][0] == hidden_path.closest_hidden_model_date(self.model_date):
-                df = hidden_input[hidden_key][1]
-            else:
-                hidden_model_date , df = hidden_path.get_hidden_df(self.model_date , exact=False)
-                hidden_input[hidden_key] = (hidden_model_date , df)
-            hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
-
-            df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
-            df.columns = [f'{hidden_key}.{col}' for col in df.columns]
-            self.datas.x[hidden_key] = DataBlock.from_pandas(df).align_secid_date(self.datas.secid , self.datas.date)
-
-        assert self.datas.date[self.datas.date < self.next_model_date(self.model_date)][-1] <= hidden_max_date , \
-            (self.next_model_date(self.model_date) , hidden_max_date)
-        self.config.update_data_param(self.datas.x)
-
-    def setup_loader_prepare(self):
+    def setup_loader_kwargs(self):
         assert all(k > 0 for k in self.seq_lens.values()) , self.seq_lens
         assert all(k > 0 for k in self.seq_steps.values()) , self.seq_steps
         y_keys = [k for k in self.seq_lens.keys() if k not in self.input_keys]
@@ -195,15 +174,19 @@ class DataModule(BaseModule):
                 self.d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - d_extend)
                 self.d1 = max(0 , model_date_col - self.config.skip_horizon)
             case 'predict' | 'test' | 'retrospective':
-                next_model_date = self.next_model_date(self.model_date)
-
                 if self.stage == 'retrospective':
-                    full_test_dates = self.datas.date
+                    start_date = self.loader_param.retro_start_date
+                    end_date = self.loader_param.retro_end_date
+                    possible_dates = self.datas.date
                 else:
-                    before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-y_extend:]
-                    full_test_dates = np.concatenate([before_test_dates , self.test_full_dates])
-                self.early_test_dates = full_test_dates[full_test_dates <= self.model_date][-(y_extend-1):] if y_extend > 1 else full_test_dates[-1:-1]
-                self.model_test_dates = full_test_dates[(full_test_dates > self.model_date) * (full_test_dates <= next_model_date)]
+                    start_date = CALENDAR.cd(self.model_date , 1)
+                    end_date = self.next_model_date(self.model_date)
+                    possible_dates = self.test_full_dates
+
+                before_dates = self.datas.date[self.datas.date < min(possible_dates)][-y_extend:]
+                possible_dates = np.concatenate([before_dates , possible_dates])
+                self.early_test_dates = possible_dates[possible_dates < start_date][-(y_extend-1):] if y_extend > 1 else possible_dates[-1:-1]
+                self.model_test_dates = possible_dates[(possible_dates >= start_date) & (possible_dates <= end_date)]
                 test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
                 
                 if test_dates.size == 0:
@@ -234,6 +217,48 @@ class DataModule(BaseModule):
         if self.stage in ['predict' , 'test']:
             assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
 
+    def setup_loader_inputs(self):
+        '''additional input prepare for hidden input'''
+        self.setup_loader_inputs_hidden2()
+
+    def setup_loader_inputs_hidden(self):
+        '''additional input prepare for hidden input , load hidden data if needed'''
+        if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
+            return
+        hidden_max_date : int | Any = None
+        hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
+        for hidden_key in self.input_keys_hidden:
+            hidden_path = HiddenPath.from_key(hidden_key)
+            if hidden_key in hidden_input and hidden_input[hidden_key][0] == hidden_path.closest_hidden_model_date(self.model_date):
+                df = hidden_input[hidden_key][1]
+            else:
+                hidden_model_date , df = hidden_path.get_hidden_df(self.model_date , exact=False)
+                hidden_input[hidden_key] = (hidden_model_date , df)
+            hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
+
+            df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
+            df.columns = [f'{hidden_key}.{col}' for col in df.columns]
+            self.datas.x[hidden_key] = DataBlock.from_pandas(df).align_secid_date(self.datas.secid , self.datas.date)
+
+        assert self.datas.date[self.datas.date < self.next_model_date(self.model_date)][-1] <= hidden_max_date , \
+            (self.next_model_date(self.model_date) , hidden_max_date)
+        self.config.update_data_param(self.datas.x)
+
+    def setup_loader_inputs_hidden2(self):
+        '''additional input prepare for hidden input , calculate hiddens and temporary store them'''
+        if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
+            return
+        from src.res.model.model_module.application import ArchivedPredictorModel
+        
+        for hidden_key in self.input_keys_hidden:
+            hidden_model = ArchivedPredictorModel.from_model_str(hidden_key)
+            assert hidden_model.model_dates.size > 0 , f'hidden model {hidden_key} has no model dates'
+            assert hidden_model.model_dates[0] <= self.model_date , f'hidden model {hidden_key} has no model date before {self.model_date}'
+            hidden_model_date = hidden_model.model_dates[hidden_model.model_dates <= self.model_date][-1]
+            hidden_block = hidden_model.hidden_block(self.y_date[0] , self.y_date[-1] , hidden_model_date)
+            self.datas.x[hidden_key] = hidden_block.align_secid_date(self.datas.secid , self.datas.date)
+        self.config.update_data_param(self.datas.x)
+    
     def setup_loader_create(self) -> None:
         if self.day_len == 0:
             self.emptry_dataloader()
@@ -391,6 +416,10 @@ class DataModule(BaseModule):
         return y[index0 , index1]
 
     @property
+    def use_data(self) -> Literal['fit','predict','both']:
+        return self._use_data if not hasattr(self , 'datas') else self.datas.use_data
+
+    @property
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective']:
         return self.loader_param.stage
 
@@ -510,17 +539,6 @@ class DataModule(BaseModule):
     @property
     def factor_end_dt(self):
         return self.end_date
-    
-    @classmethod
-    def get_date_batch_data(cls , config : ModelConfig , date : int , model_num : int = 0) -> BatchInput:
-        if config not in cls._config_instance_for_batch_data:
-            cls._config_instance_for_batch_data[config] = cls(config , 'both').load_data()
-        module = cls._config_instance_for_batch_data[config]
-        model_param = config.model_param[model_num]
-        assert date in module.test_full_dates , f"date {date} not in test_full_dates [{module.test_full_dates.min()}-{module.test_full_dates.max()}]"
-        module.setup('predict' , model_param , module.model_date_list[module.model_date_list < date][-1])
-        dataloader = module.predict_dataloader()
-        return dataloader.of_date(date)
 
     @staticmethod
     def prepare_data(data_types : list[str] | None = None):

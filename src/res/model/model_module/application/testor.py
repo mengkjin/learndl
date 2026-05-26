@@ -1,10 +1,10 @@
 import torch
 
-from src.proj import Logger
+from src.proj.util import BaseModule
 from src.res.model.util import ModelConfig , BatchData , TrainerMetrics , DataModule , get_realistic_batch_data
 from src.res.model.model_module.module import get_predictor_module
 
-class ModelTestor:
+class ModelTestor(BaseModule):
     """
     Check if a newly defined model can be forward correctly
     Example:
@@ -33,12 +33,12 @@ class ModelTestor:
     def try_forward(self) :
         '''as name says, try to forward'''
         if isinstance(self.batch_input.x , torch.Tensor):
-            Logger.stdout(f'x shape is {self.batch_input.x.shape}')
+            self.stdout(f'x shape is {self.batch_input.x.shape}')
         else:
-            Logger.stdout(f'multiple x of {len(self.batch_input.x)}')
+            self.stdout(f'multiple x of {len(self.batch_input.x)}')
         self.output = self.model(self.batch_input.x)
-        Logger.stdout(f'y shape is {self.output.pred.shape}')
-        Logger.stdout(f'Test Forward Success')
+        self.stdout(f'y shape is {self.output.pred.shape}')
+        self.stdout(f'Test Forward Success')
         return self
 
     def try_metrics(self):
@@ -47,8 +47,8 @@ class ModelTestor:
             self.try_forward()
         batch_data = BatchData(self.batch_input , self.output)
         metrics = self.metrics.calculate('train' , batch_key = 'test' , batch_data = batch_data).collect_calculation()
-        Logger.stdout(f'metric output : {metrics.batch_accuracy}')
-        Logger.stdout(f'Test Metrics Success')
+        self.stdout(f'metric output : {metrics.batch_accuracy}')
+        self.stdout(f'Test Metrics Success')
         return self
     
     def get_realistic_batch_data(self):

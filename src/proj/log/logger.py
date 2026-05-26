@@ -176,8 +176,8 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
-        def color_selector(color : str | None , indent : int):
-            return (None if indent <= 1 else 'gray') if color is None or color == 'auto' else color
+        def color_selector(color : str | None , indent : int , gray_on_indent : int = 1):
+            return (None if indent <= 1 and gray_on_indent else 'gray') if color is None or color == 'auto' else color
 
         if title:
             title_kwargs = title_kwargs or {}
@@ -198,8 +198,10 @@ class Logger:
         max_key_len = max([len(indented_key) for _ , indented_key , _ in pairs])
         max_key_len = max(max_key_len , min_key_len)
         min_indent = min([indent for indent , _ , _ in pairs])
-        pairs = [FormatStr(f'{indented_key:{max_key_len + 2*(indent - min_indent)}s} : {value}' , color = color_selector(color , indent) , 
-                          italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
+        pairs = [FormatStr(
+            f'{indented_key:{max_key_len + 2*(indent - min_indent)}s} : {value}' , 
+            color = color_selector(color , indent , gray_on_indent = False) , 
+            italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
     @classmethod
@@ -449,13 +451,14 @@ class Logger:
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
         def __init__(self , *args , silent = False , indent = 0 , 
-                     vb_level : Any = 1 , enter_vb_level : Any = 'max'): 
+                     vb_level : Any = 1 , enter_vb_level : Any = 'max' , timer_prefix : bool = True): 
             self.key = '/'.join(args)
             self.key_suffix = ''
             self.silent = silent
             self.indent = indent
             self.vb_level = Proj.vb(vb_level)
             self.enter_vb_level = Proj.vb(enter_vb_level)
+            self.timer_prefix = timer_prefix
             self.exit_infos : list[str] = []
     
         def __enter__(self):
@@ -478,13 +481,21 @@ class Logger:
             self.key_suffix = ' '.join(msgs)
 
         @property
+        def prefix(self):
+            """Get the prefix"""
+            prefix = f'{self.key}{self.key_suffix}'
+            if self.timer_prefix:
+                prefix = f'{self.__class__.__name__}({prefix})'
+            return prefix
+
+        @property
         def enter_str(self):
             """Get the enter string"""
-            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) start ... '
+            return f'{self.prefix} start ... '
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Duration(since = self._init_time , high_precision = True)}'
+            return f'{self.prefix} finished! Cost {Duration(since = self._init_time , high_precision = True)}'
 
     class Paragraph:
         """

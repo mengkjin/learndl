@@ -303,11 +303,12 @@ class Portfolio:
         """account the portfolio"""
         if not hasattr(self , 'accountant'): 
             self.activate_accountant()
+        self.accountant.set_indent(indent)
+        self.accountant.set_vb_level(vb_level)
         self.accountant.accounting(
             benchmark , start , end , analytic , attribution ,
             trade_engine = trade_engine , daily = daily , cache = cache , with_index = with_index ,
-            resume_path = resume_path , resume_end = resume_end , resume_drop_last = resume_drop_last , save_after = save_after ,
-            indent = indent , vb_level = vb_level)
+            resume_path = resume_path , resume_end = resume_end , resume_drop_last = resume_drop_last , save_after = save_after)
         return self
     
     @property

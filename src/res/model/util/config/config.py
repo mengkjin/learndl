@@ -17,11 +17,11 @@ from typing import Any, Literal, Type
 
 from src.proj import PATH, MACHINE, Logger , Const
 from src.proj.core import strPath
-from src.proj.util import Device , FlattenDict
+from src.proj.util import Device , FlattenDict , BaseModule
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
-from src.res.model.util.core import ModelPath , BaseModule , model_module_type, is_null_module_type
+from src.res.model.util.core import ModelPath , model_module_type, is_null_module_type
 
 __all__ = ['ModelConfig']
 

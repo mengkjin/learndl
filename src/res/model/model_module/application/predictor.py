@@ -2,21 +2,42 @@ from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from functools import cached_property
-from typing import Any , ClassVar
+from typing import Any , ClassVar , Literal , overload
 
 from src.proj import MACHINE , Logger , Proj , CALENDAR
-from src.res.model.util import PredictorPath , ModelConfig , DataModule , BatchData
+from src.proj.core import strPath
+from src.proj.util import RequireGrad , BaseModule
+from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
-class ArchivedPredictorModel:
+class ArchivedPredictorModel(BaseModule):
     '''for a model to predict recent/history data'''
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
-    def __init__(self , predictor_path : PredictorPath):
-        self.path = predictor_path
+    @overload
+    def __init__(self , predictor_path : PredictorPath , / , * , indent : int = 1 , vb_level : Any = 1):
+        """Initialize from a PredictorPath object"""
+    @overload
+    def __init__(self , model_input : strPath | None | Any , 
+        model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
+        submodel : str = 'best' ,
+        pred_name : str | None = None , * , indent : int = 1 , vb_level : Any = 1):
+        """Initialize from a model input, and convert to PredictorPath object"""
+    def __init__(self , model_input : strPath | None | Any | PredictorPath, 
+        model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
+        submodel : str | None = 'best' ,
+        pred_name : str | None = None , * , indent : int = 1 , vb_level : Any = 1):
+        if isinstance(model_input , PredictorPath):
+            self.path = model_input
+        else:
+            assert model_num is not None and submodel is not None , 'model_num and submodel must be provided'
+            self.path = PredictorPath(model_input , model_num , submodel , pred_name)
+        self.set_indent(indent)
+        self.set_vb_level(vb_level)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(path={self.path})'
@@ -26,9 +47,37 @@ class ArchivedPredictorModel:
             self.predict_dates([date])
         return self.cached_df.query('date == @date')
 
+    @classmethod
+    def from_path(cls , path : PredictorPath):
+        """Initialize from a PredictorPath object"""
+        return cls(path)
+
+    @classmethod
+    def from_model_str(cls , model_str : str):
+        """
+        Initialize from a model string
+        the model string is like 'gru@gru_avg@0@best' , where @ separates model_path_input , model_num , model_submodel
+        """
+        args = model_str.rsplit('@' , 2)
+        assert len(args) in [2,3] , f'Invalid model string: {model_str} , {args}'
+        if len(args) == 2:
+            model_path_input , model_num = args
+            submodel = 'best'
+        elif args[-1] not in ['best' , 'swalast' , 'swabest'] and args[-1].isdigit():
+            model_path_input = '@'.join(args[:-1])
+            model_num = args[-1]
+            submodel = 'best'
+        else:
+            model_path_input , model_num , submodel = args
+        return cls(model_path_input , int(model_num) , submodel)
+
     @property
     def model_name(self) -> str:
         return self.path.model_name
+
+    @property
+    def pred_name(self) -> str:
+        return self.path.pred_name
 
     @cached_property
     def cached_df(self) -> pd.DataFrame:
@@ -44,7 +93,8 @@ class ArchivedPredictorModel:
 
     @cached_property
     def config(self) -> ModelConfig:
-        return ModelConfig(self.model_name , stage=2 , resume=1).start_model()
+        with Proj.silence:
+            return ModelConfig(self.model_name , stage=2 , resume=1).start_model()
 
     @cached_property
     def model(self):
@@ -65,7 +115,7 @@ class ArchivedPredictorModel:
     def load_data(self , min_date : int | None = None , max_date : int | None = None):
         updated = CALENDAR.updated()
         min_date = min_date or 20170101
-        max_date = max_date or updated
+        max_date = max_date or min_date + 20000 # 2 years
         if min_date > CALENDAR.today(-100):
             use_data = 'predict'
         elif max_date < updated:
@@ -74,9 +124,9 @@ class ArchivedPredictorModel:
             use_data = 'both'
 
         if not hasattr(self , 'data_module'):
-            self.data_module = DataModule(self.config , use_data).load_data() 
-        elif self.data_module.use_data != 'both' and self.data_module.use_data != use_data:
-            self.data_module = DataModule(self.config , 'both').load_data() 
+            self.data = DataModule(self.config , use_data).load_data() 
+        elif self.data.use_data != 'both' and self.data.use_data != use_data:
+            self.data = DataModule(self.config , 'both').load_data() 
         return self
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None):
@@ -89,27 +139,110 @@ class ArchivedPredictorModel:
         self.save_preds()
         self.deploy()
 
-    def batch_data(self , date : int , model_num : int , submodel : str , model_date : int | None = None):
-        """calculate the batch data of a given date"""
-        assert model_num in self.model_nums , f'model_num {model_num} not in {self.model_nums}'
-        assert submodel in self.model_submodels , f'submodel {submodel} not in {self.model_submodels}'
+    def _get_model_num_and_submodel(self , model_num : int | None = None , submodel : str | None = None):
+        if model_num is None:
+            assert len(self.path.use_model_nums) == 1 , f'model_num must be provided when there are multiple model numbers'
+            model_num = int(self.path.use_model_nums[0])
+        else:
+            assert model_num in self.model_nums , f'model_num {model_num} not in {self.model_nums}'
+        if submodel is None:
+            submodel = self.path.use_submodel
+        else:
+            assert submodel in self.model_submodels , f'submodel {submodel} not in {self.model_submodels}'
+        return model_num , submodel
+
+    def batch_data(
+        self , date : int , model_date : int | None = None , * , 
+        model_num : int | None = None , submodel : str | None = None , 
+        retro_start_date : int | None = None , retro_end_date : int | None = None ,
+        require_grad = False , silent = True
+    ):
+        """
+        calculate the batch data of a given date
+        Args:
+            date : int, the query date
+            model_date : int | None = None, the model date of the model archive , None means the closest model date before the query date (or the first model date)
+            model_num : int | None = None, the model number of the model archive, None use default model number
+            submodel : str | None = None, the model submodel, None use default model submodel
+            retro_start_date : int | None = None, if given, init the retrospective_dataloader with this start date
+            retro_end_date : int | None = None, if given, init the retrospective_dataloader with this end date
+            require_grad : bool = False, whether to require gradient
+            silent : bool = True, whether to silence the warning
+        Returns:
+            BatchData(batch_input , batch_output) of date
+        """
+        model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
         if model_date is None:
             prev_model_dates = self.model_dates[self.model_dates < date]
             model_date = prev_model_dates[-1] if len(prev_model_dates) > 0 else self.model_dates[0]
         assert model_date is not None and model_date in self.model_dates , f'model_date {model_date} not in {self.model_dates}'
-        model_param = self.config.model_param[model_num]
-        with Logger.Timer('load data'):
+        with Proj.silence(silent):
+            model_param = self.config.model_param[model_num]
             self.load_data(date)
-            self.data_module.setup('retrospective' , model_param , date)
-        with Logger.Timer('load model'):
+            self.data.setup('retrospective' , model_param , date , retro_start_date = retro_start_date , retro_end_date = retro_end_date)
             model = self.model.load_model(model_num , model_date , self.path.use_submodel , model_param = model_param , cache_model = True)
-        with Logger.Timer('load dataloader'):
-            self.dataloader = self.data_module.retrospective_dataloader()
-        with Logger.Timer('load batch_input'):
+            self.dataloader = self.data.retrospective_dataloader()
+        with RequireGrad(require_grad):
             batch_input = self.dataloader.of_date(date)
-        with Logger.Timer('predict'):
-            batch_output = model(batch_input)
-        return BatchData(batch_input , batch_output)
+            return model.get_batch_data(batch_input)
+
+    def iter_batch_data(
+        self , start_date : int , end_date : int , model_date : int , 
+        * , model_num : int | None = None , submodel : str | None = None , 
+        require_grad = False , silent = True):
+        """
+        Iterate batch data of a given model number, model date, start date, and end date
+        Args:
+            model_date : int, the model date of the archived model
+            start_date : int, the start date
+            end_date : int, the end date
+            model_num : int | None = None, the model number of the model archive, None use default model number
+            submodel : str | None = None, the model submodel, None use default model submodel
+            require_grad : bool = False, whether to require gradient
+        Returns:
+            Iterator of BatchData(batch_input , batch_output)
+        """
+        model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
+        assert model_date in self.model_dates , f'model_date {model_date} not in {self.model_dates}'
+        assert start_date < end_date , f'start_date {start_date} must be less than end_date {end_date}'
+        model_param = self.config.model_param[model_num]
+        with Proj.silence(silent):
+            self.load_data(start_date , end_date)
+            self.data.setup('retrospective' , model_param , start_date , retro_start_date = start_date , retro_end_date = end_date)
+            model = self.model.load_model(model_num , model_date , submodel , model_param = model_param , cache_model = True)
+            self.dataloader = self.data.retrospective_dataloader()
+        with RequireGrad(require_grad):
+            for batch_input in self.dataloader:
+                yield model.get_batch_data(batch_input)
+
+    def hidden_block(
+        self , start_date : int , end_date : int , model_date : int , * , 
+        model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , silent = True):
+        """
+        Iterate hidden block of a given model number, model date, start date, and end date
+        Args:
+            model_date : int, the model date of the archived model
+            start_date : int, the start date
+            end_date : int, the end date
+            model_num : int | None = None, the model number of the model archive, None use default model number
+            submodel : str | None = None, the model submodel, None use default model submodel
+            feature_prefix : bool = True, whether to add feature prefix to the column names
+        Returns:
+            DataBlock of hiddens
+        """
+        model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
+        hidden_dfs : list[pl.DataFrame] = []
+        for batch_data in self.iter_batch_data(start_date , end_date , model_date , model_num = model_num , submodel = submodel , require_grad = False , silent = silent):
+            if batch_data.output.empty or batch_data.batch_date in self.data.early_test_dates:
+                continue
+            hidden_dfs.append(batch_data.hidden_df_pl())
+        df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
+        from src.data import DataBlock
+        block = DataBlock.from_polars(df)
+        if feature_prefix:
+            prefix = '@'.join([self.config.model_module , self.config.model_clean_name , str(model_num) , submodel])
+            block.update(feature = [f'{prefix}.{col}' for col in block.feature])
+        return block
 
     def predict_dates(self , dates : np.ndarray | list[int]):
         '''predict recent days'''
@@ -117,7 +250,7 @@ class ArchivedPredictorModel:
             return self
         dates = np.array(dates)
         self.load_data(dates.min())
-        pred_dates = dates[dates <= max(self.data_module.test_full_dates)]
+        pred_dates = dates[dates <= max(self.data.test_full_dates)]
         if pred_dates.size == 0: 
             return self
         assert any(self.path.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
@@ -131,17 +264,17 @@ class ArchivedPredictorModel:
             for model_num in self.path.use_model_nums:
                 model_param = self.config.model_param[model_num]
                 assert isinstance(model_date , int) , model_date
-                self.data_module.setup('retrospective' ,  model_param , model_date)
+                self.data.setup('retrospective' ,  model_param , model_date)
                 model = self.model.load_model(model_num , model_date , self.path.use_submodel , model_param = model_param)
                 
-                tdates = self.data_module.model_test_dates
+                tdates = self.data.model_test_dates
                 within = np.isin(tdates , df_sub.query('calculated == 0')['pred_dates'])
-                loader = self.data_module.retrospective_dataloader()
+                loader = self.data.retrospective_dataloader()
 
                 for tdate , do_calc , batch_input in zip(tdates , within , loader):
                     if not do_calc or len(batch_input) == 0: 
                         continue
-                    df = model(batch_input).pred_df(batch_input.secid , tdate , colnames = self.model_name , model_num = model_num)
+                    df = model.get_batch_data(batch_input).pred_df(colnames = self.model_name , model_num = model_num)
                     df_list.append(df)
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
 
@@ -216,12 +349,12 @@ class ArchivedPredictorModel:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start = start , end = end)
             if md.current_update_dates:
-                Logger.success(f'Update model prediction for {model} , len={len(md.current_update_dates)}' , indent = 1 , vb_level = vb_level)
+                Logger.stdout(f'Update model prediction for {model} , len={len(md.current_update_dates)}' , indent = 1 , vb_level = vb_level)
             else:
                 Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
             if md.deploy_required:
                 if md.current_deploy_dates:
-                    Logger.success(f'Deploy model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = 1 , vb_level = vb_level)
+                    Logger.stdout(f'Deploy model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = 1 , vb_level = vb_level)
                 else:
                     Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
         return md
@@ -241,10 +374,10 @@ class ArchivedPredictorModel:
             if md.current_update_dates:
                 Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md.current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
             else:
-                Logger.stdout(f'No new recalculating model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
+                Logger.skipping(f'No new recalculating model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
             if md.deploy_required:
                 if md.current_deploy_dates:
                     Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = indent + 1 , vb_level = vb_level)
                 else:
-                    Logger.stdout(f'No new deploying model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
+                    Logger.skipping(f'No new deploying model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
         return md

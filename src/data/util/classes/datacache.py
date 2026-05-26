@@ -12,7 +12,49 @@ from src.proj.util import torch_load
 __all__ = ['DataCache']
 
 class DataCache:
-    """Data Cache for All Data Types (Must be included in DataCache.possible_types)"""
+    """
+    Data Cache for All Data Types (Must be included in DataCache.possible_types)
+    Example: Cache a ModuleData
+
+    self.module_data = ModuleData(data_type_list=['day' , '15m'])
+
+    @property
+    def enable_cache(self):
+        return bool(self.datacache)  # and self.use_data in ['fit' , 'both']
+
+    @cached_property
+    def enable_cache_save(self):
+        return self.enable_cache and self.config.filter_secid is None and self.config.filter_date is None
+
+    def load_cache(self):
+        if not self.enable_cache:
+            return
+        data, _ = self.datacache.load_data(self.vb_level)
+        if data is not None:
+            self.blocks, self.norms = data["blocks"], data["norms"]
+            Logger.success(f"Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}")
+    def _save_cache(self):
+        if not self.enable_cache_save:
+            return
+        valid_end = min(block.last_valid_date for block in self.blocks.values())
+        valid_start = max(block.first_valid_date for block in self.blocks.values())
+        old_metadata = self.datacache.load_metadata()
+        old_valid_end: int = old_metadata.get("valid_end", 19000101)
+        old_valid_start: int = old_metadata.get("valid_start", 99991231)
+        if len(CALENDAR.range(old_valid_start, old_valid_end, "td")) < len(
+            CALENDAR.range(valid_start, valid_end, "td")
+        ):
+            metadata = {"valid_end": int(valid_end), "valid_start": int(valid_start)}
+            blocks = {
+                key: value for key, value in self.blocks.items() if key != "factor"
+            }
+            self.datacache.save_data(
+                {"blocks": blocks, "norms": self.norms},
+                vb_level=self.vb_level + 2,
+                **metadata,
+            )
+            Logger.success(f"Saved DataBlocks to cache {self.datacache.key}")
+    """
     metadata_file = PATH.datacache.joinpath('cache_metadata.json')
     possible_types : tuple[str,] = ('module_data' ,)
     locks_guard = threading.Lock()

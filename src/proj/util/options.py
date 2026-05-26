@@ -1,7 +1,5 @@
 """Discover models, modules, schedules, ports, and factors; cache lists for Streamlit and CLI."""
-
-import json
-
+from __future__ import annotations
 from datetime import datetime
 from src.proj.env import PATH
 from src.proj.log import Logger
@@ -28,7 +26,7 @@ class OptionsDefinition:
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules in the config/model/schedule directory"""
-        return [p.stem for p in PATH.schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]
+        return sorted([p.stem for p in PATH.schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')])
 
     @classmethod
     def available_trackingports(cls) -> list[str]:
@@ -56,24 +54,24 @@ class OptionsCache:
     def __init__(self):
         """Load JSON cache from disk; create empty file if missing."""
         if not self.cache_path.exists():
-            json.dump({}, self.cache_path.open('w'))
-        self.cache = json.load(self.cache_path.open('r'))
+            PATH.dump_json({}, self.cache_path)
+        self.cache = PATH.read_json(self.cache_path)
 
     def get(self , key : str) -> list[str]:
         """Get the options from the cache"""
         if key not in self.cache:
             self.cache[key] = getattr(OptionsDefinition , key)()
-            json.dump(self.cache, self.cache_path.open('w'))
+            PATH.dump_json(self.cache, self.cache_path)
         return self.cache[key]
 
     @classmethod
     def update(cls):
         """update the cache stored in cache_path locally"""
-        cache = {}
+        cls.clear()
         for method in dir(OptionsDefinition):
             if not method.startswith(('_')):
-                cache[method] = getattr(OptionsDefinition , method)()
-        json.dump(cache, cls.cache_path.open('w'))
+                cls.cache[method] = getattr(OptionsDefinition , method)()
+        PATH.dump_json(cls.cache, cls.cache_path)
 
     @classmethod
     def clear(cls):

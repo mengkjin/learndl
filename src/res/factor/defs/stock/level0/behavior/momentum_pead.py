@@ -4,7 +4,7 @@ from collections import defaultdict
 from threading import Lock
 from typing import Literal
 
-from src.proj import CALENDAR
+from src.proj import CALENDAR , Logger
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
@@ -71,10 +71,10 @@ class PeadCalculator:
         mv = DATAVENDOR.TRADE.get_mv(self.start , self.end , 'circ_mv')
 
         if not quotes.index.is_unique:
-            print(quotes.index[quotes.index.duplicated()])
+            Logger.error(quotes.index[quotes.index.duplicated()])
             raise ValueError('for PEAD, quotes index must be unique, got stop here')
         if not mv.index.is_unique:
-            print(mv.index[mv.index.duplicated()])
+            Logger.error(mv.index[mv.index.duplicated()])
             raise ValueError('for PEAD, mv index must be unique, got stop here')
 
         quotes['circ_mv'] = mv['circ_mv']

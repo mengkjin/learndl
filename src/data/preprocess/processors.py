@@ -52,15 +52,9 @@ class PrePros:
         return PreProcessor.start_date(type)
 
     @classmethod
-    def get_processor(cls , key : str , type : Literal['fit' , 'predict'] , **kwargs) -> PreProcessor:
+    def get_processor(cls , key : str , type : Literal['fit' , 'predict'] , indent : int = 0 , vb_level : Any = 'max') -> PreProcessor:
         """Instantiate and return the preprocessor registered under ``key``."""
-        return PreProcessor.registry[key](type , **kwargs)
-
-    @classmethod
-    def iter_processors(cls , type : Literal['fit' , 'predict'] , **kwargs):
-        """Iterate over all registered processors, yielding instantiated objects."""
-        for key in PreProcessor.registry.keys():
-            yield cls.get_processor(key , type)
+        return PreProcessor.registry[key](type , indent = indent , vb_level = vb_level)
 
 class PrePro_y(TradePreProcessor):
     """
@@ -72,9 +66,10 @@ class PrePro_y(TradePreProcessor):
     version (``std*`` prefix), then applies ``process_factor`` to winsorise
     and rank all labels.
     """
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Const.Factor.RISK.indus, 'size'])}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag'], **kwargs) ,
+            'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Const.Factor.RISK.indus, 'size'], **kwargs)}
     def final_feat(self):
         """All features are kept (return labels + neutralised variants)."""
         return None
@@ -105,8 +100,9 @@ class PrePro_y(TradePreProcessor):
 
 class PrePro_day(TradePreProcessor):
     """Daily adjusted OHLCV preprocessor (key: ``'day'``).  Applies adjfactor to price columns."""
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.final_feat()])}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.final_feat()], **kwargs)}
 
     def process(self , blocks):
         """Apply price adjustment and return the result."""
@@ -120,9 +116,10 @@ class PrePro_15m(TradePreProcessor):
     free-float turnover / daily volume to produce a turnover fraction.
     The ``volume`` feature is renamed to ``turn_fl``.
     """
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
-                'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            '15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
+            'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'], **kwargs)}
 
     def process(self , blocks):
         data_block = blocks['15m']
@@ -137,9 +134,10 @@ class PrePro_15m(TradePreProcessor):
     
 class PrePro_30m(TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
-                'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            '30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
+            'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'], **kwargs)}
 
     def process(self , blocks): 
         data_block = blocks['30m']
@@ -154,9 +152,10 @@ class PrePro_30m(TradePreProcessor):
     
 class PrePro_60m(TradePreProcessor):
     """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
-                'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            '60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
+            'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'], **kwargs)}
 
     def process(self , blocks):
         data_block = blocks['60m']
@@ -179,8 +178,9 @@ class PrePro_week(TradePreProcessor):
     """
     WEEKDAYS = 5
 
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.final_feat()])}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.final_feat()], **kwargs)}
     
     def load_blocks(self , start = None , end = None , secid = None , indent = 0 , vb_level : Any = 1 , **kwargs):
         vb_level = Proj.vb(vb_level)
@@ -190,8 +190,9 @@ class PrePro_week(TradePreProcessor):
             start = CALENDAR.td(start , -self.WEEKDAYS + 1).td
         blocks : dict[str,DataBlock] = {}
         date = CALENDAR.range(start , end)
-        for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load(start , end , indent = indent + 1 , vb_level = vb_level + 1 , **kwargs).align_secid_date(secid , date , inplace = True)
+        block_loaders = self.block_loaders(indent = indent + 1 , vb_level = vb_level + 1)
+        for src_key , loader in block_loaders.items():
+            blocks[src_key] = loader.load(start , end , **kwargs).align_secid_date(secid , date , inplace = True)
             secid = blocks[src_key].secid
         return blocks
     
@@ -207,8 +208,9 @@ class PrePro_week(TradePreProcessor):
     
 class PrePro_style(PreProcessor):
     """CNE5 style factor exposures (key: ``'style'``)."""
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'style' : BlockLoader('models', 'tushare_cne5_exp', Const.Factor.RISK.style)}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            'style' : BlockLoader('models', 'tushare_cne5_exp', Const.Factor.RISK.style, **kwargs)}
 
     def final_feat(self):
         """Keep all style features."""
@@ -220,8 +222,9 @@ class PrePro_style(PreProcessor):
 
 class PrePro_indus(PreProcessor):
     """CNE5 industry factor exposures (key: ``'indus'``)."""
-    def block_loaders(self) -> dict[str,BlockLoader]:
-        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', Const.Factor.RISK.indus)}
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            'indus' : BlockLoader('models', 'tushare_cne5_exp', Const.Factor.RISK.indus, **kwargs)}
 
     def final_feat(self):
         """Keep all industry features."""

@@ -99,8 +99,9 @@ from functools import cached_property
 from typing import Any
 
 from src.proj import Logger
+from src.proj.util import BaseModule
 from src.res.model.util.config import ModelConfig
-from src.res.model.util.core import BatchOutput , BatchInput , BaseModule
+from src.res.model.util.core import BatchOutput , BatchInput
 from .future_utils import FutureUtils
 
 __all__ = ['BasePipeline' , 'TrainerPipeline']

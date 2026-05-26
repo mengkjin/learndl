@@ -159,6 +159,14 @@ class DataBlock:
         else:
             raise ValueError(f'Unsupported type: {type(values)} for {cls.__name__} values')
 
+    def to_dict(self):
+        return {
+            'values' : self.values,
+            'secid' : self.secid,
+            'date' : self.date,
+            'feature' : self.feature,
+        }
+
     def update(self , **kwargs):
         """
         Update one or more fields in-place and re-run ``asserted()``.
@@ -325,13 +333,17 @@ class DataBlock:
         """merge multiple blocks into one block , if inplace is True, merge into the first block"""
         blocks = [*block_list]
         if inplace:
-            assert len(blocks) >= 1 , 'merge: inplace is True, but block_list is empty'
+            assert blocks , 'merge: inplace is True, but block_list is empty'
             target_block = blocks[0]
         else:
             target_block = cls()
         merge_blocks = [blk for blk in blocks if isinstance(blk , cls) and not blk.empty]
-        if len(merge_blocks) == 0 or (len(merge_blocks) == 1 and (merge_blocks[0] is target_block)): 
+        if not merge_blocks or (len(merge_blocks) == 1 and (merge_blocks[0] is target_block)): 
             return target_block
+        elif target_block.empty and len(merge_blocks) == 1:
+            target_block.update(**merge_blocks[0].to_dict())
+            return target_block
+        
             
         secid   = index_merge([blk.secid   for blk in merge_blocks] , method = secid_method)
         date    = index_merge([blk.date    for blk in merge_blocks] , method = date_method)
@@ -349,7 +361,10 @@ class DataBlock:
 
     def merge_others(self , *others : DataBlock , inplace = False):
         """Merge one or more additional blocks into this block; equivalent to ``merge([self, *others])``."""
-        self = self.merge([self , *others] , inplace = inplace)
+        merge_blocks = [blk for blk in others if blk is not self and not blk.empty]
+        if not merge_blocks:
+            return self
+        self = self.merge([self , *merge_blocks] , inplace = inplace)
         self = self.align_feature(self.feature , inplace = True)
         return self
     
@@ -963,7 +978,7 @@ class DataBlock:
         return block
 
     @classmethod
-    def blocks_align(cls , blocks : dict[str,DataBlock] , * , start = None , end = None ,
+    def blocks_align(cls , blocks : dict[str,DataBlock] , * , secid = None , date = None , start = None , end = None ,
                      intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2) -> dict[str,DataBlock]:
         """
         Align a dict of blocks to a common (secid, date) grid.
@@ -974,19 +989,26 @@ class DataBlock:
         All operations are in-place by default.
         """
         if len(blocks) <= 1:
+            for key , blk in blocks.items():
+                blocks[key] = blk.align_secid_date(secid , date , inplace = inplace)
             return blocks
         
-        if intersect_secid:  
+        if secid is not None:
+            newsecid = secid
+        elif intersect_secid:  
             newsecid = index_merge([blk.secid for blk in blocks.values()] , method = 'intersect')
         else:
             newsecid = None
         
-        newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start , max_value = end)
-        max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
-        newdate = newdate[newdate >= max_min_date]
+        if date is not None:
+            newdate = date
+        else:
+            newdate = index_merge([blk.date for blk in blocks.values()] , method = 'union' , min_value = start , max_value = end)
+            max_min_date = max([min(blk.date) for blk in blocks.values() if not blk.empty])
+            newdate = newdate[newdate >= max_min_date]
         
-        for blk in blocks.values():
-            blk.align_secid_date(newsecid , newdate , inplace = inplace)
+        for key , blk in blocks.items():
+            blocks[key] = blk.align_secid_date(newsecid , newdate , inplace = inplace)
 
         return blocks
 
