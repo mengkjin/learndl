@@ -26,7 +26,7 @@ class BacktestPortfolioManager:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
         vb_level = Proj.vb(vb_level)
-        Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
+        Logger.note(f'{cls.__name__} : Update since last update!' , indent = indent , vb_level = vb_level)
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         assert not reset_ports or all([port in BacktestPort.candidate_ports for port in reset_ports]) , \

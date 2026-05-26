@@ -15,7 +15,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Type
 
-from src.proj import PATH, MACHINE, Logger , Const
+from src.proj import PATH, MACHINE, Const
 from src.proj.core import strPath
 from src.proj.util import Device , FlattenDict , BaseModule
 from src.res.algo import AlgoModule
@@ -39,7 +39,7 @@ def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> Fla
     else:
         return FlattenDict.from_input(input , keep_nested = keep_nested)
 
-class ScheduleConfig:
+class ScheduleConfig(BaseModule):
     """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
     def __init__(self, base_path: ModelPath | None = None, schedule_name: str | None = None, model_name: Any | None = None):
         self.base_path = base_path
@@ -63,7 +63,7 @@ class ScheduleConfig:
         config_path = cls.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
-            Logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb_level = 2)
+            cls.logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb = 1)
         if schedule_name and config:
             if 'model.name' in config:
                 assert config['model.name'] == schedule_name, f"model.name {config['model.name']} is not the same as model_name {schedule_name}"
@@ -165,7 +165,7 @@ class BaseModelConfig(BaseModule):
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
             if self.force_module:
-                self.alert1(f"force_module [{self.force_module}] is provided, will use it to load config")
+                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , id = 1 , vb = 1)
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
             assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
@@ -196,12 +196,12 @@ class BaseModelConfig(BaseModule):
         if "env.short_test" in self.override:
             self.Param['env.short_test'] = self.override.pop("env.short_test")
         if self.short_test:
-            self.alert1(f'Short test is enabled, will update conditional config' , add_vb = 1)
+            self.logger.alert1(f'Short test is enabled, will update conditional config' , id = 1 , vb = 1)
             self.Param.update(self.Param.get("conditional.short_test", {}))
 
         self.Param.update(self.schedule_config.Param)
         if self.model_module == "transformer":
-            self.alert1(f'Model module is transformer, will update conditional config' , add_vb = 1)
+            self.logger.alert1(f'Model module is transformer, will update conditional config' , id = 1 , vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))
         
         self.Param.update(self.override)
@@ -219,7 +219,7 @@ class BaseModelConfig(BaseModule):
 
         # check short_test is set correctly
         if self.should_be_short_test and not self.short_test:
-            self.alert1("Should be at server or short_test, but short_test is False now!")
+            self.logger.alert1("Should be at server or short_test, but short_test is False now!" , id = 1 , vb = 1)
 
         # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
@@ -250,12 +250,12 @@ class BaseModelConfig(BaseModule):
         # check missing required keys
         missing_required_keys = np.setdiff1d(list(self.REQUIRED_CONFIG_PARAM.keys()), list(self.Param.keys())).tolist()
         if missing_required_keys:
-            Logger.error(f"{missing_required_keys} are required but not in config files")
+            self.logger.error(f"{missing_required_keys} are required but not in config files")
             raise ValueError(f"{missing_required_keys} are required but not in config files")
 
         redundant_keys = np.setdiff1d(list(self.Param.keys()), list(self.REQUIRED_CONFIG_PARAM.keys()) + list(self.OPTIONAL_CONFIG_PARAM.keys())).tolist()
         if redundant_keys:
-            self.alert1(f"{redundant_keys} in config files are not in default config params")
+            self.logger.alert1(f"{redundant_keys} in config files are not in default config params" , id = 1 , vb = 1)
 
         return self
 
@@ -664,7 +664,7 @@ class AlgoConfig(BaseModule):
         path = PATH.conf.joinpath("algo", self.module_type, f"{self.model_module}.yaml")
         default_path = path.with_stem(f"default")
         if not path.exists() and not default_path.exists():
-            Logger.error(f"{path} does not exist, and default.yaml does not exist either.")
+            self.logger.error(f"{path} does not exist, and default.yaml does not exist either.")
         return path if path.exists() else default_path
 
     def override_params(self):
@@ -845,12 +845,9 @@ class ModelConfig(BaseModelConfig , BaseModule):
             [ 0] , raw model name unless fitting and not resuming
             [1,2,3,...] , choose by model_index if is_resuming
         """
-        if self.base_path:
-            vb_level = 'never'
-
-        self.parser_stage(self.options.stage, vb_level)
-        self.parser_resume(self.options.resume, vb_level)
-        self.parser_select(self.options.selection, vb_level)
+        self.parser_stage(self.options.stage)
+        self.parser_resume(self.options.resume)
+        self.parser_select(self.options.selection)
         return self
 
     def start_model(self):
@@ -860,7 +857,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
-                self.alert1(f"{self.base_path} is cleared" , add_vb = 1)
+                self.logger.alert1(f"{self.base_path} is cleared" , id = 1 , vb = 1)
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}
@@ -1006,7 +1003,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
-    def parser_stage(self, value=-1, vb_level: Any = 1):
+    def parser_stage(self, value=-1):
         """
         parser stage queue
         value:
@@ -1015,12 +1012,14 @@ class ModelConfig(BaseModelConfig , BaseModule):
             1: fit only
             2: test only
         """
+        vb_level = 'never' if self.base_path else self.vb_level
         assert value in [-1, 0, 1, 2], f"stage must be -1, 0, 1, or 2, got {value}"
         queue_of_stages: list[Literal["data", "fit", "test"]] = ["data", "fit", "test"]
 
         if value == -1:
             if not self.base_path.is_null_model:
-                Logger.note(f"--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only")
+                msg = "--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only"
+                self.logger.note(msg , vb_level = vb_level)
                 value = int(input(f"[0, fit & test] , [1, fit only] , [2, test only]"))
 
         if self.base_path.is_null_model:
@@ -1037,10 +1036,10 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 raise ValueError(f"Invalid stage option: {value}")
 
         self.queue_of_stages = queue_of_stages
-        Logger.note("--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), queue_of_stages))),
-                    color="lightblue", vb_level=vb_level)
+        msg = "--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), queue_of_stages)))
+        self.logger.note(msg , vb_level = vb_level)
 
-    def parser_resume(self, value=-1, vb_level: Any = 1):
+    def parser_resume(self, value=-1):
         """
         parser resume flag
         value:
@@ -1048,6 +1047,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
             0: no
             1: yes
         """
+        vb_level = 'never' if self.base_path else self.vb_level
         assert value in [-1, 0, 1], f"resume must be -1, 0, or 1, got {value}"
         if value == -1:
             if self.short_test:
@@ -1055,7 +1055,8 @@ class ModelConfig(BaseModelConfig , BaseModule):
             else:
                 candidates = self.base_path.find_resumable_candidates()
                 if candidates:
-                    Logger.note(f"Multiple model path of {self.model_clean_name} exists, input [0] to deny resuming , [1] to confirm resuming!")
+                    msg = f"Multiple model path of {self.model_clean_name} exists, input [0] to deny resuming , [1] to confirm resuming!"
+                    self.logger.note(msg , vb_level = vb_level)
                     value = int(input(f"[0, not resuming] , [1, resuming]"))
                 else:
                     value = 0
@@ -1069,9 +1070,10 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 raise ValueError(f"Invalid resume option: {value}")
 
         self.is_resuming = is_resuming
-        Logger.note(f"Confirm Resume Training!" if is_resuming else "Start Training New!", vb_level=vb_level)
+        msg = f"Confirm Resume Training!" if is_resuming else "Start Training New!"
+        self.logger.note(msg , vb_level = vb_level)
 
-    def parser_select(self, value=-1, vb_level: Any = 1):
+    def parser_select(self, value=-1):
         """
         parse model_name selection if model_name dirs exists
         value:
@@ -1089,6 +1091,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 1,2,3,...: choose one by model_index
         0: don't change the base_path
         """
+        vb_level = 'never' if self.base_path else self.vb_level
         assert value in [-1, 0], f"initial selection must be -1 or 0, got {value}"
         candidates = self.base_path.find_resumable_candidates_indices()
         if value == -1:
@@ -1097,13 +1100,15 @@ class ModelConfig(BaseModelConfig , BaseModule):
             elif "fit" in self.queue_of_stages and not self.is_resuming:
                 if self.base_path.model_name_index in candidates:
                     value = self.base_path.find_new_index()
-                    Logger.note(f"ModelPath {self.base_path} is resumable, will create a new ModelPath with index {value} to Train New!", vb_level=vb_level)
+                    msg = f"ModelPath {self.base_path} is resumable, will create a new ModelPath with index {value} to Train New!"
+                    self.logger.note(msg , vb_level = vb_level)
             else:
                 if len(candidates) == 1:
                     value = candidates[0]
                 else:
-                    Logger.note(f"Multiple ModelPath of {self.model_clean_name} exists, input number to choose!", vb_level=vb_level)
-                    Logger.note(f"Options include: {candidates}", vb_level=vb_level)
+                    msg = f"Multiple ModelPath of {self.model_clean_name} exists, input number to choose!"
+                    self.logger.note(msg , vb_level = vb_level)
+                    self.logger.note(f"Options include: {candidates}" , vb_level = vb_level)
                     value = int(input(f"Which Model to Resume?"))
                     assert value in candidates, (f"value {value} is not in candidates_indices {candidates}")
         elif value == 0:
@@ -1119,10 +1124,12 @@ class ModelConfig(BaseModelConfig , BaseModule):
             self.base_path.with_new_index(value)
             new_base = self.base_path.relative_base
             if old_base != new_base:
-                Logger.alert2(f'ModelPath.base {old_base} is replaced by {new_base} due to resumability!')
+                msg = f'ModelPath.base {old_base} is replaced by {new_base} due to resumability!'
+                self.logger.alert2(msg)
 
         if self.manual_deletion_required:
-            Logger.error(f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!")
+            msg = f"{self.base_path} resumable but choose not to resume! You have to start a new training or manually delete the existing model_name dir!"
+            self.logger.error(msg)
             raise Exception(f"{self.base_path} resumable but choose not to resume!")
 
     def print_out(self, color: str | None = None, vb_level: Any = 2, min_key_len: int = -1):
@@ -1179,7 +1186,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
             info_strs.append((1, "Resume FMP", f"{Const.Model.resume_fmp}"))
             info_strs.append((1, "Resume Account", f"{Const.Model.resume_fmp_account}"))
 
-        Logger.stdout_pairs(
+        self.logger.stdout_pairs(
             info_strs,
             title="Train Config Initiated:",
             color=color,

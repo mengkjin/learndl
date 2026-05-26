@@ -284,5 +284,5 @@ class SummaryWriter(BaseCallBack):
         }
         msgs = _format_messages(messages , indent = 0)
         self.summary_log_file.write(test_name , *msgs)
-        self.note(f'Summary of model {test_name} is saved to {self.summary_log_file.current_file.relative_to(PATH.main)}')
+        self.logger.note(f'Summary of model {test_name} is saved to {self.summary_log_file.current_file.relative_to(PATH.main)}')
     

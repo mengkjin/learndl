@@ -13,7 +13,7 @@ class TrackingPortfolioManager:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
         vb_level = Proj.vb(vb_level)
-        Logger.note(f'Update: {cls.__name__} since last update!' , indent = indent)
+        Logger.note(f'{cls.__name__} : Update since last update!' , indent = indent)
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         

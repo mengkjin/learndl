@@ -7,7 +7,7 @@ import gc , torch
 from functools import cached_property
 from typing import Any , Literal , Callable
 
-from src.proj import Logger , CALENDAR , Const, MACHINE
+from src.proj import CALENDAR , Const, MACHINE
 from src.proj.util import BaseModule
 from src.data import PreProcessorTask , ModuleData , DataBlock
 
@@ -28,8 +28,8 @@ class DataModule(BaseModule):
     DataModule for model fitting / testing / predicting
     """
    
-    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , vb_level : Any = 1 , **kwargs):
-        self.set_vb_level(vb_level)
+    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        self.set_vb(vb_level , indent)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
         self._use_data : Literal['fit','predict','both'] = use_data
 
@@ -54,7 +54,7 @@ class DataModule(BaseModule):
         return data
 
     def print_out(self , vb_level : Any = 2 , min_key_len = 30):
-        Logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+        self.logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
 
     def __repr__(self): 
         keys =  self.input_keys
@@ -76,7 +76,7 @@ class DataModule(BaseModule):
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
         self.datas.load()
-        self.stdout(f'Data loaded , shape: {self.datas.shape}' , vb_level = 'max')
+        self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb_level = 'max')
         
         self.config.update_data_param(self.datas.x)
         
@@ -89,8 +89,8 @@ class DataModule(BaseModule):
         self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2).clone() , no_weight = True)[0]
 
         if self.empty_x:
-            self.alert2(f'DataModule got empty x , fit and test stage will be skipped')
-            self.note(f'{self.input_type} input keys: {self.input_keys}' , add_vb = 1)
+            self.logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
+            self.logger.note(f'{self.input_type} input keys: {self.input_keys}' , vb = 1)
             if 'fit' in self.config.queue_of_stages:
                 self.config.queue_of_stages.remove('fit')
             if 'test' in self.config.queue_of_stages:
@@ -104,11 +104,11 @@ class DataModule(BaseModule):
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
         calendar_dates = CALENDAR.range(min(dates) , max(dates) , 'td')
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
-            Logger.error(f'dates is not align with calendar dates!')
+            self.logger.error(f'dates is not align with calendar dates!')
             if len(np.setdiff1d(dates , calendar_dates)) > 0:
-                self.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}')
+                self.logger.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}' , id = 1 , vb = 1)
             if len(np.setdiff1d(calendar_dates , dates)) > 0:
-                self.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}')
+                self.logger.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}' , id = 1 , vb = 1)
             if not MACHINE.platform_coding:
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
@@ -205,11 +205,11 @@ class DataModule(BaseModule):
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
         if self.step_len <= 0:
-            self.alert1(
+            self.logger.alert1( 
                 f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , '
                 f'd1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
             if self.stage in ['predict' , 'test']:
-                self.alert1(f'Test dates: {test_dates}')
+                self.logger.alert1(f'Test dates: {test_dates}')
             raise ValueError(f'Step length is less than 0')
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * self.data_step , [0])
         self.date_idx = self.d0 + self.step_idx
@@ -456,8 +456,8 @@ class DataModule(BaseModule):
         try:
             subkeys = {f'{key}.{subkey}' : str(list(self.datas.x[subkey].feature)) for key , value in self.input_keys_all.items() for subkey in value if subkey in self.datas.x}
         except Exception as e:
-            self.alert2(f'Error getting input keys subkeys: {e}')
-            self.alert2(f'Input keys: {self.input_keys}')
+            self.logger.alert2(f'Error getting input keys subkeys: {e}')
+            self.logger.alert2(f'Input keys: {self.input_keys}')
             return {f'{key}.{subkey}' : subkey for key , value in self.input_keys_all.items() for subkey in value}
         return subkeys
 

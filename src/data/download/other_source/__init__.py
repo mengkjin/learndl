@@ -6,6 +6,6 @@ from src.proj import Logger
 class OtherSourceDownloader:
     @classmethod
     def update(cls):
-        Logger.note(f'Download: {cls.__name__} since last update!')
+        Logger.note(f'{cls.__name__} : Download since last update!')
         RcquantMinBarDownloader.proceed()
         Baostock5minBarDownloader.proceed()

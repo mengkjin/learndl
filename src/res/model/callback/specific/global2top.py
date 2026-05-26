@@ -78,19 +78,19 @@ class SpecificCB_Global2Top(BaseCallBack):
     def override_configuration(self):
         if (max_epoch := self.config.max_epoch) <= self.protect:
             self.config.model_config['train.max_epoch'] = max_epoch + self.protect
-            self.alert1(f'overrides [max_epoch] {max_epoch} -> {max_epoch + self.protect}')
+            self.logger.alert1(f'overrides [max_epoch] {max_epoch} -> {max_epoch + self.protect}' , id = 1 , vb = 1)
             
         loss_criteria = self.config.criterion_loss
         if tuple(loss_criteria.keys()) != ('global2top',):
             new_loss_criteria = {k:v for k,v in self.config.criterion_loss.items() if k == 'global2top'}
             self.config.model_config['train.criterion.loss'] = new_loss_criteria or {'global2top':{}}
-            self.alert1(f'overrides [loss criteria] {loss_criteria} -> {self.config.criterion_loss}')
+            self.logger.alert1(f'overrides [loss criteria] {loss_criteria} -> {self.config.criterion_loss}' , id = 1 , vb = 1)
 
         accuracy_criteria = self.config.criterion_accuracy
         if tuple(accuracy_criteria.keys()) != ('global2top',):
             new_accuracy_criteria = {k:v for k,v in self.config.criterion_accuracy.items() if k == 'global2top'}
             self.config.model_config['train.criterion.accuracy'] = new_accuracy_criteria or {'global2top':{}}
-            self.alert1(f'overrides [accuracy criteria] {accuracy_criteria} -> {self.config.criterion_accuracy}')
+            self.logger.alert1(f'overrides [accuracy criteria] {accuracy_criteria} -> {self.config.criterion_accuracy}' , id = 1 , vb = 1)
 
     def reset_record(self):
         self.valid_accuracies = pd.DataFrame()

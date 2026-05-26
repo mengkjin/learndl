@@ -10,9 +10,9 @@ Stored in the ``labels_ts`` database under keys like ``ret5``, ``ret10_lag``, et
 import pandas as pd
 
 import numpy as np
-from typing import Any , Literal
+from typing import Literal
 
-from src.proj import CALENDAR , DB , Logger , Dates , Proj
+from src.proj import CALENDAR , DB , Dates
 from src.data.loader import TRADE , RISK
 
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -30,38 +30,35 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
     DAYS = [5 , 10 , 20]
     LAGS = [False , True]
 
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         """Iterate over all (days, lag) combinations and update any missing dates."""
-        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all classic labels is not supported yet for {cls.__name__}')
-        for days in cls.DAYS:
-            for lag1 in cls.LAGS:
+            self.logger.warning(f'Recalculate all classic labels is not supported yet for {self.__class__.__name__}')
+        for days in self.DAYS:
+            for lag1 in self.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
                 if update_type == 'recalc':
                     stored_dates = np.array([])
                 elif update_type == 'update':
-                    stored_dates = DB.dates(cls.DB_SRC , label_name)
+                    stored_dates = DB.dates(self.DB_SRC , label_name)
                 elif update_type == 'rollback':
-                    rollback_date = CALENDAR.td(cls._rollback_date , - days - lag1 + 1)
-                    stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , label_name) , 0 , rollback_date - 1)
+                    rollback_date = CALENDAR.td(self._rollback_date , - days - lag1 + 1)
+                    stored_dates = CALENDAR.slice(DB.dates(self.DB_SRC , label_name) , 0 , rollback_date - 1)
                 else:
                     raise ValueError(f'Invalid update type: {update_type}')
                 end = CALENDAR.td(CALENDAR.updated() , - days - lag1)
-                update_dates = CALENDAR.diffs(cls.START_DATE , end , stored_dates)
+                update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
                 if len(update_dates) == 0:
-                    Logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , indent = indent , vb_level = vb_level)
+                    self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , indent = 1 , vb_level = 1)
                     continue
                 for date in update_dates:
-                    cls.update_one(date , days , lag1 , label_name , indent = indent + 1 , vb_level = vb_level + 2)
+                    self.update_one(date , days , lag1 , label_name)
 
-                Logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
+                self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , indent = 1 , vb_level = 1)
 
-    @classmethod
-    def update_one(cls , date : int , days : int , lag1 : bool , label_name : str , indent : int = 2 , vb_level : Any = 2):
+    def update_one(self , date : int , days : int , lag1 : bool , label_name : str):
         """Compute and save labels for a single ``date``."""
-        DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , indent = indent , vb_level = vb_level)
+        DB.save(calc_classic_labels(date , days , lag1) , self.DB_SRC , label_name , date , indent = self.indent + 2 , vb_level = self.vb_level + 2)
 
 def calc_classic_labels(date : int , days : int , lag1 : bool) -> pd.DataFrame | None:
     """

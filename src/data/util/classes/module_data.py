@@ -108,8 +108,7 @@ class ModuleData(BaseModule):
         vb_level: Any = 2
     ):
         self.config = config
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
+        self.set_vb(vb_level , indent)
 
     @classmethod
     def initialize(cls, data_type_list: list[str],
@@ -366,7 +365,7 @@ class ModuleData(BaseModule):
         )
         start = max(self.config.factor_start_dt or self.date[0], self.date[0])
         end = min(self.config.factor_end_dt or self.date[-1], self.date[-1])
-        with self.timer(f"Load {factor_title} ({start} - {end})"):
+        with self.logger.timer(f"Load {factor_title} ({start} - {end})"):
             from src.data.loader import FactorLoader
             self.blocks["factor"] = FactorLoader(self.factor_names , vb_level="never").\
                 load(start, end).align_secid_date(self.secid, self.date, inplace=True)

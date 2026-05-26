@@ -7,7 +7,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
-from src.proj import MACHINE , Logger , Proj , CALENDAR
+from src.proj import MACHINE , Proj , CALENDAR
 from src.proj.core import strPath
 from src.proj.util import RequireGrad , BaseModule
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
@@ -29,15 +29,14 @@ class ArchivedPredictorModel(BaseModule):
         """Initialize from a model input, and convert to PredictorPath object"""
     def __init__(self , model_input : strPath | None | Any | PredictorPath, 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
-        submodel : str | None = 'best' ,
-        pred_name : str | None = None , * , indent : int = 1 , vb_level : Any = 1):
+        submodel : str | None = 'best' , pred_name : str | None = None , * , 
+        indent : int = 1 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
         if isinstance(model_input , PredictorPath):
             self.path = model_input
         else:
             assert model_num is not None and submodel is not None , 'model_num and submodel must be provided'
             self.path = PredictorPath(model_input , model_num , submodel , pred_name)
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(path={self.path})'
@@ -315,7 +314,7 @@ class ArchivedPredictorModel(BaseModule):
                 df.to_csv(path_deploy.joinpath(f'{self.path.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
                 self.current_deploy_dates.append(date)
         except OSError as e:
-            Logger.error(f'{self.path.pred_name} deploy error: {e}')
+            self.logger.error(f'{self.path.pred_name} deploy error: {e}')
 
         return self
     
@@ -339,45 +338,45 @@ class ArchivedPredictorModel(BaseModule):
     @classmethod
     def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        Logger.note(f'Update : {cls.__name__} since last update!' , indent = indent , vb_level = vb_level)
+        cls.logger.note('Update since last update!' , id = indent , vb = vb_level)
         if start is not None or end is not None:
-            Logger.stdout(f'Update from {start} to {end}' , indent = indent + 1 , vb_level = vb_level)
+            cls.logger.stdout(f'Update from {start} to {end}' , id = indent + 1 , vb = vb_level)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            Logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
+            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , id = indent + 1 , vb = vb_level)
         for model in models:
-            md = cls(model)
+            md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             md.update_preds(update = True , overwrite = False , start = start , end = end)
             if md.current_update_dates:
-                Logger.stdout(f'Update model prediction for {model} , len={len(md.current_update_dates)}' , indent = 1 , vb_level = vb_level)
+                md.logger.success(f'Update model prediction for {model} , len={len(md.current_update_dates)}')
             else:
-                Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
+                md.logger.skipping(f'Model prediction for {model} is up to date')
             if md.deploy_required:
                 if md.current_deploy_dates:
-                    Logger.stdout(f'Deploy model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = 1 , vb_level = vb_level)
+                    md.logger.success(f'Deploy model prediction for {model} , len={len(md.current_deploy_dates)}')
                 else:
-                    Logger.skipping(f'Model prediction for {model} is up to date' , indent = 1 , vb_level = vb_level)
+                    md.logger.skipping(f'Model prediction for {model} is up to date')
         return md
 
     @classmethod
     def recalculate(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         """Recalculate all model predictions"""
-        Logger.note(f'Recalculate : {cls.__name__} since last recalculation!' , indent = indent , vb_level = vb_level)
+        cls.logger.note('Recalculate All!' , id = indent , vb = vb_level)
         if start is not None or end is not None:
-            Logger.stdout(f'Recalculate from {start} to {end}' , indent = indent + 1 , vb_level = vb_level)
+            cls.logger.stdout(f'Recalculate from {start} to {end}' , id = indent + 1 , vb = vb_level)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            Logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , indent = indent + 1 , vb_level = vb_level)
+            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , id = indent + 1 , vb = vb_level)
         for model in models:
-            md = cls(model)
+            md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             md.update_preds(update = False , overwrite = True , start = start , end = end)
             if md.current_update_dates:
-                Logger.stdout(f'Finish recalculating model prediction for {model} , len={len(md.current_update_dates)}' , indent = indent + 1 , vb_level = vb_level)
+                md.logger.success(f'Finish recalculating model prediction for {model} , len={len(md.current_update_dates)}')
             else:
-                Logger.skipping(f'No new recalculating model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
+                md.logger.skipping(f'No new recalculating model prediction for {model}')
             if md.deploy_required:
                 if md.current_deploy_dates:
-                    Logger.stdout(f'Finish deploying model prediction for {model} , len={len(md.current_deploy_dates)}' , indent = indent + 1 , vb_level = vb_level)
+                    md.logger.success(f'Finish deploying model prediction for {model} , len={len(md.current_deploy_dates)}')
                 else:
-                    Logger.skipping(f'No new deploying model prediction for {model}' , indent = indent + 1 , vb_level = vb_level)
+                    md.logger.skipping(f'No new deploying model prediction for {model}')
         return md

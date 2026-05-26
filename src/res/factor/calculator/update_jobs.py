@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any , Generator , Literal , TypedDict
 
 from src.proj import Logger
-from src.proj.util import parallel
+from src.proj.util import parallel , BaseModule
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator
@@ -140,17 +140,15 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
         MPOutputCatcher.export_current_task(payload['name'])
 
 
-class BaseUpdateJobList:
+class BaseUpdateJobList(BaseModule):
     """base update job list class"""
     def __init__(self , name : str , jobs : list[BaseUpdateJob] | None = None , * ,
-        multithreading : bool = False ,
-        vb_level : Any = 1 , indent : int = 0 , timeout : float = -1):
+        multithreading : bool = False , vb_level : Any = 1 , indent : int = 0 , timeout : float = -1):
         self.name = name
         self.jobs : list[BaseUpdateJob] = jobs or []
         self.multithreading = multithreading
-        self.vb_level = vb_level
-        self.indent = indent
         self.timeout = timeout
+        self.set_vb(vb_level , indent)
 
     def __len__(self) -> int:
         return len(self.jobs)
@@ -190,12 +188,9 @@ class BaseUpdateJobList:
     ) -> BaseUpdateJobList:
         if multithreading is not None:
             self.multithreading = multithreading
-        if vb_level is not None:
-            self.vb_level = vb_level
-        if indent is not None:
-            self.indent = indent
         if timeout is not None:
             self.timeout = timeout
+        self.set_vb(vb_level , indent)
         return self
 
     def jobs_dict(self , failed_only : bool = True) -> dict[BaseUpdateJob , BaseUpdateJob]:
@@ -290,10 +285,7 @@ class BaseUpdateJobList:
         timeout = self.timeout if timeout is None else timeout
 
         DATAVENDOR.data_storage_control()
-        Logger.stdout(
-            f'Updating {self.name} : ' + (f'{len(self)} factors' if len(self) > 10 else str(self.jobs)) ,
-            indent=self.indent , vb_level=self.vb_level,
-        )
+        self.logger.stdout(f'Updating {self.name} : ' + (f'{len(self)} factors' if len(self) > 10 else str(self.jobs)))
 
         if not in_worker:
             self.regenerate_jobs()
@@ -302,30 +294,23 @@ class BaseUpdateJobList:
         parallel(self.jobs_dict(failed_only=False) , method=multithreading , timeout=timeout , indent=self.indent + 1)
         remaining_timeout = (timeout - (datetime.now() - start_time).total_seconds() / 3600) if timeout > 0 else 0
         report = self.build_report()
-        Logger.success(
-            f'Stock Factor Update of {self.name} : {report["ok"]} / {report["total"]}' ,
-            indent=self.indent , vb_level=self.vb_level,
-        )
+        self.logger.success(f'Stock Factor Update of {self.name} : {report["ok"]} / {report["total"]}')
         failed_jobs = self.jobs_dict(failed_only=True)
         if failed_jobs and timeout > 0 and remaining_timeout > 0:
-            Logger.alert1(f'Failed Stock Factors: {list(failed_jobs.keys())}', indent=self.indent)
-            Logger.stdout('Auto Retry Failed Stock Factors...' , indent=self.indent)
+            self.logger.alert1(f'Failed Stock Factors: {list(failed_jobs.keys())}' , vb_level = 1)
+            self.logger.stdout('Auto Retry Failed Stock Factors...')
             parallel(failed_jobs , method=multithreading , timeout=remaining_timeout , indent=self.indent + 1)
             report = self.build_report()
             if [job for job in failed_jobs.values() if not job.done]:
-                Logger.alert1(f'Failed Stock Factors Again: {list(failed_jobs.keys())}', indent=self.indent)
+                self.logger.alert1(f'Failed Stock Factors Again: {list(failed_jobs.keys())}' , vb_level = 1)
             else:
-                Logger.success(
-                    f'All {len(failed_jobs)} Failed Stock Factors are Processed Successfully!' ,
-                    indent=self.indent , vb_level=self.vb_level,
-                )
+                self.logger.success(f'All {len(failed_jobs)} Failed Stock Factors are Processed Successfully!')
         return report
 
     @classmethod
     def merge_jobs(cls , job_lists : list[BaseUpdateJobList] , name : str = 'merged_jobs' , **kwargs) -> BaseUpdateJobList:
         jobs = [job for job_list in job_lists for job in job_list.jobs]
         return BaseUpdateJobList(name , jobs , **kwargs)
-
 
 class UpdateJobDate(BaseUpdateJob):
     def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , vb_level : Any = 1 , **kwargs):

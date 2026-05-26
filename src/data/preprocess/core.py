@@ -21,7 +21,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any , Type , Literal
 
-from src.proj import Logger , CALENDAR , Dates , Duration , Const
+from src.proj import CALENDAR , Dates , Duration , Const
 from src.proj.util import BaseModule
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
@@ -136,12 +136,11 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
             Masking rules forwarded to ``DataBlock.mask_values``.
             Defaults to ``{'list_dt': 91}`` (blank first 91 days post-IPO).
         """
+        self.set_vb(vb_level , indent)
         self.type : Literal['fit' , 'predict'] = type
         self.mask = mask or {'list_dt': 91}
         self.load_start = self.start_date(type)
         self.load_end   = CALENDAR.updated()
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
 
     def __repr__(self):
         """Return the class name as the string representation."""
@@ -210,15 +209,15 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         if start > end:
             return DataBlock()
 
-        with self.timer(f'[{self.key}] blocks loading' , add_indent = 1 , add_vb = 3 , add_enter_vb = 4):
+        with self.logger.timer(f'[{self.key}] blocks loading' , indent = 1 , vb = 3 , enter_vb = 4):
             load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
             block_dict = self.load_blocks(load_start, end, secid = secid)
 
-        with self.timer(f'[{self.key}] blocks process' , add_indent = 1 , add_vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks process' , indent = 1 , vb = 3):
             block = self.process_blocks(block_dict)
             block = block.slice_date(start , end)
 
-        with self.timer(f'[{self.key}] blocks masking' , add_indent = 1 , add_vb = 3):   
+        with self.logger.timer(f'[{self.key}] blocks masking' , indent = 1 , vb = 3):   
             block = block.mask_values(mask = self.mask)
             
         return block
@@ -231,7 +230,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         """Load the preprocessed dump from disk; returns empty DataBlock if not found."""
         if not self.dump_exists():
             return DataBlock()
-        with self.timer(f'[{self.key}] dumped loading' , add_vb = 2):
+        with self.logger.timer(f'[{self.key}] dumped loading' , vb = 2):
             block = DataBlock.load_dump(category = 'preprocess' , preprocess_key = self.key , type = self.type)
         return block
 
@@ -239,7 +238,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         """Save the block as a preprocessed dump if ``enable_saving`` is True."""
         if not self.enable_saving:
             return
-        with self.timer(f'[{self.key}] blocks dumping' , add_indent = 2 , add_vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks dumping' , indent = 2 , vb = 3):
             block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
 
     def dump_exists(self) -> bool:
@@ -250,7 +249,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.type != 'fit' or not self.enable_saving:
             return
-        with self.timer(f'[{self.key}] blocks norming' , add_indent = 2 , add_vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks norming' , indent = 2 , vb = 3):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None) -> DataBlock:
@@ -302,7 +301,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         if not extentions:
             return block 
 
-        with self.timer(f'[{self.key}] blocks merging' , add_vb = 2):
+        with self.logger.timer(f'[{self.key}] blocks merging' , vb = 2):
             block = block.merge_others(*extentions , inplace = True).slice_date(start , end)
 
         return block
@@ -312,7 +311,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-            Logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , id = 1 , vb = 1)
             return True
         return False
 
@@ -328,16 +327,16 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
             return
 
         tt1 = datetime.now()
-        self.stdout(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , add_vb = 2)
+        self.logger.stdout(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , vb = 2)
         data_block = self.load_with_extension(dates_for_query = None)
         
         self.save_dump(data_block)
         self.save_norm(data_block)
         
         # gc.collect()
-        Logger.success(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
-                       f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , 
-                        indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        self.logger.success(
+            f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
+            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , id = 1 , vb = 1)
     
 class FactorPreProcessor(PreProcessor):
     """

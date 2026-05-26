@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal , Any
-from src.proj import Logger , CALENDAR , DB , Dates , Proj
+from src.proj import CALENDAR , DB , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -21,57 +21,53 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
     START_DATE = max(20100101 , DB.min_date('trade_ts' , '5min' , use_alt=True))
     DB_SRC = 'market_daily'
     DB_KEY = 'risk'
-    
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+
+    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         """Update market-level risk features for all missing dates and append to the CSV."""
-        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
+            self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
             stored_dates = np.array([])
         elif update_type == 'update':
-            stored_df = DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))
+            stored_df = DB.load_df(DB.path(self.DB_SRC , self.DB_KEY))
             stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
         elif update_type == 'rollback':
-            rollback_date = CALENDAR.td(cls._rollback_date)
-            stored_df = DB.load_df(DB.path(cls.DB_SRC , cls.DB_KEY))
+            rollback_date = CALENDAR.td(self._rollback_date)
+            stored_df = DB.load_df(DB.path(self.DB_SRC , self.DB_KEY))
             stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
             stored_dates = CALENDAR.slice(stored_dates , 0 , rollback_date - 1)
         else:
             raise ValueError(f'Invalid update type: {update_type}')
             
         end = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
-        update_dates = CALENDAR.diffs(cls.START_DATE , end , stored_dates)
+        update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
         if len(update_dates) == 0:
-            Logger.skipping(f'{cls.DB_SRC}/{cls.DB_KEY} is up to date' , indent = indent , vb_level = vb_level)
+            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , id = 1 , vb = 1)
             return
 
         new_dfs : list[pd.DataFrame] = []
         for date in update_dates:
             new_dfs.append(calc_market_daily_risk(date))
-            Logger.stdout(f'Calculate market daily risk at {date}' , indent = indent + 1 , vb_level = vb_level + 2)
+            self.logger.stdout(f'Calculate market daily risk at {date}' , id = 2 , vb = 2)
 
-        cls.append_result(pd.concat(new_dfs) , indent = indent , vb_level = vb_level)
+        self.append_result(pd.concat(new_dfs))
 
-        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , id = 1 , vb = 1)
 
-    @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
+    def update_one(self , date : int):
         """Compute and append market risk features for a single ``date``."""
-        cls.append_result(calc_market_daily_risk(date) , indent = indent , vb_level = vb_level)
+        self.append_result(calc_market_daily_risk(date))
 
-    @classmethod
-    def append_result(cls , new_df : pd.DataFrame , indent : int = 1 , vb_level : Any = 1):
+    def append_result(self , new_df : pd.DataFrame):
         """
         Merge ``new_df`` with the existing CSV, deduplicate by date, and overwrite.
 
         Keeps the ``last`` value when duplicate dates exist (allows reprocessing).
         """
-        old_df = DB.load(cls.DB_SRC , cls.DB_KEY)
+        old_df = DB.load(self.DB_SRC , self.DB_KEY)
         df = pd.concat([old_df , new_df])
         if not df.empty:
             df = df.drop_duplicates('date' , keep = 'last').reset_index(drop = True).sort_values('date')
-            DB.save(df , cls.DB_SRC , cls.DB_KEY , indent = indent , vb_level = vb_level)
+            DB.save(df , self.DB_SRC , self.DB_KEY , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
 def _get_inputs(date : int) -> dict[str , pd.DataFrame]:
     inputs : dict[str , pd.DataFrame] = {

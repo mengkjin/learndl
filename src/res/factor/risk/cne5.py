@@ -3,8 +3,8 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal
 
-from src.proj import Logger , CALENDAR , DB , Const
-from src.proj.util import WarningCatcher
+from src.proj import CALENDAR , DB , Const
+from src.proj.util import WarningCatcher , BaseModule
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
@@ -81,10 +81,11 @@ class DateSeriesDict:
         else: 
             return None   
 
-class TuShareCNE5_Calculator:
+class TuShareCNE5_Calculator(BaseModule):
     '''calculator for CNE5 risk model'''
     START_DATE = 20050101
-    def __init__(self) -> None:
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1) -> None:
+        self.set_vb(vb_level , indent)
 
         self.estuniv = DateDfs(50)
         self.ind_grp = DateDfs(50)
@@ -496,13 +497,13 @@ class TuShareCNE5_Calculator:
         else:
             raise KeyError(job)
         
-        Logger.success(f'Update tushare_cne5.{job} at {date}' , indent = 1 , vb_level = 1)
+        self.logger.success(f'Update tushare_cne5.{job} at {date}' , id = 1 , vb = 1)
 
     @classmethod
     def update(cls):
         '''update all updatable dates'''
-        Logger.note(f'Update: {cls.__name__} since last update!')
         task = cls()
+        task.logger.note('Update since last update!')
         for date in task.updatable_dates('exposure'): 
             task.update_date(date , 'exposure')
         for date in task.updatable_dates('risk'): 
@@ -513,8 +514,8 @@ class TuShareCNE5_Calculator:
     def rollback(cls , rollback_date : int):
         '''update all updatable dates from a given rollback date'''
         CALENDAR.check_rollback_date(rollback_date)
-        Logger.note(f'Update: {cls.__name__} rollback from {rollback_date}!')
         task = cls()
+        task.logger.note(f'Rollback from {rollback_date}!')
         start = CALENDAR.td(rollback_date , 1)
         end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.range(start , end , 'td')

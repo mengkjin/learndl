@@ -14,7 +14,7 @@ from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
-from src.proj.util.func import parallel
+from src.proj.util import BaseModule , parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
@@ -144,24 +144,31 @@ class Connection:
                 Logger.error(f'{key} connection test failed: {e}')
                 Logger.print_exc(e)
 
-@dataclass
-class SellsideSQLDownloader:
+class SellsideSQLDownloader(BaseModule):
     """a downloader for sellside sql data"""
-    factor_src      : str
-    factor_set      : str
-    date_col        : str
-    start_date      : int
-    end_date        : int = 99991231
-    date_fmt        : str | None = None
-    sub_factors     : list | None = None
-    connection_key  : str = ''
+    DB_SRC : str = 'sellside'
+    MAX_WORKERS: int = min(1 , MAX_MAX_WORKERS)
 
-    DB_SRC : ClassVar[str] = 'sellside'
-    MAX_WORKERS: ClassVar[int] = min(1 , MAX_MAX_WORKERS)
-
-    def __post_init__(self):
+    def __init__(
+        self , factor_src : str , factor_set : str , date_col : str , 
+        start_date : int , end_date : int = 99991231 , date_fmt : str | None = None , 
+        sub_factors : list | None = None , connection_key : str = '' , * , 
+        indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
+        self.factor_src = factor_src
+        self.factor_set = factor_set
+        self.date_col = date_col
+        self.start_date = start_date
+        self.end_date = end_date
+        self.date_fmt = date_fmt
+        self.sub_factors = sub_factors
+        self.connection_key = connection_key
+        
         assert 19900101 <= self.start_date <= self.end_date <= 99991231 , f'start_date {self.start_date} must be greater than 19900101 and less than end_date {self.end_date} and less than 99991231'
         
+    def __repr__(self):
+        return f'{self.__class__.__name__}(factor_src={self.factor_src},factor_set={self.factor_set})'
+
     @property
     def db_key(self) -> str:
         return f'{self.factor_src}.{self.factor_set}'
@@ -238,7 +245,7 @@ class SellsideSQLDownloader:
             return 
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        Logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , indent = 1 , vb_level = 3)
+        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , id = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
         calls = [(self.download_period, inter) for inter in date_intervals]
@@ -249,13 +256,13 @@ class SellsideSQLDownloader:
         try:
             df = self.query_factor_values(start , end)
         except Exception as e:
-            Logger.error(f'In {self.__class__.__name__} : Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
-            Logger.print_exc(e)
+            self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
+            self.logger.print_exc(e)
             return False
         if (num_dates := self.save_data(df)) > 0:
-            Logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , indent = 1 , vb_level = 1)
+            self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , id = 1)
         else:
-            Logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , indent = 1)
+            self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , id = 1)
         return True
 
     def query_start_dt(self):
@@ -280,7 +287,7 @@ class SellsideSQLDownloader:
                     df_input = {sub_factor:pd.read_sql_query(self.sqlline_factor_values(start_str , end_str , sub_factor) , conn) for sub_factor in self.sub_factors}
                 break
             except (exc.ResourceClosedError , exc.OperationalError) as e:
-                Logger.alert1(f'{self.factor_src} Connection is encountered an error ({e!s}), re-connect')
+                self.logger.alert1(f'{self.factor_src} Connection is encountered an error ({e!s}), re-connect')
                 self.connection.reconnect()
             finally:
                 conn.close()
@@ -378,9 +385,9 @@ class SellsideSQLDownloader:
         for key , downloader in cls.factors_downloaders().items():
             try:
                 downloader.query_start_dt()
-                Logger.success(f'{downloader.factor_src}.{downloader.factor_set} start dt query passed')
+                downloader.logger.success(f'{downloader.factor_src}.{downloader.factor_set} start dt query passed')
             except Exception as e:
-                Logger.error(f'{downloader.factor_src}.{downloader.factor_set} start dt query failed: {e}')
+                downloader.logger.error(f'{downloader.factor_src}.{downloader.factor_set} start dt query failed: {e}')
 
     @classmethod
     def factors_downloaders(cls , keys = None) -> dict[str,SellsideSQLDownloader]:
@@ -403,17 +410,17 @@ class SellsideSQLDownloader:
     @classmethod
     def update_allaround(cls , keys = None):
 
-        prompt = f'Download: {cls.__name__} allaround!'
+        prompt = f'{cls.__name__} : Download allaround!'
         assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
         assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        Logger.note(prompt)
+        cls.logger.note(prompt)
 
         for key , downloader in cls.factors_downloaders(keys).items():  
             downloader.download('all')
 
     @classmethod
     def update(cls):
-        Logger.note(f'Download: {cls.__name__} since last update!')
+        cls.logger.note(f'Download since last update!')
         cls.update_since(trace = 0)
         
 if __name__ == '__main__':

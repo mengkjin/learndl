@@ -148,7 +148,7 @@ def _run_once(
                 start=date, end=date, all=False, selected_factors=factors, overwrite=overwrite,
             )
             for level, level_jobs in stock.leveled_jobs():
-                stock.process_group_jobs(level, level_jobs, indent=2, vb_level=2, timeout=-1)
+                stock.process_level_jobs(level, level_jobs, timeout=-1)
             stock.after_process_jobs(indent=1, vb_level=1)
         else:
             stock.process_jobs(

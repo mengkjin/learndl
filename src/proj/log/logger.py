@@ -29,6 +29,18 @@ LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
     'critical' : {'color' : 'lightpurple' , 'level_prefix' : {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'lightpurple'} , 'bold' : True},
 }
 
+STDOUT_PALETTE : dict[str, dict[str, Any]] = {
+    'stdout'   : {'arg_prefix' : None , 'color' : None},
+    'note'     : {'arg_prefix' : None , 'color' : 'lightblue'},
+    'footnote' : {'arg_prefix' : '**' , 'color' : 'gray' , 'bold' : True , 'italic' : True , 'vb_level' : 3},
+    'caption'  : {'arg_prefix' : None , 'color' : 'white' , 'bg_color' : 'gray' , 'bold' : True},
+    'success'  : {'arg_prefix' : 'Success : ' , 'color' : 'lightgreen' , 'to_log_file' : True},
+    'skipping' : {'arg_prefix' : 'Skipping: ' , 'color' : 'gray'},
+    'alert1'   : {'arg_prefix' : 'Caution : ' , 'color' : 'lightyellow' , 'to_log_file' : True},
+    'alert2'   : {'arg_prefix' : 'RedAlert: ' , 'color' : 'lightred' , 'to_log_file' : True},
+    'alert3'   : {'arg_prefix' : 'Emergent: ' , 'color' : 'lightpurple' , 'to_log_file' : True}
+}
+
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 ENTRY_POINT = Path(sys.argv[0]).stem
 
@@ -50,7 +62,10 @@ def add_to_log_file(message : str):
     """Add the message to the log file"""
     LOG_FILE.write(f'{ENTRY_POINT} >> {find_calling_module()} >> {message}')
 
-def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_file : bool = False , **kwargs):
+def new_stdout(
+    *args , indent : int = 0 , vb_level : Any = 1 , 
+    arg_prefix : str | None = None , prefixes : list[str] | None = None , 
+    to_log_file : bool = False , **kwargs):
     """
     custom stdout message
     kwargs:
@@ -59,21 +74,35 @@ def new_stdout(*args , indent = 0 , color = None , vb_level : Any = 1 , to_log_f
         sep , end , file , flush: same as stdout
     """
     with WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if Proj.debug['show_vb_level'] else args
-        fstr = stdout(*args , indent = indent , color = color , write = verbose(vb_level), **kwargs)
+        msg = ' '.join([str(s) for s in args])
+        if arg_prefix:
+            msg = f'{arg_prefix}{msg}'
+        if prefixes:
+            msg = ' '.join(prefixes) + ' ' + msg
+        if Proj.debug['show_vb_level']:
+            msg = f'{vb_level} | {msg}'
+        fstr = stdout(msg , indent = indent , write = verbose(vb_level), **kwargs)
     if to_log_file:
         add_to_log_file(fstr.unformatted())
     return fstr
 
-def new_stderr(*args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
+def new_stderr(
+    *args , indent : int = 0 , vb_level : Any = 1 , 
+    arg_prefix : str | None = None , prefixes : list[str] | None = None , **kwargs):
     """
     Like ``new_stdout`` but to stderr; always appends unformatted text to ``LOG_FILE``.
     Use ``vb_level`` to control the verbosity of the message.
     kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
     with WithVbLevel(vb_level):
-        args = [f'{vb_level}' , *args] if Proj.debug['show_vb_level'] else args
-        fstr = stderr(*args , indent = indent , color = color , write = verbose(vb_level), **kwargs)
+        msg = ' '.join([str(s) for s in args])
+        if arg_prefix:
+            msg = f'{arg_prefix}{msg}'
+        if prefixes:
+            msg = ' '.join(prefixes) + ' ' + msg
+        if Proj.debug['show_vb_level']:
+            msg = f'{vb_level} | {msg}'
+        fstr = stderr(msg , indent = indent , write = verbose(vb_level), **kwargs)
     add_to_log_file(fstr.unformatted())
     return fstr
 
@@ -129,7 +158,7 @@ class Logger:
         return cls._instance
 
     @classmethod
-    def stdout(cls , *args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
+    def stdout(cls , *args , indent = 0 , vb_level : Any = 1 , **kwargs):
         """
         custom stdout message
         kwargs:
@@ -137,7 +166,7 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
-        return new_stdout(*args , indent = indent , color = color , vb_level = vb_level , **kwargs)
+        return new_stdout(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , 
@@ -216,88 +245,103 @@ class Logger:
     @classmethod
     def caption(cls , *args , **kwargs):
         """custom gray stdout message for caption (e.g. table / figure title)"""
-        new_stdout(*args , color = 'white' , bg_color = 'gray' , bold = True , **kwargs)
+        kwargs = STDOUT_PALETTE['caption'] | kwargs
+        new_stdout(*args , **kwargs)
 
     @classmethod
-    def footnote(cls , *args , vb_level : Any = 3 , **kwargs):
+    def footnote(cls , *args , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        new_stdout(f'**{args[0]}' , *args[1:] , color = 'gray' , bold = True , italic = True , vb_level = vb_level , **kwargs)
+        kwargs = STDOUT_PALETTE['footnote'] | kwargs
+        new_stdout(*args , **kwargs)
         
     @classmethod
     def success(cls , *args , **kwargs):
         """custom green stdout message for success"""
-        new_stdout('Success :' , *args , color = 'lightgreen' , to_log_file = True , **kwargs)
+        kwargs = STDOUT_PALETTE['success'] | kwargs
+        new_stdout(*args , **kwargs)
     
     @classmethod
     def skipping(cls , *args , **kwargs):
         """custom skipping message"""
-        new_stdout('Skipping:' , *args , color = 'gray' , **kwargs)
+        kwargs = STDOUT_PALETTE['skipping'] | kwargs
+        new_stdout(*args , **kwargs)
 
     @classmethod
-    def alert1(cls , *args , color = 'lightyellow' , vb_level : Any = 0 , **kwargs):
+    def alert1(cls , *args , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('Caution :' , *args , color = color , vb_level = vb_level , to_log_file = True , **kwargs)
+        kwargs = STDOUT_PALETTE['alert1'] | kwargs
+        new_stdout(*args , **kwargs)
 
     @classmethod
-    def alert2(cls , *args , color = 'lightred' , vb_level : Any = 0 , **kwargs):
+    def alert2(cls , *args , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('RedAlert:' , *args , color = color , vb_level = vb_level , to_log_file = True , **kwargs)
+        kwargs = STDOUT_PALETTE['alert2'] | kwargs
+        new_stdout(*args , **kwargs)
 
     @classmethod
-    def alert3(cls , *args , color = 'purple' , vb_level : Any = 0 , **kwargs):
+    def alert3(cls , *args , **kwargs):
         """
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        new_stdout('Emergent:' , *args , color = color , vb_level = vb_level , to_log_file = True , **kwargs)
+        kwargs = STDOUT_PALETTE['alert3'] | kwargs
+        new_stdout(*args , **kwargs)
 
     @classmethod
-    def note(cls , *args , color = 'lightblue' , vb_level : Any = 1 , **kwargs):
+    def note(cls , *args , **kwargs):
         """
         custom lightblue stdout message for remark
         """
-        new_stdout(*args , color = color , vb_level = vb_level , **kwargs)
+        kwargs = STDOUT_PALETTE['note'] | kwargs
+        new_stdout(*args , **kwargs)
 
     @classmethod
     def remark(cls , *args , indent : int = 0 , vb_level : Any = 2 , **kwargs):
         """custom lightblue stderr"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['remark'] | kwargs))
+        kwargs = LOG_PALETTE['remark'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def debug(cls , *args , indent : int = 0 , vb_level : Any = 2 , **kwargs):
         """Debug level stderr"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['debug'] | kwargs))
+        kwargs = LOG_PALETTE['debug'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def info(cls , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         """Info level stderr"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['info'] | kwargs))
+        kwargs = LOG_PALETTE['info'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def highlight(cls , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['highlight'] | kwargs))
+        kwargs = LOG_PALETTE['highlight'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def warning(cls , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         """Warning level stderr"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['warning'] | kwargs))
+        kwargs = LOG_PALETTE['warning'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def error(cls , *args , indent : int = 0 , vb_level : Any = 0 , **kwargs):
         """Error level stderr"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['error'] | kwargs))
+        kwargs = LOG_PALETTE['error'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def critical(cls , *args , indent : int = 0 , vb_level : Any = 0 , **kwargs):
         """Critical level stderr"""
-        new_stderr(*args , indent = indent , vb_level = vb_level , **(LOG_PALETTE['critical'] | kwargs))
+        kwargs = LOG_PALETTE['critical'] | kwargs
+        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
     def only_once(cls , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):

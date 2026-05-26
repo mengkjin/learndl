@@ -1,6 +1,5 @@
 from typing import Literal
 
-from src.proj import Logger
 from src.res.model.util import BaseCallBack
 
 class BadAttemptRetrain(BaseCallBack):
@@ -45,7 +44,7 @@ class BadAttemptRetrain(BaseCallBack):
         if self.is_nanloss and self.remain_nan_life <= 0:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
         if self.is_nanloss:
-            Logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_life} chances.')
+            self.logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_life} chances.')
             self.remain_nan_life -= 1
             message = f'Get nanloss for {self.texts.attempt_key}. Redo current attempt {self.status.attempt}'
             self.trigger_retrain('redo_attempt' , 'nanloss' , message)

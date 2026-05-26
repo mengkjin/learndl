@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from typing import Any
 
-from src.proj import Logger , DB
+from src.proj import DB
 from src.proj.util import AsyncSaver
 
 from src.res.model.util import BaseCallBack
@@ -46,7 +46,7 @@ class BasicTestResult(BaseCallBack):
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         
         AsyncSaver.df(df , self.path_test_df , copy_for_safety = False , overwrite = True , vb_level = 'never')
-        Logger.footnote(f'{self.__class__.__name__} : Basic Test Result saved to {self.path_test_df}' , vb_level = self.vb_level + 1) 
+        self.logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = self.vb_level + 1) 
 
         return df
 
@@ -57,7 +57,7 @@ class BasicTestResult(BaseCallBack):
         if df_date.empty:
             return
 
-        with Logger.Paragraph('Test Summary' , 3): 
+        with self.logger.paragraph('Test Summary' , 3): 
             if df_date['model_date'].nunique() == 1 or self.config.base_path.is_null_model:
                 # only one model_date, calculate by year
                 df_date['model_date'] = (df_date['date'].astype(int) // 10000).apply(lambda x:f'Y{x}')
@@ -96,7 +96,7 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            Logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:' , vb_level = self.vb_level)
+            self.logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:' , vb_level = self.vb_level)
             
             # export excel
             rslt = {'test_summary' : test_summary , 'test_by_model' : df_model}

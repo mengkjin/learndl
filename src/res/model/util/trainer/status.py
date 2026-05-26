@@ -331,7 +331,7 @@ class TrainerStatus(BasePipeline):
         self.dataset = 'test'
     def on_fit_model_start(self):
         if not self.first_iteration_printed:
-            self.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan')
+            self.logger.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan')
             self.first_iteration_printed = True
         self.times['model_start'] = datetime.now()
         self.fitting_epochs.clear()

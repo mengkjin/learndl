@@ -6,12 +6,28 @@ import pandas as pd
 
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
+from matplotlib.text import Text
 from typing import Any , Literal
 
 from src.proj.log import Logger
 from src.proj.core import strPath
 
 __all__ = ['dfs_to_excel' , 'figs_to_pdf']
+
+_NONCHAR_STRIP = str.maketrans({"\ufeff": "", "\ufffe": "", "\uffff": ""})
+
+def _sanitize_figure_text(fig: Figure) -> None:
+    """Strip non-characters from all text objects in figure.
+
+    Matplotlib may warn when rendering non-characters like U+FFFE.
+    """
+    for obj in fig.findobj(match=Text):
+        try:
+            s = obj.get_text()
+        except Exception:
+            continue
+        if isinstance(s, str) and any(ch in s for ch in ("\ufeff", "\ufffe", "\uffff")):
+            obj.set_text(s.translate(_NONCHAR_STRIP))
 
 def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : strPath , mode : Literal['a','w'] = 'w' , 
                  name_prefix = '' , print_prefix = None , indent : int = 1 , vb_level : Any = 3):
@@ -39,6 +55,7 @@ def figs_to_pdf(figs : dict[str , Figure] , path : strPath , print_prefix = None
     os.makedirs(os.path.dirname(path) , exist_ok=True)
     with PdfPages(path) as pdf:
         for key, fig in figs.items():
+            _sanitize_figure_text(fig)
             pdf.savefig(fig)
             plt.close(fig)
     if print_prefix: 

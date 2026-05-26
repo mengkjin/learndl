@@ -6,7 +6,6 @@ from abc import abstractmethod
 from functools import cached_property
 from typing import Any
 
-from src.proj import Logger
 from src.res.algo.nn.loss import MultiHeadLosses
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , BatchData , ModelFile
 from src.res.model.util.config import ModelConfig
@@ -53,7 +52,7 @@ class PredictorModel(TrainerPipeline):
 
     def print_out(self , vb_level : Any = 2 , min_key_len = 30):
         infos = {'Module Type' : self.__class__.__name__}
-        Logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+        self.logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     
     def multiloss_params(self): 
         return MultiHeadLosses.get_params(getattr(self , 'net' , None))

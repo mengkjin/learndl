@@ -6,7 +6,7 @@ import numpy as np
 from functools import wraps
 from typing import Any , Literal , Sized , Callable
 
-from src.proj import Logger , Const
+from src.proj import Const
 from src.proj.util import FilteredIterable
 
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
@@ -68,9 +68,9 @@ class BaseTrainer(BasePipeline):
                  module : str | None = None , schedule_name = None , 
                  override : dict | None = None , 
                  use_data : Literal['fit','predict','both'] = 'fit' , 
-                 vb_level : Any = 1 , **kwargs):
+                 indent : int = 0 , vb_level : Any = 1 , **kwargs):
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
-        self.set_vb_level(vb_level)
+        self.set_vb(vb_level , indent)
         self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
         self._use_data : Literal['fit','both'] = use_data
         self._kwargs = kwargs
@@ -251,7 +251,7 @@ class BaseTrainer(BasePipeline):
 
     def stage_setup(self):
         '''stage of setting up'''
-        with Logger.Paragraph('Stage [Setup]' , 2):
+        with self.logger.paragraph('Stage [Setup]' , 2):
             self.init_cores()
             self.init_utils()
             self.on_configure_model()
@@ -259,7 +259,7 @@ class BaseTrainer(BasePipeline):
 
     def stage_data(self):
         '''stage of loading model data'''
-        with Logger.Paragraph('Stage [Data]' , 2):
+        with self.logger.paragraph('Stage [Data]' , 2):
             self.on_data_start_before()
             self.on_data_start()
             self.data.load_data()
@@ -268,7 +268,7 @@ class BaseTrainer(BasePipeline):
         
     def stage_fit(self):
         '''stage of fitting'''
-        with Logger.Paragraph('Stage [Fit]' , 2):
+        with self.logger.paragraph('Stage [Fit]' , 2):
             self.config.log_operation('fit' , 'start')
             self.on_fit_start_before()
             self.on_fit_start()
@@ -286,7 +286,7 @@ class BaseTrainer(BasePipeline):
 
     def stage_test(self):
         '''stage of testing'''
-        with Logger.Paragraph('Stage [Test]' , 2):
+        with self.logger.paragraph('Stage [Test]' , 2):
             self.config.log_operation('test' , 'start')
             self.on_test_start_before()
             self.on_test_start()
@@ -305,7 +305,7 @@ class BaseTrainer(BasePipeline):
 
     def stage_summary(self):
         '''stage of summarizing'''
-        with Logger.Paragraph('Stage [Summary]' , 2):
+        with self.logger.paragraph('Stage [Summary]' , 2):
             self.on_summarize_model()
 
     def iter_model_num_date(self): 
@@ -329,13 +329,13 @@ class BaseTrainer(BasePipeline):
                     resumed = [(model_date , model_num) not in resumed_models_finished for model_date , model_num in model_iter]
                     condition = np.array(resumed)
                 case _:
-                    Logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')
+                    self.logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')
                     condition = np.full(len(model_iter) , True , dtype = bool)
             model_iter = FilteredIterable(model_iter , condition)
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         else:
             iter_info += f'{num_all_models} to go!'
-        self.note(iter_info , add_vb = 1)
+        self.logger.note(iter_info , vb_level = 1)
         return model_iter
 
     def iter_model_submodels_on_save(self):
@@ -425,14 +425,14 @@ class BaseTrainer(BasePipeline):
         date0 = self.batch_dates[self.batch_idx] 
         date1 = self.batch_input.date0 
         if not date0 == date1:
-            self.alert1(f'y_date: {self.data.y_date}')
-            self.alert1(f'batch_idx: {self.batch_idx}')
-            self.alert1(f'batch_dates: {self.batch_dates}')
-            self.alert1(f'early_test_dates: {self.data.early_test_dates}')
-            self.alert1(f'model_test_dates: {self.data.model_test_dates}')
-            self.alert1(f'batch_input.i: {self.batch_input.i[0]}')
-            self.alert1(f'batch_input.date0: {self.batch_input.date0}')
-            self.alert1(f'Date equity assertion failed: {date0} != {date1}')
+            self.logger.alert1(f'y_date: {self.data.y_date}')
+            self.logger.alert1(f'batch_idx: {self.batch_idx}')
+            self.logger.alert1(f'batch_dates: {self.batch_dates}')
+            self.logger.alert1(f'early_test_dates: {self.data.early_test_dates}')
+            self.logger.alert1(f'model_test_dates: {self.data.model_test_dates}')
+            self.logger.alert1(f'batch_input.i: {self.batch_input.i[0]}')
+            self.logger.alert1(f'batch_input.date0: {self.batch_input.date0}')
+            self.logger.alert1(f'Date equity assertion failed: {date0} != {date1}')
             raise ValueError(f'Date equity assertion failed: {date0} != {date1}')
 
     def print_out(self):

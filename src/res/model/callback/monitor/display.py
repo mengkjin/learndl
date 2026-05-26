@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any
 
-from src.proj import Logger , Duration , Proj
+from src.proj import Duration , Proj
 from src.res.model.util import BaseCallBack , BatchInputLoader
 
 class CallbackTimer(BaseCallBack):
@@ -36,7 +36,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(10)
             if not df.empty:
-                Logger.display(df , caption = 'Table: Callback Time Costs:' , vb_level = self.vb_level)  
+                self.logger.display(df , caption = 'Table: Callback Time Costs:' , vb_level = self.vb_level)  
             
 class StatusDisplay(BaseCallBack):
     '''Display Epoch and Event Information'''
@@ -63,44 +63,44 @@ class StatusDisplay(BaseCallBack):
         if not self.display_progress:
             return
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
-            Logger.stdout(self.texts.progress , vb_level = self.vb_level)
+            self.logger.stdout(self.texts.progress , no_prefix = True , indent = 0)
         else:
-            Logger.log_only(self.texts.progress , vb_level = self.vb_level)
+            self.logger.log_only(self.texts.progress)
 
     def on_fit_model_start(self):
-        self.model.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
+        self.model.logger.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
     
     def on_fit_epoch_end(self):
         for event in self.status.current.events: 
             if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
-                Logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , vb_level = max(event.vb_level , self.vb_level))
+                self.logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , vb_level = max(event.vb_level , self.vb_level) , no_prefix = True , indent = 0)
             else:
-                Logger.log_only(f'Epoch Event : {event.info}' , vb_level = max(event.vb_level , self.vb_level))
+                self.logger.log_only(f'Epoch Event : {event.info}')
     
     def on_fit_model_end(self):
-        self.model.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
+        self.model.logger.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
         model_summary = self.texts.model_summary
         if model_summary:
-            Logger.remark(model_summary)
+            self.logger.remark(model_summary)
 
     def on_fit_end_after(self):  
         if self.texts.fit_summary:
-            self.note(f'In Stage [{self.status.stage}], Finish All Process! {self.texts.fit_summary}')
+            self.logger.note(f'In Stage [{self.status.stage}], Finish All Process! {self.texts.fit_summary}')
 
     def on_test_model_start(self):
-        self.model.note(f'model {self.texts.model_str} test start' , vb_level = 'max')
+        self.model.logger.note(f'model {self.texts.model_str} test start' , vb_level = 'max')
 
     def on_test_model_end(self):
-        self.model.note(f'model {self.texts.model_str} test done' , vb_level = 'max')
+        self.model.logger.note(f'model {self.texts.model_str} test done' , vb_level = 'max')
     
     def on_test_end_before(self): 
         time_cost = datetime.now() - self.status.times['test_start']
-        self.stdout(f'In Stage [{self.status.stage}], Finish Iterating Test Batches! Cost {Duration(time_cost)}')
+        self.logger.stdout(f'In Stage [{self.status.stage}], Finish Iterating Test Batches! Cost {Duration(time_cost)}')
         self.test_end_start = datetime.now()
 
     def on_test_end_after(self): 
         time_cost = datetime.now() - self.test_end_start
-        self.note(f'In Stage [{self.status.stage}], Finish Testing Callbacks! Cost {Duration(time_cost)}')
+        self.logger.note(f'In Stage [{self.status.stage}], Finish Testing Callbacks! Cost {Duration(time_cost)}')
 
     def on_train_batch_end(self):  
         if self.dataloader_info: 
@@ -119,9 +119,9 @@ class StatusDisplay(BaseCallBack):
             return
         dump_info = f'Dump model {self.texts.model_str} with best attempt {self.metrics.model_metrics.best_attempt()}'
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
-            self.stdout(dump_info , color = 'cyan')
+            self.logger.stdout(dump_info , color = 'cyan')
         else:
-            Logger.log_only(dump_info , vb_level = self.vb_level)
+            self.logger.log_only(dump_info , vb_level = self.vb_level)
 
     def on_test_batch_end(self):         
         if self.dataloader_info: 

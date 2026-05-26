@@ -1,7 +1,7 @@
 from contextlib import nullcontext
 from typing import Literal
 
-from src.proj import MACHINE , Logger , Proj , PATH
+from src.proj import MACHINE , Proj , PATH
 from src.proj.core import strPath
 from src.proj.util import HtmlCatcher , AsyncSaver
 from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
@@ -36,7 +36,7 @@ class ModelTrainer(BaseTrainer):
            stage = -1 , resume = -1 , selection = -1 ,
            **kwargs):
         if title and paragraph:
-            paragraph_context = Logger.Paragraph(title.title() , 1 , enter_vb_level = 2)
+            paragraph_context = cls.logger.paragraph(title.title() , 1 , enter_vb_level = 2)
         else:
             paragraph_context = nullcontext()
             
@@ -53,12 +53,12 @@ class ModelTrainer(BaseTrainer):
             if base_path and check_operation:
                 last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
                 if skip:
-                    Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
+                    trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
                     return trainer
                 elif last_time:
-                    Logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
+                    trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
                 else:
-                    Logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
+                    trainer.logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
          
             trainer.go()
             base_path.log_operation(log_operation)
@@ -71,7 +71,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def update_models(cls , force_update : bool = False):
         if not MACHINE.cuda_server:
-            Logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
+            cls.logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
             for model in PredictorPath.SelectModels():
@@ -91,13 +91,13 @@ class ModelTrainer(BaseTrainer):
         resumable_factors = cls.resumable_factors() if factors else []
 
         if len(resumable_models) + len(resumable_factors) == 0:
-            Logger.alert1('No models or factors to resume testing!')
+            cls.logger.alert1('No models or factors to resume testing!')
             return
 
         testees = [('Factor' , factor) for factor in resumable_factors] + [('Model' , model) for model in resumable_models]
                             
-        Logger.stdout_pairs(testees , title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} factors and models:')
-        Logger.divider()
+        cls.logger.stdout_pairs(testees , title = f'Resume Testing {len(resumable_models) + len(resumable_factors)} factors and models:')
+        cls.logger.divider()
         Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
 
         for testee_type , testee_path in testees:
@@ -168,7 +168,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def resumable_models(cls , registered : bool = True , **kwargs) -> list[ModelPath]:
         if registered:
-            return [pred_model for pred_model in PredictorPath.SelectModels() if pred_model.is_resumable]
+            return [ModelPath(pred_model.full_name) for pred_model in PredictorPath.SelectModels() if pred_model.is_resumable]
         else:
             return [ModelPath(model) for model in cls.available_models()]
 

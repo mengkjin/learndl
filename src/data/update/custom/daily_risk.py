@@ -9,7 +9,7 @@ Features
 ``true_range``        : normalised daily true range (high-low/preclose)
 ``turnover``          : free-float turnover rate
 ``large_buy_pdev``    : large-buy VWAP deviation from stock VWAP
-``small_buy_pct``     : small-buy amount as a fraction of total amount (×10)
+``small_buy_pct``     : small-buy amount as a fraction of total amount (x10)
 ``sqrt_avg_size``     : square root of average trade size
 ``open_close_pct``    : open + close period volume fraction (first+last 5min bars)
 ``ret_volatility``    : cross-bar 5-min return standard deviation
@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Literal , Callable
-from src.proj import Logger , CALENDAR , DB , Dates , Proj
+from src.proj import Logger , CALENDAR , DB , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -29,36 +29,33 @@ class DailyRiskUpdater(BasicCustomUpdater):
     DB_SRC = 'exposure'
     DB_KEY = 'daily_risk'
 
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         """Update daily risk features for all missing dates up to today."""
-        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
+            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
             stored_dates = np.array([])
         elif update_type == 'update':
-            stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)
+            stored_dates = DB.dates(self.DB_SRC , self.DB_KEY)
         elif update_type == 'rollback':
-            rollback_date = CALENDAR.td(cls._rollback_date)
-            stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , cls.DB_KEY) , 0 , rollback_date - 1)
+            rollback_date = CALENDAR.td(self._rollback_date)
+            stored_dates = CALENDAR.slice(DB.dates(self.DB_SRC , self.DB_KEY) , 0 , rollback_date - 1)
         else:
             raise ValueError(f'Invalid update type: {update_type}')
             
         end = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
-        update_dates = CALENDAR.diffs(cls.START_DATE , end , stored_dates)
+        update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
         if len(update_dates) == 0:
-            Logger.skipping(f'{cls.DB_SRC}/{cls.DB_KEY} is up to date' , indent = indent , vb_level = vb_level)
+            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , id = 1 , vb = 1)
             return
 
         for date in update_dates:
-            cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 2)
+            self.update_one(date)
 
-        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , id = 1 , vb = 1)
 
-    @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
+    def update_one(self , date : int):
         """Compute and save daily risk features for a single ``date``."""
-        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
+        DB.save(calc_daily_risk(date) , self.DB_SRC , self.DB_KEY , date , indent = self.indent + 2 , vb_level = self.vb_level + 2)
 
 def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     """Replace non-finite values (NaN, Inf) in a Series with ``fill_value``."""

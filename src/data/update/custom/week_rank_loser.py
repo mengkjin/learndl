@@ -10,14 +10,15 @@ Stores a boolean ``loser`` flag plus supporting statistics in ``exposure/week_ra
 Note: loads the full return history since 2007 on every call (see TODO_data.md item E8
 for the proposed windowed optimisation).
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 import torch
 from torch.nn.functional import pad
 from src.func import tensor as T
 
-from typing import Any , Literal
-from src.proj import Logger , CALENDAR , DB , Dates , Proj
+from typing import Literal
+from src.proj import CALENDAR , DB , Dates
 from src.data.loader import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -27,36 +28,33 @@ class WeekRankLoserUpdater(BasicCustomUpdater):
     DB_SRC = 'exposure'
     DB_KEY = 'week_rank_loser'
 
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
+    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         """Update loser flags for all missing dates."""
-        vb_level = Proj.vb(vb_level)
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
+            self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
             stored_dates = np.array([])
         elif update_type == 'update':
-            stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)
+            stored_dates = DB.dates(self.DB_SRC , self.DB_KEY)
         elif update_type == 'rollback':
-            rollback_date = CALENDAR.td(cls._rollback_date)
-            stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , cls.DB_KEY) , 0 , rollback_date - 1)
+            rollback_date = CALENDAR.td(self._rollback_date)
+            stored_dates = CALENDAR.slice(DB.dates(self.DB_SRC , self.DB_KEY) , 0 , rollback_date - 1)
         else:
             raise ValueError(f'Invalid update type: {update_type}')
             
         end = CALENDAR.updated()
-        update_dates = CALENDAR.diffs(cls.START_DATE , end , stored_dates)
+        update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
         if len(update_dates) == 0:
-            Logger.skipping(f'{cls.DB_SRC}/{cls.DB_KEY} is up to date' , indent = indent , vb_level = vb_level)
+            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , id = 1 , vb = 1)
             return
 
         for date in update_dates:
-            cls.update_one(date , indent = indent + 1 , vb_level = vb_level + 2)
+            self.update_one(date)
 
-        Logger.success(f'Update {cls.DB_SRC}/{cls.DB_KEY} at {Dates(update_dates)}' , indent = indent , vb_level = vb_level)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , id = 1 , vb = 1)
 
-    @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
+    def update_one(self , date : int):
         """Compute and save loser flags for a single ``date``."""
-        DB.save(calc_week_rank_loser(date) , cls.DB_SRC , cls.DB_KEY , date , indent = indent , vb_level = vb_level)
+        DB.save(calc_week_rank_loser(date) , self.DB_SRC , self.DB_KEY , date , indent = self.indent + 2 , vb_level = self.vb_level + 2)
 
 def calc_week_rank_loser(date : int) -> pd.DataFrame:
     """

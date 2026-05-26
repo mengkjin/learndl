@@ -12,8 +12,9 @@ from ftplib import FTP
 from typing import Any
 
 from src.proj import Logger , MACHINE
+from src.proj.util import BaseModule
 
-class SellsideFTPDownloader(object):
+class SellsideFTPDownloader(BaseModule):
     """
     FTP client for downloading sell-side data delivered via file transfer.
 
@@ -21,14 +22,16 @@ class SellsideFTPDownloader(object):
     Provides ``dir()``, ``download_file()``, and ``open_file()`` for listing
     and downloading remote CSV files.
     """
-    def __init__(self, source='msjg'):
+    def __init__(self, source='msjg' , * , indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
         assert source in MACHINE.secret.get('accounts' , 'sellside') , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
         self.ftp_param : dict[str , Any] = MACHINE.secret.get('accounts' , f'sellside/{source}')
-        type = self.ftp_param.pop('type')
+        type : str = self.ftp_param.pop('type')
         assert type.startswith('ftp') , f'{source} is not a valid ftp source : {self.ftp_param}'
         if type.endswith('.disabled'):
-            Logger.alert1(f'{source} is disabled')
+            self.logger.alert1(f'{source} is disabled')
         self.ftp = self.ftp_login(**self.ftp_param)
+        
 
     def ftp_login(self , host, user, password , **kwargs):
         ftp = FTP(host,  user, password)
@@ -55,7 +58,7 @@ class SellsideFTPDownloader(object):
     @classmethod
     def update(cls):
         return
-        Logger.note(f'Download: {cls.__name__} since last update!')
+        Logger.note(f'{cls.__name__} : Download since last update!')
 
     @classmethod
     def available_sources(cls) -> list[str]:

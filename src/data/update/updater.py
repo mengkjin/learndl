@@ -51,14 +51,12 @@ class CustomDataUpdater:
     """Orchestrate updates for all registered ``BasicCustomUpdater`` subclasses."""
     @classmethod
     def update(cls):
-        """Import all custom updater modules and call ``update()`` on each."""
-        BasicCustomUpdater.import_updaters()
-        for name , updater in BasicCustomUpdater.registry.items():
+        """call ``update()`` on each updater"""
+        for updater in BasicCustomUpdater.iter_updaters():
             updater.update()
 
     @classmethod
     def rollback(cls , rollback_date : int):
-        """Import all custom updater modules and call ``rollback()`` on each."""
-        BasicCustomUpdater.import_updaters()
-        for name , updater in BasicCustomUpdater.registry.items():
+        """call ``rollback()`` on each updater"""
+        for updater in BasicCustomUpdater.iter_updaters():
             updater.rollback(rollback_date)

@@ -33,12 +33,12 @@ class ModelTestor(BaseModule):
     def try_forward(self) :
         '''as name says, try to forward'''
         if isinstance(self.batch_input.x , torch.Tensor):
-            self.stdout(f'x shape is {self.batch_input.x.shape}')
+            self.logger.stdout(f'x shape is {self.batch_input.x.shape}')
         else:
-            self.stdout(f'multiple x of {len(self.batch_input.x)}')
+            self.logger.stdout(f'multiple x of {len(self.batch_input.x)}')
         self.output = self.model(self.batch_input.x)
-        self.stdout(f'y shape is {self.output.pred.shape}')
-        self.stdout(f'Test Forward Success')
+        self.logger.stdout(f'y shape is {self.output.pred.shape}')
+        self.logger.stdout(f'Test Forward Success')
         return self
 
     def try_metrics(self):
@@ -47,8 +47,8 @@ class ModelTestor(BaseModule):
             self.try_forward()
         batch_data = BatchData(self.batch_input , self.output)
         metrics = self.metrics.calculate('train' , batch_key = 'test' , batch_data = batch_data).collect_calculation()
-        self.stdout(f'metric output : {metrics.batch_accuracy}')
-        self.stdout(f'Test Metrics Success')
+        self.logger.stdout(f'metric output : {metrics.batch_accuracy}')
+        self.logger.stdout(f'Test Metrics Success')
         return self
     
     def get_realistic_batch_data(self):

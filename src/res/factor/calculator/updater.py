@@ -8,8 +8,8 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any , Generator , Literal
 
-from src.proj import Logger , Proj , CALENDAR , SingletonMeta , Const
-from src.proj.util import parallel
+from src.proj import CALENDAR , SingletonMeta , Const
+from src.proj.util import parallel , BaseModule
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
@@ -25,12 +25,13 @@ CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 MAX_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/max_workers')
 MIN_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/min_workers')
 
-class BaseFactorUpdater(metaclass=SingletonMeta):
+class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
     """manager of factor update jobs"""
     update_type : Literal['stock' , 'pooling' , 'affiliate' , 'market' , 'stats']
 
-    def __init__(self):
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1):
         self.jobs = BaseUpdateJobList(f'{self.name} Factor Jobs')
+        self.set_vb(vb_level , indent)
     
     def __repr__(self):
         n_jobs = len(self.jobs) if self.jobs is not None else 0
@@ -41,7 +42,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         return Const.Factor.UPDATE.get(f'update_groups_multiprocessing/{self.update_type}')
 
     @cached_property
-    def jobs_multithreading(self) -> int:
+    def jobs_multithreading(self) -> bool:
         return not self.groups_multiprocessing and Const.Factor.UPDATE.get(f'update_jobs_multithreading')
 
     @property
@@ -65,7 +66,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
+                     overwrite = False , **kwargs) -> None:
         """
         collect FactorCalculator jobs for all factors between start and end date
         """
@@ -74,40 +75,38 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         if end is None: 
             end = min(CALENDAR.updated() , Const.Factor.UPDATE.end)
 
-        vb_level = Proj.vb(vb_level)
         for calc in self.calculators(all , selected_factors , **kwargs):
             if self.update_type in ['affiliate']:
                 ...
             elif self.update_type in ['market' , 'pooling']:
                 target_dates = calc.target_dates(start , end , overwrite = overwrite)
                 if len(target_dates) > 0:
-                    self.jobs.append(UpdateJobAll(calc , start , end , overwrite , vb_level + 1))
+                    self.jobs.append(UpdateJobAll(calc , start , end , overwrite , self.vb_level + 2))
             elif self.update_type in ['stock']:
                 target_dates = calc.target_dates(start , end , overwrite = overwrite)
-                for date in calc.target_dates(start , end , overwrite = overwrite):
-                    self.jobs.append(UpdateJobDate(calc , date , overwrite , vb_level + 3))
+                for date in target_dates:
+                    self.jobs.append(UpdateJobDate(calc , date , overwrite , self.vb_level + 4))
             elif self.update_type == 'stats':
                 target_dates = calc.stats_target_dates(start , end , overwrite)
                 for stats_type , dates in target_dates.items():
                     for year in np.unique(dates // 10000):
-                        self.jobs.append(UpdateJobStats(calc , stats_type , year , dates , overwrite , vb_level + 3))
+                        self.jobs.append(UpdateJobStats(calc , stats_type , year , dates , overwrite , self.vb_level + 4))
             else:
                 raise ValueError(f'Invalid update type: {self.update_type}')
         self.jobs.sort_jobs()
 
         if self.jobs:
-            Logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , indent = indent , vb_level = vb_level)
+            self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , id = 1 , vb = 1)
         else:
-            Logger.skipping(f'There is no {self.name} Jobs to Proceed...' , indent = indent , vb_level = vb_level)
+            self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , id = 1 , vb = 1)
         
     def before_process_jobs(self , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
-                            overwrite = False , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
+                            overwrite = False , **kwargs) -> None:
         """before process jobs"""
-        vb_level = Proj.vb(vb_level)
         for calc in self.calculators(all , selected_factors , **kwargs):
             if isinstance(calc , WeightedPoolingCalculator):
-                calc.drop_pooling_weight(after = start , overwrite = overwrite , indent = indent + 1 , vb_level = vb_level + 1)
+                calc.drop_pooling_weight(after = start , overwrite = overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 2)
 
     def preview_jobs(self , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
@@ -116,42 +115,36 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         self.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = 'never')
         [job.preview() for job in self.jobs]
 
-    def after_process_jobs(self , indent : int = 1 , vb_level : Any = 2 , **kwargs) -> None:
+    def after_process_jobs(self , **kwargs) -> None:
         """after process jobs"""
         failed_jobs = [job for job in self.jobs if not job.done]
         if failed_jobs:
             if len(failed_jobs) <= 10:
-                Logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', indent = indent)
+                self.logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', id = 1 , vb = 1)
             else:
-                Logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', indent = indent)
+                self.logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', id = 1 , vb = 1)
         elif len(self.jobs) > 0:
-            Logger.success(f'All {len(self.jobs)} Jobs are Processed Successfully!' , indent = indent , vb_level = vb_level)
+            self.logger.success(f'All {len(self.jobs)} Jobs are Processed Successfully!' , id = 1 , vb = 1)
 
     def process_jobs(self , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , indent : int = 0 , vb_level : Any = 1 , timeout : int = -1 , **kwargs) -> None:
+                     overwrite = False , timeout : int = -1 , **kwargs) -> None:
         """
         update update jobs for all factors between start and end date
         default behavior is to collect jobs first to find all FactorCalculators then update one by one
         timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         """
-        vb_level = Proj.vb(vb_level)
-        self.collect_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
-        self.before_process_jobs(start , end , all , selected_factors , overwrite , indent = indent + 1 , vb_level = vb_level + 1)
+        self.collect_jobs(start , end , all , selected_factors , overwrite)
+        self.before_process_jobs(start , end , all , selected_factors , overwrite)
         start_time = datetime.now()
         remaining_timeout = timeout
-        jobs_kwargs = {
-            'multithreading' : self.jobs_multithreading , 
-            'indent' : indent + 2 , 
-            'vb_level' : vb_level + 2
-        }
         for level , level_jobs in self.leveled_jobs():
-            self.process_group_jobs(level , level_jobs , **jobs_kwargs , timeout = remaining_timeout)
+            self.process_level_jobs(level , level_jobs , timeout = remaining_timeout)
             remaining_timeout = (timeout - (datetime.now() - start_time).total_seconds() / 3600)
             if remaining_timeout <= 0 and timeout > 0:
                 break
         
-        self.after_process_jobs(indent = indent + 1 , vb_level = vb_level + 1)
+        self.after_process_jobs()
 
     def leveled_jobs(self) -> Generator[tuple[int , BaseUpdateJobList]]:
         """group jobs by level"""
@@ -168,16 +161,19 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         """
         raise NotImplementedError(f'grouped_jobs is not implemented for {self.name}')
 
-    def process_group_jobs(self ,
+    def process_level_jobs(self ,
         level : int , level_jobs : BaseUpdateJobList , 
-        multithreading : bool = False ,
-        indent : int = 0 ,
-        vb_level : Any = 1 ,
         timeout : float = -1 , **kwargs
     ) -> None:
-        Logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , indent = indent , vb_level = vb_level)
-        assert not self.groups_multiprocessing or not multithreading , 'groups_multiprocessing and multithreading cannot be used together'
-        group_jobs = self.grouped_jobs(level , level_jobs , multithreading = multithreading , indent = indent + 2 , vb_level = vb_level + 2 , timeout = timeout)
+        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , id = 2 , vb = 2)
+        assert not self.groups_multiprocessing or not self.jobs_multithreading , 'groups_multiprocessing and multithreading cannot be used together'
+        group_kwargs = {
+            'multithreading' : self.jobs_multithreading ,
+            'indent' : self.indent + 3 ,
+            'vb_level' : self.vb_level + 4 ,
+            'timeout' : timeout ,
+        }
+        group_jobs = self.grouped_jobs(level , level_jobs , **group_kwargs)
         if self.groups_multiprocessing:
             # Strip calculators before pickling; worker rebuilds from specs and returns a report.
             for chunk in group_jobs.values():
@@ -188,7 +184,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             }
             DATAVENDOR.data_storage_control()
             results = parallel(
-                process_inputs , method = 'process' , timeout = timeout , indent = indent ,
+                process_inputs , method = 'process' , timeout = timeout , indent = self.indent + 2 , vb_level = self.vb_level + 2 ,
                 capture_mp_output = True ,
             )
             for name , report in results.items():
@@ -196,13 +192,14 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             level_jobs.regenerate_jobs()
         else:
             for chunk in group_jobs.values():
-                chunk.process(multithreading = multithreading , timeout = timeout)
+                self.logger.stdout(f'Updating {chunk.name} : ' + (f'{len(chunk)} factors' if len(chunk) > 10 else str(chunk)) , id = 3 , vb = 4)
+                chunk.process(timeout = timeout)
 
     @classmethod
     def update(cls , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         """update pooling factor data according"""
         updater = cls()
-        Logger.note(f'Update : {updater.name} since last update!')
+        updater.logger.note('Update since last update!')
         updater.process_jobs(start = start , end = end , all = True , timeout = timeout)
 
     @classmethod
@@ -210,7 +207,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         """recalculate factors between start and end date"""
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
         updater = cls()
-        Logger.note(f'Update : {updater.name} recalculate all factors!')
+        updater.logger.note('Recalculate all factors!')
         updater.process_jobs(start = start , end = end , all = True , overwrite = True , timeout = timeout)
 
     @classmethod
@@ -218,7 +215,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         CALENDAR.check_rollback_date(rollback_date)
         start = int(CALENDAR.td(rollback_date , 1))
         updater = cls()
-        Logger.note(f'Update : {updater.name} rollback from {rollback_date}!')
+        updater.logger.note(f'Rollback from {rollback_date}!')
         updater.process_jobs(start = start , all = True , overwrite = True , timeout = timeout)
         
     @classmethod
@@ -227,7 +224,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         factors = [factor for factor in cls.factors() if factor in factors]
         if factors:
             updater = cls()
-            Logger.note(f'Fixing : {updater.name} {factors} from {start} to {end}!')
+            updater.logger.note(f'Fixing {factors} from {start} to {end}!')
             updater.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , timeout = timeout)
 
     def eval_coverage(self , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:

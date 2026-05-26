@@ -2,7 +2,7 @@ from __future__ import annotations
 import inspect , itertools
 from typing import Any , Type , Callable
 
-from src.proj import Logger , Proj
+from src.proj import Proj
 from src.res.model.util import BaseCallBack , BaseTrainer , ModelConfig
 from . import monitor, fit, test, specific
 
@@ -16,23 +16,23 @@ class ConsolidateCallBack(BaseCallBack):
         self.init_callbacks()
         
     def at_enter(self , hook , *args , **kwargs):
-        self.stdout(f'In stage [{self.status.stage}], Hook {hook} start' , vb_level = VbLevelCallback)
+        self.logger.stdout(f'In stage [{self.status.stage}], Hook {hook} start' , vb_level = VbLevelCallback)
         for cb in self.callbacks:
             if cb.is_hook_implemented(hook):
-                cb.stdout(f'{hook} start' , vb_level = VbLevelCallback)
+                cb.logger.stdout(f'{hook} start' , vb_level = VbLevelCallback)
                 cb.at_enter(hook , *args , **kwargs)
 
     def at_exit(self, hook , *args , **kwargs):
         for cb in self.callbacks:
             if cb.is_hook_implemented(hook):
-                cb.stdout(f'{hook} end' , vb_level = VbLevelCallback)
+                cb.logger.stdout(f'{hook} end' , vb_level = VbLevelCallback)
                 cb.at_exit(hook , *args , **kwargs)
-        self.stdout(f'In stage [{self.status.stage}], Hook {hook} end' , vb_level = VbLevelCallback)
+        self.logger.stdout(f'In stage [{self.status.stage}], Hook {hook} end' , vb_level = VbLevelCallback)
 
     def print_out(self , vb_level : Any = 2 , min_key_len = -1):
         infos = [cb.get_info() for cb in self.callbacks]
         infos_dict = {name:f'({param}), {doc}' if doc else f'({param})' for name , param , doc in infos}
-        Logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
+        self.logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
 
     def get_implemented_hook_callables(self , hook : str) -> list[Callable]:
         return [getattr(cb , hook) for cb in self.callbacks if cb.is_hook_implemented(hook)]
@@ -60,7 +60,7 @@ class ConsolidateCallBack(BaseCallBack):
         # resolve overrides
         for i , j in itertools.product(range(len(callbacks)) , range(len(callbacks))):
             if callbacks[i].__class__.__name__ in callbacks[j].OverrideCallbacks:
-                Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, overridden by callback [{callbacks[j].__class__.__name__}]!')
+                self.logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, overridden by callback [{callbacks[j].__class__.__name__}]!')
                 callback_available[i] = False
 
         # resolve conflicts
@@ -69,14 +69,14 @@ class ConsolidateCallBack(BaseCallBack):
         callback_available = [True for _ in callbacks]
         for i in range(len(callbacks)):
             if module_type in callbacks[i].ConflictModuleTypes:
-                Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module type [{module_type}]')
+                self.logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module type [{module_type}]')
                 callback_available[i] = False
             if module_name in callbacks[i].ConflictModuleNames:
-                Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module name [{module_name}]')
+                self.logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module name [{module_name}]')
                 callback_available[i] = False
             for j in range(len(callbacks)):
                 if callbacks[j].__class__.__name__ in callbacks[i].ConflictCallbacks:
-                    Logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with callback [{callbacks[j].__class__.__name__}]')
+                    self.logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with callback [{callbacks[j].__class__.__name__}]')
                     callback_available[i] = False
         
         callbacks = [cb for i, cb in enumerate(callbacks) if callback_available[i]]

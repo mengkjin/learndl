@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import Logger , CALENDAR , DB , Dates , Const
+from src.proj import CALENDAR , DB , Dates , Const
 from src.proj.core import strPath
 from src.proj.util import parallel , BaseModule
 from src.data import DATAVENDOR
@@ -267,7 +267,6 @@ class PortfolioAccount:
         if path.suffix == '.pkl':
             raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
             self.df.to_pickle(path)
-            Logger.stdout(f'Account Saved to {path}' , indent = indent , vb_level = vb_level , italic = True)
         else:
             account_dfs = self.to_dfs()
             meta = {
@@ -390,13 +389,11 @@ class PortfolioAccountant(BaseModule):
         return cls._instances[key]
     
     def __init__(self , portfolio : Portfolio , * , indent : int = 1 , vb_level : Any = 2):
+        self.set_vb(vb_level , indent)
         self.portfolio = portfolio
         self.account = PortfolioAccount()
         if not hasattr(portfolio , 'cached_accounts'):
             self.cached_accounts : dict[str , PortfolioAccount] = {}
-        
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(portfolio={self.portfolio})'
@@ -444,8 +441,9 @@ class PortfolioAccountant(BaseModule):
                 self.resumed_account.filter_dates(end = resume_end)
 
             if not self.resumed_account.empty:
-                Logger.success(f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
-                               indent = self.indent + 1 , vb_level = 'max')
+                self.logger.success(
+                    f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
+                    id = 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
         self.go(cache = cache)
@@ -492,7 +490,7 @@ class PortfolioAccountant(BaseModule):
             'analytic':None , 'attribution':None}).set_index('model_date')
 
         port_old = Port.none_port(model_dates[0])
-        self.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}')
+        self.logger.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}')
         for i , (mdate , ed) in enumerate(zip(model_dates , period_ed)):
             port_new = self.portfolio.get(mdate) if self.portfolio.has(mdate) else port_old
             bench = self.benchmark.get(mdate , True)
@@ -513,7 +511,7 @@ class PortfolioAccountant(BaseModule):
                 df.loc[mdate , 'attribution'] = RISK_MODEL.get(mdate).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
             if i > 0 and ((i + 1) % 100 == 0 or i == len(df) - 2):
-                self.stdout(f'{self.config.name} accounting {i + 1} / {len(df) - 1} at {mdate}' , add_vb = 2)
+                self.logger.stdout(f'{self.config.name} accounting {i + 1} / {len(df) - 1} at {mdate}' , vb = 2)
 
         df['pf']  = df['pf'] - df['turn'] * self.config.trade_cost
         df['excess'] = df['pf'] - df['bm']
@@ -553,14 +551,12 @@ class PortfolioAccountManager(BaseModule):
     Manage portfolio accounts in a directory.
     """
     def __init__(self , account_dir : strPath , * , indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
         self.account_dir = Path(account_dir)
         self.account_dir.mkdir(exist_ok=True)
 
         self.accounts : dict[str , PortfolioAccount] = {}
         self.account_metas : dict[str , dict[str, Any]] = {}
-
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
 
         self.load_dir_metas()
 
@@ -649,7 +645,7 @@ class PortfolioAccountManager(BaseModule):
                 plot = True , display = True , **kwargs):
         dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}
         if not dfs: 
-            self.stdout(f'No {category} accounts to account!')
+            self.logger.skipping(f'No {category} accounts to account!')
         account = PortfolioAccount.Total(*dfs.values())
         
         if account.empty: 

@@ -5,7 +5,7 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any
 
-from src.proj import Logger
+from src.proj.util import BaseModule
 from src.res.algo.nn.optimizer import sam
 
 from src.res.model.util.config import ModelConfig
@@ -16,20 +16,23 @@ __all__ = ['Optimizer']
 NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False
 
-class Optimizer:
+class Optimizer(BaseModule):
     '''specify trainer optimizer and scheduler'''
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 
     def __init__(
-            self , 
-            net : nn.Module , 
-            config : ModelConfig , 
-            transfer : bool = False , 
-            lr_multiplier : float = 1. , 
-            add_opt_param : dict | None = None , 
-            add_lr_param : dict | None = None , 
-            add_shd_param : dict | None = None ,
-            trainer = None) -> None:
+        self , 
+        net : nn.Module , 
+        config : ModelConfig , 
+        transfer : bool = False , 
+        lr_multiplier : float = 1. , 
+        add_opt_param : dict | None = None , 
+        add_lr_param : dict | None = None , 
+        add_shd_param : dict | None = None ,
+        trainer = None , * ,
+        indent : int = 0 , vb_level : int = 1 ,
+    ) -> None:
+        self.set_vb(vb_level , indent)
         self.net = net
         self.config = config
         self.trainer = trainer
@@ -120,16 +123,16 @@ class Optimizer:
         if nan_grads:
             from src import api
             setattr(api , 'mod', self.trainer)
-            Logger.stdout('total loss has nan gradients: ' , metric.total_loss)
+            self.logger.stdout('total loss has nan gradients: ' , metric.total_loss)
 
             for key , loss in metric.losses.items():
-                Logger.stdout(key , loss)
+                self.logger.stdout(key , loss)
                 self.optimizer.zero_grad()
                 # if loss.grad_fn is None: continue
                 loss.backward(retain_graph = True)
                 for name , param in self.net.named_parameters():
                     if param.grad is not None and torch.isnan(param.grad).any():
-                        Logger.stdout(name , param , param.grad)
+                        self.logger.stdout(name , param , param.grad)
 
             raise KeyError
 

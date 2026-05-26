@@ -10,7 +10,8 @@ from collections import defaultdict
 from typing import Literal , Any , Iterable
 
 
-from src.proj import Logger , CALENDAR , Proj , Dates , MACHINE
+from src.proj import CALENDAR , Proj , Dates , MACHINE
+from src.proj.util.module import BaseModule
 from src.proj.util.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.proxy.caller import ProxyCallerList
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
@@ -21,7 +22,7 @@ from .util import crawler_log
 
 __all__ = ["AnnouncementAgent"]
 
-class AnnouncementAgent:
+class AnnouncementAgent(BaseModule):
     """
     Crawl and incrementally update exchange announcement metadata.
 
@@ -32,18 +33,18 @@ class AnnouncementAgent:
 
     @classmethod
     def update(cls):
-        Logger.note(f'Update: {cls.__name__} since last update!')
+        cls.logger.note(f'Update since last update!')
         cls.update_all('update')
 
     @classmethod
     def rollback(cls , rollback_date : int):
-        Logger.note(f'Update: {cls.__name__} rollback from {rollback_date}!')
+        cls.logger.note(f'Rollback from {rollback_date}!')
         cls.set_rollback_date(rollback_date)
         cls.update_all('rollback')
 
     @classmethod
     def recalculate_all(cls):
-        Logger.note(f'Update: {cls.__name__} recalculate all!')
+        cls.logger.note(f'Recalculate all!')
         cls.update_all('recalc')
 
     @classmethod
@@ -69,29 +70,29 @@ class AnnouncementAgent:
         
         success = cls.run_with_proxy_async(start, end, redownload = redownload , force_update = force_update , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
         if success:
-            Logger.success(f'{cls.__name__} Update at {Dates(end)}' , indent = indent , vb_level = vb_level)
+            cls.logger.success(f'Update at {Dates(end)}' , id = indent , vb_level = vb_level)
         else:
-            Logger.alert1(f'{cls.__name__} Update at {Dates(end)} failed')
+            cls.logger.alert1(f'Update at {Dates(end)} failed')
 
     @classmethod
     def prepare_proxies(cls , vb_level : Any = 1):
         """verify the proxies"""
-        with Logger.Paragraph(f"Prepare Proxies", level = 1, vb_level = vb_level):
+        with cls.logger.paragraph(f"Prepare Proxies", level = 1, vb_level = vb_level):
             for url in EXCHANGE_URLS.values():
                 ProxyAPI.get_working_proxies(url, timeout=8.0,  workers=50)
-        Logger.display(ProxyVerifier.stats() , vb_level = vb_level)
+        cls.logger.display(ProxyVerifier.stats() , vb_level = vb_level)
 
     @classmethod
     def get_proxy_pool(cls , urls : Iterable[str] | str = EXCHANGE_URLS.keys() , go_with_cached_proxies = False , * , indent : int = 1 , vb_level : Any = 1):
         """get the ProxyPool(AutoRefreshProxyPool)"""
-        with Logger.Timer(f"Warmup ProxyPool", indent = indent, vb_level = vb_level) as timer:
+        with cls.logger.timer(f"Warmup ProxyPool", indent = indent, vb_level = vb_level) as timer:
             proxy_pool = ProxyAPI.get_proxy_pool(urls , go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
         return proxy_pool
 
     @classmethod
     def get_async_proxy_pool(cls, urls: Iterable[str] | str = EXCHANGE_URLS.keys(), go_with_cached_proxies: bool = False, *, indent: int = 1, vb_level: Any = 1):
-        with Logger.Timer(f"Warmup AsyncProxyPool", indent=indent, vb_level=vb_level) as timer:
+        with cls.logger.timer(f"Warmup AsyncProxyPool", indent=indent, vb_level=vb_level) as timer:
             if isinstance(urls, str):
                 target_urls = [urls]
             elif isinstance(urls, list):
@@ -112,7 +113,7 @@ class AnnouncementAgent:
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
-            Logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , indent = indent, vb_level = vb_level)
+            cls.logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , id = indent, vb_level = vb_level)
         else:
             return ProxyCallerList([])
         unique_urls = set([task.url for task in tasks])
@@ -233,7 +234,7 @@ class AnnouncementAgent:
         max_total_inflight_per_exchange: int = 20,
     ) -> bool:
         if fallback_to_raw_ip:
-            Logger.alert1("fallback_to_raw_ip is ignored in async mode")
+            cls.logger.alert1("fallback_to_raw_ip is ignored in async mode")
         return asyncio.run(
             cls._run_with_proxy_async(
                 start, end, step=step, redownload=redownload, force_update=force_update,

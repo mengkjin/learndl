@@ -15,7 +15,7 @@ import numpy as np
 from abc import ABCMeta , abstractmethod
 from functools import cached_property
 from typing import Literal , Type , Any
-from src.proj import Logger , CALENDAR , DB , Dates , Proj
+from src.proj import CALENDAR , DB , Dates
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -150,34 +150,27 @@ class CustomIndex(metaclass=CustomIndexMeta):
 class CustomIndexUpdater(BasicCustomUpdater):
     START_DATE = START_DATE
 
-    @classmethod
-    def custom_indices(cls):
-        return list(CustomIndex.iter_custom_indices())
-    
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback'] , indent : int = 1 , vb_level : Any = 1):
-        vb_level = Proj.vb(vb_level)
+    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {cls.__name__}!')
+            self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
 
         total_dates = []
         custom_indices = list(CustomIndex.iter_custom_indices())
         for custom_index in custom_indices:
-            target_dates = custom_index.target_dates(update_type , rollback_date = cls._rollback_date , start = cls.START_DATE)
+            target_dates = custom_index.target_dates(update_type , rollback_date = self._rollback_date , start = self.START_DATE)
             if len(target_dates) == 0:
-                Logger.skipping(f'{custom_index.index_name} is up to date' , indent = indent + 1 , vb_level = vb_level + 2)
+                self.logger.skipping(f'{custom_index.index_name} is up to date' , indent = 2 , vb_level = 2)
                 continue
-            custom_index.update_dates(target_dates , indent = indent + 1 , vb_level = vb_level + 2)
+            custom_index.update_dates(target_dates , indent = self.indent + 2 , vb_level = self.vb_level + 2)
             total_dates.extend(target_dates.tolist())
         if len(total_dates) == 0:
-            Logger.skipping(f'All custom indices are up to date' , indent = indent , vb_level = vb_level)
+            self.logger.skipping(f'All custom indices are up to date' , indent = 1 , vb_level = 1)
         else:
-            Logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , indent = indent , vb_level = vb_level)
+            self.logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , indent = 1 , vb_level = 1)
 
-    @classmethod
-    def update_one(cls , date : int , indent : int = 2 , vb_level : Any = 2):
+    def update_one(self , date : int):
         for custom_index in CustomIndex.iter_custom_indices():
-            custom_index.update_dates([date] , indent = indent , vb_level = vb_level)
+            custom_index.update_dates([date] , indent = self.indent + 2 , vb_level = self.vb_level + 2)
 
 class MicroCap_400(CustomIndex):
     def rebalance_dates(self) -> np.ndarray:

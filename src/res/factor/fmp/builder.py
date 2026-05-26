@@ -6,7 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Logger , Dates
+from src.proj import Duration , Dates
 from src.proj.core import strPath
 from src.proj.util import BaseModule
 
@@ -74,6 +74,8 @@ class PortfolioBuilder(BaseModule):
                  resume_path : strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
+        
+        self.set_vb(vb_level , indent)
         self.category     = category
         self.alpha        = alpha
         self.benchmark    = get_benchmark(benchmark)
@@ -82,8 +84,6 @@ class PortfolioBuilder(BaseModule):
         self.build_on     = build_on 
 
         self.resume_path  = resume_path
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
@@ -137,8 +137,7 @@ class PortfolioBuilder(BaseModule):
             dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
-            Logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}' , 
-                           indent = self.indent , vb_level = 'max')
+            self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}' , vb_level = 'max')
         return self
 
     def save_portfolio(self , append = False):
@@ -253,7 +252,7 @@ class PortfolioGroupBuilder(BaseModule):
         vb_level : Any = 1 ,
         **kwargs
     ):
-        
+        self.set_vb(vb_level , indent)
         self.category = category
 
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
@@ -283,9 +282,6 @@ class PortfolioGroupBuilder(BaseModule):
         self.builders : list[PortfolioBuilder] = []
         self.accounted = False
 
-        self.set_indent(indent)
-        self.set_vb_level(vb_level)
-
     @property
     def n_builders(self):
         return len(self.alpha_models) * len(self.benchmarks) * len(self.lags) * len(self.param_groups)
@@ -306,12 +302,14 @@ class PortfolioGroupBuilder(BaseModule):
                f'{len(self.lags)}lag,{len(self.param_groups)}kwgs] & {len(self.relevant_dates)} dates, totaling {self.n_builds} builds)'
 
     def builders_info(self):
-        Logger.stdout(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs)' ,  
-                      f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Dates(self.relevant_dates)})' , 
-                      indent = self.indent , vb_level = self.vb_level)
+        msg = ' '.join([
+            f'{self.class_name} has {self.n_builders} builders' , 
+            f'({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs)' ,  
+            f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Dates(self.relevant_dates)})'])
+        self.logger.stdout(msg)
     
     def builders_setup(self):
-        with self.timer('setup' , add_enter_vb=3):
+        with self.logger.timer('setup' , enter_vb=3):
             self.builders.clear()
             self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
@@ -323,7 +321,7 @@ class PortfolioGroupBuilder(BaseModule):
     def builders_resume(self):
         if self.resume_path is None:
             return
-        with self.timer('resume'):
+        with self.logger.timer('resume'):
             for builder in self.builders:
                 builder.load_portfolio(start = self.start , end = self.end)
         return self
@@ -331,7 +329,7 @@ class PortfolioGroupBuilder(BaseModule):
     def save_portfolios(self):
         if self.resume_path is None:
             return
-        with self.timer('export' , add_enter_vb=2):
+        with self.logger.timer('export' , enter_vb=2):
             for builder in self.builders:
                 builder.save_portfolio(append = True)
         return self
@@ -353,7 +351,7 @@ class PortfolioGroupBuilder(BaseModule):
 
         t0 = datetime.now()
  
-        self.stdout('build start...' , add_vb = 3)
+        self.logger.stdout('build start...' , vb = 3)
         iter_date_builder = self.iter_date_builder()
         for opt_count , (date , builder) in enumerate(iter_date_builder):
             builder.build(date)
@@ -361,7 +359,7 @@ class PortfolioGroupBuilder(BaseModule):
                 self.print_build_info(date , opt_count , builder)
 
         secs = (datetime.now() - t0).total_seconds()
-        self.stdout(f'build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
+        self.logger.stdout(f'build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
         self.save_portfolios()
         return self
 
@@ -371,14 +369,16 @@ class PortfolioGroupBuilder(BaseModule):
     def print_build_info(self , date : int , opt_count : int , builder : PortfolioBuilder):
         time_cost = {k:float(np.round(v*1000,2)) for k,v in builder.creations[-1].timecost.items()}
         time_cost_str = ', '.join([f'{k}: {v:.1f}' for k,v in time_cost.items()])
-        self.stdout(f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]' + 
-                    f' Finished at {date} , time costs (ms) {time_cost_str}' , add_indent = 1 , add_vb = 3)
+        msg = (
+            f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]'
+            f' Finished at {date} , time costs (ms) {time_cost_str}')
+        self.logger.stdout(msg , id = 1 , vb = 3)
         return self
     
     def accounting(self):
-        with self.timer('accounting' , add_enter_vb=1):
+        with self.logger.timer('accounting' , enter_vb=1):
             for builder in self.builders:
-                with self.timer(f'{builder.portfolio.name}.accounting' , add_indent=1 , add_vb=1 , add_enter_vb=2):
+                with self.logger.timer(f'{builder.portfolio.name}.accounting' , indent=1 , vb=1 , enter_vb=2):
                     builder.accounting(self.start , self.end , **self.acc_kwargs)
         self.accounted = True
         return self

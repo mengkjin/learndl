@@ -7,11 +7,13 @@ on class creation.  Concrete subclasses must implement ``update_all(update_type)
 To register a new updater, create a file anywhere under ``update/custom/`` that
 defines a subclass — ``import_updaters()`` will discover and import it automatically.
 """
-from typing import Any , Type , Literal
+from __future__ import annotations
+from typing import Any , Type , Literal , Iterator
 from importlib import import_module
 from pathlib import Path
 
-from src.proj import PATH , Logger , CALENDAR
+from src.proj import PATH , CALENDAR
+from src.proj.util import BaseModule
 
 class BasicCustomUpdaterMeta(type):
     """
@@ -20,7 +22,7 @@ class BasicCustomUpdaterMeta(type):
     Each concrete subclass must implement ``update_all``; the metaclass enforces
     this at class creation time and raises ``AssertionError`` if it is missing.
     """
-    registry : dict[str , Type['BasicCustomUpdater'] | Any] = {}
+    registry : dict[str , Type[BasicCustomUpdater] | Any] = {}
     def __new__(cls , name , bases , dct):
         """Create the class and register it (excluding the abstract base itself)."""
         new_cls = super().__new__(cls , name , bases , dct)
@@ -32,7 +34,7 @@ class BasicCustomUpdaterMeta(type):
             cls.registry[name] = new_cls
         return new_cls
 
-class BasicCustomUpdater(metaclass=BasicCustomUpdaterMeta):
+class BasicCustomUpdater(BaseModule , metaclass=BasicCustomUpdaterMeta):
     """
     base class of basic updater
     must implement update_all method
@@ -43,6 +45,16 @@ class BasicCustomUpdater(metaclass=BasicCustomUpdaterMeta):
     """
     _imported : bool = False
     _rollback_date : int = 99991231
+
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
+
+    @classmethod
+    def iter_updaters(cls) -> Iterator[BasicCustomUpdater]:
+        cls.import_updaters()
+        for name , updater in cls.registry.items():
+            yield updater()
+
     @classmethod
     def import_updaters(cls):
         """
@@ -60,24 +72,21 @@ class BasicCustomUpdater(metaclass=BasicCustomUpdaterMeta):
             import_module(module_name)
         cls._imported = True
 
-    @classmethod
-    def update(cls):
+    def update(self):
         """Log and call ``update_all('update')``."""
-        Logger.note(f'Update: {cls.__name__} since last update!')
-        cls.update_all('update')
+        self.logger.note('Update since last update!')
+        self.update_all('update')
 
-    @classmethod
-    def rollback(cls , rollback_date : int):
+    def rollback(self , rollback_date : int):
         """Set the rollback date and call ``update_all('rollback')``."""
-        Logger.note(f'Update: {cls.__name__} rollback from {rollback_date}!')
-        cls.set_rollback_date(rollback_date)
-        cls.update_all('rollback')
+        self.set_rollback_date(rollback_date)
+        self.logger.note(f'Rollback from {rollback_date}!')
+        self.update_all('rollback')
 
-    @classmethod
-    def recalculate_all(cls):
+    def recalculate_all(self):
         """Log and call ``update_all('recalc')`` to force full recalculation."""
-        Logger.note(f'Update: {cls.__name__} recalculate all!')
-        cls.update_all('recalc')
+        self.logger.note('Recalculate all!')
+        self.update_all('recalc')
 
     @classmethod
     def set_rollback_date(cls , rollback_date : int):
@@ -85,12 +94,11 @@ class BasicCustomUpdater(metaclass=BasicCustomUpdaterMeta):
         CALENDAR.check_rollback_date(rollback_date)
         cls._rollback_date = rollback_date
 
-    @classmethod
-    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         """
         Abstract method to be implemented by each concrete subclass.
 
         Called by ``update()``, ``rollback()``, and ``recalculate_all()``
         with the appropriate ``update_type`` string.
         """
-        pass
+        raise NotImplementedError(f'{self.__class__.__name__} must implement update_all method')
