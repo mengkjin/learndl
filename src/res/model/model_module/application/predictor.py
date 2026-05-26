@@ -250,6 +250,7 @@ class ArchivedPredictorModel(BaseModule):
         dates = np.array(dates)
         self.load_data(dates.min() , dates.max())
         pred_dates = dates[dates <= max(self.data.test_full_dates)]
+        print(dates , pred_dates)
         if pred_dates.size == 0: 
             return self
         assert any(self.path.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
