@@ -96,9 +96,9 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         self.jobs.sort_jobs()
 
         if self.jobs:
-            self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , id = 1 , vb = 1)
+            self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , ind = 1 , vb = 1)
         else:
-            self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , id = 1 , vb = 1)
+            self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , ind = 1 , vb = 1)
         
     def before_process_jobs(self , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
@@ -120,11 +120,11 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         failed_jobs = [job for job in self.jobs if not job.done]
         if failed_jobs:
             if len(failed_jobs) <= 10:
-                self.logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', id = 1 , vb = 1)
+                self.logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', ind = 1 , vb = 1)
             else:
-                self.logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', id = 1 , vb = 1)
+                self.logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', ind = 1 , vb = 1)
         elif len(self.jobs) > 0:
-            self.logger.success(f'All {len(self.jobs)} Jobs are Processed Successfully!' , id = 1 , vb = 1)
+            self.logger.success(f'All {len(self.jobs)} Jobs are Processed Successfully!' , ind = 1 , vb = 1)
 
     def process_jobs(self , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
@@ -165,7 +165,7 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         level : int , level_jobs : BaseUpdateJobList , 
         timeout : float = -1 , **kwargs
     ) -> None:
-        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , id = 2 , vb = 2)
+        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , ind = 2 , vb = 2)
         assert not self.groups_multiprocessing or not self.jobs_multithreading , 'groups_multiprocessing and multithreading cannot be used together'
         group_kwargs = {
             'multithreading' : self.jobs_multithreading ,
@@ -189,7 +189,7 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
             level_jobs.regenerate_jobs()
         else:
             for chunk in group_jobs.values():
-                self.logger.stdout(f'Updating {chunk.name} : ' + (f'{len(chunk)} factors' if len(chunk) > 10 else str(chunk)) , id = 3 , vb = 4)
+                self.logger.stdout(f'Updating {chunk.name} : ' + (f'{len(chunk)} factors' if len(chunk) > 10 else str(chunk)) , ind = 3 , vb = 4)
                 chunk.process(timeout = timeout)
 
     @classmethod

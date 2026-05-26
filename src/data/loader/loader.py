@@ -131,7 +131,7 @@ class FactorLoader(BlockLoader):
                 factors.append(df)
         if not [fac for fac in factors if not fac.empty]:
             if self.kwargs.get('notice_empty', True):
-                self.logger.alert1(f'no factors found for {self.names} within {start} - {end}' , id = 1 , vb = 1)
+                self.logger.alert1(f'no factors found for {self.names} within {start} - {end}' , ind = 1 , vb = 1)
             return DataBlock()
         with self.logger.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
             df = pd.concat([fac for fac in factors if not fac.empty])
@@ -173,7 +173,7 @@ class FactorCategory1Loader(BlockLoader):
         factors = [fac for fac in factors if not fac.empty]
         if not factors:
             if self.kwargs.get('notice_empty', True):
-                self.logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}' , id = 1 , vb = 1)
+                self.logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}' , ind = 1 , vb = 1)
             return DataBlock()
         with self.logger.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
             df = pd.concat([fac for fac in factors if not fac.empty])

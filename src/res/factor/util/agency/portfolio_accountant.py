@@ -443,7 +443,7 @@ class PortfolioAccountant(BaseModule):
             if not self.resumed_account.empty:
                 self.logger.success(
                     f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
-                    id = 1 , vb_level = 'max')
+                    ind = 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
         self.go(cache = cache)

@@ -372,7 +372,7 @@ class PortfolioGroupBuilder(BaseModule):
         msg = (
             f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]'
             f' Finished at {date} , time costs (ms) {time_cost_str}')
-        self.logger.stdout(msg , id = 1 , vb = 3)
+        self.logger.stdout(msg , ind = 1 , vb = 3)
         return self
     
     def accounting(self):

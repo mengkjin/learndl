@@ -497,7 +497,7 @@ class TuShareCNE5_Calculator(BaseModule):
         else:
             raise KeyError(job)
         
-        self.logger.success(f'Update tushare_cne5.{job} at {date}' , id = 1 , vb = 1)
+        self.logger.success(f'Update tushare_cne5.{job} at {date}' , ind = 1 , vb = 1)
 
     @classmethod
     def update(cls):

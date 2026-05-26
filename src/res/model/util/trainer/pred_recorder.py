@@ -409,7 +409,7 @@ class PredRecorder(TrainerPipeline):
             self.setup_resuming_status()
             self.has_purged_preds = False
         if self.resume_info:
-            self.logger.stdout(f'Resume testing {self.resume_info}' , id = 1)
+            self.logger.stdout(f'Resume testing {self.resume_info}' , ind = 1)
     
     def on_test_batch_end(self): 
         self.append_batch_preds()

@@ -41,17 +41,17 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
         end = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
         update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
         if len(update_dates) == 0:
-            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , id = 1 , vb = 1)
+            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , ind = 1 , vb = 1)
             return
 
         new_dfs : list[pd.DataFrame] = []
         for date in update_dates:
             new_dfs.append(calc_market_daily_risk(date))
-            self.logger.stdout(f'Calculate market daily risk at {date}' , id = 2 , vb = 2)
+            self.logger.stdout(f'Calculate market daily risk at {date}' , ind = 2 , vb = 2)
 
         self.append_result(pd.concat(new_dfs))
 
-        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , id = 1 , vb = 1)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , ind = 1 , vb = 1)
 
     def update_one(self , date : int):
         """Compute and append market risk features for a single ``date``."""

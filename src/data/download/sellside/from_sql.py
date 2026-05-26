@@ -245,7 +245,7 @@ class SellsideSQLDownloader(BaseModule):
             return 
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , id = 1 , vb = 2)
+        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , ind = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
         calls = [(self.download_period, inter) for inter in date_intervals]
@@ -260,9 +260,9 @@ class SellsideSQLDownloader(BaseModule):
             self.logger.print_exc(e)
             return False
         if (num_dates := self.save_data(df)) > 0:
-            self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , id = 1)
+            self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , ind = 1)
         else:
-            self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , id = 1)
+            self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , ind = 1)
         return True
 
     def query_start_dt(self):

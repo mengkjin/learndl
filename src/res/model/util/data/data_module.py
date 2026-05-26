@@ -106,9 +106,9 @@ class DataModule(BaseModule):
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
             self.logger.error(f'dates is not align with calendar dates!')
             if len(np.setdiff1d(dates , calendar_dates)) > 0:
-                self.logger.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}' , id = 1 , vb = 1)
+                self.logger.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}' , ind = 1 , vb = 1)
             if len(np.setdiff1d(calendar_dates , dates)) > 0:
-                self.logger.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}' , id = 1 , vb = 1)
+                self.logger.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}' , ind = 1 , vb = 1)
             if not MACHINE.platform_coding:
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
@@ -146,7 +146,7 @@ class DataModule(BaseModule):
             model_date : int = -1 , extract_backward_days = 500 , extract_forward_days = 160 ,
             retro_start_date : int | None = None , retro_end_date : int | None = None
         ) -> bool:
-        stage = 'predict' if self.use_data == 'predict' else stage
+        assert self.use_data in ['fit' , 'both'] or stage in ['predict' , 'test' , 'retrospective'] , (self.use_data , stage)
         slens = self.config.seq_lens | param.get('seqlens',{})
         slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
         slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})

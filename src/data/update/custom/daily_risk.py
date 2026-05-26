@@ -45,13 +45,13 @@ class DailyRiskUpdater(BasicCustomUpdater):
         end = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
         update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
         if len(update_dates) == 0:
-            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , id = 1 , vb = 1)
+            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , ind = 1 , vb = 1)
             return
 
         for date in update_dates:
             self.update_one(date)
 
-        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , id = 1 , vb = 1)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , ind = 1 , vb = 1)
 
     def update_one(self , date : int):
         """Compute and save daily risk features for a single ``date``."""

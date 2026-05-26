@@ -70,7 +70,7 @@ class AnnouncementAgent(BaseModule):
         
         success = cls.run_with_proxy_async(start, end, redownload = redownload , force_update = force_update , workers = workers, fallback_to_raw_ip = False, indent = indent, vb_level = vb_level, **kwargs)
         if success:
-            cls.logger.success(f'Update at {Dates(end)}' , id = indent , vb_level = vb_level)
+            cls.logger.success(f'Update at {Dates(end)}' , ind = indent , vb_level = vb_level)
         else:
             cls.logger.alert1(f'Update at {Dates(end)} failed')
 
@@ -113,7 +113,7 @@ class AnnouncementAgent(BaseModule):
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
-            cls.logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , id = indent, vb_level = vb_level)
+            cls.logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , ind = indent, vb_level = vb_level)
         else:
             return ProxyCallerList([])
         unique_urls = set([task.url for task in tasks])

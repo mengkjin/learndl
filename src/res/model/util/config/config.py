@@ -165,7 +165,7 @@ class BaseModelConfig(BaseModule):
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
             if self.force_module:
-                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , id = 1 , vb = 1)
+                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , ind = 1 , vb = 1)
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
             assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
@@ -196,12 +196,12 @@ class BaseModelConfig(BaseModule):
         if "env.short_test" in self.override:
             self.Param['env.short_test'] = self.override.pop("env.short_test")
         if self.short_test:
-            self.logger.alert1(f'Short test is enabled, will update conditional config' , id = 1 , vb = 1)
+            self.logger.alert1(f'Short test is enabled, will update conditional config' , ind = 1 , vb = 1)
             self.Param.update(self.Param.get("conditional.short_test", {}))
 
         self.Param.update(self.schedule_config.Param)
         if self.model_module == "transformer":
-            self.logger.alert1(f'Model module is transformer, will update conditional config' , id = 1 , vb = 1)
+            self.logger.alert1(f'Model module is transformer, will update conditional config' , ind = 1 , vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))
         
         self.Param.update(self.override)
@@ -219,7 +219,7 @@ class BaseModelConfig(BaseModule):
 
         # check short_test is set correctly
         if self.should_be_short_test and not self.short_test:
-            self.logger.alert1("Should be at server or short_test, but short_test is False now!" , id = 1 , vb = 1)
+            self.logger.alert1("Should be at server or short_test, but short_test is False now!" , ind = 1 , vb = 1)
 
         # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
@@ -255,7 +255,7 @@ class BaseModelConfig(BaseModule):
 
         redundant_keys = np.setdiff1d(list(self.Param.keys()), list(self.REQUIRED_CONFIG_PARAM.keys()) + list(self.OPTIONAL_CONFIG_PARAM.keys())).tolist()
         if redundant_keys:
-            self.logger.alert1(f"{redundant_keys} in config files are not in default config params" , id = 1 , vb = 1)
+            self.logger.alert1(f"{redundant_keys} in config files are not in default config params" , ind = 1 , vb = 1)
 
         return self
 
@@ -857,7 +857,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
-                self.logger.alert1(f"{self.base_path} is cleared" , id = 1 , vb = 1)
+                self.logger.alert1(f"{self.base_path} is cleared" , ind = 1 , vb = 1)
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}

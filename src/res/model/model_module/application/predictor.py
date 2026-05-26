@@ -338,12 +338,12 @@ class ArchivedPredictorModel(BaseModule):
     @classmethod
     def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        cls.logger.note('Update since last update!' , id = indent , vb = vb_level)
+        cls.logger.note('Update since last update!' , ind = indent , vb = vb_level)
         if start is not None or end is not None:
-            cls.logger.stdout(f'Update from {start} to {end}' , id = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'Update from {start} to {end}' , ind = indent + 1 , vb = vb_level)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , id = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , ind = indent + 1 , vb = vb_level)
         for model in models:
             md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             md.update_preds(update = True , overwrite = False , start = start , end = end)
@@ -361,12 +361,12 @@ class ArchivedPredictorModel(BaseModule):
     @classmethod
     def recalculate(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         """Recalculate all model predictions"""
-        cls.logger.note('Recalculate All!' , id = indent , vb = vb_level)
+        cls.logger.note('Recalculate All!' , ind = indent , vb = vb_level)
         if start is not None or end is not None:
-            cls.logger.stdout(f'Recalculate from {start} to {end}' , id = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'Recalculate from {start} to {end}' , ind = indent + 1 , vb = vb_level)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , id = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , ind = indent + 1 , vb = vb_level)
         for model in models:
             md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             md.update_preds(update = False , overwrite = True , start = start , end = end)

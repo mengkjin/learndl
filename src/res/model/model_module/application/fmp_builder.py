@@ -103,7 +103,7 @@ class ModelPortfolioBuilder(BaseModule):
     def build_fmps(self , dates : list[int] | np.ndarray , deploy = True):
         for date in dates:
             self.fmp_tables[date] = self.build_day(date) 
-            self.logger.stdout(f'Finished build fmps for {self.pred_path} at {date}' , id = 1 , vb = 1)
+            self.logger.stdout(f'Finished build fmps for {self.pred_path} at {date}' , ind = 1 , vb = 1)
             if deploy:
                 self.pred_path.save_fmp(self.fmp_tables[date] , date , False , indent = self.indent + 1 , vb_level = self.vb_level + 2)
             self.updated_fmp_dates.append(date)
@@ -118,7 +118,7 @@ class ModelPortfolioBuilder(BaseModule):
     def load_accounts(self , resume = True):
         if resume: 
             self.account_manager.load_dir()
-            self.logger.stdout(f'accounts include names: {self.account_manager.account_names}' , id = 1 , vb = 1)
+            self.logger.stdout(f'accounts include names: {self.account_manager.account_names}' , ind = 1 , vb = 1)
         return self
     
     def account_last_model_dates(self , fmp_names : list[str] | None = None):
@@ -152,7 +152,7 @@ class ModelPortfolioBuilder(BaseModule):
             portfolio.accounting(Benchmark(elements['benchmark']) , analytic = elements['lag'] == 0 , attribution = elements['lag'] == 0 , 
                                  with_index = get_port_index(fmp_name) , indent = self.indent + 1 , vb_level = self.vb_level + 2)
             self.account_manager.append_accounts(**{fmp_name : portfolio.account})
-            self.logger.stdout(f'Finished accounting for {fmp_name} at {Dates(account_dates)}' , id = 1 , vb = 1)
+            self.logger.stdout(f'Finished accounting for {fmp_name} at {Dates(account_dates)}' , ind = 1 , vb = 1)
 
         if deploy:
             with self.logger.timer(f'Deploy accounts for {self.pred_path} at {Dates(account_dates)}' , vb = 1 , enter_vb = 2):
@@ -164,10 +164,10 @@ class ModelPortfolioBuilder(BaseModule):
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
         vb_level = Proj.vb(vb_level)
         '''Update prediction models' factor model portfolios'''
-        cls.logger.note(f'Update since last update!' , id = indent , vb = vb_level)
+        cls.logger.note(f'Update since last update!' , ind = indent , vb = vb_level)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            cls.logger.stdout(f'model_name is None, build fmps for all prediction models (len={len(models)})' , id = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'model_name is None, build fmps for all prediction models (len={len(models)})' , ind = indent + 1 , vb = vb_level)
         for model in models:
             md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             md.update_fmps(update = update , overwrite = overwrite)

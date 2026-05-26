@@ -311,7 +311,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , id = 1 , vb = 1)
+            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , ind = 1 , vb = 1)
             return True
         return False
 
@@ -336,7 +336,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         # gc.collect()
         self.logger.success(
             f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
-            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , id = 1 , vb = 1)
+            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , ind = 1 , vb = 1)
     
 class FactorPreProcessor(PreProcessor):
     """
