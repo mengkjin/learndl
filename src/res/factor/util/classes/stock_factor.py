@@ -338,7 +338,7 @@ class FactorStats:
                 Logger.error(f'Error concatenating stats: {e}')
                 print(old_stat)
                 print(stat)
-                return
+                raise
         index_names = [key for key in stat.index.names if key is not None]
         if index_names:
             stat = stat.reset_index(drop=False)
