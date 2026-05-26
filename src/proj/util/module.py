@@ -101,26 +101,30 @@ class ModuleLogger:
             return self.module.__class__.__name__
         else:
             return self.module.__name__
-
-    def grep_kwargs(self , ind : int | None = None , vb : int | None = None , **kwargs):
+    @property
+    def vb_level(self) -> int:
         if isinstance(self.module , BaseModule):
-            if vb is not None:
-                kwargs['vb_level'] = kwargs.get('vb_level', self.module.vb_level + vb)
-            if ind is not None:
-                kwargs['indent'] = kwargs.get('indent', self.module.indent + ind)
-            
+            return self.module.vb_level
         else:
-            if vb is not None:
-                kwargs['vb_level'] = kwargs.get('vb_level', vb + 1)
-            if ind is not None:
-                kwargs['indent'] = kwargs.get('indent', ind)
-        kwargs['prefixes'] = [f'{self.name} >>']
+            return BaseModule.GetClassVB()
+    @property
+    def indent(self) -> int:
+        if isinstance(self.module , BaseModule):
+            return self.module.indent
+        else:
+            return BaseModule.GetClassIndent()
+
+    def grep_kwargs(self , ind : int | None = None , vb : int | None = None , no_prefix : bool = False , **kwargs):
+        if vb is not None:
+            kwargs['vb_level'] = kwargs.get('vb_level', self.vb_level + vb)
+        if ind is not None:
+            kwargs['indent'] = kwargs.get('indent', self.indent + ind)
+        if not no_prefix and kwargs.get('indent' , 0) == 0:
+            kwargs['prefixes'] = [f'{self.name} >>' , *kwargs.get('prefixes' , [])]
         return kwargs
 
     def stdout(self , *args , ind : int | None = 0 , vb : int | None = 0 , no_prefix : bool = False , **kwargs):
-        kwargs = self.grep_kwargs(ind, vb, **kwargs)
-        if no_prefix:
-            kwargs.pop('prefixes' , None)
+        kwargs = self.grep_kwargs(ind, vb, no_prefix, **kwargs)
         Logger.stdout(*args , **kwargs)
 
     def stdout_pairs(self , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] ,
@@ -273,21 +277,40 @@ class BaseModule:
         e.g. 'pipeline_hooks' , 'model_start' , 'data_module' , etc.
         """
         return GroupedCachedProperties()
+
+    @classmethod
+    def SetClassVB(cls , vb_level : int | None = None , indent : int | None = None):
+        if vb_level is not None:
+            cls._class_vb_level = Proj.vb(vb_level)
+        if indent is not None:
+            cls._class_indent = indent
     def set_vb(self , vb_level : int | None = None , indent : int | None = None):
         if vb_level is not None:
             self.cached_properties.set('vb_level' , Proj.vb(vb_level))
         if indent is not None:
             self.cached_properties.set('indent' , indent)
+    @classmethod
+    def GetClassVB(cls) -> int:
+        return cls._class_vb_level if hasattr(cls, '_class_vb_level') else 1
+    @classmethod
+    def GetClassIndent(cls) -> int:
+        return cls._class_indent if hasattr(cls, '_class_indent') else 0
     @property
     def vb_level(self) -> int:
-        if not self.cached_properties.has('vb_level'):
-            return getattr(self.binder, 'vb_level' , 0) + 1
-        return self.cached_properties.get('vb_level')
+        if self.cached_properties.has('vb_level'):
+            return self.cached_properties.get('vb_level')
+        elif hasattr(self.binder, 'vb_level'):
+            return getattr(self.binder, 'vb_level') + 1
+        else:
+            return self.GetClassVB() + 1
     @property
     def indent(self) -> int:
-        if not self.cached_properties.has('indent'):
-            return getattr(self.binder, 'indent' , 0) + 1
-        return self.cached_properties.get('indent')
+        if self.cached_properties.has('indent'):
+            return self.cached_properties.get('indent')
+        elif hasattr(self.binder, 'indent'):
+            return getattr(self.binder, 'indent')
+        else:
+            return self.GetClassIndent() + 1
 
     @cached_property
     def instance_logger(self) -> ModuleLogger:

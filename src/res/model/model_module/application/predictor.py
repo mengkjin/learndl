@@ -248,7 +248,7 @@ class ArchivedPredictorModel(BaseModule):
         if len(dates) == 0: 
             return self
         dates = np.array(dates)
-        self.load_data(dates.min())
+        self.load_data(dates.min() , dates.max())
         pred_dates = dates[dates <= max(self.data.test_full_dates)]
         if pred_dates.size == 0: 
             return self
@@ -290,6 +290,9 @@ class ArchivedPredictorModel(BaseModule):
             subdf = subdf.drop(columns='date').set_index(secid_col)
             self.path.save_pred(subdf , date , overwrite , indent = 2 , vb_level = 3)
             self.current_update_dates.append(date)
+        if not self.current_update_dates:
+            print(df)
+            raise ValueError(f'No update dates for {self.path.pred_name}')
         return self
 
     @property
