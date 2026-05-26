@@ -379,23 +379,17 @@ class FactorStatsUpdater(BaseFactorUpdater):
         """factor stats update does not support multiprocessing, always return False"""
         return False
 
+    @cached_property
+    def jobs_multithreading(self) -> int:
+        """factor stats update does not support multithreading, always return True for jobs_multithreading"""
+        return True
+
     def grouped_jobs(self , level : int , level_jobs : BaseUpdateJobList , **kwargs) -> dict[str , BaseUpdateJobList]:
         """group jobs by level and date"""
+        assert not self.groups_multiprocessing , 'factor stats update does not support multiprocessing'
         year_jobs = level_jobs.split_by(split_keys = ['year'])
         ret = {}
-        if len(year_jobs) == 1:
-            (year , ) , jobs = list(year_jobs.items())[0]
-            chunks = _split_one_jobs(jobs , MIN_PROCESS_NUM , **kwargs)
-            for chunk in chunks:
-                chunk_name = f'{self.name}(level={level},year={year},{chunk.name})'
-                ret[chunk_name] = chunk
-        elif len(year_jobs) > 1:
-            chunks = _split_multiple_jobs(year_jobs , MAX_PROCESS_NUM , **kwargs)
-            for ((year_start,) , (year_end,)) , chunk_jobs in chunks.items():
-                if year_start == year_end:
-                    chunk_yearstr = str(year_start)
-                else:
-                    chunk_yearstr = f'{year_start}-{year_end}'
-                chunk_name = f'{self.name}(level={level},year={chunk_yearstr})'
-                ret[chunk_name] = chunk_jobs
+        for (year,) , jobs in year_jobs.items():
+            chunk_jobs = jobs.with_name(f'{self.name}(level={level},year={year})').with_kwargs(**kwargs)
+            ret[chunk_jobs.name] = chunk_jobs
         return ret
