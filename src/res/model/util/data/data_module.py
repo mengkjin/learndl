@@ -76,7 +76,7 @@ class DataModule(BaseModule):
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
         self.datas.load()
-        self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb_level = 'max')
+        self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb = 10)
         
         self.config.update_data_param(self.datas.x)
         
@@ -106,9 +106,9 @@ class DataModule(BaseModule):
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
             self.logger.error(f'dates is not align with calendar dates!')
             if len(np.setdiff1d(dates , calendar_dates)) > 0:
-                self.logger.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}' , ind = 1 , vb = 1)
+                self.logger.alert1(f'dates not in calendar dates: {np.setdiff1d(dates , calendar_dates)}' , idt = 1 , vb = 1)
             if len(np.setdiff1d(calendar_dates , dates)) > 0:
-                self.logger.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}' , ind = 1 , vb = 1)
+                self.logger.alert1(f'calendar dates not in dates: {np.setdiff1d(calendar_dates , dates)}' , idt = 1 , vb = 1)
             if not MACHINE.platform_coding:
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates

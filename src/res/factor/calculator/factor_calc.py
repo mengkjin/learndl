@@ -7,13 +7,12 @@ from importlib import import_module
 from abc import abstractmethod
 from functools import cached_property
 from pathlib import Path
-from typing import Any , Callable , Literal , Type , Generator
-
+from typing import Any , Callable , Literal, Type , Generator
 
 from ..util import StockFactor
 
-from src.proj import Logger , PATH , Proj , CALENDAR , DB , Dates , SingletonABCMeta , Const
-from src.proj.util import parallel
+from src.proj import PATH , CALENDAR , DB , Dates , SingletonABCMeta , Const
+from src.proj.util import parallel , BaseModule
 from src.data import DATAVENDOR
 
 __all__ = [
@@ -244,7 +243,7 @@ class _FactorCalculatorMeta(SingletonABCMeta):
             import_module(module_name)
         cls.definition_imported = True
         
-class FactorCalculator(metaclass=_FactorCalculatorMeta):
+class FactorCalculator(BaseModule , metaclass=_FactorCalculatorMeta):
     """base class of factor calculator"""
     init_date   : int = -1
     final_date  : int = 99991231
@@ -278,8 +277,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     UPDATE_MIN_VALID_COUNT_STRICT : int = 100
     UPDATE_RELAX_DATES : list[int] = []
 
-    def __init__(self , *args , **kwargs):
+    def __init__(self , *args , vb_level : int | None = 3 , indent : int | None = 2 , **kwargs):
         super().__init__(*args , **kwargs)
+        self.set_vb(vb_level , indent)
         self._date : int | None = None
         self._df : pd.DataFrame | None = None
 
@@ -303,7 +303,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
     @abstractmethod
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         """store factor data after calculate"""
         raise NotImplementedError(f'{self.factor_name} calc_and_deploy is not implemented')
 
@@ -317,105 +317,93 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         df = DB.load(self.db_src , self.db_key , date , closest = closest , vb_level = 'never')
         return df
 
-    def eval_factor(self , date : int , indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
+    def eval_factor(self , date : int) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         try:
             df = self.load_factor(date)
         except Exception as e:
-            Logger.error(f'{self.factor_name} at {date} error : {e}')
+            self.logger.error(f'{self.factor_name} at {date} error : {e}')
             df = pd.DataFrame()
         if (df.empty or 
             (self.meta_type == 'market' and 'date' not in df.columns) or 
             (self.meta_type == 'stock' and 'secid' not in df.columns)): 
-            self.calc_and_deploy(date , overwrite = True , indent = indent , vb_level = vb_level)
+            self.calc_and_deploy(date , overwrite = True)
             assert self._df is not None and not self._df.empty , f'factor {self.factor_name} is not calculated at {date}'
             df = self._df
         return df
 
-    def eval_factor_series(self ,  date : int , indent : int = 3 , vb_level : Any = 'never') -> pd.Series:
+    def eval_factor_series(self ,  date : int) -> pd.Series:
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
-        df = self.eval_factor(date , indent = indent , vb_level = vb_level)
+        df = self.eval_factor(date)
         if 'secid' in df.columns:
             return df.set_index('secid').iloc[:,0]
         elif 'date' in df.columns:
             return df.set_index('date').iloc[:,0]
         else:
             raise ValueError(f'factor {self.factor_name} at {date} has no secid or date column')
-
-    @classmethod
-    def Calc(cls , date : int) -> pd.Series | pd.DataFrame:
-        """calculate factor value of a given date"""
-        return cls().calc_factor(date)
     
-    @classmethod
-    def Load(cls , date : int | None , closest = False) -> pd.DataFrame:
-        """load factor value of a given date"""
-        return cls().load_factor(date , closest = closest)
+    def update_day_factor(self , date : int , overwrite = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
+        """update factor data of a given date"""
+        if show_warning and date not in Const.Factor.UPDATE.target_dates:
+            self.logger.alert1(f'{self.factor_string} at {date} is not in CONST.Factor.UPDATE.target_dates')
+        prefix = f'{self.factor_string} at {date}'
+        try:
+            done = self.calc_and_deploy(date , overwrite = overwrite)
+        except catch_errors as e:
+            self.logger.error(f'{prefix} failed: {e}')
+            self.logger.print_exc(e)
+            return False
+        return done
 
-    @classmethod
-    def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
-              fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-              indent : int = 1 , vb_level : Any = 'max'
-        ) -> pd.DataFrame:
-        """load factor values of a given date range""" 
-        df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , indent = indent , vb_level = vb_level)
-        if cls.meta_type == 'stock' and normalize:
-            df = StockFactor.normalize_df(df , fill_method = fill_method)
-        return df
+    def update_periodic_stats(self , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , 
+                              overwrite = False) -> None:
+        """update factor daily or weekly stats"""
+        if dates is None:
+            dates = self.stats_target_dates()[stats_type]
+        elif len(dates) > 0 and not overwrite:
+            dates = np.intersect1d(dates , self.stats_target_dates()[stats_type])
+        if len(dates) == 0:
+            return
+        
+        old_df = DB.load(f'factor_stats_{stats_type}' , self.db_key , vb_level = 'never')
+        new_df = getattr(self.Factor(dates) , f'{stats_type}_stats')()
+        df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
+            sort_values('date').reset_index(drop = True)
+        DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
+        self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
 
-    @classmethod
-    def Eval(cls , date : int) -> pd.DataFrame:
-        """get factor value of a given date , load if exist , calculate if not exist"""
-        return cls().eval_factor(date)
+    def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
+        """update all factor data until date"""
+        dates = self.target_dates(start = start , end = end , overwrite = overwrite)
+        for date in dates:
+            self.update_day_factor(date , overwrite = overwrite , show_warning = False)
 
-    @classmethod
-    def EvalSeries(cls , date : int , indent : int = 3 , vb_level : Any = 'never') -> pd.Series:
-        """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
-        return cls().eval_factor_series(date , indent = indent , vb_level = vb_level)
+    def update_all_stats(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
+        """update all factor stats until date"""
+        target_dates = self.stats_target_dates(start = start , end = end , overwrite = overwrite)
+        for stats_type , dates in target_dates.items():
+            self.update_periodic_stats(stats_type , dates , overwrite = overwrite)
 
-    @classmethod
-    def FactorDates(cls , start : int | None = 20170101 , end : int | None = None , step : int = 1) -> np.ndarray:
-        """get factor dates of a given date range"""
-        possible_dates = np.union1d(cls.factor_calendar , cls.stored_dates())
-        assert step < cls.update_step or step % cls.update_step == 0 , f'step {step} should be a multiple of or less than {cls.update_step}'
-        dates = _slice_dates(possible_dates , start , end)
-        dates = dates[dates <= CALENDAR.updated()]
-        if step > cls.update_step:
-            dates = dates[::int(step/cls.update_step)]
-        else:
-            dates = np.intersect1d(dates , possible_dates)
-        return dates
+    def update_daily_stats(self , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+        """update factor daily stats"""
+        self.update_periodic_stats('daily' , dates , overwrite)
 
-    @classmethod
-    def Factor(cls , dates : np.ndarray | list[int] , normalize = True , 
+    def update_weekly_stats(self , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+        """update factor weekly stats"""
+        self.update_periodic_stats('weekly' , dates , overwrite)
+
+    def stock_factor(self , dates : np.ndarray | list[int] , normalize = True , 
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-               multi_thread = True , ignore_error = True , indent : int = 0 , vb_level : Any = 'max') -> StockFactor:
+               multi_thread = True , ignore_error = True) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
-            return StockFactor(factor_names = [cls.factor_name])
-        calc = cls()
-        func_calls = {date:(calc.eval_factor_series , {'date' : date , 'indent' : indent + 1 , 'vb_level' : Proj.vb(vb_level) + 2}) for date in dates}
+            return StockFactor(factor_names = [self.factor_name])
+        func_calls = {date:(self.eval_factor_series , {'date' : date , 'indent' : self.indent + 1 , 'vb_level' : self.vb_level + 2}) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs)
         if normalize: 
             factor.normalize(fill_method , inplace = True)
         return factor
-
-    @classmethod
-    def FastTest(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , **kwargs) -> StockFactor:
-        """fast test of factor values of a given date range"""
-        dates = cls.FactorDates(start , end , step)
-        factor = cls.Factor(dates , **kwargs)
-        factor.fast_analyze(nday = step)
-        return factor
-
-    @classmethod
-    def FullTest(cls , start : int | None = 20170101 , end : int | None = None , **kwargs):
-        """full test of factor values of a given date range"""
-        from src.res.model.model_module.application import ModelTrainer
-        dates = cls.stored_dates()
-        dates = _slice_dates(dates , start , end)
-        ModelTrainer.test_factor(cls.factor_name , False , start = dates[0] , end = dates[-1] , **kwargs)
 
     @classmethod
     def target_path(cls , date : int | None = None) -> Path:
@@ -468,74 +456,86 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return DB.path(cls.db_src , cls.db_key , date).exists()
 
     @classmethod
+    def Calc(cls , date : int) -> pd.Series | pd.DataFrame:
+        """calculate factor value of a given date"""
+        return cls().calc_factor(date)
+    
+    @classmethod
+    def Load(cls , date : int | None , closest = False) -> pd.DataFrame:
+        """load factor value of a given date"""
+        return cls().load_factor(date , closest = closest)
+
+    @classmethod
+    def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
+              fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        ) -> pd.DataFrame:
+        """load factor values of a given date range""" 
+        df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , vb_level = 'max')
+        if cls.meta_type == 'stock' and normalize:
+            df = StockFactor.normalize_df(df , fill_method = fill_method)
+        return df
+
+    @classmethod
+    def Eval(cls , date : int) -> pd.DataFrame:
+        """get factor value of a given date , load if exist , calculate if not exist"""
+        return cls().eval_factor(date)
+
+    @classmethod
+    def EvalSeries(cls , date : int) -> pd.Series:
+        """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
+        return cls().eval_factor_series(date)
+
+    @classmethod
+    def FactorDates(cls , start : int | None = 20170101 , end : int | None = None , step : int = 1) -> np.ndarray:
+        """get factor dates of a given date range"""
+        possible_dates = np.union1d(cls.factor_calendar , cls.stored_dates())
+        assert step < cls.update_step or step % cls.update_step == 0 , f'step {step} should be a multiple of or less than {cls.update_step}'
+        dates = _slice_dates(possible_dates , start , end)
+        dates = dates[dates <= CALENDAR.updated()]
+        if step > cls.update_step:
+            dates = dates[::int(step/cls.update_step)]
+        else:
+            dates = np.intersect1d(dates , possible_dates)
+        return dates
+
+    @classmethod
+    def Factor(cls , dates : np.ndarray | list[int] , normalize = True , 
+               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+               multi_thread = True , ignore_error = True , indent : int = 1 , vb_level : Any = 'max') -> StockFactor:
+        """get factor values of a given date range , load if exist , calculate if not exist"""
+        calc = cls(indent = indent , vb_level = vb_level)
+        return calc.stock_factor(dates , normalize = normalize , fill_method = fill_method , multi_thread = multi_thread , ignore_error = ignore_error)
+
+    @classmethod
+    def FastTest(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , **kwargs) -> StockFactor:
+        """fast test of factor values of a given date range"""
+        dates = cls.FactorDates(start , end , step)
+        factor = cls.Factor(dates , **kwargs)
+        factor.fast_analyze(nday = step)
+        return factor
+
+    @classmethod
+    def FullTest(cls , start : int | None = 20170101 , end : int | None = None , **kwargs):
+        """full test of factor values of a given date range"""
+        from src.res.model.model_module.application import ModelTrainer
+        dates = cls.stored_dates()
+        dates = _slice_dates(dates , start , end)
+        ModelTrainer.test_factor(cls.factor_name , False , start = dates[0] , end = dates[-1] , **kwargs)
+
+    @classmethod
     def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
         """update factor data and stats of a given date"""
-        cls.update_all_factors(start = start , end = end , overwrite = overwrite , indent = indent , vb_level = vb_level)
-        cls.update_all_stats(start = start , end = end , overwrite = overwrite , indent = indent , vb_level = vb_level)
-
-    @classmethod
-    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
-        """update all factor data until date"""
-        dates = cls.target_dates(start = start , end = end , overwrite = overwrite)
-        calc = cls()
-        for date in dates:
-            calc.update_day_factor(date , overwrite = overwrite , indent = indent , vb_level = vb_level , show_warning = False)
-
-    @classmethod
-    def update_all_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
-        """update all factor stats until date"""
-        target_dates = cls.stats_target_dates(start = start , end = end , overwrite = overwrite)
-        for stats_type , dates in target_dates.items():
-            cls.update_periodic_stats(stats_type , dates , overwrite = overwrite , indent = indent , vb_level = vb_level)
+        calc = cls(indent = indent , vb_level = vb_level)
+        calc.update_all_factors(start = start , end = end , overwrite = overwrite)
+        calc.update_all_stats(start = start , end = end , overwrite = overwrite)
 
     @classmethod
     def recalculate_all(cls , start : int | None = None , end : int | None = None , indent : int = 1 , vb_level : Any = 1) -> None:
-        calc = cls()
+        calc = cls(indent = indent , vb_level = vb_level)
         if isinstance(calc , WeightedPoolingCalculator):
             calc.drop_pooling_weight(after = start , overwrite = True)
-        cls.update_all_factors(start = start , end = end , overwrite = True , indent = indent , vb_level = vb_level)
-        cls.update_all_stats(start = start , end = end , overwrite = True , indent = indent , vb_level = vb_level)
-
-    def update_day_factor(self , date : int , overwrite = False , indent : int = 1 , vb_level : Any = 'max' , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
-        """update factor data of a given date"""
-        if show_warning and date not in Const.Factor.UPDATE.target_dates:
-            Logger.alert1(f'{self.factor_string} at {date} is not in CONST.Factor.UPDATE.target_dates' , indent = indent)
-        prefix = f'{self.factor_string} at {date}'
-        try:
-            done = self.calc_and_deploy(date , overwrite = overwrite , indent = indent , vb_level = vb_level)
-        except catch_errors as e:
-            Logger.error(f'{prefix} failed: {e}')
-            Logger.print_exc(e)
-            return False
-        return done
-
-    @classmethod
-    def update_periodic_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , 
-                              overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
-        """update factor daily or weekly stats"""
-        if dates is None:
-            dates = cls.stats_target_dates()[stats_type]
-        elif len(dates) > 0 and not overwrite:
-            dates = np.intersect1d(dates , cls.stats_target_dates()[stats_type])
-        if len(dates) == 0:
-            return
-        
-        old_df = DB.load(f'factor_stats_{stats_type}' , cls.db_key , vb_level = 'never')
-        new_df = getattr(cls.Factor(dates) , f'{stats_type}_stats')()
-        df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
-            sort_values('date').reset_index(drop = True)
-        DB.save(df , f'factor_stats_{stats_type}' , cls.db_key , vb_level = 'never')
-        Logger.stdout(f'Updated {stats_type} stats of {cls.factor_name} at {Dates(dates)}' , indent = indent , vb_level = vb_level)
-
-    @classmethod
-    def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
-        """update factor daily stats"""
-        cls.update_periodic_stats('daily' , dates , overwrite , indent = indent , vb_level = vb_level)
-
-    @classmethod
-    def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
-        """update factor weekly stats"""
-        cls.update_periodic_stats('weekly' , dates , overwrite , indent = indent , vb_level = vb_level)
+        calc.update_all_factors(start = start , end = end , overwrite = True)
+        calc.update_all_stats(start = start , end = end , overwrite = True)
 
     @classmethod
     def daily_stats(cls) -> pd.DataFrame:
@@ -560,11 +560,10 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
                 dates[stats_type] = df['date'].to_numpy(int)
         return dates
 
-    @classmethod
-    def stats_target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> dict[Literal['daily' , 'weekly'] , np.ndarray]:
+    def stats_target_dates(self , start : int | None = None , end : int | None = None , overwrite = False) -> dict[Literal['daily' , 'weekly'] , np.ndarray]:
         """return dates of factor stats"""
-        factor_stored_dates = cls.stored_dates(start , end)
-        stats_stored_dates = cls.stats_stored_dates()
+        factor_stored_dates = self.stored_dates(start , end)
+        stats_stored_dates = self.stats_stored_dates()
         target_dates = {}
         skip_days = {
             'daily' : 1,
@@ -633,7 +632,7 @@ class StockFactorCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path(self.db_src , self.db_key , date).exists(): 
             return False
@@ -644,7 +643,7 @@ class StockFactorCalculator(FactorCalculator):
         self._df = df
         self._date = date
 
-        return DB.save(df , self.db_src , self.db_key , date , indent = indent , vb_level = vb_level)
+        return DB.save(df , self.db_src , self.db_key , date , indent = self.indent + 1 , vb_level = 'max')
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -682,7 +681,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         """store factor data after calculate"""
         return False
 
@@ -711,10 +710,10 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def loads_from_db(cls , src : str , key : str , dates : np.ndarray | list[int] , col : str | None = None , 
-                      closest = False , indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
+                      closest = False) -> pd.DataFrame:
         if len(dates) == 0:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
-        df = DB.loads(src , key , dates , override_existing_key = True , closest = closest , indent = indent , vb_level = vb_level)
+        df = DB.loads(src , key , dates , override_existing_key = True , closest = closest , vb_level = 'max')
         if df.empty:
             return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         if not col:
@@ -740,14 +739,26 @@ class AffiliateFactorCalculator(FactorCalculator):
                 break
         return df
 
-    def eval_factor(self , date : int , indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
+    def eval_factor(self , date : int) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         return self.load_factor(date)
+
+    def stock_factor(
+        self , dates : np.ndarray | list[int] , normalize = True , 
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        *args , **kwargs) -> StockFactor:
+        """get factor values of a given date range , load if exist , calculate if not exist"""
+        if len(dates) == 0: 
+            return StockFactor(factor_names = [self.factor_name])
+    
+        factor = StockFactor(self.Loads(dates))
+        if normalize: 
+            factor.normalize(fill_method , inplace = True)
+        return factor
 
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-              indent : int = 1 , vb_level : Any = 'max'
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         if len(dates) == 0:
@@ -761,7 +772,7 @@ class AffiliateFactorCalculator(FactorCalculator):
                 dates = np.concatenate([prev_dates[-1:] , dates])
         dfs : list[pd.DataFrame] = []
         for db in cls.full_dbs():
-            df = cls.loads_from_db(**db , dates = dates , closest = False , indent = indent , vb_level = vb_level)
+            df = cls.loads_from_db(**db , dates = dates , closest = False)
             if not df.empty:
                 dfs.append(df)
                 dates = np.setdiff1d(dates , df['date'])
@@ -772,19 +783,6 @@ class AffiliateFactorCalculator(FactorCalculator):
         else:
             df = pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         return df
-
-    @classmethod
-    def Factor(cls , dates : np.ndarray | list[int] , normalize = True , 
-               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-               **kwargs) -> StockFactor:
-        """get factor values of a given date range , load if exist , calculate if not exist"""
-        if len(dates) == 0: 
-            return StockFactor(factor_names = [cls.factor_name])
-    
-        factor = StockFactor(cls.Loads(dates))
-        if normalize: 
-            factor.normalize(fill_method , inplace = True)
-        return factor
 
     @classmethod
     def target_path(cls , date : int | None = None) -> Path:
@@ -836,30 +834,29 @@ class AffiliateFactorCalculator(FactorCalculator):
                 return True
         return False
 
-    @classmethod
-    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
+    def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
         """update all factor data until date"""
         return
 
-    def update_day_factor(self , date : int , overwrite = False , indent : int = 1 , vb_level : Any = 1 , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
+    def update_day_factor(self , date : int , overwrite = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
         return True
 
 class MarketFactorCalculator(FactorCalculator):
     """base class of market factor calculator"""
     @classmethod
-    def recalculate(cls , date : int | None = None , vb_level : Any = 'max') -> bool:
+    def recalculate(cls , date : int | None = None , indent : int = 1 , vb_level : Any = 'max') -> bool:
         """recalculate factor data of a given date"""
         calc_date = CALENDAR.updated() if date is None else int(date)
-        instance = cls()
+        instance = cls(indent = indent , vb_level = vb_level)
         df = instance.calc_history(calc_date)
         df = instance.validate_value(df , calc_date , strict = True)
         return DB.save(df , cls.db_src , cls.db_key , vb_level = vb_level)
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         """store factor data after calculate"""
         if not DB.path(self.db_src , self.db_key).exists():
-            return self.recalculate(date , vb_level = vb_level)
+            return self.recalculate(date)
         
         old_df = DB.load(self.db_src , self.db_key , vb_level = 'never')
         if not overwrite and not old_df.empty and any(old_df['date'] == date):
@@ -869,7 +866,7 @@ class MarketFactorCalculator(FactorCalculator):
         df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
             sort_values('date').reset_index(drop = True)
 
-        return DB.save(df , self.db_src , self.db_key , indent = indent , vb_level = vb_level)
+        return DB.save(df , self.db_src , self.db_key , indent = self.indent + 1 , vb_level = 'max')
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -881,43 +878,38 @@ class MarketFactorCalculator(FactorCalculator):
             raise ValueError(f'factor_value must not have not finite values , but got {np.isfinite(values).sum()} not finite values')
         return df
 
-    @classmethod
-    def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+    def update_daily_stats(self , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
         """update factor daily stats is not implemented for market factor"""
         return None
 
-    @classmethod
-    def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+    def update_weekly_stats(self , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
         """update factor weekly stats is not implemented for market factor"""
         return None
 
-    @classmethod
-    def stats_target_dates(cls , *args , **kwargs) -> dict[str , np.ndarray]:
+    def stats_target_dates(self , *args , **kwargs) -> dict[str , np.ndarray]:
         """return target dates of factor stats"""
         return {
             'daily' : np.array([] , dtype = int),
             'weekly' : np.array([] , dtype = int),
         }
 
+    def stock_factor(self , *args , **kwargs) -> StockFactor:
+        """get factor values of a given date range , load if exist , calculate if not exist"""
+        raise NotImplementedError(f'{self.factor_name} : stock_factor should not be implemented for market factor')
+
     @classmethod
-    def Loads(cls , start : int | None = None , end : int | None = None , closest = False , fillna = False , 
-              fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median' ,
-              indent : int = 1 , vb_level : Any = 'max'
-        ) -> pd.DataFrame:
+    def Loads(
+        cls , start : int | None = None , end : int | None = None , closest = False , fillna = False , 
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median' 
+    ) -> pd.DataFrame:
         """load factor values of a given date range"""
         df = DB.load(cls.db_src , cls.db_key , vb_level = 'never')
         if df.empty:
-            Logger.stdout(f'{cls.factor_name} is empty' , indent = indent , vb_level = vb_level)
             return pd.DataFrame()
         
         if start is not None or end is not None:
             df = df.loc[df['date'].isin(CALENDAR.range(start , end , 'td'))].reset_index(drop = True)
         return df
-
-    @classmethod
-    def Factor(cls , *args , **kwargs) -> StockFactor:
-        """get factor values of a given date range , load if exist , calculate if not exist"""
-        raise NotImplementedError(f'{cls.factor_name} : Factor should not be implemented for market factor')
 
     @classmethod
     def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
@@ -971,7 +963,7 @@ class PoolingCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path(self.db_src , self.db_key , date).exists(): 
             return False
@@ -982,7 +974,7 @@ class PoolingCalculator(FactorCalculator):
         self._df = df
         self._date = date
 
-        return DB.save(df , self.db_src , self.db_key , date , indent = indent , vb_level = vb_level)
+        return DB.save(df , self.db_src , self.db_key , date , indent = self.indent + 1 , vb_level = 'max')
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -1101,78 +1093,71 @@ class WeightedPoolingCalculator(PoolingCalculator):
     """Factor Calculator of meta_type: pooling , category0: pooling , category1: weighted"""
     category1 = 'weighted'
 
-    @classmethod
-    def load_pooling_weight(cls) -> pd.DataFrame:
+    @abstractmethod
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , 
+                            overwrite = False) -> pd.DataFrame:
+        """calculate pooling weight of a given date range"""
+        raise NotImplementedError(f'{self.factor_name} : calc_pooling_weight should not be implemented for weighted pooling')
+
+    def load_pooling_weight(self) -> pd.DataFrame:
         """load pooling weight of a given date"""
-        df = DB.load('pooling_weight' , cls.db_key , vb_level = 'never')
+        df = DB.load('pooling_weight' , self.db_key , vb_level = 'never')
         return df
 
-    @classmethod
-    def drop_pooling_weight(cls , after : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 'max'):
+    def drop_pooling_weight(self , after : int | None = None , overwrite = False):
         """trim pooling weight of a given date range"""
         if not overwrite:
             return
         if after is not None:
-            Logger.alert1(f'Dropping pooling weight of {cls.factor_name} after {after}!', indent = indent)
-            df = cls.load_pooling_weight().query('date < @after')
-            DB.save(df , 'pooling_weight' , cls.db_key , indent = indent , vb_level = vb_level)
+            self.logger.alert1(f'Dropping pooling weight of {self.factor_name} after {after}!', idt = 1)
+            df = self.load_pooling_weight().query('date < @after')
+            DB.save(df , 'pooling_weight' , self.db_key , indent = self.indent , vb_level = self.vb_level)
         else:
-            cls.purge_pooling_weight(confirm = True)
+            self.purge_pooling_weight(confirm = True)
 
-    @classmethod
-    def purge_pooling_weight(cls , confirm : bool = False) -> None:
+    def purge_pooling_weight(self , confirm : bool = False) -> None:
         """purge pooling weight of a given date"""
         if confirm:
-            Logger.alert1(f'Purging pooling weight of {cls.factor_name}!')
-            DB.path('pooling_weight' , cls.db_key).unlink(missing_ok = True)
-
-    @cached_property
-    def loaded_weight(self) -> pd.DataFrame:
-        """loaded pooling weight"""
-        return self.load_pooling_weight()
+            self.logger.alert1(f'Purging pooling weight of {self.factor_name}!')
+            DB.path('pooling_weight' , self.db_key).unlink(missing_ok = True)
 
     def get_pooling_weight(self , date : int) -> pd.DataFrame:
         """get pooling weight of a given date"""
         weight = self.loaded_weight.query('date == @date').set_index('date')
         if weight.empty:
-            Logger.error(f'pooling weight is empty for {date} , has dates: {self.loaded_weight["date"].unique()}')
-            Logger.error(f'Call {self.__class__.__name__}.update_all_pooling_weight(date = {date}) to update pooling weight first')
+            self.logger.error(f'pooling weight is empty for {date} , has dates: {self.loaded_weight["date"].unique()}')
+            self.logger.error(f'Call {self.__class__.__name__}.update_all_pooling_weight(date = {date}) to update pooling weight first')
             raise ValueError(f'pooling weight is empty for {date}')
         return weight
-
-    @abstractmethod
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , 
-                            overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> pd.DataFrame:
-        """calculate pooling weight of a given date range"""
-        raise NotImplementedError(f'{self.factor_name} : calc_pooling_weight should not be implemented for weighted pooling')
-
-    @classmethod
-    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> None:
+    
+    def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
         """update all factor data until date"""
-        dates = cls.target_dates(start = start , end = end , overwrite = overwrite)
-        cls.update_all_pooling_weight(date = end , indent = indent , vb_level = vb_level)
-        calc = cls()
+        dates = self.target_dates(start = start , end = end , overwrite = overwrite)
+        self.update_all_pooling_weight(date = end)
         for date in dates:
-            calc.update_day_factor(date , overwrite = overwrite , indent = indent , vb_level = vb_level , show_warning = False)
+            self.update_day_factor(date , overwrite = overwrite , show_warning = False)
 
-    @classmethod
-    def update_all_pooling_weight(cls , date : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 'max') -> None:
+    def update_all_pooling_weight(self , date : int | None = None , overwrite = False) -> None:
         """update all factor data until date"""
-        calc = cls()
-        target_dates = _slice_dates(calc.update_calendar , 0 , date)
+        target_dates = _slice_dates(self.update_calendar , 0 , date)
         if not overwrite:
-            old_weights = calc.load_pooling_weight()
+            old_weights = self.load_pooling_weight()
             if not old_weights.empty:
                 target_dates = np.setdiff1d(target_dates , old_weights['date'])
         else:
             old_weights = pd.DataFrame()
         if len(target_dates) == 0:
             return
-        new_weight = calc.calc_pooling_weight(dates = target_dates , indent = indent , vb_level = vb_level)
+        new_weight = self.calc_pooling_weight(dates = target_dates)
         if 'date' not in new_weight.columns:
             new_weight = new_weight.reset_index(drop = False)
         weights = pd.concat([old_weights , new_weight]).drop_duplicates(subset = ['date'] , keep = 'last').sort_values('date')
-        DB.save(weights , 'pooling_weight' , calc.db_key , indent = indent , vb_level = vb_level)
+        DB.save(weights , 'pooling_weight' , self.db_key , indent = self.indent , vb_level = self.vb_level)
+
+    @cached_property
+    def loaded_weight(self) -> pd.DataFrame:
+        """loaded pooling weight"""
+        return self.load_pooling_weight()
 
 class NonlinearPoolingCalculator(PoolingCalculator):
     """Factor Calculator of meta_type: pooling , category0: pooling , category1: nonlinear"""

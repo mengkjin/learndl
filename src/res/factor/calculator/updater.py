@@ -4,12 +4,12 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from datetime import datetime
+from datetime import datetime , timedelta
 from functools import cached_property
 from typing import Any , Generator , Literal
 
 from src.proj import CALENDAR , SingletonMeta , Const
-from src.proj.util import parallel , BaseModule
+from src.proj.util import parallel , BaseModule , DiskTTLCache
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
@@ -71,6 +71,10 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         collect FactorCalculator jobs for all factors between start and end date
         """
         self.jobs.clear()
+        record_cache = DiskTTLCache.get('update_progress', f'{self.name}_empty_jobs')
+        if record_cache and record_cache.value:
+            self.logger.skipping(f'There is no {self.name} Jobs to Proceed (refreshed at {record_cache.create_time_str}) ...' , idt = 1 , vb = 1)
+            return
         
         if end is None: 
             end = min(CALENDAR.updated() , Const.Factor.UPDATE.end)
@@ -96,9 +100,10 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         self.jobs.sort_jobs()
 
         if self.jobs:
-            self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , ind = 1 , vb = 1)
+            self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , idt = 1 , vb = 1)
         else:
-            self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , ind = 1 , vb = 1)
+            self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , idt = 1 , vb = 1)
+            DiskTTLCache.put('update_progress' , f'{self.name}_empty_jobs' , True , ttl_hours = 4)
         
     def before_process_jobs(self , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
@@ -106,7 +111,7 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         """before process jobs"""
         for calc in self.calculators(all , selected_factors , **kwargs):
             if isinstance(calc , WeightedPoolingCalculator):
-                calc.drop_pooling_weight(after = start , overwrite = overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 2)
+                calc.drop_pooling_weight(after = start , overwrite = overwrite)
 
     def preview_jobs(self , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
@@ -120,15 +125,15 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         failed_jobs = [job for job in self.jobs if not job.done]
         if failed_jobs:
             if len(failed_jobs) <= 10:
-                self.logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', ind = 1 , vb = 1)
+                self.logger.alert1(f'Remaining Failed Jobs: {failed_jobs}', idt = 1 , vb = 1)
             else:
-                self.logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', ind = 1 , vb = 1)
+                self.logger.alert1(f'Remaining {len(failed_jobs)} Jobs Failed: [{str(failed_jobs[:10])[:-1]},...]', idt = 1 , vb = 1)
         elif len(self.jobs) > 0:
-            self.logger.success(f'All {len(self.jobs)} Jobs are Processed Successfully!' , ind = 1 , vb = 1)
+            self.logger.success(f'All {len(self.jobs)} Jobs are Processed Successfully!' , idt = 1 , vb = 1)
 
     def process_jobs(self , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , timeout : int = -1 , **kwargs) -> None:
+                     overwrite = False , timeout : float = -1 , **kwargs) -> None:
         """
         update update jobs for all factors between start and end date
         default behavior is to collect jobs first to find all FactorCalculators then update one by one
@@ -136,12 +141,12 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         """
         self.collect_jobs(start , end , all , selected_factors , overwrite)
         self.before_process_jobs(start , end , all , selected_factors , overwrite)
-        start_time = datetime.now()
-        remaining_timeout = timeout
+
+        timeout_time = datetime.now() + timedelta(hours=timeout) if timeout > 0 else None
         for level , level_jobs in self.leveled_jobs():
+            remaining_timeout = -1 if timeout_time is None else (timeout_time - datetime.now()).total_seconds() / 3600
             self.process_level_jobs(level , level_jobs , timeout = remaining_timeout)
-            remaining_timeout = (timeout - (datetime.now() - start_time).total_seconds() / 3600)
-            if remaining_timeout <= 0 and timeout > 0:
+            if timeout_time and datetime.now() >= timeout_time:
                 break
         
         self.after_process_jobs()
@@ -165,7 +170,7 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
         level : int , level_jobs : BaseUpdateJobList , 
         timeout : float = -1 , **kwargs
     ) -> None:
-        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , ind = 2 , vb = 2)
+        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , idt = 2 , vb = 2)
         assert not self.groups_multiprocessing or not self.jobs_multithreading , 'groups_multiprocessing and multithreading cannot be used together'
         group_kwargs = {
             'multithreading' : self.jobs_multithreading ,
@@ -188,9 +193,13 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
                 group_jobs[name].apply_report(report)
             level_jobs.regenerate_jobs()
         else:
+            timeout_time = datetime.now() + timedelta(hours=timeout) if timeout > 0 else None
             for chunk in group_jobs.values():
-                self.logger.stdout(f'Updating {chunk.name} : ' + (f'{len(chunk)} factors' if len(chunk) > 10 else str(chunk)) , ind = 3 , vb = 4)
-                chunk.process(timeout = timeout)
+                self.logger.stdout(f'Updating {chunk.name} : ' + (f'{len(chunk)} factors' if len(chunk) > 10 else str(chunk)) , idt = 3 , vb = 4)
+                remaining_timeout = -1 if timeout_time is None else (timeout_time - datetime.now()).total_seconds() / 3600
+                chunk.process(timeout = remaining_timeout)
+                if timeout_time and datetime.now() >= timeout_time:
+                    break
 
     @classmethod
     def update(cls , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:

@@ -209,15 +209,15 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         if start > end:
             return DataBlock()
 
-        with self.logger.timer(f'[{self.key}] blocks loading' , indent = 1 , vb = 3 , enter_vb = 4):
+        with self.logger.timer(f'[{self.key}] blocks loading' , idt = 1 , vb = 3 , enter_vb = 4):
             load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
             block_dict = self.load_blocks(load_start, end, secid = secid)
 
-        with self.logger.timer(f'[{self.key}] blocks process' , indent = 1 , vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks process' , idt = 1 , vb = 3):
             block = self.process_blocks(block_dict)
             block = block.slice_date(start , end)
 
-        with self.logger.timer(f'[{self.key}] blocks masking' , indent = 1 , vb = 3):   
+        with self.logger.timer(f'[{self.key}] blocks masking' , idt = 1 , vb = 3):   
             block = block.mask_values(mask = self.mask)
             
         return block
@@ -238,7 +238,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         """Save the block as a preprocessed dump if ``enable_saving`` is True."""
         if not self.enable_saving:
             return
-        with self.logger.timer(f'[{self.key}] blocks dumping' , indent = 2 , vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks dumping' , idt = 2 , vb = 3):
             block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
 
     def dump_exists(self) -> bool:
@@ -249,7 +249,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.type != 'fit' or not self.enable_saving:
             return
-        with self.logger.timer(f'[{self.key}] blocks norming' , indent = 2 , vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks norming' , idt = 2 , vb = 3):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None) -> DataBlock:
@@ -311,7 +311,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , ind = 1 , vb = 1)
+            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , vb = 1)
             return True
         return False
 
@@ -336,7 +336,7 @@ class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
         # gc.collect()
         self.logger.success(
             f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
-            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , ind = 1 , vb = 1)
+            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , idt = 1 , vb = 1)
     
 class FactorPreProcessor(PreProcessor):
     """

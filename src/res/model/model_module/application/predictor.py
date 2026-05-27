@@ -19,18 +19,18 @@ class ArchivedPredictorModel(BaseModule):
     DATE_COLS  : ClassVar[str] = 'date'
 
     @overload
-    def __init__(self , predictor_path : PredictorPath , / , * , indent : int = 1 , vb_level : Any = 1):
+    def __init__(self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1):
         """Initialize from a PredictorPath object"""
     @overload
     def __init__(self , model_input : strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
-        submodel : str = 'best' ,
-        pred_name : str | None = None , * , indent : int = 1 , vb_level : Any = 1):
+        submodel : str = 'best' , pred_name : str | None = None , / , 
+        indent : int = 0 , vb_level : Any = 1):
         """Initialize from a model input, and convert to PredictorPath object"""
     def __init__(self , model_input : strPath | None | Any | PredictorPath, 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
-        submodel : str | None = 'best' , pred_name : str | None = None , * , 
-        indent : int = 1 , vb_level : Any = 1):
+        submodel : str | None = 'best' , pred_name : str | None = None , / , 
+        indent : int = 0 , vb_level : Any = 1):
         self.set_vb(vb_level , indent)
         if isinstance(model_input , PredictorPath):
             self.path = model_input
@@ -286,7 +286,7 @@ class ArchivedPredictorModel(BaseModule):
             return self
         for date , subdf in df.groupby(date_col):
             subdf = subdf.drop(columns='date').set_index(secid_col)
-            self.path.save_pred(subdf , date , overwrite , indent = 2 , vb_level = 3)
+            self.path.save_pred(subdf , date , overwrite , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             self.current_update_dates.append(date)
         if not self.current_update_dates:
             print(df)
@@ -339,12 +339,13 @@ class ArchivedPredictorModel(BaseModule):
     @classmethod
     def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        cls.logger.note('Update since last update!' , ind = indent , vb = vb_level)
+        cls.SetClassVB(vb_level , indent)
+        cls.logger.note('Update since last update!')
         if start is not None or end is not None:
-            cls.logger.stdout(f'Update from {start} to {end}' , ind = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'Update from {start} to {end}' , idt = 1)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , ind = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , idt = 1)
         for model in models:
             md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             md.update_preds(update = True , overwrite = False , start = start , end = end)
@@ -362,14 +363,15 @@ class ArchivedPredictorModel(BaseModule):
     @classmethod
     def recalculate(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
         """Recalculate all model predictions"""
-        cls.logger.note('Recalculate All!' , ind = indent , vb = vb_level)
+        cls.SetClassVB(vb_level , indent)
+        cls.logger.note('Recalculate All!')
         if start is not None or end is not None:
-            cls.logger.stdout(f'Recalculate from {start} to {end}' , ind = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'Recalculate from {start} to {end}' , idt = 1)
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
-            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , ind = indent + 1 , vb = vb_level)
+            cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , idt = 1)
         for model in models:
-            md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
+            md = cls(model)
             md.update_preds(update = False , overwrite = True , start = start , end = end)
             if md.current_update_dates:
                 md.logger.success(f'Finish recalculating model prediction for {model} , len={len(md.current_update_dates)}')

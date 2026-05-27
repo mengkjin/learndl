@@ -224,7 +224,7 @@ class PredRecorder(TrainerPipeline):
             return
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
-        self.logger.display(df , caption = purge_info , vb_level = self.vb_level)
+        self.logger.display(df , caption = purge_info)
         for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
             df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
             Path(path).unlink()
@@ -409,7 +409,7 @@ class PredRecorder(TrainerPipeline):
             self.setup_resuming_status()
             self.has_purged_preds = False
         if self.resume_info:
-            self.logger.stdout(f'Resume testing {self.resume_info}' , ind = 1)
+            self.logger.stdout(f'Resume testing {self.resume_info}' , idt = 1)
     
     def on_test_batch_end(self): 
         self.append_batch_preds()

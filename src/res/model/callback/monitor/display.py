@@ -36,7 +36,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(10)
             if not df.empty:
-                self.logger.display(df , caption = 'Table: Callback Time Costs:' , vb_level = self.vb_level)  
+                self.logger.display(df , caption = 'Table: Callback Time Costs:')  
             
 class StatusDisplay(BaseCallBack):
     '''Display Epoch and Event Information'''
@@ -63,7 +63,7 @@ class StatusDisplay(BaseCallBack):
         if not self.display_progress:
             return
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
-            self.logger.stdout(self.texts.progress , no_prefix = True , indent = 0)
+            self.logger.stdout(self.texts.progress , no_prefix = True)
         else:
             self.logger.log_only(self.texts.progress)
 
@@ -72,8 +72,8 @@ class StatusDisplay(BaseCallBack):
     
     def on_fit_epoch_end(self):
         for event in self.status.current.events: 
-            if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
-                self.logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , vb_level = max(event.vb_level , self.vb_level) , no_prefix = True , indent = 0)
+            if Proj.verbose(event.vb_level) and (Proj.vb.is_max_level or self.status.total_models <= self.config.model_num):
+                self.logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , no_prefix = True)
             else:
                 self.logger.log_only(f'Epoch Event : {event.info}')
     
@@ -121,7 +121,7 @@ class StatusDisplay(BaseCallBack):
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
             self.logger.stdout(dump_info , color = 'cyan')
         else:
-            self.logger.log_only(dump_info , vb_level = self.vb_level)
+            self.logger.log_only(dump_info)
 
     def on_test_batch_end(self):         
         if self.dataloader_info: 

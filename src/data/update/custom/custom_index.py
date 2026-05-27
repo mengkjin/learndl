@@ -159,14 +159,14 @@ class CustomIndexUpdater(BasicCustomUpdater):
         for custom_index in custom_indices:
             target_dates = custom_index.target_dates(update_type , rollback_date = self._rollback_date , start = self.START_DATE)
             if len(target_dates) == 0:
-                self.logger.skipping(f'{custom_index.index_name} is up to date' , indent = 2 , vb_level = 2)
+                self.logger.skipping(f'{custom_index.index_name} is up to date' , idt = 2 , vb = 1)
                 continue
             custom_index.update_dates(target_dates , indent = self.indent + 2 , vb_level = self.vb_level + 2)
             total_dates.extend(target_dates.tolist())
         if len(total_dates) == 0:
-            self.logger.skipping(f'All custom indices are up to date' , indent = 1 , vb_level = 1)
+            self.logger.skipping(f'All custom indices are up to date' , idt = 1)
         else:
-            self.logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , indent = 1 , vb_level = 1)
+            self.logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int):
         for custom_index in CustomIndex.iter_custom_indices():

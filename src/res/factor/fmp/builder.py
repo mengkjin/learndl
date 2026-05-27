@@ -6,7 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration , Dates
+from src.proj import Duration, Dates, Proj
 from src.proj.core import strPath
 from src.proj.util import BaseModule
 
@@ -137,7 +137,8 @@ class PortfolioBuilder(BaseModule):
             dates = port.port_date[(port.port_date >= start) & (port.port_date <= end) & (port.port_date < self.min_alpha_date)]
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
-            self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}' , vb_level = 'max')
+            if Proj.vb.is_max_level:
+                self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}')
         return self
 
     def save_portfolio(self , append = False):
@@ -372,13 +373,13 @@ class PortfolioGroupBuilder(BaseModule):
         msg = (
             f'Building of {opt_count:4d}th [{builder.portfolio.name:{self.port_name_nchar}s}]'
             f' Finished at {date} , time costs (ms) {time_cost_str}')
-        self.logger.stdout(msg , ind = 1 , vb = 3)
+        self.logger.stdout(msg , idt = 1 , vb = 3)
         return self
     
     def accounting(self):
         with self.logger.timer('accounting' , enter_vb=1):
             for builder in self.builders:
-                with self.logger.timer(f'{builder.portfolio.name}.accounting' , indent=1 , vb=1 , enter_vb=2):
+                with self.logger.timer(f'{builder.portfolio.name}.accounting' , idt=1 , vb=1 , enter_vb=2):
                     builder.accounting(self.start , self.end , **self.acc_kwargs)
         self.accounted = True
         return self

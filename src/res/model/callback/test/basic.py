@@ -46,7 +46,7 @@ class BasicTestResult(BaseCallBack):
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         
         AsyncSaver.df(df , self.path_test_df , copy_for_safety = False , overwrite = True , vb_level = 'never')
-        self.logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb_level = self.vb_level + 1) 
+        self.logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb = 1) 
 
         return df
 
@@ -96,7 +96,7 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            self.logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:' , vb_level = self.vb_level)
+            self.logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:')
             
             # export excel
             rslt = {'test_summary' : test_summary , 'test_by_model' : df_model}

@@ -7,6 +7,7 @@ from .module import *
 from .catcher import (
     IOCatcher , LogWriter , WarningCatcher ,
     MPOutputCatcher , HtmlCatcher , MarkdownCatcher , CrashProtectorCatcher)
+from .disk_ttl_cache import DiskTTLCache, DiskTTLCacheEntry
 from .shared_sync import SharedSync
 from .emailer import Email
 from .device import Device , MemoryPrinter

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from src.proj import PATH , Logger
+from src.proj import PATH
+from src.proj.util import BaseModule
 from typing import Callable , TypeAlias
 
 __all__ = ['ModelConfigModifier' , 'ModelConfigsBatchModifier']
 
 DictLoader : TypeAlias = Callable[[] , dict] | dict
 
-class ModelConfigModifier:
+class ModelConfigModifier(BaseModule):
     @classmethod
     def rename_ResetOptimizer(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith('.model'):
@@ -24,18 +25,18 @@ class ModelConfigModifier:
         }
         if old_name in config:
             value = config.pop(old_name)
-            Logger.success(f'{key}.{old_name} has been removed')
+            cls.logger.success(f'{key}.{old_name} has been removed')
         else:
             value = default_value
         if new_name not in config:
             config[new_name] = value
-            Logger.success(f'{key}.{new_name} has been added')
+            cls.logger.success(f'{key}.{new_name} has been added')
 
         for name in list(config.keys()):
             if 'ResetOptimizer' in name:
                 new_name = name.replace('ResetOptimizer' , 'LearnRateReset')
                 config[new_name] = config.pop(name)
-                Logger.success(f'{key}.{name} has been renamed to {new_name}')
+                cls.logger.success(f'{key}.{name} has been renamed to {new_name}')
         return config
 
     @classmethod
@@ -46,7 +47,7 @@ class ModelConfigModifier:
             config = config()
         if 'LearnRateReset' not in config['train.callbacks']:
             config['train.callbacks'].append('LearnRateReset')
-            Logger.success(f'{key}.train.callbacks lacks LearnRateReset , added')
+            cls.logger.success(f'{key}.train.callbacks lacks LearnRateReset , added')
         return config
 
     @classmethod
@@ -61,7 +62,7 @@ class ModelConfigModifier:
             if 'lamb' in loss_kwargs:
                 assert 'alpha' not in loss_kwargs, f'{loss_name} already has alpha key : {loss_kwargs}'
                 config['train.criterion.loss'][loss_name]['alpha'] = loss_kwargs.pop('lamb')
-                Logger.success(f'{key}.train.criterion.loss.{loss_name} has lamb key , renamed to alpha')
+                cls.logger.success(f'{key}.train.criterion.loss.{loss_name} has lamb key , renamed to alpha')
         return config
 
     @classmethod
@@ -75,7 +76,7 @@ class ModelConfigModifier:
                 param = config[key]
                 if 'eps' in param:
                     param.pop('eps')
-                    Logger.success(f'{key}.{param} has eps key , removed')
+                    cls.logger.success(f'{key}.{param} has eps key , removed')
         return config
 
     @classmethod
@@ -95,19 +96,19 @@ class ModelConfigModifier:
         }
         if old_name in config:
             value = config.pop(old_name)
-            Logger.success(f'{key}.{old_name} has been removed')
+            cls.logger.success(f'{key}.{old_name} has been removed')
         else:
             value = default_value
         if new_name not in config:
             config[new_name] = value
-            Logger.success(f'{key}.{new_name} has been added')
+            cls.logger.success(f'{key}.{new_name} has been added')
 
         if 'BadAttemptRetrain' not in config['train.callbacks']:
             config['train.callbacks'].append('BadAttemptRetrain')
-            Logger.success(f'{key}.train.callbacks lacks BadAttemptRetrain , added')
+            cls.logger.success(f'{key}.train.callbacks lacks BadAttemptRetrain , added')
         if 'EarlyExitRetrain' in config['train.callbacks']:
             config['train.callbacks'].remove('EarlyExitRetrain')
-            Logger.success(f'{key}.train.callbacks has EarlyExitRetrain , removed')
+            cls.logger.success(f'{key}.train.callbacks has EarlyExitRetrain , removed')
         return config
 
     @classmethod
@@ -126,7 +127,7 @@ class ModelConfigModifier:
         }
         if new_name in config and not all(key in config[new_name] for key in default_value):
             config[new_name] = default_value
-            Logger.success(f'{key}.{new_name} has been updated')
+            cls.logger.success(f'{key}.{new_name} has been updated')
         return config
 
     @classmethod
@@ -143,7 +144,7 @@ class ModelConfigModifier:
         }
         if new_name in config and not all(key in config[new_name] for key in default_value):
             config[new_name] = default_value
-            Logger.success(f'{key}.{new_name} has been updated')
+            cls.logger.success(f'{key}.{new_name} has been updated')
         return config
     
     @classmethod
@@ -155,11 +156,11 @@ class ModelConfigModifier:
         old_name = 'callbacks.NanLossRetrain'
         if old_name in config:
             config.pop(old_name)
-            Logger.success(f'{key}.{old_name} has been removed')
+            cls.logger.success(f'{key}.{old_name} has been removed')
          
         if 'NanLossRetrain' in config['train.callbacks']:
             config['train.callbacks'].remove('NanLossRetrain')
-            Logger.success(f'{key}.train.callbacks has NanLossRetrain , removed')
+            cls.logger.success(f'{key}.train.callbacks has NanLossRetrain , removed')
         return config
 
     @classmethod
@@ -173,10 +174,10 @@ class ModelConfigModifier:
         for old_name in old_names:
             if f'callbacks.{old_name}' in config:
                 config.pop(f'callbacks.{old_name}')
-                Logger.success(f'{key}.callbacks.{old_name} has been removed')
+                cls.logger.success(f'{key}.callbacks.{old_name} has been removed')
             if old_name in config['train.callbacks']:
                 config['train.callbacks'].remove(old_name)
-                Logger.success(f'{key}.train.callbacks has {old_name} , removed')
+                cls.logger.success(f'{key}.train.callbacks has {old_name} , removed')
         return config
 
     @classmethod
@@ -192,18 +193,18 @@ class ModelConfigModifier:
         }
         if old_name in config:
             value = config.pop(old_name)
-            Logger.success(f'{key}.{old_name} has been removed')
+            cls.logger.success(f'{key}.{old_name} has been removed')
         else:
             value = default_value
         if new_name not in config:
             config[new_name] = value
-            Logger.success(f'{key}.{new_name} has been added')
+            cls.logger.success(f'{key}.{new_name} has been added')
 
         for name in list(config.keys()):
             if 'CudaEmptyCache' in name:
                 new_name = name.replace('CudaEmptyCache' , 'MemoryOptimization')
                 config[new_name] = config.pop(name)
-                Logger.success(f'{key}.{name} has been renamed to {new_name}')
+                cls.logger.success(f'{key}.{name} has been renamed to {new_name}')
         return config
 
 class ModelConfigsBatchModifier:

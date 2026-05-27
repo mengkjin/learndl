@@ -5,7 +5,7 @@ import multiprocessing as mp
 from multiprocessing.context import BaseContext
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from datetime import datetime
+from datetime import datetime , timedelta
 from typing import Any , Callable , Literal , Mapping , Iterable , TypeVar
 from uuid import uuid4
 
@@ -75,13 +75,11 @@ def parallel(
     method = get_method(method if len(func_calls) > 1 else 0 , max_workers)
     
     if method == 0:
-        remaining_timeout = timeout * 3600
-        start_time = datetime.now()
+        timeout_time = datetime.now() + timedelta(hours=timeout) if timeout > 0 else None
         for func_call in func_calls:
             func_call()
-            remaining_timeout = remaining_timeout - (datetime.now() - start_time).total_seconds()
-            if remaining_timeout <= 0 and timeout > 0:
-                Logger.alert1(f'Timeout reached, {timeout} hours passed, stopping parallel', indent = indent)
+            if timeout_time and datetime.now() >= timeout_time:
+                Logger.alert1(f'Timeout reached, {timeout} hours passed, stopping the loop  ', indent = indent)
                 break
     elif method == 1:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:

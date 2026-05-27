@@ -335,7 +335,7 @@ class BaseTrainer(BasePipeline):
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         else:
             iter_info += f'{num_all_models} to go!'
-        self.logger.note(iter_info , vb_level = 1)
+        self.logger.note(iter_info , vb = 1)
         return model_iter
 
     def iter_model_submodels_on_save(self):

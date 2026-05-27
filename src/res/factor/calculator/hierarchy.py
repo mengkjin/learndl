@@ -2,27 +2,28 @@ import pandas as pd
 
 from itertools import combinations
 from pathlib import Path
-from typing import Generator , Iterator , Type , Literal , Any
+from typing import Generator , Iterator , Type , Literal
 
 from .factor_calc import FactorCalculator
 
-from src.proj import PATH , MACHINE , Logger
-from src.proj.util import parallel
+from src.proj import PATH , MACHINE
+from src.proj.util import parallel , BaseModule
 
-class StockFactorHierarchy:
+class StockFactorHierarchy(BaseModule):
     '''hierarchy of factor classes'''
     assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
     _instance = None
     pool = FactorCalculator.registry
 
-    def __new__(cls):
+    def __new__(cls , *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self , * , vb_level : int | None = 1 , indent : int | None = 0):
         if getattr(self, '_inited', False):
             return
+        self.set_vb(vb_level , indent)
         self.initialize()
         self._inited = True
         
@@ -58,16 +59,21 @@ class StockFactorHierarchy:
         else:
             df = pd.DataFrame()
         return df
+
+    @classmethod
+    def factor_table_path(cls) -> Path:
+        '''return the factor table cache'''
+        return PATH.local_share.joinpath('factor_list.csv')
     
     @classmethod
     def export_factor_table(cls) -> Path:
         '''export factor list to csv'''
         if MACHINE.updatable:
             df = cls.full_factor_table()
-            df.to_csv(PATH.local_share.joinpath('factor_list.csv') , index = False)
+            df.to_csv(cls.factor_table_path() , index = False)
             if PATH.share_folder is not None:
                 df.to_csv(PATH.share_folder.joinpath('factor_list.csv') , index = False)
-        return PATH.local_share.joinpath('factor_list.csv')
+        return cls.factor_table_path()
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:
@@ -170,7 +176,7 @@ class StockFactorHierarchy:
         return cls().pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
-                              multi_thread = True , ignore_error = True , vb_level : Any = 1 , **kwargs) -> dict[str , pd.Series]:
+                              multi_thread = True , ignore_error = True , **kwargs) -> dict[str , pd.Series]:
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
@@ -187,7 +193,7 @@ class StockFactorHierarchy:
                 factor_value = factor_value.iloc[:,0]
             valid_ratio = len(factor_value.dropna()) / len(factor_value)
             if valid_ratio < 0.3: 
-                Logger.stdout(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}' , vb_level = vb_level)
+                self.logger.stdout(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
             return factor_value
 
         kwargs = kwargs
@@ -207,9 +213,9 @@ class StockFactorHierarchy:
                 if std <= 1e-4 or abs(box) <= 1e-4: 
                     abnormal_vars[fn] = {'std':std , 'box':box}
             if len(abnormal_vars) == 0: 
-                Logger.stdout('no abnormal factor variation')
+                self.logger.stdout('no abnormal factor variation')
             else:
-                Logger.stdout(f'abnormal factor variation: {abnormal_vars}')
+                self.logger.stdout(f'abnormal factor variation: {abnormal_vars}')
 
         if check_duplicates and len(factor_values) <= 100:
             abnormal_diffs = {}
@@ -222,9 +228,9 @@ class StockFactorHierarchy:
                 if diff <= 0.01 or abs(corr) >= 0.999: 
                     abnormal_diffs[f'{fn1}.{fn2}'] = {'diff_std':diff , 'corr' : corr}
             if len(abnormal_diffs) == 0: 
-                Logger.stdout('no abnormal factor diffs')
+                self.logger.stdout('no abnormal factor diffs')
             else:
-                Logger.stdout(f'abnormal factor diffs: {abnormal_diffs}')
+                self.logger.stdout(f'abnormal factor diffs: {abnormal_diffs}')
         return factor_values
 
     

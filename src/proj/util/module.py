@@ -114,17 +114,19 @@ class ModuleLogger:
         else:
             return BaseModule.GetClassIndent()
 
-    def grep_kwargs(self , ind : int | None = None , vb : int | None = None , no_prefix : bool = False , **kwargs):
-        if vb is not None:
-            kwargs['vb_level'] = kwargs.get('vb_level', self.vb_level + vb)
-        if ind is not None:
-            kwargs['indent'] = kwargs.get('indent', self.indent + ind)
+    def grep_kwargs(self , vb : int | None = None , idt : int | None = None , enter_vb : int | None = None , no_prefix : bool = False , **kwargs):
+        if vb is not None and 'vb_level' not in kwargs:
+            kwargs['vb_level'] = self.vb_level + vb
+        if idt is not None and 'indent' not in kwargs:
+            kwargs['indent'] = self.indent + idt
+        if enter_vb is not None and 'enter_vb_level' not in kwargs:
+            kwargs['enter_vb_level'] = self.vb_level + enter_vb
         if not no_prefix and kwargs.get('indent' , 0) == 0:
             kwargs['prefixes'] = [f'{self.name} >>' , *kwargs.get('prefixes' , [])]
         return kwargs
 
-    def stdout(self , *args , ind : int | None = 0 , vb : int | None = 0 , no_prefix : bool = False , **kwargs):
-        kwargs = self.grep_kwargs(ind, vb, no_prefix, **kwargs)
+    def stdout(self , *args , idt : int | None = 0 , vb : int | None = 0 , no_prefix : bool = False , **kwargs):
+        kwargs = self.grep_kwargs(vb, idt, no_prefix = no_prefix, **kwargs)
         Logger.stdout(*args , **kwargs)
 
     def stdout_pairs(self , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] ,
@@ -138,65 +140,65 @@ class ModuleLogger:
         """
         Logger.stdout_pairs(pair_list , title = title , indent = indent , vb_level = vb_level , min_key_len = min_key_len , **kwargs)
 
-    def caption(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def caption(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom gray stdout message for caption (e.g. table / figure title)"""
-        Logger.caption(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.caption(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def footnote(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def footnote(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        Logger.footnote(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.footnote(*args , **self.grep_kwargs(vb, idt, **kwargs))
         
-    def success(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def success(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom green stdout message for success"""
-        Logger.success(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.success(*args , **self.grep_kwargs(vb, idt, **kwargs))
     
-    def skipping(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def skipping(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom skipping message"""
-        Logger.skipping(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.skipping(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def alert1(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def alert1(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom stdout message with lightyellow for alert"""
-        Logger.alert1(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.alert1(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def alert2(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def alert2(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom stdout message with lightred for alert"""
-        Logger.alert2(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.alert2(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def alert3(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def alert3(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom stdout message with lightpurple for alert"""
-        Logger.alert3(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.alert3(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def note(self , *args , ind : int | None = 0 , vb : int | None = 0 , **kwargs):
+    def note(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom lightblue stdout message for remark"""
-        Logger.note(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.note(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def remark(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def remark(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """custom lightblue stderr"""
-        Logger.remark(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.remark(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def debug(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def debug(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """Debug level stderr"""
-        Logger.debug(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.debug(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def info(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def info(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """Info level stderr"""
-        Logger.info(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.info(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def highlight(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def highlight(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        Logger.highlight(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.highlight(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def warning(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def warning(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """Warning level stderr"""
-        Logger.warning(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.warning(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def error(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def error(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """Error level stderr"""
-        Logger.error(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.error(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def critical(self , *args , ind : int | None = None , vb : int | None = None , **kwargs):
+    def critical(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
         """Critical level stderr"""
-        Logger.critical(*args , **self.grep_kwargs(ind, vb, **kwargs))
+        Logger.critical(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
     def only_once(self , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
@@ -206,8 +208,9 @@ class ModuleLogger:
         """dump to log writer with no display"""
         Logger.log_only(*args , **kwargs)
 
-    def divider(self , *args , **kwargs):
+    def divider(self , *args , vb : int = 0 , **kwargs):
         """Divider mesge , use stdout"""
+        kwargs = self.grep_kwargs(vb, **kwargs)
         Logger.divider(*args , **kwargs)
 
     def conclude(self , *args : str , **kwargs):
@@ -230,22 +233,23 @@ class ModuleLogger:
         """Print the exception stack"""
         return Logger.print_traceback_stack(color = color , bold = bold)
 
-    def display(self , obj , caption : str | None = None , vb_level : Any = 1 , **kwargs):
+    def display(self , obj , caption : str | None = None , vb : int = 0 , **kwargs):
         """
         display the object
         """
-        Logger.display(obj , caption = caption , vb_level = vb_level , **kwargs)
+        kwargs = self.grep_kwargs(vb, no_prefix = True, **kwargs)
+        Logger.display(obj , caption = caption , **kwargs)
 
-    def timer(self , key : str , vb : int = 0 , indent : int = 0 , enter_vb : int | None = None , **kwargs):
-        kwargs = self.grep_kwargs(indent, vb, **kwargs)
-        kwargs.pop('prefixes' , None)
-        kwargs['enter_vb_level'] = 'max' if enter_vb is None else enter_vb
+    def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):
+        kwargs = self.grep_kwargs(vb, idt, enter_vb, no_prefix = True, **kwargs)
         kwargs['timer_prefix'] = False
-        return Logger.Timer(f'{self.name} Timer({key})' , **kwargs)
+        return Logger.Timer(f'{self.name}.{key} Timer' , **kwargs)
 
-    def paragraph(self , *args , **kwargs):
+    def paragraph(self , *args , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):
         """create a paragraph context manager"""
+        kwargs = self.grep_kwargs(vb, idt, enter_vb, no_prefix = True, **kwargs)
         return Logger.Paragraph(*args , **kwargs)
+
 class ModuleLoggerGetter:
     def __get__(self, instance : BaseModule | None, owner : Type[BaseModule]) -> ModuleLogger:
         if instance is None:
@@ -254,7 +258,7 @@ class ModuleLoggerGetter:
                 setattr(owner, '_cls_logger', logger)
             return getattr(owner, '_cls_logger')
         else:
-            return instance.instance_logger
+            return instance._self_logger
 
 class BaseModule:
     """
@@ -313,5 +317,5 @@ class BaseModule:
             return self.GetClassIndent() + 1
 
     @cached_property
-    def instance_logger(self) -> ModuleLogger:
+    def _self_logger(self) -> ModuleLogger:
         return ModuleLogger(self)

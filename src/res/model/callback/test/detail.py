@@ -93,46 +93,45 @@ class DetailedAlphaAnalysis(BaseCallBack):
         else:
             raise ValueError(f'Invalid resuming test fmp option: {Const.Model.resume_fmp}')
 
-
-    def factor_test(self , indent : int = 0):
+    def factor_test(self):
         with self.logger.paragraph('Factor Perf Test' , 3):
-            with self.logger.timer(f'FactorPerfTest.get_factor' , indent = indent):
+            with self.logger.timer(f'FactorPerfTest.get_factor'):
                 factor = self.get_factor_for_factor_test()
-            with self.logger.timer(f'FactorPerfTest.load_day_rets' , indent = indent):
+            with self.logger.timer(f'FactorPerfTest.load_day_rets'):
                 factor.day_returns()
-            with self.logger.timer(f'FactorPerfTest.within_benchmarks' , indent = indent):
+            with self.logger.timer(f'FactorPerfTest.within_benchmarks'):
                 factor.within_benchmarks()
 
             for task in self.factor_tasks:
-                self.logger.divider(vb_level = self.vb_level)
+                self.logger.divider()
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
                                                  start = self.trainer.config.beg_date , end = self.trainer.config.end_date ,
-                                                 indent = indent , vb_level = self.vb_level,
+                                                 indent = self.indent , vb_level = self.vb_level,
                                                  title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
-    def fmp_test(self , indent : int = 0):
+    def fmp_test(self):
         with self.logger.paragraph('Factor FMP Test' , 3):
-            with self.logger.timer(f'FactorFMPTest.get_factor' , indent = indent):
+            with self.logger.timer(f'FactorFMPTest.get_factor'):
                 factor = self.get_factor_for_fmp_test()
-            with self.logger.timer(f'FactorFMPTest.load_alpha_models' , indent = indent):
+            with self.logger.timer(f'FactorFMPTest.load_alpha_models'):
                 factor.alpha_models()
-            with self.logger.timer(f'FactorFMPTest.load_risk_models' , indent = indent):
+            with self.logger.timer(f'FactorFMPTest.load_risk_models'):
                 factor.risk_model()
-            with self.logger.timer(f'FactorFMPTest.load_universe' , indent = indent):
+            with self.logger.timer(f'FactorFMPTest.load_universe'):
                 factor.universe(load = True)
-            with self.logger.timer(f'FactorFMPTest.load_day_quotes' , indent = indent):
+            with self.logger.timer(f'FactorFMPTest.load_day_quotes'):
                 factor.day_quotes()
 
             for task in self.fmp_tasks:
-                self.logger.divider(vb_level = self.vb_level)
+                self.logger.divider()
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
                                                  resume = self.config.is_resuming , save_resumable = True , 
                                                  start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
-                                                 indent = indent , vb_level = self.vb_level,
+                                                 indent = self.indent , vb_level = self.vb_level,
                                                  title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
@@ -152,12 +151,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         df[col] = df[col].map(lambda x:f'{x:.3f}')
                     elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
                         df[col] = df[col].map(lambda x:f'{x:.3%}')
-                self.logger.display(df , caption = f'Table: {name.title()}:' , vb_level = vb_level)
+                self.logger.display(df , caption = f'Table: {name.title()}:')
 
             for name , vb_level in self.figure_vb_levels.items():
                 if not Proj.verbose(vb_level):
                     continue
-                self.logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:' , vb_level = vb_level)
+                self.logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:')
 
             AsyncSaver.dfs(self.test_results , self.path_result_data , print_prefix='Analytic datas')
             AsyncSaver.figs(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')

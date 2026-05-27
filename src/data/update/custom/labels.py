@@ -49,12 +49,12 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
                 end = CALENDAR.td(CALENDAR.updated() , - days - lag1)
                 update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
                 if len(update_dates) == 0:
-                    self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , indent = 1 , vb_level = 1)
+                    self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
                     continue
                 for date in update_dates:
                     self.update_one(date , days , lag1 , label_name)
 
-                self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , indent = 1 , vb_level = 1)
+                self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int , days : int , lag1 : bool , label_name : str):
         """Compute and save labels for a single ``date``."""

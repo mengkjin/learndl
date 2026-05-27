@@ -43,12 +43,12 @@ class MultiKlineUpdater(BasicCustomUpdater):
             end = DB.dates(self.DB_SRC , 'day').max()
             update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
             if len(update_dates) == 0:
-                self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , ind = 1 , vb = 1)
+                self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
                 continue
 
             for date in update_dates: 
                 self.update_one(date , n_day , label_name)
-            self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , ind = 1 , vb = 1)
+            self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int , n_day : int , label_name : str):
         """Compute and save the n-day OHLCV bar for a single ``date``."""

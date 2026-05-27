@@ -1,10 +1,12 @@
 from __future__ import annotations
-from src.proj import PATH , Logger
+from src.proj import PATH
+from src.proj.util import BaseModule
 
 __all__ = ['ModelConfigsInspector']
 
-class ModelConfigsInspector:
-    def __init__(self):
+class ModelConfigsInspector(BaseModule):
+    def __init__(self , * , vb_level : int | None = 1 , indent : int | None = 0):
+        self.set_vb(vb_level , indent)
         self.model_root = PATH.model
         self.config_root = PATH.conf
 
@@ -46,9 +48,9 @@ class ModelConfigsInspector:
         if isinstance(obj , str):
             for warn in warning_list:
                 if obj == warn:
-                    Logger.alert2(f'[{warn}] found in {self.current_path_str} (full_match)')
+                    self.logger.alert2(f'[{warn}] found in {self.current_path_str} (full_match)')
                 elif not full_match and warn in obj:
-                    Logger.alert1(f'[{warn}] found in {self.current_path_str} within [{obj}] (partial_match)')
+                    self.logger.alert1(f'[{warn}] found in {self.current_path_str} within [{obj}] (partial_match)')
             return
         if isinstance(obj , dict):
             for key , value in obj.items():

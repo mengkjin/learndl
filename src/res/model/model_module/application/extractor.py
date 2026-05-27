@@ -63,7 +63,7 @@ class ModelHiddenExtractor(BaseModule):
             with Proj.silence:
                 self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
-            self.logger.stdout(f'Load Model Data for Hidden Model {self.hidden_name} successfully!' , ind = 1 , vb = 1)
+            self.logger.stdout(f'Load Model Data for Hidden Model {self.hidden_name} successfully!' , idt = 1 , vb = 1)
 
     def model_iter(self , model_dates : list | np.ndarray | int | None = None , update = True):
         if model_dates is None: 
@@ -91,7 +91,7 @@ class ModelHiddenExtractor(BaseModule):
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
                     time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                    self.logger.skipping(f'{hidden_path.hidden_key} already updated at {time_str}!' , ind = 1 , vb = 1)
+                    self.logger.skipping(f'{hidden_path.hidden_key} already updated at {time_str}!' , idt = 1 , vb = 1)
                     continue
                 self.model_hidden(hidden_path , model_date , overwrite)
                 self._current_update_dates.append(model_date)
@@ -134,11 +134,11 @@ class ModelHiddenExtractor(BaseModule):
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb(vb_level)
-        cls.logger.note('Update since last update!' , ind = indent , vb = vb_level)
+        cls.SetClassVB(vb_level , indent)
+        cls.logger.note('Update since last update!')
         models = HiddenExtractionModel.SelectModels(model_name)
         if model_name is None: 
-            cls.logger.stdout(f'model_name is None, update all hidden models (len={len(models)})' , ind = indent + 1 , vb_level = vb_level)
+            cls.logger.stdout(f'model_name is None, update all hidden models (len={len(models)})' , idt = 1)
         for model in models:
             extractor = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
             extractor.extract_hidden(update = update , overwrite = overwrite)

@@ -1,7 +1,7 @@
 from typing import Any , Literal
 
 from src.proj import Logger , Proj
-from src.proj.util import Options
+from src.proj.util import Options , DiskTTLCache
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
 from src.res.factor.api import RiskModelUpdater , FactorCalculatorAPI , FactorTestAPI
@@ -68,9 +68,13 @@ class FactorAPI:
             execution_time: short
             memory_usage: medium
         """
-        path = wrap_update(StockFactorHierarchy.export_factor_table , 'export factor table')
-        if path is not None and path.exists():
-            return path
+        if (cache_record := DiskTTLCache.get('update_progress', 'export_factor_table')) and cache_record.value:
+            path = wrap_update(StockFactorHierarchy.factor_table_path , 'export factor table')
+        else:
+            path = wrap_update(StockFactorHierarchy.export_factor_table , 'export factor table')
+            if path is not None and path.exists():
+                DiskTTLCache.put('update_progress', 'export_factor_table', True, ttl_hours=24)
+        return path if path is not None and path.exists() else None
 
     @classmethod
     def update_stock_factors(cls , timeout : int = -1):

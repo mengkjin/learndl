@@ -35,36 +35,29 @@ class ModelTrainer(BaseTrainer):
            use_data : Literal['fit','predict','both'] = 'fit' ,
            stage = -1 , resume = -1 , selection = -1 ,
            **kwargs):
-        if title and paragraph:
-            paragraph_context = cls.logger.paragraph(title.title() , 1 , enter_vb_level = 2)
-        else:
-            paragraph_context = nullcontext()
-            
-        if title and html_catcher:
-            html_catcher_context = HtmlCatcher(title = title.title())
-        else:
-            html_catcher_context = nullcontext()
-       
-        with paragraph_context, html_catcher_context as catcher:
-            base_path = ModelPath(base_path)
-            trainer = cls.initialize(base_path = base_path , use_data = use_data , 
-                                     stage = stage , resume = resume , selection = selection , **kwargs)
-            
-            if base_path and check_operation:
-                last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
-                if skip:
-                    trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!')
-                    return trainer
-                elif last_time:
-                    trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
-                else:
-                    trainer.logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
-         
+        
+        base_path = ModelPath(base_path)
+        trainer = cls.initialize(
+            base_path = base_path , use_data = use_data , stage = stage , 
+            resume = resume , selection = selection , **kwargs)
+        if base_path and check_operation:
+            last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
+            if skip:
+                trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!' , idt = 1)
+                return trainer
+            elif last_time:
+                trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
+            else:
+                trainer.logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
+    
+        Paragraph = cls.logger.paragraph(title.title() , 1 , enter_vb_level = 2) if title and paragraph else nullcontext()
+        Catcher = HtmlCatcher(title = title.title()) if title and html_catcher else nullcontext()
+
+        with Paragraph, Catcher:
             trainer.go()
             base_path.log_operation(log_operation)
-            if isinstance(catcher , HtmlCatcher):
-                catcher.set_export_files(trainer.html_catcher_export_path)
-
+            if isinstance(Catcher , HtmlCatcher):
+                Catcher.set_export_files(trainer.html_catcher_export_path)
             AsyncSaver.wait_all()
         return trainer
 

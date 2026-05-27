@@ -15,7 +15,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Type
 
-from src.proj import PATH, MACHINE, Const
+from src.proj import PATH, MACHINE, Const, Proj
 from src.proj.core import strPath
 from src.proj.util import Device , FlattenDict , BaseModule
 from src.res.algo import AlgoModule
@@ -165,7 +165,7 @@ class BaseModelConfig(BaseModule):
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
             if self.force_module:
-                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , ind = 1 , vb = 1)
+                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , idt = 1 , vb = 1)
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
             assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
@@ -196,12 +196,12 @@ class BaseModelConfig(BaseModule):
         if "env.short_test" in self.override:
             self.Param['env.short_test'] = self.override.pop("env.short_test")
         if self.short_test:
-            self.logger.alert1(f'Short test is enabled, will update conditional config' , ind = 1 , vb = 1)
+            self.logger.alert1(f'Short test is enabled, will update conditional config' , idt = 1 , vb = 1)
             self.Param.update(self.Param.get("conditional.short_test", {}))
 
         self.Param.update(self.schedule_config.Param)
         if self.model_module == "transformer":
-            self.logger.alert1(f'Model module is transformer, will update conditional config' , ind = 1 , vb = 1)
+            self.logger.alert1(f'Model module is transformer, will update conditional config' , idt = 1 , vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))
         
         self.Param.update(self.override)
@@ -219,7 +219,7 @@ class BaseModelConfig(BaseModule):
 
         # check short_test is set correctly
         if self.should_be_short_test and not self.short_test:
-            self.logger.alert1("Should be at server or short_test, but short_test is False now!" , ind = 1 , vb = 1)
+            self.logger.alert1("Should be at server or short_test, but short_test is False now!" , idt = 1 , vb = 1)
 
         # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
@@ -255,7 +255,7 @@ class BaseModelConfig(BaseModule):
 
         redundant_keys = np.setdiff1d(list(self.Param.keys()), list(self.REQUIRED_CONFIG_PARAM.keys()) + list(self.OPTIONAL_CONFIG_PARAM.keys())).tolist()
         if redundant_keys:
-            self.logger.alert1(f"{redundant_keys} in config files are not in default config params" , ind = 1 , vb = 1)
+            self.logger.alert1(f"{redundant_keys} in config files are not in default config params" , idt = 1 , vb = 1)
 
         return self
 
@@ -857,7 +857,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
-                self.logger.alert1(f"{self.base_path} is cleared" , ind = 1 , vb = 1)
+                self.logger.alert1(f"{self.base_path} is cleared" , idt = 1 , vb = 1)
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}
@@ -1003,6 +1003,10 @@ class ModelConfig(BaseModelConfig , BaseModule):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
+    @property
+    def parse_vb(self) -> int:
+        return 0 if self.base_path else Proj.vb.never
+
     def parser_stage(self, value=-1):
         """
         parser stage queue
@@ -1012,14 +1016,13 @@ class ModelConfig(BaseModelConfig , BaseModule):
             1: fit only
             2: test only
         """
-        vb_level = 'never' if self.base_path else self.vb_level
         assert value in [-1, 0, 1, 2], f"stage must be -1, 0, 1, or 2, got {value}"
         queue_of_stages: list[Literal["data", "fit", "test"]] = ["data", "fit", "test"]
 
         if value == -1:
             if not self.base_path.is_null_model:
                 msg = "--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only"
-                self.logger.note(msg , vb_level = vb_level)
+                self.logger.note(msg , vb = self.parse_vb)
                 value = int(input(f"[0, fit & test] , [1, fit only] , [2, test only]"))
 
         if self.base_path.is_null_model:
@@ -1037,7 +1040,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
 
         self.queue_of_stages = queue_of_stages
         msg = "--Process Queue : {:s}".format(" + ".join(map(lambda x: (x[0].upper() + x[1:]), queue_of_stages)))
-        self.logger.note(msg , vb_level = vb_level)
+        self.logger.note(msg , vb = self.parse_vb)
 
     def parser_resume(self, value=-1):
         """
@@ -1047,7 +1050,6 @@ class ModelConfig(BaseModelConfig , BaseModule):
             0: no
             1: yes
         """
-        vb_level = 'never' if self.base_path else self.vb_level
         assert value in [-1, 0, 1], f"resume must be -1, 0, or 1, got {value}"
         if value == -1:
             if self.short_test:
@@ -1056,7 +1058,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 candidates = self.base_path.find_resumable_candidates()
                 if candidates:
                     msg = f"Multiple model path of {self.model_clean_name} exists, input [0] to deny resuming , [1] to confirm resuming!"
-                    self.logger.note(msg , vb_level = vb_level)
+                    self.logger.note(msg , vb = self.parse_vb)
                     value = int(input(f"[0, not resuming] , [1, resuming]"))
                 else:
                     value = 0
@@ -1071,7 +1073,7 @@ class ModelConfig(BaseModelConfig , BaseModule):
 
         self.is_resuming = is_resuming
         msg = f"Confirm Resume Training!" if is_resuming else "Start Training New!"
-        self.logger.note(msg , vb_level = vb_level)
+        self.logger.note(msg , vb = self.parse_vb)
 
     def parser_select(self, value=-1):
         """
@@ -1091,7 +1093,6 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 1,2,3,...: choose one by model_index
         0: don't change the base_path
         """
-        vb_level = 'never' if self.base_path else self.vb_level
         assert value in [-1, 0], f"initial selection must be -1 or 0, got {value}"
         candidates = self.base_path.find_resumable_candidates_indices()
         if value == -1:
@@ -1101,14 +1102,14 @@ class ModelConfig(BaseModelConfig , BaseModule):
                 if self.base_path.model_name_index in candidates:
                     value = self.base_path.find_new_index()
                     msg = f"ModelPath {self.base_path} is resumable, will create a new ModelPath with index {value} to Train New!"
-                    self.logger.note(msg , vb_level = vb_level)
+                    self.logger.note(msg , vb = self.parse_vb)
             else:
                 if len(candidates) == 1:
                     value = candidates[0]
                 else:
                     msg = f"Multiple ModelPath of {self.model_clean_name} exists, input number to choose!"
-                    self.logger.note(msg , vb_level = vb_level)
-                    self.logger.note(f"Options include: {candidates}" , vb_level = vb_level)
+                    self.logger.note(msg , vb = self.parse_vb)
+                    self.logger.note(f"Options include: {candidates}" , vb = self.parse_vb)
                     value = int(input(f"Which Model to Resume?"))
                     assert value in candidates, (f"value {value} is not in candidates_indices {candidates}")
         elif value == 0:

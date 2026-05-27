@@ -74,9 +74,16 @@ class Shell:
         from_workspace: str | None = None ,
     ) -> None:
         """
-        Open a terminal and run ``cmd`` (shell line, e.g. output of
-        :func:`shell_opener.commands.format_python_command`).
-
+        Open a terminal and run ``cmd`` 
+        Args:
+            cmd: The command to run.
+            pause_when_done: Whether to pause when the command is done.
+            cwd: The working directory to run the command in.
+            option: The option to use to open the terminal.
+            title: The title of the terminal.
+            new_on: The new on to use to open the terminal. (window, workspace, tab)
+            as_workspace: The workspace to use to open the terminal.
+            from_workspace: The workspace to use to open the terminal.
         ``pause_when_done`` defaults to ``True`` so the window stays open for review.
         """
         workdir = cls._resolve_cwd(cwd, cls.default_cwd)

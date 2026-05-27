@@ -245,7 +245,7 @@ class SellsideSQLDownloader(BaseModule):
             return 
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , ind = 1 , vb = 2)
+        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
         calls = [(self.download_period, inter) for inter in date_intervals]
@@ -260,9 +260,9 @@ class SellsideSQLDownloader(BaseModule):
             self.logger.print_exc(e)
             return False
         if (num_dates := self.save_data(df)) > 0:
-            self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , ind = 1)
+            self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , idt = 1)
         else:
-            self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , ind = 1)
+            self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , idt = 1)
         return True
 
     def query_start_dt(self):
@@ -277,6 +277,7 @@ class SellsideSQLDownloader(BaseModule):
         end_str   = CALENDAR.reformat(end   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         
         df_input = None
+        conn = None
         i = 0
         while i <= attempts:
             try:
@@ -290,7 +291,8 @@ class SellsideSQLDownloader(BaseModule):
                 self.logger.alert1(f'{self.factor_src} Connection is encountered an error ({e!s}), re-connect')
                 self.connection.reconnect()
             finally:
-                conn.close()
+                if conn is not None:
+                    conn.close()
             i += 1
         df = self.df_process(df_input)
         return df

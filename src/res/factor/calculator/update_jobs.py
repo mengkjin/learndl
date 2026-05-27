@@ -300,12 +300,12 @@ class BaseUpdateJobList(BaseModule):
         self.logger.success(f'Stock Factor Update of {self.name} : {report["ok"]} / {report["total"]}')
         failed_jobs = self.jobs_dict(failed_only=True)
         if failed_jobs and timeout > 0 and remaining_timeout > 0:
-            self.logger.alert1(f'Failed Stock Factors: {list(failed_jobs.keys())}' , vb_level = 1)
+            self.logger.alert1(f'Failed Stock Factors: {list(failed_jobs.keys())}')
             self.logger.stdout('Auto Retry Failed Stock Factors...')
             parallel(failed_jobs , method=multithreading , timeout=remaining_timeout , indent=self.indent + 1)
             report = self.build_report()
             if [job for job in failed_jobs.values() if not job.done]:
-                self.logger.alert1(f'Failed Stock Factors Again: {list(failed_jobs.keys())}' , vb_level = 1)
+                self.logger.alert1(f'Failed Stock Factors Again: {list(failed_jobs.keys())}')
             else:
                 self.logger.success(f'All {len(failed_jobs)} Failed Stock Factors are Processed Successfully!')
         return report
@@ -340,9 +340,9 @@ class UpdateJobDate(BaseUpdateJob):
         }
 
     def go(self , indent : int = 1 , **kwargs) -> None:
+        self.calc.set_vb(self.vb_level , indent)
         self.regenerate()
-        self.done = self.calc.update_day_factor(
-            self.date , indent=indent , vb_level=self.vb_level , overwrite=self.overwrite , catch_errors=CATCH_ERRORS)
+        self.done = self.calc.update_day_factor(self.date , overwrite=self.overwrite , catch_errors=CATCH_ERRORS)
 
     def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
         Logger.stdout(f'{self.level} : {self.factor_name} at {self.date}' , indent=indent , vb_level=vb_level)
@@ -377,9 +377,9 @@ class UpdateJobAll(BaseUpdateJob):
         }
 
     def go(self , indent : int = 1 , **kwargs) -> None:
+        self.calc.set_vb(self.vb_level , indent)
         self.regenerate()
-        self.calc.update_all_factors(
-            start=self.start , end=self.end , indent=indent , vb_level=self.vb_level , overwrite=self.overwrite)
+        self.calc.update_all_factors(start=self.start , end=self.end , overwrite=self.overwrite)
         self.done = True
 
     def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
@@ -419,11 +419,12 @@ class UpdateJobStats(BaseUpdateJob):
         }
 
     def go(self , indent : int = 1 , **kwargs) -> None:
+        self.calc.set_vb(self.vb_level , indent)
         self.regenerate()
         if self.stats_type == 'daily':
-            self.calc.update_daily_stats(self.dates() , indent=indent , vb_level=self.vb_level , overwrite=self.overwrite)
+            self.calc.update_daily_stats(self.dates() , overwrite=self.overwrite)
         elif self.stats_type == 'weekly':
-            self.calc.update_weekly_stats(self.dates() , indent=indent , vb_level=self.vb_level , overwrite=self.overwrite)
+            self.calc.update_weekly_stats(self.dates() , overwrite=self.overwrite)
         else:
             raise ValueError(f'Invalid stats type: {self.stats_type}')
         self.done = True
