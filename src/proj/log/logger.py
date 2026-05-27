@@ -495,7 +495,7 @@ class Logger:
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
         def __init__(self , *args , silent = False , indent = 0 , 
-                     vb_level : Any = 1 , enter_vb_level : Any = 'max' , timer_prefix : bool = True): 
+                     vb_level : Any = 1 , enter_vb_level : Any = 'max' , timer_prefix : bool = True , **kwargs): 
             self.key = '/'.join(args)
             self.key_suffix = ''
             self.silent = silent
@@ -550,7 +550,7 @@ class Logger:
         """
         VB_LEVEL = 1
         def __init__(self , title : str , level : Literal[1,2,3,4,5] , char : Literal['-' , '=' , '*'] = '*', 
-                     vb_level : Any = 0 , enter_vb_level : Any = 0):
+                     vb_level : Any = 0 , enter_vb_level : Any = 0 , **kwargs):
             self.key = title.title()
             self.key_suffix = ''
             self.level = level
