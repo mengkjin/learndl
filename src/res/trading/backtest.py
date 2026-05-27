@@ -1,9 +1,10 @@
 from typing import Any
 
-from src.proj import CALENDAR , Logger , Proj , Dates
+from src.proj import CALENDAR , Dates
+from src.proj.util import BaseModule
 from .trading_port import BacktestPort
 
-class BacktestPortfolioManager:
+class BacktestPortfolioManager(BaseModule):
     @classmethod
     def available_ports(cls) -> list[str]:
         return list(BacktestPort.candidate_ports.keys())
@@ -25,8 +26,8 @@ class BacktestPortfolioManager:
 
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb(vb_level)
-        Logger.note(f'{cls.__name__} : Update since last update!' , indent = indent , vb_level = vb_level)
+        cls.SetClassVB(vb_level , indent)
+        cls.logger.note(f'{cls.__name__} : Update since last update!')
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         assert not reset_ports or all([port in BacktestPort.candidate_ports for port in reset_ports]) , \
@@ -36,11 +37,11 @@ class BacktestPortfolioManager:
         updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
             
         if len(updated_ports) == 0: 
-            Logger.alert1(f'No Backtest Portfolios Updated at {Dates(date)}' , indent = indent + 1)
+            cls.logger.alert1(f'No Backtest Portfolios Updated at {Dates(date)}' , idt = 1)
         else:
-            Logger.success(f'{len(updated_ports)} Backtest Portfolios Updated at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
+            cls.logger.success(f'{len(updated_ports)} Backtest Portfolios Updated at {Dates(date)}' , idt = 1 , vb = 2)
 
         for name in BacktestPort.candidate_ports:
-            tp = BacktestPort.load(name)
-            tp.analyze(key_fig = '' , indent = indent + 1 , vb_level = vb_level + 2)
-        Logger.success(f'{len(BacktestPort.candidate_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , indent = indent + 1 , vb_level = vb_level)
+            tp = BacktestPort.load(name , vb_level = vb_level + 2 , indent = indent + 1)
+            tp.analyze(key_fig = '')
+        cls.logger.success(f'{len(BacktestPort.candidate_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , idt = 1)

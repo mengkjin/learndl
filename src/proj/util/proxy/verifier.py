@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Iterable
 
-from src.proj.log import Logger
+from src.proj.util.module import BaseModule
 from src.proj.util.web import http_session , test_connection
 
 from .core import Proxy , ProxySet
@@ -101,7 +101,7 @@ class VerificationRecords:
             df.groupby(groups)['duration'].max().rename('max_time')).join(
             df.groupby(groups)['duration'].quantile(0.9).rename('90%_time'))
 
-class ProxyVerifier:
+class ProxyVerifier(BaseModule):
     """Proxy verifier, can be used to verify single or multiple proxies are working"""
     QUICK_VERIFY_URL = "http://www.example.com"
     VERIFICATION_RECORDS = VerificationRecords()
@@ -164,10 +164,10 @@ class ProxyVerifier:
     def verified_proxies(cls , proxies: Iterable[Proxy | str] , target_url: str , * , timeout: float = 10.0, workers: int = 50, silent: bool = False, dummy: bool = False) -> ProxySet:
         """parallel verify, take the first ``max_keep`` passed proxies in the original order of the candidate list."""
         proxies = ProxySet(proxies)
-        with Logger.Timer(f'Quick Verify ({timeout/2:.1f}s) for {cls.QUICK_VERIFY_URL}', indent = 1, vb_level = 3 , silent=silent) as timer:
+        with cls.logger.timer(f'Quick Verify ({timeout/2:.1f}s) for {cls.QUICK_VERIFY_URL}', idt = 1, vb = 2 , silent=silent) as timer:
             passed_proxies = cls.parallel_verification(proxies,cls.QUICK_VERIFY_URL,timeout,fast_test=True,workers=workers,dummy=dummy)
             timer.add_key_suffix(f', {len(passed_proxies)}/{len(proxies)} passed')
-        with Logger.Timer(f'Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 3 , silent=silent) as timer:
+        with cls.logger.timer(f'Final Verify ({timeout:.1f}s) for {target_url}', idt = 1, vb = 2 , silent=silent) as timer:
             final_proxies = cls.parallel_verification(passed_proxies,target_url,timeout,fast_test=False,workers=workers,dummy=dummy)
             timer.add_key_suffix(f', {len(final_proxies)}/{len(passed_proxies)} passed')
         return final_proxies
@@ -179,7 +179,7 @@ class ProxyVerifier:
             resp = requests.get("https://httpbin.org/ip", timeout=timeout)
             return resp.json().get("origin", "")
         except Exception as e:
-            Logger.stderr(f"Failed to get real public IP: {e}")
+            cls.logger.error(f"Failed to get real public IP: {e}")
             return ""
 
     @classmethod
@@ -217,7 +217,7 @@ class ProxyVerifier:
         """Remove transparent proxies: fetch the real public IP, then drop any proxy that leaks it."""
         real_ip = cls.get_real_ip()
         if not real_ip:
-            Logger.alert2("Failed to get real public IP, cannot check proxy anonymity")
+            cls.logger.alert2("Failed to get real public IP, cannot check proxy anonymity")
             return ProxySet()
 
         proxies = ProxySet(proxies)

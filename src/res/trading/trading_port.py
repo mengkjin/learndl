@@ -5,10 +5,10 @@ import numpy as np
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any , Literal , Type , ClassVar
+from typing import Literal , Type , ClassVar
 
-from src.proj import PATH , Proj , Logger , CALENDAR , DB , Dates , Const
-from src.proj.util import AsyncSaver
+from src.proj import PATH , CALENDAR , DB , Dates , Const
+from src.proj.util import AsyncSaver , BaseModule
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -22,7 +22,7 @@ TASK_LIST : list[Type[TopCalc]] = [
 ]
 
 @dataclass
-class TradingPort:
+class TradingPort(BaseModule):
     name        : str 
     alpha       : str | list[str]
     universe    : str = 'top-1000'
@@ -96,10 +96,10 @@ class TradingPort:
     def portfolio_dir(self) -> Path:
         raise NotImplementedError(f'{self.__class__.__name__} must implement portfolio_dir in subclass')
 
-    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : Any = 2) -> TradingPort:
+    def build(self , date : int | None = None , reset = False , export = True) -> TradingPort:
         raise NotImplementedError(f'{self.__class__.__name__} must implement build in subclass')
 
-    def rebuild(self , date : int | None = None , export = True , indent : int = 1 , vb_level : Any = 2) -> TradingPort:
+    def rebuild(self , date : int | None = None , export = True) -> TradingPort:
         raise NotImplementedError(f'{self.__class__.__name__} must implement rebuild in subclass')
         
     def export_path(self , date : int) -> Path:
@@ -166,7 +166,7 @@ class TradingPort:
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
         if reset_port:
-            Logger.alert1(f'Reset port for new build! {self.name}')
+            self.logger.alert1(f'Reset port for new build! {self.name}')
             port = self.empty_pre_portfolio(date)
         else:
             if date in self.last_ports:
@@ -184,10 +184,10 @@ class TradingPort:
     def empty_pre_portfolio(self , date : int) -> Portfolio:
         return Portfolio.from_ports(Port.none_port(CALENDAR.td(date , -1).td , self.name , self.init_value))
  
-    def save_port(self , pf : pd.DataFrame , date : int , indent : int = 1 , vb_level : Any = 2):
+    def save_port(self , pf : pd.DataFrame , date : int):
         path = self.export_path(date)
         path.parent.mkdir(parents=True, exist_ok=True)
-        DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = indent , vb_level = vb_level)
+        DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = self.indent + 1 , vb_level = self.vb_level + 2)
     
     def load_portfolio(self , start : int | None = None , end : int | None = None):
         dates = self.stored_dates(start , end)
@@ -196,8 +196,7 @@ class TradingPort:
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False , 
-                          trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' ,
-                          indent : int = 1 , vb_level : Any = 2):
+                          trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale'):
         self.load_portfolio(start , end)
         benchmark = Benchmark(self.benchmark)
         index = {
@@ -207,55 +206,60 @@ class TradingPort:
         }
         self.portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine = trade_engine ,
                                   with_index = index , resume_path = self.result_path_account , resume_drop_last = True , 
-                                  save_after = True , indent = indent , vb_level = vb_level)
+                                  save_after = True , indent = self.indent + 1 , vb_level = self.vb_level + 2)
         return self.portfolio.account
 
     def analyze(self , start : int | None = None , end : int | None = None , 
-                indent : int = 0 , vb_level : Any = 1 , write_down = True , display_all = False , key_fig = 'perf_curve', 
+                write_down = True , display_all = False , key_fig = 'perf_curve', 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
-        vb_level = Proj.vb(vb_level)
         start = start if start is not None else -1
         end = end if end is not None else 99991231
         port_dates = self.stored_dates(start , end)
         if len(port_dates) == 0:
-            Logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
+            self.logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        Logger.stdout(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}] at {Dates(port_dates)} start ...' , indent = indent , vb_level = vb_level)
-        account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine , indent = indent + 1 , vb_level = vb_level + 2).df
+        self.logger.stdout(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}] at {Dates(port_dates)} start ...')
+        account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine).df
         if len(account_df) <= 1:
-            Logger.stdout(f'{self.trading_portfolio_type.title()} Portfolio [{self.name}] just start accounting and has no record' , indent = indent , vb_level = vb_level + 1)
+            self.logger.stdout(f'{self.trading_portfolio_type.title()} Portfolio [{self.name}] just start accounting and has no record' , vb = 1)
             return self
         
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
-            task.calc(account_df , indent = indent + 1 , vb_level = vb_level + 2) 
-            task.plot(show = False , indent = indent + 1 , vb_level = vb_level + 2)  
+            task.calc(account_df , indent = self.indent + 1 , vb_level = self.vb_level + 2) 
+            task.plot(show = False , indent = self.indent + 1 , vb_level = self.vb_level + 2)  
 
         rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
         figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
         if write_down:
-            AsyncSaver.dfs(rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , indent = indent + 1 , vb_level = vb_level + 2)
-            AsyncSaver.figs(figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , indent = indent + 1 , vb_level = vb_level + 2)
+            AsyncSaver.dfs(
+                rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , 
+                indent = self.indent + 1 , vb_level = self.vb_level + 2)
+            AsyncSaver.figs(
+                figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , 
+                indent = self.indent + 1 , vb_level = self.vb_level + 2)
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:
-                Logger.display(fig , caption = f'Figure: {name.title()}:' , vb_level = vb_level)
+                self.logger.display(fig , caption = f'Figure: {name.title()}:')
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        Logger.success(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}]!' , indent = indent , vb_level = vb_level)
+        self.logger.success(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}]!' , vb = 2)
         return self
 
 class TrackingPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.tracking_ports
     @classmethod
-    def load(cls , name : str) -> TrackingPort:
+    def load(cls , name : str , vb_level : int | None = None , indent : int | None = None) -> TrackingPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
-            return cls(**kwargs)
+            instance = cls(**kwargs)
+            instance.set_vb(vb_level = vb_level , indent = indent)
+            return instance
         else:
             raise ValueError(f'{name} is not a valid tracking port , find configs/setting/trading_port.yaml for available tracking ports')
 
@@ -267,36 +271,35 @@ class TrackingPort(TradingPort):
     def portfolio_dir(self) -> Path:
         return PATH.trade_port.joinpath(self.name)
     
-    def build(self , date : int | None = None , reset = False , export = True , indent : int = 1 , vb_level : Any = 2):
+    def build(self , date : int | None = None , reset = False , export = True):
         date = CALENDAR.updated(date)
-        df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True , indent = indent , vb_level = vb_level)
+        df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True)
         self.new_ports[date] = df
         return self
 
-    def rebuild(self , date : int , export = True , indent : int = 1 , vb_level : Any = 2):
+    def rebuild(self , date : int , export = True):
         raise TypeError(f'tracking port cannot rebuild. if you truely want to rebuild a tracking port, manually delete the portfolio folder and run build(end_date) again.')
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
-                        alpha_details = False , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame:
-        vb_level = Proj.vb(vb_level)
+                        alpha_details = False) -> pd.DataFrame:
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        Logger.stdout(f'Perform portfolio building for TradingPort {self.name} at {Dates(date)}' , indent = indent , vb_level = vb_level)
+        self.logger.stdout(f'Perform portfolio building for TradingPort {self.name} at {Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
-                                   screen_ratio = self.screen_ratio , indent = indent + 1 , vb_level = vb_level + 1).setup()
+                                   screen_ratio = self.screen_ratio , indent = self.indent + 1 , vb_level = self.vb_level + 1).setup()
 
         pf = builder.build(date).port.to_dataframe()
         if pf.empty: 
             return pf
 
         if export:
-            self.save_port(pf , date , indent = indent + 1 , vb_level = vb_level + 2)
+            self.save_port(pf , date)
 
         # add columns to include alpha and universe
         if alpha_details:
@@ -308,10 +311,12 @@ class TrackingPort(TradingPort):
 class BacktestPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.backtest_ports
     @classmethod
-    def load(cls , name : str) -> BacktestPort:
+    def load(cls , name : str , vb_level : int | None = None , indent : int | None = None) -> BacktestPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : True}
-            return cls(**kwargs)
+            instance = cls(**kwargs)
+            instance.set_vb(vb_level = vb_level , indent = indent)
+            return instance
         else:
             raise ValueError(f'{name} is not a valid backtest port , find configs/setting/trading_port.yaml for available backtest ports')
 
@@ -323,21 +328,20 @@ class BacktestPort(TradingPort):
     def portfolio_dir(self) -> Path:
         return PATH.rslt_trade.joinpath('backtest' , self.name , 'portfolio')
     
-    def build(self , date : int | None = None , reset_port = False , export = True , indent : int = 1 , vb_level : Any = 2):
+    def build(self , date : int | None = None , reset_port = False , export = True):
         date = CALENDAR.updated(date)
-        df = self.build_backward(date , reset_port = reset_port , export = export , indent = indent , vb_level = vb_level)
+        df = self.build_backward(date , reset_port = reset_port , export = export)
         self.new_ports[date] = df
         return self
 
-    def rebuild(self , date : int | None = None , export = True , indent : int = 0 , vb_level : Any = 2):
+    def rebuild(self , date : int | None = None , export = True):
         date = CALENDAR.updated(date)
-        Logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...' , indent = indent , vb_level = vb_level)
-        df = self.build_backward(date , reset_port = True , export = export , indent = indent + 1 , vb_level = vb_level)
+        self.logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...')
+        df = self.build_backward(date , reset_port = True , export = export)
         self.new_ports[date] = df
         return self
     
-    def build_backward(self , date : int , reset_port = False , export = True , indent : int = 1 , vb_level : Any = 2) -> pd.DataFrame:
-        vb_level = Proj.vb(vb_level)
+    def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
         
@@ -345,7 +349,7 @@ class BacktestPort(TradingPort):
             return pd.DataFrame()
         
         if reset_port:
-            Logger.alert1(f'Reset {self.trading_portfolio_type.title()} Portfolio [{self.name}] for new build!' , indent = indent)
+            self.logger.alert1(f'Reset {self.trading_portfolio_type.title()} Portfolio [{self.name}] for new build!')
             shutil.rmtree(self.portfolio_dir , ignore_errors = True)
             self.portfolio_dir.mkdir(parents = True , exist_ok = True)
             self.result_path_account.unlink(missing_ok = True)
@@ -354,22 +358,22 @@ class BacktestPort(TradingPort):
         date_list = date_list[date_list > self.end_date()]
         if len(date_list) == 0: 
             return pd.DataFrame()
-        Logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
+        self.logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}')
         alpha = self.Alpha.get(date_list)
-        Logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
+        self.logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}')
         univ_port = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])
-        Logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date_list)}' , indent = indent , vb_level = vb_level)
+        self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date_list)}')
         builder = PortfolioBuilder(self.category , alpha , univ_port , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
-                                   screen_ratio = self.screen_ratio , indent = indent + 1 , vb_level = vb_level + 1).setup()
+                                   screen_ratio = self.screen_ratio , indent = self.indent + 1 , vb_level = self.vb_level + 1).setup()
 
         for date in date_list:
             builder.build(date)
             if export:
                 df = builder.port.to_dataframe()
-                self.save_port(df , date , indent = indent + 1 , vb_level = vb_level + 2)
+                self.save_port(df , date)
 
         return pd.DataFrame()

@@ -171,7 +171,7 @@ class ProxyStats(Proxy):
         self.stats['running'] += 1
         return self
 
-    def release(self, success: bool, *, counted: bool = True , vb_level: Any = 1):
+    def release(self, success: bool, *, counted: bool = True , vb_level: Any = 4):
         """Released, decrement running; optionally update success/error counters."""
         self.stats['running'] -= 1
         if not counted:

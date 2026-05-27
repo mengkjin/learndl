@@ -12,8 +12,8 @@ from cachetools.keys import hashkey
 from threading import RLock
 
 from src.proj.core import Silence
-from src.proj.log import Logger
 from src.proj.env import MACHINE
+from src.proj.util.module import BaseModule
 from src.proj.util.error_handler import retry_call
 from .core import ProxySet
 
@@ -78,7 +78,7 @@ class ProxiesCache:
             return wrapper
         return decorator
 
-class BaseProxiesFinder(ABC):
+class BaseProxiesFinder(BaseModule, ABC):
     """Auto discover HTTP proxies from public proxy list."""
 
     @classmethod
@@ -98,7 +98,7 @@ class BaseProxiesFinder(ABC):
             proxies = proxies.set_source(cls.__name__)
             return proxies
         except Exception as e:
-            Logger.alert1(f"[!] Error occurred while finding proxies through {cls.__name__} level_type={level_type}: {e}")
+            cls.logger.alert1(f"[!] Error occurred while finding proxies through {cls.__name__} level_type={level_type}: {e}")
             return ProxySet()
 
     def __repr__(self) -> str:
@@ -122,7 +122,9 @@ class ZDAYEFinder(BaseProxiesFinder):
         return ProxySet(candidates)
 
     @classmethod
-    def _zdaye_api_url(cls, count: int | None = 100 , protocol_type: Literal["any" , "socks4" , "socks5" , "http", "https"] | str = "http" , level_type: Literal["any" , "anonymous"] = "anonymous") -> str:
+    def _zdaye_api_url(
+        cls, count: int | None = 100 , protocol_type: Literal["any" , "socks4" , "socks5" , "http", "https"] | str = "http" , 
+        level_type: Literal["any" , "anonymous"] = "anonymous") -> str:
         """URL of Zdaye API"""
         kwargs = {
             "app_id": cls.APP_ID,
@@ -154,18 +156,18 @@ class ZDAYEFinder(BaseProxiesFinder):
             try:
                 if (wait_time := cls.INTERVAL - time.time() + cls.last_request_time) > 0:
                     time.sleep(wait_time) # wait for the interval
-                Logger.stdout("[*] Getting proxies from Zdaye API...")
+                cls.logger.stdout("[*] Getting proxies from Zdaye API...")
                 response = requests.get(url, headers=headers, timeout=15)
                 cls.last_request_time = time.time()
                 if response.status_code != 200:
-                    Logger.alert1(f"[!] API request failed, status code: {response.status_code}")
+                    cls.logger.alert1(f"[!] API request failed, status code: {response.status_code}")
                     return []
                 
                 data = response.json()
                 code = data.get('code')
                 
                 if int(code) != 10001:
-                    Logger.alert1(f"[!] API returned error: {data.get('msg', 'unknown error')} (code: {code})")
+                    cls.logger.alert1(f"[!] API returned error: {data.get('msg', 'unknown error')} (code: {code})")
                     return []
                 
                 proxy_list = data.get('data', {}).get('proxy_list', [])
@@ -177,14 +179,14 @@ class ZDAYEFinder(BaseProxiesFinder):
                     elif isinstance(item, str):
                         proxies.append(item)
                 
-                Logger.stdout(f"[+] Successfully got {len(proxies)} proxies")
+                cls.logger.stdout(f"[+] Successfully got {len(proxies)} proxies")
                 return proxies
                 
             except requests.exceptions.RequestException as e:
-                Logger.alert1(f"[!] Error occurred while requesting API: {e}")
+                cls.logger.alert1(f"[!] Error occurred while requesting API: {e}")
                 return []
             except ValueError as e:
-                Logger.alert1(f"[!] Failed to parse JSON response: {e}")
+                cls.logger.alert1(f"[!] Failed to parse JSON response: {e}")
                 return []
 
 class FreeProxyListNetFinder(BaseProxiesFinder):

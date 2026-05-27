@@ -289,7 +289,7 @@ class ArchivedPredictorModel(BaseModule):
             self.path.save_pred(subdf , date , overwrite , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             self.current_update_dates.append(date)
         if not self.current_update_dates:
-            print(df)
+            self.logger.stdout(df)
             raise ValueError(f'No update dates for {self.path.pred_name}')
         return self
 

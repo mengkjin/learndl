@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.proj import Logger
-from src.proj.util import ProxyAPI
+from src.proj.util import ProxyAPI , BaseModule
 from src.proj.util.proxy import ProxyCaller
 from src.proj.util.web import (
     http_session,
@@ -53,12 +53,16 @@ class FetchedAnnouncementBatch:
     ok: bool = False
     error: Exception | None = None
 
-@dataclass
-class FetcherTask:
-    exchange: str
-    start: int
-    end: int
-    redownload: bool = False
+class FetcherTask(BaseModule):
+    def __init__(self, exchange: str, start: int, end: int, redownload: bool = False, * , vb_level: int = 2, indent: int = 1):
+        self.set_vb(vb_level , indent)
+        self.exchange = exchange
+        self.start = start
+        self.end = end
+        self.redownload = redownload
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(exchange={self.exchange}, start={self.start}, end={self.end}, redownload={self.redownload})"
 
     @property
     def exporter(self) -> AnnouncementExporter:
@@ -115,7 +119,7 @@ class FetcherTask:
     def crawl_and_persist(self, proxy: str | None) -> bool | Exception:
         if self.should_be_skipped:
             return True
-        Logger.stdout(f"Crawling {self.title} with proxy {proxy}" , vb_level = 2)
+        self.logger.stdout(f"Crawling {self.title} with proxy {proxy}")
         value = self.fetch_payload(proxy)
         if isinstance(value, Exception):
             return value
@@ -130,7 +134,7 @@ class FetcherTask:
     async def crawl_async(self, proxy: str | None) -> bool | Exception:
         if self.should_be_skipped:
             return True
-        Logger.stdout(f"Crawling {self.title} with proxy {proxy}" , vb_level = 2)
+        self.logger.stdout(f"Crawling {self.title} with proxy {proxy}")
         value = await self.fetch_payload_async(proxy)
         if isinstance(value, Exception):
             return value
@@ -142,11 +146,14 @@ class FetcherTask:
     def to_proxy_caller(self , pool) -> ProxyCaller:
         return ProxyCaller(self.crawl, self.url, pool = pool)
 
-    def run(self, pool = None, *, max_proxies_try: int = 3, indent : int = 1 , vb_level : Any = 3 , error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
-        """Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) still fails and ``auto_discover_proxy`` is enabled."""
+    def run(self, pool = None, *, max_proxies_try: int = 3, error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
+        """
+        Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) 
+        still fails and ``auto_discover_proxy`` is enabled.
+        """
         result = False
         if self.should_be_skipped:
-            Logger.skipping(f"{self.title}, already have historical data (use redownload to force re-download)" , indent = indent, vb_level = vb_level)
+            self.logger.skipping(f"{self.title}, already have historical data (use redownload to force re-download)" , vb = 1)
             return result
 
         if pool is None:
@@ -158,7 +165,7 @@ class FetcherTask:
                 if proxy is None:
                     break
                 result = self.crawl(proxy.url)
-                pool.release(proxy, result is not None , vb_level=vb_level)
+                pool.release(proxy, result is not None)
                 if result is not None:
                     break
         if result is None:

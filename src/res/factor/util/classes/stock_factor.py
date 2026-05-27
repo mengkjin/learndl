@@ -24,7 +24,7 @@ from typing import Any , Literal , Iterable
 
 from src.proj import DB , Logger , CALENDAR
 from src.proj.core import strPath
-from src.proj.util import properties
+from src.proj.util import properties , BaseModule
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -275,7 +275,7 @@ def common_elements(lists : list[np.ndarray]) -> np.ndarray:
             ds = np.intersect1d(ds , list)
         return ds
 
-class FactorStats:
+class FactorStats(BaseModule):
     """
     FactorStats class is used to store and manipulate factor statistics
     """
@@ -335,9 +335,9 @@ class FactorStats:
                 with WarningCatcher(['behavior of DataFrame concatenation']):
                     stat = pd.concat([old_stat , stat])
             except Exception as e:
-                Logger.error(f'Error concatenating stats: {e}')
-                print(old_stat)
-                print(stat)
+                self.logger.error(f'Error concatenating stats: {e}')
+                self.logger.stdout(old_stat)
+                self.logger.stdout(stat)
                 raise
         index_names = [key for key in stat.index.names if key is not None]
         if index_names:
@@ -385,7 +385,7 @@ class FactorStats:
     def create_cache_factor_stats(cls) -> dict[str,FactorStats]:
         return {name:FactorStats(name) for name in cls.available_stats}
 
-class CacheFactorStats:
+class CacheFactorStats(BaseModule):
     """
     CacheFactorStats class is used to store and manipulate multiple factor statistics
     """
@@ -399,14 +399,14 @@ class CacheFactorStats:
         if path is None or not path.exists():
             return
         stats_num = sum([factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        Logger.success(f'Load {stats_num} Factor Stats from {path}' , indent = 0 , vb_level = 'max')
+        self.logger.success(f'Load {stats_num} Factor Stats from {path}' , vb_level = 'max')
         return self
 
     def save(self , path : Path | None):
         if path is None:
             return
         stats_num = sum([factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        Logger.success(f'Save {stats_num} Factor Stats to {path}' , indent = 0 , vb_level = 'max')
+        self.logger.success(f'Save {stats_num} Factor Stats to {path}' , vb_level = 'max')
 
     def common_dates(self , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf']) -> np.ndarray:
         dates = [self.factor_stats[subset].date for subset in subsets]
@@ -447,7 +447,7 @@ class CacheFactorStats:
     def coverage(self) -> FactorStats:
         return self.factor_stats['coverage']
 
-class StockFactor:
+class StockFactor(BaseModule):
     """
     StockFactor class is used to store and manipulate factor data
     factor data can be a pandas DataFrame , a pandas Series , a DataBlock , a StockFactor , or a dictionary of pd.Series

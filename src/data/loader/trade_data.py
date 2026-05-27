@@ -99,12 +99,6 @@ class TradeDataAccess(DateDataAccess):
             qte = qte.pivot_table(field , 'date' , 'secid')
 
         if not qte.index.is_unique:
-            print(qte.index)
-            print(qte.index[qte.index.duplicated()])
-            counts = self.collections['trd'].long_frame.groupby('date').count()
-            print(counts)
-            print(counts[counts > 8000])
-            
             raise ValueError('quotes index must be unique, got stop here')
         return qte
     
@@ -223,7 +217,7 @@ class TradeDataAccess(DateDataAccess):
         mv = self.get_val_data(start , end , mv_type , prev = prev , pivot = pivot , drop_old = drop_old)
 
         if not mv.index.is_unique:
-            print(mv.index[mv.index.duplicated()])
+            self.logger.stdout(mv.index[mv.index.duplicated()])
             raise ValueError('mv index must be unique, got stop here')
         return mv
 

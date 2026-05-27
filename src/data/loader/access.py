@@ -21,9 +21,10 @@ from abc import ABC , abstractmethod
 from typing import Any
 
 from src.proj import CALENDAR , TradeDate
+from src.proj.util import BaseModule
 from src.data.util import INFO , DFCollection , PLDFCollection
 
-class DateDataAccess(ABC):
+class DateDataAccess(BaseModule , ABC):
     """
     Abstract date-keyed data accessor.
 

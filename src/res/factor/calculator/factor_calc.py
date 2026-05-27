@@ -398,7 +398,7 @@ class FactorCalculator(BaseModule , metaclass=_FactorCalculatorMeta):
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
             return StockFactor(factor_names = [self.factor_name])
-        func_calls = {date:(self.eval_factor_series , {'date' : date , 'indent' : self.indent + 1 , 'vb_level' : self.vb_level + 2}) for date in dates}
+        func_calls = {date:(self.eval_factor_series , (date,)) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs)
         if normalize: 

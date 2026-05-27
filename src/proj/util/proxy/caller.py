@@ -5,7 +5,7 @@ from typing import Callable , Any , Iterable , Union, Iterator
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.proj.log import Logger
+from src.proj.util.module import BaseModule
 from src.proj.util.web import iterate_with_interval_control
 
 ProxyCallerInput = Union[Callable[..., bool | Exception] , tuple[str, Callable[..., bool | Exception]] , tuple[Callable[..., bool | Exception], str] , 'ProxyCaller']
@@ -53,14 +53,14 @@ class ProxyCaller:
         """Ban the caller"""
         self.banned = True
 
-    def proxied(self , *args: Any, vb_level: Any = 2, **kwargs: Any) -> bool | Exception:
+    def proxied(self , *args: Any, **kwargs: Any) -> bool | Exception:
         """Call the function with a proxy"""
         proxy = self.pool.acquire(self.url)
         if proxy is None:
             return ProxyDepletionException(self.url)
         self.result = self.func(proxy.url , *args, **kwargs)
         self.finished = not isinstance(self.result, Exception)
-        self.pool.release(proxy, False if isinstance(self.result, Exception) else self.result, vb_level=vb_level)
+        self.pool.release(proxy, False if isinstance(self.result, Exception) else self.result)
         return self.result
 
     def fallback(self , *args: Any, **kwargs: Any) -> bool | Exception:
@@ -93,11 +93,12 @@ class ProxyCaller:
                 assert isinstance(input , Callable) , f"single input should be a callable, but got {input}"
                 return cls(input , pool = pool)
 
-class ProxyCallerList:
+class ProxyCallerList(BaseModule):
     """A list of proxy callers"""
     fallback_interval = 1.0
     
-    def __init__(self, callers: list[ProxyCaller] | dict[str, ProxyCaller] , * , pool = None):
+    def __init__(self, callers: list[ProxyCaller] | dict[str, ProxyCaller] , * , pool = None, vb_level: int = 2, indent: int = 1):
+        self.set_vb(vb_level , indent)
         if isinstance(callers , dict):
             self.callers = [caller.set_title(title) for title, caller in callers.items()]
         else:
@@ -140,7 +141,7 @@ class ProxyCallerList:
 
     def print_status(self):
         """Print the status of the proxy pool"""
-        Logger.stdout([(caller.url, caller.finished, caller.banned) for caller in self.callers])
+        self.logger.stdout([(caller.url, caller.finished, caller.banned) for caller in self.callers])
 
     def check_shutdown(self):
         """Ban the url"""
@@ -222,20 +223,21 @@ class ProxyCallerList:
         grouping_num = max(int(np.round(np.sqrt(len(self.callers)))) , 2 * max_workers)
         for i_iter in range(10):
             groups = self.partition(grouping_num)
-            Logger.stdout(f"Execute with partitioning in Round {i_iter}, partition into {len(groups)} groups" , indent = 1 , vb_level = 'max')
+            self.logger.stdout(f"Execute with partitioning in Round {i_iter}, partition into {len(groups)} groups" , vb_level = 'max')
             for i_group, group in enumerate(groups):
                 group.execute(max_workers=max_workers , **kwargs)
-                Logger.stdout(f"Finished executing {len(group.callers)} callers for group {i_group}," ,  
-                              f"{len(group.unfinished_callers())} unfinished" , indent = 2 , vb_level = 'max')
+                self.logger.stdout(
+                    f"Finished executing {len(group.callers)} callers for group {i_group}," ,  
+                    f"{len(group.unfinished_callers())} unfinished" , vb_level = 'max')
                 self.pool.adaptive_refresh()
-                Logger.stdout(f"Try Refresh Proxy Pool for group {i_group} in round {i_iter} finished" , indent = 2 , vb_level = 'max')
+                self.logger.stdout(f"Try Refresh Proxy Pool for group {i_group} in round {i_iter} finished" , vb_level = 'max')
             if self.is_unable_to_proceed():
                 break
         else:
-            Logger.alert2(f"After 10 Rounds, the proxy pool is still able to proceed, WHY?")
-            Logger.alert1(self.unfinished_callers())
+            self.logger.alert2(f"After 10 Rounds, the proxy pool is still able to proceed, WHY?")
+            self.logger.alert1(self.unfinished_callers())
         if fallback_to_raw_ip and not self.all_finished:
-            Logger.alert1(f"Fallback to raw ip for {len(self.unfinished_callers())} callers" , indent = 1 , vb_level = 'max')
+            self.logger.alert1(f"Fallback to raw ip for {len(self.unfinished_callers())} callers")
             self.fallback()
         return self.results()
 
@@ -250,7 +252,7 @@ class ProxyCallerList:
                 if group.is_unable_to_proceed():
                     break
             else:
-                Logger.alert2(f"Proxy pool is refreshed too many times, but still able to proceed, WHY?")
+                self.logger.alert2(f"Proxy pool is refreshed too many times, but still able to proceed, WHY?")
             if not group.is_unable_to_proceed() or self.is_unable_to_proceed():
                 break
         if fallback_to_raw_ip and not self.all_finished:

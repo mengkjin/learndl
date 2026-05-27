@@ -53,7 +53,6 @@ def kline_download(start = 20100104 , end = 20241226):
         _file_list_2 = [f for f in _file_list_2 if filedate(f) > 20230328 and filedate(f) <= end]
         file_list = _file_list_1 + _file_list_2
 
-    # Logger.info(f'{len(file_list)} files to download:')
     files = dict(sorted({filedate(f): f for f in file_list}.items()))
     Logger.stdout(files.keys())
     import concurrent.futures

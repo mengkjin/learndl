@@ -10,66 +10,68 @@ from typing import Iterable , Literal , Any
 
 from src.proj.env import Proj
 from src.proj.log import Logger
+from src.proj.util.module import BaseModule
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
 from .verifier import ProxyVerifier
 from .finder import FreeProxyFinder as ProxyFinder
 from .cache import ProxyCache
 from .caller import ProxyCallerList , ProxyCallerInput
 
-def get_test_proxies():
-    """Test fake proxies"""
-    return ProxySet(["http://1.2.3.4:8080", "http://5.6.7.8:3128", "http://9.10.11.12:9999", "http://4.4.4.4:8080", "http://5.5.5.5:3129"])
-
-def get_working_proxies(
-    target_url: str , start_with: Iterable[Proxy | str] = () , * , min_count: int = 5, max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
-    dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: Literal['all','none','simple'] = 'all') -> ProxySet:
-    """
-    return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
-    if force_refresh is True, ignore the expired cache.
-    """
-    if target_url == 'test':
-        return get_test_proxies()
-    Logger.highlight(f'Get working proxies for {target_url}' + (f' with dummy verification' if dummy else '') , vb_level = 0 if detail_level in ['all' , 'simple'] else 'max')
-    finder = ProxyFinder()
-    finder_use_cache = True
-    for _ in range(2):
-        verified_proxies = ProxySet()
-        for round in range(max_round + 1):
-            prefix = f'Round {round} '
-            if len(verified_proxies) >= min_count:
-                break
-            timer_find = Logger.Timer(f'{prefix}{"Load" if round == 0 else "Find"} Proxies', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
-            timer_quick = Logger.Timer(f'{prefix}Quick Verify ({timeout/2:.1f}s) for {ProxyVerifier.QUICK_VERIFY_URL}', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
-            timer_final = Logger.Timer(f'{prefix}Final Verify ({timeout:.1f}s) for {target_url}', indent = 1, vb_level = 1 if detail_level == 'all' else 'max')
-            with timer_find as timer:
-                if round == 0:
-                    cands = ProxyCache.get_cached_proxies('all').extend(start_with)
+class WorkingProxies(BaseModule):
+    TEST_PROXIES = ProxySet(["http://1.2.3.4:8080", "http://5.6.7.8:3128", "http://9.10.11.12:9999", "http://4.4.4.4:8080", "http://5.5.5.5:3129"])
+    @classmethod
+    def get(
+        cls, target_url: str , start_with: Iterable[Proxy | str] = () , * , 
+        min_count: int = 5, max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
+        dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: Literal['all','none','simple'] = 'all') -> ProxySet:
+        """
+        return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
+        if force_refresh is True, ignore the expired cache.
+        """
+        if target_url == 'test':
+            return cls.TEST_PROXIES
+        
+        cls.logger.highlight(f'Get working proxies for {target_url}' + (f' with dummy verification' if dummy else '') , vb_level = 0 if detail_level in ['all' , 'simple'] else 'max')
+        finder = ProxyFinder()
+        finder_use_cache = True
+        timer_vb_level = 1 if detail_level == 'all' else 'max'
+        for _ in range(2):
+            verified_proxies = ProxySet()
+            for round in range(max_round + 1):
+                prefix = f'Round {round} '
+                if len(verified_proxies) >= min_count:
+                    break
+                timer_find = cls.logger.timer(f'{prefix}{"Load" if round == 0 else "Find"} Proxies', idt = 1, vb_level = timer_vb_level)
+                timer_quick = cls.logger.timer(f'{prefix}Quick Verify ({timeout/2:.1f}s) for {ProxyVerifier.QUICK_VERIFY_URL}', idt = 1, vb_level = timer_vb_level)
+                timer_final = cls.logger.timer(f'{prefix}Final Verify ({timeout:.1f}s) for {target_url}', idt = 1, vb_level = timer_vb_level)
+                with timer_find as timer:
+                    if round == 0:
+                        cands = ProxyCache.get_cached_proxies('all').extend(start_with)
+                    else:
+                        # for a url, the first time to find proxies can use cache of other urls, but the next time should not use cache
+                        cands = finder.find(use_cache=finder_use_cache)
+                        finder_use_cache = False
+                    timer.add_key_suffix(f', get {len(cands)} new proxies')
+                if go_with_cached_proxies and round == 0:
+                    return cands
                 else:
-                    # for a url, the first time to find proxies can use cache of other urls, but the next time should not use cache
-                    cands = finder.find(use_cache=finder_use_cache)
-                    finder_use_cache = False
-                timer.add_key_suffix(f', get {len(cands)} new proxies')
-            if go_with_cached_proxies and round == 0:
-                return cands
-            else:
-                cands = ProxyVerifier.unverified_proxies(target_url, cands)
-            if not cands:
-                continue
-            with timer_quick as timer:
-                passed_proxies = ProxyVerifier.parallel_verification(cands,ProxyVerifier.QUICK_VERIFY_URL,timeout,fast_test=True,workers=workers,dummy=dummy)
-                timer.add_key_suffix(f', {len(passed_proxies)}/{len(cands)} passed')
-            if not passed_proxies:
-                continue
-            with timer_final as timer:
-                final_proxies = ProxyVerifier.parallel_verification(passed_proxies,target_url,timeout,fast_test=False,workers=workers,dummy=dummy)
-                timer.add_key_suffix(f', {len(final_proxies)}/{len(passed_proxies)} passed')
-            verified_proxies.extend(final_proxies)
-        if verified_proxies:
-            break
-    if not dummy and verified_proxies:
-        ProxyCache.update(target_url, verified_proxies)
-    return verified_proxies
-
+                    cands = ProxyVerifier.unverified_proxies(target_url, cands)
+                if not cands:
+                    continue
+                with timer_quick as timer:
+                    passed_proxies = ProxyVerifier.parallel_verification(cands,ProxyVerifier.QUICK_VERIFY_URL,timeout,fast_test=True,workers=workers,dummy=dummy)
+                    timer.add_key_suffix(f', {len(passed_proxies)}/{len(cands)} passed')
+                if not passed_proxies:
+                    continue
+                with timer_final as timer:
+                    final_proxies = ProxyVerifier.parallel_verification(passed_proxies,target_url,timeout,fast_test=False,workers=workers,dummy=dummy)
+                    timer.add_key_suffix(f', {len(final_proxies)}/{len(passed_proxies)} passed')
+                verified_proxies.extend(final_proxies)
+            if verified_proxies:
+                break
+        if not dummy and verified_proxies:
+            ProxyCache.update(target_url, verified_proxies)
+        return verified_proxies
 
 class ProxyStatsSetURL(ProxyStatsSet):
     """
@@ -152,7 +154,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
         old_proxies = [proxy for proxy in self.proxies if proxy.invalid]
         new_proxies = [
             ProxyStats(proxy) for proxy in 
-            get_working_proxies(self.url, self.proxies , go_with_cached_proxies = go_with_cached_proxies , detail_level = detail_level)
+            WorkingProxies.get(self.url, self.proxies , go_with_cached_proxies = go_with_cached_proxies , detail_level = detail_level)
         ]
         self.proxies = list(set(old_proxies + new_proxies))
         self.refresh_time = datetime.now()

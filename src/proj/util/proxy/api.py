@@ -1,14 +1,15 @@
 """Facade: cached working proxies and shared ``AdaptiveProxyPool`` instances per target URL set."""
 
 from typing import Iterable
+from src.proj.util.module import BaseModule
 from .finder import FreeProxyFinder as ProxyFinder
 from .verifier import ProxyVerifier
 from .cache import ProxyCache
-from .ppool import AdaptiveProxyPool , get_working_proxies
+from .ppool import AdaptiveProxyPool , WorkingProxies
 
 __all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool']
 
-class ProxyAPI:
+class ProxyAPI(BaseModule):
     """Process-wide registry of ``AdaptiveProxyPool`` keyed by sorted target URL tuples."""
 
     proxy_pools : dict[tuple[str, ...], AdaptiveProxyPool] = {}
@@ -20,7 +21,7 @@ class ProxyAPI:
         return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
         if force_refresh is True, ignore the expired cache.
         """
-        return get_working_proxies(target_url, min_count=min_count, max_round=max_round, timeout=timeout,  workers=workers)
+        return WorkingProxies.get(target_url, min_count=min_count, max_round=max_round, timeout=timeout,  workers=workers)
 
     @classmethod
     def get_proxy_pool(cls , target_urls: Iterable[str] | str , go_with_cached_proxies: bool = False, * , refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2) -> AdaptiveProxyPool:
