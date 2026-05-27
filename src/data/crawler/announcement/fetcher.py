@@ -18,7 +18,6 @@ from urllib.parse import urlencode
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from src.proj import Logger
 from src.proj.util import ProxyAPI , BaseModule
 from src.proj.util.proxy import ProxyCaller
 from src.proj.util.web import (
@@ -185,14 +184,14 @@ class FetcherTask(BaseModule):
                 if not task.should_be_skipped or (i >= (len(ranges) - force_update)):
                     tasks.append(task)
         if (len(tasks) >= 100):
-            Logger.error(f"Too many tasks in {start}~{end}, be cautious!")
+            cls.logger.error(f"Too many tasks in {start}~{end}, be cautious!")
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
-            Logger.stdout(f"Total Announcement Crawling Tasks: {len(tasks)} at {min_date}~{max_date} for {len(EXCHANGES)} exchanges")
+            cls.logger.stdout(f"Total Announcement Crawling Tasks: {len(tasks)} at {min_date}~{max_date} for {len(EXCHANGES)} exchanges")
         return tasks
 
-class AnnoucementFetcher(ABC):
+class AnnoucementFetcher(ABC, BaseModule):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 
@@ -222,7 +221,7 @@ class AnnoucementFetcher(ABC):
                 try:
                     announcements = self.fetch_announcements(start, end, **kwargs, title=title)
                 except (TimeoutError , requests.exceptions.Timeout) as e:
-                    Logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
+                    self.logger.error(f"{self.__class__.__name__} at {start}~{end} TimeoutError: {e}")
                     return e
                 for ann in announcements:
                     if ann and ann.key not in seen:
@@ -245,7 +244,7 @@ class AnnoucementFetcher(ABC):
         else:
             raise ValueError(f"Invalid exchange: {exchange}")
 
-class AsyncAnnoucementFetcher(ABC):
+class AsyncAnnoucementFetcher(ABC, BaseModule):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 

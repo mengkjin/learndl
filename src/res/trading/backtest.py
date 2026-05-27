@@ -17,9 +17,9 @@ class BacktestPortfolioManager(BaseModule):
 
     @classmethod
     def rebuild(cls , port_name : str , date : int | None = None , export = True , analyze = True , indent : int = 1 , vb_level : Any = 2):
-        tp = BacktestPort.load(port_name)
+        tp = BacktestPort.load(port_name , indent = indent , vb_level = vb_level)
         date = date if date is not None else CALENDAR.updated()
-        tp.rebuild(date , export = export , indent = indent , vb_level = vb_level)
+        tp.rebuild(date , export = export)
         if analyze:
             tp.analyze(end = date)
         return tp
@@ -32,7 +32,7 @@ class BacktestPortfolioManager(BaseModule):
         date = CALENDAR.updated()
         assert not reset_ports or all([port in BacktestPort.candidate_ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
-        updated_ports = {name:BacktestPort.load(name).build(date , indent = indent + 1 , vb_level = 'max') 
+        updated_ports = {name:BacktestPort.load(name , indent = indent + 1 , vb_level = 'max').build(date) 
                          for name in BacktestPort.candidate_ports}
         updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
             

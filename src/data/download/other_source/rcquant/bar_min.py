@@ -16,7 +16,7 @@ from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
 from src.proj import PATH , MACHINE , Logger , CALENDAR , DB , Dates
-from src.proj.util import IOCatcher
+from src.proj.util import IOCatcher , BaseModule
 from src.data.util import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -245,3 +245,9 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
             return False
     
     return True
+
+class RcquantMinBarDownloader(BaseModule):
+    @classmethod
+    def update(cls , * , indent: int = 0, vb_level: int = 1):
+        cls.SetClassVB(vb_level, indent)
+        rcquant_proceed()

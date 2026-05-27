@@ -15,6 +15,7 @@ import pandas as pd
 from typing import Any , Literal
 
 from src.proj import PATH , Logger , CALENDAR , DB , Dates
+from src.proj.util import BaseModule
 from src.data.util import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
@@ -212,3 +213,9 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
     if len(dates) > 0:
         Logger.success(f'Transform baostock X-min bars at {dates}' , indent = 1)
     return True
+
+class Baostock5minBarDownloader(BaseModule):
+    @classmethod
+    def update(cls , * , indent: int = 0, vb_level: int = 1):
+        cls.SetClassVB(vb_level, indent)
+        baostock_proceed()

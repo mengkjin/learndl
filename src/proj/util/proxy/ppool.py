@@ -9,7 +9,6 @@ from datetime import datetime , timedelta
 from typing import Iterable , Literal , Any
 
 from src.proj.env import Proj
-from src.proj.log import Logger
 from src.proj.util.module import BaseModule
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
 from .verifier import ProxyVerifier
@@ -73,7 +72,7 @@ class WorkingProxies(BaseModule):
             ProxyCache.update(target_url, verified_proxies)
         return verified_proxies
 
-class ProxyStatsSetURL(ProxyStatsSet):
+class ProxyStatsSetURL(ProxyStatsSet , BaseModule):
     """
     Per-URL singleton :class:`ProxyStatsSet` with optional adaptive refresh.
 
@@ -95,9 +94,10 @@ class ProxyStatsSetURL(ProxyStatsSet):
         proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown' , * , 
         url: str , adaptive: bool = False,
         refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2,
-        go_with_cached_proxies: bool = False,
+        go_with_cached_proxies: bool = False, indent: int = 0, vb_level: Any = 1,
         **kwargs
     ):
+        self.set_vb(vb_level, indent)
         if getattr(self, '_inited', False):
             assert url == self.url , f"url is already set to {self.url} , and cannot be changed to {url}"
             if proxies is not None:
@@ -145,7 +145,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
     def check_validity(self) -> bool:
         """Return True if at least one valid proxy exists; log a one-time shutdown notice otherwise."""
         if self.shutdown:
-            Logger.only_once(f"ProxySet for URL {self.url} shutdown , all proxies are invalid and refresh is disabled" , object = self , mark = 'shutdown_info' , printer = 'alert2')
+            self.logger.only_once(f"ProxySet for URL {self.url} shutdown , all proxies are invalid and refresh is disabled" , object = self , mark = 'shutdown_info' , printer = 'alert2')
             return False
         return self.valid_count > 0
 
@@ -161,7 +161,7 @@ class ProxyStatsSetURL(ProxyStatsSet):
 
     def print_status(self):
         """Print the status of the proxy pool"""
-        Logger.stdout(f"URL {self.url} has {len(self.proxies)} proxies, {self.valid_ratio:.2%} valid")
+        self.logger.stdout(f"URL {self.url} has {len(self.proxies)} proxies, {self.valid_ratio:.2%} valid")
 
     def initial_refresh(self , go_with_cached_proxies: bool = False):
         """Refresh the proxy set with new proxies"""
@@ -180,18 +180,18 @@ class ProxyStatsSetURL(ProxyStatsSet):
         prefix = f'URL {self.url} Proxies '
         refresh_time = datetime.now()
         if refresh_time - self.refresh_time < timedelta(seconds=self.refresh_interval):
-            Logger.alert1(f"{prefix}refresh re-called too soon, will wait for {self.refresh_interval}")
+            self.logger.alert1(f"{prefix}refresh re-called too soon, will wait for {self.refresh_interval}")
             time.sleep(self.refresh_interval - (refresh_time - self.refresh_time).total_seconds())
         self.refresh_proxies(detail_level = 'none')
         self.refresh_attempt += 1
         if self.proxies:
-            Logger.success(f"{prefix}valid ratio drop to {valid_ratio:.2f}, refresh to {len(self.proxies)} proxies (attempt {self.refresh_attempt}/{self.refresh_max_attempts})")
+            self.logger.success(f"{prefix}valid ratio drop to {valid_ratio:.2f}, refresh to {len(self.proxies)} proxies (attempt {self.refresh_attempt}/{self.refresh_max_attempts})")
         if self.refresh_attempt >= self.refresh_max_attempts:
             self.refresh_enabled = False
-            Logger.alert1(f"{prefix}refresh count reached max attempts {self.refresh_max_attempts}, will not refresh anymore")
+            self.logger.alert1(f"{prefix}refresh count reached max attempts {self.refresh_max_attempts}, will not refresh anymore")
         elif self.valid_ratio == 0:
             self.refresh_enabled = False
-            Logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
+            self.logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
 
     @classmethod
     def from_urls(cls, urls: list[str] | str , **kwargs):
@@ -203,20 +203,24 @@ class ProxyStatsSetURL(ProxyStatsSet):
             urls = [urls]
         return {url: cls(url = url, **kwargs) for url in urls}
 
-class ProxyPool:
+class ProxyPool(BaseModule):
     """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""
 
-    def __init__(self, target_urls: list[str] | str , * , go_with_cached_proxies: bool = False):
+    def __init__(
+        self, target_urls: list[str] | str , * , 
+        go_with_cached_proxies: bool = False ,
+        indent: int = 0, vb_level: Any = 1, **kwargs):
+        self.set_vb(vb_level, indent)
         self.initiate(target_urls, go_with_cached_proxies = go_with_cached_proxies , adaptive=False)
 
     def initiate(self , target_urls: list[str] | str , **kwargs):
         """Initialise the pool's lock, condition, and per-URL proxy sets."""
         if target_urls == 'test':
-            Logger.alert1("Using test mode and pseudo proxies")
+            self.logger.alert1("Using test mode and pseudo proxies")
         self.lock = threading.Lock()
         self.condition = threading.Condition(self.lock)
         self.target_urls = target_urls if isinstance(target_urls , list) else [target_urls]
-        self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, **kwargs)
+        self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, indent=self.indent + 1, vb_level=self.vb_level + 1, **kwargs)
         
     def __len__(self) -> int:
         return len(self.target_urls)
@@ -255,13 +259,13 @@ class ProxyPool:
                     return proxy
 
                 # condition 3: if there are no available proxies, wait until a proxy is available
-                Logger.footnote(f"URL [{url}] is waiting for a proxy" , vb_level = Proj.vb.get('proxy'))
+                self.logger.footnote(f"URL [{url}] is waiting for a proxy" , vb_level = Proj.vb.get('proxy'))
                 self.condition.wait()
 
-    def release(self, proxy: ProxyStats, success: bool, counted: bool = True , vb_level: Any = 1) -> None:
+    def release(self, proxy: ProxyStats, success: bool, counted: bool = True) -> None:
         """Release a proxy, and update the state of this usage."""
         with self.condition:
-            proxy.release(success, counted=counted, vb_level=vb_level)
+            proxy.release(success, counted=counted, vb_level=self.vb_level + 3)
             # notify all waiting threads that the proxy state has changed
             self.condition.notify_all()
 
@@ -290,12 +294,12 @@ class ProxyPool:
             # success = True  # if you want all success, change to True
 
             if success:
-                Logger.note(f"Worker {worker_id} use proxy {proxy} successfully")
+                self.logger.note(f"Worker {worker_id} use proxy {proxy} successfully")
             else:
-                Logger.note(f"Worker {worker_id} use proxy {proxy} failed")
+                self.logger.note(f"Worker {worker_id} use proxy {proxy} failed")
 
             return success
-        Logger.stdout('start testing proxy pool')
+        self.logger.stdout('start testing proxy pool')
         workers = [('test' ,lambda proxy, i=i: test_worker(proxy, worker_id=i)) for i in range(4 * len(self))]
         return self.execute(workers , max_workers=max_workers)
 
@@ -314,7 +318,9 @@ class AdaptiveProxyPool(ProxyPool):
         refresh_interval: int = 5 ,
         refresh_max_attempts: int = 10 ,
         refresh_threshold: float = 0.2 ,
+        indent: int = 0, vb_level: Any = 1, **kwargs
     ):
+        self.set_vb(vb_level, indent)
         self.initiate(target_urls, adaptive=True , go_with_cached_proxies = go_with_cached_proxies , 
                       refresh_interval=refresh_interval , refresh_max_attempts=refresh_max_attempts , refresh_threshold=refresh_threshold)
 
@@ -340,7 +346,7 @@ class AdaptiveProxyPool(ProxyPool):
                 if group.is_unable_to_proceed():
                     break
             else:
-                Logger.alert2(f"Proxy pool is refreshed too many times, but still able to proceed, WHY?")
+                self.logger.alert2(f"Proxy pool is refreshed too many times, but still able to proceed, WHY?")
             if not group.is_unable_to_proceed() or callers.is_unable_to_proceed():
                 break
         if fallback_to_raw_ip and not callers.all_finished:
@@ -353,19 +359,24 @@ class AdaptiveProxyPool(ProxyPool):
         return cls('test' , refresh_interval=refresh_interval , refresh_max_attempts=refresh_max_attempts , refresh_threshold=refresh_threshold)
 
 
-class AsyncProxyPool:
+class AsyncProxyPool(BaseModule):
     """Asyncio-native proxy pool corresponding to ``ProxyPool``."""
 
-    def __init__(self, target_urls: list[str] | str, *, go_with_cached_proxies: bool = False):
+    def __init__(
+        self, target_urls: list[str] | str, *, 
+        go_with_cached_proxies: bool = False,
+        indent: int = 0, vb_level: Any = 1, **kwargs
+    ):
+        self.set_vb(vb_level, indent)
         self.initiate(target_urls, go_with_cached_proxies=go_with_cached_proxies, adaptive=False)
 
     def initiate(self, target_urls: list[str] | str, **kwargs):
         if target_urls == 'test':
-            Logger.alert1("Using test mode and pseudo proxies")
+            self.logger.alert1("Using test mode and pseudo proxies")
         self.lock = asyncio.Lock()
         self.condition = asyncio.Condition(self.lock)
         self.target_urls = target_urls if isinstance(target_urls, list) else [target_urls]
-        self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, **kwargs)
+        self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, indent=self.indent + 1, vb_level=self.vb_level + 1, **kwargs)
 
     def __len__(self) -> int:
         return len(self.target_urls)
@@ -385,12 +396,12 @@ class AsyncProxyPool:
                     return None
                 if proxy := self.proxies[url].pick_one():
                     return proxy
-                Logger.footnote(f"URL [{url}] is waiting for a proxy" , vb_level = Proj.vb.get('proxy'))
+                self.logger.footnote(f"URL [{url}] is waiting for a proxy" , vb_level = Proj.vb.get('proxy'))
                 await self.condition.wait()
 
-    async def release_async(self, proxy: ProxyStats, success: bool, *, counted: bool = True , vb_level: Any = 1) -> None:
+    async def release_async(self, proxy: ProxyStats, success: bool, *, counted: bool = True) -> None:
         async with self.condition:
-            proxy.release(success, counted=counted, vb_level=vb_level)
+            proxy.release(success, counted=counted, vb_level=self.vb_level + 3)
             self.condition.notify_all()
 
 
@@ -405,7 +416,9 @@ class AsyncAdaptiveProxyPool(AsyncProxyPool):
         refresh_interval: int = 5,
         refresh_max_attempts: int = 10,
         refresh_threshold: float = 0.2,
+        indent: int = 0, vb_level: Any = 1, **kwargs
     ):
+        self.set_vb(vb_level, indent)
         self.initiate(
             target_urls,
             adaptive=True,

@@ -283,12 +283,12 @@ class BaseModule:
         return GroupedCachedProperties()
 
     @classmethod
-    def SetClassVB(cls , vb_level : int | None = None , indent : int | None = None):
+    def SetClassVB(cls , vb_level : Any | None = None , indent : int | None = None):
         if vb_level is not None:
             cls._class_vb_level = Proj.vb(vb_level)
         if indent is not None:
             cls._class_indent = indent
-    def set_vb(self , vb_level : int | None = None , indent : int | None = None):
+    def set_vb(self , vb_level : Any | None = None , indent : int | None = None):
         if vb_level is not None:
             self.cached_properties.set('vb_level' , Proj.vb(vb_level))
         if indent is not None:

@@ -5,7 +5,7 @@ import numpy as np
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal , Type , ClassVar
+from typing import Literal , Type , ClassVar , Any
 
 from src.proj import PATH , CALENDAR , DB , Dates , Const
 from src.proj.util import AsyncSaver , BaseModule
@@ -78,13 +78,13 @@ class TradingPort(BaseModule):
         self.last_ports : dict[int , pd.DataFrame] = {}
     
     @classmethod
-    def load(cls , name : str) -> TradingPort:
+    def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> TradingPort:
         if name in TrackingPort.candidate_ports and name in BacktestPort.candidate_ports:
             raise ValueError(f'{name} is both tracking and backtest port, please use distinct name for tracking and backtest ports')
         elif name in TrackingPort.candidate_ports:
-            return TrackingPort.load(name)
+            return TrackingPort.load(name , vb_level = vb_level , indent = indent)
         elif name in BacktestPort.candidate_ports:
-            return BacktestPort.load(name)
+            return BacktestPort.load(name , vb_level = vb_level , indent = indent)
         else:
             raise ValueError(f'{name} is not in {TrackingPort.candidate_ports.keys()} or {BacktestPort.candidate_ports.keys()}')
 
@@ -254,7 +254,7 @@ class TradingPort(BaseModule):
 class TrackingPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.tracking_ports
     @classmethod
-    def load(cls , name : str , vb_level : int | None = None , indent : int | None = None) -> TrackingPort:
+    def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> TrackingPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
             instance = cls(**kwargs)
@@ -311,7 +311,7 @@ class TrackingPort(TradingPort):
 class BacktestPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.backtest_ports
     @classmethod
-    def load(cls , name : str , vb_level : int | None = None , indent : int | None = None) -> BacktestPort:
+    def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> BacktestPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : True}
             instance = cls(**kwargs)
