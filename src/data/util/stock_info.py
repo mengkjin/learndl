@@ -12,15 +12,14 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
-from src.proj import MACHINE , CALENDAR , TradeDate , DB , singleton
+from src.proj import MACHINE , CALENDAR , TradeDate , DB , SingletonMeta
+from src.proj.util import BaseModule
 
-@singleton
-class InfoDataAccess:
+class InfoDataAccess(BaseModule , metaclass=SingletonMeta):
     """
     Date-aware interface to static Chinese A-share stock reference data.
 
-    Loaded once at startup via the ``@singleton`` decorator; imported via the
-    module-level ``INFO`` alias.
+    Loaded once at startup; imported via the module-level ``INFO`` alias.
 
     Attributes
     ----------

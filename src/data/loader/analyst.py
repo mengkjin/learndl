@@ -10,11 +10,10 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import CALENDAR , DB , singleton
+from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
 
-@singleton
 class AnalystDataAccess(DateDataAccess):
     """
     Singleton data access object for sell-side analyst reports.

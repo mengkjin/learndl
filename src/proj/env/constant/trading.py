@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 from src.proj.env import MACHINE
-from src.proj.core import singleton
+from src.proj.core import SingletonMeta
 
 __all__ = ['TradingPortConstants']
 
-@singleton
-class TradingPortConstants:
+class TradingPortConstants(metaclass=SingletonMeta):
     """
     Thin view over YAML-loaded trading port metadata:
     - focused_ports [list[str]]: focused ports

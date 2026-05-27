@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 from typing import Literal
-from src.proj.core import singleton
+from src.proj.core import SingletonMeta
 from src.proj.env import MACHINE
 
 __all__ = ['ModelConstants']
 
-@singleton
-class ModelConstants:
+class ModelConstants(metaclass=SingletonMeta):
     """
     User-tunable resume flags for training and downstream evaluations:
     - resume_test [Literal['False' , 'last_model_date' , 'last_pred_date']]: resume option of model train: if resume testing , and if so whether to resume from last model date or last pred date

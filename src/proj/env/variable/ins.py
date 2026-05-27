@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.proj.core import singleton
+from src.proj.core import SingletonMeta
 
 class _Trainer:
     """Descriptor returning ``BaseTrainer._instance``."""
@@ -21,8 +21,7 @@ class _Factor:
         from src.res.factor.util import StockFactor
         return StockFactor._factor
 
-@singleton
-class InstanceCollection:
+class InstanceCollection(metaclass=SingletonMeta):
     """
     Holds optional instances used across research code.
         Proj.instances.trainer  # BaseTrainer instance

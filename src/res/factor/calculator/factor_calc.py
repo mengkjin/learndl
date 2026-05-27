@@ -523,19 +523,19 @@ class FactorCalculator(BaseModule , metaclass=_FactorCalculatorMeta):
         ModelTrainer.test_factor(cls.factor_name , False , start = dates[0] , end = dates[-1] , **kwargs)
 
     @classmethod
-    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> None:
+    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , * , indent : int = 1 , vb_level : Any = 1) -> None:
         """update factor data and stats of a given date"""
         calc = cls(indent = indent , vb_level = vb_level)
-        calc.update_all_factors(start = start , end = end , overwrite = overwrite)
-        calc.update_all_stats(start = start , end = end , overwrite = overwrite)
+        calc.update_all_factors(start , end , overwrite)
+        calc.update_all_stats(start , end , overwrite)
 
     @classmethod
-    def recalculate_all(cls , start : int | None = None , end : int | None = None , indent : int = 1 , vb_level : Any = 1) -> None:
+    def recalculate_all(cls , start : int | None = None , end : int | None = None , * , indent : int = 1 , vb_level : Any = 1) -> None:
         calc = cls(indent = indent , vb_level = vb_level)
         if isinstance(calc , WeightedPoolingCalculator):
             calc.drop_pooling_weight(after = start , overwrite = True)
-        calc.update_all_factors(start = start , end = end , overwrite = True)
-        calc.update_all_stats(start = start , end = end , overwrite = True)
+        calc.update_all_factors(start , end , True)
+        calc.update_all_stats(start , end , True)
 
     @classmethod
     def daily_stats(cls) -> pd.DataFrame:

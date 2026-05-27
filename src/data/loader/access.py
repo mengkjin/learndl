@@ -17,16 +17,16 @@ Concrete singletons in this package
 import numpy as np
 import pandas as pd
 
-from abc import ABC , abstractmethod
+from abc import abstractmethod
 from typing import Any
 
-from src.proj import CALENDAR , TradeDate
+from src.proj import CALENDAR , TradeDate , SingletonABCMeta
 from src.proj.util import BaseModule
 from src.data.util import INFO , DFCollection , PLDFCollection
 
-class DateDataAccess(BaseModule , ABC):
+class DateDataAccess(BaseModule , metaclass=SingletonABCMeta):
     """
-    Abstract date-keyed data accessor.
+    Abstract date-keyed data accessor. Singleton ABC class.
 
     Class Attributes
     ----------------

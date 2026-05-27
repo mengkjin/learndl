@@ -359,7 +359,7 @@ class Logger:
 
     @classmethod
     def divider(cls , width : int = 140 , char : Literal['-' , '=' , '*'] = '-' , msg : str | None = None , 
-                color : str | None = None , bold : bool = True , vb_level : Any = 0):
+                color : str | None = None , bold : bool = True , vb_level : Any = 0 , **kwargs):
         """Divider mesge , use stdout"""
         if msg is None:
             msg = char * width
@@ -370,13 +370,13 @@ class Logger:
         new_stdout(msg , color = color , bold = bold , vb_level = vb_level)
 
     @classmethod
-    def conclude(cls , *args : str , level : LOG_LEVEL_TYPE = 'critical'):
+    def conclude(cls , *args : str , level : LOG_LEVEL_TYPE = 'critical' , **kwargs):
         """Add the message to the conclusions for later use"""
         msg = ' '.join([str(s) for s in args])
         cls._conclusions[level].append(msg)
 
     @classmethod
-    def draw_conclusions(cls , simplify_errors : bool = True) -> str:
+    def draw_conclusions(cls , simplify_errors : bool = True , **kwargs) -> str:
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
         num_conclusions = sum([len(cls._conclusions[level]) for level in LOG_LEVELS])
@@ -399,17 +399,17 @@ class Logger:
         return '\n'.join(conclusion_strs)
 
     @classmethod
-    def get_conclusions(cls , type : LOG_LEVEL_TYPE) -> list[str]:
+    def get_conclusions(cls , type : LOG_LEVEL_TYPE , **kwargs) -> list[str]:
         """Get the conclusions"""
         return cls._conclusions[type]
 
     @classmethod
-    def print_exc(cls , e : Exception , color : str = 'lightred' , bold : bool = True):
+    def print_exc(cls , e : Exception , color : str = 'lightred' , bold : bool = True , **kwargs):
         """Print the exception"""
         return new_print_exc(e , color = color , bold = bold)
 
     @classmethod
-    def print_traceback_stack(cls , color : str = 'lightyellow' , bold : bool = True):
+    def print_traceback_stack(cls , color : str = 'lightyellow' , bold : bool = True , **kwargs):
         """Print the exception stack"""
         return new_print_traceback_stack(color = color , bold = bold)
 

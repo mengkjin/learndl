@@ -9,12 +9,10 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import TradeDate , DB , singleton
+from src.proj import TradeDate , DB
 from src.data.util import INFO
 
 from .access import DateDataAccess
-
-@singleton
 class ExposureAccess(DateDataAccess):
     """
     Singleton data access object for custom daily microstructure risk exposures.

@@ -1,13 +1,12 @@
 """Debug mode: container of debug mode contents."""
 from __future__ import annotations
 
-from src.proj.core import singleton , stderr
+from src.proj.core import stderr , SingletonMeta
 from .machine import MACHINE
 
 __all__ = ['DebugMode']
 
-@singleton
-class DebugMode:
+class DebugMode(metaclass=SingletonMeta):
     """Context manager: set ``VB.vb_level`` for the block."""
     def __init__(self):
         self._contents = MACHINE.preference('debug')

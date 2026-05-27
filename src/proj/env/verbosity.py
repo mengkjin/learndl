@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from functools import cached_property
 from typing import Any , Literal
-from src.proj.core import stderr , singleton
+from src.proj.core import stderr , SingletonMeta
 
 from .debug_mode import DebugMode
 from .machine import MACHINE
@@ -43,8 +43,8 @@ class WithVB:
 
     def __exit__(self , exc_type , exc_value , exc_traceback):
         self.VB.set_vb(self.vb_prev)
-@singleton
-class Verbosity:
+
+class Verbosity(metaclass=SingletonMeta):
     """
     Verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers.
     can be used to convert between symbolic and numeric levels.

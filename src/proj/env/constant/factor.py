@@ -4,12 +4,11 @@ import numpy as np
 from typing import Any , Literal
 
 from src.proj.env import MACHINE
-from src.proj.core import singleton
+from src.proj.core import SingletonMeta
 
 __all__ = ['FactorConstants']
 
-@singleton
-class FactorUpdateConfig:
+class FactorUpdateConfig(metaclass=SingletonMeta):
     """
     Default calendar window and step for factor refresh jobs:
     - start: start date of factor update
@@ -44,8 +43,7 @@ class FactorUpdateConfig:
     def get(self , key) -> Any:
         return MACHINE.preference('factor' , f'update/{key}')
 
-@singleton
-class RiskModelConfig:
+class RiskModelConfig(metaclass=SingletonMeta):
     """
     Named risk factor groupings (Barra-style lists):
     - market: market factors
@@ -82,8 +80,7 @@ class RiskModelConfig:
         """common factors"""
         return self.market + self.style + self.indus
 
-@singleton
-class BenchmarksConfig:
+class BenchmarksConfig(metaclass=SingletonMeta):
     """
     Allowed benchmark identifiers and presets for tests vs defaults:
     - availables: available benchmarks that can be used
@@ -114,8 +111,7 @@ class BenchmarksConfig:
         """none benchmarks"""
         return ['none' , 'default' , 'market']
 
-@singleton
-class TradeConfig:
+class TradeConfig(metaclass=SingletonMeta):
     """Round-trip cost presets for portfolio analytics:
     - default: default trade cost
     - harvest: harvest trade cost
@@ -135,8 +131,7 @@ class TradeConfig:
         """yale trade cost"""
         return 0.00035
 
-@singleton
-class RoundingConfig:
+class RoundingConfig(metaclass=SingletonMeta):
     """Decimal places for reporting weights, exposures, returns, etc.:
     - weight: weight rounding
     - exposure: exposure rounding
@@ -166,8 +161,7 @@ class RoundingConfig:
         """turnover rounding"""
         return 8
 
-@singleton
-class PortfolioOptimizationConfig:
+class PortfolioOptimizationConfig(metaclass=SingletonMeta):
     """
     Load default/custom optimizer YAML from machine ``util/factor`` configs:
     - default: default portfolio optimization config
@@ -183,8 +177,7 @@ class PortfolioOptimizationConfig:
         """custom portfolio optimization config"""
         return MACHINE.config.get('algo/opt_portfolio/custom')
 
-@singleton
-class StockFactorDefinitionConfig:
+class StockFactorDefinitionConfig(metaclass=SingletonMeta):
     """
     Hierarchical labels for stock factors and validation helpers:
     - meta_type: meta type of stock factor
@@ -282,8 +275,7 @@ class StockFactorDefinitionConfig:
             if category1 not in category1_list:
                 raise ValueError(f'category1 is should be in {category1_list}, but got {category1}')
 
-@singleton
-class FMPConfig:
+class FMPConfig(metaclass=SingletonMeta):
     """
     Thin view over YAML-loaded FMP metadata:
     - default: default FMP config
@@ -294,8 +286,7 @@ class FMPConfig:
         return MACHINE.preference('factor' , 'factor_model_portfolio/creator')
 
 
-@singleton
-class FactorConstants:
+class FactorConstants(metaclass=SingletonMeta):
     """Aggregate accessor for factor-related sub-configs (UPDATE, RISK, BENCH, ...):
     - UPDATE: factor update config
     - RISK: risk model config

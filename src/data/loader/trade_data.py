@@ -8,12 +8,11 @@ import pandas as pd
 import numpy as np
 from typing import Any , Literal
 
-from src.proj import CALENDAR , TradeDate , DB , singleton
+from src.proj import CALENDAR , TradeDate , DB
 from src.data.util import INFO
 
 from .access import DateDataAccess
 
-@singleton
 class TradeDataAccess(DateDataAccess):
     """
     Singleton data access object for daily Chinese A-share market data.

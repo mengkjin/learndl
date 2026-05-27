@@ -21,7 +21,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import CALENDAR , DB , singleton
+from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
 
@@ -411,7 +411,6 @@ class FDataAccess(DateDataAccess):
         """Return the latest YoY growth rate per secid."""
         return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date , qtr_method , yoy_method)
     
-@singleton
 class IndicatorDataAccess(FDataAccess):
     """
     Per-share and ratio indicators (EPS, gross margin, FCFE, ROIC, etc.) from
@@ -452,7 +451,6 @@ class IndicatorDataAccess(FDataAccess):
     def yoy_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
         return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date , qtr_method , yoy_method)
 
-@singleton
 class BalanceSheetAccess(FDataAccess):
     """
     Balance sheet data from ``financial_ts/balance``.  Uses ``'exact'`` quarter
@@ -465,7 +463,6 @@ class BalanceSheetAccess(FDataAccess):
     DEFAULT_QOQ_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
     ANN_DATA_COL : str = 'f_ann_date'
 
-@singleton
 class CashFlowAccess(FDataAccess):
     """
     Cash-flow statement data from ``financial_ts/cashflow``.  Uses ``'diff'``
@@ -476,7 +473,6 @@ class CashFlowAccess(FDataAccess):
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
     ANN_DATA_COL : str = 'f_ann_date'
 
-@singleton
 class IncomeStatementAccess(FDataAccess):
     """
     Income statement data from ``financial_ts/income``.  Uses ``'diff'``
@@ -487,7 +483,6 @@ class IncomeStatementAccess(FDataAccess):
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
     ANN_DATA_COL : str = 'f_ann_date'
   
-@singleton
 class FinancialDataAccess(FDataAccess):
     """
     Supplementary financial tables (dividend, disclosure schedule, earnings

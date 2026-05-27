@@ -5,10 +5,9 @@ Provides factor exposures, residual returns, specific risk, covariance matrices,
 and model coefficients from the ``models`` database.
 Exported as the ``RISK`` singleton.
 """
-from src.proj import TradeDate , DB , singleton
+from src.proj import TradeDate , DB
 from .access import DateDataAccess
 
-@singleton
 class RiskModelAccess(DateDataAccess):
     """
     Singleton data access object for the Tushare CNE5 risk model outputs.

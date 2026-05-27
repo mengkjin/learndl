@@ -9,12 +9,11 @@ import polars as pl
 
 from typing import Literal
 
-from src.proj import DB , singleton
+from src.proj import DB
 from src.data.util import INFO
 
 from .access import DateDataAccess
 
-@singleton
 class MinKLineAccess(DateDataAccess):
     """
     Singleton data access object for intraday minute-bar data.

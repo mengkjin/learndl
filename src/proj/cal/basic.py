@@ -7,7 +7,7 @@ import pandas as pd
 
 from zoneinfo import ZoneInfo
 
-from src.proj.core import singleton
+from src.proj import SingletonMeta
 from src.proj.env import MACHINE
 import src.proj.db as DB
 
@@ -15,8 +15,7 @@ import src.proj.db as DB
 BJ_TZ = ZoneInfo("Asia/Shanghai")
 LOCAL_TZ = MACHINE.timezone
 
-@singleton
-class BasicCalendar:
+class BasicCalendar(metaclass=SingletonMeta):
     """The full calendar built from information_ts/calendar and configuration; keep 'full'/'cal'/'trd' DataFrame for reference."""
 
     def __init__(self) -> None:
