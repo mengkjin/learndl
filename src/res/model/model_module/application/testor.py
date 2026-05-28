@@ -1,10 +1,10 @@
 import torch
 
-from src.proj.util import BaseModule
+from src.proj import BaseClass
 from src.res.model.util import ModelConfig , BatchData , TrainerMetrics , DataModule , get_realistic_batch_data
 from src.res.model.model_module.module import get_predictor_module
 
-class ModelTestor(BaseModule):
+class ModelTestor(BaseClass.BoundLogger):
     """
     Check if a newly defined model can be forward correctly
     Example:

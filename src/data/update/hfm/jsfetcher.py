@@ -19,9 +19,11 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal
 
-from src.proj import PATH , MACHINE , Logger , CALENDAR , DB
-from src.data.util import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
-
+from src.proj import PATH , MACHINE , CALENDAR , DB , BaseClass
+from src.data.util import (
+    secid_adjust , col_reform , row_filter , adjust_precision , 
+    trade_min_reform , trade_min_fillna
+)
 @dataclass
 class FailedData:
     """Container for a failed fetch operation, holding the type and optional date."""
@@ -32,7 +34,7 @@ class FailedData:
         return self
     
 @dataclass
-class JSFetcher:
+class JSFetcher(BaseClass.BoundLogger):
     """
     Callable fetcher for a single ``(db_src, db_key)`` combination.
 
@@ -318,7 +320,7 @@ class JSFetcher:
         paths_not_exists = {k:p.exists()==0 for k,p in paths.items()}
         if any(paths_not_exists.values()): 
             # something wrong
-            Logger.error(f'Something wrong at {date} on {cls.__name__}.trade_day')
+            cls.logger.error(f'Something wrong at {date} on {cls.__name__}.trade_day')
             return FailedData('day' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
@@ -473,73 +475,74 @@ class JSFetcher:
             df = adjust_precision(df)
         return df
 
-class JSDownloader():
+class JSDownloader(BaseClass.BoundLogger):
     @classmethod
     def proceed(cls):
-        paths = kline_download()
+        paths = cls.kline_download()
         return paths
 
-def kline_download():
-    import boto3 , re , datetime , os    # type: ignore
-    from pathlib import Path
+    @classmethod
+    def kline_download(cls):
+        import boto3 , re , datetime , os    # type: ignore
+        from pathlib import Path
 
-    key_id = MACHINE.secret.get('accounts' , 'aws/access_key_id')
-    access_key = MACHINE.secret.get('accounts' , 'aws/secret_access_key')
+        key_id = MACHINE.secret.get('accounts' , 'aws/access_key_id')
+        access_key = MACHINE.secret.get('accounts' , 'aws/secret_access_key')
 
-    session = boto3.Session(aws_access_key_id=key_id, aws_secret_access_key=access_key, region_name='cn-north-1')
-    s3 = session.resource('s3')
-    bucket = s3.Bucket('datayes-data')
-    download_path = PATH.miscel.joinpath('JSMinute')
+        session = boto3.Session(aws_access_key_id=key_id, aws_secret_access_key=access_key, region_name='cn-north-1')
+        s3 = session.resource('s3')
+        bucket = s3.Bucket('datayes-data')
+        download_path = PATH.miscel.joinpath('JSMinute')
 
-    os.makedirs(download_path , exist_ok=True)
-    target_dates = CALENDAR.range(20241201 , None , 'td' , updated = True)
-    stored_dates = [int(x.name.split('.')[-2]) for x in download_path.iterdir() if x.is_file() and x.name.endswith('.zip')]
-    dates = np.setdiff1d(target_dates , stored_dates)
+        os.makedirs(download_path , exist_ok=True)
+        target_dates = CALENDAR.range(20241201 , None , 'td' , updated = True)
+        stored_dates = [int(x.name.split('.')[-2]) for x in download_path.iterdir() if x.is_file() and x.name.endswith('.zip')]
+        dates = np.setdiff1d(target_dates , stored_dates)
 
-    paths : list[Path] = []
-    if len(dates) == 0: 
+        paths : list[Path] = []
+        if len(dates) == 0: 
+            return paths
+        start , end = dates.min() , dates.max()
+
+        def filedate(x):
+            return int(re.findall(r'(\d{8})', x.key)[-1])
+        def filefilter(x):
+            return x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin')
+
+        if start <= 20230328 and end <= 20230328:
+            file_list = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
+            file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
+        elif start > 20230328 and end > 20230328:
+            file_list = [f for f in bucket.objects.filter(Prefix = 'snapshot/L1_services_equd_min/') if filefilter(f)]
+            file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
+        else:
+            _file_list_1 = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
+            _file_list_1 = [f for f in _file_list_1 if filedate(f) >= start and filedate(f) <= 20230328]
+            _file_list_2 = [f for f in bucket.objects.filter(Prefix = 'snapshot/L1_services_equd_min/') if filefilter(f)]
+            _file_list_2 = [f for f in _file_list_2 if filedate(f) > 20230328 and filedate(f) <= end]
+            file_list = _file_list_1 + _file_list_2
+
+        # cls.logger.stdout(f'{len(file_list)} files to download:')
+        files = dict(sorted({filedate(f): f for f in file_list}.items()))
+        files = {k:v for k,v in files.items() if k in dates}
+
+        import concurrent.futures
+        from concurrent.futures import as_completed
+
+        def download_wrapper(args):
+            date, file = args
+            zip_file_path = download_path.joinpath(f'min.{date}.zip')
+            if zip_file_path.exists(): 
+                return
+            bucket.download_file(file.key , zip_file_path)
+            return zip_file_path
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = {executor.submit(download_wrapper, (date , file)):date for date , file in files.items()}
+            for future in as_completed(futures):
+                date = futures[future]
+                if (path := future.result()) is not None: 
+                    paths.append(path)
+                cls.logger.success(f'Download {date} minute kline at {datetime.datetime.now()}!')
+                
         return paths
-    start , end = dates.min() , dates.max()
-
-    def filedate(x):
-        return int(re.findall(r'(\d{8})', x.key)[-1])
-    def filefilter(x):
-        return x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin')
-
-    if start <= 20230328 and end <= 20230328:
-        file_list = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
-        file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
-    elif start > 20230328 and end > 20230328:
-        file_list = [f for f in bucket.objects.filter(Prefix = 'snapshot/L1_services_equd_min/') if filefilter(f)]
-        file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
-    else:
-        _file_list_1 = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
-        _file_list_1 = [f for f in _file_list_1 if filedate(f) >= start and filedate(f) <= 20230328]
-        _file_list_2 = [f for f in bucket.objects.filter(Prefix = 'snapshot/L1_services_equd_min/') if filefilter(f)]
-        _file_list_2 = [f for f in _file_list_2 if filedate(f) > 20230328 and filedate(f) <= end]
-        file_list = _file_list_1 + _file_list_2
-
-    # Logger.stdout(f'{len(file_list)} files to download:')
-    files = dict(sorted({filedate(f): f for f in file_list}.items()))
-    files = {k:v for k,v in files.items() if k in dates}
-
-    import concurrent.futures
-    from concurrent.futures import as_completed
-
-    def download_wrapper(args):
-        date, file = args
-        zip_file_path = download_path.joinpath(f'min.{date}.zip')
-        if zip_file_path.exists(): 
-            return
-        bucket.download_file(file.key , zip_file_path)
-        return zip_file_path
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {executor.submit(download_wrapper, (date , file)):date for date , file in files.items()}
-        for future in as_completed(futures):
-            date = futures[future]
-            if (path := future.result()) is not None: 
-                paths.append(path)
-            Logger.success(f'Download {date} minute kline at {datetime.datetime.now()}!')
-            
-    return paths

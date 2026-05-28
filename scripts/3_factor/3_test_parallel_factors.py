@@ -117,7 +117,7 @@ def _collect_jobs_force(date: int, factors: list[str], overwrite: bool) -> int:
         if int(date) < calc.init_date:
             Logger.alert1(f'Skip {name}: date {date} < init_date {calc.init_date}')
             continue
-        stock.jobs.append(UpdateJobDate(calc, date, overwrite, vb))
+        stock.jobs.append(UpdateJobDate(calc, date, overwrite, vb_level = vb))
     stock.jobs.sort_jobs()
     return len(stock.jobs)
 

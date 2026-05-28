@@ -8,7 +8,7 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , Logger , DB , Proj
+from src.proj import PATH , DB , BaseClass
 from src.proj.core import strPath
 from src.proj.util import AsyncSaver , camel_to_snake
 from src.data import DataBlock
@@ -28,7 +28,20 @@ class TestTitle:
     def __get__(self,instance,owner) -> str:
         return test_title(str(getattr(owner, 'TEST_TYPE')))
 
-class BaseFactorAnalyticCalculator(ABC):
+class CalcWarningsManager(BaseClass.BoundLogger):
+    def __init__(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        self.set_vb(vb_level , indent)
+        self.timer = self.logger.timer(*args , **kwargs)
+    def __enter__(self):
+        self.timer.__enter__()
+        warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
+        warnings.filterwarnings('ignore', message='divide by zero encountered in divide', category=RuntimeWarning)
+        warnings.filterwarnings('ignore', message='invalid value encountered in multiply', category=RuntimeWarning)
+    def __exit__(self , *args):
+        warnings.resetwarnings()
+        self.timer.__exit__(*args)
+
+class BaseFactorAnalyticCalculator(ABC, BaseClass.BoundLogger):
     TEST_TYPE : TYPE_of_TEST
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     TEST_TITLE = TestTitle()
@@ -46,17 +59,8 @@ class BaseFactorAnalyticCalculator(ABC):
     def match_name(cls , name : str):
         return name.lower() in [cls.__name__.lower() , cls.task_name()]
 
-    class calc_manager:
-        def __init__(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
-            self.timer = Logger.Timer(*args , indent = indent , vb_level = vb_level , **kwargs)
-        def __enter__(self):
-            self.timer.__enter__()
-            warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
-            warnings.filterwarnings('ignore', message='divide by zero encountered in divide', category=RuntimeWarning)
-            warnings.filterwarnings('ignore', message='invalid value encountered in multiply', category=RuntimeWarning)
-        def __exit__(self , *args):
-            warnings.resetwarnings()
-            self.timer.__exit__(*args)
+    def calc_manager(self):
+        return CalcWarningsManager(f'{self.__class__.__name__} calc' , indent = self.indent , vb_level = self.vb_level)
 
     @abstractmethod
     def calculator(self) -> Callable[...,pd.DataFrame]: 
@@ -68,8 +72,8 @@ class BaseFactorAnalyticCalculator(ABC):
     def calc(self , *args , **kwargs):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
-    def plot(self , show = False , indent : int = 0 , vb_level : Any = 1): 
-        with Logger.Timer(f'{self.__class__.__name__} plot' , indent = indent , vb_level = vb_level):
+    def plot(self , show = False): 
+        with self.logger.timer('plot'):
             if self.calc_rslt.empty: 
                 self.figs = {}
                 return self
@@ -77,8 +81,8 @@ class BaseFactorAnalyticCalculator(ABC):
                 figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
                 self.figs = {'all':figs} if isinstance(figs , Figure) else figs
             except Exception as e:
-                Logger.error(f"Error when plotting {self.__class__.__name__}: {e}")
-                Logger.print_exc(e)
+                self.logger.error(f"Error when plotting {self.__class__.__name__}: {e}")
+                self.logger.print_exc(e)
                 self.figs = {}    
         return self
     @property
@@ -86,8 +90,8 @@ class BaseFactorAnalyticCalculator(ABC):
         if title_prefix := self.kwargs.get('title_prefix' , None):
             return f'{title_prefix} {self.TEST_TITLE}'
         return self.TEST_TITLE
-    
-class BaseFactorAnalyticTest(ABC):
+        
+class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
     TEST_TYPE : TYPE_of_TEST
     TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
     TEST_TITLE = TestTitle()
@@ -95,8 +99,10 @@ class BaseFactorAnalyticTest(ABC):
     def __init__(
         self , test_path : strPath | None = None , 
         resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
-        which : str | list[str] | Literal['all'] = 'all' , **kwargs
+        which : str | list[str] | Literal['all'] = 'all' , * ,
+        indent : int = 0 , vb_level : Any = 1 , **kwargs
     ):
+        self.set_vb(vb_level , indent)
         candidates = {task.task_name():task for task in self.TASK_LIST}
         self.create_time = datetime.now()
         self.kwargs = kwargs
@@ -105,6 +111,7 @@ class BaseFactorAnalyticTest(ABC):
         self.save_resumable = save_resumable
         self.start = start
         self.end = end
+        kwargs = kwargs | {'indent':self.indent + 1 , 'vb_level':self.vb_level + 2}
         if which == 'all':
             self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:
@@ -123,24 +130,21 @@ class BaseFactorAnalyticTest(ABC):
         testor = cls(test_path , resume , save_resumable , start , end , which , **kwargs)
         return testor
 
-    def proceed(self , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-                indent : int = 0 , vb_level : Any = 1 , **kwargs):
-        self.calc(StockFactor(factor) , benchmark , indent = indent , vb_level = vb_level)
-        self.plot(show = False , indent = indent , vb_level = vb_level)
+    def proceed(self , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' , **kwargs):
+        self.calc(StockFactor(factor) , benchmark)
+        self.plot(show = False)
         return self
 
-    def calc(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
-        vb_level = Proj.vb(vb_level)
-        with Logger.Timer(f'{self.__class__.__name__}.calc' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 2):
+    def calc(self , *args , **kwargs):
+        with self.logger.timer('calc' , enter_vb = 2):
             for task in self.tasks.values():  
-                task.calc(*args , indent = indent + 1 , vb_level = vb_level + 2 , **kwargs) 
+                task.calc(*args , **kwargs) 
         return self
 
-    def plot(self , show = False , indent : int = 0 , vb_level : Any = 1):
-        vb_level = Proj.vb(vb_level)
-        with Logger.Timer(f'{self.__class__.__name__}.plot' , indent = indent , vb_level = vb_level , enter_vb_level = vb_level + 2):
+    def plot(self , show = False):
+        with self.logger.timer('plot' , enter_vb = 2):
             for task in self.tasks.values(): 
-                task.plot(show = show , indent = indent + 1 , vb_level = vb_level + 2)
+                task.plot(show = show)
         return self
 
     @property
@@ -204,7 +208,7 @@ class BaseFactorAnalyticTest(ABC):
         return {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
     
     def display_figs(self):
-        [Logger.display(fig) for fig in self.get_figs().values()]
+        [self.logger.display(fig) for fig in self.get_figs().values()]
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()

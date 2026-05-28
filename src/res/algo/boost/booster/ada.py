@@ -14,7 +14,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.proj import Logger
+from src.proj import BaseClass
 from src.res.algo.boost.util import BasicBoostModel , BoostInput , load_xingye_data
 
 class AdaBoost(BasicBoostModel):
@@ -97,7 +97,7 @@ class AdaBoost(BasicBoostModel):
             rank /= rank.nan_to_num().max(dim = dim , keepdim = True)[0] + 1e-6
         return rank
     
-class StrongLearner:
+class StrongLearner(BaseClass.BoundLogger):
     """Ensemble of :class:`WeakLearner` stumps trained with AdaBoost.M1.
 
     At each round a new :class:`WeakLearner` is fitted on the current sample
@@ -128,7 +128,7 @@ class StrongLearner:
                     txt += f', F_idx: {learner.feat_idx}'
                 else:
                     txt += f', F_name: {feature[learner.feat_idx]}'
-                Logger.stdout(txt)
+                self.logger.stdout(txt)
         return self
     
     def predict(self , x : np.ndarray | torch.Tensor):
@@ -250,4 +250,3 @@ if __name__ == '__main__':
         ada.fit(BoostInput.from_dataframe(input_df['train']) , silent = True)
         ic_dfs.append(ada.calc_ic(input_df['test']))
     df = pd.concat([d for d in ic_dfs if not d.empty])
-    Logger.stdout(df)

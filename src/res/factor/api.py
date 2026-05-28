@@ -96,8 +96,9 @@ class FactorTestAPI:
                  resume : bool = False , save_resumable : bool = False , 
                  indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                  write_down = False , display_figs = False , **kwargs):
-        testor = cls.create(test_type , test_path , resume , save_resumable , start , end , **kwargs)
-        testor.proceed(factor , benchmark , indent = indent , vb_level = vb_level)
+        testor = cls.create(test_type , test_path , resume , save_resumable , 
+                            start , end , indent = indent , vb_level = vb_level , **kwargs)
+        testor.proceed(factor , benchmark)
         if write_down:   
             testor.write_down()
         if display_figs: 

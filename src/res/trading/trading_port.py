@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Type , ClassVar , Any
 
-from src.proj import PATH , CALENDAR , DB , Dates , Const
-from src.proj.util import AsyncSaver , BaseModule
+from src.proj import PATH , CALENDAR , DB , Dates , Const , BaseClass
+from src.proj.util import AsyncSaver
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -22,7 +22,7 @@ TASK_LIST : list[Type[TopCalc]] = [
 ]
 
 @dataclass
-class TradingPort(BaseModule):
+class TradingPort(BaseClass.BoundLogger):
     name        : str 
     alpha       : str | list[str]
     universe    : str = 'top-1000'
@@ -228,8 +228,8 @@ class TradingPort(BaseModule):
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
-            task.calc(account_df , indent = self.indent + 1 , vb_level = self.vb_level + 2) 
-            task.plot(show = False , indent = self.indent + 1 , vb_level = self.vb_level + 2)  
+            task.calc(account_df) 
+            task.plot(show = False)  
 
         rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
         figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}

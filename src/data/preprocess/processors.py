@@ -27,7 +27,7 @@ import polars as pl
 
 from typing import Any , Literal
 
-from src.proj import Proj , DB , CALENDAR , Const
+from src.proj import DB , CALENDAR , Const
 from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
@@ -182,15 +182,14 @@ class PrePro_week(TradePreProcessor):
         return {
             'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.final_feat()], **kwargs)}
     
-    def load_blocks(self , start = None , end = None , secid = None , indent = 0 , vb_level : Any = 1 , **kwargs):
-        vb_level = Proj.vb(vb_level)
+    def load_blocks(self , start = None , end = None , secid = None , **kwargs):
         if start is not None and start < 0: 
             start = 2 * start
         elif start is not None and start > 0:
             start = CALENDAR.td(start , -self.WEEKDAYS + 1).td
         blocks : dict[str,DataBlock] = {}
         date = CALENDAR.range(start , end)
-        block_loaders = self.block_loaders(indent = indent + 1 , vb_level = vb_level + 1)
+        block_loaders = self.block_loaders(indent = self.indent + 1 , vb_level = self.vb_level + 3)
         for src_key , loader in block_loaders.items():
             blocks[src_key] = loader.load(start , end , **kwargs).align_secid_date(secid , date , inplace = True)
             secid = blocks[src_key].secid

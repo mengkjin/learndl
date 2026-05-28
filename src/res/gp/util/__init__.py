@@ -4,7 +4,7 @@ from .primative import Primative
 from .fitness import FitnessObjectMin , gpFitness
 from .toolbox import BaseToolbox
 from .syntax import BaseIndividual , SyntaxRecord
-from .logger import gpLogger
+from .recorder import gpRecorder
 from .elite import EliteGroup , EliteBlock
 from .gp import GeneticProgramming
 from .input import gpInput

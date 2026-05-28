@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from src.proj import PATH
-from src.proj.util import BaseModule
+from src.proj import PATH , BaseClass
 from typing import Callable , TypeAlias
 
 __all__ = ['ModelConfigModifier' , 'ModelConfigsBatchModifier']
 
 DictLoader : TypeAlias = Callable[[] , dict] | dict
 
-class ModelConfigModifier(BaseModule):
+class ModelConfigModifier(BaseClass.BoundLogger):
     @classmethod
     def rename_ResetOptimizer(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith('.model'):

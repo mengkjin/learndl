@@ -7,8 +7,7 @@ import gc , torch
 from functools import cached_property
 from typing import Any , Literal , Callable
 
-from src.proj import CALENDAR , Const, MACHINE
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , Const, MACHINE , BaseClass
 from src.data import PreProcessorTask , ModuleData , DataBlock
 
 from src.func import match_values
@@ -23,7 +22,7 @@ from .operations import PrenormOperator , DataOperator
 
 __all__ = ['DataModule']
 
-class DataModule(BaseModule):
+class DataModule(BaseClass.BoundLogger):
     """
     DataModule for model fitting / testing / predicting
     """

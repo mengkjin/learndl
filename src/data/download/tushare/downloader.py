@@ -10,10 +10,10 @@ CSV backup data that supplements the live Tushare pipeline.
 """
 from typing import Generator , Type
 
-from src.proj import Logger
+from src.proj import BaseClass
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
 
-class TushareDataDownloader:
+class TushareDataDownloader(BaseClass.BoundLogger):
     """Orchestrate incremental updates for all registered Tushare fetchers."""
     @classmethod
     def iter_fetchers(cls) -> Generator[Type[TushareFetcher] , None , None]:
@@ -23,19 +23,19 @@ class TushareDataDownloader:
             yield fetcher
 
     @classmethod
-    def update(cls):
+    def update(cls , * , indent : int = 0 , vb_level : int = 1):
         """update all tushare fetchers"""
-        Logger.note(f'{cls.__name__} : Download since last update!')
+        cls.logger.note(f'Download since last update!')
         TSBackUpDataTransform.clear()
         for fetcher in cls.iter_fetchers():
-            fetcher.update()
+            fetcher.update(indent = indent + 1 , vb_level = vb_level + 1)
         TSBackUpDataTransform.update()
 
     @classmethod
-    def rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : int = 1):
         """update all tushare fetchers with rollback date"""
-        Logger.note(f'{cls.__name__} : Rollback from {rollback_date}!')
+        cls.logger.note(f'Rollback from {rollback_date}!')
         TSBackUpDataTransform.rollback(rollback_date)
         for fetcher in cls.iter_fetchers():
-            fetcher.rollback(rollback_date)
+            fetcher.rollback(rollback_date , indent = indent + 1 , vb_level = vb_level + 1)
         TSBackUpDataTransform.update()

@@ -168,7 +168,7 @@ class THSConcept(MonthFetcher):
                               self.locked_fetch(self.api.ths_index , exchange = 'A', type = 'TH')]).reset_index(drop=True)
         dfs : list[pd.DataFrame] = []
         for i , ts_code in enumerate(df_theme['ts_code']):
-            # Logger.stdout(i , ts_code)
+            # self.logger.stdout(i , ts_code)
             df = self.locked_fetch(self.api.ths_member , ts_code = ts_code)
             dfs.append(df)
         df_all = pd.concat([d for d in dfs if not d.empty]).rename(columns={'name':'concept'})

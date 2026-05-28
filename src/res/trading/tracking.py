@@ -4,13 +4,12 @@ import pandas as pd
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH , Proj , CALENDAR , Dates , Const
-from src.proj.util import BaseModule
+from src.proj import PATH , Proj , CALENDAR , Dates , Const , BaseClass
 from src.res.trading.util.trade_suggestion import TradeSuggestion
 
 from .trading_port import TrackingPort
 
-class TrackingPortfolioManager(BaseModule):
+class TrackingPortfolioManager(BaseClass.BoundLogger):
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
         cls.SetClassVB(vb_level , indent)

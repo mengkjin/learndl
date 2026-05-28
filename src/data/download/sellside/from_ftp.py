@@ -11,10 +11,9 @@ import pandas as pd
 from ftplib import FTP
 from typing import Any
 
-from src.proj import Logger , MACHINE
-from src.proj.util import BaseModule
+from src.proj import MACHINE , BaseClass
 
-class SellsideFTPDownloader(BaseModule):
+class SellsideFTPDownloader(BaseClass.BoundLogger):
     """
     FTP client for downloading sell-side data delivered via file transfer.
 
@@ -58,7 +57,7 @@ class SellsideFTPDownloader(BaseModule):
     @classmethod
     def update(cls):
         return
-        Logger.note(f'{cls.__name__} : Download since last update!')
+        cls.logger.note(f'Download since last update!')
 
     @classmethod
     def available_sources(cls) -> list[str]:
@@ -67,4 +66,4 @@ class SellsideFTPDownloader(BaseModule):
 def main():
     connector = SellsideFTPDownloader()
     df = connector.open_file('/StockFactor_cier/cier.csv')
-    Logger.stdout(df)
+    connector.logger.display(df)

@@ -12,13 +12,13 @@ convention ``{key}_{Dates(date)}.csv``.
 import pandas as pd
 import numpy as np
 
-from src.proj import PATH , CALENDAR , DB , Dates
+from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
 from .core import TS
 
 path_bak_data   = PATH.backup.joinpath('tushare' , 'data')
 path_bak_record = PATH.backup.joinpath('tushare' , 'record')
 
-class TSBackUpDataTransform():
+class TSBackUpDataTransform(BaseClass.BoundLogger):
     """
     Transformer that reads backup CSVs and writes them to the live database format.
 
@@ -30,6 +30,9 @@ class TSBackUpDataTransform():
 
     path_bak_data.mkdir(parents=True , exist_ok=True)
     path_bak_record.mkdir(parents=True , exist_ok=True)
+
+    def __init__(self , * , indent : int = 0 , vb_level : int = 1):
+        self.set_vb(vb_level , indent)
     
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""

@@ -4,7 +4,7 @@ import torch
 from torch import nn , Tensor
 from typing import Any , Literal
 
-from src.proj import Logger
+from src.proj import BaseClass
 from src.proj.util import RequireGrad
 from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 from src.res.model.util.core import BatchData
@@ -12,7 +12,7 @@ from .components import MetricComponent , LossComponent , AccuracyComponent
 
 __all__ = ['MetricFunction' , 'LossFunction' , 'AccuracyFunction']
 
-class MetricFunction:
+class MetricFunction(BaseClass.BoundLogger):
     SearchList : list[str] = []
     ExcludeNan : bool = True
     def __init__(
@@ -39,7 +39,7 @@ class MetricFunction:
             inputs = data.loss_inputs(exclude_nan = self.ExcludeNan)
             results : dict[str,Tensor] = {}
             for criterion , component in self.components.items():
-                Logger.only_once(f'{self.__class__.__name__} {criterion} calculated!' , object = self.__class__ , mark = criterion , printer = 'success' , vb_level = 'max')
+                self.logger.only_once(f'{criterion} calculated!' , object = self , mark = criterion , printer = 'success' , vb_level = 'max')
                 value = component(which_output = which_output , which_label = which_label , **inputs)
                 if isinstance(value , dict):
                     results.update({k:v.sum() for k,v in value.items()})

@@ -4,13 +4,14 @@ import torch
 from typing import Any
 from tqdm import tqdm
 
-from src.proj import Logger
+from src.proj import BaseClass
 from src.func import tensor as T
 from src.res.gp.func import factor_func as FF
 from .memory import MemoryManager
 
-class EliteGroup:
-    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50) -> None:
+class EliteGroup(BaseClass.BoundLogger):
+    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Any = 1) -> None:
+        self.set_vb(vb_level , indent)
         self.start_i_elite = start_i_elite
         self.elite_count   = 0
         self.device    = device
@@ -87,7 +88,7 @@ class EliteGroup:
             try:
                 new_tensor = torch.concat([block.data_to_device(device) for block in self.blocks] , dim = -1)
             except torch.cuda.OutOfMemoryError:
-                Logger.warning('OutofMemory when compiling elite tensor, try use cpu to concat')
+                self.logger.warning('OutofMemory when compiling elite tensor, try use cpu to concat')
                 new_tensor = torch.concat([block.data_to_device('cpu') for block in self.blocks] , dim = -1)
                 new_tensor = new_tensor.to(device)
         else:
@@ -119,7 +120,7 @@ class EliteGroup:
         iterator = [(i,*self.elite_positions[i],j,*self.elite_positions[j]) for i in range(total) for j in range(i+1,total)]
         iter_df = pd.DataFrame(iterator , columns = pd.Index(['ii','ib','ik','jj','jb','jk']))
         iter_df = iter_df.sort_values(['ib' , 'jb' , 'ik' , 'jk'])
-        Logger.stdout(f'Total Correlation Counts : {len(iter_df)}')
+        self.logger.stdout(f'Total Correlation Counts : {len(iter_df)}')
         for grp , sub_df in iter_df.groupby(['ib' , 'jb']):
             ib , jb = int(grp[0]) , int(grp[1]) # type: ignore
             Blk_i = self.blocks[ib].data_to_device(self.device)
@@ -132,8 +133,9 @@ class EliteGroup:
         corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat).cpu()
         return corr_mat
     
-class EliteBlock:
-    def __init__(self , max_len = 50):
+class EliteBlock(BaseClass.BoundLogger):
+    def __init__(self , max_len = 50 , * , indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
         self.max_len = max_len
         self.names : list[str] = []
         self.infos : dict[str,Any] = {}
@@ -156,7 +158,7 @@ class EliteBlock:
                 if isinstance(data , torch.Tensor): 
                     self.data = data.cpu()
             except MemoryError:
-                Logger.warning('OutofMemory when concat gpEliteBlock, try use cpu to concat')
+                self.logger.warning('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                 gc.collect()
                 self.data = T.concat_factors_2d(*self.data , device=torch.device('cpu')) # to cpu first
         assert self.data is not None , f'{self} has data None'

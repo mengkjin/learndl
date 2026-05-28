@@ -18,7 +18,8 @@ from urllib.parse import urlencode
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from src.proj.util import ProxyAPI , BaseModule
+from src.proj import BaseClass
+from src.proj.util import ProxyAPI
 from src.proj.util.proxy import ProxyCaller
 from src.proj.util.web import (
     http_session,
@@ -28,7 +29,7 @@ from src.proj.util.web import (
     request_with_timeouterror_async,
 )
 from src.proj.util.error_handler import ErrorHandler
-from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter , crawler_log
+from .util import parse_jsonp , Announcement , range_dates , AnnouncementExporter , CrawlerLogger
 
 EXCHANGES : list[str] = ['sse', 'szse', 'bse']
 EXCHANGE_URLS = {
@@ -52,7 +53,7 @@ class FetchedAnnouncementBatch:
     ok: bool = False
     error: Exception | None = None
 
-class FetcherTask(BaseModule):
+class FetcherTask(BaseClass.BoundLogger):
     def __init__(self, exchange: str, start: int, end: int, redownload: bool = False, * , vb_level: int = 2, indent: int = 1):
         self.set_vb(vb_level , indent)
         self.exchange = exchange
@@ -103,12 +104,12 @@ class FetcherTask(BaseModule):
 
     async def fetch_payload_async(self, proxy: str | None, *, attempt_id: str | None = None) -> list[Announcement] | Exception:
         try:
-            crawler_log(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
+            CrawlerLogger.stdout(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
             payload = await self.fetch_date_async(proxy)
-            crawler_log(f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}")
+            CrawlerLogger.stdout(f"[async-fetch] done {self.title} proxy={proxy} attempt={attempt_id} rows={len(payload) if isinstance(payload, list) else 'NA'}")
             return payload
         except Exception as e:
-            crawler_log(f"[async-fetch] failed {self.title} proxy={proxy} attempt={attempt_id} error={e!s}" , type='alert')
+            CrawlerLogger.alert(f"[async-fetch] failed {self.title} proxy={proxy} attempt={attempt_id} error={e!s}")
             return e
 
     def persist_payload(self, payload: list[Announcement]) -> bool:
@@ -191,7 +192,7 @@ class FetcherTask(BaseModule):
             cls.logger.stdout(f"Total Announcement Crawling Tasks: {len(tasks)} at {min_date}~{max_date} for {len(EXCHANGES)} exchanges")
         return tasks
 
-class AnnoucementFetcher(ABC, BaseModule):
+class AnnoucementFetcher(ABC, BaseClass.BoundLogger):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 
@@ -244,7 +245,7 @@ class AnnoucementFetcher(ABC, BaseModule):
         else:
             raise ValueError(f"Invalid exchange: {exchange}")
 
-class AsyncAnnoucementFetcher(ABC, BaseModule):
+class AsyncAnnoucementFetcher(ABC, BaseClass.BoundLogger):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 

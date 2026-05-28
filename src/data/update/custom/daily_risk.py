@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Literal , Callable
-from src.proj import Logger , CALENDAR , DB , Dates
+from src.proj import CALENDAR , DB , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -32,7 +32,7 @@ class DailyRiskUpdater(BasicCustomUpdater):
     def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
         """Update daily risk features for all missing dates up to today."""
         if update_type == 'recalc':
-            Logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
+            self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
             stored_dates = np.array([])
         elif update_type == 'update':
             stored_dates = DB.dates(self.DB_SRC , self.DB_KEY)

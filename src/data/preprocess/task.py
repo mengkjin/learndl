@@ -10,8 +10,7 @@ import argparse
 
 from typing import Any
 
-from src.proj import Logger , Dates , Proj
-
+from src.proj import Dates , BaseClass
 from .processors import PrePros
 
 __all__ = ['PreProcessorTask']
@@ -19,7 +18,7 @@ __all__ = ['PreProcessorTask']
 DATASET_FIT = [*PrePros.keys()]
 DATASET_PREDICT = DATASET_FIT
 
-class PreProcessorTask:
+class PreProcessorTask(BaseClass.BoundLogger):
     """
     Batch runner that iterates over all registered preprocessors and calls
     ``PreProcessor.update()``.
@@ -45,7 +44,7 @@ class PreProcessorTask:
         force_update : bool
             If True, skip the "already updated today" check.
         """
-        vb_level = Proj.vb(vb_level)
+        cls.SetClassVB(vb_level , indent)
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -59,10 +58,10 @@ class PreProcessorTask:
         else:
             keys = DATASET_PREDICT if predict else DATASET_FIT
             
-        Logger.note(f'Data PreProcessing for {"fitting" if not predict else "predicting"} start with {keys} datas !' , indent = indent , vb_level = vb_level)
-        Logger.stdout(f'Will process {keys} from {Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , indent = indent + 1 , vb_level = vb_level + 1)
+        cls.logger.note(f'Data PreProcessing for {"fitting" if not predict else "predicting"} start with {keys} datas !')
+        cls.logger.stdout(f'Will process {keys} from {Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , idt = 1 , vb = 1)
 
         for key in keys:
             proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)
             proc.update(force_update = force_update)
-            Logger.divider(vb_level = vb_level + 3)
+            cls.logger.divider(vb = 1)

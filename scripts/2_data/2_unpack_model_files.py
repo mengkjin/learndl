@@ -12,11 +12,11 @@
 
 from src.proj.util import ScriptTool
 
-from src.res.model.util import PredictionModel
+from src.res.model.util import PredictorPath
 
 @ScriptTool('unpack_model_files')
 def main(**kwargs):
-    PredictionModel.UnpackModelArchives()
+    PredictorPath.UnpackModelArchives()
     
 if __name__ == '__main__':
     main()

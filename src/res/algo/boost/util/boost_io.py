@@ -15,14 +15,59 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
+from src.proj import BaseClass
 from src.func import match_values , index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
-from src.proj import Logger
 
 __all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
 
+@dataclass(slots=True)
+class BoostDataset:
+    x : Any
+    y : Any
+    w : Any
+    date : Any = None
+    
+    def as_numpy(self):
+        [setattr(self , attr , getattr(self , attr).cpu().numpy()) for attr in self.__slots__ 
+            if isinstance(getattr(self , attr) , torch.Tensor)]
+        return self
+
+    def to(self , device : torch.device | None = None):
+        [setattr(self , attr , getattr(self , attr).to(device)) for attr in self.__slots__ 
+            if isinstance(getattr(self , attr) , torch.Tensor)]
+        return self
+    
+    def boost_inputs(self , boost_type : Literal['lgbm' , 'xgboost' , 'catboost'] , group = False):
+        self.as_numpy()
+        boost_inputs = {'data' : self.x , 'label' : self.y}
+        if boost_type == 'lgbm':
+            # if group: boost_inputs['group'] = self.group_arr()
+            boost_inputs['weight'] = self.w
+        elif boost_type == 'xgboost':
+            if False and group: 
+                g = self.group_arr()
+                boost_inputs['group'] = g
+                boost_inputs['weight'] = np.array([self.w[e-length:e].sum() for e , length in zip(g.cumsum() , g)])
+            boost_inputs['weight'] = self.w
+        elif boost_type == 'catboost':    
+            # if group: boost_inputs['group_id'] = self.group_id()
+            boost_inputs['weight'] = self.w
+        else:
+            raise ValueError(f'Boost type {boost_type} not supported')
+        return boost_inputs
+    
+    def group_arr(self):
+        assert (np.diff(self.date) >= 0).all() , 'date must be sorted'
+        return np.unique(self.date , return_counts=True)[1]
+    
+    def group_id(self): return self.date
+
+    @property
+    def nfeat(self): return self.x.shape[-1]
+
 @dataclass
-class BoostOutput:
+class BoostOutput(BaseClass.BoundLogger):
     """Container for boost model predictions.
 
     Attributes:
@@ -64,7 +109,7 @@ class BoostOutput:
         return ic_2d(self.to_2d() , self.label , 0)
 
 @dataclass
-class BoostInput:
+class BoostInput(BaseClass.BoundLogger):
     """Aligned 3-D tensor container for boost model input.
 
     Attributes:
@@ -208,51 +253,7 @@ class BoostInput:
         return self.obj_flatten(w , dropna=True)
     
     def Dataset(self , *args): 
-        return self.BoostDataset(self.X() , self.Y() , self.W() , self.DATE())
-    @dataclass(slots=True)
-    class BoostDataset:
-        x : Any
-        y : Any
-        w : Any
-        date : Any = None
-        
-        def as_numpy(self):
-            [setattr(self , attr , getattr(self , attr).cpu().numpy()) for attr in self.__slots__ 
-             if isinstance(getattr(self , attr) , torch.Tensor)]
-            return self
-
-        def to(self , device : torch.device | None = None):
-            [setattr(self , attr , getattr(self , attr).to(device)) for attr in self.__slots__ 
-             if isinstance(getattr(self , attr) , torch.Tensor)]
-            return self
-        
-        def boost_inputs(self , boost_type : Literal['lgbm' , 'xgboost' , 'catboost'] , group = False):
-            self.as_numpy()
-            boost_inputs = {'data' : self.x , 'label' : self.y}
-            if boost_type == 'lgbm':
-                # if group: boost_inputs['group'] = self.group_arr()
-                boost_inputs['weight'] = self.w
-            elif boost_type == 'xgboost':
-                if False and group: 
-                    g = self.group_arr()
-                    boost_inputs['group'] = g
-                    boost_inputs['weight'] = np.array([self.w[e-length:e].sum() for e , length in zip(g.cumsum() , g)])
-                boost_inputs['weight'] = self.w
-            elif boost_type == 'catboost':    
-                # if group: boost_inputs['group_id'] = self.group_id()
-                boost_inputs['weight'] = self.w
-            else:
-                raise ValueError(f'Boost type {boost_type} not supported')
-            return boost_inputs
-        
-        def group_arr(self):
-            assert (np.diff(self.date) >= 0).all() , 'date must be sorted'
-            return np.unique(self.date , return_counts=True)[1]
-        
-        def group_id(self): return self.date
-
-        @property
-        def nfeat(self): return self.x.shape[-1]
+        return BoostDataset(self.X() , self.Y() , self.W() , self.DATE())
         
     def output(self , pred : torch.Tensor | np.ndarray | Any):
         """Wrap a flat prediction array into a :class:`BoostOutput`.
@@ -333,7 +334,7 @@ class BoostInput:
         if label_col is None:
             label_col = data.columns.to_list()[-1]
         if not label_col.lower().startswith(('ret' , 'y' , 'label' , 'rtn' , 'res' , 'std')):
-            Logger.warning(f'using {label_col} as label column, not recommended')
+            cls.logger.warning(f'using {label_col} as label column, not recommended')
         xarr = xr.Dataset.from_dataframe(data.drop(columns=[label_col]))
         yarr = xr.Dataset.from_dataframe(data[[label_col]])
 

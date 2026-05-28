@@ -6,7 +6,7 @@ from typing import Any
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
 
 from .fetcher import FetcherTask
-from .util import Announcement, crawler_log
+from .util import Announcement, CrawlerLogger
 
 class AsyncProxyRaceExecutor:
     """Async scheduler for normal mode + race mode over a shared proxy pool."""
@@ -42,9 +42,9 @@ class AsyncProxyRaceExecutor:
             # Save temp payload only for successful download attempts.
             if isinstance(value, list):
                 task.exporter.save_temp_attempt(task_key, attempt_id, value)
-                crawler_log(f"[race-attempt] saved success attempt={attempt_id} task={task.title} rows={len(value)}")
+                CrawlerLogger.stdout(f"[race-attempt] saved success attempt={attempt_id} task={task.title} rows={len(value)}")
             else:
-                crawler_log(f"[race-attempt] no temp saved attempt={attempt_id} task={task.title} type={type(value)}")
+                CrawlerLogger.stdout(f"[race-attempt] no temp saved attempt={attempt_id} task={task.title} type={type(value)}")
             if self._is_success(value):
                 await self._release_proxy(proxy_stats, True, counted=True)
                 return {"ok": True, "payload": value, "proxy": proxy, "attempt_id": attempt_id}
@@ -84,7 +84,7 @@ class AsyncProxyRaceExecutor:
         done_titles: set[str] = set()
         attempt_idx: dict[str, int] = {task.title: 0 for task in pending}
         max_workers = max(1, workers)
-        crawler_log(f"[race-run-exchange-tasks] max_workers={max_workers} max_total_inflight_per_exchange={self.max_total_inflight_per_exchange}", type='stdout')
+        CrawlerLogger.stdout(f"[race-run-exchange-tasks] max_workers={max_workers} max_total_inflight_per_exchange={self.max_total_inflight_per_exchange}")
 
         def remaining_titles() -> list[str]:
             return [task.title for task in pending if task.title not in done_titles]
@@ -93,7 +93,7 @@ class AsyncProxyRaceExecutor:
             nonlocal pending
             total_inflight = sum(len(v) for v in inflight_by_task.values())
             cap = min(max_workers, self.max_total_inflight_per_exchange)
-            crawler_log(f"[race-fill-slots] total_inflight={total_inflight} cap={cap}", type='stdout')
+            CrawlerLogger.stdout(f"[race-fill-slots] total_inflight={total_inflight} cap={cap}")
             while total_inflight < cap:
                 remaining = remaining_titles()
                 if not remaining:
@@ -149,11 +149,10 @@ class AsyncProxyRaceExecutor:
                     task = task_map[title]
                     task_key = f"{task.start}_{task.end}_{task.exchange}"
                     task.exporter.cleanup_temp_attempts(task_key, keep_attempt_id=winner_attempt[title])
-                    crawler_log(
+                    CrawlerLogger.success(
                         f"[race-winner] task={title} winner={winner_attempt[title]} "
                         f"rows={len(ret['payload']) if isinstance(ret.get('payload'), list) else 'NA'} "
                         f"cancelled_replicas={cancel_count}" ,
-                        type='success'
                     )
                 elif title not in errors:
                     errors[title] = ret.get("error") or RuntimeError("Unknown fetch error")
@@ -162,7 +161,7 @@ class AsyncProxyRaceExecutor:
                         task = task_map[title]
                         task_key = f"{task.start}_{task.end}_{task.exchange}"
                         task.exporter.cleanup_temp_attempts(task_key, keep_attempt_id=None)
-                        crawler_log(f"[race-failed] task={title} exhausted without winner" , type='alert')
+                        CrawlerLogger.alert(f"[race-failed] task={title} exhausted without winner")
         ok = len(done_titles) == len(pending)
-        crawler_log(f"[race-summary] task={title} total_tasks={len(pending)} success={len(done_titles)} failed={len(errors)}",type='note')
+        CrawlerLogger.note(f"[race-summary] task={title} total_tasks={len(pending)} success={len(done_titles)} failed={len(errors)}")
         return {"ok": ok, "results": results, "errors": errors, "winner_attempt": winner_attempt}

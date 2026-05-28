@@ -20,11 +20,10 @@ import pandas as pd
 from abc import abstractmethod
 from typing import Any
 
-from src.proj import CALENDAR , TradeDate , SingletonABCMeta
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , TradeDate , BaseMeta , BaseClass
 from src.data.util import INFO , DFCollection , PLDFCollection
 
-class DateDataAccess(BaseModule , metaclass=SingletonABCMeta):
+class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
     """
     Abstract date-keyed data accessor. Singleton ABC class.
 

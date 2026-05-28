@@ -11,15 +11,15 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal , Self , cast
 
-from src.proj import PATH , Logger , LogFile , DB , CALENDAR , Const
+from src.proj import PATH , LogFile , DB , CALENDAR , Const , BaseClass
 from src.proj.core import strPath
 
 from .func import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 from .model_file import ModelFile
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'PredictionModel' , 'HiddenExtractionModel' , 'PredictorPath']
+__all__ = ['ModelPath' , 'HiddenPath' , 'HiddenExtractionModel' , 'PredictorPath']
 
-class ModelPath:
+class ModelPath(BaseClass.BoundLogger):
     f"""
     model path
     access stored model in learndl/models
@@ -42,7 +42,8 @@ class ModelPath:
         else:
             return super().__new__(cls)
 
-    def __init__(self , model_input : strPath | None | Any) -> None:
+    def __init__(self , model_input : strPath | None | Any , * , indent : int = 0 , vb_level : int = 1) -> None:
+        self.set_vb(vb_level , indent)
         if not isinstance(model_input , self.__class__):
             self.parse_input(model_input)
 
@@ -234,7 +235,7 @@ class ModelPath:
     def clear_model_path(self):
         """clear model directory , but archive directory will protected , log directory will be remained"""
         if self.is_resumable and not self.is_short_test:
-            Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
+            self.logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
             return
         else:
             [shutil.rmtree(folder , ignore_errors=True) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
@@ -339,14 +340,16 @@ class ModelPath:
         skip = time_elapsed.total_seconds() / 3600  < interval_hours
         return last_time , time_elapsed , skip
 
-class HiddenPath:
+class HiddenPath(BaseClass.BoundLogger):
     """hidden factor path for nn models , used for extracting hidden states"""
-    def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
+    def __init__(self , model_name : str , model_num : int , submodel : str , * , indent : int = 0 , vb_level : int = 1) -> None:
+        self.set_vb(vb_level , indent)
         self.model_name , self.model_num , self.submodel = model_name , model_num , submodel
         assert self.model_name in [p.name for p in PATH.hidden.iterdir()] , \
             f'Hidden path does not contains hidden data of {self.model_name}'
 
-    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
+    def __repr__(self): 
+        return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
 
     @classmethod
     def from_key(cls , hidden_key : str) -> HiddenPath:
@@ -409,12 +412,12 @@ class HiddenPath:
         dates = [int(p.name.removesuffix(suffix)) for p in parent.iterdir() if p.name.endswith(suffix)]
         return np.sort(dates)
 
-    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int , indent : int = 1 , vb_level : Any = 2) -> None:
+    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int) -> None:
         """save hidden dataframe"""
         hidden_path = self.target_path(model_date)
-        DB.save_df(hidden_df , hidden_path , overwrite = True , prefix = f'Hidden States' , indent = indent , vb_level = vb_level)
+        DB.save_df(hidden_df , hidden_path , overwrite = True , prefix = f'Hidden States' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
-    def get_hidden_df(self , model_date : int , exact = False , indent : int = 1 , vb_level : Any = 2) -> tuple[int, pd.DataFrame]:
+    def get_hidden_df(self , model_date : int , exact = False) -> tuple[int, pd.DataFrame]:
         """get hidden dataframe"""
         if not exact: 
             model_date = self.closest_hidden_model_date(model_date)
@@ -425,133 +428,6 @@ class HiddenPath:
         """closest hidden model date"""
         possible_model_dates = self.model_dates()
         return possible_model_dates[possible_model_dates <= model_date].max()
-
-
-class PredictionModel(ModelPath):
-    '''
-    for a prediction model to predict recent/history data
-    model dict stored in configs/proj/model_settings.yaml file under prediction section
-    '''
-    START_DATE = 20170101
-    FMP_STEP = 5
-    MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
-
-    def __new__(cls , *args , **kwargs) -> PredictionModel | Any:
-        return super().__new__(cls , *args , **kwargs)
-
-    def __init__(self, pred_name : str , name: str | Any = None , 
-                 submodel : Literal['best' , 'swalast' , 'swabest'] | Any = None ,
-                 num  : int | list[int] | range | Literal['all'] | Any = None , 
-                 start = START_DATE , assertion = True) -> None:
-        if assertion:
-            assert pred_name in self.MODEL_DICT , f'{pred_name} is not a prediction model'
-        if pred_name in self.MODEL_DICT:
-            reg_dict = self.MODEL_DICT[pred_name]
-            name     = reg_dict['name']
-            submodel = reg_dict['submodel']
-            num      = reg_dict['num']
-
-        self.pred_name = pred_name
-        super().__init__(name)
-        self.submodel = submodel
-        self.num = num
-        self.model_path = ModelPath(self.full_name)
-        self.start = start
-        assert start > 20070101 , f'start must be a valid date , got {start}'
-
-    def __repr__(self) -> str:  
-        return f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},submodel={self.submodel},num={str(self.num)})'
-    
-    @classmethod
-    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictionModel]:
-        """select prediction models"""
-        if pred_names is None: 
-            pred_names = list(cls.MODEL_DICT.keys())
-        if isinstance(pred_names , str): 
-            pred_names = [pred_names]
-        return [cls(key) for key in pred_names]
-
-    @classmethod
-    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path | Any]:
-        paths : list[Path] = []
-        for model in cls.SelectModels(pred_names):
-            paths.extend(model.model_path.collect_model_archives(start_model_date , end_model_date))
-        return paths
-
-    @classmethod
-    def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
-        files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
-        path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
-        DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
-        return path
-
-    @classmethod
-    def UnpackModelArchives(cls , path : strPath | None = None , delete_tar = True , overwrite = False) -> None:
-        if path is None:
-            paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
-            paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]
-        else:
-            paths = [Path(path)]
-        
-        for path in paths:
-            DB.unpack_files_from_tar(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
-            if delete_tar:
-                path.unlink()
-            
-    @property
-    def pred_dates(self) -> np.ndarray:
-        """model pred dates"""
-        return DB.dates('pred' , self.pred_name)
-    
-    @property
-    def pred_target_dates(self) -> np.ndarray:
-        """model pred target dates"""
-        start = max(self.start , int(CALENDAR.td(min(self.model_dates) , 1)))
-        end = None
-        return CALENDAR.range(start , end , 'td' , updated = True)
-    
-    @property
-    def fmp_dates(self) -> np.ndarray:
-        """model factor portfolio dates"""
-        return DB.dir_dates(PATH.fmp.joinpath(self.pred_name))
-    
-    @property
-    def fmp_target_dates(self) -> np.ndarray:
-        """model factor portfolio target dates"""
-        return self.pred_target_dates[::self.FMP_STEP]
-    
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : Any = 'max' , reason : str = '') -> None:
-        """save model pred"""
-        df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
-        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
-
-    def load_pred(self , date : int , closest = False , indent = 1 , vb_level : Any = 'max' , **kwargs) -> pd.DataFrame:
-        """load model pred"""
-        df = DB.load('pred' , self.pred_name , date , closest = closest , indent = indent , vb_level = vb_level , **kwargs)
-        if not df.empty and self.pred_name not in df.columns:
-            assert self.model_clean_name in df.columns or self.model_name in df.columns , \
-                f'{self.pred_name} / {self.model_clean_name} / {self.model_name} not in df.columns : {df.columns}'
-            df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 'max' , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
-        return df
-
-    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : Any = 2) -> None:
-        """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
-        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = indent , vb_level = vb_level)
-
-    def load_fmp(self , date : int , vb_level : Any = 2 , **kwargs) -> pd.DataFrame:
-        """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
-        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        if not path.exists(): 
-            Logger.alert1(f'{path} does not exist' , vb_level = vb_level)
-        return DB.load_df(path)
-    
-    @property
-    def account_dir(self) -> Path:
-        """model factor portfolio account directory"""
-        return PATH.fmp_account.joinpath(self.pred_name)
-
 class HiddenExtractionModel(ModelPath):
     '''
     for a hidden extraction model to extract hidden states
@@ -602,10 +478,9 @@ class PredictorPath(ModelPath):
     def __init__(
         self, model_input : strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any ,
-        submodel : str = 'best' ,
-        pred_name : str | None = None ,
-    ) -> None:
-        super().__init__(model_input)
+        submodel : str = 'best' , pred_name : str | None = None , * , 
+        indent : int = 0 , vb_level : int = 1) -> None:
+        super().__init__(model_input , indent = indent , vb_level = vb_level)
         self._model_num = model_num
         self._submodel = submodel
         self._pred_name = pred_name
@@ -669,31 +544,31 @@ class PredictorPath(ModelPath):
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent : int = 1 , vb_level : Any = 'max' , reason : str = '') -> None:
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , reason : str = '') -> None:
         """save model pred"""
         df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
-        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = indent , vb_level = vb_level , reason = reason)
+        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = self.indent + 1 , vb_level = self.vb_level + 1 , reason = reason)
 
-    def load_pred(self , date : int , closest = False , indent = 1 , vb_level : Any = 'max' , **kwargs) -> pd.DataFrame:
+    def load_pred(self , date : int , closest = False , **kwargs) -> pd.DataFrame:
         """load model pred"""
-        df = DB.load('pred' , self.pred_name , date , closest = closest , indent = indent , vb_level = vb_level , **kwargs)
+        df = DB.load('pred' , self.pred_name , date , closest = closest , vb_level = 'max' , **kwargs)
         if not df.empty and self.pred_name not in df.columns:
             assert self.model_clean_name in df.columns or self.model_name in df.columns , \
                 f'{self.pred_name} / {self.model_clean_name} / {self.model_name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
-            self.save_pred(df , date , overwrite = True , indent = indent , vb_level = 'max' , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
+            self.save_pred(df , date , overwrite = True , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
         return df
 
-    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False , indent = 1 , vb_level : Any = 2) -> None:
+    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
         """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = indent , vb_level = vb_level)
+        DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
-    def load_fmp(self , date : int , vb_level : Any = 2 , **kwargs) -> pd.DataFrame:
+    def load_fmp(self , date : int , **kwargs) -> pd.DataFrame:
         """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
-            Logger.alert1(f'{path} does not exist' , vb_level = vb_level)
+            self.logger.alert1(f'{path} does not exist')
         return DB.load_df(path)
     
     @property

@@ -10,19 +10,18 @@ from collections import defaultdict
 from typing import Literal , Any , Iterable
 
 
-from src.proj import CALENDAR , Dates , MACHINE
-from src.proj.util.module import BaseModule
+from src.proj import CALENDAR , Dates , MACHINE , BaseClass
 from src.proj.util.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.proxy.caller import ProxyCallerList
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
 
 from .fetcher import FetcherTask , EXCHANGE_URLS
 from .async_race import AsyncProxyRaceExecutor
-from .util import crawler_log
+from .util import CrawlerLogger
 
 __all__ = ["AnnouncementAgent"]
 
-class AnnouncementAgent(BaseModule):
+class AnnouncementAgent(BaseClass.BoundLogger):
     """
     Crawl and incrementally update exchange announcement metadata.
 
@@ -187,7 +186,7 @@ class AnnouncementAgent(BaseModule):
                 max_replicas_per_task=max_replicas_per_task,
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
             )
-            crawler_log(f"[async-race] Running {exchange} with {len(ex_tasks)} tasks and {workers} workers", type='stdout')
+            CrawlerLogger.stdout(f"[async-race] Running {exchange} with {len(ex_tasks)} tasks and {workers} workers")
             ex_result = await executor.run_exchange_tasks(ex_tasks, workers=min(max(1, workers), 50))
             for task in ex_tasks:
                 payload = ex_result["results"].get(task.title)
@@ -197,12 +196,11 @@ class AnnouncementAgent(BaseModule):
                 task.persist_payload(payload)
                 winner_attempt = ex_result.get("winner_attempt", {}).get(task.title)
                 task.exporter.cleanup_temp_attempts(task_key)
-                crawler_log(
+                CrawlerLogger.success(
                     f"[crawler-task-finished] task={task.title} persisted_rows={len(payload)} winner={winner_attempt}",
-                    type='success'
                 )
             if ex_result["errors"]:
-                crawler_log(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks", type='alert')
+                CrawlerLogger.alert(f"{exchange} async crawl has {len(ex_result['errors'])} failed tasks")
             return ex_result["ok"]
 
         exchange_results = await asyncio.gather(*[

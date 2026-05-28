@@ -15,9 +15,9 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Type
 
-from src.proj import PATH, MACHINE, Const, Proj
+from src.proj import PATH, MACHINE, Const, Proj , BaseClass
 from src.proj.core import strPath
-from src.proj.util import Device , FlattenDict , BaseModule
+from src.proj.util import Device , FlattenDict
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
@@ -39,7 +39,7 @@ def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> Fla
     else:
         return FlattenDict.from_input(input , keep_nested = keep_nested)
 
-class ScheduleConfig(BaseModule):
+class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
     def __init__(self, base_path: ModelPath | None = None, schedule_name: str | None = None, model_name: Any | None = None):
         self.base_path = base_path
@@ -97,7 +97,7 @@ class ScheduleConfig(BaseModule):
         path = cls.find_path(None, model_name)
         return True if path else False
 
-class BaseModelConfig(BaseModule):
+class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
     REQUIRED_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "required.yaml"))
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
@@ -624,7 +624,7 @@ class BaseModelConfig(BaseModule):
     def gc_collect_each_model(self) -> bool:
         return self.module_type == "nn"
 
-class AlgoConfig(BaseModule):
+class AlgoConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def __init__(
         self,
         base_path: ModelPath | strPath | None,
@@ -790,7 +790,7 @@ class ModelConfigOptions:
     resume: int = -1
     selection: int = -1
 
-class ModelConfig(BaseModelConfig , BaseModule):
+class ModelConfig(BaseModelConfig):
     def __init__(
         self,
         base_path: ModelPath | strPath | None = None, *,

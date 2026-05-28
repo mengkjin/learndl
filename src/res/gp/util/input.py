@@ -6,7 +6,7 @@ import torch
 from dataclasses import dataclass
 from typing import Any
 
-from src.proj import Logger , Proj , CALENDAR , Const
+from src.proj import CALENDAR , Const , BaseClass
 from src.proj.util import torch_load
 from src.func import tensor as T
 from src.data import DATAVENDOR
@@ -14,7 +14,7 @@ from src.data.util import DataBlock
 from src.data.loader import BlockLoader
 from src.res.gp.param import gpDefaults , gpParameters
 from src.res.gp.func import factor_func as FF
-from .logger import gpLogger
+from .recorder import gpRecorder
 from .status import gpStatus
 
 # db_src , db_key , feature , scale
@@ -208,17 +208,17 @@ def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_
     assert labels_raw is not None , 'labels_raw is None'
     return labels_raw
 
-class gpInput:
+class gpInput(BaseClass.BoundLogger):
     """遗传规划输入,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
-    def __init__(self , param : gpParameters , status : gpStatus , logger : gpLogger , 
-                 vb_level : Any = 2):
+    def __init__(self , param : gpParameters , status : gpStatus , recorder : gpRecorder , * ,
+                 indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
         self.param     = param
         self.status    = status
-        self.logger    = logger
+        self.recorder  = recorder
         self.inputs :    list[torch.Tensor] = []
         self.tensors :   dict[str , torch.Tensor] = {}
         self.records :   dict[str , Any] = {}
-        self.vb_level = Proj.vb(vb_level)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(inputs={len(self.inputs)}, tensors={len(self.tensors)}, records={len(self.records)})'
@@ -294,7 +294,7 @@ class gpInput:
             self.insample.share_memory_()
             self.outsample.share_memory_()
 
-        self.logger.save_states({'params' : self.param.params, 'secid' : self.records['secid'] , 'date' : self.records['date']}) # useful to assert same index as package data
+        self.recorder.save_states({'params' : self.param.params, 'secid' : self.records['secid'] , 'date' : self.records['date']}) # useful to assert same index as package data
         return self
 
     def load_package(self):
@@ -304,25 +304,25 @@ class gpInput:
         try:
             package_data = torch_load(self.package_path , map_location = self.device)
         except Exception as e:
-            Logger.error(f'Error loading package: {e}' , indent = 1 , vb_level = self.vb_level)
+            self.logger.error(f'Error loading package: {e}')
             self.package_path.unlink()
             return False
 
         package_require = ['argnames' , 'inputs' , 'neutral_exp' , 'labels_raw' , 'secid' , 'date' , 'universe']
         
         if not np.isin(package_require , list(package_data.keys())).all():
-            Logger.alert1(f'Exists "{self.package_path}" but Lack Required Data!' , indent = 1 , vb_level = self.vb_level)
-            Logger.alert1(f'Required: {package_require}' , indent = 1 , vb_level = self.vb_level)
-            Logger.alert1(f'Available: {list(package_data.keys())}' , indent = 1 , vb_level = self.vb_level)
+            self.logger.alert1(f'Exists "{self.package_path}" but Lack Required Data!')
+            self.logger.alert1(f'Required: {package_require}')
+            self.logger.alert1(f'Available: {list(package_data.keys())}')
             return False
 
         if not np.isin(self.argnames , package_data['argnames']).all():
-            Logger.alert1(f'Exists package_data["argnames"] but Lack Required Data!' , indent = 1 , vb_level = self.vb_level)
-            Logger.alert1(f'Required: {self.argnames}' , indent = 1 , vb_level = self.vb_level)
-            Logger.alert1(f'Available: {package_data['argnames']}' , indent = 1 , vb_level = self.vb_level)
+            self.logger.alert1(f'Exists package_data["argnames"] but Lack Required Data!')
+            self.logger.alert1(f'Required: {self.argnames}')
+            self.logger.alert1(f'Available: {package_data['argnames']}')
             return False
 
-        Logger.stdout(f'Directly load "{self.package_path}"' , indent = 1 , vb_level = self.vb_level)
+        self.logger.stdout(f'Directly load "{self.package_path}"')
 
         for gp_key in self.argnames:
             gp_val = package_data['inputs'][package_data['argnames'].index(gp_key)]
@@ -341,7 +341,7 @@ class gpInput:
 
     
     def load_source(self):
-        Logger.stdout(f'Load from DB' , indent = 1 , vb_level = self.vb_level)
+        self.logger.stdout(f'Load from DB')
         nrowchar = 0
 
         cp_block = get_cp_block(self.start , self.end)
@@ -356,14 +356,14 @@ class gpInput:
 
         for i , gp_key in enumerate(self.argnames):
             if nrowchar == 0: 
-                Logger.stdout('' , end='', indent = 1 , vb_level = self.vb_level)
+                self.logger.stdout('' , end='')
             gp_val = input_block.values[...,i:i+1].squeeze().to(self.device)
             self.inputs.append(gp_val)
             
-            Logger.stdout(gp_key , end=',', vb_level = self.vb_level)
+            self.logger.stdout(gp_key, end=',',indent=0)
             nrowchar += len(gp_key) + 1
             if nrowchar >= 100 or i == len(self.argnames):
-                Logger.stdout(vb_level = self.vb_level)
+                self.logger.stdout(indent=0)
                 nrowchar = 0
 
         gpDefaults.dir_data_package.mkdir(parents=True, exist_ok=True)
@@ -377,7 +377,7 @@ class gpInput:
             'date' : self.records['date'] ,
         }
         torch.save(saved_data , self.package_path)
-        Logger.success(f'Package data saved to "{self.package_path}"' , indent = 1 , vb_level = self.vb_level)
+        self.logger.success(f'Package data saved to "{self.package_path}"')
 
     def update_residual(self , **kwargs):
         """计算本轮需要预测的labels_res,基于上一轮的labels_res和elites,以及是否是完全中性化还是svd因子中性化"""
@@ -389,8 +389,8 @@ class gpInput:
             labels_res = copy.deepcopy(self.labels_raw)
             elites     = None
         else:
-            labels_res = self.logger.load_state('res' , self.i_iter - 1 , device = self.device)
-            elites     = self.logger.load_state('elt' , self.i_iter - 1 , device = self.device)
+            labels_res = self.recorder.load_state('res' , self.i_iter - 1 , device = self.device)
+            elites     = self.recorder.load_state('elt' , self.i_iter - 1 , device = self.device)
         neutra = elites
 
         if isinstance(elites , torch.Tensor) and self.param.labels_neut_type == 'svd': 
@@ -401,26 +401,26 @@ class gpInput:
                 elites_mat = FF.factor_corr_with_y(elites[self.insample], labels_res[self.insample].unsqueeze(-1), corr_dim=1, dim=-1)
             neutra = FF.top_svd_factors(elites_mat, elites, top_n = self.param.svd_top_n ,top_ratio=self.param.svd_top_ratio, dim=-1 , inplace = True) # use svd factors instead
             assert neutra is not None , 'neutra is None'
-            Logger.stdout(f'Elites({elites.shape[-1]}) Shrink to SvdElites({neutra.shape[-1]})' , indent = 1 , vb_level = self.vb_level)
+            self.logger.stdout(f'Elites({elites.shape[-1]}) Shrink to SvdElites({neutra.shape[-1]})')
 
         if isinstance(neutra , torch.Tensor) and neutra.numel(): 
             self.neutra = neutra.cpu()
-            Logger.stdout(f'Neutra has {neutra.shape} Elements' , indent = 1 , vb_level = 'max')
+            self.logger.stdout(f'Neutra has {neutra.shape} Elements',vb_level='max')
 
         assert isinstance(labels_res , torch.Tensor) , type(labels_res)
         if isinstance(neutra , pd.DataFrame):
             neutra = torch.Tensor(neutra.values)
         labels_res = T.neutralize_2d(labels_res, neutra , inplace = True) 
         assert labels_res is not None , 'labels_res is None'
-        self.logger.save_state('res', labels_res, self.i_iter) 
+        self.recorder.save_state('res', labels_res, self.i_iter) 
 
         if self.param.factor_neut_type > 0 and self.param.labels_neut_type == 'svd':
-            lastneutra = None if self.i_iter == 0 else self.logger.load_state('neu' , self.i_iter - 1 , device = self.device)
+            lastneutra = None if self.i_iter == 0 else self.recorder.load_state('neu' , self.i_iter - 1 , device = self.device)
             if isinstance(lastneutra , torch.Tensor): 
                 lastneutra = lastneutra.cpu()
             if isinstance(neutra , torch.Tensor): 
                 lastneutra = torch.cat([lastneutra , neutra.cpu()] , dim=-1) if isinstance(lastneutra , torch.Tensor) else neutra.cpu()
-            self.logger.save_state('neu', lastneutra, self.i_iter) 
+            self.recorder.save_state('neu', lastneutra, self.i_iter) 
             del lastneutra
         
         self.tensors['labels_res'] = labels_res.to(self.device)

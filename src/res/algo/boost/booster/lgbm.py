@@ -11,11 +11,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from copy import deepcopy
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
 from src.func import match_values
-from src.proj import Logger
+from src.proj import BaseClass
 from ..util import BasicBoostModel , BoostInput
 
 PLOT_PATH : Path | None = None
@@ -101,10 +102,11 @@ class Lgbm(BasicBoostModel):
         self.model = lightgbm.Booster(model_str = model_dict['model'])
         return self
     
-    @property
-    def plot(self): return LgbmPlot(self)
+    @cached_property
+    def plot(self): 
+        return LgbmPlot(self)
 
-class LgbmPlot:
+class LgbmPlot(BaseClass.BoundLogger):
     """Visualization helper attached to a fitted :class:`Lgbm` instance.
 
     All plot methods save to ``plot_path`` when it is set.  Methods that
@@ -141,7 +143,7 @@ class LgbmPlot:
             plt.yscale(yscale)
         plt.close(fig)
         if show_plot: 
-            Logger.display(fig , caption = 'Training process of Lgbm')
+            self.logger.display(fig , caption = 'Training process of Lgbm')
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)
@@ -154,7 +156,7 @@ class LgbmPlot:
 
     def histogram(self , feature_idx='all'):
         if self.plot_path is None:
-            Logger.alert1(f'plot path not given, will not proceed')
+            self.logger.alert1(f'plot path not given, will not proceed')
             return
         if isinstance(feature_idx,str):
             assert feature_idx=='all' , feature_idx
@@ -181,7 +183,7 @@ class LgbmPlot:
 
     def tree(self , num_trees_list=[0]):   
         if self.plot_path is None:
-            Logger.alert1(f'plot path not given, will not proceed')
+            self.logger.alert1(f'plot path not given, will not proceed')
             return
         for num_trees in num_trees_list:
             fig, ax = plt.subplots(figsize=(12,12))
@@ -193,7 +195,7 @@ class LgbmPlot:
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
-            Logger.alert1(f'plot path not given, will not proceed')
+            self.logger.alert1(f'plot path not given, will not proceed')
             return
         import shap # type: ignore
         
@@ -226,7 +228,7 @@ class LgbmPlot:
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
-            Logger.alert1(f'plot path not given, will not proceed')
+            self.logger.alert1(f'plot path not given, will not proceed')
             return
         x = train.X().cpu().numpy()
         pred = np.array(self.lgbm.model.predict(x))
@@ -242,7 +244,7 @@ class LgbmPlot:
         if train is None: 
             train = self.lgbm.data['train']
         if self.plot_path is None:
-            Logger.alert1(f'plot path not given, will not proceed')
+            self.logger.alert1(f'plot path not given, will not proceed')
             return
         self.plot_path.joinpath('explainer_pdp').mkdir(exist_ok=True)
         [file.unlink() for file in self.plot_path.joinpath('explainer_pdp').iterdir()]
@@ -279,14 +281,11 @@ def main():
         'test'  : pd.read_csv('../../data/tree_data/df_test.csv' , index_col=[0,1]) , 
     }
 
-    # %%
+    
     a = Lgbm().import_data(**dict_df)
-    a.fit()
+    # seqn = np.arange(dict_df['train'].shape[1])
+    # use_features = dict_df['train'].iloc[:,[*seqn[-22:-1]]].columns.values
 
-    # %%
-    seqn = np.arange(dict_df['train'].shape[1])
-    use_features = dict_df['train'].iloc[:,[*seqn[-22:-1]]].columns.values
-    Logger.stdout(use_features)
     a.fit()
     a.plot.training()
 
@@ -296,12 +295,12 @@ def main():
     a.plot.importance()
     a.plot.histogram()
 
-    # %%
+    
     a.plot.tree()
     a.plot.sdt()
     a.plot.pdp()
     if a.train_param['linear_tree'] is False:
         a.plot.shap() # Error now due to Numpy >= 1.24 and shap from pip not compatible
-# %%
+
 if __name__ == '__main__':
     main()

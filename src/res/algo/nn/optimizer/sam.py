@@ -20,7 +20,7 @@ from torch.distributed import ReduceOp
 from torch.nn.modules.batchnorm import _BatchNorm
 import torch.distributed
 
-from src.proj import Logger
+from src.proj import BaseClass
 
 def disable_running_stats(model):
     """Freeze BatchNorm running statistics by setting momentum to 0.
@@ -47,7 +47,7 @@ def enable_running_stats(model):
             module.momentum = getattr(module, 'backup_momentum')
     model.apply(_enable)
 
-class SAM(optim.Optimizer):
+class SAM(optim.Optimizer , BaseClass.BoundLogger):
     """Sharpness-Aware Minimization (SAM).
 
     Two-step optimization loop:
@@ -263,7 +263,7 @@ class SSAMF(SAM):
         with torch.enable_grad():
             for idx, sample_idx in enumerate(sampled_idxs):
                 if idx % (self.num_samples // 10) == 0:
-                    Logger.stdout(f'Updating Mask: [{idx}/{self.num_samples}]..')
+                    self.logger.stdout(f'Updating Mask: [{idx}/{self.num_samples}]..')
 
                 (feature, label) = train_data.dataset[sample_idx]
                 feature = torch.from_numpy(feature).to(self.device).float()
@@ -324,9 +324,9 @@ class SSAMF(SAM):
         assert epoch is not None , f'{self.__class__.__name__} epoch is None'
         assert batch_idx is not None , f'{self.__class__.__name__} batch_idx is None'
         if (epoch % self.update_freq == 0) and (batch_idx == 0):
-            Logger.stdout('\nUpdate Mask!')
+            self.logger.stdout('\nUpdate Mask!')
             self.update_mask(model, train_data)
-            Logger.stdout(f'Mask Lived Weight: {self.mask_info():.4f}')
+            self.logger.stdout(f'Mask Lived Weight: {self.mask_info():.4f}')
 
     @torch.no_grad()
     def mask_info(self):
@@ -932,7 +932,7 @@ class GAM(optim.Optimizer):
         return f'GAM({self.base_optimizer.__class__.__name__})'
 
 
-class FriendlySAM(torch.optim.Optimizer):
+class FriendlySAM(torch.optim.Optimizer , BaseClass.BoundLogger):
     """Friendly SAM — momentum-corrected perturbation direction.
 
     Before computing the perturbation norm, subtracts a momentum term
@@ -969,7 +969,7 @@ class FriendlySAM(torch.optim.Optimizer):
         self.lmbda = lmbda
         self.adaptive = adaptive
         self.rho = rho
-        Logger.stdout('FriendlySAM sigma:', self.sigma, 'lambda:', self.lmbda)
+        self.logger.stdout('FriendlySAM sigma:', self.sigma, 'lambda:', self.lmbda)
 
     @torch.no_grad()
     def first_step(self, zero_grad=False):

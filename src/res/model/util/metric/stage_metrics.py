@@ -4,11 +4,11 @@ import pandas as pd
 import torch
 
 from collections import defaultdict
-from torch import nn , Tensor
+from torch import Tensor
 from typing import Any , Callable , Literal
 from pathlib import Path
 
-from src.proj import Logger
+from src.proj import BaseClass
 from src.proj.util.func import AsyncSaver
 from src.res.model.util.core import epoch_key , attempt_key
 
@@ -18,14 +18,6 @@ from .metric_result import EpochMetricResult
 __all__ = ['BatchMetrics' , 'EpochMetrics' , 'AttemptMetrics' , 'ModelMetrics']
 
 MetricTypes = Literal['accuracy' , 'loss' , 'rankic']
-
-def _get_net(model : nn.Module | Any) -> nn.Module | None:
-    if isinstance(model , nn.Module):
-        return model
-    elif hasattr(model , 'net') and isinstance(getattr(model , 'net') , nn.Module):
-        return getattr(model , 'net')
-    else:
-        return None
 
 class BatchMetrics:
     def __init__(self , aggregator : MetricAggregator) -> None:
@@ -144,7 +136,7 @@ class BatchMetrics:
     def batch_key(self) -> int | str | Any:
         return self.key['batch']
 
-class AggregatedMetrics:
+class AggregatedMetrics(BaseClass.BoundLogger):
     def __init__(self , aggregator : MetricAggregator) -> None:
         self.aggregator = aggregator
         self.indices : dict[str,list[str|Any]] = defaultdict(list)
@@ -184,7 +176,7 @@ class AggregatedMetrics:
         if name in self.collected_tables:
             return self.collected_tables[name]
         if name not in self.tables:
-            Logger.only_once(f'{name} not found in {self.tables.keys()}', object = self , mark = 'get_table' , printer = 'alert1' , vb_level = 'max')
+            self.logger.only_once(f'{name} not found in {self.tables.keys()}', object = self , mark = 'get_table' , printer = 'alert1' , vb_level = 'max')
         if not self.tables[name]:
             return pd.DataFrame()
         df = pd.concat(self.tables[name])

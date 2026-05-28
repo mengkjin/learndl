@@ -7,8 +7,7 @@ from typing import Any , Callable , Literal
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
-
-from src.proj import Logger
+from src.proj import BaseClass
 from src.func.tensor import nanmedian , standardize
 from src.data import DataBlockNorm
 from src.res.model.util.config import ModelConfig
@@ -24,10 +23,6 @@ class Prenormer:
     divlast  : bool = False
     histnorm : bool = False
     channelnorm : bool = False
-
-    def __post_init__(self):
-        if self: 
-            Logger.success(f'Pre-Norm : {self}' , vb_level = 'max')
             
     def __bool__(self):
         return self.divlast or self.histnorm or self.channelnorm
@@ -66,12 +61,17 @@ class Prenormer:
         )
 
 
-class PrenormOperator:
+class PrenormOperator(BaseClass.BoundLogger):
     '''prenorm operator for data module datas'''
     def __init__(self, config: ModelConfig , histnorms : dict[str, DataBlockNorm] | None = None):
         self.config = config
         self.histnorms = histnorms or {}
-        self.prenorms = {name: Prenormer.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
+        
+        prenorms = {name: Prenormer.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
+        prenorms = {name: prenorm for name , prenorm in prenorms.items() if prenorm}
+        for prenorm in prenorms.values():
+            self.logger.success(f'{prenorm} initialized' , vb_level = 'max')
+        self.prenorms = prenorms
 
     @property
     def input_keys(self) -> list[str]:

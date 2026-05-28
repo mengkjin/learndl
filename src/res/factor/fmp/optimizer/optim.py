@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal , Any
 
-from src.proj import MACHINE , Logger
+from src.proj import MACHINE , BaseClass
 from src.res.factor.util import PortCreator , PortCreateResult , Port
 
 from .interpreter import OptimizedPortfolioInput
@@ -18,7 +18,7 @@ ENGINE_TYPE = Literal['mosek' , 'cvxopt' , 'cvxpy']
 CVXPY_SOLVER = Literal['mosek' , 'ecos' , 'osqp' , 'scs' , 'clarabel']
 
 @dataclass(slots = True)
-class OptimizedPortfolioCreatorConfig:
+class OptimizedPortfolioCreatorConfig(BaseClass.BoundLogger):
     prob_type : PROB_TYPE = 'quadprog'
     engine_type : ENGINE_TYPE = 'mosek'
     cvxpy_solver : CVXPY_SOLVER = 'mosek'
@@ -31,6 +31,7 @@ class OptimizedPortfolioCreatorConfig:
 
     @classmethod
     def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+        cls.SetClassVB(vb_level , indent)
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v != cls.__dataclass_fields__[k].default}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if use_kwargs and drop_kwargs: 
@@ -41,7 +42,7 @@ class OptimizedPortfolioCreatorConfig:
             kwargs_str = f'dropped kwargs: {drop_kwargs}'
         else:
             kwargs_str = 'no kwargs used'
-        Logger.stdout(f'{cls.__name__}.init_from: {kwargs_str}' , indent = indent , vb_level = vb_level)
+        cls.logger.stdout(f'init_from: {kwargs_str}')
         return cls(**use_kwargs)
 
     @property
@@ -76,7 +77,7 @@ class OptimizedPortfolioCreator(PortCreator):
                 break
 
         if not is_success and self.conf.opt_relax:
-            Logger.alert1(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')
+            self.logger.alert1(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')
             assert self.solver_input.w0 is not None , 'In this failed-with-relax case, w0 must not be None'
             w = self.solver_input.w0
 
@@ -91,8 +92,8 @@ class OptimizedPortfolioCreator(PortCreator):
             self.create_result.utility  = self.solver_input.utility(w , self.conf.prob_type , **self.conf.opt_cond) 
             self.create_result.accuracy = self.solver_input.accuracy(w)
             if not self.create_result.accuracy and is_success:
-                Logger.alert1(f'Not accurate but assessed as success at {self.model_date} for [{self.opt_input.alpha_model.name}]!')
-                Logger.stdout(self.create_result.accuracy)
+                self.logger.alert1(f'Not accurate but assessed as success at {self.model_date} for [{self.opt_input.alpha_model.name}]!')
+                self.logger.stdout(self.create_result.accuracy)
             self.create_result.analyze(self.bench_port , self.init_port)
         return self
     
@@ -103,4 +104,4 @@ if __name__ == '__main__':
     optim = OptimizedPortfolioCreator('test').setup(config_path = config_path , prob_type='socp')
 
     s = optim.create(20240606 , detail_infos = True)
-    Logger.stdout(s)
+    optim.logger.stdout(s)

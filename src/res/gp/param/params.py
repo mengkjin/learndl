@@ -1,12 +1,12 @@
-from src.proj import PATH , Logger
+from __future__ import annotations
 import torch
 import shutil
 from typing import Literal , Any
 
-from src.proj import Proj
+from src.proj import PATH , BaseClass
 from .default import gpDefaults
 
-class gpParameters:
+class gpParameters(BaseClass.BoundLogger):
     '''
     主要遗传规划参数初始化
     注：为方便跑多组实验,需设置job_id参数,设置方式为: python xxx.py --job_id 123456
@@ -17,17 +17,20 @@ class gpParameters:
         test_code:      if only to test code validity
     '''
 
-    def __init__(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , **kwargs):
+    def __init__(
+        self , job_id : int | None = None , train : bool = True , 
+        continuation : bool = False , test_code : bool = False , * ,
+        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        self.set_vb(vb_level , indent)
         self.initiate(job_id , train , continuation , test_code , **kwargs)
 
     def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , 
-                 vb_level : Any = 2 ,**kwargs):
+                 **kwargs):
         self.job_id = job_id
         self.train = train
         self.continuation = continuation
         self.test_code = test_code
         self.kwargs = kwargs
-        self.vb_level = Proj.vb(vb_level)
         self.make_job_dir()
         self.load_params()
 
@@ -52,22 +55,22 @@ class gpParameters:
         else:
             assert self.job_id >= 0 , self.job_id
             job_dir = gpDefaults.dir_result.joinpath(str(self.job_id))
-        Logger.success(f'Job Directory is : "{job_dir}"' , vb_level = self.vb_level)
+        self.logger.success(f'Job Directory is : "{job_dir}"')
         if self.train:
             if job_dir.exists() and not self.continuation: 
                 if not self.test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
                     raise Exception(f'Deletion Denied!')
                 shutil.rmtree(job_dir)
-                Logger.alert1(f'Start New Training in "{job_dir}"' , indent = 1 , vb_level = self.vb_level)
+                self.logger.alert1(f'Start New Training in "{job_dir}"' , idt = 1)
             elif not job_dir.exists() and self.continuation:
                 raise Exception(f'No existing "{job_dir}" for Continuation!')
             else:
-                Logger.stdout(f'Continue Training in "{job_dir}"' , indent = 1 , vb_level = self.vb_level)
+                self.logger.stdout(f'Continue Training in "{job_dir}"' , idt = 1)
         self.job_dir = job_dir  
 
     def load_params(self):
         if self.train:
-            Logger.stdout(f'Using Device {gpDefaults.device}' , vb_level = self.vb_level)
+            self.logger.stdout(f'Using Device {gpDefaults.device}')
         param_path = self.job_dir.joinpath('params.yaml') 
         if self.job_id is None or not param_path.exists():
             param_path = gpDefaults.path_param

@@ -6,15 +6,14 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration, Dates, Proj
+from src.proj import Duration, Dates, Proj , BaseClass
 from src.proj.core import strPath
-from src.proj.util import BaseModule
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name , category_title)
 
-class PortfolioBuilder(BaseModule):
+class PortfolioBuilder(BaseClass.BoundLogger):
     '''
     category : str but in BUILDER_TYPES
     alpha : AlphaModel
@@ -199,7 +198,7 @@ class PortfolioBuilder(BaseModule):
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
-class PortfolioGroupBuilder(BaseModule):
+class PortfolioGroupBuilder(BaseClass.BoundLogger):
     '''
     parallel_kwargs:
         can have list of builder_kwargs' components, but cannot overlap with builder_kwargs

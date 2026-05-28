@@ -7,7 +7,7 @@ import pandas as pd
 
 from zoneinfo import ZoneInfo
 
-from src.proj import SingletonMeta
+from src.proj.core import SingletonMeta
 from src.proj.env import MACHINE
 import src.proj.db as DB
 

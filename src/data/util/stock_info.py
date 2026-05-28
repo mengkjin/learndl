@@ -12,10 +12,9 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
-from src.proj import MACHINE , CALENDAR , TradeDate , DB , SingletonMeta
-from src.proj.util import BaseModule
+from src.proj import MACHINE , CALENDAR , TradeDate , DB , BaseMeta , BaseClass
 
-class InfoDataAccess(BaseModule , metaclass=SingletonMeta):
+class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     """
     Date-aware interface to static Chinese A-share stock reference data.
 

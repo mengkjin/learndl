@@ -6,10 +6,10 @@ from typing import Generator , Iterator , Type , Literal
 
 from .factor_calc import FactorCalculator
 
-from src.proj import PATH , MACHINE
-from src.proj.util import parallel , BaseModule
+from src.proj import PATH , MACHINE , BaseClass
+from src.proj.util import parallel
 
-class StockFactorHierarchy(BaseModule):
+class StockFactorHierarchy(BaseClass.BoundLogger):
     '''hierarchy of factor classes'''
     assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
     _instance = None

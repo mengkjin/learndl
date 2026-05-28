@@ -18,8 +18,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , Literal
 
-from src.proj import CALENDAR , Proj , DB , Dates , SingletonMeta , Const
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , Proj , DB , Dates , Const , BaseMeta , BaseClass
 from src.data.util import DataBlock , INFO
 
 from .financial_data import BS , IS , CF , INDI , FINA , FinData
@@ -29,7 +28,7 @@ from .model_data import RISK
 from .trade_data import TRADE
 from .exposure import EXPO
 
-class DataVendor(BaseModule , metaclass=SingletonMeta):
+class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     """
     Singleton aggregation facade for factor analysis and portfolio construction.
 

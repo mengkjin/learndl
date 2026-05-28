@@ -11,8 +11,8 @@ from typing import Any , Callable , Literal, Type , Generator
 
 from ..util import StockFactor
 
-from src.proj import PATH , CALENDAR , DB , Dates , SingletonABCMeta , Const
-from src.proj.util import parallel , BaseModule
+from src.proj import PATH , CALENDAR , DB , Dates , Const , BaseMeta , BaseClass
+from src.proj.util import parallel
 from src.data import DATAVENDOR
 
 __all__ = [
@@ -182,7 +182,7 @@ def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series
         return df
     return wrapper
 
-class _FactorCalculatorMeta(SingletonABCMeta):
+class _FactorCalculatorMeta(BaseMeta.SingletonABC):
     """meta class of StockFactorCalculator"""
 
     registry : dict[str,Type[FactorCalculator] | Any] = {}
@@ -243,7 +243,7 @@ class _FactorCalculatorMeta(SingletonABCMeta):
             import_module(module_name)
         cls.definition_imported = True
         
-class FactorCalculator(BaseModule , metaclass=_FactorCalculatorMeta):
+class FactorCalculator(BaseClass.BoundLogger , metaclass=_FactorCalculatorMeta):
     """base class of factor calculator"""
     init_date   : int = -1
     final_date  : int = 99991231

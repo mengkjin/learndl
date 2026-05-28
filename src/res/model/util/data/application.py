@@ -1,4 +1,3 @@
-from src.proj import Logger
 from src.res.model.util import ModelConfig , BatchInput
 from .data_module import DataModule
 
@@ -23,7 +22,6 @@ def get_realistic_batch_data(input_data_types='day') -> BatchInput:
     data = DataModule(model_config , 'predict').load_data()
     data.setup('predict' , model_date = data.datas.y.date[-50])
     batch_input = data.predict_dataloader()[0]
-    Logger.stdout(batch_input.info)
     return batch_input
 
 def get_random_batch_data(batch_size = 10 , seq_len = 30 , n_inputs = 6 , predict_steps = 1) -> BatchInput:

@@ -4,7 +4,7 @@ from collections import defaultdict
 from threading import Lock
 from typing import Literal
 
-from src.proj import CALENDAR , Logger
+from src.proj import CALENDAR , BaseClass
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
@@ -20,7 +20,7 @@ def get_profit_ann_dt(date : int):
     ann_dt = ann_dt[positive_yoy.reindex(ann_dt.index) > 0]
     return ann_dt.reset_index(drop=False)
 
-class PeadCalculator:
+class PeadCalculator(BaseClass.BoundLogger):
     """
     Thread-safe, per-date cache for PEAD intermediate data (ann calendar + quotes).
     """
@@ -71,10 +71,10 @@ class PeadCalculator:
         mv = DATAVENDOR.TRADE.get_mv(self.start , self.end , 'circ_mv')
 
         if not quotes.index.is_unique:
-            Logger.error(quotes.index[quotes.index.duplicated()])
+            self.logger.error(quotes.index[quotes.index.duplicated()])
             raise ValueError('for PEAD, quotes index must be unique, got stop here')
         if not mv.index.is_unique:
-            Logger.error(mv.index[mv.index.duplicated()])
+            self.logger.error(mv.index[mv.index.duplicated()])
             raise ValueError('for PEAD, mv index must be unique, got stop here')
 
         quotes['circ_mv'] = mv['circ_mv']

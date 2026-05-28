@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from functools import cached_property
-from typing import Any, Callable,Literal, Sequence, TypeVar, Type, overload
+from typing import Any, Callable,Literal, Sequence, TypeVar, Type
 
 from src.proj.env import Proj
 from src.proj.log import Logger , LOG_LEVEL_TYPE
@@ -10,113 +9,35 @@ from src.proj.log import Logger , LOG_LEVEL_TYPE
 T = TypeVar('T')
 _MISSING = object()
 
-__all__ = ['BaseModule']
-
-class GroupedCachedProperties:
-    """GroupedModule cached properties"""
-    def __init__(self):
-        self._cached_properties = defaultdict(dict)
-    def __repr__(self):
-        return f'{self.__class__.__name__}(cached_properties={self._cached_properties})'
-    def group_keys(self , group : str) -> list[str]:
-        return list(self._cached_properties[group].keys())
-    def clear_all(self):
-        self._cached_properties.clear()
-    def clear(self , group : str):
-        self._cached_properties[group].clear()
-    @overload
-    def set(self, key: str, value: Any, /) -> None: ...
-    @overload
-    def set(self, group: str, key: str, value: Any, /) -> None: ...
-    def set(
-        self,
-        group: str,
-        key: str | None = None,
-        value: Any = _MISSING,
-    ) -> None:
-        if value is _MISSING:
-            value = key  # type: ignore[assignment]
-            key = group
-            group = ''
-        self._cached_properties[group][key] = value
-    @overload
-    def get(self, key: str, /) -> Any: ...
-    @overload
-    def get(self, group: str, key: str, /) -> Any: ...
-    def get(self , group : str , key : str | None = None) -> Any:
-        if key is None:
-            group , key = '' , group
-        try:
-            return self._cached_properties[group][key]
-        except KeyError:
-            raise KeyError(
-                f'{group} {key} not found in cached_properties, '
-                f'current keys: {self.group_keys(group)}'
-            )
-    
-    @overload
-    def has(self, key: str, /) -> bool: ...
-    @overload
-    def has(self, group: str, key: str, /) -> bool: ...
-    def has(self, group: str, key: str | None = None) -> bool:
-        if key is None:
-            key, group = group, ''
-        return key in self._cached_properties[group]
-
-    @overload
-    def pop(self, key: str, /) -> Any: ...
-    @overload
-    def pop(self, group: str, key: str, /) -> Any: ...
-    def pop(self, group: str, key: str | None = None) -> Any:
-        if key is None:
-            key, group = group, ''
-        return self._cached_properties[group].pop(key)
-    @overload
-    def query(self, key: str, default_generator: Callable[[], T], /) -> T: ...
-    @overload
-    def query(self, group: str, key: str, default_generator: Callable[[], T], /) -> T: ...
-    def query(
-        self, group: str, key: str | Callable[[], T] , 
-        default_generator: Callable[[], T] | None = None,
-    ) -> T:
-        if callable(key) and default_generator is None:
-            default_generator = key
-            group, key = '' , group
-        elif callable(key):
-            raise ValueError(f'Only one of key or default_generator can be callable, but got {key} and {default_generator}')
-
-        if not self.has(group, key):
-            assert default_generator is not None , f'default_generator is required when {group} {key} is not found'
-            self.set(group, key, default_generator())
-        return self.get(group, key)
+__all__ = ['BoundLogger']
 
 class ModuleLogger:
     """Module logger for the module, include most methods of Logger, and can set base indent and vb_level"""
-    def __init__(self , module : type[BaseModule] | BaseModule):
+    def __init__(self , module : type[BoundLogger] | BoundLogger):
         self.module = module
 
     @cached_property
     def is_instance_logger(self) -> bool:
-        return isinstance(self.module , BaseModule)
+        return isinstance(self.module , BoundLogger)
 
     @cached_property
     def name(self) -> str:
-        if isinstance(self.module , BaseModule):
+        if isinstance(self.module , BoundLogger):
             return self.module.__class__.__name__
         else:
             return self.module.__name__
     @property
     def vb_level(self) -> int:
-        if isinstance(self.module , BaseModule):
+        if isinstance(self.module , BoundLogger):
             return self.module.vb_level
         else:
-            return BaseModule.GetClassVB()
+            return BoundLogger.GetClassVB()
     @property
     def indent(self) -> int:
-        if isinstance(self.module , BaseModule):
+        if isinstance(self.module , BoundLogger):
             return self.module.indent
         else:
-            return BaseModule.GetClassIndent()
+            return BoundLogger.GetClassIndent()
 
     def grep_kwargs(self , vb : int | None = None , idt : int | None = None , enter_vb : int | None = None , no_prefix : bool = False , **kwargs):
         if vb is not None and 'vb_level' not in kwargs:
@@ -255,7 +176,7 @@ class ModuleLogger:
         return Logger.Paragraph(*args , **kwargs)
 
 class ModuleLoggerGetter:
-    def __get__(self, instance : BaseModule | None, owner : Type[BaseModule]) -> ModuleLogger:
+    def __get__(self, instance : BoundLogger | None, owner : Type[BoundLogger]) -> ModuleLogger:
         if instance is None:
             if not hasattr(owner, '_cls_logger'):
                 logger = ModuleLogger(owner)
@@ -264,10 +185,20 @@ class ModuleLoggerGetter:
         else:
             return instance._self_logger
 
-class BaseModule:
+class BoundLogger:
     """
-    Base module of model components, including trainer, predictor, data module, etc.
-    Includes methods and properties for binder logging / vb_level and caching properties.
+    Bounded logger for the module, include most methods of Logger, and can set base indent and vb_level
+    Both class and instance can set vb_level and indent, and the instance will inherit the class's vb_level and indent.
+    For example
+        class A(BoundLogger):
+            ...
+        a = A()
+
+        A.SetClassVB(vb_level = 1)
+        A.logger.info('hello')
+        
+        a.set_vb(vb_level = 2)
+        a.logger.info('hello')
     """
     logger = ModuleLoggerGetter()
 
@@ -277,14 +208,6 @@ class BaseModule:
             return getattr(self , '_binder')
         else:
             return None
-    @cached_property
-    def cached_properties(self) -> GroupedCachedProperties:
-        """
-        grouped cached properties for the module
-        Will store properties in miscellaneous groups. Use '' as group name for properties that only calucate once
-        e.g. 'pipeline_hooks' , 'model_start' , 'data_module' , etc.
-        """
-        return GroupedCachedProperties()
 
     @classmethod
     def SetClassVB(cls , vb_level : Any | None = None , indent : int | None = None):
@@ -294,9 +217,9 @@ class BaseModule:
             cls._class_indent = indent
     def set_vb(self , vb_level : Any | None = None , indent : int | None = None):
         if vb_level is not None:
-            self.cached_properties.set('vb_level' , Proj.vb(vb_level))
+            self._instance_vb_level = Proj.vb(vb_level)
         if indent is not None:
-            self.cached_properties.set('indent' , indent)
+            self._instance_indent = indent
     @classmethod
     def GetClassVB(cls) -> int:
         return cls._class_vb_level if hasattr(cls, '_class_vb_level') else 1
@@ -305,16 +228,16 @@ class BaseModule:
         return cls._class_indent if hasattr(cls, '_class_indent') else 0
     @property
     def vb_level(self) -> int:
-        if self.cached_properties.has('vb_level'):
-            return self.cached_properties.get('vb_level')
+        if hasattr(self, '_instance_vb_level'):
+            return self._instance_vb_level
         elif hasattr(self.binder, 'vb_level'):
             return getattr(self.binder, 'vb_level') + 1
         else:
             return self.GetClassVB() + 1
     @property
     def indent(self) -> int:
-        if self.cached_properties.has('indent'):
-            return self.cached_properties.get('indent')
+        if hasattr(self, '_instance_indent'):
+            return self._instance_indent
         elif hasattr(self.binder, 'indent'):
             return getattr(self.binder, 'indent')
         else:

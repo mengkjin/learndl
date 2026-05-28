@@ -5,7 +5,7 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any
 
-from src.proj.util import BaseModule
+from src.proj import BaseClass
 from src.res.algo.nn.optimizer import sam
 
 from src.res.model.util.config import ModelConfig
@@ -16,7 +16,7 @@ __all__ = ['Optimizer']
 NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False
 
-class Optimizer(BaseModule):
+class Optimizer(BaseClass.BoundLogger):
     '''specify trainer optimizer and scheduler'''
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 

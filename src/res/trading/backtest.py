@@ -1,10 +1,9 @@
 from typing import Any
 
-from src.proj import CALENDAR , Dates
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , Dates , BaseClass
 from .trading_port import BacktestPort
 
-class BacktestPortfolioManager(BaseModule):
+class BacktestPortfolioManager(BaseClass.BoundLogger):
     @classmethod
     def available_ports(cls) -> list[str]:
         return list(BacktestPort.candidate_ports.keys())

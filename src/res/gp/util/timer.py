@@ -5,22 +5,22 @@ from functools import wraps
 from typing import Any , Literal, Callable
 import pandas as pd
 
-from src.proj import Logger , Proj
+from src.proj import BaseClass
 from src.res.gp.func import primas
 from .memory import MemoryManager
 
-class AccTimer:
-    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, vb_level : Any = 2 , memory_check = False):
+class AccTimer(BaseClass.BoundLogger):
+    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, indent : int = 1 , vb_level : Any = 2 , memory_check = False):
+        self.set_vb(vb_level , indent)
         self.key = key
         self.title = title.title()
         self.time_costs : list[float] = []
-        self.vb_level = Proj.vb(vb_level)
         if not title:
             self.paragraph = None
         elif timer_level != 5:
-            self.paragraph = Logger.Paragraph(title , timer_level)
+            self.paragraph = self.logger.paragraph(title , timer_level)
         else:
-            self.paragraph = Logger.Timer(title , enter_vb_level = self.vb_level , vb_level = self.vb_level)
+            self.paragraph = self.logger.timer(title , enter_vb = 0)
         self.memory_check = memory_check and torch.cuda.is_available()
 
     def __repr__(self) -> str:
@@ -38,7 +38,7 @@ class AccTimer:
         if self.memory_check:
             torch.cuda.empty_cache()
             mem_end  = torch.cuda.mem_get_info()[0] / MemoryManager.unit
-            Logger.success(f'Free CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G')
+            self.logger.success(f'Free CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G')
 
         self.time_costs.append(time_cost)
         if self.paragraph is not None:
@@ -68,7 +68,7 @@ class AccTimer:
                 return func(*args , **kwargs)
         return wrapper
 
-class gpTimer:
+class gpTimer(BaseClass.BoundLogger):
     '''
     ------------------------ gp timers ------------------------
     includes:
@@ -83,18 +83,18 @@ class gpTimer:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , record = False , vb_level : Any = 2) -> None:
-        self.initiate(record , vb_level)
+    def __init__(self , record = False , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        self.set_vb(vb_level , indent)
+        self.initiate(record)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'recording')
 
-    def initiate(self , record = False , vb_level : Any = 2) -> None:
+    def initiate(self , record = False) -> None:
         if self.initiated:
             return
         self.recording = record
-        self.vb_level = Proj.vb(vb_level)
         self.timers : dict[str, dict[str, AccTimer]] = {}
 
     def __repr__(self):
@@ -116,8 +116,8 @@ class gpTimer:
         [times.append((cat , k , v.time_cost , v.avg_time_cost , v.count)) for cat , timers in self.timers.items() for k,v in timers.items() if v]
         
         df = pd.DataFrame(times, columns=['category' , 'name', 'total_time', 'avg_time', 'count'])
-        display_kwargs = {'display.float_format': '{:.4f}'.format}
-        Logger.display(df , caption = 'Timer Table:' , vb_level = 1 , **display_kwargs)
+        display_kwargs : dict[str, Any] = {'display.float_format': '{:.4f}'.format}
+        self.logger.display(df , caption = 'Timer Table:' , **display_kwargs)
         return df
 
     def decorate_primas(self):

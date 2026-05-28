@@ -7,35 +7,35 @@ from datetime import datetime
 from pathlib import Path
 from typing import Sequence , Literal , Any
 
-from src.proj import PATH , Proj , Logger
+from src.proj import PATH , BaseClass
 from src.proj.core import strPath
 from src.proj.util import torch_load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus
 
-class gpLogger:
-    """process logger for genetic programming"""
+class gpRecorder(BaseClass.BoundLogger):
+    """process recorder for genetic programming"""
     _instance = None
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , job_dir : strPath | None = None , status : gpStatus | None = None , vb_level : Any = 2 , *args , **kwargs) -> None:
-        self.initiate(job_dir , status , vb_level , *args , **kwargs)
+    def __init__(self , job_dir : strPath | None = None , status : gpStatus | None = None , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        self.set_vb(vb_level , indent)
+        self.initiate(job_dir , status , *args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'job_dir')
 
-    def initiate(self , job_dir : strPath | None = None , status : gpStatus | None = None , vb_level : Any = 2) -> None:
+    def initiate(self , job_dir : strPath | None = None , status : gpStatus | None = None) -> None:
         if self.initiated:
             return
 
         self.job_dir = gpDefaults.dir_result.joinpath('bendi') if job_dir is None else Path(job_dir)
         self.status = status if status is not None else gpStatus(0 , 0)
-        self.vb_level = Proj.vb(vb_level)
 
         for dir in [self.dir_logbook , self.dir_tensors , self.dir_records]:
             dir.mkdir(parents=True, exist_ok=True)
@@ -107,7 +107,7 @@ class gpLogger:
         else:
             path = self.dir_logbook.joinpath(f'{self.current_logbook_name}.pkl')
         joblib.dump(dumps , path)
-        Logger.success(f'Generation {self.status.i_gen} Logbook Saved to "{path}"' , indent = 1 , vb_level = self.vb_level)
+        self.logger.success(f'Generation {self.status.i_gen} Logbook Saved to "{path}"')
         return self
 
     def load_historybook(self , **kwargs) -> dict[str, SyntaxRecord]:
@@ -118,7 +118,7 @@ class gpLogger:
 
     def dump_historybook(self , historybook : dict[str, SyntaxRecord] | None = None , **kwargs):
         joblib.dump(historybook , self.path_historybook)
-        Logger.success(f'Historybook Saved to {self.path_historybook}' , vb_level = self.vb_level)
+        self.logger.success(f'Historybook Saved to {self.path_historybook}')
         return self
 
     def update_sku(self , syntax : str , pool_skuname : str):
@@ -188,7 +188,7 @@ class gpLogger:
             case 'params':
                 assert isinstance(data , dict) , data
                 if path.exists():
-                    Logger.alert1(f'{path} already exists, it will be overwritten' , vb_level = self.vb_level)
+                    self.logger.alert1(f'{path} already exists, it will be overwritten')
                     path.unlink()
                 PATH.dump_yaml(data , path)
             case _:

@@ -18,14 +18,14 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH , Logger , DB
+from src.proj import PATH , DB , BaseClass
 from src.func.metric import ic_2d , rankic_2d
 
 from .boost_io import BoostInput , BoostOutput
 
 __all__ = ['BasicBoostModel' , 'load_xingye_data']
 
-class BasicBoostModel(ABC):
+class BasicBoostModel(ABC, BaseClass.BoundLogger):
     """Abstract base class for all gradient-boost wrappers.
 
     Sub-classes must implement :meth:`fit`, :meth:`predict`, :meth:`to_dict`,
@@ -116,7 +116,7 @@ class BasicBoostModel(ABC):
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
                 if not self.silent: 
-                    Logger.alert1(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
+                    self.logger.alert1(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
             n_bins = min(n_bins , self.DEFAULT_CATEGORICAL_MAX_BINS)            
         train_param['n_bins'] = n_bins
 

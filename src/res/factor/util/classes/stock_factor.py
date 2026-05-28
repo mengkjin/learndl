@@ -22,9 +22,9 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal , Iterable
 
-from src.proj import DB , Logger , CALENDAR
+from src.proj import DB , CALENDAR , BaseClass
 from src.proj.core import strPath
-from src.proj.util import properties , BaseModule
+from src.proj.util import properties
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -275,7 +275,7 @@ def common_elements(lists : list[np.ndarray]) -> np.ndarray:
             ds = np.intersect1d(ds , list)
         return ds
 
-class FactorStats(BaseModule):
+class FactorStats(BaseClass.BoundLogger):
     """
     FactorStats class is used to store and manipulate factor statistics
     """
@@ -385,7 +385,7 @@ class FactorStats(BaseModule):
     def create_cache_factor_stats(cls) -> dict[str,FactorStats]:
         return {name:FactorStats(name) for name in cls.available_stats}
 
-class CacheFactorStats(BaseModule):
+class CacheFactorStats(BaseClass.BoundLogger):
     """
     CacheFactorStats class is used to store and manipulate multiple factor statistics
     """
@@ -447,7 +447,7 @@ class CacheFactorStats(BaseModule):
     def coverage(self) -> FactorStats:
         return self.factor_stats['coverage']
 
-class StockFactor(BaseModule):
+class StockFactor(BaseClass.BoundLogger):
     """
     StockFactor class is used to store and manipulate factor data
     factor data can be a pandas DataFrame , a pandas Series , a DataBlock , a StockFactor , or a dictionary of pd.Series
@@ -739,8 +739,8 @@ class StockFactor(BaseModule):
         return a factor with the pseudo date
         """
         if pseudo_date is not None and not np.array_equal(self.data_date , pseudo_date):
-            Logger.alert1(f'Setting {self} pseudo date to {pseudo_date}' , indent = 1 , vb_level = 'max')
-            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 'max')
+            self.logger.alert1(f'Setting {self} pseudo date to {pseudo_date}' , indent = 1 , vb_level = 'max')
+            self.logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 'max')
             self.pseudo_date = pseudo_date
         return self
         

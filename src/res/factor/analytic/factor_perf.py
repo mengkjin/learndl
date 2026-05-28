@@ -17,8 +17,8 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     COMPULSORY_BENCHMARKS : Any = None
         
-    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None , indent : int = 1 , vb_level : Any = 1):
-        with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level):
+    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None):
+        with self.calc_manager():
             func = self.calculator()
             rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
             self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
@@ -240,11 +240,10 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         # Distrib_Qtile ,
     ]
 
-    def calc(self , factor : StockFactor , benchmarks: list[Benchmark|Any] | Any = None , * , 
-             indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def calc(self , factor : StockFactor , benchmarks: list[Benchmark|Any] | Any = None , **kwargs):
         factor = factor.filter_dates_between(self.start , self.end)
         if Const.Model.resume_factor_perf:
             factor.cache_factor_stats.load(self.factor_stats_resume_path)
-        super().calc(factor , benchmarks , indent = indent , vb_level = vb_level , **kwargs)
+        super().calc(factor , benchmarks , **kwargs)
         factor.cache_factor_stats.save(self.factor_stats_resume_path)
         return self

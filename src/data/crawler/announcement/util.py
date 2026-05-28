@@ -18,7 +18,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import TypeVar
 
-from src.proj import CALENDAR , DB , Logger , Proj
+from src.proj import CALENDAR , DB , Proj , BaseClass
 
 BJTZ = ZoneInfo("Asia/Shanghai")
 
@@ -38,21 +38,29 @@ def parse_jsonp(text: str) -> object:
     text = text.strip()
     m = re.match(r"^[a-zA-Z0-9_$]+\((.*)\)\s*;?\s*$", text, re.DOTALL)
     if not m:
-        Logger.error(f"Response is not JSONP format: {text}")
+        CrawlerLogger.error(f"Response is not JSONP format: {text}")
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
 
-def crawler_log(*msgs , type : Literal['stdout' , 'success' , 'alert' , 'note'] = 'stdout'):
-    match type:
-        case 'success':
-            printer = Logger.success
-        case 'alert':
-            printer = Logger.alert1
-        case 'note':
-            printer = Logger.note
-        case 'stdout' | _:
-            printer = Logger.stdout
-    printer(*msgs, indent = 1, vb_level = Proj.vb.get('crawler'))
+class CrawlerLogger(BaseClass.BoundLogger):
+    _class_vb_level = Proj.vb.get('crawler')
+    _class_indent = 1
+
+    @classmethod
+    def success(cls , *msgs):
+        cls.logger.success(*msgs)
+    @classmethod
+    def alert(cls , *msgs):
+        cls.logger.alert1(*msgs)
+    @classmethod
+    def note(cls , *msgs):
+        cls.logger.note(*msgs)
+    @classmethod
+    def stdout(cls , *msgs):
+        cls.logger.stdout(*msgs)
+    @classmethod
+    def error(cls , *msgs):
+        cls.logger.error(*msgs)
 
 @dataclass
 class Announcement:

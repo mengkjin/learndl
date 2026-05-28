@@ -13,7 +13,7 @@ from threading import RLock
 
 from src.proj.core import Silence
 from src.proj.env import MACHINE
-from src.proj.util.module import BaseModule
+from src.proj.bases import BaseClass
 from src.proj.util.error_handler import retry_call
 from .core import ProxySet
 
@@ -78,7 +78,7 @@ class ProxiesCache:
             return wrapper
         return decorator
 
-class BaseProxiesFinder(BaseModule, ABC):
+class BaseProxiesFinder(ABC , BaseClass.BoundLogger):
     """Auto discover HTTP proxies from public proxy list."""
 
     @classmethod

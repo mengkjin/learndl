@@ -5,9 +5,10 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from typing import Any , Literal
 
+from src.proj import BaseClass
 from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
-class PortCreator(ABC):
+class PortCreator(ABC , BaseClass.BoundLogger):
     def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
         self.name = name
         self.setup(indent = indent , vb_level = vb_level , **kwargs)
@@ -35,7 +36,7 @@ class PortCreator(ABC):
         self.output()
         t3 = datetime.now()
 
-        # Logger.stdout(f'At model_date {model_date} , portfolio has {len(self.create_result.port)} stocks , init_value {self.init_port.value} , final_value {self.create_result.port.value} ')
+        # self.logger.stdout(f'At model_date {model_date} , portfolio has {len(self.create_result.port)} stocks , init_value {self.init_port.value} , final_value {self.create_result.port.value} ')
 
         self.create_result.timecost.update({
             'parse' : (t1 - t0).total_seconds() ,

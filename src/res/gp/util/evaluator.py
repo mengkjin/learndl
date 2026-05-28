@@ -5,7 +5,7 @@ from deap import gp
 from torch.multiprocessing import Pool
 from tqdm import tqdm
 
-from src.proj import Logger
+from src.proj import Logger , BaseClass
 from src.func import tensor as T
 from src.res.gp.func import factor_func as FF
 from src.res.gp.param import gpParameters
@@ -13,7 +13,7 @@ from .syntax import BaseIndividual , SyntaxRecord , Population
 from .input import gpInput
 from .status import gpStatus
 from .timer import gpTimer
-from .logger import gpLogger
+from .recorder import gpRecorder
 from .fitness import gpFitness
 
 def except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
@@ -53,14 +53,15 @@ def raw_neutralize(y : torch.Tensor | None , x : torch.Tensor | None , * , insam
 processor = except_MemoryError(FF.process_factor)
 neutralizer = except_MemoryError(raw_neutralize)
 
-class gpEvaluator:
+class gpEvaluator(BaseClass.BoundLogger):
     def __init__(self , param : gpParameters , input : gpInput , status : gpStatus ,  
-                timer : gpTimer , logger : gpLogger , **kwargs):
+                timer : gpTimer , recorder : gpRecorder , * , indent : int = 1 , vb_level : Any = 2 , **kwargs):
+        self.set_vb(vb_level , indent)
         self.param = param
         self.input = input
         self.status = status
         self.timer = timer
-        self.logger = logger
+        self.recorder = recorder
         self.fitness = gpFitness(param.fitness_wgt)
 
     def to_value(self , individual : BaseIndividual | str | SyntaxRecord , * , neutral_type : Literal[0,1,2] = 0 , process_key='inf_winsor_norm',
@@ -76,7 +77,7 @@ class gpEvaluator:
             factor_value: 2d tensor
         """
         ind_name = str(individual)
-        Logger.footnote(f'Evaluating {ind_name}' , vb_level = 'max' , indent = 1)
+        self.logger.footnote(f'Evaluating {ind_name}' , vb_level = 'max')
 
         with self.timer.timer('process' , 'Compile'):
             calculator = except_MemoryError(compiler(individual))
@@ -140,7 +141,7 @@ class gpEvaluator:
                 rankir:     (insample_res, outsample_res, insample_raw, outsample_raw)
             )
         """
-        self.logger.update_sku(str(individual) , pool_skuname)
+        self.recorder.update_sku(str(individual) , pool_skuname)
         factor = self.to_value(individual , **kwargs)
         metrics, fit_value = self.assess(factor , const_annual = const_annual , min_coverage = min_coverage , **kwargs)
     

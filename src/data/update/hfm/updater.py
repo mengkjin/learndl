@@ -17,12 +17,12 @@ from datetime import datetime
 from functools import reduce
 from pathlib import Path
 
-from src.proj import PATH , MACHINE , Logger , Duration , DB
+from src.proj import PATH , MACHINE , Duration , DB , BaseClass
 
 from .jsfetcher import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform
 
-class JSDataUpdater():
+class JSDataUpdater(BaseClass.BoundLogger):
     '''
     in JS environment, update js source data from jinmeng's terminal
     must update after the original R database is updated
@@ -63,9 +63,9 @@ class JSDataUpdater():
             paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
-            Logger.divider()
-            Logger.stdout(f'Delete {len(paths)} updaters after completion')
-            Logger.stdout(paths)
+            cls.logger.divider()
+            cls.logger.stdout(f'Delete {len(paths)} updaters after completion')
+            cls.logger.stdout(paths)
             # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
 
         for tar_filename in paths:
@@ -183,7 +183,7 @@ class JSDataUpdater():
             df , target_path = param()
             target_str = self.handle_result(df , target_path , result)
             if target_str: 
-                Logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
+                self.logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
         return result
     
     def fetch_by_date(self , db_src , start = None , end = None , force = False):
@@ -205,7 +205,7 @@ class JSDataUpdater():
                 if param.db_src == 'trade_js' and param.db_key == 'min': 
                     temporal['df_min'] = df
                 if target_str: 
-                    Logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
+                    self.logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
         return result
 
     def fetch_all(self ,start = None , end = None , force = False):
@@ -227,19 +227,19 @@ class JSDataUpdater():
             start_time = datetime.now()
             target_str = self.handle_result(path , path)
             if target_str: 
-                Logger.success(f'Download {target_str}! Cost {Duration(since = start_time)}')
+                self.logger.success(f'Download {target_str}! Cost {Duration(since = start_time)}')
             paths.append(path)
         return paths
 
     def print_unfetch(self):
-        [Logger.stdout(fail) for fail in self.Failed]
+        [self.logger.stdout(fail) for fail in self.Failed]
 
     @classmethod
     def update_hfm_terminal(cls):
         assert not MACHINE.platform_server , f'{MACHINE.name} is platform server, must on terminal machine'
         if not MACHINE.belong_to_hfm: 
             return
-        with Logger.Paragraph('Update JSData Update Files' , 3):
+        with cls.logger.paragraph('Update JSData Update Files' , 3):
             Updater = cls()
             Updater.fetch_all()
             Updater.download_all()
@@ -250,7 +250,7 @@ class JSDataUpdater():
     def update_server(cls):
         assert MACHINE.platform_server , f'{MACHINE.name} is not platform server, must on platform server machine'
 
-        with Logger.Paragraph('Unpack JSData Update Files' , 3):
+        with cls.logger.paragraph('Unpack JSData Update Files' , 3):
             cls.unpack_exist_updaters(del_after_dumping=True)
             cls.transform_datas()
 

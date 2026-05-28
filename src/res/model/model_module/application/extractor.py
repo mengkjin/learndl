@@ -8,12 +8,11 @@ from datetime import datetime
 from itertools import product
 from typing import Any
 
-from src.proj import CALENDAR , Proj
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , Proj , BaseClass
 from src.res.model.util import ModelConfig , HiddenPath , HiddenExtractionModel , DataModule
 from src.res.model.model_module.module import NNPredictor , get_predictor_module
 
-class ModelHiddenExtractor(BaseModule):
+class ModelHiddenExtractor(BaseClass.BoundLogger):
     '''for a model to predict recent/history data'''
     def __init__(self , model : HiddenExtractionModel , backward_days = 300 , forward_days = 160 , * , indent : int = 0 , vb_level : Any = 1):
         self.set_vb(vb_level , indent)
@@ -87,7 +86,7 @@ class ModelHiddenExtractor(BaseModule):
         self._current_update_dates = []
         with torch.no_grad():
             for model_date , model_num , submodel in model_iter:
-                hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
+                hidden_path = HiddenPath(self.hidden_name , model_num , submodel , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
                     time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
@@ -126,7 +125,7 @@ class ModelHiddenExtractor(BaseModule):
             hiddens.insert(0 , old_hidden_df)
         hidden_df = pd.concat(hiddens , axis=0).drop_duplicates(['secid','date']).sort_values(['secid','date'])
         self.hidden_df = hidden_df
-        hidden_path.save_hidden_df(hidden_df , model_date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        hidden_path.save_hidden_df(hidden_df , model_date)
 
     @classmethod
     def SelectModel(cls , model_name : str) -> ModelHiddenExtractor:

@@ -12,8 +12,7 @@ from typing import Any , Type , Literal , Iterator
 from importlib import import_module
 from pathlib import Path
 
-from src.proj import PATH , CALENDAR
-from src.proj.util import BaseModule
+from src.proj import PATH , CALENDAR , BaseClass
 
 class BasicCustomUpdaterMeta(type):
     """
@@ -34,7 +33,7 @@ class BasicCustomUpdaterMeta(type):
             cls.registry[name] = new_cls
         return new_cls
 
-class BasicCustomUpdater(BaseModule , metaclass=BasicCustomUpdaterMeta):
+class BasicCustomUpdater(BaseClass.BoundLogger , metaclass=BasicCustomUpdaterMeta):
     """
     base class of basic updater
     must implement update_all method

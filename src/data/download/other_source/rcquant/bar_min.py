@@ -8,16 +8,16 @@ Start date behaviour:
 - Equity bars: enabled from 2024-11-01 on non-HFM machines; disabled on HFM machines.
 - ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
 """
-import rqdatac , re
+import rqdatac
 import pandas as pd
 import numpy as np
 
-from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger , CALENDAR , DB , Dates
-from src.proj.util import IOCatcher , BaseModule
+from src.proj import PATH , MACHINE , CALENDAR , DB , Dates , BaseClass
 from src.data.util import secid_adjust , trade_min_reform
+
+from .initializer import RcQuantInitializer
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
 DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
@@ -64,28 +64,6 @@ def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
     DB.save_df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} min {date}')
-
-def rcquant_init():
-    if not rqdatac.initialized(): 
-        try:
-            with IOCatcher() as catcher:
-                rqdatac.init(uri = MACHINE.secret.get('accounts' , 'rcquant/uri'))
-            output = catcher.contents
-            if _print := output['stdout']:
-                Logger.stdout(_print)
-            if _error := output['stderr']:
-                key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
-                if key_info:
-                    Logger.alert1(f'RcQuant Warning >> {key_info.group(0)}' , indent = 1 , vb_level = 1)
-                else:
-                    Logger.error(f'RcQuant Error : {_error}')
-        except KeyError:
-            Logger.error(f'rcquant login info not found, please check .secret/accounts.yaml')
-            return False
-        except QuotaExceeded as e:
-            Logger.error(f'rcquant init failed: {e}')
-            return False
-    return True
 
 def rcquant_past_dates(data_type : DATA_TYPES , file_type : Literal['secdf' , 'min']):
     path = RC_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RC_PATH.joinpath(f'{data_type}df')
@@ -135,7 +113,7 @@ def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     secdf = load_list(date , data_type)
     if secdf is not None: 
         return secdf
-    if not rcquant_init(): 
+    if not RcQuantInitializer.init(): 
         return pd.DataFrame()
     secdf = rqdatac.all_instruments(type=instrument_types[data_type], date=str(date))
     secdf = secdf.rename(columns = {'order_book_id':'code'})
@@ -147,7 +125,7 @@ def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     return secdf
 
 def rcquant_trading_dates(start, end):
-    if not rcquant_init(): 
+    if not RcQuantInitializer.init(): 
         return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start, end, market='cn')]
 
@@ -169,7 +147,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 1, vb_level = 3)
         return True
 
-    if not rcquant_init(): 
+    if not RcQuantInitializer.init(): 
         return False
 
     instrument_list = rcquant_instrument_list(date , data_type = data_type)
@@ -205,49 +183,52 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
-    assert data_type is not None , f'data_type is required'
-    dates = target_dates(data_type , date)
-    if dates.empty: 
-        Logger.skipping(f'RcQuant {data_type} bar min is up to date' , indent = 1)
+class RcquantMinBarDownloader(BaseClass.BoundLogger):
+    def __init__(self , * , indent: int = 0, vb_level: int = 1):
+        self.set_vb(vb_level, indent)
+
+    def proceed(self , date : int | None = None , first_n : int = -1):
+        data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
+        for data_type in data_types:
+            try:
+                self.download(date , data_type , first_n)
+            except Exception as e:
+                self.logger.error(f'RcQuant {data_type} minbar failed: {e}')
+                return False
+        
         return True
-    
-    if dates.empty: 
-        Logger.skipping(f'RcQuant {data_type} bar min is up to date' , indent = 1)
-    else:
-        for dt in dates:
-            mark = rcquant_bar_min(dt , data_type , first_n)
-            if not mark: 
-                Logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed' , indent = 1)
-        Logger.success(f'Download RcQuant {data_type} bar min at {dates}' , indent = 1 , vb_level = 1)
 
-    dates = x_mins_target_dates(data_type , date)
-    if dates.empty: 
-        ...
-    else:
-        for dt in dates:
-            for x_min in x_mins_to_update(dt , data_type = data_type):
-                min_df = DB.load('trade_ts' , src_key(data_type) , dt)
-                assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-                x_min_df = trade_min_reform(min_df , x_min , 1)
-                DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = 1 , vb_level = 3)
-        Logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}' , indent = 1 , vb_level = 1)
-    return True
+    def download(self , date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
+        assert data_type is not None , f'data_type is required'
+        dates = target_dates(data_type , date)
+        if dates.empty: 
+            self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
+            return True
+        
+        if dates.empty: 
+            self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
+        else:
+            for dt in dates:
+                mark = rcquant_bar_min(dt , data_type , first_n)
+                if not mark: 
+                    self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
+            self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
 
-def rcquant_proceed(date : int | None = None , first_n : int = -1):
+        dates = x_mins_target_dates(data_type , date)
+        if dates.empty: 
+            ...
+        else:
+            for dt in dates:
+                for x_min in x_mins_to_update(dt , data_type = data_type):
+                    min_df = DB.load('trade_ts' , src_key(data_type) , dt)
+                    assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
+                    x_min_df = trade_min_reform(min_df , x_min , 1)
+                    DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
+        return True
 
-    data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
-    for data_type in data_types:
-        try:
-            rcquant_download(date , data_type , first_n)
-        except Exception as e:
-            Logger.error(f'RcQuant {data_type} minbar failed: {e}')
-            return False
-    
-    return True
-
-class RcquantMinBarDownloader(BaseModule):
     @classmethod
     def update(cls , * , indent: int = 0, vb_level: int = 1):
         cls.SetClassVB(vb_level, indent)
-        rcquant_proceed()
+        cls.logger.note('Download since last update!')
+        cls(indent=indent + 1, vb_level=vb_level + 1).proceed()

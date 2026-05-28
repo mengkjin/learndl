@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 import numpy as np
 
-from src.proj import Logger
+from src.proj import BaseClass
 from src.func import tensor as T
 
 def factor_repr(obj : Any):
@@ -175,7 +175,6 @@ def factor_corr_with_y(x : torch.Tensor | None , y : torch.Tensor , * , corr_dim
         torch.cuda.empty_cache()
         tscorr = []
         for i in range(x.shape[dim]):
-            # Logger.stdout(x.select(dim , i).shape , y.select(dim , 0).shape)
             tscorr.append(T.corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
         tscorr = torch.stack(tscorr , dim = new_dim)
     x = tscorr.transpose(-1 , new_dim)
@@ -220,7 +219,6 @@ def top_svd_factors(mat : torch.Tensor | None , raw_factor : torch.Tensor | None
         return raw_factor
     where  = svd.S.cumsum(0) / svd.S.sum() <= top_ratio
     where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum().int().item() + 1)
-    Logger.stdout(svd.S.cumsum(0) / svd.S.sum())
     return vector[...,where]
 
 @dataclass
@@ -266,7 +264,7 @@ class MultiFactorValue:
         
         return pd.DataFrame(self.inputs.flatten(0,-2).cpu().numpy(),index = self.df_index(secid , date) , columns = names).dropna(how = 'all')
     
-class MultiFactor:
+class MultiFactor(BaseClass.BoundLogger):
     def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 
                  ir_window = 40 , roll_window = 40 , halflife  = 20 , 
                  insample = None , universe = None , min_coverage = 0.1 , **kwargs) -> None:
@@ -322,7 +320,7 @@ class MultiFactor:
         try:
             multi = (factor * weight).nanmean(-1)
         except torch.cuda.OutOfMemoryError:
-            Logger.warning(f'OutOfMemoryError on multi factor calculation')
+            self.logger.warning(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
         multi = T.zscore(multi , dim = -1)
         return MultiFactorValue(value = multi , weight = weight , inputs = factor , names = names , secid = secid , date = date)

@@ -3,8 +3,8 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal
 
-from src.proj import CALENDAR , DB , Const
-from src.proj.util import WarningCatcher , BaseModule
+from src.proj import CALENDAR , DB , Const , BaseClass
+from src.proj.util import WarningCatcher
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
@@ -81,7 +81,7 @@ class DateSeriesDict:
         else: 
             return None   
 
-class TuShareCNE5_Calculator(BaseModule):
+class TuShareCNE5_Calculator(BaseClass.BoundLogger):
     '''calculator for CNE5 risk model'''
     START_DATE = 20050101
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1) -> None:

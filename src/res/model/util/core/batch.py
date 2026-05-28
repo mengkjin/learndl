@@ -7,7 +7,7 @@ from dataclasses import dataclass , field
 from functools import cached_property
 from typing import Any, Literal
 
-from src.proj import Proj , Logger
+from src.proj import Proj , BaseClass
 from src.proj.util import Device , properties
 
 __all__ = ['BatchInput' , 'BatchOutput' , 'BatchData']
@@ -22,7 +22,7 @@ def _object_shape(obj : Any) -> Any:
     else: 
         return type(obj)
 @dataclass
-class BatchInput:
+class BatchInput(BaseClass.BoundLogger):
     '''custom data component of a batch(x,y,w,i,valid)'''
     x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
     y       : torch.Tensor 
@@ -180,10 +180,10 @@ class BatchInput:
                 data = DataModule(model_config , 'predict').load_data()
                 data.setup('predict' , model_date = data.datas.y.date[-20])
                 batch_input = data.predict_dataloader()[0]
-            Logger.stdout(batch_input.info)
+            batch_input.logger.stdout(batch_input.info)
             return batch_input
-@dataclass(slots=True)
-class BatchOutput:
+@dataclass
+class BatchOutput(BaseClass.BoundLogger):
     outputs : torch.Tensor | tuple | list | Any | None = None
     def __post_init__(self):
         if isinstance(self.outputs , BatchOutput):
@@ -306,11 +306,11 @@ class BatchOutput:
             module = module.to(device1)
         outputs = module(inputs ,  **kwargs)
         batch_output = cls(outputs)
-        Logger.stdout(batch_output.info)
+        batch_output.logger.stdout(batch_output.info)
         return batch_output
 
-@dataclass(slots=True)
-class BatchData:
+@dataclass
+class BatchData(BaseClass.BoundLogger):
     input : BatchInput
     output : BatchOutput
     def __len__(self): return len(self.input)
@@ -397,15 +397,14 @@ class BatchData:
                     others[key] = value
                     continue
                 if value.ndim == 2 and value.shape[1] == len(value):
-                    Logger.warning(f'{key} is a 2-dim square tensor of {value.shape}, remove nan for both rows and columns')
+                    self.logger.warning(f'{key} is a 2-dim square tensor of {value.shape}, remove nan for both rows and columns')
                     others[key] = value[row_pos][:,row_pos]
                 else:
                     others[key] = value[row_pos]
 
         return {'label':label , 'pred':pred , 'weight':weight , **others}
 
-    @staticmethod
-    def _slice_nonnan(*args : torch.Tensor | None , print_all_nan = False) -> torch.Tensor | None:
+    def _slice_nonnan(self , *args : torch.Tensor | None , print_all_nan = False) -> torch.Tensor | None:
         nanpos = False
         tensors = [arg for arg in args if arg is not None]
         if not tensors:
@@ -416,8 +415,8 @@ class BatchData:
         if nanpos.ndim > 1:
             nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0 
         if print_all_nan and nanpos.all(): 
-            Logger.error('Encountered all nan inputs in metric calculation!')
-            [Logger.stdout(arg) for arg in args]
+            self.logger.error('Encountered all nan inputs in metric calculation!')
+            [self.logger.stdout(arg) for arg in args]
         return ~nanpos
 
     @property

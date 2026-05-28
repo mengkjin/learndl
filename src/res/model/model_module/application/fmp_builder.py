@@ -5,13 +5,12 @@ import pandas as pd
 from functools import cached_property
 from typing import Any , Iterable
 
-from src.proj import CALENDAR , Dates
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , Dates , BaseClass
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
 from src.res.model.util import PredictorPath
 
-class ModelPortfolioBuilder(BaseModule):
+class ModelPortfolioBuilder(BaseClass.BoundLogger):
     FMP_TYPES  = ['top' , 'optim']
     SUB_TYPES  = ['indep' , 'conti'] # independent and continuous portfolios
     N_BESTS    = [-1 , 50]
@@ -20,6 +19,7 @@ class ModelPortfolioBuilder(BaseModule):
     def __init__(self , pred_path : PredictorPath , * , indent : int = 0 , vb_level : Any = 1):
         self.set_vb(vb_level , indent)
         self.pred_path = pred_path
+        self.pred_path.set_vb(vb_level , indent)
         self.fmp_tables : dict[int , pd.DataFrame] = {}
         self.account_manager = PortfolioAccountManager(self.pred_path.account_dir)
         
@@ -105,7 +105,7 @@ class ModelPortfolioBuilder(BaseModule):
             self.fmp_tables[date] = self.build_day(date) 
             self.logger.stdout(f'Finished build fmps for {self.pred_path} at {date}' , idt = 1 , vb = 1)
             if deploy:
-                self.pred_path.save_fmp(self.fmp_tables[date] , date , False , indent = self.indent + 1 , vb_level = self.vb_level + 2)
+                self.pred_path.save_fmp(self.fmp_tables[date] , date , False)
             self.updated_fmp_dates.append(date)
         
     def build_day(self , date : int):

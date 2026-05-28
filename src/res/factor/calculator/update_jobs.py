@@ -6,8 +6,8 @@ from abc import ABC , abstractmethod
 from datetime import datetime
 from typing import Any , Generator , Literal , TypedDict
 
-from src.proj import Logger
-from src.proj.util import parallel , BaseModule
+from src.proj import BaseClass
+from src.proj.util import parallel
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator
@@ -38,17 +38,15 @@ class JobChunkPayload(TypedDict):
     specs: list[dict[str, Any]]
     multithreading: bool
     timeout: float
-    indent: int
-    vb_level: Any
 
-class BaseUpdateJob(ABC):
+class BaseUpdateJob(ABC , BaseClass.BoundLogger):
     """base job class"""
-    def __init__(self , calc : FactorCalculator , overwrite : bool = False , vb_level : Any = 1):
+    def __init__(self , calc : FactorCalculator , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+        self.set_vb(vb_level , indent)
         self.calc : FactorCalculator | Any = calc
         self.level = calc.level
         self.factor_name = calc.factor_name
         self.overwrite = overwrite
-        self.vb_level = vb_level
         self.done = False
 
     def __repr__(self):
@@ -106,14 +104,14 @@ def _job_from_spec(spec: dict[str, Any]) -> BaseUpdateJob:
     calc = FactorCalculator.get(spec['factor_name'])
     job_type = spec['job_type']
     if job_type == 'date':
-        return UpdateJobDate(calc , spec['date'] , spec['overwrite'] , spec['vb_level'])
+        return UpdateJobDate(calc , spec['date'] , spec['overwrite'])
     if job_type == 'all':
-        return UpdateJobAll(calc , spec.get('start') , spec.get('end') , spec['overwrite'] , spec['vb_level'])
+        return UpdateJobAll(calc , spec.get('start') , spec.get('end') , spec['overwrite'])
     if job_type == 'stats':
         return UpdateJobStats(
             calc , spec['stats_type'] , spec['year'] ,
             np.array(spec['year_dates'] , dtype=np.int64) ,
-            spec['overwrite'] , spec['vb_level'],
+            spec['overwrite'] ,
         )
     raise ValueError(f'Unknown job_type in spec: {job_type!r}')
 
@@ -130,8 +128,6 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
     chunk = BaseUpdateJobList(
         payload['name'] , jobs ,
         multithreading=payload['multithreading'] ,
-        vb_level=payload['vb_level'] ,
-        indent=payload['indent'] ,
         timeout=payload['timeout'],
     )
     try:
@@ -140,15 +136,15 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
         MPOutputCatcher.export_current_task(payload['name'])
 
 
-class BaseUpdateJobList(BaseModule):
+class BaseUpdateJobList(BaseClass.BoundLogger):
     """base update job list class"""
     def __init__(self , name : str , jobs : list[BaseUpdateJob] | None = None , * ,
         multithreading : bool = False , vb_level : Any = 1 , indent : int = 0 , timeout : float = -1):
+        self.set_vb(vb_level , indent)
         self.name = name
         self.jobs : list[BaseUpdateJob] = jobs or []
         self.multithreading = multithreading
         self.timeout = timeout
-        self.set_vb(vb_level , indent)
 
     def __len__(self) -> int:
         return len(self.jobs)
@@ -241,8 +237,6 @@ class BaseUpdateJobList(BaseModule):
             specs=[job.to_spec() for job in self.jobs] ,
             multithreading=self.multithreading ,
             timeout=self.timeout ,
-            indent=self.indent ,
-            vb_level=self.vb_level ,
         )
 
     def apply_report(self , report: JobChunkReport | None) -> None:
@@ -316,8 +310,8 @@ class BaseUpdateJobList(BaseModule):
         return BaseUpdateJobList(name , jobs , **kwargs)
 
 class UpdateJobDate(BaseUpdateJob):
-    def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , vb_level : Any = 1 , **kwargs):
-        super().__init__(calc , overwrite , vb_level)
+    def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+        super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.date = date
 
     def dates(self) -> np.ndarray:
@@ -335,23 +329,22 @@ class UpdateJobDate(BaseUpdateJob):
             'factor_name': self.factor_name ,
             'level': self.level ,
             'overwrite': self.overwrite ,
-            'vb_level': self.vb_level ,
             'date': int(self.date) ,
         }
 
-    def go(self , indent : int = 1 , **kwargs) -> None:
-        self.calc.set_vb(self.vb_level , indent)
+    def go(self , **kwargs) -> None:
+        self.calc.set_vb(self.vb_level , self.indent)
         self.regenerate()
         self.done = self.calc.update_day_factor(self.date , overwrite=self.overwrite , catch_errors=CATCH_ERRORS)
 
-    def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
-        Logger.stdout(f'{self.level} : {self.factor_name} at {self.date}' , indent=indent , vb_level=vb_level)
+    def preview(self) -> None:
+        self.logger.stdout(f'{self.level} : {self.factor_name} at {self.date}')
 
 
 class UpdateJobAll(BaseUpdateJob):
     def __init__(self , calc : FactorCalculator , start : int | None = None , end : int | None = None ,
-                 overwrite : bool = False , vb_level : Any = 1 , **kwargs):
-        super().__init__(calc , overwrite , vb_level)
+                 overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+        super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.target_dates = calc.target_dates(start , end , overwrite=overwrite)
         self.start = start
         self.end = end
@@ -371,25 +364,24 @@ class UpdateJobAll(BaseUpdateJob):
             'factor_name': self.factor_name ,
             'level': self.level ,
             'overwrite': self.overwrite ,
-            'vb_level': self.vb_level ,
             'start': self.start ,
             'end': self.end ,
         }
 
-    def go(self , indent : int = 1 , **kwargs) -> None:
-        self.calc.set_vb(self.vb_level , indent)
+    def go(self , **kwargs) -> None:
+        self.calc.set_vb(self.vb_level , self.indent)
         self.regenerate()
         self.calc.update_all_factors(start=self.start , end=self.end , overwrite=self.overwrite)
         self.done = True
 
-    def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
-        Logger.stdout(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}' , indent=indent , vb_level=vb_level)
+    def preview(self) -> None:
+        self.logger.stdout(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}')
 
 
 class UpdateJobStats(BaseUpdateJob):
     def __init__(self , calc : FactorCalculator , stats_type : Literal['daily' , 'weekly'] ,
-                 year : int , dates : np.ndarray , overwrite : bool = False , vb_level : Any = 1 , **kwargs):
-        super().__init__(calc , overwrite , vb_level)
+                 year : int , dates : np.ndarray , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+        super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.stats_type = stats_type
         self.year = year
         self.year_dates = dates[dates // 10000 == year]
@@ -412,14 +404,13 @@ class UpdateJobStats(BaseUpdateJob):
             'factor_name': self.factor_name ,
             'level': self.level ,
             'overwrite': self.overwrite ,
-            'vb_level': self.vb_level ,
             'stats_type': self.stats_type ,
             'year': int(self.year) ,
             'year_dates': self.year_dates.astype(int).tolist() ,
         }
 
-    def go(self , indent : int = 1 , **kwargs) -> None:
-        self.calc.set_vb(self.vb_level , indent)
+    def go(self , **kwargs) -> None:
+        self.calc.set_vb(self.vb_level , self.indent)
         self.regenerate()
         if self.stats_type == 'daily':
             self.calc.update_daily_stats(self.dates() , overwrite=self.overwrite)
@@ -429,5 +420,5 @@ class UpdateJobStats(BaseUpdateJob):
             raise ValueError(f'Invalid stats type: {self.stats_type}')
         self.done = True
 
-    def preview(self , indent : int = 1 , vb_level : Any = 1) -> None:
-        Logger.stdout(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}' , indent=indent , vb_level=vb_level)
+    def preview(self) -> None:
+        self.logger.stdout(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}')

@@ -1,7 +1,7 @@
 """Facade: cached working proxies and shared ``AdaptiveProxyPool`` instances per target URL set."""
 
 from typing import Iterable
-from src.proj.util.module import BaseModule
+from src.proj import BaseClass
 from .finder import FreeProxyFinder as ProxyFinder
 from .verifier import ProxyVerifier
 from .cache import ProxyCache
@@ -9,7 +9,7 @@ from .ppool import AdaptiveProxyPool , WorkingProxies
 
 __all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool']
 
-class ProxyAPI(BaseModule):
+class ProxyAPI(BaseClass.BoundLogger):
     """Process-wide registry of ``AdaptiveProxyPool`` keyed by sorted target URL tuples."""
 
     proxy_pools : dict[tuple[str, ...], AdaptiveProxyPool] = {}

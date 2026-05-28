@@ -5,13 +5,13 @@ import shutil , threading , torch , json
 
 from typing import Any
 
-from src.proj import PATH , Logger
+from src.proj import PATH , BaseClass
 from src.proj.core import strPath
 from src.proj.util import torch_load
 
 __all__ = ['DataCache']
 
-class DataCache:
+class DataCache(BaseClass.BoundLogger):
     """
     Data Cache for All Data Types (Must be included in DataCache.possible_types)
     Example: Cache a ModuleData
@@ -32,7 +32,7 @@ class DataCache:
         data, _ = self.datacache.load_data(self.vb_level)
         if data is not None:
             self.blocks, self.norms = data["blocks"], data["norms"]
-            Logger.success(f"Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}")
+            self.logger.success(f"Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}")
     def _save_cache(self):
         if not self.enable_cache_save:
             return
@@ -53,14 +53,15 @@ class DataCache:
                 vb_level=self.vb_level + 2,
                 **metadata,
             )
-            Logger.success(f"Saved DataBlocks to cache {self.datacache.key}")
+            self.logger.success(f"Saved DataBlocks to cache {self.datacache.key}")
     """
     metadata_file = PATH.datacache.joinpath('cache_metadata.json')
     possible_types : tuple[str,] = ('module_data' ,)
     locks_guard = threading.Lock()
     locks : dict[str, threading.Lock] = {}
 
-    def __init__(self , type : str , **kwargs):
+    def __init__(self , type : str , * , vb_level: int = 1 , indent: int = 0 , **kwargs):
+        self.set_vb(vb_level , indent)
         self.type = type
         self.kwargs = kwargs
         self.content_name = list(kwargs.keys())[0]
@@ -86,7 +87,7 @@ class DataCache:
         self.path.mkdir(parents = True , exist_ok = True)
         metadata_success = self._update_metadata(self.key , **additional_metadata)
         if not metadata_success:
-            Logger.alert1(f'Failed to update metadata: {self.key}')
+            self.logger.alert1(f'Failed to update metadata: {self.key}')
             return
         with self._get_lock(self.key):
             torch.save(data , self.path.joinpath('data.pt'))
@@ -101,12 +102,12 @@ class DataCache:
                 data = torch_load(self.path.joinpath('data.pt'))
         except ModuleNotFoundError as e:
             '''can be caused by different package version'''
-            Logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!')
+            self.logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!')
             data , metadata = None , {}
             self._remove_cache_file(self.key)
         except Exception as e:
-            Logger.error(f'Failed to load {self.type.title()} CacheData: {e}')
-            Logger.print_exc(e)
+            self.logger.error(f'Failed to load {self.type.title()} CacheData: {e}')
+            self.logger.print_exc(e)
             raise
         return data , metadata
 
@@ -183,7 +184,7 @@ class DataCache:
             try:
                 return PATH.read_json(cls.metadata_file)
             except Exception as e:
-                Logger.alert2(f'Failed to load metadata: {e}')
+                cls.logger.alert2(f'Failed to load metadata: {e}')
                 return {}
 
     @classmethod
@@ -206,8 +207,8 @@ class DataCache:
             PATH.dump_json(metadata , path , overwrite = True)
             return True
         except Exception as e:
-            Logger.error(f'Failed to update metadata: {e}')
-            Logger.print_exc(e)
+            cls.logger.error(f'Failed to update metadata: {e}')
+            cls.logger.print_exc(e)
             return False
 
 

@@ -7,13 +7,13 @@ import polars as pl
 from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
-from src.proj import MACHINE , Proj , CALENDAR
-from src.proj.core import strPath
-from src.proj.util import RequireGrad , BaseModule
+from src.proj import MACHINE , Proj , CALENDAR , BaseClass
+from src.proj.core import strPath 
+from src.proj.util import RequireGrad
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
-class ArchivedPredictorModel(BaseModule):
+class ArchivedPredictorModel(BaseClass.BoundLogger):
     '''for a model to predict recent/history data'''
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
@@ -286,7 +286,8 @@ class ArchivedPredictorModel(BaseModule):
             return self
         for date , subdf in df.groupby(date_col):
             subdf = subdf.drop(columns='date').set_index(secid_col)
-            self.path.save_pred(subdf , date , overwrite , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            self.path.set_vb(self.vb_level + 1 , self.indent + 1)
+            self.path.save_pred(subdf , date , overwrite)
             self.current_update_dates.append(date)
         if not self.current_update_dates:
             self.logger.stdout(df)

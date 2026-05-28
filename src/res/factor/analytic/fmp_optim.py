@@ -2,8 +2,6 @@ import pandas as pd
 
 from typing import Any , Literal , Type
 
-from src.proj import Logger
-
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.optim_pf import Plotter
@@ -18,8 +16,8 @@ class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
     DEFAULT_BENCHMARKS = 'defaults'
 
-    def calc(self , account_df : pd.DataFrame , indent : int = 0 , vb_level : Any = 1):
-        with self.calc_manager(f'{self.__class__.__name__} calc' , indent = indent , vb_level = vb_level): 
+    def calc(self , account_df : pd.DataFrame):
+        with self.calc_manager(): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account_df)
         return self
     
@@ -121,24 +119,24 @@ class OptimFMPTest(BaseFactorAnalyticTest):
     ]
 
     def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
-              add_lag = 1 , optim_config = None , indent : int = 0 , vb_level : Any = 1):
+              add_lag = 1 , optim_config = None):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(add_lag = add_lag , optim_config = optim_config)
         self.portfolio_group = PortfolioGroupBuilder(
             'optim' , alpha_models , benchmarks , resume = self.resume , 
             resume_path = self.resume_path , caller = self , 
-            start = self.start , end = self.end , indent = indent , vb_level = vb_level , **self.kwargs)
+            start = self.start , end = self.end , indent = self.indent , vb_level = self.vb_level , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , 
-             indent : int = 0 , vb_level : Any = 1 , **kwargs):
-        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , indent = indent , vb_level = vb_level)
+             **kwargs):
+        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config)
         if self.total_account.empty:
-            Logger.error(f'No accounts created for {self.test_name}!')
+            self.logger.error(f'No accounts created for {self.test_name}!')
         else:
-            super().calc(self.total_account , indent = indent , vb_level = vb_level , **kwargs)
+            super().calc(self.total_account , **kwargs)
         return self
     
     def update_kwargs(self , add_lag = 1 , **kwargs):

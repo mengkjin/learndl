@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 from typing import Literal
 
-from src.proj import Logger , Proj
+from src.proj import Proj , BaseClass
 
 from src.res.gp.func import factor_func as FF
 from src.res.gp.util import EliteGroup , GeneticProgramming
 
-class gpGenerator:
+class gpGenerator(BaseClass.BoundLogger):
     '''
     构成因子生成器,返回输入因子表达式则输出历史因子值的函数
     input:
@@ -30,8 +30,8 @@ class gpGenerator:
             self.gp  = GeneticProgramming(job_id = job_id , train = False , **kwargs).load_data().preparation()
             self.process_key = process_key
             self.elitelog = self.load_log('elitelog').set_index('i_elite')
-            self.secid : np.ndarray = self.gp.logger.load_state('secid')
-            self.date  : np.ndarray = self.gp.logger.load_state('date')
+            self.secid : np.ndarray = self.gp.recorder.load_state('secid')
+            self.date  : np.ndarray = self.gp.recorder.load_state('date')
 
         self.elite_multi_factor = FF.MultiFactor(
             weight_scheme = weight_scheme ,
@@ -66,7 +66,7 @@ class gpGenerator:
         else:
             value = None
         if print_info: 
-            Logger.stdout(f'{self.__class__.__name__} -> process_key : {process_key} , syntax : {syntax}')
+            self.logger.stdout(f'process_key : {process_key} , syntax : {syntax}')
         return value
 
     @property
@@ -78,7 +78,7 @@ class gpGenerator:
         return self.load_log('hoflog').syntax.tolist()
 
     def load_log(self , key : Literal['elitelog' , 'hoflog']) -> pd.DataFrame:
-        return self.gp.logger.load_state(key)
+        return self.gp.recorder.load_state(key)
 
     def entire_elites(self , block_len = 50 , process_key = None):
         '''
@@ -90,7 +90,7 @@ class gpGenerator:
         for elite in elite_log.syntax: 
             hof_elites.append(self(elite , process_key = process_key))
         hof_elites.cat_all()
-        Logger.success(f'Load {hof_elites.total_len()} Elites')
+        self.logger.success(f'Load {hof_elites.total_len()} Elites')
         return hof_elites
 
     def load_elites(self):

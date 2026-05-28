@@ -29,7 +29,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any , Literal , Type , Callable , TypeVar
 
-from src.proj import PATH , Logger , CALENDAR , DB , Dates
+from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
 from src.proj.util.error_handler import retry_call
 from .core import TS
 
@@ -63,7 +63,7 @@ class TushareFetcherMeta(ABCMeta):
 
         return new_cls
 
-class TushareIterateFetcher:
+class TushareIterateFetcher(BaseClass.BoundLogger):
     """
     Paginated Tushare API fetcher with breakpoint/resume support.
 
@@ -80,7 +80,7 @@ class TushareIterateFetcher:
     survival_time : int = 4 # in hours
 
     def __init__(self , fetcher_name : str , tushare_api : Callable[..., T] , limit : int = 2000 , * ,
-                 max_fetch_times : int = -1 , breakpoint : bool = True , **kwargs):
+                 max_fetch_times : int = -1 , breakpoint : bool = True , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         """
         Parameters
         ----------
@@ -95,6 +95,7 @@ class TushareIterateFetcher:
         breakpoint : bool
             Enable breakpoint/resume (default True).
         """
+        self.set_vb(vb_level , indent)
         self.fetcher_name = fetcher_name
         self.tushare_api = tushare_api
 
@@ -169,7 +170,7 @@ class TushareIterateFetcher:
             'breakpoints' : list(datas.keys()),
         }
         self.append_metadata(metadata)
-        Logger.success(f'Saved {self} to {self.breakpoint_path}' , indent = 1)
+        self.logger.success(f'Saved {self} to {self.breakpoint_path}')
 
     def load_breakpoint(self) -> tuple[int , dict[int , pd.DataFrame]]:
         """return the offset and data of the breakpoint"""
@@ -182,10 +183,10 @@ class TushareIterateFetcher:
                 for bkpt in metadata['breakpoints']:
                     p = self.breakpoint_path.joinpath(f'bkpt.{bkpt}.feather')
                     dfs[int(bkpt)] = DB.load_df(p)
-                Logger.success(f'Loaded {self} from {self.breakpoint_path} , next_offset={metadata['next_offset']}' , indent = 1)
+                self.logger.success(f'Loaded {self} from {self.breakpoint_path} , next_offset={metadata['next_offset']}')
                 return metadata['next_offset'] , dfs
             except Exception as e:
-                Logger.error(f'Error loading breakpoint: {e}')
+                self.logger.error(f'Error loading breakpoint: {e}')
                 return 0 , {}
         else:
             return 0 , {}
@@ -220,7 +221,7 @@ class TushareIterateFetcher:
         else:
             return pd.DataFrame()
 
-class TushareFetcher(metaclass=TushareFetcherMeta):
+class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""
     START_DATE  : int = 19970101
     DB_TYPE     : Literal['info' , 'time_series' , 'date' , 'fina' , 'rolling' , 'fundport' , ''] = ''
@@ -228,7 +229,8 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     DB_SRC      : str = ''
     DB_KEY      : str = ''
 
-    _stdout_indent : int = 1
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1):
+        self.set_vb(vb_level , indent)
     
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}Fetcher(type={self.DB_TYPE},db={self.DB_SRC}/{self.DB_KEY},start={self.START_DATE},freq={self.UPDATE_FREQ})'
@@ -239,10 +241,6 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         else:
             name = self.__class__.__name__ + 'Fetcher'
         return f'{name}()'
-
-    @classmethod
-    def set_stdout_indent(cls , indent : int):
-        cls._stdout_indent = indent
 
     @classmethod
     def load_tasks(cls):
@@ -342,33 +340,32 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         return ldate
 
     @classmethod
-    def update(cls) -> None:
+    def update(cls , * , indent : int = 0 , vb_level : Any = 1) -> None:
         """update the fetcher"""
         try:
-            fetcher = cls()
-            fetcher.set_rollback_date(None)
+            fetcher = cls(indent = indent , vb_level = vb_level)
             fetcher.update_with_retries()
             fetcher.update_missing()
         except Exception as e:
-            Logger.error(f'{cls.__name__} update failed: {e}')
-            Logger.print_exc(e)
+            cls.logger.error(f'Update failed: {e}')
+            cls.logger.print_exc(e)
     
     @classmethod
-    def rollback(cls , rollback_date : int) -> None:
+    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : int = 1) -> None:
         """update the fetcher with rollback date"""
         try:
-            fetcher = cls()
+            fetcher = cls(indent = indent , vb_level = vb_level)
             fetcher.set_rollback_date(rollback_date)
             fetcher.update_with_retries()
             fetcher.update_missing()
         except Exception as e:
-            Logger.error(f'{cls.__name__} update rollback failed: {e}')
-            Logger.print_exc(e)
+            cls.logger.error(f'Update rollback failed: {e}')
+            cls.logger.print_exc(e)
 
     def check_server_down(self) -> bool:
         """check if the tushare server is down"""
         if TS.server_down:
-            Logger.only_once(f'{self.__class__.__name__} will not update because Tushare server is down' , object = self , mark = 'tushare_server_down' , printer = 'error')
+            self.logger.only_once(f'Will not update because Tushare server is down' , object = self , mark = 'tushare_server_down' , printer = 'error')
             return True
         return False
 
@@ -387,7 +384,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         dates = self.target_dates()
 
         if len(dates) == 0: 
-            Logger.skipping(f'{self.__class__.__name__} already fetched up to {CALENDAR.update_to()}!' , indent = self._stdout_indent)
+            self.logger.skipping(f'Already fetched up to {CALENDAR.update_to()}!')
             return
 
         updated_dates = np.array([], dtype = int)
@@ -399,12 +396,12 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             except Exception as e:
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
-                        Logger.warning(f'max retries reached: {e}')
+                        self.logger.warning(f'max retries reached: {e}')
                     else:
-                        Logger.alert1(f'{e} , wait {timeout_wait_seconds} seconds' , indent = self._stdout_indent)
+                        self.logger.alert1(f'{e} , wait {timeout_wait_seconds} seconds' , idt = 1)
                         time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
-                    Logger.error(e)
+                    self.logger.error(e)
                     TS.server_down = True
                     self.check_server_down()
                     raise Exception('Tushare server is down, skip today\'s update')
@@ -414,7 +411,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
-        Logger.success(f'{self.__class__.__name__} fetched for {Dates(updated_dates)}' , indent = self._stdout_indent)
+        self.logger.success(f'Fetched for {Dates(updated_dates)}')
 
     def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> pd.DataFrame:
         """fetch from tushare with threading lock"""

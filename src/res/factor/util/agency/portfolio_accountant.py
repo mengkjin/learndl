@@ -8,9 +8,9 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import CALENDAR , DB , Dates , Const
+from src.proj import CALENDAR , DB , Dates , Const , BaseClass
 from src.proj.core import strPath
-from src.proj.util import parallel , BaseModule
+from src.proj.util import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -370,7 +370,7 @@ class PortfolioAccount:
             return pd.DataFrame()
         return pd.concat({name : account.eval_period_ret() for name , account in accounts.items()}, axis = 1)
 
-class PortfolioAccountant(BaseModule):
+class PortfolioAccountant(BaseClass.BoundLogger):
     """
     portfolio accountant for a portfolio , one portfolio has only one accountant
     portfolio : Portfolio
@@ -546,7 +546,7 @@ class PortfolioAccountant(BaseModule):
         rets['overnight_vwap'] = overnight_vwap
         return rets
 
-class PortfolioAccountManager(BaseModule):
+class PortfolioAccountManager(BaseClass.BoundLogger):
     """
     Manage portfolio accounts in a directory.
     """

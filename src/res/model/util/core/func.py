@@ -2,7 +2,7 @@ import re
 from typing import Any , Literal
 from pathlib import Path
 
-from src.proj import PATH , Logger
+from src.proj import PATH
 from src.proj.core import strPath
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
@@ -129,8 +129,7 @@ def split_full_name(text : str) -> tuple[str,TYPE_MODULE_TYPES,str,str,str]:
             assert module_name == model_clean_name , f'module_name {module_name} and model_clean_name {model_clean_name} are not the same for {text} as a {module_type} model'
             assert model_name_index == '' , f'model_name_index {model_name_index} is not empty for {text} as a {module_type} model'
     except ValueError as e:
-        Logger.error(f'Failed to split full name [{text}] : {e}')
-        raise
+        raise ValueError(f'Failed to split full name [{text}] : {e}')
     return st , module_type , module_name , model_clean_name , model_name_index
 
 def model_module_type(module_name : str) -> TYPE_MODULE_TYPES:

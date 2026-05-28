@@ -8,8 +8,8 @@ from datetime import datetime , timedelta
 from functools import cached_property
 from typing import Any , Generator , Literal
 
-from src.proj import CALENDAR , SingletonMeta , Const
-from src.proj.util import parallel , BaseModule , DiskTTLCache
+from src.proj import CALENDAR , Const , BaseMeta , BaseClass
+from src.proj.util import parallel , DiskTTLCache
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
@@ -25,7 +25,7 @@ CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 MAX_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/max_workers')
 MIN_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/min_workers')
 
-class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
+class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     """manager of factor update jobs"""
     update_type : Literal['stock' , 'pooling' , 'affiliate' , 'market' , 'stats']
 
@@ -85,16 +85,16 @@ class BaseFactorUpdater(BaseModule , metaclass=SingletonMeta):
             elif self.update_type in ['market' , 'pooling']:
                 target_dates = calc.target_dates(start , end , overwrite = overwrite)
                 if len(target_dates) > 0:
-                    self.jobs.append(UpdateJobAll(calc , start , end , overwrite , self.vb_level + 2))
+                    self.jobs.append(UpdateJobAll(calc , start , end , overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 2))
             elif self.update_type in ['stock']:
                 target_dates = calc.target_dates(start , end , overwrite = overwrite)
                 for date in target_dates:
-                    self.jobs.append(UpdateJobDate(calc , date , overwrite , self.vb_level + 4))
+                    self.jobs.append(UpdateJobDate(calc , date , overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 4))
             elif self.update_type == 'stats':
                 target_dates = calc.stats_target_dates(start , end , overwrite)
                 for stats_type , dates in target_dates.items():
                     for year in np.unique(dates // 10000):
-                        self.jobs.append(UpdateJobStats(calc , stats_type , year , dates , overwrite , self.vb_level + 4))
+                        self.jobs.append(UpdateJobStats(calc , stats_type , year , dates , overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 4))
             else:
                 raise ValueError(f'Invalid update type: {self.update_type}')
         self.jobs.sort_jobs()

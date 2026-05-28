@@ -13,8 +13,8 @@ from functools import cached_property
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import MACHINE , Logger , Duration , CALENDAR , DB , Dates
-from src.proj.util import BaseModule , parallel
+from src.proj import MACHINE , CALENDAR , DB , Dates , Duration , BaseClass
+from src.proj.util import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
@@ -48,7 +48,7 @@ factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
 
 MAX_MAX_WORKERS: int = 3
 @dataclass
-class Connection:
+class Connection(BaseClass.BoundLogger):
     """a connection to a sellside sql database"""
     dialect     : str
     username    : str
@@ -119,7 +119,7 @@ class Connection:
             type : str = kwargs.pop('type')
             assert type.startswith('sql') , f'{key} is not a valid sql source'
             if type.endswith('.disabled'):
-                Logger.alert1(f'{key} is disabled')
+                cls.logger.alert1(f'{key} is disabled')
             
             for system in ['linux' , 'windows' , 'macos']:
                 driver : str | None = kwargs.pop(f'driver.{system}' , None)
@@ -139,12 +139,12 @@ class Connection:
                 connection = cls.connection(key)
                 connection.get_connection
                 connection.close()
-                Logger.success(f'{key} connection test passed')
+                connection.logger.success(f'{key} connection test passed')
             except Exception as e:
-                Logger.error(f'{key} connection test failed: {e}')
-                Logger.print_exc(e)
+                connection.logger.error(f'{key} connection test failed: {e}')
+                connection.logger.print_exc(e)
 
-class SellsideSQLDownloader(BaseModule):
+class SellsideSQLDownloader(BaseClass.BoundLogger):
     """a downloader for sellside sql data"""
     DB_SRC : str = 'sellside'
     MAX_WORKERS: int = min(1 , MAX_MAX_WORKERS)

@@ -1,10 +1,9 @@
 from __future__ import annotations
-from src.proj import PATH
-from src.proj.util import BaseModule
+from src.proj import PATH , BaseClass
 
 __all__ = ['ModelConfigsInspector']
 
-class ModelConfigsInspector(BaseModule):
+class ModelConfigsInspector(BaseClass.BoundLogger):
     def __init__(self , * , vb_level : int | None = 1 , indent : int | None = 0):
         self.set_vb(vb_level , indent)
         self.model_root = PATH.model

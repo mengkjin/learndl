@@ -3,11 +3,11 @@ import numpy as np
 from deap import tools
 from typing import Any , Sequence , Callable
 
-from src.proj import Logger , Proj
+from src.proj import Proj , BaseClass
 from src.res.gp.param import gpParameters
 from .syntax import Population
 from .toolbox import BaseToolbox
-from .logger import gpLogger
+from .recorder import gpRecorder
 from .elite import EliteGroup
 from .memory import MemoryManager
 from .timer import gpTimer
@@ -15,7 +15,7 @@ from .input import gpInput
 from .status import gpStatus
 from .evaluator import gpEvaluator
 
-class GeneticProgramming:
+class GeneticProgramming(BaseClass.BoundLogger):
     """遗传规划空间,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
     _instance = None
     def __new__(cls , *args , **kwargs):
@@ -24,16 +24,16 @@ class GeneticProgramming:
         return cls._instance
 
     def __init__(self , job_id : int | None = None , train : bool = True , start_iter = 0 , start_gen = 0 , 
-                 test_code : bool = False , timer = True , vb_level : Any = 2 , **kwargs):
-        self.vb_level  = Proj.vb(vb_level)
-        self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , vb_level = self.vb_level , **kwargs)
-        self.status    = gpStatus(self.param.n_iter , self.param.n_gen , start_iter , start_gen , self.param.train)
-        self.memory    = MemoryManager(self.param.device , vb_level = self.vb_level)
-        self.logger    = gpLogger(self.param.job_dir , self.status , vb_level = self.vb_level + 1)
-        self.input     = gpInput(self.param , self.status , self.logger , vb_level = self.vb_level + 1)
+                 test_code : bool = False , timer = True , * , indent : int = 0 , vb_level : int = 2 , **kwargs):
+        self.set_vb(vb_level , indent)
+        self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , indent = self.indent , vb_level = self.vb_level , **kwargs)
+        self.status    = gpStatus(self.param.n_iter , self.param.n_gen , start_iter , start_gen , self.param.train , indent = self.indent , vb_level = self.vb_level)
+        self.memory    = MemoryManager(self.param.device , indent = self.indent , vb_level = self.vb_level)
+        self.recorder  = gpRecorder(self.param.job_dir , self.status , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        self.input     = gpInput(self.param , self.status , self.recorder , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         
-        self.timer     = gpTimer(timer , vb_level = self.vb_level + 2)
-        self.evaluator = gpEvaluator(self.param , self.input , self.status , self.timer , self.logger)
+        self.timer     = gpTimer(timer , indent = self.indent + 2 , vb_level = self.vb_level + 2)
+        self.evaluator = gpEvaluator(self.param , self.input , self.status , self.timer , self.recorder)
 
     @property
     def device(self):
@@ -75,7 +75,7 @@ class GeneticProgramming:
     def load_data(self):
         with self.timer.timer('stage' , 'Data' , title= 'Load Data' , timer_level = 5):
             self.input.load_data()
-            Logger.stdout(f'{len(self.param.gp_raw_list)} raw datas , {len(self.param.gp_fac_list)} factors loaded!' , indent = 1 , vb_level = self.vb_level)
+            self.logger.stdout(f'{len(self.param.gp_raw_list)} raw datas , {len(self.param.gp_fac_list)} factors loaded!')
         return self
 
     def preparation(self , **kwargs):
@@ -138,7 +138,7 @@ class GeneticProgramming:
     
             # Populate new population to pop_num
             population = self.population(population , self.forbidden + [str(ind) for ind in halloffame]).purify()
-            Logger.note(f'Generation {i_gen} : {restore_info}, Populate to {len(population)}' , indent = 1 , vb_level = self.vb_level + 2)
+            self.logger.note(f'Generation {i_gen} : {restore_info}, Populate to {len(population)}' , idt = 1 , vb = 2)
             
             # Evaluate the new population , add evaluation result to historybook , update forbidden list
             self.evaluator.evaluate_population(population , historybook = self.historybook , **kwargs)
@@ -167,11 +167,11 @@ class GeneticProgramming:
         other_dumps = stats.compile(population) if stats else {}
         pop = population.record_list()
         hof = Population.from_list(halloffame).record_list()
-        self.logger.dump_generation(pop, hof, self.forbidden, **other_dumps)
+        self.recorder.dump_generation(pop, hof, self.forbidden, **other_dumps)
 
     def load_evolution(self):
         """load population , halloffame , forbidden from logbooks of this generation"""
-        pop , hof , fbd = self.logger.load_generation(i_gen = self.start_gen)
+        pop , hof , fbd = self.recorder.load_generation(i_gen = self.start_gen)
         population = Population.from_list(pop)
         halloffame = Population.from_list(hof).to_hof(self.param.hof_num)
         self.update_forbidden(fbd)
@@ -179,14 +179,14 @@ class GeneticProgramming:
         return population , halloffame 
 
     def load_historybook(self):
-        self.status.update_historybook(self.logger.load_historybook())
+        self.status.update_historybook(self.recorder.load_historybook())
         self.update_forbidden([k for k , v in self.historybook.items() if not v.if_valid])
 
     def update_historybook(self , population : Population , **kwargs):
         self.status.update_historybook({str(ind) : ind for ind in population.record_list()})
 
     def dump_historybook(self):
-        self.logger.dump_historybook(self.status.historybook)
+        self.recorder.dump_historybook(self.status.historybook)
 
     def update_forbidden(self , population_or_forbidden : Population | Sequence[str] , forbidden_lambda : Callable | None = None , **kwargs):
         if isinstance(population_or_forbidden , Population):
@@ -198,8 +198,8 @@ class GeneticProgramming:
     def selection(self , **kwargs):
         """筛选精英群体中的因子表达式,以高ir、低相关为标准筛选精英中的精英"""
         elite_group = EliteGroup.new_from_logs(
-            elite_log = self.logger.load_state('elitelog' , i_iter = self.i_iter - 1) , 
-            hof_log = self.logger.load_state('hoflog'   , i_iter = self.i_iter - 1) , device=self.device)
+            elite_log = self.recorder.load_state('elitelog' , i_iter = self.i_iter - 1) , 
+            hof_log = self.recorder.load_state('hoflog'   , i_iter = self.i_iter - 1) , device=self.device)
         halloffame = Population.from_list(self.halloffame)
 
         hoflog = halloffame.log_df(list(self.param.fitness_wgt.keys())).\
@@ -207,15 +207,15 @@ class GeneticProgramming:
             loc[:,['i_iter','i_elite','syntax','valid','elite','elite_state','max_corr',*self.param.fitness_wgt.keys()]]
         
         if not hoflog.valid.all():
-            Logger.alert1(f'HallofFame({len(halloffame)}) contains invalid factors, please check the code' , indent = 1)
-            Logger.display(hoflog[~hoflog.valid])
+            self.logger.alert1(f'HallofFame({len(halloffame)}) contains invalid factors, please check the code' , idt = 1)
+            self.logger.display(hoflog[~hoflog.valid])
         
         elite_candidate_num = (hoflog.valid & (hoflog.rankir_in_res.abs() >= self.ir_floor) & (hoflog.rankir_in_raw.abs() >= self.ir_floor)).sum()
-        Logger.stdout(f'HallofFame({len(halloffame)}) Contains {elite_candidate_num} Promising Candidates with RankIR >= {self.ir_floor:.2f}' , indent = 1)
+        self.logger.stdout(f'HallofFame({len(halloffame)}) Contains {elite_candidate_num} Promising Candidates with RankIR >= {self.ir_floor:.2f}' , idt = 1)
         if elite_candidate_num <= 0.1 * len(halloffame):
             # Failure of finding promising offspring , check if code has bug
-            Logger.alert1(f'Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ' , indent = 1)
-            Logger.alert1(f'Valid Hof({hoflog.valid.sum()}), insample max ir({hoflog.rankir_in_res.abs().max():.4f})' , indent = 1)
+            self.logger.alert1(f'Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ' , idt = 1)
+            self.logger.alert1(f'Valid Hof({hoflog.valid.sum()}), insample max ir({hoflog.rankir_in_res.abs().max():.4f})' , idt = 1)
 
         # hof states :
         # 0 : pass all tests
@@ -268,22 +268,22 @@ class GeneticProgramming:
                 elite_group.append(factor_value , **infos)
                 msg = f'Hof{i:_>3d} Pass Test [{str(hof)}] (Elite{elite_group.i_elite:_>3d},{"|".join([f"{k}{v:+.2f}" for k,v in infos.items()])})'
                 self.memory.check(showoff = self.param.test_code and Proj.vb.is_max_level)
-                Logger.success(f'{str(hof)} : {msg}' , indent = 2 , vb_level = self.vb_level)
+                self.logger.success(f'{str(hof)} : {msg}' , idt = 2 , vb = 1)
             else:
-                Logger.alert1(f'{str(hof)} : {msg}' , indent = 2 , vb_level = self.vb_level)
+                self.logger.alert1(f'{str(hof)} : {msg}' , idt = 2 , vb = 1)
 
         self.update_forbidden(elite_group.all_names())
-        self.logger.dump_generation([], [], self.forbidden , overall = True)
+        self.recorder.dump_generation([], [], self.forbidden , overall = True)
 
         # 记录本次运行的名人堂与精英状态
         elite_group.update_logs(hoflog)
         elites = elite_group.compile_elite_tensor(device=self.device)
-        self.logger.save_states({'elitelog' : elite_group.elitelog , 'hoflog' : elite_group.hoflog})
-        self.logger.save_state('elt', elites , self.i_iter)
+        self.recorder.save_states({'elitelog' : elite_group.elitelog , 'hoflog' : elite_group.hoflog})
+        self.recorder.save_state('elt', elites , self.i_iter)
         if elites is not None:
-            Logger.stdout(f'An EliteGroup of {elites.shape[-1]} has been Selected from HallofFame' , indent = 1)
+            self.logger.stdout(f'An EliteGroup of {elites.shape[-1]} has been Selected from HallofFame' , idt = 1)
         else:
-            Logger.alert1(f'EliteGroup is Empty, this iteration is futile' , indent = 1)
+            self.logger.alert1(f'EliteGroup is Empty, this iteration is futile' , idt = 1)
         self.memory.show_memories({'input' : self.input.inputs , 'elites' : elites , 'tensors' : self.input.tensors})
 
     def iteration(self , **kwargs):
@@ -303,7 +303,7 @@ class GeneticProgramming:
         训练的主程序,[大循环]的过程出发点,从start_iter的start_gen开始训练
         """
 
-        with Logger.Paragraph('Genetic Programming' , level=2) , self:
+        with self.logger.paragraph('Genetic Programming' , 2) , self:
             self.load_data()
             self.load_historybook()
 
@@ -312,7 +312,7 @@ class GeneticProgramming:
                     self.iteration()
 
             self.dump_historybook()
-            self.logger.save_state('runtime', self.timer.time_table())
+            self.recorder.save_state('runtime', self.timer.time_table())
 
     def __enter__(self):
         self.timer.decorate_primas()

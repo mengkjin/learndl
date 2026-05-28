@@ -1,12 +1,11 @@
 from functools import cached_property
 from typing import Any
 
-from src.proj import Proj , CALENDAR
-from src.proj.util import BaseModule
+from src.proj import Proj , CALENDAR , BaseClass
 from src.res.model.util import ModelPath , BatchData , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
-class ModelCalculator(BaseModule):
+class ModelCalculator(BaseClass.BoundLogger):
     '''for a model_name/model_path to get batch_data easily'''
     def __init__(self , model : str | ModelPath | Any , * , indent : int = 0 , vb_level : Any = 1):
         self.set_vb(vb_level , indent)

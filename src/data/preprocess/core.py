@@ -21,8 +21,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any , Type , Literal
 
-from src.proj import CALENDAR , Dates , Duration , Const
-from src.proj.util import BaseModule
+from src.proj import CALENDAR , Dates , Duration , Const , BaseClass
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -91,7 +90,7 @@ class PreProcessorProperty:
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
         return str(owner.__qualname__).removeprefix('PrePro_').lower()
 
-class PreProcessor(BaseModule, metaclass=PreProcessorMeta):
+class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
     """
     Abstract base class for all data preprocessors.
 

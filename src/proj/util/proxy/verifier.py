@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Iterable
 
-from src.proj.util.module import BaseModule
+from src.proj import BaseClass
 from src.proj.util.web import http_session , test_connection
 
 from .core import Proxy , ProxySet
@@ -101,7 +101,7 @@ class VerificationRecords:
             df.groupby(groups)['duration'].max().rename('max_time')).join(
             df.groupby(groups)['duration'].quantile(0.9).rename('90%_time'))
 
-class ProxyVerifier(BaseModule):
+class ProxyVerifier(BaseClass.BoundLogger):
     """Proxy verifier, can be used to verify single or multiple proxies are working"""
     QUICK_VERIFY_URL = "http://www.example.com"
     VERIFICATION_RECORDS = VerificationRecords()
