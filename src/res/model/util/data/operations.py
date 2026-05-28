@@ -67,11 +67,10 @@ class PrenormOperator(BaseClass.BoundLogger):
         self.config = config
         self.histnorms = histnorms or {}
         
-        prenorms = {name: Prenormer.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
-        prenorms = {name: prenorm for name , prenorm in prenorms.items() if prenorm}
-        for prenorm in prenorms.values():
-            self.logger.success(f'{prenorm} initialized' , vb_level = 'max')
-        self.prenorms = prenorms
+        self.prenorms = {name: Prenormer.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
+        for name , prenorm in self.prenorms.items():
+            if prenorm:
+                self.logger.success(f'{name} {prenorm} initialized' , vb_level = 'max')
 
     @property
     def input_keys(self) -> list[str]:

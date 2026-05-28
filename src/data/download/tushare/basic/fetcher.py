@@ -504,8 +504,8 @@ class RollingFetcher(TushareFetcher):
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = True
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self , *args , **kwargs):
+        super().__init__(*args , **kwargs)
         assert self.ROLLING_BACK_DAYS > 0 , f'{self.__class__.__name__} ROLLING_BACK_DAYS must be positive'
         assert self.ROLLING_SEP_DAYS > 0 , f'{self.__class__.__name__} ROLLING_BACK_DAYS must be positive'
 
