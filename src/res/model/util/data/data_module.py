@@ -197,6 +197,8 @@ class DataModule(BaseClass.BoundLogger):
                     self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
                     self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
                 test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
+                print(self.d0 + x_extend - 1 , self.d1)
+                print(test_dates)
             case 'extract':
                 model_date_col = (self.datas.date < self.model_date).sum()
                 self.d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - d_extend)
@@ -207,8 +209,9 @@ class DataModule(BaseClass.BoundLogger):
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
         if self.step_len <= 0:
             self.logger.error( 
-                f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , '
-                f'd1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
+                f'Step length is less than 0 ({self.step_len}) , stage: {self.stage} , '
+                f'd0: {self.d0} , d1: {self.d1} , day_len: {self.day_len} , ' 
+                f'data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
             if self.stage in ['predict' , 'test']:
                 self.logger.error(f'Test dates: {test_dates}')
             raise ValueError(f'Step length is less than 0')

@@ -25,7 +25,8 @@ def get_email_setting(name : str , server : Literal['netease'] = 'netease') -> A
     if name == 'smtp_port':
         return 25 if MACHINE.platform_server else 465
     assert name in EmailSettings , f'{name} is not set in email settings'
-    return EmailSettings.get(server , {}).get(name.lower() , None)
+    return EmailSettings.get(name.lower() , None)
+
 class Email(BaseClass.BoundLogger, metaclass=BaseMeta.NoInstance):
     """
     Email class for sending email with attachment
