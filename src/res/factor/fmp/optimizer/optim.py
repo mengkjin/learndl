@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal , Any
 
-from src.proj import MACHINE , BaseClass
+from src.proj import MACHINE , Logger
 from src.res.factor.util import PortCreator , PortCreateResult , Port
 
 from .interpreter import OptimizedPortfolioInput
@@ -18,7 +18,7 @@ ENGINE_TYPE = Literal['mosek' , 'cvxopt' , 'cvxpy']
 CVXPY_SOLVER = Literal['mosek' , 'ecos' , 'osqp' , 'scs' , 'clarabel']
 
 @dataclass(slots = True)
-class OptimizedPortfolioCreatorConfig(BaseClass.BoundLogger):
+class OptimizedPortfolioCreatorConfig:
     prob_type : PROB_TYPE = 'quadprog'
     engine_type : ENGINE_TYPE = 'mosek'
     cvxpy_solver : CVXPY_SOLVER = 'mosek'
@@ -30,8 +30,7 @@ class OptimizedPortfolioCreatorConfig(BaseClass.BoundLogger):
     opt_short : bool = True
 
     @classmethod
-    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
-        cls.SetClassVB(vb_level , indent)
+    def init_from(cls , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v != cls.__dataclass_fields__[k].default}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if use_kwargs and drop_kwargs: 
@@ -42,7 +41,7 @@ class OptimizedPortfolioCreatorConfig(BaseClass.BoundLogger):
             kwargs_str = f'dropped kwargs: {drop_kwargs}'
         else:
             kwargs_str = 'no kwargs used'
-        cls.logger.stdout(f'init_from: {kwargs_str}')
+        Logger.stdout(f'init_from: {kwargs_str}' , indent = 1 , vb_level = 3)
         return cls(**use_kwargs)
 
     @property

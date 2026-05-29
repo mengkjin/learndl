@@ -84,8 +84,8 @@ class DateSeriesDict:
 class TuShareCNE5_Calculator(BaseClass.BoundLogger):
     '''calculator for CNE5 risk model'''
     START_DATE = 20050101
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1) -> None:
-        self.set_vb(vb_level , indent)
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
 
         self.estuniv = DateDfs(50)
         self.ind_grp = DateDfs(50)

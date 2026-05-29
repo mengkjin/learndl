@@ -109,9 +109,6 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
     return df
 
 class Baostock5minBarDownloader(BaseClass.BoundLogger):
-    def __init__(self , * , indent: int = 0, vb_level: int = 1):
-        self.set_vb(vb_level, indent)
-        
     def proceed(self , date : int | None = None , first_n : int = -1 , retry_n : int = 10):
         pending_dt = pending_date()
         end = CALENDAR.update_to() if date is None else date
@@ -137,13 +134,14 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
                 
         dates = x_mins_update_dates(date)
         updated = False
-        for dt in dates:
-            for x_min in x_mins_to_update(dt):
-                five_min_df = DB.load('trade_ts' , '5min' , dt)
-                x_min_df = trade_min_reform(five_min_df , x_min , 5)
-                DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt)
-                updated = updated or mark
-            self.logger.stdout(f'baostock {x_min}min bars at {dt} transformed' , idt = 1 , vb = 1)
+        with self.logger.subprocess(idt = 1 , vb = 1):
+            for dt in dates:
+                for x_min in x_mins_to_update(dt):
+                    five_min_df = DB.load('trade_ts' , '5min' , dt)
+                    x_min_df = trade_min_reform(five_min_df , x_min , 5)
+                    DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , indent = self.logger.indent , vb_level = self.logger.vb_level)
+                    updated = updated or mark
+                self.logger.stdout(f'baostock {x_min}min bars at {dt} transformed')
         if len(dates) > 0:
             self.logger.success(f'Transform baostock X-min bars at {dates}')
         return True
@@ -207,7 +205,7 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
             DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = 'max' , prefix = f'Baostock 5min bars {date}')
 
             df = baostock_5min_to_normal_5min(df)
-            DB.save(df , 'trade_ts' , '5min' , date = date , indent = 1 , vb_level = 3)
+            DB.save(df , 'trade_ts' , '5min' , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         # del after : No!
         '''
         if first_n <= 0:

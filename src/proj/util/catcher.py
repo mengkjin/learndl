@@ -12,12 +12,13 @@ from io import StringIO , TextIOWrapper
 from matplotlib.figure import Figure
 from pathlib import Path
 from string import Template
-from typing import Any ,Literal , IO , Union , Callable
+from typing import Any , Literal , Callable , TextIO
 
 
 from src.proj.env import PATH , MACHINE , Proj
 from src.proj.core import Duration , str_to_html , dataframe_to_html , figure_to_html , strPath
 from src.proj.log import Logger
+from src.proj.bases import BaseClass
 
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' ,
@@ -25,9 +26,8 @@ __all__ = [
 ]
 
 type_of_std = Literal['stdout' , 'stderr']
-type_of_catcher = Union['OutputDeflector' , IO , 'OutputCatcher' , None]
 
-class OutputDeflector:
+class OutputDeflector(BaseClass.BoundLogger):
     """
     double output stream: deflect output to catcher and original output stream (optional)
     example:
@@ -38,11 +38,13 @@ class OutputDeflector:
             Logger.info('This will be deflected to catcher')
     """
     def __init__(
-            self, 
-            type : type_of_std ,
-            catcher : type_of_catcher, 
-            keep_original : bool = True,
-        ):
+        self, 
+        type : type_of_std ,
+        catcher : OutputDeflector | IOCatcher | OutputCatcher | None, 
+        keep_original : bool = True,
+        * , indent: int = 0 , vb_level: int = 1 , **kwargs
+    ):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.type = type
         self.catcher = catcher
         self.keep_original = keep_original
@@ -52,7 +54,7 @@ class OutputDeflector:
     def __repr__(self):
         return f'{self.__class__.__name__}(original={self.original}, catcher={self.catcher}, type={self.type})'
 
-    def get_write_flush(self , output : type_of_catcher) -> tuple[Callable, Callable]:
+    def get_write_flush(self , output : OutputDeflector | IOCatcher | OutputCatcher | TextIO | None) -> tuple[Callable, Callable]:
         if output is None:
             return lambda *x: None, lambda: None
         elif isinstance(output , OutputCatcher):
@@ -116,7 +118,7 @@ class OutputDeflector:
             try:
                 getattr(self.catcher, 'close')()
             except Exception as e:
-                Logger.error(f"Error closing catcher: {e}")
+                self.logger.error(f"Error closing catcher: {e}")
                 raise
 
 class DeflectorGroup:
@@ -136,7 +138,7 @@ class DeflectorGroup:
         """Restore both streams."""
         self.stdout.end_catching()
         self.stderr.end_catching()
-class OutputCatcher(ABC):
+class OutputCatcher(BaseClass.BoundLogger , ABC):
     """
     Abstract base class for output catcher for stdout and stderr
     must implement the get_contents method
@@ -290,16 +292,20 @@ class LogWriter(OutputCatcher):
         else:
             return self.log_path.read_text(encoding='utf-8')
 
-class WarningCatcher:
+class WarningCatcher(BaseClass.BoundLogger):
     """
     catch specific warnings and show call stack
     example:
         with WarningCatcher(['This will raise an exception']):
             raise Exception('This will raise an exception')
     """
-    def __init__(self , catch_warnings : list[str] | None = None , * ,
-                 method : Literal['raise' , 'ignore'] = 'raise' ,
-                 highlight_varibles : dict[str, Any] | None = None):
+    def __init__(
+        self , catch_warnings : list[str] | None = None , * ,
+        method : Literal['raise' , 'ignore'] = 'raise' ,
+        highlight_varibles : dict[str, Any] | None = None ,
+        indent: int = 0 , vb_level: int = 1 , **kwargs
+    ):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.method = method
         self.warnings_caught = []
         self.original_showwarning = warnings.showwarning
@@ -311,16 +317,16 @@ class WarningCatcher:
         """Custom warning show function to catch specific warnings and show call stack"""
         # only catch the warnings we care about
         if any(c in str(message).lower() for c in self.catch_warnings):
-            Logger.alert1(f"\n caught warning: {message}")
-            Logger.alert1(f"warning location: {filename}:{lineno}")
-            Logger.alert1("call stack:")
-            Logger.print_traceback_stack(color = 'lightyellow' , bold = True)
-            Logger.alert1("-" * 80)
+            self.logger.alert1(f"\n caught warning: {message}")
+            self.logger.alert1(f"warning location: {filename}:{lineno}")
+            self.logger.alert1("call stack:")
+            self.logger.print_traceback_stack(color = 'lightyellow' , bold = True)
+            self.logger.alert1("-" * 80)
 
             if self.highlight_varibles is not None:
                 for var_name, var_value in self.highlight_varibles.items():
-                    Logger.alert1(f"{var_name}: {var_value}")
-                Logger.alert1("-" * 80)
+                    self.logger.alert1(f"{var_name}: {var_value}")
+                self.logger.alert1("-" * 80)
                 
             if self.method == 'raise':
                 raise Exception(message)
@@ -494,11 +500,11 @@ class TimedOutput:
         }
 
     @classmethod
-    def from_record(cls , record: dict[str, Any]) -> TimedOutput:
+    def from_record(cls , record: dict[str, Any] , prefix: str = '') -> TimedOutput:
         """Rebuild from :meth:`to_record` (preserves original timestamp for sorting)."""
         obj = cls(
             record['type'] ,
-            record['content'] ,
+            prefix + record['content'] ,
             record.get('infos') or {} ,
             record.get('valid' , True) ,
         )
@@ -541,7 +547,7 @@ class MPOutputCatcher(OutputCatcher):
 
     def add_output(self , content: str | Any , output_type: str | None = None) -> None:
         if output_type is None and not isinstance(content , str):
-            Logger.warning(f'MPOutputCatcher skips non-text output: {type(content)}')
+            self.logger.warning(f'MPOutputCatcher skips non-text output: {type(content)}')
             content = str(content)
         output = TimedOutput.create(content , output_type)
         if not output or (self.outputs and output.equivalent(self.outputs[-1])):
@@ -595,7 +601,7 @@ class MPOutputCatcher(OutputCatcher):
         cls.PrimaryInstance.__enter__()
 
     @classmethod
-    def merge_into_html(cls , run_id: str | None = None , *, keep_on_error: bool = False) -> None:
+    def merge_into_html(cls , run_id: str | None = None , *, keep_on_error: bool = False, indent: int = 0) -> None:
         """
         Load worker ``jsonl`` logs for ``run_id`` and append to ``HtmlCatcher.PrimaryInstance``.
 
@@ -612,31 +618,26 @@ class MPOutputCatcher(OutputCatcher):
         worker_outputs: list[TimedOutput] = []
         n_files = 0
         for mp_id in mp_ids:
+            mp_prefix = ' ' * (indent + 1) * 2 + '--> ' + f'[{run_id}]: '
             for path in sorted((run_dir / mp_id).glob('*.jsonl')):
                 n_files += 1
                 try:
                     for line in path.read_text(encoding='utf-8').splitlines():
                         if line.strip():
-                            worker_outputs.append(TimedOutput.from_record(json.loads(line)))
+                            worker_outputs.append(TimedOutput.from_record(json.loads(line) , prefix=mp_prefix))
                 except Exception as e:
-                    Logger.warning(f'Failed to load worker log {path}: {e}')
+                    cls.logger.warning(f'Failed to load worker log {path}: {e}' , indent=indent)
 
         if not worker_outputs:
-            Logger.warning(f'No multiprocessing worker output under {run_dir}')
+            cls.logger.alert1(f'No multiprocessing worker output under {run_dir}' , indent=indent)
             if not keep_on_error:
                 shutil.rmtree(run_dir , ignore_errors=True)
             return
 
         worker_outputs.sort(key=lambda o: o.sort_key)
-        Logger.note(
-            f'=== Multiprocessing worker output begin (run_id={run_id}, workers={mp_ids}, chunk_files={n_files}) ===' ,
-            vb_level=1 ,
-        )
+        cls.logger.note(f'Multiprocessing worker output begin (run_id={run_id}, workers={mp_ids}, chunk_files={n_files})' , indent=indent)
         HtmlCatcher.PrimaryInstance.outputs.extend(worker_outputs)
-        Logger.note(
-            f'=== Multiprocessing worker output end (run_id={run_id}) ===' ,
-            vb_level=1 ,
-        )
+        cls.logger.note(f'Multiprocessing worker output end (run_id={run_id})' , indent=indent)
         if not keep_on_error:
             shutil.rmtree(run_dir , ignore_errors=True)
 
@@ -750,11 +751,11 @@ class HtmlCatcher(OutputCatcher):
             self.start_cursor = self.PrimaryInstance.last_output
             self.start_point = len(self.PrimaryInstance.outputs)
 
-        Logger.remark(f"{self} Capturing Start" , vb_level = 1 if self.is_primary else 2)
+        self.logger.remark(f"Title = {self.full_title} , Primary = {self.is_primary}, Capturing Start" , vb_level = 1 if self.is_primary else 2)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1 if self.is_primary else 2)
+        self.logger.remark(f"Title = {self.full_title} , Primary = {self.is_primary}, Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1 if self.is_primary else 2)
         self.export()
         if self.is_primary:
             self.deflectors.end_catching()
@@ -765,7 +766,7 @@ class HtmlCatcher(OutputCatcher):
         """Export the catcher to all paths in the export file list"""
         # log first and then export
         for export_path in self.export_file_list:
-            Logger.footnote(f"{self.__class__.__name__} result saved to {export_path}" , indent = 1 , vb_level = 3)
+            self.logger.footnote(f"result saved to {export_path}")
         if self.is_primary and self.export_file_list:
             Proj.exit_files.insert(0 , self.export_file_list[0])
         
@@ -1003,7 +1004,7 @@ class MarkdownCatcher(OutputCatcher):
         
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.remark(f"{self} Capturing Start" , vb_level = 1)
+        self.logger.remark(f"Title = {self.title}, Capturing Start")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1022,7 +1023,7 @@ class MarkdownCatcher(OutputCatcher):
             running_filename = self.export_file_list[-1].with_suffix(f'.{i}.running.md')
             i += 1
             if i >= max_running_files:
-                Logger.error(f"Too many running markdown files, max_running_files={max_running_files}")
+                self.logger.error(f"Too many running markdown files, max_running_files={max_running_files}")
                 running_filename = self.export_file_list[-1].with_suffix('.running.md')
                 break
         self.running_filename = running_filename
@@ -1046,7 +1047,7 @@ class MarkdownCatcher(OutputCatcher):
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1)
+        self.logger.remark(f"Title = {self.title}, Capturing Finished, Cost {Duration(since = self.start_time)}")
         self.markdown_file.close()
         for filename in self.export_file_list:
             filename.unlink(missing_ok=True)
@@ -1054,8 +1055,8 @@ class MarkdownCatcher(OutputCatcher):
             try:
                 shutil.copy(self.running_filename, filename)
             except OSError as e:
-                Logger.error(f"Failed to copy {self.running_filename} to {filename}: {e}")
-            Logger.footnote(f"{self.__class__.__name__} result saved to {filename}" , indent = 1 , vb_level = 3)
+                self.logger.error(f"Failed to copy {self.running_filename} to {filename}: {e}")
+            self.logger.footnote(f"result saved to {filename}")
         for path in self.running_filename.parent.glob(f'{self.filename.removesuffix(".md")}.*running.md'):
             path.unlink()
     
@@ -1113,15 +1114,15 @@ class CrashProtectorCatcher(OutputCatcher):
         self.start_time = datetime.now()
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        Logger.remark(f"{self} Capturing Start" , vb_level = 1)
+        self.logger.remark(f"Task ID = {self.task_id}, Capturing Start")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.task_id is None:
             return
         self.deflectors.end_catching()
-        Logger.remark(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1)
-        Logger.footnote(f"{self.__class__.__name__} file {self.filename} removed" , indent = 1 , vb_level = 3)
+        self.logger.remark(f"Task ID = {self.task_id}, Capturing Finished, Cost {Duration(since = self.start_time)}")
+        self.logger.footnote(f"crash protector file {self.filename} removed")
         self.is_catching = False
     
     def open_markdown_file(self):

@@ -129,64 +129,7 @@ def rcquant_trading_dates(start, end):
         return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start, end, market='cn')]
 
-def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):    
-    def code_map(x : str):
-        if data_type != 'sec': 
-            return x
-        x = x.split('.')[0]
-        if x[:1] in ['3', '0']:
-            y = x+'.SZ'
-        elif x[:1] in ['6']:
-            y = x+'.SH'
-        else:
-            y = x
-        return y
-
-    if (sec_min := load_min(date , data_type)) is not None: 
-        df = rcquant_min_to_normal_min(sec_min , data_type)
-        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 1, vb_level = 3)
-        return True
-
-    if not RcQuantInitializer.init(): 
-        return False
-
-    instrument_list = rcquant_instrument_list(date , data_type = data_type)
-    instrument_list = instrument_list.loc[instrument_list['is_active']]
-    if first_n > 0: 
-        instrument_list = instrument_list.iloc[:first_n]
-    code_list = instrument_list['code'].to_numpy(str)
-    data = rqdatac.get_price(code_list, start_date=str(date), end_date=str(date), frequency='1m',expect_df=True)
-    if isinstance(data , pd.DataFrame) and not data.empty:
-        data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
-        data['code'] = data['code'].map(code_map)
-        data['time'] = data['datetime'].map(lambda x: x.strftime('%H%M%S')).str.slice(0,4)
-        data['date'] = data['datetime'].map(lambda x: x.strftime('%Y%m%d'))
-
-        write_min(data , date , data_type)
-
-        df = rcquant_min_to_normal_min(data , data_type)
-        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = 1 , vb_level = 3)
-        return True
-    else:
-        return False
-
-def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
-    if data_type != 'sec': 
-        return df
-    df = df.copy()
-    df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
-    df = secid_adjust(df , ['code'] , drop_old=True)
-    df['minute'] = ((df['time'].str.slice(0,2).astype(int) - 9.5) * 60 + df['time'].str.slice(2,4).astype(int)).astype(int) - 1
-    df.loc[df['minute'] >= 120 , 'minute'] -= 90
-    df['vwap'] = df['amount'] / df['volume'].where(df['volume'] > 0 , np.nan)
-    df['vwap'] = df['vwap'].where(df['vwap'].notna() , df['open'])
-    df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
-    return df
-
 class RcquantMinBarDownloader(BaseClass.BoundLogger):
-    def __init__(self , * , indent: int = 0, vb_level: int = 1):
-        self.set_vb(vb_level, indent)
-
     def proceed(self , date : int | None = None , first_n : int = -1):
         data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
         for data_type in data_types:
@@ -209,7 +152,7 @@ class RcquantMinBarDownloader(BaseClass.BoundLogger):
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
         else:
             for dt in dates:
-                mark = rcquant_bar_min(dt , data_type , first_n)
+                mark = self.rcquant_bar_min(dt , data_type , first_n)
                 if not mark: 
                     self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
             self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
@@ -226,6 +169,60 @@ class RcquantMinBarDownloader(BaseClass.BoundLogger):
                     DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
         return True
+
+    def rcquant_bar_min(self ,date : int , data_type : DATA_TYPES , first_n : int = -1):    
+        def code_map(x : str):
+            if data_type != 'sec': 
+                return x
+            x = x.split('.')[0]
+            if x[:1] in ['3', '0']:
+                y = x+'.SZ'
+            elif x[:1] in ['6']:
+                y = x+'.SH'
+            else:
+                y = x
+            return y
+
+        if (sec_min := load_min(date , data_type)) is not None: 
+            df = self.rcquant_min_to_normal_min(sec_min , data_type)
+            DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
+            return True
+
+        if not RcQuantInitializer.init(): 
+            return False
+
+        instrument_list = rcquant_instrument_list(date , data_type = data_type)
+        instrument_list = instrument_list.loc[instrument_list['is_active']]
+        if first_n > 0: 
+            instrument_list = instrument_list.iloc[:first_n]
+        code_list = instrument_list['code'].to_numpy(str)
+        data = rqdatac.get_price(code_list, start_date=str(date), end_date=str(date), frequency='1m',expect_df=True)
+        if isinstance(data , pd.DataFrame) and not data.empty:
+            data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
+            data['code'] = data['code'].map(code_map)
+            data['time'] = data['datetime'].map(lambda x: x.strftime('%H%M%S')).str.slice(0,4)
+            data['date'] = data['datetime'].map(lambda x: x.strftime('%Y%m%d'))
+
+            write_min(data , date , data_type)
+
+            df = self.rcquant_min_to_normal_min(data , data_type)
+            DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            return True
+        else:
+            return False
+
+    def rcquant_min_to_normal_min(self , df : pd.DataFrame , data_type : DATA_TYPES):
+        if data_type != 'sec': 
+            return df
+        df = df.copy()
+        df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
+        df = secid_adjust(df , ['code'] , drop_old=True)
+        df['minute'] = ((df['time'].str.slice(0,2).astype(int) - 9.5) * 60 + df['time'].str.slice(2,4).astype(int)).astype(int) - 1
+        df.loc[df['minute'] >= 120 , 'minute'] -= 90
+        df['vwap'] = df['amount'] / df['volume'].where(df['volume'] > 0 , np.nan)
+        df['vwap'] = df['vwap'].where(df['vwap'].notna() , df['open'])
+        df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
+        return df
 
     @classmethod
     def update(cls , * , indent: int = 0, vb_level: int = 1):

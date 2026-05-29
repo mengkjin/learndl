@@ -8,8 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import CALENDAR , DB , Dates , Const , BaseClass
-from src.proj.core import strPath
+from src.proj import CALENDAR , DB , Dates , Const , BaseClass , BaseType
 from src.proj.util import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
@@ -260,7 +259,7 @@ class PortfolioAccount:
             account.loc[date , 'attribution'] = v #type:ignore
         return cls(account.reset_index(drop = False) , index = index)
 
-    def save(self , path : strPath | None = None , vb_level : Any = 1 , indent : int = 0):
+    def save(self , path : BaseType.strPath | None = None , vb_level : Any = 1 , indent : int = 0):
         if path is None or self.empty:
             return self
         path = Path(path)
@@ -278,7 +277,7 @@ class PortfolioAccount:
         return self
 
     @classmethod
-    def load(cls , path : strPath | None = None) -> PortfolioAccount:
+    def load(cls , path : BaseType.strPath | None = None) -> PortfolioAccount:
         """load portfolio account from a path (a tar file or a pickle (disabled now) file)"""
         if path is None:
             return cls()
@@ -295,7 +294,7 @@ class PortfolioAccount:
         return account
 
     @classmethod
-    def load_meta(cls , path : strPath) -> dict[str, Any]:
+    def load_meta(cls , path : BaseType.strPath) -> dict[str, Any]:
         return DB.load_tar_meta(path)
 
     @property
@@ -388,8 +387,8 @@ class PortfolioAccountant(BaseClass.BoundLogger):
             cls._instances[key] = instance
         return cls._instances[key]
     
-    def __init__(self , portfolio : Portfolio , * , indent : int = 1 , vb_level : Any = 2):
-        self.set_vb(vb_level , indent)
+    def __init__(self , portfolio : Portfolio , * , indent : int = 1 , vb_level : Any = 2 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.portfolio = portfolio
         self.account = PortfolioAccount()
         if not hasattr(portfolio , 'cached_accounts'):
@@ -408,7 +407,7 @@ class PortfolioAccountant(BaseClass.BoundLogger):
         return self.portfolio.available_dates()
 
     @cached_property
-    def resume_path(self) -> strPath | None:
+    def resume_path(self) -> BaseType.strPath | None:
         return None
 
     def accounting(
@@ -417,7 +416,7 @@ class PortfolioAccountant(BaseClass.BoundLogger):
         start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
         trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
         daily = False , cache = False , with_index : dict[str,Any] | None = None ,
-        resume_path : strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+        resume_path : BaseType.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
     ):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
@@ -550,8 +549,8 @@ class PortfolioAccountManager(BaseClass.BoundLogger):
     """
     Manage portfolio accounts in a directory.
     """
-    def __init__(self , account_dir : strPath , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(self , account_dir : BaseType.strPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.account_dir = Path(account_dir)
         self.account_dir.mkdir(exist_ok=True)
 

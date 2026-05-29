@@ -5,7 +5,7 @@ from deap import gp
 from torch.multiprocessing import Pool
 from tqdm import tqdm
 
-from src.proj import Logger , BaseClass
+from src.proj import BaseClass
 from src.func import tensor as T
 from src.res.gp.func import factor_func as FF
 from src.res.gp.param import gpParameters
@@ -21,6 +21,7 @@ def except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
         try:
             value = func(*args , **kwargs)
         except torch.cuda.OutOfMemoryError:
+            from src.proj import Logger
             Logger.warning(f'OutOfMemoryError on {print_str or func.__name__}')
             torch.cuda.empty_cache()
             value = out
@@ -56,7 +57,7 @@ neutralizer = except_MemoryError(raw_neutralize)
 class gpEvaluator(BaseClass.BoundLogger):
     def __init__(self , param : gpParameters , input : gpInput , status : gpStatus ,  
                 timer : gpTimer , recorder : gpRecorder , * , indent : int = 1 , vb_level : Any = 2 , **kwargs):
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.param = param
         self.input = input
         self.status = status

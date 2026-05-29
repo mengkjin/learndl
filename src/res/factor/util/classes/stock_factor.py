@@ -22,9 +22,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal , Iterable
 
-from src.proj import DB , CALENDAR , BaseClass
-from src.proj.core import strPath
-from src.proj.util import properties
+from src.proj import DB , CALENDAR , Logger , BaseProperty , BaseType
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -275,7 +273,7 @@ def common_elements(lists : list[np.ndarray]) -> np.ndarray:
             ds = np.intersect1d(ds , list)
         return ds
 
-class FactorStats(BaseClass.BoundLogger):
+class FactorStats:
     """
     FactorStats class is used to store and manipulate factor statistics
     """
@@ -335,9 +333,9 @@ class FactorStats(BaseClass.BoundLogger):
                 with WarningCatcher(['behavior of DataFrame concatenation']):
                     stat = pd.concat([old_stat , stat])
             except Exception as e:
-                self.logger.error(f'Error concatenating stats: {e}')
-                self.logger.stdout(old_stat)
-                self.logger.stdout(stat)
+                Logger.error(f'Error concatenating stats: {e}')
+                Logger.stdout(old_stat)
+                Logger.stdout(stat)
                 raise
         index_names = [key for key in stat.index.names if key is not None]
         if index_names:
@@ -385,7 +383,7 @@ class FactorStats(BaseClass.BoundLogger):
     def create_cache_factor_stats(cls) -> dict[str,FactorStats]:
         return {name:FactorStats(name) for name in cls.available_stats}
 
-class CacheFactorStats(BaseClass.BoundLogger):
+class CacheFactorStats:
     """
     CacheFactorStats class is used to store and manipulate multiple factor statistics
     """
@@ -399,21 +397,21 @@ class CacheFactorStats(BaseClass.BoundLogger):
         if path is None or not path.exists():
             return
         stats_num = sum([factor_stats.load(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        self.logger.success(f'Load {stats_num} Factor Stats from {path}' , vb_level = 'max')
+        Logger.success(f'Load {stats_num} Factor Stats from {path}' , vb_level = 'max')
         return self
 
     def save(self , path : Path | None):
         if path is None:
             return
         stats_num = sum([factor_stats.save(path.joinpath(factor_stats.name)) for factor_stats in self.factor_stats.values()])
-        self.logger.success(f'Save {stats_num} Factor Stats to {path}' , vb_level = 'max')
+        Logger.success(f'Save {stats_num} Factor Stats to {path}' , vb_level = 'max')
 
     def common_dates(self , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf']) -> np.ndarray:
         dates = [self.factor_stats[subset].date for subset in subsets]
         return common_elements(dates)
 
     @classmethod
-    def saved_dates(cls , path : strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
+    def saved_dates(cls , path : BaseType.strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
                     exclude_csi2000 : bool = True) -> np.ndarray:
         path = Path(path)
         if not path.exists():
@@ -447,7 +445,7 @@ class CacheFactorStats(BaseClass.BoundLogger):
     def coverage(self) -> FactorStats:
         return self.factor_stats['coverage']
 
-class StockFactor(BaseClass.BoundLogger):
+class StockFactor:
     """
     StockFactor class is used to store and manipulate factor data
     factor data can be a pandas DataFrame , a pandas Series , a DataBlock , a StockFactor , or a dictionary of pd.Series
@@ -509,7 +507,7 @@ class StockFactor(BaseClass.BoundLogger):
     @property
     def empty(self) -> bool:
         """return True if the factor is empty"""
-        return properties.empty(self.prior_input)
+        return BaseProperty.empty(self.prior_input)
 
     def update(self , factor : pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None = None , 
                normalized : bool | None = None , benchmark : Benchmark | str | None = None ,
@@ -739,8 +737,8 @@ class StockFactor(BaseClass.BoundLogger):
         return a factor with the pseudo date
         """
         if pseudo_date is not None and not np.array_equal(self.data_date , pseudo_date):
-            self.logger.alert1(f'Setting {self} pseudo date to {pseudo_date}' , indent = 1 , vb_level = 'max')
-            self.logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 'max')
+            Logger.alert1(f'Setting {self} pseudo date to {pseudo_date}' , indent = 1 , vb_level = 'max')
+            Logger.alert1(f'Original date : {self.data_date}' , indent = 1 , vb_level = 'max')
             self.pseudo_date = pseudo_date
         return self
         

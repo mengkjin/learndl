@@ -45,9 +45,6 @@ class BasicCustomUpdater(BaseClass.BoundLogger , metaclass=BasicCustomUpdaterMet
     _imported : bool = False
     _rollback_date : int = 99991231
 
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
-
     @classmethod
     def iter_updaters(cls) -> Iterator[BasicCustomUpdater]:
         cls.import_updaters()

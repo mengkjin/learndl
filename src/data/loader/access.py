@@ -46,8 +46,9 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
     DB_KEYS : dict[str , str] = {}
     LOAD_AS_PL : list[str] = []
 
-    def __init__(self) -> None:
+    def __init__(self , * , indent: int = 1 , vb_level: int = 2 , **kwargs):
         """Initialise one DFCollection (or PLDFCollection) per DB_KEYS entry."""
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.collections : dict[str , DFCollection] = {
             data_type : DFCollection(self.MAX_LEN , self.DATE_KEY) 
             for data_type in self.DB_KEYS.keys() if data_type not in self.LOAD_AS_PL}

@@ -29,9 +29,9 @@ class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     """manager of factor update jobs"""
     update_type : Literal['stock' , 'pooling' , 'affiliate' , 'market' , 'stats']
 
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1):
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.jobs = BaseUpdateJobList(f'{self.name} Factor Jobs')
-        self.set_vb(vb_level , indent)
     
     def __repr__(self):
         n_jobs = len(self.jobs) if self.jobs is not None else 0
@@ -103,7 +103,7 @@ class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , idt = 1 , vb = 1)
         else:
             self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , idt = 1 , vb = 1)
-            DiskTTLCache.put('update_progress' , f'{self.name}_empty_jobs' , True , ttl_hours = 4)
+            DiskTTLCache.put('update_progress' , f'{self.name}_empty_jobs' , True , ttl_hours = 8)
         
     def before_process_jobs(self , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
@@ -170,7 +170,7 @@ class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         level : int , level_jobs : BaseUpdateJobList , 
         timeout : float = -1 , **kwargs
     ) -> None:
-        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 10 else str(level_jobs)) , idt = 2 , vb = 2)
+        self.logger.stdout(f'Updating level {level} : ' + (f'{len(level_jobs)} factors' if len(level_jobs) > 8 else str(level_jobs)) , idt = 2 , vb = 2)
         assert not self.groups_multiprocessing or not self.jobs_multithreading , 'groups_multiprocessing and multithreading cannot be used together'
         group_kwargs = {
             'multithreading' : self.jobs_multithreading ,

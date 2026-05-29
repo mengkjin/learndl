@@ -21,8 +21,8 @@ class SellsideFTPDownloader(BaseClass.BoundLogger):
     Provides ``dir()``, ``download_file()``, and ``open_file()`` for listing
     and downloading remote CSV files.
     """
-    def __init__(self, source='msjg' , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(self, source='msjg' , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(vb_level=vb_level, indent=indent, **kwargs)
         assert source in MACHINE.secret.get('accounts' , 'sellside') , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
         self.ftp_param : dict[str , Any] = MACHINE.secret.get('accounts' , f'sellside/{source}')
         type : str = self.ftp_param.pop('type')

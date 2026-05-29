@@ -54,8 +54,8 @@ class FetchedAnnouncementBatch:
     error: Exception | None = None
 
 class FetcherTask(BaseClass.BoundLogger):
-    def __init__(self, exchange: str, start: int, end: int, redownload: bool = False, * , vb_level: int = 2, indent: int = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(self, exchange: str, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
+        super().__init__(vb_level=vb_level, indent=indent, **kwargs)
         self.exchange = exchange
         self.start = start
         self.end = end
@@ -196,7 +196,8 @@ class AnnoucementFetcher(ABC, BaseClass.BoundLogger):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 
-    def __init__(self, proxy: str | None = None):
+    def __init__(self, proxy: str | None = None , * , indent: int = 1 , vb_level: int = 2 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.proxy = proxy
 
     def init_session(self) -> requests.Session:
@@ -249,7 +250,8 @@ class AsyncAnnoucementFetcher(ABC, BaseClass.BoundLogger):
     exchange: Literal["sse", "szse", "bse"]
     FETCH_KWARGS : list[dict[str, Any]] = [{}]
 
-    def __init__(self, proxy: str | None = None):
+    def __init__(self, proxy: str | None = None , * , indent: int = 1 , vb_level: int = 2 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.proxy = proxy
 
     def init_session(self) -> requests.AsyncSession:

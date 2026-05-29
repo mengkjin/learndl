@@ -6,8 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration, Dates, Proj , BaseClass
-from src.proj.core import strPath
+from src.proj import Duration, Dates, Proj , BaseClass , BaseType
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
@@ -70,11 +69,11 @@ class PortfolioBuilder(BaseClass.BoundLogger):
     def __init__(self , category : str | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
-                 resume_path : strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+                 resume_path : BaseType.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.category     = category
         self.alpha        = alpha
         self.benchmark    = get_benchmark(benchmark)
@@ -244,15 +243,13 @@ class PortfolioGroupBuilder(BaseClass.BoundLogger):
         attribution : bool = True ,
         trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
         resume : bool = False ,
-        resume_path : strPath | None = None ,
+        resume_path : BaseType.strPath | None = None ,
         start : int = -1 ,
         end : int = 99991231 ,
         caller = None ,
-        indent : int = 0 , 
-        vb_level : Any = 1 ,
-        **kwargs
+        indent : int = 0 , vb_level : Any = 1 , **kwargs
     ):
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.category = category
 
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
@@ -378,7 +375,7 @@ class PortfolioGroupBuilder(BaseClass.BoundLogger):
     def accounting(self):
         with self.logger.timer('accounting' , enter_vb=1):
             for builder in self.builders:
-                with self.logger.timer(f'{builder.portfolio.name}.accounting' , idt=1 , vb=1 , enter_vb=2):
+                with self.logger.timer(f'{builder.portfolio.name}.accounting' , idt = 1 , vb = 1 , enter_vb=2):
                     builder.accounting(self.start , self.end , **self.acc_kwargs)
         self.accounted = True
         return self

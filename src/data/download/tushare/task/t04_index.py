@@ -97,7 +97,7 @@ class IndexDaily(TimeSeriesFetcher):
                     old_df = _df
             df = self.get_data(index , start , end)
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).astype({'trade_date':int}).sort_values('trade_date')
-            DB.save(df , self.DB_SRC , index , indent = 1 , vb_level = 3)
+            DB.save(df , self.DB_SRC , index , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             updated_dates.extend(df['trade_date'].unique())
         return np.unique(np.array(updated_dates , dtype = int))
 
@@ -146,18 +146,18 @@ class ZXIndexDaily(DayFetcher):
         for start , end in zip(si , ei): 
             date_dfs , index_dfs = self.get_zx_index_quotes(start , end)
             for date , df in date_dfs.items():
-                DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
+                DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 updated_dates.append(date)
             for index , df in index_dfs.items():
-                self.update_index_daily_file(index , df , vb_level = 'max')
+                self.update_index_daily_file(index , df)
         return np.unique(np.array(updated_dates , dtype = int))
     
-    def update_index_daily_file(self , index : str , df : pd.DataFrame , vb_level : Any = 5):
+    def update_index_daily_file(self , index : str , df : pd.DataFrame):
         df_old = DB.load('index_daily_ts' , index , vb_level = 'never')
         if not df_old.empty:
             df = pd.concat([df_old.astype({'trade_date':int}) , df]).drop_duplicates('trade_date' , keep = 'last')
         df = df.sort_values('trade_date').reset_index(drop = True)
-        DB.save(df , 'index_daily_ts' , index , indent = 1 , vb_level = vb_level)
+        DB.save(df , 'index_daily_ts' , index , indent = self.indent + 1 , vb_level = self.vb_level + 5)
     
 class THSConcept(MonthFetcher):
     """Tonghuashun Concept"""

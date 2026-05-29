@@ -201,7 +201,7 @@ class ModelAPI:
           execution_time: long
           memory_usage: high
         '''
-        with Proj.vb.WithVB('max' if short_test else None):
+        with Proj.vb.temporary_vb('max' if short_test else None):
             trainer = ModelTrainer.train(module , short_test , start = start , end = end , 
                                          stage = 0 , resume = 0 , selection = 0 , **kwargs)
         return trainer

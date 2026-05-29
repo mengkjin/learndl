@@ -5,13 +5,12 @@ import shutil , threading , torch , json
 
 from typing import Any
 
-from src.proj import PATH , BaseClass
-from src.proj.core import strPath
+from src.proj import PATH , Logger , BaseType
 from src.proj.util import torch_load
 
 __all__ = ['DataCache']
 
-class DataCache(BaseClass.BoundLogger):
+class DataCache:
     """
     Data Cache for All Data Types (Must be included in DataCache.possible_types)
     Example: Cache a ModuleData
@@ -60,8 +59,7 @@ class DataCache(BaseClass.BoundLogger):
     locks_guard = threading.Lock()
     locks : dict[str, threading.Lock] = {}
 
-    def __init__(self , type : str , * , vb_level: int = 1 , indent: int = 0 , **kwargs):
-        self.set_vb(vb_level , indent)
+    def __init__(self , type : str , **kwargs):
         self.type = type
         self.kwargs = kwargs
         self.content_name = list(kwargs.keys())[0]
@@ -87,7 +85,7 @@ class DataCache(BaseClass.BoundLogger):
         self.path.mkdir(parents = True , exist_ok = True)
         metadata_success = self._update_metadata(self.key , **additional_metadata)
         if not metadata_success:
-            self.logger.alert1(f'Failed to update metadata: {self.key}')
+            Logger.alert1(f'Failed to update metadata: {self.key}' , indent = 1 , vb_level = 2)
             return
         with self._get_lock(self.key):
             torch.save(data , self.path.joinpath('data.pt'))
@@ -102,12 +100,12 @@ class DataCache(BaseClass.BoundLogger):
                 data = torch_load(self.path.joinpath('data.pt'))
         except ModuleNotFoundError as e:
             '''can be caused by different package version'''
-            self.logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!')
+            Logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!' , indent = 1 , vb_level = 2)
             data , metadata = None , {}
             self._remove_cache_file(self.key)
         except Exception as e:
-            self.logger.error(f'Failed to load {self.type.title()} CacheData: {e}')
-            self.logger.print_exc(e)
+            Logger.error(f'Failed to load {self.type.title()} CacheData: {e}' , indent = 1 , vb_level = 2)
+            Logger.print_exc(e)
             raise
         return data , metadata
 
@@ -184,7 +182,7 @@ class DataCache(BaseClass.BoundLogger):
             try:
                 return PATH.read_json(cls.metadata_file)
             except Exception as e:
-                cls.logger.alert2(f'Failed to load metadata: {e}')
+                Logger.alert2(f'Failed to load metadata: {e}')
                 return {}
 
     @classmethod
@@ -200,15 +198,15 @@ class DataCache(BaseClass.BoundLogger):
             return cls._try_save_metadata(metadata[key] , cls._get_meta_file(key))
 
     @classmethod
-    def _try_save_metadata(cls , metadata : dict[str, Any] , path : strPath) -> bool:
+    def _try_save_metadata(cls , metadata : dict[str, Any] , path : BaseType.strPath) -> bool:
         """Remove the metadata for a specific key"""
         try:
             _ = json.dumps(metadata)
             PATH.dump_json(metadata , path , overwrite = True)
             return True
         except Exception as e:
-            cls.logger.error(f'Failed to update metadata: {e}')
-            cls.logger.print_exc(e)
+            Logger.error(f'Failed to update metadata: {e}')
+            Logger.print_exc(e)
             return False
 
 

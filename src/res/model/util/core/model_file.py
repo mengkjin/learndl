@@ -7,7 +7,7 @@ import torch
 
 from pathlib import Path
 from typing import Any
-from src.proj.core import strPath
+from src.proj import BaseType
 from src.proj.util import torch_load
 
 __all__ = ['ModelDict' , 'ModelFile']
@@ -31,7 +31,7 @@ class ModelDict:
         self.boost_head = None
         self.boost_dict = None
 
-    def save(self , path : strPath) -> None:
+    def save(self , path : BaseType.strPath) -> None:
         """uniformly save model dictionary"""
         if isinstance(path , str): 
             path = Path(path)

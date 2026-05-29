@@ -7,8 +7,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
-from src.proj import MACHINE , Proj , CALENDAR , BaseClass
-from src.proj.core import strPath 
+from src.proj import MACHINE , DB , Proj , CALENDAR , BaseClass , BaseType
 from src.proj.util import RequireGrad
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
@@ -22,16 +21,16 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
     def __init__(self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1):
         """Initialize from a PredictorPath object"""
     @overload
-    def __init__(self , model_input : strPath | None | Any , 
+    def __init__(self , model_input : BaseType.strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1):
         """Initialize from a model input, and convert to PredictorPath object"""
-    def __init__(self , model_input : strPath | None | Any | PredictorPath, 
+    def __init__(self , model_input : BaseType.strPath | None | Any | PredictorPath, 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
         submodel : str | None = 'best' , pred_name : str | None = None , / , 
-        indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         if isinstance(model_input , PredictorPath):
             self.path = model_input
         else:
@@ -185,16 +184,26 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             batch_input = self.dataloader.of_date(date)
             return model.get_batch_data(batch_input)
 
+    def _get_dates(self , dates : np.ndarray | list[int] , start : int | None = None , end : int | None = None , step : int = 1):
+        if start is not None or end is not None:
+            assert start is not None and end is not None , 'start and end must be provided together'
+            assert start < end , f'start {start} must be less than end {end}'
+            assert step > 0 , f'step {step} must be greater than 0'
+            dates = CALENDAR.range(start , end , step = step)
+        return np.array(dates)
+
     def iter_batch_data(
-        self , start_date : int , end_date : int , model_date : int , 
-        * , model_num : int | None = None , submodel : str | None = None , 
+        self , dates : np.ndarray | list[int] , model_date : int , 
+        * , start : int | None = None , end : int | None = None , step : int = 1 , model_num : int | None = None , submodel : str | None = None , 
         require_grad = False , silent = True):
         """
         Iterate batch data of a given model number, model date, start date, and end date
         Args:
+            dates : np.ndarray | list[int], the dates to iterate
             model_date : int, the model date of the archived model
-            start_date : int, the start date
-            end_date : int, the end date
+            start : int | None = None, the start date, if given, iterate dates from start to end with step
+            end : int | None = None, the end date, if given, iterate dates from start to end with step
+            step : int = 1, the step size
             model_num : int | None = None, the model number of the model archive, None use default model number
             submodel : str | None = None, the model submodel, None use default model submodel
             require_grad : bool = False, whether to require gradient
@@ -203,7 +212,10 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         """
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
         assert model_date in self.model_dates , f'model_date {model_date} not in {self.model_dates}'
-        assert start_date < end_date , f'start_date {start_date} must be less than end_date {end_date}'
+        dates = self._get_dates(dates , start , end , step)
+        if len(dates) == 0:
+            return iter([])
+        start_date , end_date = min(dates) , max(dates)
         model_param = self.config.model_param[model_num]
         with Proj.silence(silent):
             self.load_data(start_date , end_date)
@@ -212,36 +224,76 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             self.dataloader = self.data.retrospective_dataloader()
         with RequireGrad(require_grad):
             for batch_input in self.dataloader:
-                yield model.get_batch_data(batch_input)
+                batch_data = model.get_batch_data(batch_input)
+                if len(self.data.early_test_dates) == 0 and batch_input.date0 not in dates:
+                    # if no early test dates, and the batch date is not in dates, no need to warmup,skip
+                    continue
+                batch_data = model.get_batch_data(batch_input)
+                if batch_data.batch_date in dates:
+                    yield batch_data
 
     def hidden_block(
-        self , start_date : int , end_date : int , model_date : int , * , 
-        model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , silent = True):
+        self , 
+        dates : np.ndarray | list[int] , model_date : int , * , 
+        start = None , end = None , step : int = 1 ,
+        model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
+        align_secid : np.ndarray | None = None , align_date : np.ndarray | None = None ,
+        load_first = True , silent = True
+    ):
         """
         Iterate hidden block of a given model number, model date, start date, and end date
         Args:
+            dates : np.ndarray | list[int], the dates to iterate
             model_date : int, the model date of the archived model
-            start_date : int, the start date
-            end_date : int, the end date
+            start : int | None = None, the start date, if given, iterate dates from start to end with step
+            end : int | None = None, the end date, if given, iterate dates from start to end with step
+            step : int = 1, the step size
             model_num : int | None = None, the model number of the model archive, None use default model number
             submodel : str | None = None, the model submodel, None use default model submodel
             feature_prefix : bool = True, whether to add feature prefix to the column names
+            load_first : bool = True, whether to load the first batch data to get the hidden block
+            silent : bool = True, whether to silence the warning
         Returns:
             DataBlock of hiddens
         """
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
+        dates = self._get_dates(dates , start , end , step)
+        hidden_path = self.hidden_values_path(model_num , model_date , submodel)
         hidden_dfs : list[pl.DataFrame] = []
-        for batch_data in self.iter_batch_data(start_date , end_date , model_date , model_num = model_num , submodel = submodel , require_grad = False , silent = silent):
+        existing_dates = []
+        if load_first:
+            saved_hidden_df = DB.load_df_pl(hidden_path)
+            if saved_hidden_df.height > 0:
+                hidden_dfs.append(saved_hidden_df)
+                existing_dates = saved_hidden_df['date'].unique()
+                dates = np.setdiff1d(dates , existing_dates)
+
+        batch_data_iterator = self.iter_batch_data(
+            dates , model_date , model_num = model_num , 
+            submodel = submodel , require_grad = False , silent = silent)
+        for batch_data in batch_data_iterator:
             if batch_data.output.empty or batch_data.batch_date in self.data.early_test_dates:
                 continue
+            assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
             hidden_dfs.append(batch_data.hidden_df_pl())
         df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
+        if load_first and len(hidden_dfs) > 1:
+            DB.save_df(df , hidden_path , overwrite = True)
+        if align_secid is not None:
+            df = df.filter(pl.col('secid').is_in(align_secid))
+        if align_date is not None:
+            df = df.filter(pl.col('date').is_in(align_date))
+
         from src.data import DataBlock
         block = DataBlock.from_polars(df)
         if feature_prefix:
             prefix = '@'.join([self.config.model_module , self.config.model_clean_name , str(model_num) , submodel])
             block.update(feature = [f'{prefix}.{col}' for col in block.feature])
+        block = block.align_secid_date(align_secid , align_date)
         return block
+
+    def hidden_values_path(self , model_num : int , model_date : int , submodel : str):
+        return self.path.snapshot('hidden_values' , f'{model_num}.{model_date}.{submodel}.feather')
 
     def predict_dates(self , dates : np.ndarray | list[int]):
         '''predict recent days'''

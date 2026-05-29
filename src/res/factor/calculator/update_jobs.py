@@ -6,7 +6,7 @@ from abc import ABC , abstractmethod
 from datetime import datetime
 from typing import Any , Generator , Literal , TypedDict
 
-from src.proj import BaseClass
+from src.proj import BaseClass , Logger
 from src.proj.util import parallel
 from src.data import DATAVENDOR
 
@@ -39,15 +39,17 @@ class JobChunkPayload(TypedDict):
     multithreading: bool
     timeout: float
 
-class BaseUpdateJob(ABC , BaseClass.BoundLogger):
+class BaseUpdateJob(ABC):
     """base job class"""
     def __init__(self , calc : FactorCalculator , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
-        self.set_vb(vb_level , indent)
         self.calc : FactorCalculator | Any = calc
         self.level = calc.level
         self.factor_name = calc.factor_name
         self.overwrite = overwrite
         self.done = False
+
+        self.indent = indent
+        self.vb_level = vb_level
 
     def __repr__(self):
         return self.factor_name
@@ -139,8 +141,8 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
 class BaseUpdateJobList(BaseClass.BoundLogger):
     """base update job list class"""
     def __init__(self , name : str , jobs : list[BaseUpdateJob] | None = None , * ,
-        multithreading : bool = False , vb_level : Any = 1 , indent : int = 0 , timeout : float = -1):
-        self.set_vb(vb_level , indent)
+        multithreading : bool = False , timeout : float = -1 , vb_level : Any = 1 , indent : int = 0 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.name = name
         self.jobs : list[BaseUpdateJob] = jobs or []
         self.multithreading = multithreading
@@ -338,7 +340,7 @@ class UpdateJobDate(BaseUpdateJob):
         self.done = self.calc.update_day_factor(self.date , overwrite=self.overwrite , catch_errors=CATCH_ERRORS)
 
     def preview(self) -> None:
-        self.logger.stdout(f'{self.level} : {self.factor_name} at {self.date}')
+        Logger.stdout(f'{self.level} : {self.factor_name} at {self.date}' , indent = self.indent , vb_level = self.vb_level)
 
 
 class UpdateJobAll(BaseUpdateJob):
@@ -375,7 +377,7 @@ class UpdateJobAll(BaseUpdateJob):
         self.done = True
 
     def preview(self) -> None:
-        self.logger.stdout(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}')
+        Logger.stdout(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}' , indent = self.indent , vb_level = self.vb_level)
 
 
 class UpdateJobStats(BaseUpdateJob):
@@ -421,4 +423,4 @@ class UpdateJobStats(BaseUpdateJob):
         self.done = True
 
     def preview(self) -> None:
-        self.logger.stdout(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}')
+        Logger.stdout(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}' , indent = self.indent , vb_level = self.vb_level)

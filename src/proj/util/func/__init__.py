@@ -1,7 +1,4 @@
 """Generic helpers: shell, export, dynamic import, torch load, parallelism, disk info."""
-from . import properties
-
-from .basic import *
 from .export import *
 from .shell_interaction import *
 from .dynamic_import import *

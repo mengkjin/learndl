@@ -10,8 +10,8 @@ from src.res.gp.func import factor_func as FF
 from .memory import MemoryManager
 
 class EliteGroup(BaseClass.BoundLogger):
-    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Any = 1) -> None:
-        self.set_vb(vb_level , indent)
+    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.start_i_elite = start_i_elite
         self.elite_count   = 0
         self.device    = device
@@ -134,8 +134,8 @@ class EliteGroup(BaseClass.BoundLogger):
         return corr_mat
     
 class EliteBlock(BaseClass.BoundLogger):
-    def __init__(self , max_len = 50 , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(self , max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.max_len = max_len
         self.names : list[str] = []
         self.infos : dict[str,Any] = {}

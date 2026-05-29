@@ -25,7 +25,7 @@ class DBConnHandler:
     example:
         with DBConnHandler('path/to/db.db') as (conn, cursor):
             cursor.execute('SELECT * FROM table')
-            Logger.stdout(cursor.fetchall())
+            cursor.fetchall()
     """
     def __init__(self, db_path: strPath):
         self.db_path = Path(db_path)

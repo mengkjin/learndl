@@ -7,8 +7,8 @@ from dataclasses import dataclass , field
 from functools import cached_property
 from typing import Any, Literal
 
-from src.proj import Proj , BaseClass
-from src.proj.util import Device , properties
+from src.proj import Proj , Logger , BaseProperty
+from src.proj.util import Device
 
 __all__ = ['BatchInput' , 'BatchOutput' , 'BatchData']
 
@@ -22,7 +22,7 @@ def _object_shape(obj : Any) -> Any:
     else: 
         return type(obj)
 @dataclass
-class BatchInput(BaseClass.BoundLogger):
+class BatchInput:
     '''custom data component of a batch(x,y,w,i,valid)'''
     x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
     y       : torch.Tensor 
@@ -76,12 +76,14 @@ class BatchInput(BaseClass.BoundLogger):
         return {k:self[k] for k in self.keys()}
     
     @property
-    def empty(self): return len(self.y) == 0
+    def empty(self): 
+        return len(self.y) == 0
     @property
-    def device(self): return self.y.device
+    def device(self): 
+        return self.y.device
     @property
     def shape(self): 
-        return properties.shape(self , self.keys())
+        return BaseProperty.shape(self , self.keys())
     @property
     def info(self):
         return f'{self.__class__.__name__}:\n' + \
@@ -180,10 +182,10 @@ class BatchInput(BaseClass.BoundLogger):
                 data = DataModule(model_config , 'predict').load_data()
                 data.setup('predict' , model_date = data.datas.y.date[-20])
                 batch_input = data.predict_dataloader()[0]
-            batch_input.logger.stdout(batch_input.info)
+            Logger.stdout(batch_input.info)
             return batch_input
 @dataclass
-class BatchOutput(BaseClass.BoundLogger):
+class BatchOutput:
     outputs : torch.Tensor | tuple | list | Any | None = None
     def __post_init__(self):
         if isinstance(self.outputs , BatchOutput):
@@ -200,7 +202,7 @@ class BatchOutput(BaseClass.BoundLogger):
         return {k:self[k] for k in self.keys()}
     @property
     def shape(self):
-        return properties.shape(self , self.keys())
+        return BaseProperty.shape(self , self.keys())
     @property    
     def empty(self): 
         return len(self) == 0
@@ -306,11 +308,11 @@ class BatchOutput(BaseClass.BoundLogger):
             module = module.to(device1)
         outputs = module(inputs ,  **kwargs)
         batch_output = cls(outputs)
-        batch_output.logger.stdout(batch_output.info)
+        Logger.stdout(batch_output.info)
         return batch_output
 
 @dataclass
-class BatchData(BaseClass.BoundLogger):
+class BatchData:
     input : BatchInput
     output : BatchOutput
     def __len__(self): return len(self.input)
@@ -397,7 +399,7 @@ class BatchData(BaseClass.BoundLogger):
                     others[key] = value
                     continue
                 if value.ndim == 2 and value.shape[1] == len(value):
-                    self.logger.warning(f'{key} is a 2-dim square tensor of {value.shape}, remove nan for both rows and columns')
+                    Logger.warning(f'{key} is a 2-dim square tensor of {value.shape}, remove nan for both rows and columns')
                     others[key] = value[row_pos][:,row_pos]
                 else:
                     others[key] = value[row_pos]
@@ -415,8 +417,8 @@ class BatchData(BaseClass.BoundLogger):
         if nanpos.ndim > 1:
             nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0 
         if print_all_nan and nanpos.all(): 
-            self.logger.error('Encountered all nan inputs in metric calculation!')
-            [self.logger.stdout(arg) for arg in args]
+            Logger.error('Encountered all nan inputs in metric calculation!')
+            [Logger.stdout(arg) for arg in args]
         return ~nanpos
 
     @property

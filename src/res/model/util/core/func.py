@@ -2,8 +2,7 @@ import re
 from typing import Any , Literal
 from pathlib import Path
 
-from src.proj import PATH
-from src.proj.core import strPath
+from src.proj import PATH , BaseType
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
@@ -21,7 +20,7 @@ def epoch_key(epoch : int , phase : int = 0) -> str:
 def attempt_key(attempt : int , redo : int = 0) -> str:
     return f'Trial{attempt}-{redo}'
 
-def parse_model_input(model_input : strPath | None) -> dict[str,Any]:
+def parse_model_input(model_input : BaseType.strPath | None) -> dict[str,Any]:
     """return full model name and root path of a given model input"""
     if model_input is None or model_input == '' or model_input == Path(''):
         return {

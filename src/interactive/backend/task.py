@@ -28,10 +28,9 @@ from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
 
-from src.proj import PATH , Logger , Duration
+from src.proj import PATH , Duration , Logger , BaseProperty , BaseType
 from src.proj.util.func import is_main_process
-from src.proj.core import strPath
-from src.proj.util import ScriptCmd , DBConnHandler , Email , properties , check_process_status , kill_process
+from src.proj.util import ScriptCmd , DBConnHandler , Email , check_process_status , kill_process
 
 def timestamp() -> float:
     """Return the current UTC time as a POSIX timestamp (seconds since epoch)."""
@@ -40,7 +39,7 @@ def timestamp() -> float:
 def runs_page_url(script_key : str):
     """get runs page url"""
     return "pages/_" + re.sub(r'[/\\]', '_', script_key)
-
+    
 class TaskDatabase:
     """SQLite-backed persistence layer for task and queue records.
 
@@ -58,7 +57,7 @@ class TaskDatabase:
     task_queues
         Many-to-many mapping of queues to task IDs.
     """
-    def __init__(self , db_name: strPath | None = None) -> None:
+    def __init__(self , db_name: BaseType.strPath | None = None) -> None:
         """Initialise the database connection and create tables if they don't exist.
 
         Parameters
@@ -150,7 +149,7 @@ class TaskDatabase:
             return cursor.fetchone() is None
         
     @classmethod
-    def backup_stats(cls , backup_path : strPath):
+    def backup_stats(cls , backup_path : BaseType.strPath):
         """Get task count from backup database"""
         with DBConnHandler(backup_path) as (conn, cursor):
             cursor.execute('SELECT COUNT(*) FROM task_records')
@@ -438,7 +437,7 @@ class TaskDatabase:
         """Return a list of all backup database file paths."""
         return self.conn_handler.all_backup_paths()
 
-    def restore_backup(self , backup_path : strPath) -> None:
+    def restore_backup(self , backup_path : BaseType.strPath) -> None:
         """Clear the live database and restore from a backup file.
 
         Parameters
@@ -516,7 +515,7 @@ class TaskQueue:
     @property
     def empty(self) -> bool:
         """True if the queue contains no task items."""
-        return properties.empty(self.queue)
+        return BaseProperty.empty(self.queue)
 
     def reload(self) -> None:
         """Re-fetch all queue tasks from the database and do an initial refresh."""
@@ -541,7 +540,7 @@ class TaskQueue:
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : strPath | None , source : str | None = None) -> TaskItem:
+    def create_item(self , script : BaseType.strPath | None , source : str | None = None) -> TaskItem:
         """Create a new :class:`TaskItem`, persist it, and add it to this queue."""
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
@@ -876,7 +875,7 @@ class TaskItem:
         return runs_page_url(self.script_key)
     
     @classmethod
-    def create(cls, script : strPath | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
+    def create(cls, script : BaseType.strPath | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
                queue : TaskQueue | bool | None = None) -> TaskItem:
         """Factory: create and persist a new :class:`TaskItem`.
 
@@ -919,7 +918,7 @@ class TaskItem:
         return item
     
     @classmethod
-    def preview_cmd(cls , script : strPath | None ,
+    def preview_cmd(cls , script : BaseType.strPath | None ,
                     source : Literal['py', 'bash','app'] | str | None = None ,
                     mode: Literal['shell', 'os'] = 'shell' ,
                     **kwargs) -> str:
@@ -1042,7 +1041,7 @@ class TaskItem:
             refresh_time += refresh_interval
         return True
 
-    def get_crash_protector(self) -> list[strPath]:
+    def get_crash_protector(self) -> list[BaseType.strPath]:
         """Return paths of crash-protector marker files matching this task's ID."""
         if self.task_id is None:
             return []

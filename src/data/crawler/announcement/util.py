@@ -48,19 +48,19 @@ class CrawlerLogger(BaseClass.BoundLogger):
 
     @classmethod
     def success(cls , *msgs):
-        cls.logger.success(*msgs)
+        cls.logger.success(*msgs , add_prefix = True)
     @classmethod
     def alert(cls , *msgs):
-        cls.logger.alert1(*msgs)
+        cls.logger.alert1(*msgs , add_prefix = True)
     @classmethod
     def note(cls , *msgs):
-        cls.logger.note(*msgs)
+        cls.logger.note(*msgs , add_prefix = True)
     @classmethod
     def stdout(cls , *msgs):
-        cls.logger.stdout(*msgs)
+        cls.logger.stdout(*msgs , add_prefix = True)
     @classmethod
     def error(cls , *msgs):
-        cls.logger.error(*msgs)
+        cls.logger.error(*msgs , add_prefix = True)
 
 @dataclass
 class Announcement:
@@ -285,7 +285,8 @@ class AnnouncementExporter:
         df["_attempt_error"] = ""
         path = self.temp_attempt_path(task_key, attempt_id)
         with PathLock.get(path):
-            DB.save_df(df, path, empty_ok=True , vb_level= Proj.vb.get('crawler'))
+            DB.save_df(df, path, empty_ok=True , vb_level= 'never')
+            CrawlerLogger.stdout(f"Saved temp attempt to {path}")
         return path
 
     def load_temp_attempt(self, task_key: str, attempt_id: str) -> pd.DataFrame:

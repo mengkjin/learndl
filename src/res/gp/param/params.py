@@ -21,7 +21,7 @@ class gpParameters(BaseClass.BoundLogger):
         self , job_id : int | None = None , train : bool = True , 
         continuation : bool = False , test_code : bool = False , * ,
         indent : int = 0 , vb_level : Any = 1 , **kwargs):
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(job_id , train , continuation , test_code , **kwargs)
 
     def initiate(self , job_id : int | None = None , train : bool = True , continuation : bool = False , test_code : bool = False , 

@@ -97,8 +97,11 @@ class ProxyCallerList(BaseClass.BoundLogger):
     """A list of proxy callers"""
     fallback_interval = 1.0
     
-    def __init__(self, callers: list[ProxyCaller] | dict[str, ProxyCaller] , * , pool = None, vb_level: int = 2, indent: int = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(
+        self, callers: list[ProxyCaller] | dict[str, ProxyCaller] , * , 
+        pool = None, vb_level: int = 2, indent: int = 1 , **kwargs
+    ):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         if isinstance(callers , dict):
             self.callers = [caller.set_title(title) for title, caller in callers.items()]
         else:

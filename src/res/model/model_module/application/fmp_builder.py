@@ -16,8 +16,8 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
     N_BESTS    = [-1 , 50]
     BENCHMARKS = Benchmark.DEFAULTS
 
-    def __init__(self , pred_path : PredictorPath , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(self , pred_path : PredictorPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.pred_path = pred_path
         self.pred_path.set_vb(vb_level , indent)
         self.fmp_tables : dict[int , pd.DataFrame] = {}

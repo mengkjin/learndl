@@ -7,8 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Sequence , Literal , Any
 
-from src.proj import PATH , BaseClass
-from src.proj.core import strPath
+from src.proj import PATH , BaseClass , BaseType
 from src.proj.util import torch_load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
@@ -22,15 +21,17 @@ class gpRecorder(BaseClass.BoundLogger):
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , job_dir : strPath | None = None , status : gpStatus | None = None , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
-        self.set_vb(vb_level , indent)
+    def __init__(
+        self , job_dir : BaseType.strPath | None = None , status : gpStatus | None = None , *args ,
+        indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(job_dir , status , *args , **kwargs)
 
     @property
     def initiated(self) -> bool:
         return hasattr(self , 'job_dir')
 
-    def initiate(self , job_dir : strPath | None = None , status : gpStatus | None = None) -> None:
+    def initiate(self , job_dir : BaseType.strPath | None = None , status : gpStatus | None = None) -> None:
         if self.initiated:
             return
 

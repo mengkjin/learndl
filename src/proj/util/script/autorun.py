@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any , Callable
 
 from src.proj.env import MACHINE , Proj
-from src.proj.log import Logger
 from src.proj.core import strPath
 from src.proj.cal import CALENDAR
+from src.proj.bases import BaseClass
 
 from .task_record import TaskRecorder
 from ..emailer import Email
@@ -96,7 +96,7 @@ class AutoRunCatchers:
             catcher.__exit__(*args)
         return self
 
-class AutoRunTask:
+class AutoRunTask(BaseClass.BoundLogger):
     """
     AutoRunTask manager for common tasks
     features:
@@ -106,9 +106,9 @@ class AutoRunTask:
         4. send email with attachment if in server and email is True
     example:
         with AutoRunTask('daily_update' , 'CALENDAR.update_to()'):
-            Logger.stdout('This is the task...')
+            'This is the task...'
         with AutoRunTask('daily_update' , '@source'):
-            Logger.stdout('This is the task...')
+            'This is the task...'
     """
     task_name = TaskName()
     task_key = TaskKey()
@@ -127,8 +127,10 @@ class AutoRunTask:
         verbosity : int | None = None , 
         task_id : str | None = None ,
         markdown_catcher : bool = False ,
+        * , indent : int = 0 , vb_level : Any = 1,
         **kwargs
     ):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.task_name = task_name
         self.task_key = task_key
         self.init_time = datetime.now() 
@@ -162,7 +164,7 @@ class AutoRunTask:
         self.set_verbosity()
         self.set_debug_mode()
         Proj.print_info(once_type = 'script')
-        Logger.divider(vb_level = 1)
+        self.logger.divider()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -172,14 +174,14 @@ class AutoRunTask:
         if isinstance(self.func_return , Path):
             Proj.exit_files.append(self.func_return)
         elif isinstance(self.func_return , str):
-            Logger.conclude(self.func_return , level = 'info')
+            self.logger.conclude(self.func_return , level = 'info')
         elif self.func_return is not None:
-            Logger.display(self.func_return)
+            self.logger.display(self.func_return)
 
         assert exc_type is None , 'Unexpected exception in AutoRunTask , should be caught by the caller!'
 
-        self.error_messages.extend(Logger.get_conclusions('error'))
-        self.exit_message = Logger.draw_conclusions()
+        self.error_messages.extend(self.logger.get_conclusions('error'))
+        self.exit_message = self.logger.draw_conclusions()
 
         self.catchers.exit(exc_type, exc_value, exc_traceback)
         
@@ -201,15 +203,15 @@ class AutoRunTask:
             self.kwargs.update(kwargs)
             with self:
                 if self.forfeit_if_done and self.forfeit_task:
-                    Logger.conclude(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update' , level = 'error')
+                    self.logger.conclude(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update' , level = 'error')
                 else:
                     try:
                         self.func_return = func(*args , **self.kwargs)
                         self.status = 'Success'
                     except Exception as e:
                         self.status = 'Error'
-                        error_msg = Logger.print_exc(e)
-                        Logger.conclude(error_msg , level = 'error')
+                        error_msg = self.logger.print_exc(e)
+                        self.logger.conclude(error_msg , level = 'error')
                         
             return self
         return wrapper

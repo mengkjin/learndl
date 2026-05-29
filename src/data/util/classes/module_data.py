@@ -29,8 +29,7 @@ from dataclasses import dataclass
 from functools import partial, cached_property
 from typing import Any, Literal
 
-from src.proj import CALENDAR , BaseClass
-from src.proj.util import properties
+from src.proj import CALENDAR , BaseClass , Logger , BaseProperty
 
 from .data_block import DataBlock, DataBlockNorm, data_type_abbr
 from .special_dataset import SpecialDataSet
@@ -96,19 +95,18 @@ class ModuleData(BaseClass.BoundLogger):
         SecidFilter specification string (e.g. ``'random.200'``, ``'csi300'``).
     filter_date : str | None
         DateFilter specification string (e.g. ``'20100101~20201231'``).
-    indent / vb_level : int
+    indent / vb_level : int / Any
         Verbosity / indentation for the module messages.
     dtype : torch dtype
         Dtype to cast loaded blocks to (default: ``torch.float``).
     """
     def __init__(
         self,
-        config: ModuleDataConfig,
-        indent: int = 1,
-        vb_level: Any = 2
+        config: ModuleDataConfig, * ,
+        indent: int = 1, vb_level: Any = 2 , **kwargs
     ):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config = config
-        self.set_vb(vb_level , indent)
 
     @classmethod
     def initialize(cls, data_type_list: list[str],
@@ -191,7 +189,7 @@ class ModuleData(BaseClass.BoundLogger):
     @property
     def shape(self):
         """Shape summary across x, y, secid, and date."""
-        return properties.shape(self, ["x", "y", "secid", "date"])
+        return BaseProperty.shape(self, ["x", "y", "secid", "date"])
 
     @property
     def secid(self):
@@ -421,7 +419,7 @@ class ModuleData(BaseClass.BoundLogger):
             return CALENDAR.td_array([max(dates)], backward=True)[0]
 
 
-class SecidFilter(BaseClass.BoundLogger):
+class SecidFilter:
     """
     Callable filter that subsets a security universe array.
 
@@ -438,11 +436,10 @@ class SecidFilter(BaseClass.BoundLogger):
     """
 
     def __init__(self, value: str | None , * , indent: int = 0 , vb_level: int = 2):
-        self.set_vb(vb_level , indent)
         if value is None:
             self.filter = self.none
         else:
-            self.logger.alert1(f"filtering secid for ModuleData: {value}")
+            Logger.alert1(f"filtering secid for ModuleData: {value}" , indent = indent , vb_level = vb_level)
             if value.startswith("random."):
                 self.filter = partial(self.random, num=int(value.split(".")[1]))
             elif value.startswith("first."):
@@ -501,7 +498,7 @@ class SecidFilter(BaseClass.BoundLogger):
         return cls.Benchmark()(bm).get(date, True).secid
 
 
-class DateFilter(BaseClass.BoundLogger):
+class DateFilter:
     """
     Callable filter that subsets a date array.
 
@@ -511,11 +508,10 @@ class DateFilter(BaseClass.BoundLogger):
     """
 
     def __init__(self, value: str | None , * , indent: int = 0 , vb_level: int = 2):
-        self.set_vb(vb_level , indent)
         if value is None:
             self.filter = self.none
         else:
-            self.logger.alert1(f"filtering date for ModuleData: {value}")
+            Logger.alert1(f"filtering date for ModuleData: {value}" , indent = indent , vb_level = vb_level)
 
             value = value.strip().replace("-", "~").replace(" ", "~")
             dates = value.split("~")

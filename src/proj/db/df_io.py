@@ -175,9 +175,9 @@ class dfIOHandler:
             raise ValueError(f'Unsupported accelerator: {accelerator}')
         return dfs
   
-def save_df(df : pd.DataFrame | None , path : strPath , *, overwrite = True , prefix = '' , empty_ok = False , indent = 1 , vb_level : Any = 1):
+def save_df(df : pd.DataFrame | pl.DataFrame | None , path : strPath , *, overwrite = True , prefix = '' , empty_ok = False , indent = 1 , vb_level : Any = 1):
     """save dataframe to path"""
-    if df is None or (not empty_ok and df.empty): 
+    if df is None or (not empty_ok and len(df) == 0): 
         return False
     prefix = prefix or ''
     path = Path(path)

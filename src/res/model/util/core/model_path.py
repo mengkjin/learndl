@@ -11,15 +11,14 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal , Self , cast
 
-from src.proj import PATH , LogFile , DB , CALENDAR , Const , BaseClass
-from src.proj.core import strPath
+from src.proj import PATH , LogFile , DB , CALENDAR , Const , Logger , BaseClass , BaseType
 
 from .func import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 from .model_file import ModelFile
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'HiddenExtractionModel' , 'PredictorPath']
+__all__ = ['ModelPath' , 'PredictorPath']
 
-class ModelPath(BaseClass.BoundLogger):
+class ModelPath:
     f"""
     model path
     access stored model in learndl/models
@@ -36,14 +35,13 @@ class ModelPath(BaseClass.BoundLogger):
     
     """
 
-    def __new__(cls , model_input : ModelPath | strPath | None , *args , **kwargs) -> Self:
+    def __new__(cls , model_input : ModelPath | BaseType.strPath | None , *args , **kwargs) -> Self:
         if isinstance(model_input , ModelPath):
             return cast(Self , model_input)
         else:
             return super().__new__(cls)
 
-    def __init__(self , model_input : strPath | None | Any , * , indent : int = 0 , vb_level : int = 1) -> None:
-        self.set_vb(vb_level , indent)
+    def __init__(self , model_input : BaseType.strPath | None | Any , **kwargs) -> None:
         if not isinstance(model_input , self.__class__):
             self.parse_input(model_input)
 
@@ -54,7 +52,7 @@ class ModelPath(BaseClass.BoundLogger):
     def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
-    def parse_input(self , model_input : strPath | None):
+    def parse_input(self , model_input : BaseType.strPath | None):
         parsed_model_input = parse_model_input(model_input)
         self.full_name : str = parsed_model_input.pop('full_name')
         self.full_name_kwargs : dict[str,Any] = parsed_model_input
@@ -235,7 +233,7 @@ class ModelPath(BaseClass.BoundLogger):
     def clear_model_path(self):
         """clear model directory , but archive directory will protected , log directory will be remained"""
         if self.is_resumable and not self.is_short_test:
-            self.logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
+            Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
             return
         else:
             [shutil.rmtree(folder , ignore_errors=True) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
@@ -340,133 +338,7 @@ class ModelPath(BaseClass.BoundLogger):
         skip = time_elapsed.total_seconds() / 3600  < interval_hours
         return last_time , time_elapsed , skip
 
-class HiddenPath(BaseClass.BoundLogger):
-    """hidden factor path for nn models , used for extracting hidden states"""
-    def __init__(self , model_name : str , model_num : int , submodel : str , * , indent : int = 0 , vb_level : int = 1) -> None:
-        self.set_vb(vb_level , indent)
-        self.model_name , self.model_num , self.submodel = model_name , model_num , submodel
-        assert self.model_name in [p.name for p in PATH.hidden.iterdir()] , \
-            f'Hidden path does not contains hidden data of {self.model_name}'
-
-    def __repr__(self): 
-        return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
-
-    @classmethod
-    def from_key(cls , hidden_key : str) -> HiddenPath:
-        """
-        create hidden path from hidden key
-        example:
-            HiddenPath.from_key('gru_day_V0.1.best')
-        """
-        model_name , model_num , submodel = cls.parse_hidden_key(hidden_key)
-        return cls(model_name , model_num , submodel)
-
-    @staticmethod
-    def create_hidden_key(model_name : str , model_num : int , submodel : str) -> str:
-        """
-        create hidden key
-        example:
-            HiddenPath.create_hidden_key('gru_day_V0' , 1 , 'best') # gru_day_V0.1.best
-        """
-        return f'{model_name}.{model_num}.{submodel}'
-    
-    @property
-    def hidden_key(self) -> str:
-        """current hidden path's hidden key"""
-        return self.create_hidden_key(self.model_name , self.model_num , self.submodel)
-    
-    @staticmethod
-    def parse_hidden_key(hidden_key : str) -> tuple[str, int, str]:
-        """parse hidden key"""
-        model_name , model_num , submodel = hidden_key.split('.')
-        assert submodel in ['best' , 'swabest' , 'swalast'] , f'{hidden_key} has invalid submodel: {submodel}'
-        return model_name , int(model_num) , submodel
-    
-    @staticmethod
-    def target_hidden_path(model_name : str , model_num : int , model_date , submodel : str) -> Path:
-        """target hidden path"""
-        return PATH.hidden.joinpath(model_name , str(model_num) , f'{model_date}.{submodel}.feather')
-    
-    def target_path(self , model_date: int) -> Path:
-        """target hidden path of a given model date"""
-        return self.target_hidden_path(self.model_name , self.model_num , model_date , self.submodel)
-    
-    def last_modified_date(self , model_date : int | None = None) -> int:
-        """last modified date of the hidden path in '%Y%m%d' format"""
-        if model_date is None: 
-            model_dates = self.model_dates()
-            model_date = int(model_dates.max()) if len(model_dates) else -1
-        return PATH.file_modified_date(self.target_path(model_date))
-    
-    def last_modified_time(self , model_date : int | None = None) -> int:
-        """last modified time of the hidden path in '%Y%m%d%H%M%S' format"""
-        if model_date is None: 
-            model_dates = self.model_dates()
-            model_date = int(model_dates.max()) if len(model_dates) else -1
-        return PATH.file_modified_time(self.target_path(model_date))
-
-    def model_dates(self) -> np.ndarray:
-        """model dates of source model"""
-        suffix = f'.{self.submodel}.feather'
-        parent = self.target_path(0).parent
-        dates = [int(p.name.removesuffix(suffix)) for p in parent.iterdir() if p.name.endswith(suffix)]
-        return np.sort(dates)
-
-    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int) -> None:
-        """save hidden dataframe"""
-        hidden_path = self.target_path(model_date)
-        DB.save_df(hidden_df , hidden_path , overwrite = True , prefix = f'Hidden States' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
-
-    def get_hidden_df(self , model_date : int , exact = False) -> tuple[int, pd.DataFrame]:
-        """get hidden dataframe"""
-        if not exact: 
-            model_date = self.closest_hidden_model_date(model_date)
-        hidden_df = DB.load_df(self.target_path(model_date))
-        return model_date , hidden_df
-    
-    def closest_hidden_model_date(self , model_date) -> int:
-        """closest hidden model date"""
-        possible_model_dates = self.model_dates()
-        return possible_model_dates[possible_model_dates <= model_date].max()
-class HiddenExtractionModel(ModelPath):
-    '''
-    for a hidden extraction model to extract hidden states
-    model dict stored in configs/proj/model_settings.yaml file under hidden_extraction section
-    '''
-    MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['hidden_extraction']
-    def __new__(cls , *args , **kwargs) -> HiddenExtractionModel | Any:
-        return super().__new__(cls , *args , **kwargs)
-
-    def __init__(self , hidden_name : str , name: str | Any = None ,    
-                 submodels : list | np.ndarray | Literal['best' , 'swalast' , 'swabest'] | None = None ,
-                 nums : list | np.ndarray | int | None = None , assertion = True):
-        if assertion:
-            assert hidden_name in self.MODEL_DICT , f'{hidden_name} is not a hidden extraction model'
-        if hidden_name in self.MODEL_DICT:
-            reg_dict  = self.MODEL_DICT[hidden_name]
-            name      = reg_dict['name']
-            submodels = reg_dict['submodels']
-            nums      = reg_dict['nums']
-
-        self.hidden_name = hidden_name
-        super().__init__(name)
-        self.submodels = submodels
-        self.nums = nums
-        self.model_path = ModelPath(self.full_name)
-
-    def __repr__(self) -> str:  
-        return f'{self.__class__.__name__}(hidden_name={self.hidden_name},full_name={self.full_name},submodels={self.submodels},nums={str(self.nums)})'
-
-    @classmethod
-    def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list[HiddenExtractionModel]:   
-        """select hidden models"""
-        if hidden_names is None: 
-            hidden_names = list(cls.MODEL_DICT.keys())
-        if isinstance(hidden_names , str): 
-            hidden_names = [hidden_names]
-        return [cls(key) for key in hidden_names]
-
-class PredictorPath(ModelPath):
+class PredictorPath(ModelPath , BaseClass.BoundLogger):
     '''
     for a prediction model to predict recent/history data
     model dict stored in configs/proj/model_settings.yaml file under prediction section
@@ -476,11 +348,11 @@ class PredictorPath(ModelPath):
     MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
 
     def __init__(
-        self, model_input : strPath | None | Any , 
+        self, model_input : BaseType.strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any ,
         submodel : str = 'best' , pred_name : str | None = None , * , 
-        indent : int = 0 , vb_level : int = 1) -> None:
-        super().__init__(model_input , indent = indent , vb_level = vb_level)
+        indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        super().__init__(model_input = model_input , indent=indent, vb_level=vb_level, **kwargs)
         self._model_num = model_num
         self._submodel = submodel
         self._pred_name = pred_name
@@ -568,7 +440,7 @@ class PredictorPath(ModelPath):
         """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
-            self.logger.alert1(f'{path} does not exist')
+            Logger.alert1(f'{path} does not exist')
         return DB.load_df(path)
     
     @property
@@ -608,7 +480,7 @@ class PredictorPath(ModelPath):
         return path
 
     @classmethod
-    def UnpackModelArchives(cls , path : strPath | None = None , delete_tar = True , overwrite = False) -> None:
+    def UnpackModelArchives(cls , path : BaseType.strPath | None = None , delete_tar = True , overwrite = False) -> None:
         if path is None:
             paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
             paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]

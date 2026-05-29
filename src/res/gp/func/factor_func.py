@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 import numpy as np
 
-from src.proj import BaseClass
+from src.proj import Logger
 from src.func import tensor as T
 
 def factor_repr(obj : Any):
@@ -264,7 +264,7 @@ class MultiFactorValue:
         
         return pd.DataFrame(self.inputs.flatten(0,-2).cpu().numpy(),index = self.df_index(secid , date) , columns = names).dropna(how = 'all')
     
-class MultiFactor(BaseClass.BoundLogger):
+class MultiFactor:
     def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 
                  ir_window = 40 , roll_window = 40 , halflife  = 20 , 
                  insample = None , universe = None , min_coverage = 0.1 , **kwargs) -> None:
@@ -320,7 +320,7 @@ class MultiFactor(BaseClass.BoundLogger):
         try:
             multi = (factor * weight).nanmean(-1)
         except torch.cuda.OutOfMemoryError:
-            self.logger.warning(f'OutOfMemoryError on multi factor calculation')
+            Logger.warning(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
         multi = T.zscore(multi , dim = -1)
         return MultiFactorValue(value = multi , weight = weight , inputs = factor , names = names , secid = secid , date = date)

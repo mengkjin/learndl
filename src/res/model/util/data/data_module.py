@@ -8,10 +8,10 @@ from functools import cached_property
 from typing import Any , Literal , Callable
 
 from src.proj import CALENDAR , Const, MACHINE , BaseClass
-from src.data import PreProcessorTask , ModuleData , DataBlock
+from src.data import PreProcessorTask , ModuleData
 
 from src.func import match_values
-from src.res.model.util.core import BatchInput , HiddenPath
+from src.res.model.util.core import BatchInput
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.storage import TorchFileStorage , StoredTorchFileLoader
 from src.res.model.util.trainer import BaseTrainer
@@ -27,8 +27,11 @@ class DataModule(BaseClass.BoundLogger):
     DataModule for model fitting / testing / predicting
     """
    
-    def __init__(self , config : ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
-        self.set_vb(vb_level , indent)
+    def __init__(
+        self , config : ModelConfig | None = None , 
+        use_data : Literal['fit','predict','both'] = 'fit' , * , 
+        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
         self._use_data : Literal['fit','predict','both'] = use_data
 
@@ -142,8 +145,7 @@ class DataModule(BaseClass.BoundLogger):
     def setup_new_param(
             self , stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date : int = -1 , extract_backward_days = 500 , extract_forward_days = 160 ,
-            retro_start_date : int | None = None , retro_end_date : int | None = None
+            model_date : int = -1 , retro_start_date : int | None = None , retro_end_date : int | None = None
         ) -> bool:
         assert self.use_data in ['fit' , 'both'] or stage in ['predict' , 'test' , 'retrospective'] , (self.use_data , stage)
         slens = self.config.seq_lens | param.get('seqlens',{})
@@ -151,7 +153,7 @@ class DataModule(BaseClass.BoundLogger):
         slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
         
         assert slens , (self.config.seq_lens | param.get('seqlens',{}) , self.input_keys)
-        loader_param = DataloaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days , retro_start_date , retro_end_date)
+        loader_param = DataloaderParam(stage , model_date , slens , retro_start_date , retro_end_date)
         if self.loader_param == loader_param: 
             return False
         else:
@@ -204,11 +206,11 @@ class DataModule(BaseClass.BoundLogger):
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
         if self.step_len <= 0:
-            self.logger.alert1( 
+            self.logger.error( 
                 f'Step length is less than 0 , stage: {self.stage} , d0: {self.d0} , '
                 f'd1: {self.d1} , data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
             if self.stage in ['predict' , 'test']:
-                self.logger.alert1(f'Test dates: {test_dates}')
+                self.logger.error(f'Test dates: {test_dates}')
             raise ValueError(f'Step length is less than 0')
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * self.data_step , [0])
         self.date_idx = self.d0 + self.step_idx
@@ -218,44 +220,23 @@ class DataModule(BaseClass.BoundLogger):
 
     def setup_loader_inputs(self):
         '''additional input prepare for hidden input'''
-        self.setup_loader_inputs_hidden2()
+        self.setup_loader_inputs_hidden()
 
     def setup_loader_inputs_hidden(self):
-        '''additional input prepare for hidden input , load hidden data if needed'''
-        if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
-            return
-        hidden_max_date : int | Any = None
-        hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
-        for hidden_key in self.input_keys_hidden:
-            hidden_path = HiddenPath.from_key(hidden_key)
-            if hidden_key in hidden_input and hidden_input[hidden_key][0] == hidden_path.closest_hidden_model_date(self.model_date):
-                df = hidden_input[hidden_key][1]
-            else:
-                hidden_model_date , df = hidden_path.get_hidden_df(self.model_date , exact=False)
-                hidden_input[hidden_key] = (hidden_model_date , df)
-            hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
-
-            df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
-            df.columns = [f'{hidden_key}.{col}' for col in df.columns]
-            self.datas.x[hidden_key] = DataBlock.from_pandas(df).align_secid_date(self.datas.secid , self.datas.date)
-
-        assert self.datas.date[self.datas.date < self.next_model_date(self.model_date)][-1] <= hidden_max_date , \
-            (self.next_model_date(self.model_date) , hidden_max_date)
-        self.config.update_data_param(self.datas.x)
-
-    def setup_loader_inputs_hidden2(self):
         '''additional input prepare for hidden input , calculate hiddens and temporary store them'''
         if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
             return
         from src.res.model.model_module.application import ArchivedPredictorModel
         
-        for hidden_key in self.input_keys_hidden:
-            hidden_model = ArchivedPredictorModel.from_model_str(hidden_key)
-            assert hidden_model.model_dates.size > 0 , f'hidden model {hidden_key} has no model dates'
-            assert hidden_model.model_dates[0] <= self.model_date , f'hidden model {hidden_key} has no model date before {self.model_date}'
-            hidden_model_date = hidden_model.model_dates[hidden_model.model_dates <= self.model_date][-1]
-            hidden_block = hidden_model.hidden_block(self.y_date[0] , self.y_date[-1] , hidden_model_date)
-            self.datas.x[hidden_key] = hidden_block.align_secid_date(self.datas.secid , self.datas.date)
+        hd_dates = self.y_date[self.step_idx]
+
+        for hd_key in self.input_keys_hidden:
+            hd_model = ArchivedPredictorModel.from_model_str(hd_key)
+            assert hd_model.model_dates.size > 0 , f'hidden model {hd_key} has no model dates'
+            assert hd_model.model_dates[0] <= self.model_date , f'hidden model {hd_key} has no model date before {self.model_date}'
+            model_date = hd_model.model_dates[hd_model.model_dates <= self.model_date][-1]
+            bd_block = hd_model.hidden_block(hd_dates , model_date , align_secid = self.datas.secid , align_date = self.datas.date)
+            self.datas.x[hd_key] = bd_block
         self.config.update_data_param(self.datas.x)
     
     def setup_loader_create(self) -> None:
@@ -404,6 +385,8 @@ class DataModule(BaseClass.BoundLogger):
     def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
         datas = []
         for model_data_type , data in x.items():
+            if data[index0,index1].isnan().all():
+                self.logger.error(f'Get all nan in {model_data_type} at index {index0} , {index1}')
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)
             datas.append(data)

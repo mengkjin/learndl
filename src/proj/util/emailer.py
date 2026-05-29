@@ -7,44 +7,26 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Any , Literal
+from typing import Literal , Any
 
 from src.proj.env import MACHINE , Proj
 from src.proj.core import strPath
-from src.proj.log import Logger
+from src.proj.bases import BaseClass , BaseMeta
 
-class EmailSetting:
-    """Descriptor that reads a named field from merged server/machine email YAML."""
+EmailSettings : dict = {}
 
-    EmailSettings : dict = MACHINE.secret.get('accounts' , 'email')
-
-    def __init__(self , name : str , server : Literal['netease'] = 'netease'):
-        server_settings = self.EmailSettings.get(server , {})
-        machine_settings = self.EmailSettings.get(server , {}).get(MACHINE.name.lower() , {})
+def get_email_setting(name : str , server : Literal['netease'] = 'netease') -> Any:
+    if not EmailSettings:
+        email_accounts = MACHINE.secret.get('accounts' , 'email')
+        server_settings = email_accounts.get(server , {})
+        machine_settings = email_accounts.get(server , {}).get(MACHINE.name.lower() , {})
         settings = server_settings | machine_settings
-
-        self.name = name
-        self.server = server
-        self.value = settings.get(name.lower() , None)
-
-    def __get__(self , instance : Any , owner : Any) -> Any:
-        if self.name == 'smtp_port':
-            return 25 if MACHINE.platform_server else 465
-            raise Exception('smtp_port is not set and will use default port 465/587/25')
-        assert self.value is not None , f'{self.name} is not set in {self.server} email settings'
-        return self.value
-        
-
-class EmailMeta(type):
-    smtp_server = EmailSetting('smtp_server')
-    smtp_port = EmailSetting('smtp_port')
-    sender = EmailSetting('sender')
-    password = EmailSetting('password')
-
-    def __call__(cls , *args , **kwargs):
-        raise Exception('EmailMeta subclass is not meant to be instantiated')
-
-class Email(metaclass=EmailMeta):
+        EmailSettings.update(settings)
+    if name == 'smtp_port':
+        return 25 if MACHINE.platform_server else 465
+    assert name in EmailSettings , f'{name} is not set in email settings'
+    return EmailSettings.get(server , {}).get(name.lower() , None)
+class Email(BaseClass.BoundLogger, metaclass=BaseMeta.NoInstance):
     """
     Email class for sending email with attachment
     example:
@@ -52,6 +34,10 @@ class Email(metaclass=EmailMeta):
         Proj.States.email_attachments.append('path/to/attachment.txt')
         Email.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'test@example.com' , send_attachments = True , additional_attachments = ['path/to/additional.txt'])
     """
+    smtp_server : str = get_email_setting('smtp_server')
+    smtp_port : int = get_email_setting('smtp_port')
+    sender : str = get_email_setting('sender')
+    password : str = get_email_setting('password')
 
     @classmethod
     def recipient(cls , recipient : str | None = None):
@@ -116,9 +102,9 @@ class Email(metaclass=EmailMeta):
                 server.login(cls.sender, cls.password)
                 server.send_message(message , from_addr=cls.sender, to_addrs=cls.recipient(recipient))
             if confirmation_message:
-                Logger.success(f'Send email {confirmation_message}')
+                cls.logger.success(f'Send email {confirmation_message}')
         except Exception as e:
-            Logger.error(f'Error : sending email went wrong: {e}')
+            cls.logger.error(f'Error : sending email went wrong: {e}')
 
     @classmethod
     def send(cls , title : str  , 
@@ -130,7 +116,7 @@ class Email(metaclass=EmailMeta):
              confirmation_message = ''):
         
         if not MACHINE.emailable:
-           Logger.alert1(f'{MACHINE.name} is not available for email, skip sending email')
+           cls.logger.alert1(f'{MACHINE.name} is not available for email, skip sending email')
            return
 
         message = cls.message(title , body , recipient , attachments = attachments , project_attachments = project_attachments , title_prefix = title_prefix)
@@ -139,4 +125,4 @@ class Email(metaclass=EmailMeta):
     @classmethod
     def print_info(cls , server : Literal['netease'] = 'netease'):
         infos = {'server' : server , 'smtp_server' : cls.smtp_server , 'smtp_port' : cls.smtp_port , 'sender' : cls.sender , 'password' : cls.password}
-        Logger.stdout_pairs(infos , title = 'Email Settings:')
+        cls.logger.stdout_pairs(infos , title = 'Email Settings:')

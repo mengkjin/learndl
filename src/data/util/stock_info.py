@@ -33,7 +33,8 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     indus_data : pd.DataFrame
         Industry membership history: ``secid``, ``in_date``, ``indus``.
     """
-    def __init__(self) -> None:
+    def __init__(self , * , indent: int = 0 , vb_level: int = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiated = False
 
     def ensure_initiation(self):

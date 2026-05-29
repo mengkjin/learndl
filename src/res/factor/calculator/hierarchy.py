@@ -2,7 +2,7 @@ import pandas as pd
 
 from itertools import combinations
 from pathlib import Path
-from typing import Generator , Iterator , Type , Literal
+from typing import Generator , Iterator , Type , Literal , Any
 
 from .factor_calc import FactorCalculator
 
@@ -20,10 +20,10 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , * , vb_level : int | None = 1 , indent : int | None = 0):
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         if getattr(self, '_inited', False):
             return
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initialize()
         self._inited = True
         

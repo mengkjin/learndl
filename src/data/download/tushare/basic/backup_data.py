@@ -30,9 +30,6 @@ class TSBackUpDataTransform(BaseClass.BoundLogger):
 
     path_bak_data.mkdir(parents=True , exist_ok=True)
     path_bak_record.mkdir(parents=True , exist_ok=True)
-
-    def __init__(self , * , indent : int = 0 , vb_level : int = 1):
-        self.set_vb(vb_level , indent)
     
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""

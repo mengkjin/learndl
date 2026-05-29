@@ -17,7 +17,7 @@ from typing import Any , ClassVar , Callable , Literal
 from pathlib import Path
 from datetime import datetime
 import time
-from src.proj import PATH , Logger , Const
+from src.proj import PATH , Const , Logger
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache
 
@@ -295,7 +295,7 @@ class SessionControl:
         """set param inputs form"""
         from src.interactive.frontend import ParamInputsForm
         if not isinstance(param_inputs_form, ParamInputsForm):
-            Logger.error(f"param inputs form is not a ParamInputsForm: {param_inputs_form.__class__.__name__}")
+            Logger.error(f"param inputs form is not a ParamInputsForm: {param_inputs_form.__class__.__name__}" , indent = 1 , vb_level = 2)
             raise ValueError("param inputs form is not a ParamInputsForm")
         self.param_inputs_form = param_inputs_form
    
@@ -448,7 +448,7 @@ class SessionControl:
 
     def click_file_preview(self , path : Path):
         """click file previewer"""
-        Logger.stdout('click file previewer')
+        Logger.stdout('click file previewer' , indent = 1 , vb_level = 2)
         if self.running_report_file_previewer == path:
             self.running_report_file_previewer = None
         else:   

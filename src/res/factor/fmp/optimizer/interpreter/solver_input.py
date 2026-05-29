@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from src.proj import Logger
+from src.proj import BaseClass
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
 
 __all__ = ['SolverInput' , 'Relaxer' , 'SolveCond' , 'SolveVars']
@@ -120,23 +120,31 @@ class SolverInput:
             short_con = ShortConstraint(0.1 , 0.002) ,
         )
     
-class Relaxer:
-    def __init__(self) -> None:
-        self.queue = ['conflicted_lin_con',
-                      'free_tracking_error' ,
-                      'double_turnover' , 
-                      'expand_portional_lin_con' ,
-                      'expand_numerical_lin_con' ,
-                      'free_turnover']
+class Relaxer(BaseClass.BoundLogger):
+    """Relaxer for solver input"""
+
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        self.relax_queue : list[str] = [
+            'conflicted_lin_con',
+            'free_tracking_error',
+            'double_turnover',
+            'expand_portional_lin_con',
+            'expand_numerical_lin_con',
+            'free_turnover',
+        ]
+        
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(queue={str(self.queue)})'
-    def __bool__(self): return bool(self.queue)
-    def __call__(self, solver_input): return self.relax(solver_input)
+        return f'{self.__class__.__name__}(queue={str(self.relax_queue)})'
+    def __bool__(self): 
+        return bool(self.relax_queue)
+    def __call__(self, solver_input): 
+        return self.relax(solver_input)
         
     def relax(self , solver_input : SolverInput):
         relaxed = False
         while self and not relaxed:
-            method = getattr(self , self.queue.pop(0))
+            method = getattr(self , self.relax_queue.pop(0))
             relaxed = method(bnd_con = solver_input.bnd_con ,
                              lin_con = solver_input.lin_con ,
                              turn_con = solver_input.turn_con ,
@@ -150,7 +158,7 @@ class Relaxer:
         for dup_rows in dup_groups:
             if lin_con.lb[dup_rows].max() <= lin_con.ub[dup_rows].min(): 
                 continue
-            Logger.stdout('Deal with conflicted duplicated linear constraints!')
+            self.logger.stdout('Deal with conflicted duplicated linear constraints!')
             fx_b = lin_con.lb[dup_rows].max()
             lin_con.lb[dup_rows] = fx_b - 1e-6
             lin_con.ub[dup_rows] = fx_b + 1e-6
@@ -160,26 +168,26 @@ class Relaxer:
         rows = lin_con.A.min(axis = 1) >= 0 # all positive rows
         if np.any(lin_con.ub[rows] < lin_con.A[rows].dot(bnd_con.lb)):
             # bnd lower bound > lin upper bound
-            Logger.stdout('Lift up conflicted linear upper bound to weight bound!')
+            self.logger.stdout('Lift up conflicted linear upper bound to weight bound!')
             lin_con.ub[rows] = np.maximum(lin_con.ub[rows] , lin_con.A[rows].dot(bnd_con.lb)) 
             relaxed = True
 
         if np.any(lin_con.lb[rows] > lin_con.A[rows].dot(bnd_con.ub)):
             # bnd upper bound < lin lower bound
-            Logger.stdout('Draw down conflicted linear lower bound to weight bound!')
+            self.logger.stdout('Draw down conflicted linear lower bound to weight bound!')
             lin_con.lb[rows] = np.minimum(lin_con.lb[rows] , lin_con.A[rows].dot(bnd_con.ub)) 
             relaxed = True
 
         rows = lin_con.A.max(axis = 1) <= 0 # all negatvie rows
         if np.any(lin_con.ub[rows] < lin_con.A[rows].dot(bnd_con.ub)):
             # bnd lower bound > lin upper bound
-            Logger.stdout('Lift up conflicted linear upper bound to weight bound!')
+            self.logger.stdout('Lift up conflicted linear upper bound to weight bound!')
             lin_con.ub[rows] = np.maximum(lin_con.ub[rows] , lin_con.A[rows].dot(bnd_con.ub))
             relaxed = True
 
         if np.any(lin_con.lb[rows] > lin_con.A[rows].dot(bnd_con.lb)):
             # bnd upper bound < lin lower bound
-            Logger.stdout('Draw down conflicted linear lower bound to weight bound!')
+            self.logger.stdout('Draw down conflicted linear lower bound to weight bound!')
             lin_con.lb[rows] = np.minimum(lin_con.lb[rows] , lin_con.A[rows].dot(bnd_con.lb))
             relaxed = True
 
@@ -189,7 +197,7 @@ class Relaxer:
         relaxed = False
         if cov_con.te is not None:
             cov_con.te = None
-            Logger.stdout(f'Free turnover constraint!')
+            self.logger.stdout(f'Free turnover constraint!')
             relaxed = True
         return relaxed
     
@@ -197,7 +205,7 @@ class Relaxer:
         relaxed = False
         if turn_con.dbl is not None:
             turn_con.dbl = turn_con.dbl * 2
-            Logger.stdout(f'Double turnover constraint to {turn_con.dbl :.2%}!')
+            self.logger.stdout(f'Double turnover constraint to {turn_con.dbl :.2%}!')
             relaxed = True
         return relaxed
     
@@ -207,7 +215,7 @@ class Relaxer:
         rng = (lin_con.ub - lin_con.lb) * 0.5
         rows = ((lin_con.A.min(axis = 1) >= 0) + (lin_con.A.max(axis = 1) <= 0)) * (lin_con.type == 'ra')
         if rows.any() > 0:
-            Logger.stdout(f'Expand {rows.sum():d} portional constraint 2 times!')
+            self.logger.stdout(f'Expand {rows.sum():d} portional constraint 2 times!')
             lin_con.ub[rows] = lin_con.ub[rows] + rng[rows]
             lin_con.lb[rows] = lin_con.lb[rows] - rng[rows]
             relaxed = True
@@ -220,7 +228,7 @@ class Relaxer:
         rng = (lin_con.ub - lin_con.lb) * (lin_con.type == 'ra') * 0.5
         rows = (lin_con.A.min(axis = 1) < 0) * (lin_con.A.max(axis = 1) > 0) * (lin_con.type == 'ra')
         if rows.any() > 0:
-            Logger.stdout(f'Expand {rows.sum():d} numerial constraint 2 times!')
+            self.logger.stdout(f'Expand {rows.sum():d} numerial constraint 2 times!')
             lin_con.ub[rows] = lin_con.ub[rows] + rng[rows]
             lin_con.lb[rows] = lin_con.lb[rows] - rng[rows]
             relaxed = True
@@ -231,7 +239,7 @@ class Relaxer:
         relaxed = False
         if turn_con.dbl is not None:
             turn_con.dbl = None
-            Logger.stdout(f'Free turnover constraint!')
+            self.logger.stdout(f'Free turnover constraint!')
             relaxed = True
         return relaxed
 

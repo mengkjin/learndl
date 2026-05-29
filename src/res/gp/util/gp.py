@@ -24,8 +24,8 @@ class GeneticProgramming(BaseClass.BoundLogger):
         return cls._instance
 
     def __init__(self , job_id : int | None = None , train : bool = True , start_iter = 0 , start_gen = 0 , 
-                 test_code : bool = False , timer = True , * , indent : int = 0 , vb_level : int = 2 , **kwargs):
-        self.set_vb(vb_level , indent)
+                 test_code : bool = False , timer = True , * , indent : int = 0 , vb_level : Any = 2 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , indent = self.indent , vb_level = self.vb_level , **kwargs)
         self.status    = gpStatus(self.param.n_iter , self.param.n_gen , start_iter , start_gen , self.param.train , indent = self.indent , vb_level = self.vb_level)
         self.memory    = MemoryManager(self.param.device , indent = self.indent , vb_level = self.vb_level)
@@ -337,7 +337,7 @@ class GeneticProgramming(BaseClass.BoundLogger):
         output:
             gp:             GeneticProgramming object
         """
-        with Proj.vb.WithVB('max' if test_code else vb):
+        with Proj.vb.temporary_vb('max' if test_code else vb):
             gp = cls(job_id , start_iter = start_iter , start_gen = start_gen , test_code = test_code , timer = timer , vb_level = vb_level , **kwargs)
             gp.gp()
         return gp

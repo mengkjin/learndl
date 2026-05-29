@@ -27,8 +27,9 @@ class PeadCalculator(BaseClass.BoundLogger):
     running_days = 20
     _cache : dict[int , PeadCalculator] = {}
 
-    def __init__(self , date : int):
+    def __init__(self , date : int , **kwargs):
         assert date > 0 , f'date must be positive integer , got {date}'
+        super().__init__(**kwargs)
         self.date = date
         self.lock = Lock()
         self.calc_ann_cal()

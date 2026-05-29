@@ -10,11 +10,11 @@ basic:
 # special verbosity settings for special purposes , use Proj.vb.get('key') to get the verbosity
 special:
   callback: 
-    default: never
+    default: max
     debug: always
   proxy:
-    default: never
+    default: max
     debug: always
   crawler:
-    default: always
+    default: max
     debug: always

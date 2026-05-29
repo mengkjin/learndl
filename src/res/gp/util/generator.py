@@ -26,6 +26,7 @@ class gpGenerator(BaseClass.BoundLogger):
                  halflife : int = 20 , 
                  min_coverage :float = 0.1 , 
                  **kwargs) -> None:
+        super().__init__(**kwargs)
         with Proj.silence:
             self.gp  = GeneticProgramming(job_id = job_id , train = False , **kwargs).load_data().preparation()
             self.process_key = process_key

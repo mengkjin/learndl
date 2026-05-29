@@ -10,4 +10,4 @@ from . import db as DB
 
 from .cal import CALENDAR , TradeDate , Dates , BJ_TZ
 
-from .bases import BaseMeta , BaseClass
+from .bases import *

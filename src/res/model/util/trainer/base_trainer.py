@@ -70,7 +70,7 @@ class BaseTrainer(BasePipeline):
                  use_data : Literal['fit','predict','both'] = 'fit' , 
                  indent : int = 0 , vb_level : Any = 1 , **kwargs):
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
         self._use_data : Literal['fit','both'] = use_data
         self._kwargs = kwargs

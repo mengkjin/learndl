@@ -204,6 +204,9 @@ class _PipelineMeta(ABCMeta):
 
 class BasePipeline(_Pipeline, BaseClass.BoundLogger, BaseClass.CacheProps, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        
     @cached_property
     def all_hooks(self):
         return frozenset([hook for hook in dir(self) if hook.startswith('on_')])

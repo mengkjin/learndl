@@ -64,4 +64,4 @@ class PreProcessorTask(BaseClass.BoundLogger):
         for key in keys:
             proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)
             proc.update(force_update = force_update)
-            cls.logger.divider(vb = 1)
+            cls.logger.divider(vb = 3)

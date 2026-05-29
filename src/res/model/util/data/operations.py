@@ -3,11 +3,12 @@ from __future__ import annotations
 import torch
 import numpy as np
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any , Callable , Literal
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
-from src.proj import BaseClass
+from src.proj import Logger
 from src.func.tensor import nanmedian , standardize
 from src.data import DataBlockNorm
 from src.res.model.util.config import ModelConfig
@@ -26,6 +27,9 @@ class Prenormer:
             
     def __bool__(self):
         return self.divlast or self.histnorm or self.channelnorm
+
+    def __call__(self , x : torch.Tensor , histnorm : DataBlockNorm | Any = None) -> torch.Tensor:
+        return self.prenorm(x , histnorm)
 
     def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | Any = None) -> torch.Tensor:
         """
@@ -61,16 +65,25 @@ class Prenormer:
         )
 
 
-class PrenormOperator(BaseClass.BoundLogger):
+class PrenormOperator:
     '''prenorm operator for data module datas'''
     def __init__(self, config: ModelConfig , histnorms : dict[str, DataBlockNorm] | None = None):
         self.config = config
         self.histnorms = histnorms or {}
         
+        
         self.prenorms = {name: Prenormer.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
-        for name , prenorm in self.prenorms.items():
-            if prenorm:
-                self.logger.success(f'{name} {prenorm} initialized' , vb_level = 'max')
+        [Logger.success(f'{name} {prenorm} initialized' , vb_level = 'max') for name , prenorm in self.prenorms.items() if prenorm]
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(prenorms={self.prenorms})'
+
+    def __getitem__(self , key : str) -> Prenormer:
+        return self.prenorms.get(key , self.empty_prenormer)
+
+    @cached_property
+    def empty_prenormer(self) -> Prenormer:
+        return Prenormer(name = 'empty')
 
     @property
     def input_keys(self) -> list[str]:
@@ -82,10 +95,7 @@ class PrenormOperator(BaseClass.BoundLogger):
         1.divlast: divide by the last value, get seq-mormalized x
         2.histnorm: normalized by history avg and std
         """
-        if key in self.histnorms:
-            return self.prenorms[key].prenorm(x , self.histnorms.get(key , None))
-        else:
-            return x
+        return self[key](x , self.histnorms.get(key , None))
 
 class DataOperator:
     '''operations for data module datas'''

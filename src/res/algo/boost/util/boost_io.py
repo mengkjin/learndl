@@ -15,7 +15,7 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from src.proj import BaseClass
+from src.proj import Logger
 from src.func import match_values , index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
 
@@ -67,7 +67,7 @@ class BoostDataset:
     def nfeat(self): return self.x.shape[-1]
 
 @dataclass
-class BoostOutput(BaseClass.BoundLogger):
+class BoostOutput:
     """Container for boost model predictions.
 
     Attributes:
@@ -109,7 +109,7 @@ class BoostOutput(BaseClass.BoundLogger):
         return ic_2d(self.to_2d() , self.label , 0)
 
 @dataclass
-class BoostInput(BaseClass.BoundLogger):
+class BoostInput:
     """Aligned 3-D tensor container for boost model input.
 
     Attributes:
@@ -334,7 +334,7 @@ class BoostInput(BaseClass.BoundLogger):
         if label_col is None:
             label_col = data.columns.to_list()[-1]
         if not label_col.lower().startswith(('ret' , 'y' , 'label' , 'rtn' , 'res' , 'std')):
-            cls.logger.warning(f'using {label_col} as label column, not recommended')
+            Logger.warning(f'using {label_col} as label column, not recommended')
         xarr = xr.Dataset.from_dataframe(data.drop(columns=[label_col]))
         yarr = xr.Dataset.from_dataframe(data[[label_col]])
 

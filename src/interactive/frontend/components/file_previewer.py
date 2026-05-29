@@ -11,7 +11,7 @@ import streamlit as st
 import base64
 import pandas as pd
 
-from src.proj.core import strPath
+from src.proj import BaseType
 
 class FilePreviewer:
     """Multi-format file viewer that renders file content inside a Streamlit container.
@@ -19,7 +19,7 @@ class FilePreviewer:
     Supported formats: ``.txt``, ``.csv``, ``.json``, ``.log``, ``.py`` (code blocks),
     ``.html`` (iframe), ``.pdf`` (base64 iframe), ``.xlsx`` / ``.xls`` (dataframe).
     """
-    def __init__(self , path : strPath | None = None , height : int | None = 600) -> None:
+    def __init__(self , path : BaseType.strPath | None = None , height : int | None = 600) -> None:
         self.path = Path(path) if path is not None else None
         self.height = height or 600
 

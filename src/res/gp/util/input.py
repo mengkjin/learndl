@@ -211,8 +211,8 @@ def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_
 class gpInput(BaseClass.BoundLogger):
     """遗传规划输入,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
     def __init__(self , param : gpParameters , status : gpStatus , recorder : gpRecorder , * ,
-                 indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+                 indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.param     = param
         self.status    = status
         self.recorder  = recorder

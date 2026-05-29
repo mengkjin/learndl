@@ -10,16 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Callable , Literal , Sequence
 
-from src.proj.env import PATH
-from src.proj.env import Proj
-from src.proj.core import Duration , stdout , stderr , FormatStr , Once
+from src.proj.env import PATH , Proj
+from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silence
 
 from .display import Display
 from .logfile import LogFile
 
 LOG_LEVEL_TYPE = Literal['remark' , 'highlight' , 'debug' , 'info' , 'warning' , 'error' , 'critical']
 LOG_LEVELS : list[LOG_LEVEL_TYPE] = ['remark' , 'highlight' , 'info' , 'debug' , 'warning' , 'error' , 'critical']
-LOG_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
+STDERR_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
     'remark' : {'color' : 'lightblue' , 'level_prefix' : {'level' : 'REMARK' , 'color' : 'white' , 'bg_color' : 'lightblue'} , 'bold' : True},
     'debug' : {'color' : 'gray' , 'level_prefix' : {'level' : 'DEBUG' , 'color' : 'white' , 'bg_color' : 'gray'} , 'bold' : True},
     'info' : {'color' : 'lightgreen' , 'level_prefix' : {'level' : 'INFO' , 'color' : 'black' , 'bg_color' : 'lightgreen'} , 'bold' : True},
@@ -43,10 +42,6 @@ STDOUT_PALETTE : dict[str, dict[str, Any]] = {
 
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 ENTRY_POINT = Path(sys.argv[0]).stem
-
-WithVbLevel = Proj.vb.WithVbLevel
-WithVB = Proj.vb.WithVB
-verbose = Proj.verbose
 
 def find_calling_module():
     """Find the calling module"""
@@ -73,7 +68,9 @@ def new_stdout(
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
-    with WithVbLevel(vb_level):
+    if Silence.silent or not Proj.verbose(vb_level):
+        return FormatStr.empty()
+    with Proj.vb.record_vb_level(vb_level):
         msg = ' '.join([str(s) for s in args])
         if arg_prefix:
             msg = f'{arg_prefix}{msg}'
@@ -81,28 +78,27 @@ def new_stdout(
             msg = ' '.join(prefixes) + ' ' + msg
         if Proj.debug['show_vb_level']:
             msg = f'{vb_level} | {msg}'
-        fstr = stdout(msg , indent = indent , write = verbose(vb_level), **kwargs)
-    if to_log_file:
-        add_to_log_file(fstr.unformatted())
+        fstr = stdout(msg , indent = indent , **kwargs)
+        if to_log_file:
+            add_to_log_file(fstr.unformatted())
     return fstr
 
 def new_stderr(
-    *args , indent : int = 0 , vb_level : Any = 1 , 
+    *args , indent : int = 0 , vb_level : Any = 0 , 
     arg_prefix : str | None = None , prefixes : list[str] | None = None , **kwargs):
     """
     Like ``new_stdout`` but to stderr; always appends unformatted text to ``LOG_FILE``.
     Use ``vb_level`` to control the verbosity of the message.
     kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
-    with WithVbLevel(vb_level):
-        msg = ' '.join([str(s) for s in args])
-        if arg_prefix:
-            msg = f'{arg_prefix}{msg}'
-        if prefixes:
-            msg = ' '.join(prefixes) + ' ' + msg
-        if Proj.debug['show_vb_level']:
-            msg = f'{vb_level} | {msg}'
-        fstr = stderr(msg , indent = indent , write = verbose(vb_level), **kwargs)
+    if Silence.silent:
+        return FormatStr.empty()
+    msg = ' '.join([str(s) for s in args])
+    if arg_prefix:
+        msg = f'{arg_prefix}{msg}'
+    if prefixes:
+        msg = ' '.join(prefixes) + ' ' + msg
+    fstr = stderr(msg , indent = 0 , **kwargs)
     add_to_log_file(fstr.unformatted())
     return fstr
 
@@ -302,46 +298,46 @@ class Logger:
         new_stdout(*args , **kwargs)
 
     @classmethod
-    def remark(cls , *args , indent : int = 0 , vb_level : Any = 2 , **kwargs):
+    def remark(cls , *args , **kwargs):
         """custom lightblue stderr"""
-        kwargs = LOG_PALETTE['remark'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['remark'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
-    def debug(cls , *args , indent : int = 0 , vb_level : Any = 2 , **kwargs):
+    def debug(cls , *args , **kwargs):
         """Debug level stderr"""
-        kwargs = LOG_PALETTE['debug'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['debug'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
-    def info(cls , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def info(cls , *args , **kwargs):
         """Info level stderr"""
-        kwargs = LOG_PALETTE['info'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['info'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
-    def highlight(cls , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def highlight(cls , *args , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        kwargs = LOG_PALETTE['highlight'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['highlight'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
-    def warning(cls , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def warning(cls , *args , **kwargs):
         """Warning level stderr"""
-        kwargs = LOG_PALETTE['warning'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['warning'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
-    def error(cls , *args , indent : int = 0 , vb_level : Any = 0 , **kwargs):
+    def error(cls , *args , **kwargs):
         """Error level stderr"""
-        kwargs = LOG_PALETTE['error'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['error'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
-    def critical(cls , *args , indent : int = 0 , vb_level : Any = 0 , **kwargs):
+    def critical(cls , *args , **kwargs):
         """Critical level stderr"""
-        kwargs = LOG_PALETTE['critical'] | kwargs
-        new_stderr(*args , indent = indent , vb_level = vb_level , **kwargs)
+        kwargs = STDERR_PALETTE['critical'] | kwargs
+        new_stderr(*args , **kwargs)
 
     @classmethod
     def only_once(cls , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
@@ -384,7 +380,7 @@ class Logger:
             return ''
 
         with cls.Paragraph('Final Conclusions' , 3):
-            for level , palette in LOG_PALETTE.items():
+            for level , palette in STDERR_PALETTE.items():
                 if not cls._conclusions[level]:
                     continue
                 new_stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = palette['color'] , vb_level = 0)
@@ -416,7 +412,7 @@ class Logger:
     @classmethod
     def test_logger(cls):
         import tqdm , pandas as pd , matplotlib.pyplot as plt
-        with WithVB('max'):
+        with Proj.vb.temporary_vb('max'):
             with cls.Paragraph('ParagraphI' , 1):
                 cls.stdout('This is a stdout message')
                 cls.stderr('This is a stderr message')
@@ -466,11 +462,11 @@ class Logger:
         """
         display the object
         """
-        if Proj.silence.silent or not verbose(vb_level):
+        if Silence.silent or not Proj.verbose(vb_level):
             return
         if caption is not None:
             cls.caption(caption , vb_level = vb_level)
-        with Proj.vb.WithVbLevel(vb_level):
+        with Proj.vb.record_vb_level(vb_level):
             cls._displayer(obj , **kwargs)
 
     @classmethod

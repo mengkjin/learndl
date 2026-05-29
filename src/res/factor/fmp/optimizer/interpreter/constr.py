@@ -21,11 +21,14 @@ class LinearConstraint:
     def __post_init__(self):
         self.check()
 
-    def __bool__(self): return len(self) > 0
-    def __len__(self): return len(self.A)
+    def __bool__(self): 
+        return len(self) > 0
+    def __len__(self): 
+        return len(self.A)
 
     @property
-    def empty(self): return len(self) == 0
+    def empty(self): 
+        return len(self) == 0
 
     def check(self , N : int | None = None):
         if N is None:

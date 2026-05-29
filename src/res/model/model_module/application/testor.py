@@ -12,7 +12,8 @@ class ModelTestor(BaseClass.BoundLogger):
         testor.try_forward()
         testor.try_metrics()
     """
-    def __init__(self , module = 'tra_lstm' , data_types = 'day') -> None:
+    def __init__(self , module = 'tra_lstm' , data_types = 'day' , **kwargs) -> None:
+        super().__init__(**kwargs)
         override_cfg = {
             'env.short_test' : True ,
             'input.type' : 'data' ,

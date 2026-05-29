@@ -5,7 +5,6 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any
 
-from src.proj import BaseClass
 from src.res.algo.nn.optimizer import sam
 
 from src.res.model.util.config import ModelConfig
@@ -16,7 +15,7 @@ __all__ = ['Optimizer']
 NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False
 
-class Optimizer(BaseClass.BoundLogger):
+class Optimizer:
     '''specify trainer optimizer and scheduler'''
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 
@@ -29,10 +28,8 @@ class Optimizer(BaseClass.BoundLogger):
         add_opt_param : dict | None = None , 
         add_lr_param : dict | None = None , 
         add_shd_param : dict | None = None ,
-        trainer = None , * ,
-        indent : int = 0 , vb_level : int = 1 ,
+        trainer = None ,
     ) -> None:
-        self.set_vb(vb_level , indent)
         self.net = net
         self.config = config
         self.trainer = trainer
@@ -122,17 +119,18 @@ class Optimizer(BaseClass.BoundLogger):
                 break
         if nan_grads:
             from src import api
+            from src.proj import Logger
             setattr(api , 'mod', self.trainer)
-            self.logger.stdout('total loss has nan gradients: ' , metric.total_loss)
+            Logger.stdout('total loss has nan gradients: ' , metric.total_loss)
 
             for key , loss in metric.losses.items():
-                self.logger.stdout(key , loss)
+                Logger.stdout(key , loss)
                 self.optimizer.zero_grad()
                 # if loss.grad_fn is None: continue
                 loss.backward(retain_graph = True)
                 for name , param in self.net.named_parameters():
                     if param.grad is not None and torch.isnan(param.grad).any():
-                        self.logger.stdout(name , param , param.grad)
+                        Logger.stdout(name , param , param.grad)
 
             raise KeyError
 

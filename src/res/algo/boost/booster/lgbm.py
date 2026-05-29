@@ -123,7 +123,10 @@ class LgbmPlot(BaseClass.BoundLogger):
         sdt         — single-distillation tree (SDT) visualisation.
         pdp         — partial dependence plots for each feature.
     """
-    def __init__(self , lgbm : Lgbm , plot_path : Path | None = PLOT_PATH) -> None:
+    def __init__(
+        self , lgbm : Lgbm , plot_path : Path | None = PLOT_PATH , **kwargs
+    ):
+        super().__init__(**kwargs)
         self.lgbm = lgbm
         self.plot_path = plot_path
         if self.plot_path is not None: 

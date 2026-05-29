@@ -31,8 +31,9 @@ class JSDataUpdater(BaseClass.BoundLogger):
     UPDATER_TITLE       = 'DB_updater'
     UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MACHINE.platform_server else [PATH.updater]
 
-    def __init__(self) -> None:
+    def __init__(self , * , indent: int = 0 , vb_level: int = 1 , **kwargs):
         """Create a new timestamped tar archive path and initialise result tracking lists."""
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.Updater = self.get_new_updater()
         self.Success = []
         self.Failed  = []

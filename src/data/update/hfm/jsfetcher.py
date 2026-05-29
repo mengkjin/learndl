@@ -19,7 +19,7 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal
 
-from src.proj import PATH , MACHINE , CALENDAR , DB , BaseClass
+from src.proj import PATH , MACHINE , CALENDAR , DB , BaseClass , Logger
 from src.data.util import (
     secid_adjust , col_reform , row_filter , adjust_precision , 
     trade_min_reform , trade_min_fillna
@@ -34,7 +34,7 @@ class FailedData:
         return self
     
 @dataclass
-class JSFetcher(BaseClass.BoundLogger):
+class JSFetcher:
     """
     Callable fetcher for a single ``(db_src, db_key)`` combination.
 
@@ -320,7 +320,7 @@ class JSFetcher(BaseClass.BoundLogger):
         paths_not_exists = {k:p.exists()==0 for k,p in paths.items()}
         if any(paths_not_exists.values()): 
             # something wrong
-            cls.logger.error(f'Something wrong at {date} on {cls.__name__}.trade_day')
+            Logger.error(f'Something wrong at {date} on {cls.__name__}.trade_day' , indent = 1 , vb_level = 2)
             return FailedData('day' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)

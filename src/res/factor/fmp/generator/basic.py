@@ -5,10 +5,10 @@ from abc import abstractmethod
 from functools import cached_property
 from typing import Any
 
-from src.proj import Const , BaseClass
+from src.proj import Const , Logger
 from ...util import Port , AlphaModel , AlphaScreener , Amodel , AlphaComposite , PortCreator , PortCreateResult
 
-class BasicCreatorConfig(BaseClass.BoundLogger):
+class BasicCreatorConfig:
     '''
     Config for Generator of Basic Portfolio
     '''
@@ -41,8 +41,7 @@ class BasicCreatorConfig(BaseClass.BoundLogger):
         return f'{self.__class__.__name__}({", ".join([f"{k}={getattr(self, k)}" for k in self.slots])})'
 
     @classmethod
-    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
-        cls.SetClassVB(vb_level , indent)
+    def init_from(cls , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.slots and v is not None}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.slots}
         if use_kwargs and drop_kwargs: 
@@ -53,7 +52,7 @@ class BasicCreatorConfig(BaseClass.BoundLogger):
             kwargs_str = f'dropped kwargs: {drop_kwargs}'
         else:
             kwargs_str = 'no kwargs used'
-        cls.logger.stdout(f'init_from: {kwargs_str}')
+        Logger.stdout(f'init_from: {kwargs_str}' , indent = 1 , vb_level = 3)
         return cls(**use_kwargs)
 
     @cached_property

@@ -101,7 +101,7 @@ def parallel(
                     if func_call.key is not None:
                         result[func_call.key] = returned
         finally:
-            MPOutputCatcher.merge_into_html(mp_run_id , keep_on_error=keep_mp_output_on_error)
+            MPOutputCatcher.merge_into_html(mp_run_id , keep_on_error=keep_mp_output_on_error , indent=indent)
     return result
 
 class FuncCall:

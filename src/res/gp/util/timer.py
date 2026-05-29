@@ -10,8 +10,9 @@ from src.res.gp.func import primas
 from .memory import MemoryManager
 
 class AccTimer(BaseClass.BoundLogger):
-    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , *, indent : int = 1 , vb_level : Any = 2 , memory_check = False):
-        self.set_vb(vb_level , indent)
+    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , * , 
+        indent : int = 1 , vb_level : Any = 2 , memory_check = False , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.key = key
         self.title = title.title()
         self.time_costs : list[float] = []
@@ -84,7 +85,7 @@ class gpTimer(BaseClass.BoundLogger):
         return cls._instance
 
     def __init__(self , record = False , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(record)
 
     @property

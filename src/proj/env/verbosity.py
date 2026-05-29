@@ -1,48 +1,17 @@
 """Global verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers."""
 from __future__ import annotations
 
+import numpy as np
+from contextlib import contextmanager
 from functools import cached_property
 from typing import Any , Literal
+
 from src.proj.core import stderr , SingletonMeta
 
 from .debug_mode import DebugMode
 from .machine import MACHINE
 
 __all__ = ['Verbosity']
-
-class WithVbLevel:
-    """
-    Context manager: set ``VB.vb_level`` for the block.
-    Set temporary per-thread logical level used by ``Logger`` wrappers.
-    """
-        
-
-    def __init__(self , vb_level : int | None | Literal['max','min','never','always'] | Any):
-        self.VB = Verbosity()
-        self.vb_level = self.VB(vb_level)
-
-    def __enter__(self):
-        self.VB.vb_level = self.vb_level
-        return self
-
-    def __exit__(self , exc_type , exc_value , exc_traceback):
-        self.VB.vb_level = None
-
-class WithVB:
-    """Context manager: temporarily replace global ``vb`` and restore on exit."""
-
-    def __init__(self , vb : int | None | Literal['max','min','never','always'] | Any):
-        self.VB = Verbosity()
-        self.vb = self.VB(vb)
-        self.vb_prev : int | None = None
-
-    def __enter__(self):
-        self.vb_prev = self.VB.vb
-        self.VB.set_vb(self.vb)
-        return self
-
-    def __exit__(self , exc_type , exc_value , exc_traceback):
-        self.VB.set_vb(self.vb_prev)
 
 class Verbosity(metaclass=SingletonMeta):
     """
@@ -52,10 +21,13 @@ class Verbosity(metaclass=SingletonMeta):
     
     - ``vb``: global verbosity level
     - ``vb_level``: per-call verbosity level
-    - ``WithVbLevel``: context manager to temporarily set ``vb_level``
-    - ``WithVB``: context manager to temporarily set ``vb``
     - ``ignore``: check if output at a given level should be suppressed
     - ``is_max_level``: check if ``vb`` is at or above ``max``
+
+    context managers:
+        - ``temporary_vb``: temporarily set the vb
+        - ``record_vb_level``: record the vb_level
+        - ``subprocess_vb``: temporarily set the additive vb_level and indent for subprocess
     
     """
     max = MACHINE.preference('verbosity' , 'basic/vb_max' , default = 10)
@@ -64,9 +36,6 @@ class Verbosity(metaclass=SingletonMeta):
     always = MACHINE.preference('verbosity' , 'basic/vb_always' , default = -99)
     
     assert never > max > min > always , (never , max , min , always)
-
-    WithVbLevel = WithVbLevel
-    WithVB = WithVB
         
     def __repr__(self):
         return f'{self.vb}'
@@ -100,10 +69,30 @@ class Verbosity(metaclass=SingletonMeta):
             self._vb = MACHINE.preference('verbosity' , 'basic/vb' , default = 1)
         return self._vb
 
-    @cached_property
+    @property
     def vb_level(self) -> int | None:
-        """Per-context override set by ``WithVbLevel``; ``None`` means use ``vb`` only."""
-        return None
+        """Per-context override set by ``RecordVbLevel``; ``None`` means use ``vb`` only."""
+        if not hasattr(self , '_vb_level'):
+            self._vb_level = None
+        return self._vb_level
+
+    @property
+    def additive_vbs(self) -> np.ndarray:
+        """Additive vbs for subprocess"""
+        if not hasattr(self , '_additive_vbs'):
+            self._additive_vbs : list[np.ndarray] = []
+        value : np.ndarray | Any = sum(self._additive_vbs) if self._additive_vbs else np.array([0 , 0])
+        return value
+
+    @property
+    def add_vb_level(self) -> int:
+        """Add vb_level for subprocess"""
+        return self.additive_vbs[0]
+
+    @property
+    def add_indent(self) -> int:
+        """Add indent for subprocess"""
+        return self.additive_vbs[1]
 
     def set_vb(self , value : int | None = None):
         """Persist new global ``vb``; no-op if ``value`` is ``None``."""
@@ -137,6 +126,39 @@ class Verbosity(metaclass=SingletonMeta):
         if Proj.debug:
             value = MACHINE.preference('verbosity' , f'special/{key}/debug')
         return value
+
+    @contextmanager
+    def record_vb_level(self , vb_level : int | Literal['max','min','never','always'] | Any):
+        """Context manager: Record the vb_level"""
+        _ = self.vb_level
+        old_vb_level = self._vb_level
+        try:
+            self._vb_level = self(vb_level)
+            yield
+        finally:
+            self._vb_level = old_vb_level
+
+    @contextmanager
+    def temporary_vb(self, vb: int | None | Literal['max', 'min', 'never', 'always'] | Any):
+        """Context manager: Temporarily set the vb"""
+        _ = self.vb
+        old_vb = self._vb
+        try:
+            self.set_vb(self(vb))
+            yield
+        finally:
+            self.set_vb(old_vb)
+
+    @contextmanager
+    def subprocess_vb(self , vb : int = 0 , idt : int = 0):
+        """Context manager: Temporarily set the add_vb_level (vb) and add_indent (idt) for subprocess"""
+        _ = self.additive_vbs
+        add_value = np.array([vb , idt])
+        try:
+            self._additive_vbs.append(add_value)
+            yield
+        finally:
+            self._additive_vbs.remove(add_value)
 
     def __eq__(self , other : int):
         return self.vb == other

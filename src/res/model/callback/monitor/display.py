@@ -63,7 +63,7 @@ class StatusDisplay(BaseCallBack):
         if not self.display_progress:
             return
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
-            self.logger.stdout(self.texts.progress , no_prefix = True)
+            self.logger.stdout(self.texts.progress , add_prefix = False)
         else:
             self.logger.log_only(self.texts.progress)
 
@@ -73,7 +73,7 @@ class StatusDisplay(BaseCallBack):
     def on_fit_epoch_end(self):
         for event in self.status.current.events: 
             if Proj.verbose(event.vb_level) and (Proj.vb.is_max_level or self.status.total_models <= self.config.model_num):
-                self.logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , no_prefix = True)
+                self.logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , add_prefix = False)
             else:
                 self.logger.log_only(f'Epoch Event : {event.info}')
     

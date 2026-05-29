@@ -17,9 +17,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import PATH , CALENDAR , DB , BaseClass
-from src.proj.core import strPath
-from src.proj.util import properties , torch_load
+from src.proj import PATH , CALENDAR , DB , Logger , BaseProperty , BaseType
+from src.proj.util import torch_load
 from src.func import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice
 
 from .nd import NdData
@@ -60,7 +59,7 @@ def data_type_alias(key : str) -> list[str]:
     assert alias[-1] == key , f'{alias[-1]} != {key}'
     return alias
 
-def save_dict(data : dict , file_path : strPath):
+def save_dict(data : dict , file_path : BaseType.strPath):
     """
     Save a dictionary to disk.
 
@@ -77,7 +76,7 @@ def save_dict(data : dict , file_path : strPath):
     else:
         raise Exception(file_path)
 
-def load_dict(file_path : strPath , keys = None) -> dict[str,Any]:
+def load_dict(file_path : BaseType.strPath , keys = None) -> dict[str,Any]:
     """
     Load a dictionary from disk.
 
@@ -98,7 +97,7 @@ def load_dict(file_path : strPath , keys = None) -> dict[str,Any]:
     return data
 
 @dataclass
-class DataBlock(BaseClass.BoundLogger):
+class DataBlock:
     """
     Core 4-D tensor container: ``(N_secid, N_date, N_inday, N_feature)``.
 
@@ -240,7 +239,7 @@ class DataBlock(BaseClass.BoundLogger):
     @property
     def shape(self):
         """Shape of ``values`` as a tuple ``(N_secid, N_date, N_inday, N_feature)``."""
-        return properties.shape(self.values)
+        return BaseProperty.shape(self.values)
 
     @property
     def dtype(self):
@@ -255,17 +254,17 @@ class DataBlock(BaseClass.BoundLogger):
     @property
     def empty(self):
         """True if uninitiated or ``values`` has zero elements."""
-        return not self.initiated or properties.empty(self.values)
+        return not self.initiated or BaseProperty.empty(self.values)
 
     @property
     def max_date(self):
         """Maximum date in the ``date`` array, or None if empty."""
-        return properties.max_of_date(self.date)
+        return BaseProperty.max_of_date(self.date)
 
     @property
     def min_date(self):
         """Minimum date in the ``date`` array, or None if empty."""
-        return properties.min_of_date(self.date)
+        return BaseProperty.min_of_date(self.date)
 
     @property
     def inday(self) -> np.ndarray:
@@ -628,16 +627,16 @@ class DataBlock(BaseClass.BoundLogger):
                 df = df.rename(columns = {inday_marks[0]:'inday'}).set_index('inday' , append = True)
             xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         except Exception as e:
-            cls.logger.error(f'Failed to convert DataFrame to NdData: {e}')
-            cls.logger.print_exc(e)
-            cls.logger.display(df[df.index.duplicated()] , caption = 'Duplicate index in DataFrame')
+            Logger.error(f'Failed to convert DataFrame to NdData: {e}')
+            Logger.print_exc(e)
+            Logger.display(df[df.index.duplicated()] , caption = 'Duplicate index in DataFrame')
             raise
         try:
             block = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
         except Exception:
             import src
             setattr(src , 'xarr' , xarr)
-            cls.logger.stdout(xarr)
+            Logger.stdout(xarr)
             raise
         return block
 
@@ -722,7 +721,7 @@ class DataBlock(BaseClass.BoundLogger):
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
-            cls.logger.error(f'min_data_date({key , type}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'min_data_date({key , type}) error: ModuleNotFoundError: {e}')
             return None
 
     @classmethod
@@ -741,7 +740,7 @@ class DataBlock(BaseClass.BoundLogger):
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
-            cls.logger.error(f'max_data_date({key , type}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'max_data_date({key , type}) error: ModuleNotFoundError: {e}')
             return None
 
     def ffill(self , if_fill : bool = True):
@@ -1176,12 +1175,12 @@ class DataBlock(BaseClass.BoundLogger):
         category = 'raw'
     
         for path in category_path.iterdir():
-            with cls.logger.timer(f'{category}.{path.name}.Change_dump_method'):
+            with Logger.Timer(f'{cls.__name__}.{category}.{path.name}.Change_dump_method'):
                 new_path = path.with_suffix(PREFERRED_DUMP_SUFFIXES[0])
                 db_src , db_key = path.name.split('.')[:2]
                 block = cls.load_from_db(db_src , db_key , 20070101 , 20241231)
                 block.save_dump()
-                cls.logger.success(f'{category}.{path.name} changed to {new_path}')
+                Logger.success(f'{category}.{path.name} changed to {new_path}')
 
 @dataclass(slots=True)
 class DataBlockNorm:

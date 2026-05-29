@@ -3,19 +3,6 @@
 import threading
 from abc import ABCMeta
 
-def singleton(cls):
-    '''thread safe singleton decorator'''
-    instances = {}
-    lock = threading.Lock()
-
-    def get_instance(*args, **kwargs):
-        with lock:
-            if cls not in instances:
-                instances[cls] = cls(*args, **kwargs)
-            return instances[cls]
-
-    return get_instance
-
 class NoInstanceMeta(type):
     '''metaclass to block direct instantiation of a class'''
     def __new__(cls, name, bases, namespace, **kwargs):

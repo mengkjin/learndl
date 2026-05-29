@@ -1,8 +1,7 @@
 from contextlib import nullcontext
 from typing import Literal
 
-from src.proj import MACHINE , Proj , PATH
-from src.proj.core import strPath
+from src.proj import MACHINE , Proj , PATH , BaseType
 from src.proj.util import HtmlCatcher , AsyncSaver
 from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
@@ -28,7 +27,7 @@ class ModelTrainer(BaseTrainer):
         return app
         
     @classmethod
-    def GO(cls , * , base_path : ModelPath | strPath | None = None , title : str | None = None , 
+    def GO(cls , * , base_path : ModelPath | BaseType.strPath | None = None , title : str | None = None , 
            paragraph : bool = False , html_catcher : bool = True, 
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
            log_operation : Literal['update_models' , 'resume_testing'] | None = None , 

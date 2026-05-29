@@ -7,8 +7,8 @@ from src.res.model.model_module.module import get_predictor_module
 
 class ModelCalculator(BaseClass.BoundLogger):
     '''for a model_name/model_path to get batch_data easily'''
-    def __init__(self , model : str | ModelPath | Any , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(self , model : str | ModelPath | Any , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.model_path = ModelPath(model)
         
         self.config = self.model_path.load_config()

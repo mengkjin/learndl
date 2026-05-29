@@ -125,7 +125,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
     hist_end      = 20161231
 
     def __init__(self , type : Literal['fit' , 'predict'] = 'fit' , * , 
-                 mask : dict[str,Any] | None = None , indent : int = 0 , vb_level : Any = 'max'):
+                 mask : dict[str,Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs):
         """
         Parameters
         ----------
@@ -135,7 +135,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
             Masking rules forwarded to ``DataBlock.mask_values``.
             Defaults to ``{'list_dt': 91}`` (blank first 91 days post-IPO).
         """
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.type : Literal['fit' , 'predict'] = type
         self.mask = mask or {'list_dt': 91}
         self.load_start = self.start_date(type)
@@ -208,15 +208,15 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         if start > end:
             return DataBlock()
 
-        with self.logger.timer(f'[{self.key}] blocks loading' , idt = 1 , vb = 3 , enter_vb = 4):
+        with self.logger.timer(f'[{self.key}] blocks loading' , vb = 3 , enter_vb = 4):
             load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
             block_dict = self.load_blocks(load_start, end, secid = secid)
 
-        with self.logger.timer(f'[{self.key}] blocks process' , idt = 1 , vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks process' , vb = 3):
             block = self.process_blocks(block_dict)
             block = block.slice_date(start , end)
 
-        with self.logger.timer(f'[{self.key}] blocks masking' , idt = 1 , vb = 3):   
+        with self.logger.timer(f'[{self.key}] blocks masking' , vb = 3):   
             block = block.mask_values(mask = self.mask)
             
         return block
@@ -237,7 +237,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """Save the block as a preprocessed dump if ``enable_saving`` is True."""
         if not self.enable_saving:
             return
-        with self.logger.timer(f'[{self.key}] blocks dumping' , idt = 2 , vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks dumping' , vb = 3):
             block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
 
     def dump_exists(self) -> bool:
@@ -248,7 +248,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.type != 'fit' or not self.enable_saving:
             return
-        with self.logger.timer(f'[{self.key}] blocks norming' , idt = 2 , vb = 3):
+        with self.logger.timer(f'[{self.key}] blocks norming' , vb = 3):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None) -> DataBlock:
@@ -326,7 +326,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
             return
 
         tt1 = datetime.now()
-        self.logger.stdout(f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , vb = 2)
+        self.logger.stdout(f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , vb = 2)
         data_block = self.load_with_extension(dates_for_query = None)
         
         self.save_dump(data_block)
@@ -334,8 +334,8 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         
         # gc.collect()
         self.logger.success(
-            f'Update Preprocess [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
-            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , idt = 1 , vb = 1)
+            f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
+            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , vb = 1)
     
 class FactorPreProcessor(PreProcessor):
     """

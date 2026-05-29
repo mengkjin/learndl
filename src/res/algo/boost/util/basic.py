@@ -46,12 +46,13 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
     DEFAULT_CATEGORICAL_N_BINS = 3
     DEFAULT_CATEGORICAL_MAX_BINS = 10
 
-    def __repr__(self) -> str: return f'{self.__class__.__name__},\n,train_param={self.train_param}'
+    def __repr__(self) -> str: 
+        return f'{self.__class__.__name__},\n,train_param={self.train_param}'
     
-    def __init__(self ,
-                 train_param : dict[str,Any] = {} ,
-                 weight_param : dict[str,Any] = {} ,
-                 cuda = True , seed = None , **kwargs):   
+    def __init__(
+        self , train_param : dict[str,Any] = {} , weight_param : dict[str,Any] = {} ,
+        cuda = True , seed = None , **kwargs):   
+        super().__init__(**kwargs)
         self.train_param = deepcopy(self.DEFAULT_TRAIN_PARAM)
         self.weight_param = deepcopy(self.DEFAULT_WEIGHT_PARAM)
         self.cuda = cuda

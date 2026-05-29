@@ -277,9 +277,8 @@ class FactorCalculator(BaseClass.BoundLogger , metaclass=_FactorCalculatorMeta):
     UPDATE_MIN_VALID_COUNT_STRICT : int = 100
     UPDATE_RELAX_DATES : list[int] = []
 
-    def __init__(self , *args , vb_level : int | None = 3 , indent : int | None = 2 , **kwargs):
-        super().__init__(*args , **kwargs)
-        self.set_vb(vb_level , indent)
+    def __init__(self , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self._date : int | None = None
         self._df : pd.DataFrame | None = None
 

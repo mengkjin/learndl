@@ -66,8 +66,9 @@ class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
 
     CUSTOM_DATA = {}
     
-    def __init__(self):
+    def __init__(self , * , indent: int = 1 , vb_level: int = 2 , **kwargs):
         """Initialise per-date caches and load the full stock listing at startup."""
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         # Protects ``day_secids`` and lazy ``_block_*`` attrs (parallel factor updates).
         self._lock = threading.Lock()
         self.initiated = False

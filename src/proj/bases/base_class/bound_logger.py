@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from functools import cached_property
 from typing import Any, Callable,Literal, Sequence, TypeVar, Type
 
@@ -15,43 +16,52 @@ class ModuleLogger:
     """Module logger for the module, include most methods of Logger, and can set base indent and vb_level"""
     def __init__(self , module : type[BoundLogger] | BoundLogger):
         self.module = module
+        self.idts : list[int] = []
+        self.vbs : list[int] = []
 
     @cached_property
     def is_instance_logger(self) -> bool:
         return isinstance(self.module , BoundLogger)
-
     @cached_property
     def name(self) -> str:
-        if isinstance(self.module , BoundLogger):
-            return self.module.__class__.__name__
-        else:
-            return self.module.__name__
+        module = self.module.__class__ if isinstance(self.module , BoundLogger) else self.module
+        return module.__name__
+    
+    @property
+    def module_vb_level(self) -> int:
+        return self.module.vb_level if isinstance(self.module , BoundLogger) else self.module.GetClassVB()
+    @property
+    def module_indent(self) -> int:
+        return self.module.indent if isinstance(self.module , BoundLogger) else self.module.GetClassIndent()
     @property
     def vb_level(self) -> int:
-        if isinstance(self.module , BoundLogger):
-            return self.module.vb_level
-        else:
-            return BoundLogger.GetClassVB()
+        return self.module_vb_level + sum(self.vbs)
     @property
     def indent(self) -> int:
-        if isinstance(self.module , BoundLogger):
-            return self.module.indent
-        else:
-            return BoundLogger.GetClassIndent()
+        return self.module_indent + sum(self.idts)
 
-    def grep_kwargs(self , vb : int | None = None , idt : int | None = None , enter_vb : int | None = None , no_prefix : bool = False , **kwargs):
+    @contextmanager
+    def subprocess(self , idt : int = 0  , vb = 0):
+        """subprocess context manager , add idt / vb / enter_vb temporary for the subprocess"""
+        self.idts.append(idt)
+        self.vbs.append(vb)
+        yield
+        self.idts.pop()
+        self.vbs.pop()
+
+    def grep_kwargs(self , vb : int | None = None , idt : int | None = None , enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs):
         if vb is not None and 'vb_level' not in kwargs:
             kwargs['vb_level'] = self.vb_level + vb
         if idt is not None and 'indent' not in kwargs:
             kwargs['indent'] = self.indent + idt
         if enter_vb is not None and 'enter_vb_level' not in kwargs:
             kwargs['enter_vb_level'] = self.vb_level + enter_vb
-        if not no_prefix and (kwargs.get('indent' , 0) == 0 or not self.is_instance_logger):
+        if add_prefix or (add_prefix is None and (kwargs.get('indent' , 0) <= self.module_indent or not self.is_instance_logger)):
             kwargs['prefixes'] = [f'{self.name} >>' , *kwargs.get('prefixes' , [])]
         return kwargs
 
-    def stdout(self , *args , idt : int | None = 0 , vb : int | None = 0 , no_prefix : bool = False , **kwargs):
-        kwargs = self.grep_kwargs(vb, idt, no_prefix = no_prefix, **kwargs)
+    def stdout(self , *args , idt : int | None = 0 , vb : int | None = 0 , add_prefix : bool | None = None , **kwargs):
+        kwargs = self.grep_kwargs(vb, idt, add_prefix = add_prefix, **kwargs)
         Logger.stdout(*args , **kwargs)
 
     def stdout_pairs(self , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] ,
@@ -97,33 +107,33 @@ class ModuleLogger:
         """custom lightblue stdout message for remark"""
         Logger.note(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def remark(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def remark(self , *args , **kwargs):
         """custom lightblue stderr"""
-        Logger.remark(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.remark(*args , **self.grep_kwargs(**kwargs))
 
-    def debug(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def debug(self , *args , **kwargs):
         """Debug level stderr"""
-        Logger.debug(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.debug(*args , **self.grep_kwargs(**kwargs))
 
-    def info(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def info(self , *args , **kwargs):
         """Info level stderr"""
-        Logger.info(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.info(*args , **self.grep_kwargs(**kwargs))
 
-    def highlight(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def highlight(self , *args , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        Logger.highlight(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.highlight(*args , **self.grep_kwargs(**kwargs))
 
-    def warning(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def warning(self , *args , **kwargs):
         """Warning level stderr"""
-        Logger.warning(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.warning(*args , **self.grep_kwargs(**kwargs))
 
-    def error(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def error(self , *args , **kwargs):
         """Error level stderr"""
-        Logger.error(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.error(*args , **self.grep_kwargs(**kwargs))
 
-    def critical(self , *args , idt : int | None = None , vb : int | None = None , **kwargs):
+    def critical(self , *args , **kwargs):
         """Critical level stderr"""
-        Logger.critical(*args , **self.grep_kwargs(vb, idt, **kwargs))
+        Logger.critical(*args , **self.grep_kwargs(**kwargs))
 
     def only_once(self , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
@@ -135,8 +145,7 @@ class ModuleLogger:
 
     def divider(self , *args , vb : int = 0 , **kwargs):
         """Divider mesge , use stdout"""
-        kwargs = self.grep_kwargs(vb, **kwargs)
-        Logger.divider(*args , **kwargs)
+        Logger.divider(*args , **self.grep_kwargs(vb, **kwargs))
 
     def conclude(self , *args : str , **kwargs):
         """Add the message to the conclusions for later use"""
@@ -162,17 +171,17 @@ class ModuleLogger:
         """
         display the object
         """
-        kwargs = self.grep_kwargs(vb, no_prefix = True, **kwargs)
+        kwargs = self.grep_kwargs(vb, add_prefix = False, **kwargs)
         Logger.display(obj , caption = caption , **kwargs)
 
     def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):
-        kwargs = self.grep_kwargs(vb, idt, enter_vb, no_prefix = True, **kwargs)
+        kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = False, **kwargs)
         kwargs['timer_prefix'] = False
         return Logger.Timer(f'{self.name}.{key} Timer' , **kwargs)
 
     def paragraph(self , *args , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):
         """create a paragraph context manager"""
-        kwargs = self.grep_kwargs(vb, idt, enter_vb, no_prefix = True, **kwargs)
+        kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = False, **kwargs)
         return Logger.Paragraph(*args , **kwargs)
 
 class ModuleLoggerGetter:
@@ -201,6 +210,8 @@ class BoundLogger:
         a.logger.info('hello')
     """
     logger = ModuleLoggerGetter()
+    def __init__(self , * , indent: int = 0 , vb_level: Any = 1 , **kwargs):
+        self.set_vb(vb_level , indent)
 
     @property
     def binder(self) -> Any:
@@ -222,7 +233,7 @@ class BoundLogger:
             self._instance_indent = indent
     @classmethod
     def GetClassVB(cls) -> int:
-        return cls._class_vb_level if hasattr(cls, '_class_vb_level') else 1
+        return Proj.vb(cls._class_vb_level if hasattr(cls, '_class_vb_level') else 1)
     @classmethod
     def GetClassIndent(cls) -> int:
         return cls._class_indent if hasattr(cls, '_class_indent') else 0

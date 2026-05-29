@@ -32,9 +32,9 @@ class BlockLoader(BaseClass.BoundLogger):
         db_key : str | list | None = None , 
         feature : list | None = None , 
         use_alt : bool = True , * , 
-        indent : int = 1 , vb_level : Any = 1
+        indent : int = 1 , vb_level : Any = 1 , **kwargs
     ):
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.db_src = db_src
         self.db_key = db_key
         self.feature = feature
@@ -44,7 +44,8 @@ class BlockLoader(BaseClass.BoundLogger):
             assert self.src_path.joinpath(key).exists() , f'{key} not exists in {self.src_path}'
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(db_src={self.db_src},db_key={self.db_key},feature={self.feature},use_alt={self.use_alt})'
+        return f'{self.__class__.__name__}(db_src={self.db_src},db_key={self.db_key},' \
+            f'feature={self.feature},use_alt={self.use_alt})'
 
     @property
     def src_path(self):
@@ -54,7 +55,7 @@ class BlockLoader(BaseClass.BoundLogger):
     def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
         """Load all configured DB keys and merge them into a single DataBlock."""
         sub_blocks = []
-        with self.logger.timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , vb = 1 , enter_vb = 1):
+        with self.logger.timer(f'{self.db_src} blocks reading {len(self.iter_keys())} DataBase' , enter_vb = 0):
             for db_key in self.iter_keys():
                 with self.logger.timer(f'{self.db_src} blocks reading [{db_key}] DataBase' , idt = 1 , vb = 1):
                     blk = DataBlock.load_raw(self.db_src , db_key , start , end , feature = self.feature , use_alt = self.use_alt , vb_level = 'max')
@@ -79,8 +80,10 @@ class FrameLoader(BaseClass.BoundLogger):
         loader = FrameLoader(db_src = 'trade_ts' , db_key = 'day')
         df = loader.load(start = 20250101 , end = 20250331)
     """
-    def __init__(self , db_src : str , db_key : str , reserved_src : list[str] | None = None , use_alt : bool = True , * , indent : int = 1 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+    def __init__(
+        self , db_src : str , db_key : str , reserved_src : list[str] | None = None , 
+        use_alt : bool = True , * , indent : int = 1 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.db_src = db_src
         self.db_key = db_key
         self.reserved_src = reserved_src
@@ -130,7 +133,7 @@ class FactorLoader(BlockLoader):
                 factors.append(df)
         if not [fac for fac in factors if not fac.empty]:
             if self.kwargs.get('notice_empty', True):
-                self.logger.alert1(f'no factors found for {self.names} within {start} - {end}' , idt = 1 , vb = 1)
+                self.logger.alert1(f'no factors found for {self.names} within {start} - {end}')
             return DataBlock()
         with self.logger.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
             df = pd.concat([fac for fac in factors if not fac.empty])
@@ -149,11 +152,10 @@ class FactorCategory1Loader(BlockLoader):
         self , 
         category1 : str , 
         normalize = False , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' , * , 
-        indent : int = 1 , vb_level : Any = 1 ,
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
         **kwargs
     ):
-        super().__init__('factor' , indent = indent , vb_level = vb_level)
+        super().__init__('factor' , **kwargs)
         self.category1 = category1
         self.normalize = normalize
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
@@ -172,7 +174,7 @@ class FactorCategory1Loader(BlockLoader):
         factors = [fac for fac in factors if not fac.empty]
         if not factors:
             if self.kwargs.get('notice_empty', True):
-                self.logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}' , idt = 1 , vb = 1)
+                self.logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}')
             return DataBlock()
         with self.logger.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
             df = pd.concat([fac for fac in factors if not fac.empty])

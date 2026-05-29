@@ -191,7 +191,7 @@ class ProxyStats(Proxy):
 class ProxyStatsSet(ProxySet):
     """A :class:`ProxySet` whose members are :class:`ProxyStats` singletons with live usage tracking."""
 
-    def __init__(self , proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown'):
+    def __init__(self , proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown' , **kwargs):
         if proxies is None:
             proxies = []
         self.proxies : list[ProxyStats] = list(set([ProxyStats(proxy , source) for proxy in proxies]))

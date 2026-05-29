@@ -8,7 +8,7 @@ and calls their ``update()`` or ``rollback()`` methods.
 ``TSBackUpDataTransform.clear/update/rollback`` manages the manually-downloaded
 CSV backup data that supplements the live Tushare pipeline.
 """
-from typing import Generator , Type
+from typing import Generator , Type , Any
 
 from src.proj import BaseClass
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
@@ -23,7 +23,7 @@ class TushareDataDownloader(BaseClass.BoundLogger):
             yield fetcher
 
     @classmethod
-    def update(cls , * , indent : int = 0 , vb_level : int = 1):
+    def update(cls , * , indent : int = 0 , vb_level : Any = 1):
         """update all tushare fetchers"""
         cls.logger.note(f'Download since last update!')
         TSBackUpDataTransform.clear()
@@ -32,7 +32,7 @@ class TushareDataDownloader(BaseClass.BoundLogger):
         TSBackUpDataTransform.update()
 
     @classmethod
-    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : int = 1):
+    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : Any = 1):
         """update all tushare fetchers with rollback date"""
         cls.logger.note(f'Rollback from {rollback_date}!')
         TSBackUpDataTransform.rollback(rollback_date)

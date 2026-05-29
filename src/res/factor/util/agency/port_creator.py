@@ -10,8 +10,9 @@ from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskA
 
 class PortCreator(ABC , BaseClass.BoundLogger):
     def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.name = name
-        self.setup(indent = indent , vb_level = vb_level , **kwargs)
+        self.setup(**kwargs)
     
     def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
                benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , 
@@ -45,7 +46,7 @@ class PortCreator(ABC , BaseClass.BoundLogger):
         return self.create_result
 
     @abstractmethod
-    def setup(self , indent : int = 2 , vb_level : Any = 3 , **kwargs): 
+    def setup(self , **kwargs): 
         return self
     
     @abstractmethod

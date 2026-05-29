@@ -48,6 +48,7 @@ class MultiHeadLosses(BaseClass.BoundLogger):
             ml.view_plot(2 , 'gls')
             ml.view_plot(2 , 'rws')
         """
+        super().__init__(**kwargs)
         self.num_head = num_head
         self.name = name
         self.params = params or {}

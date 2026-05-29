@@ -14,8 +14,8 @@ class MemoryManager(BaseClass.BoundLogger):
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , device = None , indent : int = 0 , vb_level : Any = 1 , *args , **kwargs) -> None:
-        self.set_vb(vb_level , indent)
+    def __init__(self , device = None ,  *args , indent : int = 0 , vb_level : Any = 1 ,**kwargs) -> None:
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(device , *args , **kwargs)
 
     @property

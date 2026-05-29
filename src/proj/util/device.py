@@ -1,11 +1,13 @@
 """Torch device selection, nested ``.to()``, and simple RAM usage string."""
 from __future__ import annotations
 import psutil , torch
+
 from copy import deepcopy
+from functools import cached_property
 from torch.nn import Module
 from typing import Any
 
-from src.proj.log import Logger
+from src.proj.bases import BaseClass
 
 __all__ = ['Device' , 'MemoryPrinter']
 
@@ -46,19 +48,26 @@ def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any) -> torch
     else:
         raise ValueError(f'{obj} is not a valid object')
 
-class Device:
+class Device(BaseClass.BoundLogger):
     """Preferred accelerator (MPS > CUDA > CPU) with helpers to move data."""
-
-    def __init__(self , try_cuda = True , try_mps = True) -> None:
+    def __init__(self , try_cuda = True , * , indent: int = 0 , vb_level: int = 1 , **kwargs):
         """Pick device via ``use_device`` (MPS checked before CUDA when available)."""
-        self.device = self.use_device(try_cuda)
-    def __repr__(self): return str(self.device)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        self.try_cuda = try_cuda
+
+    def __repr__(self): 
+        return str(self.device)
+
     def __call__(self, obj):
         """Move ``obj`` to this device (see ``send_to``)."""
         return send_to(obj , self.device)
     def __eq__(self , other : Any) -> bool:
         """True if type and index match another ``Device`` or ``torch.device``."""
         return self.compare_devices(self.device , other)
+
+    @cached_property
+    def device(self) -> torch.device:
+        return self.use_device(self.try_cuda)
 
     @staticmethod
     def compare_devices(device1 : torch.device | Device , device2 : torch.device | Device) -> bool:
@@ -102,13 +111,14 @@ class Device:
     def status(self):
         """Log allocator stats for CUDA/MPS or a short CPU message."""
         if self.is_cuda:
-            Logger.stdout(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
-                  f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
+            info = f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
+                  f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G'
         elif self.is_mps:
-            Logger.stdout(f'Allocated {torch.mps.current_allocated_memory() / 1024**3:.1f}G, '+\
-                  f'Driver Allocated {torch.mps.driver_allocated_memory() / 1024**3:.1f}G')
+            info = f'Allocated {torch.mps.current_allocated_memory() / 1024**3:.1f}G, '+\
+                  f'Driver Allocated {torch.mps.driver_allocated_memory() / 1024**3:.1f}G'
         else:
-            Logger.stdout(f'Not using cuda or mps {self.device}')
+            info = f'Not using cuda or mps {self.device}'
+        self.logger.stdout(info)
 
     @staticmethod
     def send_to(x : Any , device = None , copy = False) -> Any:

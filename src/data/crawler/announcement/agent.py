@@ -93,7 +93,7 @@ class AnnouncementAgent(BaseClass.BoundLogger):
 
     @classmethod
     def get_async_proxy_pool(cls, urls: Iterable[str] | str = EXCHANGE_URLS.keys(), go_with_cached_proxies: bool = False):
-        with cls.logger.timer(f"Warmup AsyncProxyPool", idt=1, vb=1) as timer:
+        with cls.logger.timer(f"Warmup AsyncProxyPool", idt = 1, vb = 1) as timer:
             if isinstance(urls, str):
                 target_urls = [urls]
             elif isinstance(urls, list):

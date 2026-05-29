@@ -7,8 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import DB , CALENDAR
-from src.proj.core import strPath
+from src.proj import DB , CALENDAR , BaseType
 from src.data import DataBlock
 from .port import Port
 
@@ -34,8 +33,8 @@ class Portfolio:
     .get(date : int , closest = False) : return the port for the given date
     .from_dataframe(df : pd.DataFrame , name : str | Any = None) : create a portfolio from a dataframe
     .to_dataframe() : convert the portfolio to a dataframe
-    .load(path : strPath) : load a portfolio from a path (dataframe)
-    .save(path : strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the portfolio to a path (dataframe)
+    .load(path : BaseType.strPath) : load a portfolio from a path (dataframe)
+    .save(path : BaseType.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the portfolio to a path (dataframe)
     .filter_secid(secid : np.ndarray | Any | None = None , exclude = False , inplace = False) : filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid
     .filter_dates(dates : np.ndarray | Any | None = None , exclude = False , inplace = False) : filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates
     .replace(port : 'Port|Portfolio' , inplace = False) : replace the portfolio with the given port or portfolio
@@ -43,8 +42,8 @@ class Portfolio:
     .from_ports(*ports : Port , name : str | None = None) : create a portfolio from a list of ports
     .activate_accountant() : activate the accountant for the portfolio
     .accounting(benchmark : 'Portfolio | str | Any' = None , start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * , start_port : Port | None = None , trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Any = 1) : account the portfolio
-    .save_account(path : strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the account to a path (a dir containing multiple dataframes)
-    .load_account(path : strPath) : load the account from a path (a dir containing multiple dataframes)
+    .save_account(path : BaseType.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the account to a path (a dir containing multiple dataframes)
+    .load_account(path : BaseType.strPath) : load the account from a path (a dir containing multiple dataframes)
     .account : return the account of the portfolio
     .cached_accounts : return the cached accounts of the portfolio
     .activate_conditioner(name : str) : activate the conditioner for the portfolio
@@ -210,7 +209,7 @@ class Portfolio:
             return df
 
     @classmethod
-    def load(cls , path : strPath) -> Portfolio:
+    def load(cls , path : BaseType.strPath) -> Portfolio:
         """load a portfolio from a path (dataframe)"""
         path = Path(path)
         if path.exists():
@@ -218,7 +217,7 @@ class Portfolio:
         else:
             return cls(path.stem)
 
-    def save(self , path : strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2):
+    def save(self , path : BaseType.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2):
         """save the portfolio to a path (dataframe)"""
         if self.empty:
             return
@@ -297,7 +296,7 @@ class Portfolio:
             analytic = True , attribution = True , * ,
             trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
             daily = False , cache = False , with_index = None ,
-            resume_path : strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+            resume_path : BaseType.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
             indent : int = 0 , vb_level : Any = 1
         ):
         """account the portfolio"""

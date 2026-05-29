@@ -95,7 +95,7 @@ class TushareIterateFetcher(BaseClass.BoundLogger):
         breakpoint : bool
             Enable breakpoint/resume (default True).
         """
-        self.set_vb(vb_level , indent)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.fetcher_name = fetcher_name
         self.tushare_api = tushare_api
 
@@ -228,9 +228,6 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
     UPDATE_FREQ : Literal['d' , 'w' , 'm' , ''] = ''
     DB_SRC      : str = ''
     DB_KEY      : str = ''
-
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
     
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}Fetcher(type={self.DB_TYPE},db={self.DB_SRC}/{self.DB_KEY},start={self.START_DATE},freq={self.UPDATE_FREQ})'
@@ -351,7 +348,7 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
             cls.logger.print_exc(e)
     
     @classmethod
-    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : int = 1) -> None:
+    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : Any = 1) -> None:
         """update the fetcher with rollback date"""
         try:
             fetcher = cls(indent = indent , vb_level = vb_level)
@@ -376,7 +373,7 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
         if not self.db_by_name:
             assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
         for date in dates: 
-            DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
+            DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return dates
 
     def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10) -> None:
@@ -411,7 +408,7 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
-        self.logger.success(f'Fetched for {Dates(updated_dates)}')
+        self.logger.success(f'Fetched for {Dates(updated_dates)}' , add_prefix = True)
 
     def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> pd.DataFrame:
         """fetch from tushare with threading lock"""
@@ -541,6 +538,6 @@ class RollingFetcher(TushareFetcher):
                 subdf = df.query(f'{self.ROLLING_DATE_COL} == @date').copy()
                 if not self.SAVEING_DATE_COL: 
                     subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
-                DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , indent = 1 , vb_level = 3)
+                DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 updated_dates.append(date)
         return np.array(updated_dates , dtype = int)

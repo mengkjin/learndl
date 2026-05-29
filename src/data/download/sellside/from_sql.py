@@ -13,7 +13,7 @@ from functools import cached_property
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import MACHINE , CALENDAR , DB , Dates , Duration , BaseClass
+from src.proj import MACHINE , CALENDAR , DB , Dates , Duration , BaseClass , Logger
 from src.proj.util import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
@@ -48,7 +48,7 @@ factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
 
 MAX_MAX_WORKERS: int = 3
 @dataclass
-class Connection(BaseClass.BoundLogger):
+class Connection:
     """a connection to a sellside sql database"""
     dialect     : str
     username    : str
@@ -119,7 +119,7 @@ class Connection(BaseClass.BoundLogger):
             type : str = kwargs.pop('type')
             assert type.startswith('sql') , f'{key} is not a valid sql source'
             if type.endswith('.disabled'):
-                cls.logger.alert1(f'{key} is disabled')
+                Logger.alert1(f'{key} is disabled' , indent = 1 , vb_level = 2)
             
             for system in ['linux' , 'windows' , 'macos']:
                 driver : str | None = kwargs.pop(f'driver.{system}' , None)
@@ -139,10 +139,10 @@ class Connection(BaseClass.BoundLogger):
                 connection = cls.connection(key)
                 connection.get_connection
                 connection.close()
-                connection.logger.success(f'{key} connection test passed')
+                Logger.success(f'{key} connection test passed' , indent = 1 , vb_level = 2)
             except Exception as e:
-                connection.logger.error(f'{key} connection test failed: {e}')
-                connection.logger.print_exc(e)
+                Logger.error(f'{key} connection test failed: {e}' , indent = 1 , vb_level = 2)
+                Logger.print_exc(e)
 
 class SellsideSQLDownloader(BaseClass.BoundLogger):
     """a downloader for sellside sql data"""
@@ -153,8 +153,8 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
         self , factor_src : str , factor_set : str , date_col : str , 
         start_date : int , end_date : int = 99991231 , date_fmt : str | None = None , 
         sub_factors : list | None = None , connection_key : str = '' , * , 
-        indent : int = 0 , vb_level : Any = 1):
-        self.set_vb(vb_level , indent)
+        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.factor_src = factor_src
         self.factor_set = factor_set
         self.date_col = date_col
@@ -252,18 +252,20 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
         parallel(calls, method = method, max_workers = self.MAX_WORKERS)
  
     def download_period(self , start : int , end : int):
-        t0 = datetime.now()
-        try:
-            df = self.query_factor_values(start , end)
-        except Exception as e:
-            self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
-            self.logger.print_exc(e)
-            return False
-        if (num_dates := self.save_data(df)) > 0:
-            self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}' , idt = 1)
-        else:
-            self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}' , idt = 1)
-        return True
+        with self.logger.subprocess(idt = 1):
+            t0 = datetime.now()
+            try:
+                df = self.query_factor_values(start , end)
+            except Exception as e:
+                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
+                self.logger.print_exc(e)
+                return False
+            num_dates = self.save_data(df)
+            if num_dates > 0:
+                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}')
+            else:
+                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}')
+            return True
 
     def query_start_dt(self):
         conn = self.connection.get_connection()
@@ -362,7 +364,7 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = 2 , vb_level = 3)
+            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
             status += 1
         return status
 
@@ -410,7 +412,8 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
             downloader.download('dates' , dates=dates)
 
     @classmethod
-    def update_allaround(cls , keys = None):
+    def update_allaround(cls , keys = None , * , indent : int = 0 , vb_level : Any = 1):
+        cls.SetClassVB(vb_level, indent)
 
         prompt = f'{cls.__name__} : Download allaround!'
         assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
@@ -421,7 +424,8 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
             downloader.download('all')
 
     @classmethod
-    def update(cls):
+    def update(cls , * , indent : int = 0 , vb_level : Any = 1):
+        cls.SetClassVB(vb_level, indent)
         cls.logger.note(f'Download since last update!')
         cls.update_since(trace = 0)
         

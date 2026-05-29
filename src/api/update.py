@@ -43,7 +43,7 @@ class UpdateAPI:
         FactorAPI.update_pooling_factors(timeout = 3)
         FactorAPI.update_factor_stats()
         FactorAPI.export_factor_table()
-        with Proj.vb.WithVB(1):
+        with Proj.vb.temporary_vb(1):
             wrap_update(ModelAPI.resume_testing , 'resume testing')
         TradingAPI.update()
         SummaryAPI.update()

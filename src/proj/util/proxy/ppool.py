@@ -97,14 +97,13 @@ class ProxyStatsSetURL(ProxyStatsSet , BaseClass.BoundLogger):
         go_with_cached_proxies: bool = False, indent: int = 0, vb_level: Any = 1,
         **kwargs
     ):
-        self.set_vb(vb_level, indent)
         if getattr(self, '_inited', False):
             assert url == self.url , f"url is already set to {self.url} , and cannot be changed to {url}"
             if proxies is not None:
                 self.extend(proxies)
             return
 
-        super().__init__(proxies, source)
+        super().__init__(proxies = proxies, source = source, indent = indent, vb_level = vb_level, **kwargs)
         self.set_url(url)
         self.adaptive = adaptive
         self.init_refresh_stats(refresh_interval=refresh_interval, refresh_max_attempts=refresh_max_attempts, refresh_threshold=refresh_threshold)
@@ -209,9 +208,10 @@ class ProxyPool(BaseClass.BoundLogger):
     def __init__(
         self, target_urls: list[str] | str , * , 
         go_with_cached_proxies: bool = False ,
+        adaptive: bool = False,
         indent: int = 0, vb_level: Any = 1, **kwargs):
-        self.set_vb(vb_level, indent)
-        self.initiate(target_urls, go_with_cached_proxies = go_with_cached_proxies , adaptive=False)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        self.initiate(target_urls, go_with_cached_proxies = go_with_cached_proxies , adaptive=adaptive , **kwargs)
 
     def initiate(self , target_urls: list[str] | str , **kwargs):
         """Initialise the pool's lock, condition, and per-URL proxy sets."""
@@ -320,10 +320,14 @@ class AdaptiveProxyPool(ProxyPool):
         refresh_threshold: float = 0.2 ,
         indent: int = 0, vb_level: Any = 1, **kwargs
     ):
-        self.set_vb(vb_level, indent)
-        self.initiate(target_urls, adaptive=True , go_with_cached_proxies = go_with_cached_proxies , 
-                      refresh_interval=refresh_interval , refresh_max_attempts=refresh_max_attempts , refresh_threshold=refresh_threshold)
-
+        super().__init__(
+            target_urls=target_urls, 
+            go_with_cached_proxies=go_with_cached_proxies,
+            refresh_interval=refresh_interval,
+            refresh_max_attempts=refresh_max_attempts,
+            refresh_threshold=refresh_threshold,
+            indent=indent, vb_level=vb_level, **kwargs)
+        
     def adaptive_refresh(self):
         """Refresh the proxy pool with new proxies"""
         for proxy_set in self.proxies.values():
@@ -364,10 +368,11 @@ class AsyncProxyPool(BaseClass.BoundLogger):
     def __init__(
         self, target_urls: list[str] | str, *, 
         go_with_cached_proxies: bool = False,
+        adaptive: bool = False,
         indent: int = 0, vb_level: Any = 1, **kwargs
     ):
-        self.set_vb(vb_level, indent)
-        self.initiate(target_urls, go_with_cached_proxies=go_with_cached_proxies, adaptive=False)
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        self.initiate(target_urls, go_with_cached_proxies=go_with_cached_proxies, adaptive=adaptive, **kwargs)
 
     def initiate(self, target_urls: list[str] | str, **kwargs):
         if target_urls == 'test':
@@ -417,15 +422,13 @@ class AsyncAdaptiveProxyPool(AsyncProxyPool):
         refresh_threshold: float = 0.2,
         indent: int = 0, vb_level: Any = 1, **kwargs
     ):
-        self.set_vb(vb_level, indent)
-        self.initiate(
-            target_urls,
-            adaptive=True,
+        super().__init__(
+            target_urls=target_urls,
             go_with_cached_proxies=go_with_cached_proxies,
             refresh_interval=refresh_interval,
             refresh_max_attempts=refresh_max_attempts,
             refresh_threshold=refresh_threshold,
-        )
+            indent=indent, vb_level=vb_level, **kwargs)
 
     async def adaptive_refresh_async(self):
         await asyncio.gather(*[

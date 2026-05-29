@@ -6,7 +6,7 @@ import portalocker
 
 from datetime import datetime
 from functools import wraps
-from typing import Any, Callable
+from typing import Callable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
@@ -15,7 +15,7 @@ __all__ = ['ScriptLock' , 'ScriptLockMultiple']
 class ScriptLock:
     LOCK_DIR = PATH.runtime.joinpath('script_lock')
     
-    def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , vb_level : Any = 1):
+    def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1):
         """
         init script lock
         Args:
@@ -28,22 +28,17 @@ class ScriptLock:
         self.timeout = timeout
         self.wait_time = wait_time
         self.lock_file = None
-        self.vb_level = vb_level
         self.LOCK_DIR.mkdir(parents=True, exist_ok=True)
-
-    def _log(self, message: str):
-        """printing out message"""
-        Logger.debug(message , vb_level = self.vb_level)
 
     def _log_get_lock(self , start_time: datetime | None = None):
         if start_time is not None and (wait_time := (datetime.now() - start_time).total_seconds()) > 1:
-            self._log(f"Wait {wait_time:.1f} seconds to get lock of {self.lock_name}, continue to run.")
+            Logger.debug(f"Wait {wait_time:.1f} seconds to get lock of {self.lock_name}, continue to run.")
         else:
-            self._log(f"Get lock of {self.lock_name}, continue to run.")
+            Logger.debug(f"Get lock of {self.lock_name}, continue to run.")
 
     def _log_wait_lock(self):
         if not self._has_wait_message:
-            self._log(f"Other instance of {self.lock_name} is running, wait for lock to be released...")
+            Logger.debug(f"Other instance of {self.lock_name} is running, wait for lock to be released...")
             self._has_wait_message = True
     
     def _get_lock_path(self):
@@ -102,7 +97,7 @@ class ScriptLockMultiple:
     LOCK_DIR = PATH.runtime.joinpath('script_lock_multiple')
     
     def __init__(self, lock_name: str, lock_num: int = 1, timeout: int | None = None, 
-                 wait_time: int = 1, vb_level : Any = 1):
+                 wait_time: int = 1):
         """
         initialize multiple lock manager
         Args:
@@ -110,13 +105,11 @@ class ScriptLockMultiple:
             lock_num: maximum number of instances allowed to run simultaneously, <= 0 means no limit
             timeout: timeout seconds, None or <= 0 means infinite wait
             wait_time: wait time seconds between each check
-            vb_level: minimum verbosity level to output logs
         """
         self.lock_name = lock_name
         self.lock_num = lock_num
         self.timeout = timeout
         self.wait_time = wait_time
-        self.vb_level = vb_level
         self.acquired_locks = []  # get lock files
         self._has_wait_message = False
 
@@ -124,21 +117,17 @@ class ScriptLockMultiple:
     def lock_dir(self):
         return self.LOCK_DIR.joinpath(f"{self.lock_name}")
 
-    def _log(self, message: str):
-        """printing out message"""
-        Logger.debug(message , vb_level = self.vb_level)
-
     def _log_get_lock(self, lock_id: int, start_time: datetime | None = None):
         """record the log of getting lock"""
         if start_time is not None and (wait_time := (datetime.now() - start_time).total_seconds()) > 1:
-            self._log(f"Wait {wait_time:.1f} seconds to get lock {lock_id} of {self.lock_name}, continue to run.")
+            Logger.debug(f"Wait {wait_time:.1f} seconds to get lock {lock_id} of {self.lock_name}, continue to run.")
         else:
-            self._log(f"Get lock {lock_id} of {self.lock_name}, continue to run.")
+            Logger.debug(f"Get lock {lock_id} of {self.lock_name}, continue to run.")
 
     def _log_wait_lock(self):
         """record the log of waiting lock"""
         if not self._has_wait_message:
-            self._log(f"All {self.lock_num} instances of {self.lock_name} are running, wait for a lock to be released...")
+            Logger.debug(f"All {self.lock_num} instances of {self.lock_name} are running, wait for a lock to be released...")
             self._has_wait_message = True
 
     def _get_lock_paths(self):
@@ -204,7 +193,7 @@ class ScriptLockMultiple:
                 portalocker.unlock(lock_file)
                 lock_file.close()
             except Exception as e:
-                self._log(f"Error releasing lock: {e}")
+                Logger.debug(f"Error releasing lock: {e}")
         self.acquired_locks.clear()
 
     def __call__(self, func: Callable) -> Callable:

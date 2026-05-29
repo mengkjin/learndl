@@ -11,12 +11,12 @@ import subprocess
 import time
 
 from abc import abstractmethod , ABC
-from src.proj import Proj , MACHINE , PATH , Const
+from src.proj import Proj , MACHINE , PATH , Const , BaseClass
 from src.proj.util import Options
 from src.interactive.backend import ScriptRunner
 from .session_control import SC
 
-class ControlPanelButton(ABC):
+class ControlPanelButton(ABC , BaseClass.BoundLogger):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
 
     Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class
@@ -201,7 +201,7 @@ class ControlGitClearPullButton(ControlPanelButton):
             raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
         else:
             import shutil
-            from src.proj import PATH , Logger
+            from src.proj import PATH
 
             subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
             subprocess.run(['git', 'clean', '-fd'], check=True)
@@ -211,16 +211,16 @@ class ControlGitClearPullButton(ControlPanelButton):
                 if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
                     subfiles = [x for x in folder.rglob('*') if x.is_file()]
                     if not len(subfiles):
-                        Logger.stdout(f"Removing empty folder: {folder}")
+                        self.logger.stdout(f"Removing empty folder: {folder}")
                         folder.rmdir()
                     else:
                         if all([x.suffix == '.pyc' for x in subfiles]):
-                            Logger.stdout(f"Removing folder with only pyc files: {folder}")
+                            self.logger.stdout(f"Removing folder with only pyc files: {folder}")
                             shutil.rmtree(folder)
                         else:
-                            Logger.error(f"Error removing folder: {folder}:")
-                            Logger.error(f"Subfiles: {subfiles}")
-            Logger.success("Git Pull Finished")
+                            self.logger.error(f"Error removing folder: {folder}:")
+                            self.logger.error(f"Subfiles: {subfiles}")
+            self.logger.success("Git Pull Finished")
 
 class ControlPanelPopover(ABC):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
