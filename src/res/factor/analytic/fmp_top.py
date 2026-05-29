@@ -122,7 +122,7 @@ class TopFMPTest(BaseFactorAnalyticTest):
         self.update_kwargs(n_bests = n_bests)
         self.portfolio_group = PortfolioGroupBuilder(
             'top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , 
-            caller = self , start = self.start , end = self.end , indent = self.indent , vb_level = self.vb_level , **self.kwargs)
+            caller = self , start = self.start , end = self.end , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,

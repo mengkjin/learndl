@@ -85,7 +85,7 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
         self.portfolio_group = PortfolioGroupBuilder(
             'screen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 
             resume = self.resume , resume_path = self.resume_path , caller = self , 
-            start = self.start , end = self.end , indent = self.indent , vb_level = self.vb_level , **self.kwargs)
+            start = self.start , end = self.end , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , **kwargs):
