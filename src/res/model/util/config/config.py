@@ -996,7 +996,7 @@ class ModelConfig(BaseModelConfig):
         if stage == "fit":
             stg = "fit"
         else:
-            # includes test / predict / extract
+            # includes test / predict / retrospective
             stg = "test"
         return None if no_weight else self.model_config.Param[f"train.criterion.weight"].get(stg, "equal")
 

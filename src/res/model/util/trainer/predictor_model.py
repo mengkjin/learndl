@@ -153,6 +153,8 @@ class PredictorModel(TrainerPipeline):
 
     def test(self):
         '''test the model inside'''
+        if self.data.no_date_to_test:
+            return
         for _ in self.trainer.iter_model_submodels():
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()

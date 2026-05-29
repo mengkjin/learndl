@@ -522,6 +522,10 @@ class DataModule(BaseClass.BoundLogger):
     def factor_end_dt(self):
         return self.end_date
 
+    @property
+    def no_date_to_test(self):
+        return self.stage not in ['fit'] and len(self.model_test_dates) == 0
+
     @staticmethod
     def prepare_data(data_types : list[str] | None = None):
         PreProcessorTask.update(predict = False , data_types = data_types)
