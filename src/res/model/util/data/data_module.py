@@ -189,6 +189,13 @@ class DataModule(BaseClass.BoundLogger):
                 self.early_test_dates = possible_dates[possible_dates < start_date][-(y_extend-1):] if y_extend > 1 else possible_dates[-1:-1]
                 self.model_test_dates = possible_dates[(possible_dates >= start_date) & (possible_dates <= end_date)]
                 test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
+
+                print(self.stage)
+                print(start_date)
+                print(end_date)
+                print(self.test_full_dates)
+                
+                print(test_dates)
                 
                 if test_dates.size == 0:
                     self.d0 = len(self.datas.date) - x_extend
@@ -197,10 +204,10 @@ class DataModule(BaseClass.BoundLogger):
                     self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
                     self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
                 test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
-                print(self.stage)
+                
                 print(self.d0)
                 print(self.d1)
-                print(test_dates)
+
             case 'extract':
                 model_date_col = (self.datas.date < self.model_date).sum()
                 self.d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - d_extend)
