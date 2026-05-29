@@ -189,13 +189,6 @@ class DataModule(BaseClass.BoundLogger):
                 self.early_test_dates = possible_dates[possible_dates < start_date][-(y_extend-1):] if y_extend > 1 else possible_dates[-1:-1]
                 self.model_test_dates = possible_dates[(possible_dates >= start_date) & (possible_dates <= end_date)]
                 test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-
-                print(self.stage)
-                print(start_date)
-                print(end_date)
-                print(self.test_full_dates)
-                
-                print(test_dates)
                 
                 if test_dates.size == 0:
                     self.d0 = len(self.datas.date) - x_extend
@@ -204,10 +197,6 @@ class DataModule(BaseClass.BoundLogger):
                     self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
                     self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
                 test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
-                
-                print(self.d0)
-                print(self.d1)
-
             case 'extract':
                 model_date_col = (self.datas.date < self.model_date).sum()
                 self.d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - d_extend)
@@ -216,13 +205,11 @@ class DataModule(BaseClass.BoundLogger):
                 raise KeyError(self.stage)
 
         self.step_len = (self.day_len - x_extend + 1) // self.data_step
-        if self.step_len <= 0:
+        if self.step_len < 0:
             self.logger.error( 
                 f'Step length is less than 0 ({self.step_len}) , stage: {self.stage} , '
                 f'd0: {self.d0} , d1: {self.d1} , day_len: {self.day_len} , ' 
                 f'data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
-            if self.stage in ['predict' , 'test']:
-                self.logger.error(f'Test dates: {test_dates}')
             self.logger.print_traceback_stack()
             raise ValueError(f'Step length is less than 0')
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * self.data_step , [0])
