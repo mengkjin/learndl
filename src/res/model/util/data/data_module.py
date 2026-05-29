@@ -197,7 +197,9 @@ class DataModule(BaseClass.BoundLogger):
                     self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
                     self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
                 test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
-                print(self.d0 + x_extend - 1 , self.d1)
+                print(self.stage)
+                print(self.d0)
+                print(self.d1)
                 print(test_dates)
             case 'extract':
                 model_date_col = (self.datas.date < self.model_date).sum()
@@ -214,6 +216,7 @@ class DataModule(BaseClass.BoundLogger):
                 f'data_len: {len(self.datas.date)} , x_extend: {x_extend} , data_step: {self.data_step}')
             if self.stage in ['predict' , 'test']:
                 self.logger.error(f'Test dates: {test_dates}')
+            self.logger.print_traceback_stack()
             raise ValueError(f'Step length is less than 0')
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * self.data_step , [0])
         self.date_idx = self.d0 + self.step_idx
