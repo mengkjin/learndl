@@ -310,7 +310,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         modified_time = DataBlock.last_preprocess_time(self.key , self.type)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , vb = 1)
+            self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , add_prefix = False)
             return True
         return False
 
@@ -326,7 +326,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
             return
 
         tt1 = datetime.now()
-        self.logger.stdout(f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , vb = 2)
+        self.logger.stdout(f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , vb = 2 , add_prefix = False)
         data_block = self.load_with_extension(dates_for_query = None)
         
         self.save_dump(data_block)
@@ -335,7 +335,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         # gc.collect()
         self.logger.success(
             f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
-            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , vb = 1)
+            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , add_prefix = False)
     
 class FactorPreProcessor(PreProcessor):
     """
