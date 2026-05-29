@@ -98,6 +98,11 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
         dates = CALENDAR.diffs(self.pred_path.fmp_target_dates , self.pred_path.fmp_dates if update else [])
         dates = [d for d in dates if d in self.pred_path.pred_dates]
         self.build_fmps(dates , deploy = True)
+
+        if self.updated_fmp_dates:
+            self.logger.success(f'Update model portfolios for {self.pred_path.pred_name} , len={len(self.updated_fmp_dates)}')
+        else:
+            self.logger.skipping(f'Model portfolios for {self.pred_path.pred_name} is up to date')
         return dates
     
     def build_fmps(self , dates : list[int] | np.ndarray , deploy = True):
@@ -160,6 +165,11 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
             
         self.updated_account_dates.extend(account_dates)
 
+        if self.updated_account_dates:
+            self.logger.success(f'Update model portfolios accounting for {self.pred_path.pred_name} , len={len(self.updated_account_dates)}')
+        else:
+            self.logger.skipping(f'Model portfolios accounting for {self.pred_path.pred_name} is up to date')
+
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
         '''Update prediction models' factor model portfolios'''
@@ -169,16 +179,8 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
         if model_name is None: 
             cls.logger.stdout(f'model_name is None, build fmps for all prediction models (len={len(models)})' , idt = 1)
         for model in models:
-            md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
-            md.update_fmps(update = update , overwrite = overwrite)
-            if md.updated_fmp_dates:
-                md.logger.success(f'Update model portfolios for {model} , len={len(md.updated_fmp_dates)}')
-            else:
-                md.logger.skipping(f'Model portfolios for {model} is up to date')
-
-            md.accounting(resume = True , deploy = True)
-            if md.updated_account_dates:
-                md.logger.success(f'Update model portfolios accounting for {model} , len={len(md.updated_account_dates)}')
-            else:
-                md.logger.skipping(f'Model portfolios accounting for {model} is up to date')
+            md = cls(model , indent = indent , vb_level = vb_level)
+            with md.logger.subprocess(idt = 1 , vb = 1):
+                md.update_fmps(update = update , overwrite = overwrite)
+                md.accounting(resume = True , deploy = True)
         return md

@@ -215,7 +215,8 @@ class FittingEpochs:
     
 class TrainerStatus(BasePipeline):
     """Trainer status class, used to store the status of the trainer"""
-    def __init__(self):
+    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.stage   : Literal['setup' , 'data' , 'fit' , 'test' , 'summary'] = 'setup'
         self.dataset : Literal['train' , 'valid' , 'test' , 'predict'] = 'train'
         self.model_num  : int = -1
@@ -229,6 +230,10 @@ class TrainerStatus(BasePipeline):
         self.times : dict[str,datetime] = {}
 
         self.first_iteration_printed = False
+
+    @classmethod
+    def initialize(cls , config_or_trainer):
+        return cls(indent = config_or_trainer.indent , vb_level = config_or_trainer.vb_level)
         
     def __repr__(self):
         return f'TrainerStatus({", ".join([f"{k}={v}" for k,v in self.status.items()])})'
@@ -331,7 +336,7 @@ class TrainerStatus(BasePipeline):
         self.dataset = 'test'
     def on_fit_model_start(self):
         if not self.first_iteration_printed:
-            self.logger.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan')
+            self.logger.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan' , vb = 1)
             self.first_iteration_printed = True
         self.times['model_start'] = datetime.now()
         self.fitting_epochs.clear()

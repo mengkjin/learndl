@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from functools import wraps
-from typing import Any , Literal , Sized , Callable
+from typing import Any , Literal , Sized , Callable , cast
 
 from src.proj import Const
 from src.proj.util import FilteredIterable
@@ -71,15 +71,28 @@ class BaseTrainer(BasePipeline):
                  indent : int = 0 , vb_level : Any = 1 , **kwargs):
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
-        self._use_data : Literal['fit','both'] = use_data
+        self._config_kwargs = {
+            'base_path': base_path,
+            'module': module,
+            'schedule_name': schedule_name,
+            'override': override,
+            'indent': indent,
+            'vb_level': vb_level,
+        }
+        self._use_data = use_data
         self._kwargs = kwargs
+        # self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
+        # self._use_data : Literal['fit','both'] = use_data
+        # self._kwargs = kwargs
 
     def __bool__(self): 
         return True
 
     def __repr__(self): 
-        return f'{self.__class__.__name__}(path={self.config.base_path.base})'
+        return f'{self.__class__.__name__}(path={self.base_path})'
+
+    def init_config(self) -> None:
+        self._config   = ModelConfig.initialize(**self._config_kwargs , **self._kwargs)
 
     def init_cores(self) -> None:
         """
@@ -102,8 +115,11 @@ class BaseTrainer(BasePipeline):
         self._deposition = FutureUtils.deposition(self)
 
     @property
-    def use_data(self):
-        return self._use_data
+    def base_path(self):
+        return self.config.base_path if hasattr(self , '_config') else self._config_kwargs['base_path']
+    @property
+    def use_data(self) -> Literal['fit','predict','both']:
+        return cast(Literal['fit','predict','both'], self._use_data)
     @property
     def input_model_kwargs(self):
         return self._kwargs
@@ -154,9 +170,6 @@ class BaseTrainer(BasePipeline):
     @property
     def device(self): 
         return self.config.device
-    @property
-    def base_path(self): 
-        return self.config.base_path
     @property
     def queue_of_stages(self): 
         return self.config.queue_of_stages
@@ -252,6 +265,7 @@ class BaseTrainer(BasePipeline):
     def stage_setup(self):
         '''stage of setting up'''
         with self.logger.paragraph('Stage [Setup]' , 2):
+            self.init_config()
             self.init_cores()
             self.init_utils()
             self.on_configure_model()
@@ -314,7 +328,7 @@ class BaseTrainer(BasePipeline):
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
         num_all_models = len(model_iter)
-        iter_info = f'In stage [{self.status.stage}], number of all models (model_date x model_num) is {num_all_models}, '
+        iter_info = f'In Stage [{self.status.stage}], number of all models (model_date x model_num) is {num_all_models}, '
         if self.config.is_resuming:
             match self.status.stage:
                 case 'fit':

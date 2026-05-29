@@ -72,10 +72,12 @@ def new_stdout(
         return FormatStr.empty()
     with Proj.vb.record_vb_level(vb_level):
         msg = ' '.join([str(s) for s in args])
-        if arg_prefix:
+        if arg_prefix and arg_prefix != '**':
             msg = f'{arg_prefix}{msg}'
         if prefixes:
             msg = ' '.join(prefixes) + ' ' + msg
+        if arg_prefix == '**':
+            msg = f'{arg_prefix}{msg}'
         if Proj.debug['show_vb_level']:
             msg = f'{vb_level} | {msg}'
         fstr = stdout(msg , indent = indent , **kwargs)
@@ -91,7 +93,7 @@ def new_stderr(
     Use ``vb_level`` to control the verbosity of the message.
     kwargs match ``stdout``/``stderr`` (indent, colors, sep, end, file, flush).
     """
-    if Silence.silent:
+    if Silence.silent or not Proj.verbose(vb_level):
         return FormatStr.empty()
     msg = ' '.join([str(s) for s in args])
     if arg_prefix:
@@ -201,9 +203,7 @@ class Logger:
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
-        def color_selector(color : str | None , indent : int , gray_on_indent : int = 1):
-            return (None if indent <= 1 and gray_on_indent else 'gray') if color is None or color == 'auto' else color
-
+        
         if title:
             title_kwargs = title_kwargs or {}
             if title_printer is None:
@@ -213,6 +213,7 @@ class Logger:
             add_indent = 1
         else:
             add_indent = 0
+        benchmark_indent = indent + add_indent
         
         if isinstance(pair_list , dict):
             pair_list = list(pair_list.items())
@@ -223,10 +224,18 @@ class Logger:
         max_key_len = max([len(indented_key) for _ , indented_key , _ in pairs])
         max_key_len = max(max_key_len , min_key_len)
         min_indent = min([indent for indent , _ , _ in pairs])
-        pairs = [FormatStr(
-            f'{indented_key:{max_key_len + 2*(indent - min_indent)}s} : {value}' , 
-            color = color_selector(color , indent , gray_on_indent = False) , 
-            italic = italic , **kwargs).formatted() for indent , indented_key , value in pairs]
+
+        def color_selector(color : str | None , indent : int , gray_on_indent : int = 1):
+            return (None if indent < gray_on_indent else 'gray') if color is None or color == 'auto' else color
+
+        pairs = [
+            FormatStr(
+                f'{indented_key:{max_key_len + 2*(indent - min_indent)}s} : {value}' , 
+                color = color_selector(color , indent , gray_on_indent = benchmark_indent + 1) , 
+                italic = italic , **kwargs
+            ).formatted() 
+            for indent , indented_key , value in pairs
+        ]
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
     @classmethod

@@ -208,15 +208,15 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         if start > end:
             return DataBlock()
 
-        with self.logger.timer(f'[{self.key}] blocks loading' , vb = 3 , enter_vb = 4):
+        with self.logger.timer(f'{self.key} blocks loading' , vb = 3 , enter_vb = 4):
             load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
             block_dict = self.load_blocks(load_start, end, secid = secid)
 
-        with self.logger.timer(f'[{self.key}] blocks process' , vb = 3):
+        with self.logger.timer(f'{self.key} blocks process' , vb = 3):
             block = self.process_blocks(block_dict)
             block = block.slice_date(start , end)
 
-        with self.logger.timer(f'[{self.key}] blocks masking' , vb = 3):   
+        with self.logger.timer(f'{self.key} blocks masking' , vb = 3):   
             block = block.mask_values(mask = self.mask)
             
         return block
@@ -229,7 +229,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """Load the preprocessed dump from disk; returns empty DataBlock if not found."""
         if not self.dump_exists():
             return DataBlock()
-        with self.logger.timer(f'[{self.key}] dumped loading' , vb = 2):
+        with self.logger.timer(f'{self.key} dumped loading' , vb = 2):
             block = DataBlock.load_dump(category = 'preprocess' , preprocess_key = self.key , type = self.type)
         return block
 
@@ -237,7 +237,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """Save the block as a preprocessed dump if ``enable_saving`` is True."""
         if not self.enable_saving:
             return
-        with self.logger.timer(f'[{self.key}] blocks dumping' , vb = 3):
+        with self.logger.timer(f'{self.key} blocks dumping' , vb = 3):
             block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
 
     def dump_exists(self) -> bool:
@@ -248,7 +248,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.type != 'fit' or not self.enable_saving:
             return
-        with self.logger.timer(f'[{self.key}] blocks norming' , vb = 3):
+        with self.logger.timer(f'{self.key} blocks norming' , vb = 3):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None) -> DataBlock:
@@ -300,7 +300,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         if not extentions:
             return block 
 
-        with self.logger.timer(f'[{self.key}] blocks merging' , vb = 2):
+        with self.logger.timer(f'{self.key} blocks merging' , vb = 2):
             block = block.merge_others(*extentions , inplace = True).slice_date(start , end)
 
         return block

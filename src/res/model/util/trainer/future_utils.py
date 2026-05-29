@@ -16,7 +16,7 @@ class FutureUtils:
     @classmethod
     def status(cls , trainer_or_config):
         from src.res.model.util.trainer import TrainerStatus
-        return TrainerStatus()
+        return TrainerStatus.initialize(trainer_or_config)
     @classmethod
     def record(cls , trainer_or_config):
         from src.res.model.util.trainer import PredRecorder

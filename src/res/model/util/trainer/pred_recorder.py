@@ -210,7 +210,7 @@ class PredRecorder(TrainerPipeline):
                 
             self.has_purged_preds = True
         else:
-            purge_info = f'{len(self.retrained_models)} models retrained, but no pred need to be purged'
+            purge_info = f'Total {len(self.retrained_models)} models retrained, but no pred need to be purged'
         self.logger.stdout(purge_info)
 
     def purge_outdated_model_preds(self):
@@ -388,7 +388,7 @@ class PredRecorder(TrainerPipeline):
             for path in pred_df['path'].unique():
                 subdf = pred_df.query('path == @path').drop(columns = ['path']).reset_index(drop = True)
                 if not subdf.empty and subdf['new_label'].notna().any():
-                    self.logger.stdout(f'rewriting na label for {path}')
+                    self.logger.stdout(f'Rewriting na label for {path}')
                     DB.save_df(subdf.drop(columns = ['new_label']) , path , overwrite = True)
         return pred_df.drop(columns = ['new_label']).reset_index(drop = True)
 
@@ -424,4 +424,4 @@ class PredRecorder(TrainerPipeline):
         self.purge_duplicated_model_preds()
         avg_pred_records = self.avg_pred_records()
         if not avg_pred_records.empty:
-            self.logger.stdout(f'avg model preds updated to {avg_pred_records["max_pred_date"].max()}')
+            self.logger.stdout(f'Avg model preds updated to {avg_pred_records["max_pred_date"].max()}')

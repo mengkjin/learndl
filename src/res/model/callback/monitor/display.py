@@ -81,7 +81,7 @@ class StatusDisplay(BaseCallBack):
         self.model.logger.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
         model_summary = self.texts.model_summary
         if model_summary:
-            self.logger.remark(model_summary)
+            self.logger.remark(model_summary , add_prefix = False , vb_level = 2)
 
     def on_fit_end_after(self):  
         if self.texts.fit_summary:

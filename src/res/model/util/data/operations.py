@@ -104,7 +104,7 @@ class DataOperator:
         self.loader_param = loader_param
 
     @property
-    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective']:
+    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'retrospective']:
         return self.loader_param.stage
 
     @property

@@ -171,20 +171,35 @@ def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs) -> pd.DataFram
         df = pivot_frame(df)
     return df
 
+def series_grouping(x : pd.Series , group_num : int , * , direction : int = 1 , strict_sparse_grouping = True) -> pd.Series:
+    """
+    group the series into group_num groups
+    """
+    bins = np.linspace(0,1,group_num + 1).tolist()
+    labels = [i for i in range(1, group_num + 1)] if direction > 0 else [i for i in range(group_num, 0, -1)]
+
+    data = x.rename('value').to_frame()
+    if strict_sparse_grouping:
+        data = x.rename('value').to_frame()
+        data = data.sort_values('value')
+        data['group'] = np.floor(np.arange(len(data)) / (len(data) + 1) * group_num) + 1
+        data = data.reindex(x.index)
+        return data['group'].astype(int)
+    else:
+        return pd.cut(x.rank(pct = True), bins=bins, labels=labels).rename('group')
+
 def eval_grp_avg(
     x : pd.DataFrame , x_cols : list[str], y_name : str = 'ret', 
-    group_num : int = 10 , excess = False , direction : int = 1
+    group_num : int = 10 , excess = False , direction : int = 1 , strict_sparse_grouping = True
 ) -> pd.DataFrame:
     """
     evaluate the group average return of the factors
     """
     y = pd.DataFrame(x[y_name], index=x.index, columns=pd.Index([y_name]))
-    group_bins = np.linspace(0,1,group_num + 1).tolist()
-    group_labels = [i for i in range(1, group_num + 1)] if direction > 0 else [i for i in range(group_num, 0, -1)]
-
+    
     rtn = list()
     for col in x_cols:
-        y['group'] = pd.cut(x[col].rank(pct = True), bins=group_bins, labels=group_labels)
+        y['group'] = series_grouping(x[col], group_num, direction=direction, strict_sparse_grouping=strict_sparse_grouping)
         if excess: 
             y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)

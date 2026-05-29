@@ -9,6 +9,7 @@ from typing import Any , ClassVar , Literal , overload
 
 from src.proj import MACHINE , DB , Proj , CALENDAR , BaseClass , BaseType
 from src.proj.util import RequireGrad
+from src.data.util import DataBlock
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
@@ -136,6 +137,14 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             self.predict_dates(dates)
         self.save_preds()
         self.deploy()
+        if self.current_update_dates:
+            self.logger.success(f'Update model prediction for {self.pred_name} , len={len(self.current_update_dates)}')
+        else:
+            self.logger.skipping(f'Model prediction for {self.pred_name} is up to date')
+        if self.deploy_required and self.current_deploy_dates:
+            self.logger.success(f'Deploy model prediction for {self.pred_name} , len={len(self.current_deploy_dates)}')
+        elif self.deploy_required:
+            self.logger.skipping(f'Model prediction for {self.pred_name} is up to date')
 
     def _get_model_num_and_submodel(self , model_num : int | None = None , submodel : str | None = None):
         if model_num is None:
@@ -239,7 +248,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
         align_secid : np.ndarray | None = None , align_date : np.ndarray | None = None ,
         load_first = True , silent = True
-    ):
+    ) -> DataBlock:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
         Args:
@@ -258,16 +267,20 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         """
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
         dates = self._get_dates(dates , start , end , step)
+        if len(dates) == 0:
+            return DataBlock()
+
         hidden_path = self.hidden_values_path(model_num , model_date , submodel)
         hidden_dfs : list[pl.DataFrame] = []
         existing_dates = []
-        if load_first:
-            saved_hidden_df = DB.load_df_pl(hidden_path)
-            if saved_hidden_df.height > 0:
-                hidden_dfs.append(saved_hidden_df)
-                existing_dates = saved_hidden_df['date'].unique()
-                dates = np.setdiff1d(dates , existing_dates)
-
+        saved_hidden_df = DB.load_df_pl(hidden_path)
+        if not load_first and saved_hidden_df.height > 0:
+            saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates))
+        if saved_hidden_df.height > 0:
+            hidden_dfs.append(saved_hidden_df)
+        existing_dates = saved_hidden_df['date'].unique()
+        dates = np.setdiff1d(dates , existing_dates)
+            
         batch_data_iterator = self.iter_batch_data(
             dates , model_date , model_num = model_num , 
             submodel = submodel , require_grad = False , silent = silent)
@@ -277,18 +290,18 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
             hidden_dfs.append(batch_data.hidden_df_pl())
         df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
-        if load_first and len(hidden_dfs) > 1:
+        if df.height > 0 and len(dates) > 0:
             DB.save_df(df , hidden_path , overwrite = True)
         if align_secid is not None:
             df = df.filter(pl.col('secid').is_in(align_secid))
         if align_date is not None:
             df = df.filter(pl.col('date').is_in(align_date))
 
-        from src.data import DataBlock
         block = DataBlock.from_polars(df)
         if feature_prefix:
             prefix = '@'.join([self.config.model_module , self.config.model_clean_name , str(model_num) , submodel])
             block.update(feature = [f'{prefix}.{col}' for col in block.feature])
+
         block = block.align_secid_date(align_secid , align_date)
         return block
 
@@ -400,17 +413,9 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         if model_name is None: 
             cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , idt = 1)
         for model in models:
-            md = cls(model , indent = indent + 1 , vb_level = vb_level + 1)
-            md.update_preds(update = True , overwrite = False , start = start , end = end)
-            if md.current_update_dates:
-                md.logger.success(f'Update model prediction for {model} , len={len(md.current_update_dates)}')
-            else:
-                md.logger.skipping(f'Model prediction for {model} is up to date')
-            if md.deploy_required:
-                if md.current_deploy_dates:
-                    md.logger.success(f'Deploy model prediction for {model} , len={len(md.current_deploy_dates)}')
-                else:
-                    md.logger.skipping(f'Model prediction for {model} is up to date')
+            md = cls(model , indent = indent , vb_level = vb_level)
+            with md.logger.subprocess(idt = 1 , vb = 1):
+                md.update_preds(update = True , overwrite = False , start = start , end = end)
         return md
 
     @classmethod
@@ -425,14 +430,6 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , idt = 1)
         for model in models:
             md = cls(model)
-            md.update_preds(update = False , overwrite = True , start = start , end = end)
-            if md.current_update_dates:
-                md.logger.success(f'Finish recalculating model prediction for {model} , len={len(md.current_update_dates)}')
-            else:
-                md.logger.skipping(f'No new recalculating model prediction for {model}')
-            if md.deploy_required:
-                if md.current_deploy_dates:
-                    md.logger.success(f'Finish deploying model prediction for {model} , len={len(md.current_deploy_dates)}')
-                else:
-                    md.logger.skipping(f'No new deploying model prediction for {model}')
+            with md.logger.subprocess(idt = 1 , vb = 1):
+                md.update_preds(update = False , overwrite = True , start = start , end = end)
         return md

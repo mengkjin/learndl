@@ -126,7 +126,7 @@ class DataModule(BaseClass.BoundLogger):
             else:
                 self.model_date_list = dates[::self.config.interval]
 
-    def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
+    def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
         """
@@ -134,8 +134,6 @@ class DataModule(BaseClass.BoundLogger):
         other kwargs:
             retro_start_date : int | None = None # start date for retrospective data , None means year start of model date
             retro_end_date : int | None = None # end date for retrospective data , None means year end of model date
-            extract_backward_days : int = 500 # backward days for extract data
-            extract_forward_days : int = 160 # forward days for extract data
         """
         if self.setup_new_param(stage , param , model_date , **kwargs):
             self.setup_loader_kwargs()
@@ -143,7 +141,7 @@ class DataModule(BaseClass.BoundLogger):
             self.setup_loader_create()
 
     def setup_new_param(
-            self , stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , 
+            self , stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
             model_date : int = -1 , retro_start_date : int | None = None , retro_end_date : int | None = None
         ) -> bool:
@@ -197,10 +195,6 @@ class DataModule(BaseClass.BoundLogger):
                     self.d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - x_extend + 1 , 0)
                     self.d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
                 test_dates = self.datas.date[self.d0 + x_extend - 1:self.d1]
-            case 'extract':
-                model_date_col = (self.datas.date < self.model_date).sum()
-                self.d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - d_extend)
-                self.d1 = min(max(0 , model_date_col + self.loader_param.extract_forward_days) , len(self.datas.date))
             case _:
                 raise KeyError(self.stage)
 
@@ -271,8 +265,6 @@ class DataModule(BaseClass.BoundLogger):
         return BatchInputLoader(self.loader_dict['test'] , self , desc = 'Test')
     def predict_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['predict'] , self , tqdm = False , desc = 'Predict')
-    def extract_dataloader(self) -> BatchInputLoader: 
-        return BatchInputLoader(self.loader_dict['extract'] , self , tqdm = False , desc = 'Extract')
     def retrospective_dataloader(self) -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['retrospective'] , self , tqdm = False , desc = 'Retrospective')
 
@@ -346,7 +338,7 @@ class DataModule(BaseClass.BoundLogger):
             return None
 
     def get_batch_input_of_date(self , date : int) -> BatchInput:
-        assert self.stage in ['predict' , 'test' , 'extract' , 'retrospective'] , f'stage should be predict , test or extract, but got {self.stage}'
+        assert self.stage in ['predict' , 'test' , 'retrospective'] , f'stage should be predict , test or retrospective, but got {self.stage}'
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
@@ -358,7 +350,7 @@ class DataModule(BaseClass.BoundLogger):
         self.storage.del_group(self.stage)
         self.loader_dates[self.stage] = []
         for set_key , set_samples in sample_index.items():
-            assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract' , 'retrospective'] , set_key
+            assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'retrospective'] , set_key
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_keys : list[str] = []
             for bnum , b_i in enumerate(set_samples):
@@ -377,7 +369,7 @@ class DataModule(BaseClass.BoundLogger):
                 batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)
                 batch_keys.append(batch_key)
-                if set_key in ['predict' , 'test' , 'extract' , 'retrospective']:
+                if set_key in ['predict' , 'test' , 'retrospective']:
                     self.loader_dates[set_key].append(self.y_date[int(xindex1[0].item())])
                 
             self.loader_dict[set_key] = StoredTorchFileLoader(self.storage , batch_keys , shuf_opt)
@@ -386,7 +378,7 @@ class DataModule(BaseClass.BoundLogger):
         datas = []
         for model_data_type , data in x.items():
             if data[index0,index1].isnan().all():
-                self.logger.error(f'Get all nan in {model_data_type} at index {index0} , {index1}')
+                raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)
             datas.append(data)
@@ -402,7 +394,7 @@ class DataModule(BaseClass.BoundLogger):
         return self._use_data if not hasattr(self , 'datas') else self.datas.use_data
 
     @property
-    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective']:
+    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'retrospective']:
         return self.loader_param.stage
 
     @cached_property

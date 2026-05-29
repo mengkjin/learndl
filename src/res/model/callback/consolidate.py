@@ -16,8 +16,7 @@ class ConsolidateCallBack(BaseCallBack):
         self.init_callbacks()
         
     def at_enter(self , hook , *args , **kwargs):
-        if Proj.verbose(VbLevelCallback):
-            self.logger.stdout(f'In stage [{self.status.stage}], Hook {hook} start')
+        self.logger.stdout(f'In Stage [{self.status.stage}], Hook {hook} start' , vb_level = VbLevelCallback)
         for cb in self.callbacks:
             if cb.is_hook_implemented(hook):
                 cb.logger.stdout(f'{hook} start' , vb_level = VbLevelCallback)
@@ -28,8 +27,7 @@ class ConsolidateCallBack(BaseCallBack):
             if cb.is_hook_implemented(hook):
                 cb.logger.stdout(f'{hook} end' , vb_level = VbLevelCallback)
                 cb.at_exit(hook , *args , **kwargs)
-        if Proj.verbose(VbLevelCallback):
-            self.logger.stdout(f'In stage [{self.status.stage}], Hook {hook} end')
+        self.logger.stdout(f'In Stage [{self.status.stage}], Hook {hook} end' , vb_level = VbLevelCallback)
 
     def print_out(self , vb_level : Any = 2 , min_key_len = -1):
         infos = [cb.get_info() for cb in self.callbacks]

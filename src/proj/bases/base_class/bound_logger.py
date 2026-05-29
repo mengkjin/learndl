@@ -56,7 +56,7 @@ class ModuleLogger:
             kwargs['indent'] = self.indent + idt
         if enter_vb is not None and 'enter_vb_level' not in kwargs:
             kwargs['enter_vb_level'] = self.vb_level + enter_vb
-        if add_prefix or (add_prefix is None and (kwargs.get('indent' , 0) <= self.module_indent or not self.is_instance_logger)):
+        if add_prefix or (add_prefix is None and (kwargs.get('indent' , 0) <= self.module_indent)):
             kwargs['prefixes'] = [f'{self.name} >>' , *kwargs.get('prefixes' , [])]
         return kwargs
 
@@ -107,33 +107,33 @@ class ModuleLogger:
         """custom lightblue stdout message for remark"""
         Logger.note(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def remark(self , *args , **kwargs):
+    def remark(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """custom lightblue stderr"""
-        Logger.remark(*args , **self.grep_kwargs(**kwargs))
+        Logger.remark(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def debug(self , *args , **kwargs):
+    def debug(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """Debug level stderr"""
-        Logger.debug(*args , **self.grep_kwargs(**kwargs))
+        Logger.debug(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def info(self , *args , **kwargs):
+    def info(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """Info level stderr"""
-        Logger.info(*args , **self.grep_kwargs(**kwargs))
+        Logger.info(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def highlight(self , *args , **kwargs):
+    def highlight(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        Logger.highlight(*args , **self.grep_kwargs(**kwargs))
+        Logger.highlight(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def warning(self , *args , **kwargs):
+    def warning(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """Warning level stderr"""
-        Logger.warning(*args , **self.grep_kwargs(**kwargs))
+        Logger.warning(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def error(self , *args , **kwargs):
+    def error(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """Error level stderr"""
-        Logger.error(*args , **self.grep_kwargs(**kwargs))
+        Logger.error(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def critical(self , *args , **kwargs):
+    def critical(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
         """Critical level stderr"""
-        Logger.critical(*args , **self.grep_kwargs(**kwargs))
+        Logger.critical(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
     def only_once(self , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
@@ -174,10 +174,12 @@ class ModuleLogger:
         kwargs = self.grep_kwargs(vb, add_prefix = False, **kwargs)
         Logger.display(obj , caption = caption , **kwargs)
 
-    def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):
+    def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs):
         kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = False, **kwargs)
         kwargs['timer_prefix'] = False
-        return Logger.Timer(f'{self.name}.{key} Timer' , **kwargs)
+        if add_prefix is None or add_prefix:
+            key = f'{self.name} >> {key}'
+        return Logger.Timer(key , **kwargs)
 
     def paragraph(self , *args , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):
         """create a paragraph context manager"""

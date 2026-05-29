@@ -51,8 +51,11 @@ class OutputDeflector(BaseClass.BoundLogger):
         self.original = None
         self.is_catching = False
 
+    def keyword_repr(self):
+        return f'original={self.original}, catcher={self.catcher}, type={self.type}'
+
     def __repr__(self):
-        return f'{self.__class__.__name__}(original={self.original}, catcher={self.catcher}, type={self.type})'
+        return f'{self.__class__.__name__}({self.keyword_repr()})'
 
     def get_write_flush(self , output : OutputDeflector | IOCatcher | OutputCatcher | TextIO | None) -> tuple[Callable, Callable]:
         if output is None:
@@ -146,6 +149,12 @@ class OutputCatcher(BaseClass.BoundLogger , ABC):
     """
     keep_original : bool = True
     export_suffix : str = '.log'
+
+    def keyword_repr(self):
+        return f'keep_original={self.keep_original}'
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.keyword_repr()})'
 
     def __enter__(self):
         """Enter the output catcher , start stdout and stderr redirection"""
@@ -678,9 +687,9 @@ class HtmlCatcher(OutputCatcher):
         
     def __bool__(self):
         return True
-    
-    def __repr__(self):
-        return f"{self.__class__.__name__}(title={self.full_title},primary={self.is_primary})"
+
+    def keyword_repr(self):
+        return f'title="{self.full_title}",primary={self.is_primary}'
 
     @cached_property
     def title(self) -> str | None:
@@ -751,11 +760,11 @@ class HtmlCatcher(OutputCatcher):
             self.start_cursor = self.PrimaryInstance.last_output
             self.start_point = len(self.PrimaryInstance.outputs)
 
-        self.logger.remark(f"Title = {self.full_title} , Primary = {self.is_primary}, Capturing Start" , vb_level = 1 if self.is_primary else 2)
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Start" , vb_level = 1 if self.is_primary else 2)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.logger.remark(f"Title = {self.full_title} , Primary = {self.is_primary}, Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1 if self.is_primary else 2)
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1 if self.is_primary else 2)
         self.export()
         if self.is_primary:
             self.deflectors.end_catching()
@@ -970,10 +979,9 @@ class MarkdownCatcher(OutputCatcher):
         
         self.kwargs = kwargs
         self.seperating_by = seperating_by
-        
 
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(title={self.title})'
+    def keyword_repr(self):
+        return f'title="{self.full_title}"'
 
     @cached_property
     def title(self) -> str | None:
@@ -1004,7 +1012,7 @@ class MarkdownCatcher(OutputCatcher):
         
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        self.logger.remark(f"Title = {self.title}, Capturing Start")
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Start")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1047,7 +1055,7 @@ class MarkdownCatcher(OutputCatcher):
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
-        self.logger.remark(f"Title = {self.title}, Capturing Finished, Cost {Duration(since = self.start_time)}")
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Duration(since = self.start_time)}")
         self.markdown_file.close()
         for filename in self.export_file_list:
             filename.unlink(missing_ok=True)
@@ -1105,8 +1113,8 @@ class CrashProtectorCatcher(OutputCatcher):
         self.kwargs = kwargs
         self.seperating_by = seperating_by
 
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(task_id={self.task_id})'
+    def keyword_repr(self):
+        return f'task_id="{self.task_id}"'
 
     def __enter__(self):
         if self.task_id is None:
@@ -1114,14 +1122,14 @@ class CrashProtectorCatcher(OutputCatcher):
         self.start_time = datetime.now()
         self.open_markdown_file()
         self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
-        self.logger.remark(f"Task ID = {self.task_id}, Capturing Start")
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Start")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.task_id is None:
             return
         self.deflectors.end_catching()
-        self.logger.remark(f"Task ID = {self.task_id}, Capturing Finished, Cost {Duration(since = self.start_time)}")
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Duration(since = self.start_time)}")
         self.logger.footnote(f"crash protector file {self.filename} removed")
         self.is_catching = False
     

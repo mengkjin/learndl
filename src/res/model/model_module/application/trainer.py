@@ -42,10 +42,10 @@ class ModelTrainer(BaseTrainer):
         if base_path and check_operation:
             last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
             if skip:
-                trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will be skipped!' , idt = 1)
+                trainer.logger.skipping(f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago.')
                 return trainer
             elif last_time:
-                trainer.logger.alert1(f'{title} operated at {last_time}, {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
+                trainer.logger.alert1(f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
             else:
                 trainer.logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
     

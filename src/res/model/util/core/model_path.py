@@ -35,8 +35,10 @@ class ModelPath:
     
     """
 
-    def __new__(cls , model_input : ModelPath | BaseType.strPath | None , *args , **kwargs) -> Self:
-        if isinstance(model_input , ModelPath):
+    def __new__(cls , model_input : ModelPath | PredictorPath | BaseType.strPath | None , *args , **kwargs):
+        if isinstance(model_input , PredictorPath):
+            return model_input.to_model_path()
+        elif isinstance(model_input , ModelPath):
             return cast(Self , model_input)
         else:
             return super().__new__(cls)
@@ -356,6 +358,9 @@ class PredictorPath(ModelPath , BaseClass.BoundLogger):
         self._model_num = model_num
         self._submodel = submodel
         self._pred_name = pred_name
+
+    def to_model_path(self) -> ModelPath:
+        return ModelPath(self.base)
 
     def __repr__(self) -> str:  
         return (

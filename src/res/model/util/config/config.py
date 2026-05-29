@@ -58,12 +58,11 @@ class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def get(self, key: str, default: Any = None) -> Any:
         return self.Param.get(key, default)
 
-    @classmethod
-    def get_config_dict(cls , base_path: ModelPath | None, schedule_name: str | None) -> FlattenDict:
-        config_path = cls.find_path(base_path, schedule_name)
+    def get_config_dict(self , base_path: ModelPath | None, schedule_name: str | None) -> FlattenDict:
+        config_path = self.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
-            cls.logger.alert1(f'Using schedule name "{schedule_name}" to load config')
+            self.logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb = 1)
         if schedule_name and config:
             if 'model.name' in config:
                 assert config['model.name'] == schedule_name, f"model.name {config['model.name']} is not the same as model_name {schedule_name}"
@@ -166,7 +165,7 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
             if self.force_module:
-                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config")
+                self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , vb = 1)
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
             assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
@@ -197,12 +196,12 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
         if "env.short_test" in self.override:
             self.Param['env.short_test'] = self.override.pop("env.short_test")
         if self.short_test:
-            self.logger.alert1(f'Short test is enabled, will update conditional config')
+            self.logger.alert1(f'Short test is enabled, will update conditional config' , vb = 1)
             self.Param.update(self.Param.get("conditional.short_test", {}))
 
         self.Param.update(self.schedule_config.Param)
         if self.model_module == "transformer":
-            self.logger.alert1(f'Model module is transformer, will update conditional config')
+            self.logger.alert1(f'Model module is transformer, will update conditional config' , vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))
         
         self.Param.update(self.override)
@@ -220,7 +219,7 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
 
         # check short_test is set correctly
         if self.should_be_short_test and not self.short_test:
-            self.logger.alert1("Should be at server or short_test, but short_test is False now!")
+            self.logger.alert1("Should be at server or short_test, but short_test is False now!" , vb = 1)
 
         # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
@@ -256,7 +255,7 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
 
         redundant_keys = np.setdiff1d(list(self.Param.keys()), list(self.REQUIRED_CONFIG_PARAM.keys()) + list(self.OPTIONAL_CONFIG_PARAM.keys())).tolist()
         if redundant_keys:
-            self.logger.alert1(f"{redundant_keys} in config files are not in default config params")
+            self.logger.alert1(f"{redundant_keys} in config files are not in default config params" , vb = 1)
 
         return self
 
@@ -800,14 +799,14 @@ class ModelConfig(BaseModelConfig):
         base_path: ModelPath | BaseType.strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None,
         start: int | None = None, end: int | None = None, stage=-1, resume=-1, selection=-1,
-        indent: int = 0 , vb_level: Any = 1,
+        indent: int = 1 , vb_level: Any = 2,
         **kwargs,
     ):
         self.set_vb(vb_level , indent)
         self.options = ModelConfigOptions(start, end, stage, resume, selection)
         self.model_config = BaseModelConfig(
             base_path, module=module, schedule_name=schedule_name, override=override, 
-            indent=indent + 1, vb_level=vb_level + 1, **kwargs)
+            indent=indent , vb_level=vb_level, **kwargs)
         self.algo_config = self.model_config.generate_algo_config()
         assert self.base_path, self.base_path
         assert self.model_config.base_path is self.base_path, \
@@ -867,7 +866,7 @@ class ModelConfig(BaseModelConfig):
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
                     raise Exception(f"{self.model_name} resumable , re-train has to delete folder manually")
                 self.base_path.clear_model_path()
-                self.logger.alert1(f"{self.base_path} is cleared")
+                self.logger.alert1(f"{self.base_path} is cleared" , vb = 1)
 
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}
@@ -1015,7 +1014,7 @@ class ModelConfig(BaseModelConfig):
 
     @property
     def parse_vb(self) -> int:
-        return 0 if self.base_path else Proj.vb.never
+        return Proj.vb.never if self.base_path.base.exists() else 0
 
     def parser_stage(self, value=-1):
         """
@@ -1158,7 +1157,7 @@ class ModelConfig(BaseModelConfig):
                 else:
                     info_strs.append((0, "Boost Params", ""))
                     for k, v in self.algo_config.Param.items():
-                        info_strs.append((2, k, f"{v}"))
+                        info_strs.append((1, k, f"{v}"))
             else:
                 if self.boost_head:
                     info_strs.append((0, "Use Boost Head", f"{self.boost_head}"))

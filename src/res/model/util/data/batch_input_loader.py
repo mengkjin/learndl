@@ -10,16 +10,14 @@ __all__ = ['BatchInputLoader' , 'DataloaderParam']
 
 @dataclass
 class DataloaderParam:
-    stage : Literal['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] = 'fit'
+    stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] = 'fit'
     model_date : int | Any = None
     seqlens : dict[str,int] | Any = None
-    extract_backward_days : int | Any = None
-    extract_forward_days  : int | Any = None
     retro_start_date : int | Any = None
     retro_end_date : int | Any = None
 
     def __post_init__(self):
-        assert self.stage in ['fit' , 'test' , 'predict' , 'extract' , 'retrospective'] , self.stage
+        assert self.stage in ['fit' , 'test' , 'predict' , 'retrospective'] , self.stage
         if self.stage == 'retrospective':
             if self.retro_start_date is None:
                 self.retro_start_date = self.model_date // 10000 * 10000 + 101
@@ -30,18 +28,13 @@ class DataloaderParam:
         assert self.seqlens is None or self.seqlens , self.seqlens
         if self.seqlens is None:
             self.seqlens = {}
-        if self.stage != 'extract':
-            self.extract_backward_days = None 
-            self.extract_forward_days  = None
 
     def __eq__(self , other : Any) -> bool:
         assert isinstance(other , DataloaderParam) , f'must compare with instance of DataloaderParam, but got {type(other)}'
         if self.stage != other.stage:
             return False
         match_attrs = ['seqlens']
-        if self.stage == 'extract':
-            match_attrs.extend(['model_date' , 'extract_backward_days' , 'extract_forward_days'])
-        elif self.stage == 'retrospective':
+        if self.stage == 'retrospective':
             match_attrs.extend(['retro_start_date' , 'retro_end_date'])
         else:
             match_attrs.append('model_date')
