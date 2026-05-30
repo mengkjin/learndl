@@ -99,7 +99,8 @@ class SummaryWriter(BaseCallBack):
         return [(name , param) for name , param in net.named_parameters()]
 
     def reset_writer(self):
-        del self.writer
+        if 'writer' in self.__dict__:
+            del self.writer
 
     def add_metrics(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']

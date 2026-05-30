@@ -1,6 +1,6 @@
 # basic verbosity settings
 basic:
-  vb:  1
+  vb: 3
   vb_max: 10
   vb_min: 0
   vb_never: 99
