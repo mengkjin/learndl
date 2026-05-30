@@ -12,7 +12,7 @@ class PortCreator(ABC , BaseClass.BoundLogger):
     def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.name = name
-        self.setup(**kwargs)
+        self.setup(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs)
     
     def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
                benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , 

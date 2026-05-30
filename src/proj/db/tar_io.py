@@ -114,11 +114,11 @@ def save_dfs_to_tar(dfs : dict[str , pd.DataFrame] , path : strPath , meta : dic
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.unlink(missing_ok=True)
         save_tar(dfs , path , meta = meta)
-        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists '
-        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
+        Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
 def load_dfs_from_tar(path : strPath , * , missing_ok = True , mapper : PD_MAPPER_TYPE = None) -> dict[str , pd.DataFrame]:
@@ -144,11 +144,11 @@ def pack_files_to_tar(files : list[strPath] , path : strPath , *, overwrite = Tr
         with tarfile.open(path, 'a') as tar:  
             for file in files:
                 tar.add(file , arcname = Path(file).relative_to(PATH.main))
-        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists '
-        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
+        Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
 def unpack_files_from_tar(path : strPath , target : strPath , * , 

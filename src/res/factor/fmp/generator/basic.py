@@ -41,7 +41,7 @@ class BasicCreatorConfig:
         return f'{self.__class__.__name__}({", ".join([f"{k}={getattr(self, k)}" for k in self.slots])})'
 
     @classmethod
-    def init_from(cls , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.slots and v is not None}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.slots}
         if use_kwargs and drop_kwargs: 
@@ -52,7 +52,7 @@ class BasicCreatorConfig:
             kwargs_str = f'dropped kwargs: {drop_kwargs}'
         else:
             kwargs_str = 'no kwargs used'
-        Logger.stdout(f'init_from: {kwargs_str}' , indent = 1 , vb_level = 3)
+        Logger.stdout(f'init_from: {kwargs_str}' , indent = indent , vb_level = vb_level)
         return cls(**use_kwargs)
 
     @cached_property

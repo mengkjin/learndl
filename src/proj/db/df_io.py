@@ -185,11 +185,11 @@ def save_df(df : pd.DataFrame | pl.DataFrame | None , path : strPath , *, overwr
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.parent.mkdir(parents=True , exist_ok=True)
         dfIOHandler.save_df(df , path)
-        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists '
-        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
+        Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
 def append_df(df : pd.DataFrame | None , path : strPath , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : Any = 1):
@@ -207,7 +207,7 @@ def append_df(df : pd.DataFrame | None , path : strPath , *, drop_duplicate_cols
             df = df.drop_duplicates(subset=drop_duplicate_cols , keep='last')
             status += f'with unique ({",".join(drop_duplicate_cols)})'
         dfIOHandler.save_df(df , path)
-        Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
 
 def load_df(
     path : strPath | strPaths , * , 

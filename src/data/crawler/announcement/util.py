@@ -11,16 +11,14 @@ import re
 import threading
 import hashlib
 import pandas as pd
-from typing import Literal, Any
+from typing import Any
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from typing import TypeVar
 
 from src.proj import CALENDAR , DB , Proj , BaseClass
-
-BJTZ = ZoneInfo("Asia/Shanghai")
+from . import const
 
 T = TypeVar("T")
 
@@ -41,6 +39,9 @@ def parse_jsonp(text: str) -> object:
         CrawlerLogger.error(f"Response is not JSONP format: {text}")
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
+
+def now_iso() -> str:
+    return datetime.now(tz=const.BJTZ).replace(microsecond=0).isoformat()
 
 class CrawlerLogger(BaseClass.BoundLogger):
     _class_vb_level = Proj.vb.get('crawler')
@@ -64,7 +65,7 @@ class CrawlerLogger(BaseClass.BoundLogger):
 
 @dataclass
 class Announcement:
-    exchange: Literal["SSE", "SZSE", "BSE"]
+    exchange: const.ExchangeType
     sec_code: str
     sec_name: str
     source_id: str
@@ -85,7 +86,7 @@ class Announcement:
  
     @classmethod
     def from_sse(cls , raw : dict[str, Any]) -> Announcement:
-        crawled_iso = datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
+        crawled_iso = now_iso()
         pdf_base_url = "https://static.sse.com.cn/disclosure"
         rel_path = str(raw.get("URL") or "").strip()
         code = str(raw.get("SECURITY_CODE") or "").strip()
@@ -95,7 +96,7 @@ class Announcement:
         title = str(raw.get("TITLE") or "").strip()
         category = str(raw.get("BULLETIN_TYPE_DESC") or "").strip()
         return cls(
-            exchange="SSE",
+            exchange=const.sse,
             sec_code=f'{code:0>6s}.SH',
             sec_name=name,
             source_id=source_id,
@@ -110,7 +111,7 @@ class Announcement:
 
     @classmethod
     def from_szse(cls, raw: dict[str, Any]) -> Announcement:
-        crawled_iso = datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
+        crawled_iso = now_iso()
         pdf_base_url = "https://disc.static.szse.cn/download"
         codes = raw.get("secCode") or []
         names = raw.get("secName") or []
@@ -121,7 +122,7 @@ class Announcement:
         rel_path = str(raw.get("attachPath") or "").strip()
         source_id = str(raw.get("annId") or raw.get("id") or "").strip()
         return cls(
-            exchange="SZSE",
+            exchange=const.szse,
             sec_code=f'{code:0>6s}.SZ' ,
             sec_name=name,
             title=title,
@@ -136,7 +137,7 @@ class Announcement:
 
     @classmethod
     def from_bse(cls, raw: dict[str, Any]) -> Announcement:
-        crawled_iso = datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
+        crawled_iso = now_iso()
         pdf_base_url = "https://www.bse.cn"
         title = (str(raw.get("disclosureTitle") or "") + str(raw.get("disclosurePostTitle") or "")).strip()
         m = re.match(r"^\[([^\]]+)\]", title)
@@ -150,7 +151,7 @@ class Announcement:
         name = str(raw.get("companyName") or "").strip()
         source_id = f'{code}|{date}|{title}'
         return cls(
-            exchange="BSE",
+            exchange=const.bse,
             sec_code=f'{code:0>6s}.BJ' ,
             sec_name=name,
             title=title,
@@ -238,11 +239,11 @@ class AnnouncementExporter:
     _instances : dict[str, AnnouncementExporter] = {}
 
     def __new__(cls, exchange: str):
-        assert exchange.lower() in ['sse' , 'szse' , 'bse'] , f'{exchange} is not in [sse, szse, bse]'
-        if exchange.lower() not in cls._instances:
-            cls._instances[exchange.lower()] = super().__new__(cls)
-            cls._instances[exchange.lower()].exchange = exchange.lower()
-        return cls._instances[exchange.lower()]
+        assert exchange in const.EXCHANGES , f'{exchange} is not in {const.EXCHANGES}'
+        if exchange not in cls._instances:
+            cls._instances[exchange] = super().__new__(cls)
+            cls._instances[exchange].exchange = exchange
+        return cls._instances[exchange]
 
     @property
     def exchange(self) -> str:
@@ -346,3 +347,47 @@ class AnnouncementExporter:
         if end >= CALENDAR.cd(CALENDAR.update_to() , -1) and not CALENDAR.is_updated_recently(paths , hours = 8.):
             return False
         return True
+
+def sse_parse_groups(groups: list[Any]) -> list[Announcement]:
+    rows: list[Announcement] = []
+    for g in groups:
+        if isinstance(g, list):
+            rows.extend([Announcement.from_sse(item) for item in g if isinstance(item, dict)])
+        elif isinstance(g, dict):
+            rows.append(Announcement.from_sse(g))
+    return rows
+
+
+def bse_query_body(page: int, start: int, end: int) -> str:
+    """Same as the form encoding on the official website (disclosureType[]=5 ...)."""
+    from urllib.parse import urlencode
+    need_fields = [
+        "companyCd",
+        "companyName",
+        "disclosureTitle",
+        "disclosurePostTitle",
+        "destFilePath",
+        "publishDate",
+        "xxfcbj",
+        "destFilePath",
+        "fileExt",
+        "xxzrlx",
+        "disclosureType",
+        "disclosureSubType",
+    ]
+    pairs: list[tuple[str, str]] = [
+        ("disclosureType[]", "5"),
+        ("disclosureSubtype[]", ""),
+        ("page", str(page)),
+        ("companyCd", ""),
+        ("isNewThree", "1"),
+        ("startTime", datetime.strptime(str(start), "%Y%m%d").date().isoformat()),
+        ("endTime", datetime.strptime(str(end), "%Y%m%d").date().isoformat()),
+        ("keyword", ""),
+        ("xxfcbj[]", "2"),
+        ("sortfield", "xxssdq"),
+        ("sorttype", "asc"),
+    ]
+    for f in need_fields:
+        pairs.append(("needFields[]", f))
+    return urlencode(pairs, doseq=True)

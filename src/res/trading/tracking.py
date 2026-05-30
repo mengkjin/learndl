@@ -13,23 +13,28 @@ class TrackingPortfolioManager(BaseClass.BoundLogger):
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
         cls.SetClassVB(vb_level , indent)
-        cls.logger.note(f'{cls.__name__} : Update since last update!')
+        cls.logger.note(f'Update since last update!')
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
         
         assert not reset_ports or all([port in TrackingPort.candidate_ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
-            
-        updated_ports = {name:TrackingPort.load(name, vb_level = vb_level + 2 , indent = indent + 1).build(date , name in reset_ports) 
-                         for name in TrackingPort.candidate_ports}
-        updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
+        
+        cls.logger.stdout(f'Build Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1 , add_prefix = True)
+        updated_ports : dict[str, TrackingPort] = {}
+        for name in TrackingPort.candidate_ports:
+            tp = TrackingPort.load(name , vb_level = cls.logger.vb_level + 1, indent = cls.logger.indent + 1)
+            with tp.logger.subprocess(idt = 1):
+                tp.build(date , name in reset_ports)
+                if not tp.new_ports[date].empty:
+                    updated_ports[name] = tp
 
-        new_ports = {name:tp.new_ports[date] for name,tp in updated_ports.items()}
-        last_ports = {name:tp.get_last_port(date).to_dataframe() for name,tp in updated_ports.items()}
-            
+        
         if len(updated_ports) == 0: 
-            cls.logger.alert1(f'No Tracking Portfolios Updated at {Dates(date)}' , idt = 1)
+            cls.logger.skipping(f'No Tracking Portfolios Updated at {Dates(date)}' , idt = 1)
         else:
+            new_ports = {name:tp.new_ports[date] for name,tp in updated_ports.items()}
+            last_ports = {name:tp.get_last_port(date).to_dataframe() for name,tp in updated_ports.items()}
             cls.logger.success(f'{len(updated_ports)} Tracking Portfolios Updated at {Dates(date)}: [{", ".join(new_ports.keys())}]' , idt = 1 , vb = 2)
             for port_name in updated_ports:
                 in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
@@ -47,10 +52,12 @@ class TrackingPortfolioManager(BaseClass.BoundLogger):
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Proj.email_attachments.append(path)
 
+        cls.logger.stdout(f'Analyze Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1 , add_prefix = True)
+        
         for name in TrackingPort.candidate_ports:
-            tp = TrackingPort.load(name , vb_level = vb_level + 2 , indent = indent + 1)
-            tp.analyze(key_fig = '')
-
+            tp = TrackingPort.load(name , vb_level = cls.logger.vb_level + 1 , indent = cls.logger.indent + 1)
+            with tp.logger.subprocess(idt = 1):
+                tp.analyze(key_fig = '')
         cls.logger.success(f'{len(TrackingPort.candidate_ports)} Tracking Portfolios Analyzed at {Dates(date)}' , idt = 1)
                     
     @classmethod

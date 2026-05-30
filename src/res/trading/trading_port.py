@@ -219,14 +219,14 @@ class TradingPort(BaseClass.BoundLogger):
             self.logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        self.logger.stdout(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}] at {Dates(port_dates)} start ...')
+        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Dates(port_dates)} start ...')
         account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine).df
         if len(account_df) <= 1:
-            self.logger.stdout(f'{self.trading_portfolio_type.title()} Portfolio [{self.name}] just start accounting and has no record' , vb = 1)
+            self.logger.stdout(f'Portfolio [{self.name}] just start accounting and has no record' , vb = 1)
             return self
         
         candidates = {task.task_name():task for task in TASK_LIST}
-        self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
+        self.tasks = {k:v(indent = self.logger.indent + 1, vb_level = self.logger.vb_level + 2, **kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
             task.calc(account_df) 
             task.plot(show = False)  
@@ -237,10 +237,10 @@ class TradingPort(BaseClass.BoundLogger):
         if write_down:
             AsyncSaver.dfs(
                 rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , 
-                indent = self.indent + 1 , vb_level = self.vb_level + 2)
+                indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 2)
             AsyncSaver.figs(
                 figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , 
-                indent = self.indent + 1 , vb_level = self.vb_level + 2)
+                indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 2)
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:
@@ -248,13 +248,13 @@ class TradingPort(BaseClass.BoundLogger):
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        self.logger.success(f'Analyze {self.trading_portfolio_type.title()} Portfolio [{self.name}]!' , vb = 2)
+        self.logger.success(f'Analyze Portfolio [{self.name}]!' , vb = 1)
         return self
 
 class TrackingPort(TradingPort):
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.tracking_ports
     @classmethod
-    def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> TrackingPort:
+    def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> TrackingPort:
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
             instance = cls(**kwargs)
@@ -287,7 +287,7 @@ class TrackingPort(TradingPort):
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        self.logger.stdout(f'Perform portfolio building for TradingPort {self.name} at {Dates(date)}')
+        self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 

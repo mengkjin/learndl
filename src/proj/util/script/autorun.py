@@ -54,15 +54,8 @@ class TaskKey:
         self._key = value
 
 class AutoRunCatchers:
-    _catch_warnings = [
-        'must accept context and return_scalar arguments' ,
-        'an item of incompatible dtype' ,
-        'parameter is deprecated and will be removed in Pillow 13'
-        'overflow encountered in reduce' ,
-        'overflow encountered in multiply' ,
-        'Mean of empty slice' ,''
-        'invalid value encountered in scalar divide' ,
-    ]
+    _raise_warnings = MACHINE.config.get('constant/project' , 'raise_warnings' , default = None)
+    _ignore_warnings = MACHINE.config.get('constant/project' , 'ignore_warnings' , default = None)
     def __init__(
         self , task_id : str | None = None , * , 
         crash_protector_catcher : bool = True ,
@@ -85,7 +78,7 @@ class AutoRunCatchers:
         if self.markdown_catcher:
             self.catchers.append(MarkdownCatcher(title , category , init_time , add_time_to_title=True , to_share_folder=True))
         if self.warning_catcher:
-            self.catchers.append(WarningCatcher(self._catch_warnings))
+            self.catchers.append(WarningCatcher(self._raise_warnings , self._ignore_warnings))
 
         for catcher in self.catchers:
             catcher.__enter__()

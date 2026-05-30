@@ -309,23 +309,23 @@ class WarningCatcher(BaseClass.BoundLogger):
             raise Exception('This will raise an exception')
     """
     def __init__(
-        self , catch_warnings : list[str] | None = None , * ,
-        method : Literal['raise' , 'ignore'] = 'raise' ,
+        self , 
+        raise_warnings : list[str] | None = None , 
+        ignore_warnings : list[str] | None = None , * ,
         highlight_varibles : dict[str, Any] | None = None ,
         indent: int = 0 , vb_level: int = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self.method = method
-        self.warnings_caught = []
         self.original_showwarning = warnings.showwarning
         warnings.filterwarnings('always')
-        self.catch_warnings = [] if catch_warnings is None else [c.lower() for c in catch_warnings]
+        self.raise_warnings = [] if raise_warnings is None else [c.lower() for c in raise_warnings]
+        self.ignore_warnings = [] if ignore_warnings is None else [c.lower() for c in ignore_warnings]
         self.highlight_varibles = highlight_varibles
     
     def custom_showwarning(self, message, category, filename, lineno, file=None, line=None) -> None:
         """Custom warning show function to catch specific warnings and show call stack"""
         # only catch the warnings we care about
-        if any(c in str(message).lower() for c in self.catch_warnings):
+        if any(c in str(message).lower() for c in self.raise_warnings):
             self.logger.alert1(f"\n caught warning: {message}")
             self.logger.alert1(f"warning location: {filename}:{lineno}")
             self.logger.alert1("call stack:")
@@ -337,8 +337,10 @@ class WarningCatcher(BaseClass.BoundLogger):
                     self.logger.alert1(f"{var_name}: {var_value}")
                 self.logger.alert1("-" * 80)
                 
-            if self.method == 'raise':
-                raise Exception(message)
+            raise Exception(message)
+
+        if any(c in str(message).lower() for c in self.ignore_warnings):
+            return
         
         # call original warning show function
         self.original_showwarning(message, category, filename, lineno, file, line)

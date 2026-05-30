@@ -113,13 +113,13 @@ def timeout_expanding_sessions(session: requests.Session | requests.AsyncSession
 
 def request_with_timeouterror(
     session: requests.Session, request_method: Literal['get', 'post'], *args, 
-    expansion : float = 2. , max_retry_count: int = 2, title : str = '' ,  **kwargs) -> requests.Response:
+    expansion : float = 2. , max_retry_count: int = 2, title : str = '' , indent : int = 0, **kwargs) -> requests.Response:
     """GET/POST with exponentially growing timeouts until success or retries exhausted."""
     if expansion < 1:
-        Logger.alert1(f"expansion {expansion} is less than 1, setting to 1")
+        Logger.alert1(f"expansion {expansion} is less than 1, setting to 1" , indent = indent)
         expansion = 1
     if max_retry_count < 1:
-        Logger.alert1(f"max_retry_count {max_retry_count} is less than 1, setting to 1")
+        Logger.alert1(f"max_retry_count {max_retry_count} is less than 1, setting to 1" , indent = indent)
         max_retry_count = 1
     match request_method:
         case 'get':
@@ -136,7 +136,7 @@ def request_with_timeouterror(
         except (TimeoutError , requests.exceptions.Timeout) as e:
             if i == max_retry_count:
                 raise e
-            Logger.stdout(f"{title} TimeoutError (expand {i} times to retry): {e!s}")
+            Logger.stdout(f"{title} TimeoutError (expand {i} times to retry): {e!s}" , indent = indent)
     raise
 
 async def request_with_timeouterror_async(
@@ -146,14 +146,15 @@ async def request_with_timeouterror_async(
     expansion: float = 2.,
     max_retry_count: int = 2,
     title: str = '',
+    indent: int = 0,
     **kwargs
 ) -> requests.Response:
     """Async GET/POST with exponentially growing timeout retry."""
     if expansion < 1:
-        Logger.alert1(f"expansion {expansion} is less than 1, setting to 1")
+        Logger.alert1(f"expansion {expansion} is less than 1, setting to 1" , indent = indent)
         expansion = 1
     if max_retry_count < 1:
-        Logger.alert1(f"max_retry_count {max_retry_count} is less than 1, setting to 1")
+        Logger.alert1(f"max_retry_count {max_retry_count} is less than 1, setting to 1" , indent = indent)
         max_retry_count = 1
     match request_method:
         case 'get':
@@ -172,7 +173,7 @@ async def request_with_timeouterror_async(
         except (TimeoutError , requests.exceptions.Timeout) as e:
             if i == max_retry_count:
                 raise e
-            Logger.alert1(f"{title} TimeoutError (expand {i} times to retry): {e!s}")
+            Logger.alert1(f"{title} TimeoutError (expand {i} times to retry): {e!s}" , indent = indent)
     raise
 
 def test_connection(target_url: str, proxy: str | None = None, timeout : float = 10. , fast_test: bool = False) -> bool:

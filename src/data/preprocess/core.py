@@ -326,7 +326,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
             return
 
         tt1 = datetime.now()
-        self.logger.stdout(f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"} start...' , vb = 2 , add_prefix = False)
+        self.logger.stdout(f'Update Preprocessed ({self.type}) of [{self.key.upper()}] start...' , vb = 2 , add_prefix = False)
         data_block = self.load_with_extension(dates_for_query = None)
         
         self.save_dump(data_block)
@@ -334,8 +334,9 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         
         # gc.collect()
         self.logger.success(
-            f'Update Preprocessed [{self.key.upper()}] for {"fitting" if self.type == "fit" else "predicting"}  '
-            f'({Dates(data_block.date)}) finished! Cost {Duration(since = tt1)}' , add_prefix = False)
+            f'Update Preprocessed ({self.type}) of [{self.key.upper()}] at '
+            f'{Dates(data_block.date)} finished! Cost {Duration(since = tt1)}' , 
+            add_prefix = False)
     
 class FactorPreProcessor(PreProcessor):
     """

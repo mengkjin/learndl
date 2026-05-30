@@ -15,7 +15,8 @@ from src.proj.util.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.proxy.caller import ProxyCallerList
 from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
 
-from .fetcher import FetcherTask , EXCHANGE_URLS
+from . import const
+from .fetcher_task import FetcherTask
 from .async_race import AsyncProxyRaceExecutor
 from .util import CrawlerLogger
 
@@ -79,12 +80,12 @@ class AnnouncementAgent(BaseClass.BoundLogger):
     def prepare_proxies(cls):
         """verify the proxies"""
         with cls.logger.paragraph(f"Prepare Proxies", level = 1, vb = 1):
-            for url in EXCHANGE_URLS.values():
+            for url in const.EXCHANGE_URLS.values():
                 ProxyAPI.get_working_proxies(url, timeout=8.0,  workers=50)
         cls.logger.display(ProxyVerifier.stats() , vb = 1)
 
     @classmethod
-    def get_proxy_pool(cls , urls : Iterable[str] | str = EXCHANGE_URLS.keys() , go_with_cached_proxies = False):
+    def get_proxy_pool(cls , urls : Iterable[str] | str = const.EXCHANGES , go_with_cached_proxies = False):
         """get the ProxyPool(AutoRefreshProxyPool)"""
         with cls.logger.timer(f"Warmup ProxyPool", idt = 1, vb = 1) as timer:
             proxy_pool = ProxyAPI.get_proxy_pool(urls , go_with_cached_proxies=go_with_cached_proxies)
@@ -92,7 +93,7 @@ class AnnouncementAgent(BaseClass.BoundLogger):
         return proxy_pool
 
     @classmethod
-    def get_async_proxy_pool(cls, urls: Iterable[str] | str = EXCHANGE_URLS.keys(), go_with_cached_proxies: bool = False):
+    def get_async_proxy_pool(cls, urls: Iterable[str] | str = const.EXCHANGES, go_with_cached_proxies: bool = False):
         with cls.logger.timer(f"Warmup AsyncProxyPool", idt = 1, vb = 1) as timer:
             if isinstance(urls, str):
                 target_urls = [urls]

@@ -30,7 +30,7 @@ class OptimizedPortfolioCreatorConfig:
     opt_short : bool = True
 
     @classmethod
-    def init_from(cls , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v != cls.__dataclass_fields__[k].default}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if use_kwargs and drop_kwargs: 
@@ -41,7 +41,7 @@ class OptimizedPortfolioCreatorConfig:
             kwargs_str = f'dropped kwargs: {drop_kwargs}'
         else:
             kwargs_str = 'no kwargs used'
-        Logger.stdout(f'init_from: {kwargs_str}' , indent = 1 , vb_level = 3)
+        Logger.stdout(f'init_from: {kwargs_str}' , indent = indent , vb_level = vb_level)
         return cls(**use_kwargs)
 
     @property

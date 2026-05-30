@@ -2,3 +2,15 @@
 # e.g. record param/grad histogram in tensorboard
 # see configs/constant/preference/debug.yaml for more details
 debug_mode: false
+
+raise_warnings:
+  - 'must accept context and return_scalar arguments'
+  - 'an item of incompatible dtype'
+  - 'parameter is deprecated and will be removed in Pillow 13'
+  - 'overflow encountered in reduce'
+  - 'overflow encountered in multiply'
+  - 'Mean of empty slice'
+  - 'invalid value encountered in scalar divide'
+
+ignore_warnings:
+  - 'missing from font(s) DejaVu Sans Mono'
