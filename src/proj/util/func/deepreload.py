@@ -5,10 +5,10 @@ temporarily patching ``builtins.__import__``):
 
 - **This module's** :func:`deepreload` scans ``sys.modules`` and reloads every module
   whose source file lies under *root* (typical for a monorepo ``src/`` tree). It does
-  not patch global import, does not print, and is scoped by path.
+  not patch global import, does not stdout, and is scoped by path.
 - **IPython** reloads the transitive import graph starting from a *single* entry
   module. That can fix stale bindings for code imported only through that graph, but
-  it temporarily replaces ``__import__``, prints ``Reloading ...`` unless suppressed,
+  it temporarily replaces ``__import__``, stdout ``Reloading ...`` unless suppressed,
   and is unsafe if the entry module imports Streamlit: the hook may try to reload
   ``streamlit.*`` internals. Use :func:`ipython_recursive_reload` only for
   non-Streamlit packages or after merging a broad ``streamlit.*`` exclude list (see

@@ -413,7 +413,7 @@ class BatchData:
             return None
         nanpos = torch.zeros_like(tensors[0])
         for ts in tensors:
-            nanpos += ts.isnan()
+            nanpos += ts.isnan().any(dim = -1 , keepdim = True)
         if nanpos.ndim > 1:
             nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0 
         if print_all_nan and nanpos.all(): 

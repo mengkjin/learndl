@@ -21,7 +21,7 @@
 #       default: 20
 #   compare:
 #       type: [forloop, process, both]
-#       desc: forloop only, process pool only, or run both and print timing
+#       desc: forloop only, process pool only, or run both and stdout timing
 #       required: False
 #       default: both
 #   overwrite:
