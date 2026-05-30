@@ -94,7 +94,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
             raise ValueError(f'Invalid resuming test fmp option: {Const.Model.resume_fmp}')
 
     def factor_test(self):
-        with self.logger.paragraph('Factor Perf Test' , 3):
+        self.logger.note('Factor Perf Test')
+        with self.logger.subprocess(idt = 1):
             with self.logger.timer(f'FactorPerfTest.get_factor'):
                 factor = self.get_factor_for_factor_test()
             with self.logger.timer(f'FactorPerfTest.load_day_rets'):
@@ -104,17 +105,20 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
             for task in self.factor_tasks:
                 self.logger.divider()
-                results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
-                                                 resume = self.config.is_resuming , save_resumable = True , 
-                                                 start = self.trainer.config.beg_date , end = self.trainer.config.end_date ,
-                                                 indent = self.indent , vb_level = self.vb_level,
-                                                 title_prefix=self.config.model_name)
+                with self.logger.timer(f'FactorPerfTest.{task}' , enter_vb=1):
+                    results = FactorTestAPI.run_test(
+                        task , factor , test_path = self.snap_folder , 
+                        resume = self.config.is_resuming , save_resumable = True , 
+                        start = self.trainer.config.beg_date , end = self.trainer.config.end_date ,
+                        indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1,
+                        title_prefix=self.config.model_name)
 
-                self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
-                self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
+                    self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
+                    self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
     def fmp_test(self):
-        with self.logger.paragraph('Factor FMP Test' , 3):
+        self.logger.note('Factor FMP Test')
+        with self.logger.subprocess(idt = 1):
             with self.logger.timer(f'FactorFMPTest.get_factor'):
                 factor = self.get_factor_for_fmp_test()
             with self.logger.timer(f'FactorFMPTest.load_alpha_models'):
@@ -129,43 +133,44 @@ class DetailedAlphaAnalysis(BaseCallBack):
             for task in self.fmp_tasks:
                 self.logger.divider()
                 results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
-                                                 resume = self.config.is_resuming , save_resumable = True , 
-                                                 start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
-                                                 indent = self.indent , vb_level = self.vb_level,
-                                                 title_prefix=self.config.model_name)
+                                                    resume = self.config.is_resuming , save_resumable = True , 
+                                                    start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
+                                                    indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1,
+                                                    title_prefix=self.config.model_name)
 
                 self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                 self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
     def display_export(self):
-        with self.logger.paragraph('Display Analytic Results' , 3):
-            for name , vb_level in self.table_vb_levels.items():
-                if not Proj.verbose(vb_level):
-                    continue
-                df = self.test_results[name].copy()
-                df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
-                for col in df.columns:
-                    if col in ['pf','bm','excess','annualized','mdd','te','ret']: 
-                        df[col] = df[col].map(lambda x:f'{x:.2%}')
-                    elif col in ['ir','calmar','turnover','IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , '|IC|_avg']: 
-                        df[col] = df[col].map(lambda x:f'{x:.3f}')
-                    elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
-                        df[col] = df[col].map(lambda x:f'{x:.3%}')
-                self.logger.display(df , caption = f'Table: {name.title()}:')
+        self.logger.note('Display Analytic Results')
+        for name , vb_level in self.table_vb_levels.items():
+            if not Proj.verbose(vb_level):
+                continue
+            df = self.test_results[name].copy()
+            df = df.reset_index(drop=isinstance(df.index , pd.RangeIndex))
+            for col in df.columns:
+                if col in ['pf','bm','excess','annualized','mdd','te','ret']: 
+                    df[col] = df[col].map(lambda x:f'{x:.2%}')
+                elif col in ['ir','calmar','turnover','IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , '|IC|_avg']: 
+                    df[col] = df[col].map(lambda x:f'{x:.3f}')
+                elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
+                    df[col] = df[col].map(lambda x:f'{x:.3%}')
+            self.logger.display(df , caption = f'Table: {name.title()}:')
 
-            for name , vb_level in self.figure_vb_levels.items():
-                if not Proj.verbose(vb_level):
-                    continue
-                self.logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:')
+        for name , vb_level in self.figure_vb_levels.items():
+            if not Proj.verbose(vb_level):
+                continue
+            self.logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:')
 
-            AsyncSaver.dfs(self.test_results , self.path_result_data , print_prefix='Analytic datas')
-            AsyncSaver.figs(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')
-            Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
+        AsyncSaver.dfs(self.test_results , self.path_result_data , print_prefix='Analytic datas')
+        AsyncSaver.figs(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')
+        Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 
     def on_test_end(self):
         if not self.tasks:
             return
         assert self.factor_names , 'factor_names is empty'
-        self.factor_test()
-        self.fmp_test()
-        self.display_export()
+        with self.logger.paragraph('Detailed Alpha Analysis' , 3):
+            self.factor_test()
+            self.fmp_test()
+            self.display_export()

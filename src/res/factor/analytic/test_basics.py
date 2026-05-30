@@ -141,13 +141,13 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
         return self
 
     def calc(self , *args , **kwargs):
-        with self.logger.timer('calc' , enter_vb = 2):
+        with self.logger.timer(f'{self.class_snake_name}.calc' , enter_vb = 2 , add_prefix = False):
             for task in self.tasks.values():  
                 task.calc(*args , **kwargs) 
         return self
 
     def plot(self , show = False):
-        with self.logger.timer('plot' , enter_vb = 2):
+        with self.logger.timer(f'{self.class_snake_name}.plot' , enter_vb = 2 , add_prefix = False):
             for task in self.tasks.values(): 
                 task.plot(show = show)
         return self

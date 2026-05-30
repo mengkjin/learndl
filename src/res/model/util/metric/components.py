@@ -53,14 +53,12 @@ class MetricComponent:
         self , 
         calculator : Callable[...,Tensor | dict[str,Tensor]] , 
         lamb : float = 1. , 
-        dim : int | None = 0 ,
         which_output : int | list[int] | None = None ,
         which_label : int | list[int] | None = None ,
         **kwargs
     ):
         self.calculator = calculator
         self.lamb = lamb
-        self.dim = dim
         self.which_output = which_output
         self.which_label = which_label
         self.kwargs = kwargs
@@ -71,7 +69,7 @@ class MetricComponent:
         return self.apply_lamb(output)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(calculator={self.calculator},lamb={self.lamb},dim={self.dim},which_output={self.which_output},which_label={self.which_label},kwargs={self.kwargs})'
+        return f'{self.__class__.__name__}(calculator={self.calculator},lamb={self.lamb},which_output={self.which_output},which_label={self.which_label},kwargs={self.kwargs})'
 
     def apply_lamb(self , output : Tensor | dict[str,Tensor]) -> Tensor | dict[str,Tensor]:
         if isinstance(output , dict):
@@ -97,7 +95,7 @@ class MetricComponent:
             label = label[:,None]
         if weight is not None and weight.ndim == 1:
             weight = weight[:,None]
-        dim = kwargs.pop('dim' , self.dim)
+        dim = kwargs.pop('dim' , None)
         if pred is not None and label is not None:
             pred , label , weight = align_shape(pred , label , weight , dim = dim)
         return kwargs | {'pred':pred , 'label':label , 'weight':weight , 'dim':dim}
@@ -107,13 +105,12 @@ class LossComponent(MetricComponent):
         self , 
         calculator : Callable[...,Tensor | dict[str,Tensor]] , 
         lamb : float = 1. , 
-        dim : int | None = 0 ,
         which_output : int | list[int] | None = None ,
         which_label : int | list[int] | None = None ,
         multilosses : MultiHeadLosses | None = None ,
         **kwargs
     ):
-        super().__init__(calculator , lamb , dim , which_output , which_label , **kwargs)
+        super().__init__(calculator , lamb , which_output , which_label , **kwargs)
         self.multilosses = multilosses
 
     def __call__(self , **kwargs) -> Tensor | dict[str,Tensor]:

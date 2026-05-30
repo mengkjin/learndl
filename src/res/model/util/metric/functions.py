@@ -40,6 +40,7 @@ class MetricFunction:
             results : dict[str,Tensor] = {}
             for criterion , component in self.components.items():
                 Logger.only_once(f'{criterion} calculated!' , object = self , mark = criterion , printer = 'success' , vb_level = 'max')
+                print(inputs)
                 value = component(which_output = which_output , which_label = which_label , **inputs)
                 if isinstance(value , dict):
                     results.update({k:v.sum() for k,v in value.items()})
