@@ -77,6 +77,8 @@ class DataModule(BaseClass.BoundLogger):
             filter_secid = self.config.input_filter_secid , 
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
+
+        print(f'factor_start_dt : {self.factor_start_dt} , factor_end_dt : {self.factor_end_dt}')
         self.datas.load()
         self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb = 10)
         
@@ -181,6 +183,9 @@ class DataModule(BaseClass.BoundLogger):
                     start_date = CALENDAR.cd(self.model_date , 1)
                     end_date = self.next_model_date(self.model_date)
                     possible_dates = self.test_full_dates
+                    print(f'possible_dates: {possible_dates}')
+                    print(f'start_date: {start_date} , end_date: {end_date}')
+                    print(f'self.config.resumed_max_pred_date: {self.config.resumed_max_pred_date}')
 
                 before_dates = self.datas.date[self.datas.date < min(possible_dates)][-y_extend:]
                 possible_dates = np.concatenate([before_dates , possible_dates])
