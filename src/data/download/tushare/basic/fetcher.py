@@ -472,6 +472,12 @@ class DayFetcher(TradeDataFetcher):
         missing_dates = np.setdiff1d(dates , stored_dates)
         return missing_dates
 
+    def target_dates(self):
+        """get target dates"""
+        target_dates = self._date_fetcher_update_dates()
+        missing_dates = self.missing_dates()
+        return np.intersect1d(target_dates , missing_dates)
+
 class WeekFetcher(TradeDataFetcher):
     """base class of week fetcher , implement get_data for real use"""
     UPDATE_FREQ = 'w'

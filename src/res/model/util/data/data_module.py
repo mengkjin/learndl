@@ -180,7 +180,7 @@ class DataModule(BaseClass.BoundLogger):
                     end_date = self.loader_param.retro_end_date
                     possible_dates = self.datas.date
                 else:
-                    start_date = CALENDAR.cd(self.model_date , 1)
+                    start_date = max(CALENDAR.cd(self.model_date , 1) , CALENDAR.td(self.config.resumed_max_pred_date , -1).as_int())
                     end_date = self.next_model_date(self.model_date)
                     possible_dates = self.test_full_dates
                     print(f'possible_dates: {possible_dates}')
