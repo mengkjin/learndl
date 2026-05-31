@@ -339,13 +339,13 @@ class Logger:
     @classmethod
     def error(cls , *args , **kwargs):
         """Error level stderr"""
-        kwargs = STDERR_PALETTE['error'] | kwargs
+        kwargs = STDERR_PALETTE['error'] | kwargs | {'vb_level' : 0}
         new_stderr(*args , **kwargs)
 
     @classmethod
     def critical(cls , *args , **kwargs):
         """Critical level stderr"""
-        kwargs = STDERR_PALETTE['critical'] | kwargs
+        kwargs = STDERR_PALETTE['critical'] | kwargs | {'vb_level' : 0}
         new_stderr(*args , **kwargs)
 
     @classmethod
