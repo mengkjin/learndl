@@ -380,7 +380,7 @@ class DataModule(BaseClass.BoundLogger):
             if data[index0,index1].isnan().all():
                 self.logger.error(f'Get all nan in {model_data_type} at index {index0} , {index1}')
                 self.logger.error(f'x valid_dates: {self.datas.x[model_data_type].valid_dates}')
-                self.logger.error(f'date: {self.y_date[index0[0]]}')
+                self.logger.error(f'date: {self.y_date[index1[0]]}')
                 raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)
