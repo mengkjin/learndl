@@ -68,12 +68,12 @@ class FactorAPI:
             execution_time: short
             memory_usage: medium
         """
-        if (cache_record := DiskTTLCache.get('update_progress', 'export_factor_table')) and cache_record.value:
+        if (cache_record := DiskTTLCache.get('daily_update', 'export_factor_table')) and cache_record.value:
             path = wrap_update(StockFactorHierarchy.factor_table_path , 'export factor table')
         else:
             path = wrap_update(StockFactorHierarchy.export_factor_table , 'export factor table')
             if path is not None and path.exists():
-                DiskTTLCache.put('update_progress', 'export_factor_table', True, ttl_hours=24)
+                DiskTTLCache.put('daily_update', 'export_factor_table', True, ttl_hours=24)
         return path if path is not None and path.exists() else None
 
     @classmethod
