@@ -193,7 +193,10 @@ class SummaryWriter(BaseCallBack):
 
         # pack run folder to tar file
         tar_filename = PATH.tensorboard.joinpath(f'{self.base_path.full_name}_{self.init_time.strftime("%Y%m%d%H%m")}.tar')
-        AsyncSaver.pack(ts_folder, tar_filename , overwrite = True)
+        AsyncSaver.pack(
+            ts_folder, tar_filename , overwrite = True , 
+            prefix = f'{self.__class__.__name__} Tensorboard Dir' , 
+            indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
 
     def append_batch_hidden_summary(self):
         if self.HIDDEN_FEATURE_MODE and 'hidden' in self.batch_data.output.other:

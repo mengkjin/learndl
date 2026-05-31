@@ -45,8 +45,9 @@ class BasicTestResult(BaseCallBack):
             df = pd.concat([df , new_df]).drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         
-        AsyncSaver.df(df , self.path_test_df , copy_for_safety = False , overwrite = True , vb_level = 'never')
-        self.logger.footnote(f'Basic Test Result saved to {self.path_test_df}' , vb = 1) 
+        AsyncSaver.df(
+            df , self.path_test_df , copy_for_safety = False , overwrite = True , 
+            prefix = f'Basic Test Result' , vb_level = self.logger.vb_level + 1 , indent = self.logger.indent + 1)
 
         return df
 
@@ -107,4 +108,4 @@ class BasicTestResult(BaseCallBack):
                 df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
                 rslt[f'{model_num}'] = df
             [AsyncSaver.df(df , self.snap_folder.joinpath(f'{key}.feather') , copy_for_safety = False , overwrite = True , vb_level = 'never') for key,df in rslt.items()]
-            AsyncSaver.dfs(rslt , self.path_result, print_prefix = 'Test Summary')
+            AsyncSaver.dfs(rslt , self.path_result, prefix = 'Test Summary' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)

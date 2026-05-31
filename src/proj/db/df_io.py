@@ -175,7 +175,10 @@ class dfIOHandler:
             raise ValueError(f'Unsupported accelerator: {accelerator}')
         return dfs
   
-def save_df(df : pd.DataFrame | pl.DataFrame | None , path : strPath , *, overwrite = True , prefix = '' , empty_ok = False , indent = 1 , vb_level : Any = 1):
+def save_df(
+    df : pd.DataFrame | pl.DataFrame | None , path : strPath , *, 
+    overwrite = True , prefix : str | None = None , empty_ok = False , 
+    indent = 1 , vb_level : Any = 1 , footnote = False):
     """save dataframe to path"""
     if df is None or (not empty_ok and len(df) == 0): 
         return False
@@ -185,14 +188,20 @@ def save_df(df : pd.DataFrame | pl.DataFrame | None , path : strPath , *, overwr
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.parent.mkdir(parents=True , exist_ok=True)
         dfIOHandler.save_df(df , path)
-        Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        if footnote:
+            Logger.footnote(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
+        else:
+            Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists '
         Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def append_df(df : pd.DataFrame | None , path : strPath , *, drop_duplicate_cols : list[str] | None = None , prefix = '' , indent = 1 , vb_level : Any = 1):
+def append_df(
+    df : pd.DataFrame | None , path : strPath , * , 
+    drop_duplicate_cols : list[str] | None = None , prefix : str | None = None , 
+    indent = 1 , vb_level : Any = 1 , footnote = False):
     """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
     if df is None or df.empty: 
         return False
@@ -207,7 +216,10 @@ def append_df(df : pd.DataFrame | None , path : strPath , *, drop_duplicate_cols
             df = df.drop_duplicates(subset=drop_duplicate_cols , keep='last')
             status += f'with unique ({",".join(drop_duplicate_cols)})'
         dfIOHandler.save_df(df , path)
-        Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+        if footnote:
+            Logger.footnote(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
+        else:
+            Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
 
 def load_df(
     path : strPath | strPaths , * , 

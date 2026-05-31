@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any , Callable
+from typing import Any , Callable , Type
 
 from src.proj.env import MACHINE , Proj
 from src.proj.core import strPath
@@ -16,13 +16,12 @@ from .task_record import TaskRecorder
 from ..emailer import Email
 from ..catcher import HtmlCatcher , MarkdownCatcher , WarningCatcher , CrashProtectorCatcher
 
-
 class TaskName:
     def __init__(self):
         self._name = None
 
-    def __get__(self , instance, owner = None):
-        if instance is None and owner is not None:
+    def __get__(self , instance : AutoRunTask | None, owner : Type[AutoRunTask]):
+        if instance is None and owner._instances:
             return owner._instances[-1].task_name
         assert self._name is not None , 'TaskName is not set'
         return self._name.replace(' ' , '_').lower()
@@ -37,15 +36,15 @@ class TaskKey:
     def __bool__(self):
         return self._key is not None
 
-    def __get__(self , instance : AutoRunTask, owner = None):
+    def __get__(self , instance : AutoRunTask | None, owner : Type[AutoRunTask]):
         if self._key is None:
             return None
         elif isinstance(self._key , str) and self._key.startswith('@'):
             key = self._key.removeprefix('@')
-            if instance is not None:
-                value = instance[key]
+            if instance is None:
+                return owner.get_value(key)
             else:
-                value = owner.get_value(key)
+                value = instance[key]
             return str(value).lower()
         else:
             return str(self._key).lower()
@@ -54,8 +53,6 @@ class TaskKey:
         self._key = value
 
 class AutoRunCatchers:
-    _raise_warnings = MACHINE.config.get('constant/project' , 'raise_warnings' , default = None)
-    _ignore_warnings = MACHINE.config.get('constant/project' , 'ignore_warnings' , default = None)
     def __init__(
         self , task_id : str | None = None , * , 
         crash_protector_catcher : bool = True ,
@@ -78,7 +75,9 @@ class AutoRunCatchers:
         if self.markdown_catcher:
             self.catchers.append(MarkdownCatcher(title , category , init_time , add_time_to_title=True , to_share_folder=True))
         if self.warning_catcher:
-            self.catchers.append(WarningCatcher(self._raise_warnings , self._ignore_warnings))
+            raise_warnings = MACHINE.config.get('constant/project' , 'raise_warnings' , default = None)
+            ignore_warnings = MACHINE.config.get('constant/project' , 'ignore_warnings' , default = None)
+            self.catchers.append(WarningCatcher(raise_warnings , ignore_warnings))
 
         for catcher in self.catchers:
             catcher.__enter__()
@@ -105,12 +104,12 @@ class AutoRunTask(BaseClass.BoundLogger):
     """
     task_name = TaskName()
     task_key = TaskKey()
-    _instances = []
+    _instances : list[AutoRunTask] = []
 
     def __new__(cls , *args , **kwargs):
-        if cls not in cls._instances:
-            cls._instances.append(super().__new__(cls))
-        return cls._instances[-1]
+        instance = super().__new__(cls)
+        cls._instances.append(instance)
+        return instance
 
     def __init__(
         self , 

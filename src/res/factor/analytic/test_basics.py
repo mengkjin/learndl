@@ -206,7 +206,7 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
             stats_path = Path(test_path) / camel_to_snake(cls.__name__) / 'factor_stats'
             return CacheFactorStats.saved_dates(stats_path)
 
-    def get_rslts(self):
+    def get_rslts(self) -> dict[str, pd.DataFrame]:
         return {k:v.calc_rslt for k,v in self.tasks.items()}
     
     def get_figs(self):
@@ -217,8 +217,12 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
-        AsyncSaver.dfs(rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , print_prefix=f'{self.__class__.__name__} Analytic Datas')
-        AsyncSaver.figs(figs   , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , print_prefix=f'{self.__class__.__name__} Analytic Plots')
+        AsyncSaver.dfs(
+            rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , 
+            prefix=f'{self.__class__.__name__} Analytic Datas' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+        AsyncSaver.figs(
+            figs , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , 
+            prefix=f'{self.__class__.__name__} Analytic Plots' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
         return self
 
     def save(self , path : BaseType.strPath):

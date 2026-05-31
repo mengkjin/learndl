@@ -147,10 +147,6 @@ class ScriptTool:
     def __repr__(self):
         return f'ScriptTool(task_name={self.task_name},task_key={self.task_key},lock_name={self.lock_name})'
 
-    @classmethod
-    def get_value(cls , key : str):
-        return AutoRunTask.get_value(key)
-
     @property
     def task_id(self):
         return self.backend_recorder.task_id

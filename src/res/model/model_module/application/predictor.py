@@ -8,7 +8,7 @@ from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
 from src.proj import MACHINE , DB , Proj , CALENDAR , BaseClass , BaseType
-from src.proj.util import RequireGrad
+from src.proj.util import RequireGrad , AsyncSaver
 from src.data.util import DataBlock
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
@@ -247,7 +247,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
         align_secid : np.ndarray | None = None , align_date : np.ndarray | None = None ,
-        load_first = True , silent = True
+        load_first = False , silent = True
     ) -> DataBlock:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
@@ -291,7 +291,10 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             hidden_dfs.append(batch_data.hidden_df_pl())
         df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
         if df.height > 0 and len(dates) > 0:
-            DB.save_df(df , hidden_path , overwrite = True)
+            AsyncSaver.df(
+                df , hidden_path , overwrite = True , 
+                prefix = f'{self.pred_name} Hidden Values' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            
         if align_secid is not None:
             df = df.filter(pl.col('secid').is_in(align_secid))
         if align_date is not None:

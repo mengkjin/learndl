@@ -2,11 +2,13 @@
 from __future__ import annotations
 import torch
 import concurrent.futures
+import numpy as np
 import pandas as pd
+import polars as pl
 import threading
 
 from copy import deepcopy
-from typing import Any , Callable
+from typing import Any , Callable , Mapping , TypeVar , cast
 from matplotlib.figure import Figure
 from pathlib import Path
 
@@ -18,18 +20,24 @@ from .export import dfs_to_excel , figs_to_pdf
 
 __all__ = ['AsyncSaver']
 
-def _prepare_torch_data(data):
+T = TypeVar('T')
+
+def _prepare_data(data : T , *, copy_for_safety : bool = True) -> T:
     """
     prepare torch data for async save , move to cpu and clone for safety
     for dict and list, recursively call _prepare_torch_data
     """
+    if not copy_for_safety:
+        return data
     if isinstance(data, torch.Tensor):
-        return data.detach().cpu().clone()
+        return cast(T, data.detach().cpu().clone())
     elif isinstance(data, dict):
-        return {k: _prepare_torch_data(v) for k, v in data.items()}
+        return cast(T, {k: _prepare_data(v) for k, v in data.items()})
     elif isinstance(data, list):
-        return [_prepare_torch_data(v) for v in data]
+        return cast(T, [_prepare_data(v) for v in data])
     else:
+        if not isinstance(data, (pd.DataFrame, pl.DataFrame, Figure, np.ndarray)):
+            Logger.warning(f'data is of type {type(data)}, will be copied for safety')
         return deepcopy(data)
 
 def _wait_futures(futures : list[Future] , raise_first_error : bool = False) -> list[BaseException]:
@@ -51,6 +59,19 @@ def _wait_futures(futures : list[Future] , raise_first_error : bool = False) -> 
                 raise
     return errors
 
+def _torch_save_with_footnote(obj : Any , path : strPath , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3) -> None:
+    """
+    save torch object to path with footnote
+    """
+    torch.save(obj, path)
+    if prefix:
+        Logger.footnote(f'{prefix} saved to {path}' , indent = indent , vb_level = vb_level)
+
+def _aprefix(prefix : str | None = None) -> str:
+    """
+    get the async prefix
+    """
+    return f'(Async) {prefix}' if prefix else ''
 class AsyncSaver:
     """
     AsyncSaver is a class that provides a way to save data asynchronously using a global thread pool.
@@ -164,7 +185,11 @@ class AsyncSaver:
             cls._futures.clear()
 
     @classmethod
-    def torch(cls , obj : Any , path : strPath , copy_for_safety : bool = True , future_group : str | None = None , **kwargs) -> Future:
+    def torch(
+        cls , 
+        obj : Any , path : strPath , copy_for_safety : bool = True , * , 
+        future_group : str | None = None , prefix : str | None = None , **kwargs
+    ) -> Future:
         """
         async save torch object to path
         Args:
@@ -177,13 +202,17 @@ class AsyncSaver:
         Returns:
             future: concurrent.futures.Future object
         """
-        if copy_for_safety:
-            obj = _prepare_torch_data(obj)
-        future = cls.submit(torch.save, obj, path, future_group = future_group, **kwargs)
+        obj = _prepare_data(obj, copy_for_safety = copy_for_safety)
+        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
+        future = cls.submit(_torch_save_with_footnote, obj, path, **kwargs)
         return future
 
     @classmethod
-    def df(cls , df : pd.DataFrame , path : strPath , copy_for_safety : bool = True , future_group : str | None = None , **kwargs) -> Future:
+    def df(
+        cls , 
+        df : pd.DataFrame | pl.DataFrame , path : strPath , copy_for_safety : bool = True , * ,
+        future_group : str | None = None , prefix : str | None = None , **kwargs
+    ) -> Future:
         """
         async save dataframe to path
         Args:
@@ -196,13 +225,17 @@ class AsyncSaver:
         Returns:
             future: concurrent.futures.Future object
         """
-        if copy_for_safety:
-            df = deepcopy(df)
-        future = cls.submit(save_df, df, path, future_group = future_group, **kwargs)
+        df = _prepare_data(df, copy_for_safety = copy_for_safety)
+        kwargs = kwargs | {'footnote': True , 'prefix': _aprefix(prefix) , 'future_group': future_group}
+        future = cls.submit(save_df, df, path, **kwargs)
         return future
 
     @classmethod
-    def dfs(cls , dfs : dict[str , pd.DataFrame] , path : strPath , copy_for_safety : bool = False , future_group : str | None = None , **kwargs) -> Future:
+    def dfs(
+        cls , 
+        dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , copy_for_safety : bool = False , * ,
+        future_group : str | None = None , prefix : str | None = None , **kwargs
+    ) -> Future:
         """
         async save multiple dataframes to path (excel format)
         
@@ -215,13 +248,17 @@ class AsyncSaver:
         Returns:
             future: concurrent.futures.Future object
         """
-        if copy_for_safety:
-            dfs = {k: deepcopy(v) for k, v in dfs.items()}
-        future = cls.submit(dfs_to_excel, dfs, path, future_group = future_group, **kwargs)
+        dfs = _prepare_data(dfs, copy_for_safety = copy_for_safety)
+        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
+        future = cls.submit(dfs_to_excel, dfs, path, **kwargs)
         return future
 
     @classmethod
-    def figs(cls , figs : dict[str , Figure] , path : strPath , copy_for_safety : bool = False , future_group : str | None = None , **kwargs) -> Future:
+    def figs(
+        cls , 
+        figs : dict[str , Figure] , path : strPath , copy_for_safety : bool = False , * ,
+        future_group : str | None = None , prefix : str | None = None , **kwargs
+    ) -> Future:
         """
         async save multiple figures to path (pdf format)
         Args:
@@ -234,13 +271,17 @@ class AsyncSaver:
         Returns:
             future: concurrent.futures.Future object
         """
-        if copy_for_safety:
-            figs = {k: deepcopy(v) for k, v in figs.items()}
-        future = cls.submit(figs_to_pdf, figs, path, future_group = future_group, **kwargs)
+        figs = _prepare_data(figs, copy_for_safety = copy_for_safety)
+        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
+        future = cls.submit(figs_to_pdf, figs, path, **kwargs)
         return future
 
     @classmethod
-    def pack(cls , source_path : strPath , target_path : strPath , future_group : str | None = None , overwrite = False , **kwargs) -> Future:
+    def pack(
+        cls , 
+        source_path : strPath , target_path : strPath , overwrite = False , * ,
+        future_group : str | None = None , prefix : str | None = None , **kwargs
+    ) -> Future:
         """
         pack the source path to the target path
         """
@@ -253,9 +294,12 @@ class AsyncSaver:
             raise FileExistsError(f'{target_path} already exists')
         target_path.parent.mkdir(parents=True, exist_ok=True)
         import tarfile
-        def packing():
+        def packing(prefix : str | None = None , indent : int = 1 , vb_level : Any = 3 , **kwargs):
             with tarfile.open(target_path, 'w:gz') as tar:
                 for path in source_path.iterdir():
                     tar.add(path, arcname=path.relative_to(source_path))
-        future = cls.submit(packing, future_group = future_group)
+            if prefix:
+                Logger.footnote(f'{prefix} packed to {target_path}' , indent = indent , vb_level = vb_level)
+        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
+        future = cls.submit(packing, **kwargs)
         return future

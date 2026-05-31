@@ -9,7 +9,7 @@ import shutil
 from datetime import datetime , timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import Any , Literal , Self , cast
+from typing import Any , Literal
 
 from src.proj import PATH , LogFile , DB , CALENDAR , Const , Logger , BaseClass , BaseType
 
@@ -34,18 +34,10 @@ class ModelPath:
         index: optional, model index
     
     """
+    def __init__(self , model_input : BaseType.strPath | ModelPath | None | Any , **kwargs) -> None:
+        super().__init__(**kwargs)
 
-    def __new__(cls , model_input : ModelPath | PredictorPath | BaseType.strPath | None , *args , **kwargs):
-        if isinstance(model_input , PredictorPath):
-            return model_input.to_model_path()
-        elif isinstance(model_input , ModelPath):
-            return cast(Self , model_input)
-        else:
-            return super().__new__(cls)
-
-    def __init__(self , model_input : BaseType.strPath | None | Any , **kwargs) -> None:
-        if not isinstance(model_input , self.__class__):
-            self.parse_input(model_input)
+        self.parse_input(model_input.base if isinstance(model_input , ModelPath) else model_input)
 
     def __bool__(self):         
         return bool(self.full_name)
@@ -54,7 +46,7 @@ class ModelPath:
     def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
-    def parse_input(self , model_input : BaseType.strPath | None):
+    def parse_input(self , model_input : BaseType.strPath  | None):
         parsed_model_input = parse_model_input(model_input)
         self.full_name : str = parsed_model_input.pop('full_name')
         self.full_name_kwargs : dict[str,Any] = parsed_model_input
@@ -367,6 +359,9 @@ class PredictorPath(ModelPath , BaseClass.BoundLogger):
             f'{self.__class__.__name__}(pred_name={self.pred_name},full_name={self.full_name},'
             f'model_num={str(self._model_num)},submodel={self._submodel})'
         )
+
+    def __eq__(self , other : PredictorPath):
+        return self.full_name == other.full_name and self._model_num == other._model_num and self._submodel == other._submodel
 
     def to_model(self):
         from src.res.model.model_module.application import ArchivedPredictorModel

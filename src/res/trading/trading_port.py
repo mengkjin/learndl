@@ -236,10 +236,12 @@ class TradingPort(BaseClass.BoundLogger):
 
         if write_down:
             AsyncSaver.dfs(
-                rslts , self.result_path_data , print_prefix=f'Analytic Test of TradingPort {self.name} datas' , 
+                rslts , self.result_path_data , 
+                prefix=f'Portfolio Analysis of {self.name} Datas' , 
                 indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 2)
             AsyncSaver.figs(
-                figs   , self.result_path_plot , print_prefix=f'Analytic Test of TradingPort {self.name} plots' , 
+                figs   , self.result_path_plot , 
+                prefix=f'Portfolio Analysis of {self.name} Plots' , 
                 indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 2)
 
         for name , fig in figs.items():

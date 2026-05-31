@@ -9,9 +9,9 @@ from typing import Any , Literal
 
 DIV_TOL = 1e-6
 
-def alert_message(message : str , color : str = 'lightyellow'):
+def alert_message(message : str , color : str = 'yellow'):
     """Emit a one-line message to stderr, optionally with ANSI color."""
-    if color == 'lightyellow':
+    if color == 'yellow':
         sys.stderr.write(f'\u001b[93m\u001b[1m{message}\u001b[0m')
     elif color == 'lightred':
         sys.stderr.write(f'\u001b[91m\u001b[1m{message}\u001b[0m')

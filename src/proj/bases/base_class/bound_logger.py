@@ -92,7 +92,7 @@ class ModuleLogger:
         Logger.skipping(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
     def alert1(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
-        """custom stdout message with lightyellow for alert"""
+        """custom stdout message with yellow for alert"""
         Logger.alert1(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
     def alert2(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
@@ -163,7 +163,7 @@ class ModuleLogger:
         """Print the exception"""
         return Logger.print_exc(e , color = color , bold = bold)
 
-    def print_traceback_stack(self , color : str = 'lightyellow' , bold : bool = True):
+    def print_traceback_stack(self , color : str = 'yellow' , bold : bool = True):
         """Print the exception stack"""
         return Logger.print_traceback_stack(color = color , bold = bold)
 
@@ -175,10 +175,8 @@ class ModuleLogger:
         Logger.display(obj , caption = caption , **kwargs)
 
     def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs):
-        kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = False, **kwargs)
+        kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = add_prefix, **kwargs)
         kwargs['timer_prefix'] = False
-        if add_prefix is None or add_prefix:
-            key = f'{self.name} >> {key}'
         return Logger.Timer(key , **kwargs)
 
     def paragraph(self , *args , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , **kwargs):

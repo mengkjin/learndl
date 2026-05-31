@@ -40,7 +40,7 @@ def run_packed_tensorboard():
         return
     Logger.success("Choose from available packed Tensorboard tar files:")
     for i , packed_tar in enumerate(packed_tars):
-        Logger.stdout(f"{i + 1:>2}. {packed_tar.name}" , indent = 1 , color = 'lightyellow')
+        Logger.stdout(f"{i + 1:>2}. {packed_tar.name}" , indent = 1 , color = 'yellow')
     index = int(input("Enter the number of the packed Tensorboard tar to launch: "))
     assert index >= 1 and index <= len(packed_tars) , f"Invalid index: {index} , must be between 1 and {len(packed_tars)}"
     packed_tar = packed_tars[index - 1]
@@ -64,7 +64,7 @@ def run_trained_models_tensorboard():
         return
     Logger.success("Choose from available models that have tensorboard logs when no model name is provided:")
     for i , model in enumerate(candidates):
-        Logger.stdout(f"{i + 1:>2}. {model.full_name}" , indent = 1 , color = 'lightyellow')
+        Logger.stdout(f"{i + 1:>2}. {model.full_name}" , indent = 1 , color = 'yellow')
     index = int(input("Enter the number of the model to launch: "))
     assert index >= 1 and index <= len(candidates) , f"Invalid index: {index} , must be between 1 and {len(candidates)}"
     model_name = candidates[index - 1].full_name
@@ -96,7 +96,7 @@ class TSBoardAPI:
 
         options = ["local Tensorboard logs in run folder (lastest training)" , "Packed Tensorboard tar files (all past trainings)" , "Tensorboard logs of Trained Models (preserved training logs)"]
         for i , option in enumerate(options):
-            Logger.stdout(f"{i + 1:>2}. {option}" , indent = 1 , color = 'lightyellow')
+            Logger.stdout(f"{i + 1:>2}. {option}" , indent = 1 , color = 'yellow')
         index = int(input("Enter the number of the option to launch: "))
         assert index >= 1 and index <= len(options) , f"Invalid index: {index} , must be between 1 and {len(options)}"
         

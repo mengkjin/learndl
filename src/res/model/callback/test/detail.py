@@ -94,6 +94,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
             raise ValueError(f'Invalid resuming test fmp option: {Const.Model.resume_fmp}')
 
     def factor_test(self):
+        if not self.factor_tasks:
+            return
         self.logger.note('Factor Perf Test')
         with self.logger.subprocess(idt = 1):
             with self.logger.timer(f'FactorPerfTest.get_factor'):
@@ -104,7 +106,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 factor.within_benchmarks()
 
             for task in self.factor_tasks:
-                self.logger.divider()
+                self.logger.divider(vb = 2)
                 with self.logger.timer(f'FactorPerfTest.{task}' , enter_vb=1):
                     results = FactorTestAPI.run_test(
                         task , factor , test_path = self.snap_folder , 
@@ -117,6 +119,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
                     self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
     def fmp_test(self):
+        if not self.fmp_tasks:
+            return
         self.logger.note('Factor FMP Test')
         with self.logger.subprocess(idt = 1):
             with self.logger.timer(f'FactorFMPTest.get_factor'):
@@ -127,19 +131,21 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 factor.risk_model()
             with self.logger.timer(f'FactorFMPTest.load_universe'):
                 factor.universe(load = True)
-            with self.logger.timer(f'FactorFMPTest.load_day_quotes'):
+            with self.logger.timer(f'FactorFMPTest.load_day_quotes' ):
                 factor.day_quotes()
 
             for task in self.fmp_tasks:
-                self.logger.divider()
-                results = FactorTestAPI.run_test(task , factor , test_path = self.snap_folder , 
-                                                    resume = self.config.is_resuming , save_resumable = True , 
-                                                    start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
-                                                    indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1,
-                                                    title_prefix=self.config.model_name)
+                self.logger.divider(vb = 2)
+                with self.logger.timer(f'FactorFMPTest.{task}' , enter_vb=1):
+                    results = FactorTestAPI.run_test(
+                        task , factor , test_path = self.snap_folder , 
+                        resume = self.config.is_resuming , save_resumable = True , 
+                        start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
+                        indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1,
+                        title_prefix=self.config.model_name)
 
-                self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
-                self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
+                    self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
+                    self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
     def display_export(self):
         self.logger.note('Display Analytic Results')
@@ -162,8 +168,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 continue
             self.logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:')
 
-        AsyncSaver.dfs(self.test_results , self.path_result_data , print_prefix='Analytic datas')
-        AsyncSaver.figs(self.test_figures , self.path_result_plot , print_prefix='Analytic plots')
+        AsyncSaver.dfs(
+            self.test_results , self.path_result_data , 
+            prefix='Detailed Alpha Analysis Datas' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+        AsyncSaver.figs(
+            self.test_figures , self.path_result_plot , 
+            prefix='Detailed Alpha Analysis Plots' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
         Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 
     def on_test_end(self):

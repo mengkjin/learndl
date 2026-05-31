@@ -23,7 +23,7 @@ STDERR_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
     'debug' : {'color' : 'gray' , 'level_prefix' : {'level' : 'DEBUG' , 'color' : 'white' , 'bg_color' : 'gray'} , 'bold' : True},
     'info' : {'color' : 'lightgreen' , 'level_prefix' : {'level' : 'INFO' , 'color' : 'black' , 'bg_color' : 'lightgreen'} , 'bold' : True},
     'highlight' : {'color' : 'lightcyan' , 'level_prefix' : {'level' : 'HIGHLIGHT' , 'color' : 'black' , 'bg_color' : 'lightcyan'} , 'bold' : True},
-    'warning' : {'color' : 'lightyellow' , 'level_prefix' : {'level' : 'WARNING' , 'color' : 'black' , 'bg_color' : 'lightyellow'} , 'bold' : True},
+    'warning' : {'color' : 'yellow' , 'level_prefix' : {'level' : 'WARNING' , 'color' : 'black' , 'bg_color' : 'yellow'} , 'bold' : True},
     'error' : {'color' : 'lightred' , 'level_prefix' : {'level' : 'ERROR' , 'color' : 'white' , 'bg_color' : 'lightred'} , 'bold' : True},
     'critical' : {'color' : 'lightpurple' , 'level_prefix' : {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'lightpurple'} , 'bold' : True},
 }
@@ -35,7 +35,7 @@ STDOUT_PALETTE : dict[str, dict[str, Any]] = {
     'caption'  : {'arg_prefix' : None , 'color' : 'white' , 'bg_color' : 'gray' , 'bold' : True},
     'success'  : {'arg_prefix' : 'Success : ' , 'color' : 'lightgreen' , 'to_log_file' : True},
     'skipping' : {'arg_prefix' : 'Skipping: ' , 'color' : 'gray'},
-    'alert1'   : {'arg_prefix' : 'Caution : ' , 'color' : 'lightyellow' , 'to_log_file' : True},
+    'alert1'   : {'arg_prefix' : 'Caution : ' , 'color' : 'yellow' , 'to_log_file' : True},
     'alert2'   : {'arg_prefix' : 'RedAlert: ' , 'color' : 'lightred' , 'to_log_file' : True},
     'alert3'   : {'arg_prefix' : 'Emergent: ' , 'color' : 'lightpurple' , 'to_log_file' : True}
 }
@@ -110,7 +110,7 @@ def new_print_exc(e : Exception , color : str = 'lightred' , bold : bool = True)
     new_stderr(error_msg , color = color , bold = bold)
     return error_msg
 
-def new_print_traceback_stack(color : str = 'lightyellow' , bold : bool = True) -> str:
+def new_print_traceback_stack(color : str = 'yellow' , bold : bool = True) -> str:
     """Print the traceback stack"""
     stack = traceback.extract_stack()
     stack_str = 'Traceback Stack:\n'
@@ -127,7 +127,7 @@ class Logger:
         stdout level:
             - stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
             - divider: long line on stdout
-            - success (lightgreen) , skipping (gray) , footnote (gray) , alert1 (lightyellow) , alert2 (lightred) , alert3 (purple)
+            - success (lightgreen) , skipping (gray) , footnote (gray) , alert1 (yellow) , alert2 (lightred) , alert3 (purple)
 
         stderr level:
             - stderr: custom stderr (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs
@@ -414,7 +414,7 @@ class Logger:
         return new_print_exc(e , color = color , bold = bold)
 
     @classmethod
-    def print_traceback_stack(cls , color : str = 'lightyellow' , bold : bool = True , **kwargs):
+    def print_traceback_stack(cls , color : str = 'yellow' , bold : bool = True , **kwargs):
         """Print the exception stack"""
         return new_print_traceback_stack(color = color , bold = bold)
 
@@ -560,7 +560,7 @@ class Logger:
             self.key_suffix = ''
             self.level = level
             self.char : Literal['-' , '=' , '*'] = char
-            self.color = ['lightyellow' , 'lightgreen' , 'lightcyan' , 'white' , 'gray'][level-1]
+            self.color = ['yellow' , 'lightgreen' , 'lightcyan' , 'white' , 'gray'][level-1]
             self.vb_level = max(Proj.vb(vb_level) , 1 if level == 1 else 2)
             self.enter_vb_level = max(Proj.vb(enter_vb_level) , 1 if level == 1 else 2)
             self.exit_infos : list[str] = []

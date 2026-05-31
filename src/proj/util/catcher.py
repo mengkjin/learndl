@@ -329,7 +329,7 @@ class WarningCatcher(BaseClass.BoundLogger):
             self.logger.alert1(f"\n caught warning: {message}")
             self.logger.alert1(f"warning location: {filename}:{lineno}")
             self.logger.alert1("call stack:")
-            self.logger.print_traceback_stack(color = 'lightyellow' , bold = True)
+            self.logger.print_traceback_stack()
             self.logger.alert1("-" * 80)
 
             if self.highlight_varibles is not None:
