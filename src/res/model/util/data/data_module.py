@@ -381,6 +381,12 @@ class DataModule(BaseClass.BoundLogger):
                 self.logger.error(f'Get all nan in {model_data_type} at index {index0} , {index1}')
                 self.logger.error(f'x valid_dates: {self.datas.x[model_data_type].valid_dates}')
                 self.logger.error(f'date: {self.y_date[index1[0]]}')
+                self.logger.error(f'keys: {x.keys()}')
+                self.logger.error(f'seq_lens: {self.seq_lens}')
+                self.logger.error(f'seq_steps: {self.seq_steps}')
+                self.logger.error(f'early_test_dates: {self.early_test_dates}')
+                self.logger.error(f'model_test_dates: {self.model_test_dates}')
+                
                 raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)
