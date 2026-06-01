@@ -39,7 +39,7 @@ def align_shape(pred : Tensor , label : Tensor , weight : Tensor | None = None ,
             label = label[...,:last_dim]
             pred = pred[...,:last_dim]
         if weight is not None:
-            weight = weight[...,:last_dim]
+            weight = weight[...,:label.shape[-1]]
     else:
         assert dim == 0 , f'dim should be 0 when provided, got {dim}'
         assert label.shape[-1] == pred.shape[-1] or label.shape[-1] == 1 , \

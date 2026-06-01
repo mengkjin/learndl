@@ -71,7 +71,7 @@ class OptionsCache:
         for method in dir(OptionsDefinition):
             if not method.startswith(('_')):
                 cls.cache[method] = getattr(OptionsDefinition , method)()
-        PATH.dump_json(cls.cache, cls.cache_path)
+        PATH.dump_json(cls.cache, cls.cache_path , overwrite = True)
 
     @classmethod
     def clear(cls):
