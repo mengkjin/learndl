@@ -75,7 +75,7 @@ class CatBoost(BasicBoostModel):
         
     def predict(self , x : BoostInput | str = 'test'):
         data = self.boost_input(x)
-        return data.output(self.model.predict(data.X().cpu().numpy()))
+        return data.output(self.model.predict(data.X.cpu().numpy()))
     
     def to_dict(self):
         model_dict = super().to_dict()

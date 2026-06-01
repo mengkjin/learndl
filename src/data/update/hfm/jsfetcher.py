@@ -391,7 +391,7 @@ class JSFetcher:
         if res_pos + days > len(_dates['res']): 
             return None
 
-        def f_read(k,d,p=''):
+        def f_read(k,d,p='') -> pd.DataFrame:
             return pyreadr.read_r(path_param[k].joinpath(f'{path_param[k].name}_{d}.Rdata'))['data'].rename(columns={'data':k+p})
         wind_id = f_read('id',date)
 

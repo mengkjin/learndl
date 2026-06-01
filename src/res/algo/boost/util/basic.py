@@ -177,8 +177,8 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
         pred  = self.predict(test).to_2d()
         index = test.date
 
-        ic = ic_2d(pred , label , dim = 0)
-        ric = rankic_2d(pred , label , dim = 0)
+        ic = ic_2d(pred , label , dim = 0) if label is not None else torch.full_like(pred[0,:] , fill_value=torch.nan)
+        ric = rankic_2d(pred , label , dim = 0) if label is not None else torch.full_like(pred[0,:] , fill_value=torch.nan)
         return pd.DataFrame({'ic' : ic , 'rankic' : ric} , index = index)
 
     @staticmethod

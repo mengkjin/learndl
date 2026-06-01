@@ -12,47 +12,54 @@ import pandas as pd
 import xarray as xr
 
 from copy import deepcopy
-from dataclasses import dataclass , field
-from typing import Any , Literal
+from dataclasses import dataclass
+from functools import cached_property
+from typing import Any , Literal , TypeVar , cast
 
 from src.proj import Logger
 from src.func import match_values , index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
+from src.func.tensor import rank_pct
 
 __all__ = ['BoostOutput' , 'BoostInput' , 'BoostWeightMethod']
 
+T = TypeVar('T')
 @dataclass(slots=True)
 class BoostDataset:
-    x : Any
-    y : Any
-    w : Any
-    date : Any = None
+    x : torch.Tensor
+    y : torch.Tensor | None
+    w : torch.Tensor
+    date : np.ndarray
     
     def as_numpy(self):
-        [setattr(self , attr , getattr(self , attr).cpu().numpy()) for attr in self.__slots__ 
-            if isinstance(getattr(self , attr) , torch.Tensor)]
-        return self
+        return {
+            'x' : self.x.cpu().numpy(),
+            'y' : self.y.cpu().numpy() if self.y is not None else None,
+            'w' : self.w.cpu().numpy(),
+            'date' : self.date,
+        }
 
     def to(self , device : torch.device | None = None):
-        [setattr(self , attr , getattr(self , attr).to(device)) for attr in self.__slots__ 
-            if isinstance(getattr(self , attr) , torch.Tensor)]
+        self.x = self.x.to(device)
+        self.y = self.y.to(device) if self.y is not None else None
+        self.w = self.w.to(device)
         return self
     
     def boost_inputs(self , boost_type : Literal['lgbm' , 'xgboost' , 'catboost'] , group = False):
-        self.as_numpy()
-        boost_inputs = {'data' : self.x , 'label' : self.y}
+        data = self.as_numpy()
+        boost_inputs = {'data' : data['x'] , 'label' : data['y']}
         if boost_type == 'lgbm':
             # if group: boost_inputs['group'] = self.group_arr()
-            boost_inputs['weight'] = self.w
+            boost_inputs['weight'] = data['w']
         elif boost_type == 'xgboost':
             if False and group: 
-                g = self.group_arr()
-                boost_inputs['group'] = g
-                boost_inputs['weight'] = np.array([self.w[e-length:e].sum() for e , length in zip(g.cumsum() , g)])
-            boost_inputs['weight'] = self.w
+                group_arr = self.group_arr
+                boost_inputs['group'] = group_arr
+                boost_inputs['weight'] = np.array([data['w'][e-length:e].sum() for e , length in zip(group_arr.cumsum() , group_arr)])
+            boost_inputs['weight'] = data['w']
         elif boost_type == 'catboost':    
             # if group: boost_inputs['group_id'] = self.group_id()
-            boost_inputs['weight'] = self.w
+            boost_inputs['weight'] = data['w']
         else:
             raise ValueError(f'Boost type {boost_type} not supported')
         return boost_inputs
@@ -61,10 +68,12 @@ class BoostDataset:
         assert (np.diff(self.date) >= 0).all() , 'date must be sorted'
         return np.unique(self.date , return_counts=True)[1]
     
-    def group_id(self): return self.date
+    def group_id(self): 
+        return self.date
 
     @property
-    def nfeat(self): return self.x.shape[-1]
+    def nfeat(self): 
+        return self.x.shape[-1]
 
 @dataclass
 class BoostOutput:
@@ -108,7 +117,6 @@ class BoostOutput:
         assert self.label is not None , f'{self.__class__.__name__} label is None'
         return ic_2d(self.to_2d() , self.label , 0)
 
-@dataclass
 class BoostInput:
     """Aligned 3-D tensor container for boost model input.
 
@@ -123,33 +131,35 @@ class BoostInput:
         feature:      Feature name array of shape ``(n_feature,)``.
         weight_param: Keyword arguments forwarded to :class:`BoostWeightMethod`.
                       Supported keys:
-                        * ``ts_type``           – ``'lin'`` | ``'exp'`` | ``None``
-                        * ``cs_type``           – ``'top'`` | ``'ones'`` | ``None``
-                        * ``bm_type``           – ``'in'`` | ``None``
-                        * ``ts_lin_rate``       – float (default 0.5)
-                        * ``ts_half_life_rate`` – float (default 0.5)
-                        * ``cs_top_tau``        – float
-                        * ``cs_ones_rate``      – float (default 2.0)
-                        * ``bm_rate``           – float (default 2.0)
-                        * ``bm_secid``          – benchmark security IDs or ``None``
+                        * ``ts_type``           : ``'lin'`` | ``'exp'`` | ``None``
+                        * ``cs_type``           : ``'top'`` | ``'positive'`` | ``'ones'`` | ``None``
+                        * ``bm_type``           : ``'in'`` | ``None``
+                        * ``ts_lin_rate``       : float (default 0.5)
+                        * ``ts_half_life_rate`` : float (default 0.5)
+                        * ``cs_top_tau``        : float
+                        * ``cs_ones_rate``      : float (default 2.0)
+                        * ``bm_rate``           : float (default 2.0)
+                        * ``bm_secid``          : benchmark security IDs or ``None``
         n_bins:       When not ``None``, ``y`` is converted to integer category
                       labels in ``[0, n_bins - 1]`` for classification training.
     """
-    x : torch.Tensor
-    y : torch.Tensor | Any = None
-    w : torch.Tensor | Any = None
-    secid   : np.ndarray | Any = None
-    date    : np.ndarray | Any = None
-    feature : np.ndarray | Any = None
-    weight_param : dict[str,Any] = field(default_factory=dict)
-    n_bins : int | None = None
-    
-    def __post_init__(self):
+   
+    def __init__(
+        self , x : torch.Tensor , y : torch.Tensor | Any = None , w : torch.Tensor | Any = None ,
+        secid : np.ndarray | Any = None , date : np.ndarray | Any = None , feature : np.ndarray | Any = None ,
+        weight_param : dict[str,Any] | None = None , n_bins : int | None = None):
+        self._x = x
+        self._raw_y = y
+        self._y = None
+        self._w = w
+        self._secid = secid
+        self._date = date
+        self._feature = feature
+        self._weight_param = weight_param or {}
+        self._n_bins = n_bins
+
         self.update_feature()
-        self.weight_method = BoostWeightMethod(**self.weight_param)
-        self.use_feature = self.feature
-        self._raw_y = self.y
-        self.to_categorical(n_bins=self.n_bins)
+        self.to_categorical()
 
     def __repr__(self):
         return '\n'.join(
@@ -159,101 +169,120 @@ class BoostInput:
              f'weight_method={self.weight_method})'])
 
     @property
-    def complete(self):
+    def x(self) -> torch.Tensor:
+        return self._x
+    @property
+    def y(self) -> torch.Tensor | None:
+        return self._y
+    @property
+    def w(self) -> torch.Tensor:
+        return self._w
+    @property
+    def secid(self) -> np.ndarray:
+        return self._secid
+    @property
+    def date(self) -> np.ndarray:
+        return self._date
+    @property
+    def feature(self) -> np.ndarray:
+        return self._feature
+    @property
+    def weight_param(self) -> dict[str,Any]:
+        return self._weight_param
+    @property
+    def n_bins(self) -> int | None:
+        return self._n_bins
+
+    @property
+    def complete(self) -> bool:
         return self.y is not None and self.secid is not None and self.date is not None and self.feature is not None
     @property
-    def finite(self):
+    def finite(self) -> torch.Tensor:
+        finite = ~self.x.isnan().all(dim=-1)
         if self.y is not None:
-            return self.y >= 0 if self.is_categorical else self.y.isfinite()
-        else:
-            return torch.ones_like(self.x[:,:,0] , dtype=torch.bool)
+            finite = finite & (self.y >= 0 if self.is_categorical else self.y.isfinite())
+        return finite
     @property
-    def is_categorical(self): return self.n_bins is not None
+    def is_categorical(self) -> bool: 
+        return self.n_bins is not None
 
-    def copy(self): return deepcopy(self)
+    @cached_property
+    def weight_method(self) -> BoostWeightMethod:
+        return BoostWeightMethod(**self.weight_param)
 
-    def to_categorical(self , n_bins : int | None = 100):
-        if n_bins is None:
-            self.n_bins = None
-            self.y = self._raw_y
-        elif n_bins is not None and self.n_bins != n_bins:
-            rank_pct = self._raw_y.argsort(dim = 0).argsort(dim = 0).where(~self._raw_y.isnan() , torch.nan)
-            rank_pct /= rank_pct.nan_to_num().max(dim = 0 , keepdim = True)[0] + 1e-6
-            self.y = (rank_pct * n_bins).int().clip(-1 , n_bins-1)
-            self.n_bins = n_bins
+    def copy(self) -> BoostInput:
+        return deepcopy(self)
 
-        return self
-
-    def set_weight_param(self , **weight_param):
+    def set_weight_param(self , **weight_param) -> None:
         self.weight_method.reset(**weight_param)
+        self.__dict__.pop('weight_method' , None)
 
-    def update_feature(self , use_feature = None):
+    def update_feature(self , use_feature = None) -> None:
         if use_feature is None:
             self.use_feature = self.feature
         else:
             assert all(np.isin(use_feature , self.feature)) , np.setdiff1d(use_feature , self.feature)
             self.use_feature = use_feature
 
-    def obj_flatten(self , obj : torch.Tensor | np.ndarray | None , dropna = True , date_first = True) -> Any:
-        """Flatten a 2-D or 3-D array to 1-D (or 2-D for ``x``) by the finite mask.
+    def to_categorical(self , n_bins : int | None = 100) -> BoostInput:
+        if n_bins is None:
+            self._n_bins = None
+            self._y = self._raw_y
+        elif n_bins is not None and self.n_bins != n_bins:
+            self._n_bins = n_bins
+            self._y = (rank_pct(self._raw_y , dim = 0) * n_bins).int().clip(-1 , n_bins-1)
+        self.__dict__.pop('Y' , None)
+        return self
 
-        Parameters
-        ----------
-        obj:        Tensor/array aligned with ``(n_sample, n_date, ...)``.
-        dropna:     If ``True`` (default) keep only positions where
-                    ``self.finite`` is ``True``; otherwise keep all.
-        date_first: If ``True`` (default) transpose to ``(n_date, n_sample, ...)``
-                    before flattening so that the output is date-major.
-
-        Returns
-        -------
-        Flattened array of length ``n_finite`` (or ``n_sample * n_date`` when
-        ``dropna=False``).
-        """
-        if obj is None:
-            return obj
-
-        finite = self.finite if dropna else self.finite.fill_(True)
-
-        if date_first and obj.ndim > 1:
-            obj = obj.transpose(1,0) if isinstance(obj , torch.Tensor) else obj.swapaxes(1,0)
-            if finite.ndim > 1: 
-                finite = finite.transpose(1,0)
-
-        if obj.ndim == 1:
-            finite = finite.flatten()
-        return obj[finite]
-
-    def SECID(self , dropna = True):
+    @cached_property
+    def SECID(self) -> np.ndarray:
         """Return flat security-ID array aligned with the finite mask."""
-        return self.obj_flatten(self.secid[:,None].repeat(len(self.date),axis=1) , dropna=dropna)
+        return flatten_by_date(self.secid[:,None].repeat(len(self.date),axis=1) , self.finite)
 
-    def DATE(self , dropna = True):
+    @cached_property
+    def DATE(self) -> np.ndarray:
         """Return flat date array aligned with the finite mask."""
-        return self.obj_flatten(self.date[None,:].repeat(len(self.secid),axis=0) , dropna=dropna)
+        return flatten_by_date(self.date[None,:].repeat(len(self.secid),axis=0) , self.finite)
 
+    @cached_property
     def X(self) -> torch.Tensor:
         """Return flat feature matrix of shape ``(n_finite, n_use_feature)``.
 
         Only the columns in ``use_feature`` are returned; NaN rows are dropped.
+        ! important: rank_pct is applied to every date every feature
         """
-        return self.obj_flatten(self.x[...,match_slice(self.use_feature , self.feature)] , dropna=True)
+        x = self.x[...,match_slice(self.use_feature , self.feature)]
+        x = rank_pct(x , dim = 0)
+        return flatten_by_date(x , self.finite)
 
-    def Y(self):
-        """Return flat label vector of length ``n_finite``, NaN rows dropped."""
-        return self.obj_flatten(self.y , dropna=True)
+    @cached_property
+    def Y(self) -> torch.Tensor | None:
+        """
+        Return flat label vector of length ``n_finite``, NaN rows dropped.
+        
+        ! important: rank_pct is applied to every date
+        """
+        if self.y is None:
+            return None
+        else:
+            y = rank_pct(self.y , dim = 0)
+            return flatten_by_date(y , self.finite)
 
-    def W(self):
+    @cached_property
+    def W(self) -> torch.Tensor:
         """Return flat sample weight vector of length ``n_finite``, NaN rows dropped.
 
         If ``self.w`` is ``None`` the weights are computed on-the-fly from
         ``weight_method.calculate_weight()``.
         """
-        w = self.weight_method.calculate_weight(self.y , self.secid) if self.w is None and self.y is not None else self.w
-        return self.obj_flatten(w , dropna=True)
+        if self.w is None and self.y is not None:
+            w = self.weight_method.calculate_weight(self.y , self.secid) 
+        else:
+            w = self.w
+        return flatten_by_date(w , self.finite)
     
-    def Dataset(self , *args): 
-        return BoostDataset(self.X() , self.Y() , self.W() , self.DATE())
+    def Dataset(self): 
+        return BoostDataset(self.X , self.Y , self.W , self.DATE)
         
     def output(self , pred : torch.Tensor | np.ndarray | Any):
         """Wrap a flat prediction array into a :class:`BoostOutput`.
@@ -303,10 +332,10 @@ class BoostInput:
         return len(self.feature) if self.use_feature is None else len(self.use_feature)
 
     def to_dataframe(self):
-        df = pd.DataFrame(self.X().cpu().numpy() , columns = self.feature)
-        df['secid'] = self.SECID()
-        df['date']  = self.DATE()
-        df['label'] = self.Y()
+        df = pd.DataFrame(self.X.cpu().numpy() , columns = self.feature)
+        df['secid'] = self.SECID
+        df['date']  = self.DATE
+        df['label'] = self.Y.cpu().numpy() if self.Y is not None else np.nan
         df = df.set_index(['secid' , 'date'])
         return df
 
@@ -329,7 +358,7 @@ class BoostInput:
         var_sec  = np.intersect1d(SECID_COLS , data.columns.to_numpy())
         var_date = np.intersect1d(DATE_COLS  , data.columns.to_numpy())
         assert len(var_sec) == len(var_date) == 1, (var_sec , var_date , data.columns)
-        data = data.set_index([var_sec[0] , var_date[0]])
+        data = data.rename(columns={var_sec[0]:'secid' , var_date[0]:'date'}).set_index(['secid' , 'date'])
 
         if label_col is None:
             label_col = data.columns.to_list()[-1]
@@ -346,18 +375,22 @@ class BoostInput:
         return cls(x , y , None , secid , date , feature , weight_param)
 
     @classmethod
-    def from_numpy(cls , x : np.ndarray , y : np.ndarray | Any = None,  w : np.ndarray | Any = None ,
-                   secid : Any = None , date : Any = None , feature : Any = None ,
-                   weight_param : dict[str,Any] = {}):
+    def from_numpy(
+        cls , x : np.ndarray , y : np.ndarray | None = None,  w : np.ndarray | None = None ,
+        secid : Any = None , date : Any = None , feature : Any = None ,
+        weight_param : dict[str,Any] | None = None):
         """Construct from NumPy arrays, delegating to :meth:`from_tensor`."""
-        return cls.from_tensor(torch.Tensor(x) , None if y is None else torch.Tensor(y) ,
-                               None if w is None else torch.Tensor(w) ,
-                               secid , date , feature , weight_param)
+        return cls.from_tensor(
+            x = torch.Tensor(x) , 
+            y = None if y is None else torch.Tensor(y) ,
+            w = None if w is None else torch.Tensor(w) ,
+            secid = secid , date = date , feature = feature , weight_param = weight_param)
     
     @classmethod
-    def from_tensor(cls , x : torch.Tensor , y : torch.Tensor | Any = None , w : torch.Tensor | Any = None ,
-                    secid : Any = None , date : Any = None , feature : Any = None ,
-                    weight_param : dict[str,Any] = {}):
+    def from_tensor(
+        cls , x : torch.Tensor , y : torch.Tensor | None = None , w : torch.Tensor | None = None ,
+        secid : Any = None , date : Any = None , feature : Any = None ,
+        weight_param : dict[str,Any] | None = None):
         """Construct from tensors, normalising shapes and generating default indices.
 
         ``x`` may be 2-D ``(n_sample, n_feature)`` (treated as single date) or
@@ -386,7 +419,7 @@ class BoostInput:
         return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod
-    def concat(cls , datas : list[BoostInput | None]):
+    def concat(cls , datas : list[BoostInput | None]) -> BoostInput:
         """Union-merge a list of :class:`BoostInput` objects along all axes.
 
         ``secid`` and ``date`` are union-merged; ``feature`` is stacked
@@ -408,10 +441,12 @@ class BoostInput:
             x[*tar_grid] = blk.x[*src_grid]
 
             tar_grid , src_grid = intersect_meshgrid([secid , date] , [blk.secid , blk.date])
-            y[*tar_grid] = blk.y[*src_grid]
+            if blk.y is not None:
+                y[*tar_grid] = blk.y[*src_grid]
             if blk.w is not None and w is not None:
                 w[*tar_grid] = blk.w[*src_grid]
-
+        if y.isnan().all():
+            y = None
         new_binput = cls(x , y , w , secid , date , feature)
         return new_binput
         
@@ -452,7 +487,7 @@ class BoostWeightMethod:
     bm_rate : float = 2.
     bm_secid : np.ndarray | list | None = None
 
-    def calculate_weight(self , y : np.ndarray | torch.Tensor , secid : Any):
+    def calculate_weight(self , y : np.ndarray | torch.Tensor , secid : np.ndarray) -> torch.Tensor:
         """Compute the combined ``(n_sample, n_date)`` weight matrix.
 
         The result is the element-wise product of :meth:`cs_weight`,
@@ -461,13 +496,17 @@ class BoostWeightMethod:
         if y.ndim == 3 and y.shape[-1] == 1:
             y = y[...,0]
         assert y.ndim == 2 , y.shape
-        return self.cs_weight(y) * self.ts_weight(y) * self.bm_weight(y , secid)
+        value = self.cs_weight(y) * self.ts_weight(y) * self.bm_weight(y , secid)
+        if isinstance(value , torch.Tensor):
+            return value
+        else:
+            return torch.from_numpy(value)
 
     def cs_weight(self , y : np.ndarray | torch.Tensor , **kwargs):
         """Cross-sectional weights of shape ``(n_sample, n_date)``.
 
         ``'ones'``: samples with label ``== 1`` get weight ``cs_ones_rate``
-        (default ×2).
+        (default * 2).
         ``'top'``: exponential rank-based decay so top-ranked securities receive
         higher weight.  ``None``: uniform ones.
         """
@@ -520,3 +559,30 @@ class BoostWeightMethod:
     
     def reset(self , **kwargs):
         [setattr(self , k , v) for k,v in kwargs.items()]
+
+def flatten_by_date(obj : T , finite : torch.Tensor) -> T:
+    """Flatten a 2-D or 3-D array to 1-D (or 2-D for ``x``) by the finite mask.
+
+    Parameters
+    ----------
+    obj:        Tensor/array aligned with ``(n_sample, n_date, ...)``.
+    dropna:     If ``True`` (default) keep only positions where
+                ``self.finite`` is ``True``; otherwise keep all.
+    date_first: If ``True`` (default) transpose to ``(n_date, n_sample, ...)``
+                before flattening so that the output is date-major.
+
+    Returns
+    -------
+    Flattened array of length ``n_finite`` (or ``n_sample * n_date`` when
+    ``dropna=False``).
+    """
+    assert obj is None or isinstance(obj , (torch.Tensor , np.ndarray)) , type(obj)
+    if obj is None:
+        return obj
+    if obj.ndim > 1:
+        transposed = obj.transpose(1,0) if isinstance(obj , torch.Tensor) else obj.swapaxes(0,1)
+    else:
+        transposed = obj
+    if finite.ndim > 1:
+        finite = finite.transpose(1,0)
+    return cast(T , transposed[finite])

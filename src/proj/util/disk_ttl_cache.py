@@ -86,8 +86,8 @@ class DiskTTLCacheEntry:
         }
 
     def put(self, value: Any , ttl_hours: float | None = None) -> DiskTTLCacheEntry:
-        assert self.ttl_hours or ttl_hours, f'ttl_hours is required when updating entry : {self.key} in namespace : {self.namespace}'
-        ttl_hours = ttl_hours or self.ttl_hours
+        if self.ttl_hours > 0:
+            ttl_hours = ttl_hours or self.ttl_hours
         return DiskTTLCache.put(self.namespace, self.key, value, ttl_hours=ttl_hours)
 
     @classmethod

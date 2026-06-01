@@ -45,7 +45,7 @@ def data_type_abbr(key : str):
     """
     key = key.lower()
     if (key.startswith('trade_') and len(key)>6):
-        return key[6:]
+        return key.removeprefix('trade_')
     elif key.startswith(('rtn_lag','res_lag','std_lag')):
         return '{:s}{:d}'.format(key[:3] , sum([int(s) for s in key[7:].split('_')]))
     elif key in ['y' , 'labels']:

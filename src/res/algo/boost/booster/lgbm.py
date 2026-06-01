@@ -89,7 +89,7 @@ class Lgbm(BasicBoostModel):
         
     def predict(self , x : BoostInput | str = 'test'):
         data = self.boost_input(x)
-        X = data.X().cpu().numpy()
+        X = data.X.cpu().numpy()
         return data.output(self.model.predict(X))
     
     def to_dict(self):
@@ -204,7 +204,7 @@ class LgbmPlot(BaseClass.BoundLogger):
         
         # 定义计算SHAP模型，这里使用TreeExplainer
         explainer = shap.TreeExplainer(self.lgbm.model)
-        X_df = deepcopy(train.X())
+        X_df = deepcopy(train.X)
             
         # 计算全部因子SHAP
         shap_values = explainer.shap_values(X_df)
@@ -233,7 +233,7 @@ class LgbmPlot(BaseClass.BoundLogger):
         if self.plot_path is None:
             self.logger.alert1(f'plot path not given, will not proceed')
             return
-        x = train.X().cpu().numpy()
+        x = train.X.cpu().numpy()
         pred = np.array(self.lgbm.model.predict(x))
         dtrain = lightgbm.Dataset(x, label=pred)
         _params = deepcopy(self.lgbm.train_param)
@@ -255,7 +255,7 @@ class LgbmPlot(BaseClass.BoundLogger):
         for feature , imp in zip(self.lgbm.model.feature_name() , self.lgbm.model.feature_importance()):
             if imp == 0: 
                 continue
-            x = deepcopy(train.X()).cpu().numpy()
+            x = deepcopy(train.X).cpu().numpy()
             if isinstance(x , pd.DataFrame): 
                 x = x.values
             ifeat = match_values(feature , train.feature)

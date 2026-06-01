@@ -58,6 +58,8 @@ class AdaBoost(BasicBoostModel):
         train_data = BoostInput.concat([train , valid])
         dset = train_data.Dataset().to(device)
 
+        assert dset.y is not None , 'y must not be None in fitting'
+
         dset.x = self.input_transform(dset.x)
         dset.y = self.label_transform(dset.y)
 
@@ -69,7 +71,7 @@ class AdaBoost(BasicBoostModel):
     
     def predict(self , x : BoostInput | str = 'test'):
         data = self.boost_input(x)
-        X = self.input_transform(data.X())
+        X = self.input_transform(data.X)
         return data.output(self.model.predict(X))
     
     def to_dict(self):

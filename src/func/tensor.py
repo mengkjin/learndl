@@ -350,6 +350,7 @@ def rank_pct(x : Tensor , * , dim : int | None = 0) -> Tensor:
         x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32) + 1 # .where(~x.isnan() , nan)
         x_rank[x.isnan()] = nan
         x_rank = x_rank / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
+
     return x_rank
 
 def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : Tensor | None = None , min_coverage = 0.5):
