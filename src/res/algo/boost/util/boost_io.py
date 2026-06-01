@@ -17,7 +17,7 @@ from functools import cached_property
 from typing import Any , Literal , TypeVar , cast
 
 from src.proj import Logger
-from src.func import match_values , index_merge , match_slice , intersect_meshgrid
+from src.func import index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
 from src.func.tensor import rank_pct
 
@@ -149,17 +149,13 @@ class BoostInput:
         secid : np.ndarray | Any = None , date : np.ndarray | Any = None , feature : np.ndarray | Any = None ,
         weight_param : dict[str,Any] | None = None , n_bins : int | None = None):
         self._x = x
-        self._raw_y = y
-        self._y = None
+        self._y = y
         self._w = w
         self._secid = secid
         self._date = date
         self._feature = feature
         self._weight_param = weight_param or {}
         self._n_bins = n_bins
-
-        self.update_feature()
-        self.to_categorical()
 
     def __repr__(self):
         return '\n'.join(
@@ -203,6 +199,13 @@ class BoostInput:
             finite = finite & (self.y >= 0 if self.is_categorical else self.y.isfinite())
         return finite
     @property
+    def finite_idx(self) -> tuple[torch.Tensor, torch.Tensor]:
+        tr_finite = self.finite.transpose(0,1)
+        idx0 = torch.arange(self.x.shape[0])[None,:].where(tr_finite , torch.nan)[tr_finite].to(torch.int)
+        idx1 = torch.arange(self.x.shape[1])[:,None].where(tr_finite , torch.nan)[tr_finite].to(torch.int)
+        return idx0 , idx1
+
+    @property
     def is_categorical(self) -> bool: 
         return self.n_bins is not None
 
@@ -213,25 +216,22 @@ class BoostInput:
     def copy(self) -> BoostInput:
         return deepcopy(self)
 
-    def set_weight_param(self , **weight_param) -> None:
+    def set_weight_param(self , **weight_param):
         self.weight_method.reset(**weight_param)
         self.__dict__.pop('weight_method' , None)
+        return self
 
-    def update_feature(self , use_feature = None) -> None:
-        if use_feature is None:
-            self.use_feature = self.feature
-        else:
-            assert all(np.isin(use_feature , self.feature)) , np.setdiff1d(use_feature , self.feature)
-            self.use_feature = use_feature
-
-    def to_categorical(self , n_bins : int | None = 100) -> BoostInput:
-        if n_bins is None:
+    def set_data_param(self , use_feature : np.ndarray | list[str] | None = None , n_bins : int | None = None): 
+        if not hasattr(self , '_use_feature'):
+            self._use_feature = None
+        if not hasattr(self , '_n_bins'):
             self._n_bins = None
-            self._y = self._raw_y
-        elif n_bins is not None and self.n_bins != n_bins:
+        if use_feature is not None and (self._use_feature is None or not np.array_equal(use_feature , self._use_feature)):
+            self._use_feature = np.array(use_feature)
+            self.__dict__.pop('X' , None)
+        if n_bins is not None and n_bins != self._n_bins:
             self._n_bins = n_bins
-            self._y = (rank_pct(self._raw_y , dim = 0) * n_bins).int().clip(-1 , n_bins-1)
-        self.__dict__.pop('Y' , None)
+            self.__dict__.pop('Y' , None)
         return self
 
     @cached_property
@@ -251,7 +251,7 @@ class BoostInput:
         Only the columns in ``use_feature`` are returned; NaN rows are dropped.
         ! important: rank_pct is applied to every date every feature
         """
-        x = self.x[...,match_slice(self.use_feature , self.feature)]
+        x = self.x[...,self.feat_idx]
         x = rank_pct(x , dim = 0)
         return flatten_by_date(x , self.finite)
 
@@ -259,7 +259,6 @@ class BoostInput:
     def Y(self) -> torch.Tensor | None:
         """
         Return flat label vector of length ``n_finite``, NaN rows dropped.
-        
         ! important: rank_pct is applied to every date
         """
         if self.y is None:
@@ -311,7 +310,7 @@ class BoostInput:
             raise ValueError(f'BoostOutput cannot deal with pred with ndim {new_pred.ndim}')
 
         finite = self.finite if self.y is not None else torch.full_like(new_pred , fill_value=True)
-        return BoostOutput(new_pred , self.secid , self.date , finite , self._raw_y)
+        return BoostOutput(new_pred , self.secid , self.date , finite , self.y)
 
     def pred_to_dataframe(self , pred : np.ndarray | torch.Tensor):
         new_pred = pred.numpy() if isinstance(pred , torch.Tensor) else pred 
@@ -321,7 +320,11 @@ class BoostInput:
 
     @property
     def feat_idx(self): 
-        return match_values(self.use_feature , self.feature)
+        if self._use_feature is None:
+            return slice(None)
+        else:
+            assert all(np.isin(self._use_feature , self.feature)) , np.setdiff1d(self._use_feature , self.feature)
+            return match_slice(self._use_feature , self.feature)
 
     @property
     def shape(self): 
@@ -329,7 +332,7 @@ class BoostInput:
 
     @property
     def nfeat(self): 
-        return len(self.feature) if self.use_feature is None else len(self.use_feature)
+        return len(self.feature) if self._use_feature is None else len(self._use_feature)
 
     def to_dataframe(self):
         df = pd.DataFrame(self.X.cpu().numpy() , columns = self.feature)

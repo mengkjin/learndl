@@ -315,7 +315,7 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
         if self.db_by_name:
             ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
         else:
-            dates = DB.dates(self.DB_SRC , self.DB_KEY)
+            dates = self.stored_dates()
             ldate = max(dates) if len(dates) else self.START_DATE
         if self.rollback_date: 
             ldate = min(ldate , self.rollback_date)
@@ -423,9 +423,13 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
         iterate_fetcher = TushareIterateFetcher(self.__class__.__name__ , tushare_api , limit , max_fetch_times = max_fetch_times , breakpoint = breakpoint , **kwargs)
         return iterate_fetcher.fetch()
         
-    def missing_dates(self):
+    def missing_dates(self , **kwargs):
         """get missing dates"""
         return np.array([] , dtype = int)
+
+    def stored_dates(self):
+        """get stored dates"""
+        return DB.dates(self.DB_SRC , self.DB_KEY)
 
     @classmethod
     def update_missing(cls):
@@ -465,18 +469,14 @@ class DayFetcher(TradeDataFetcher):
     """base class of day fetcher , implement get_data for real use"""
     UPDATE_FREQ = 'd'
 
-    def missing_dates(self):
+    def missing_dates(self , updated = True , **kwargs):
         """get missing dates"""
-        dates = CALENDAR.range(self.START_DATE , None , type = 'td' , updated = True)
-        stored_dates = DB.dates(self.DB_SRC , self.DB_KEY)
-        missing_dates = np.setdiff1d(dates , stored_dates)
-        return missing_dates
+        dates = CALENDAR.range(self.START_DATE , None , type = 'td' , updated = updated)
+        return np.setdiff1d(dates , self.stored_dates())
 
     def target_dates(self):
         """get target dates"""
-        target_dates = self._date_fetcher_update_dates()
-        missing_dates = self.missing_dates()
-        return np.intersect1d(target_dates , missing_dates)
+        return np.intersect1d(self._date_fetcher_update_dates() , self.missing_dates())
 
 class WeekFetcher(TradeDataFetcher):
     """base class of week fetcher , implement get_data for real use"""

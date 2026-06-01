@@ -85,7 +85,7 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
 
     def update_feature(self , use_feature = None):
         if use_feature is not None: 
-            [bdata.update_feature(use_feature) for bdata in self.data.values()]
+            [bdata.set_data_param(use_feature = use_feature) for bdata in self.data.values()]
         return self
 
     @abstractmethod
@@ -112,7 +112,7 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
         train_param = {k:v for k,v in deepcopy(self.train_param).items() if k in self.DEFAULT_TRAIN_PARAM}
 
         # categorical_label
-        n_bins = train_param.pop('n_bins', None)
+        n_bins : int | None = train_param.pop('n_bins', None)
         if self.boost_objective_multi:
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
@@ -126,8 +126,8 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
         if valid is None: 
             valid = self.data['valid']
 
-        self.fit_train_ds = train.to_categorical(n_bins).Dataset()
-        self.fit_valid_ds = valid.to_categorical(n_bins).Dataset()
+        self.fit_train_ds = train.set_data_param(n_bins = n_bins).Dataset()
+        self.fit_valid_ds = valid.set_data_param(n_bins = n_bins).Dataset()
         self.fit_train_param = train_param
 
         return self

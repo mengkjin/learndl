@@ -7,6 +7,10 @@ from src.data.download.tushare.basic import DayFetcher , TS
 class DailyQuote(DayFetcher):
     """Daily Quote"""
     DB_KEY = 'day'
+    def missing_dates(self , **kwargs):
+        """get missing dates"""
+        return super().missing_dates(updated = False)
+
     def get_data(self , date : int):
         date_str = str(date)
         adj = self.locked_fetch(self.api.query , 'adj_factor',  trade_date=date_str).rename(columns={'adj_factor':'adjfactor'})
