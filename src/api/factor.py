@@ -68,12 +68,17 @@ class FactorAPI:
             execution_time: short
             memory_usage: medium
         """
-        if (cache_record := DiskTTLCache.get('daily_update', 'export_factor_table')) and cache_record.value:
-            path = wrap_update(StockFactorHierarchy.factor_table_path , 'export factor table')
+        record_entry = DiskTTLCache.get('daily_update', 'export_factor_table')
+        if record_entry.valid_value:
+            def bypass_export():
+                path = StockFactorHierarchy.factor_table_path()
+                Logger.skipping(f'Factor table already exported {record_entry.time_str} ...')
+                return path
+            path = wrap_update(bypass_export , 'export factor table')
         else:
             path = wrap_update(StockFactorHierarchy.export_factor_table , 'export factor table')
             if path is not None and path.exists():
-                DiskTTLCache.put('daily_update', 'export_factor_table', True, ttl_hours=24)
+                record_entry.put(True , ttl_hours = 24)
         return path if path is not None and path.exists() else None
 
     @classmethod

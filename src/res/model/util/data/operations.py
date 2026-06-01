@@ -9,7 +9,7 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
 from src.proj import Logger
-from src.func.tensor import nanmedian , standardize
+from src.func.tensor import nanmedian , standardize , rank_pct
 from src.data import DataBlockNorm
 from src.res.model.util.config import ModelConfig
 
@@ -129,20 +129,27 @@ class DataOperator:
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if valid is not None: 
             y.nan_to_num_(0)[~valid] = torch.nan
-        w = None
         y = standardize(y , dim=0)
-        if no_weight or (self.stage != 'fit' and y.isnan().all().item()): 
-            return y , w
-        
         weight_scheme = self.config.weight_scheme(self.stage , no_weight)
-        assert weight_scheme in ['equal' , 'top' , None] , weight_scheme
+        w = self.label_weighting(weight_scheme , y)
+        return y, w
+
+    def label_weighting(self , weight_scheme : Literal['equal' , 'top' , 'polar'] , y : torch.Tensor) -> torch.Tensor | None:
+        '''weighting for label'''
+        if weight_scheme == 'equal' or y.isnan().all().item(): 
+            return None
         if weight_scheme == 'top':
             w = torch.ones_like(y)
             try: 
                 w[y > nanmedian(y , dim=0 , keepdim=True)] = 2
             except Exception:    
                 w[y > nanmedian(y)] = 2
-        return y, w
+        elif weight_scheme == 'polar':
+            y_rank = rank_pct(y , dim = 0)
+            w = torch.abs(2 * y_rank - 1).square().clamp(0.25 , 1)
+        else:
+            raise ValueError(f'Invalid weight scheme: {weight_scheme}')
+        return w
 
     def rolling_rotation(self , key : str | None , x : torch.Tensor , index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , * , dim = 1 , squeeze_out = True) -> torch.Tensor:
         '''rotate [stock , date , inday , feature] to [sample , rolling sequence (by step) , inday , feature]'''

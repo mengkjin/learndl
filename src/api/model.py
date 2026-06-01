@@ -2,6 +2,7 @@ from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
   ModelTrainer , ModelTestor , ArchivedPredictorModel , ModelPortfolioBuilder)
 from src.proj import PATH , MACHINE , Logger , Proj
+from src.proj.util import DiskTTLCache
 from src.data import PreProcessorTask
 
 from .util import wrap_update
@@ -53,7 +54,7 @@ class ModelAPI:
             Logger.alert1('This is not a server with cuda, skip this process')
 
     @classmethod
-    def resume_testing(cls , force_resume : bool = False):
+    def resume_testing(cls , force_resume : bool = False , daily_update_component : bool = False):
         '''
         Resume testing models for both laptop and server:
 
@@ -70,7 +71,16 @@ class ModelAPI:
           execution_time: medium
           memory_usage: medium
         '''
-        ModelTrainer.resume_testing(force_resume = force_resume)
+        if daily_update_component:
+            record_entry = DiskTTLCache.get('daily_update', 'resume_testing')
+            if record_entry.valid_value:
+                Logger.skipping(f'Resume testing already done {record_entry.time_str} ...')
+                return
+            with Proj.vb.temporary_vb(1):
+                wrap_update(ModelTrainer.resume_testing , 'resume testing' , force_resume = force_resume)
+                record_entry.put(True , ttl_hours = 24)
+        else:
+            ModelTrainer.resume_testing(force_resume = force_resume)
     
     @classmethod
     def update_preds(cls):

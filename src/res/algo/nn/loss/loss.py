@@ -242,6 +242,7 @@ class SoftTopKLoss(BaseLoss):
         self.target_ratio = target_ratio
 
     def forward(self, pred : torch.Tensor , label : torch.Tensor , dim : int | None = None , **kwargs) -> torch.Tensor:
+        # should not use label weight for long-only purpose
         std = pred.std(dim = dim , keepdim=True) + 1e-8
         temperature = std * (self.target_ratio * 10) 
         

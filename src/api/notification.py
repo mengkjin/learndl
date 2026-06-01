@@ -2,7 +2,7 @@ import pandas as pd
 import torch
 from datetime import datetime
 from src.proj import MACHINE , Logger , CALENDAR , DB
-from src.proj.util import Options , Email , TempFile , TaskRecorder
+from src.proj.util import Options , Email , TempFile , TaskRecorder , DiskTTLCache
 from .util import wrap_update
 
 class NotificationAPI:
@@ -107,8 +107,9 @@ class NotificationAPI:
             return
         today = CALENDAR.updated()
         task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))
-        if task_recorder.is_finished():
-            Logger.skipping(f'email_to_fanghan at {today} already done')
+        record_entry = DiskTTLCache.get('daily_update', 'email_to_fanghan')
+        if task_recorder.is_finished() or record_entry.valid_value:
+            Logger.skipping(f'email_to_fanghan at {today} already done {record_entry.time_str} ...')
             return
         
         pred_dates = DB.dates('pred' , 'gru_day_V1')
@@ -133,6 +134,7 @@ class NotificationAPI:
             try:
                 Email.send(title , body , recipient , attachments = attachments)
                 task_recorder.mark_finished()
+                record_entry.put(True , ttl_hours = 24)
             except Exception as e:
                 Logger.error(f'Failed to send email to fanghan: {e}')
                 Logger.print_exc(e)

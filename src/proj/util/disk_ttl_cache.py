@@ -19,11 +19,15 @@ from src.proj.env import PATH
 _T = TypeVar('_T')
 _SAFE_NAMESPACE = re.compile(r'[^\w\-.]+')
 
-TypeNamespace : TypeAlias = Literal['daily_update']
-_namespace_options : frozenset[str] = frozenset(['daily_update'])
+TypeNamespace : TypeAlias = Literal['cache_meta' , 'daily_update']
+_namespace_options : frozenset[str] = frozenset(['cache_meta' , 'daily_update'])
 _max_ttl_hours : dict[str, float] = {
+    'cache_meta': 24 * 365,
     'daily_update': 24,
 }
+
+def _current_time() -> datetime:
+    return datetime.now(tz=BJ_TZ)
 
 def _parse_datetime(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
@@ -35,7 +39,7 @@ def _ensure_json_serializable(value: Any) -> None:
 
 def _validate_ttl_hours(namespace: str, ttl_hours: float | None = None) -> float:
     assert namespace in _namespace_options, f'namespace {namespace} is not supported, supported namespaces: {_namespace_options}'
-    max_ttl_hours = min(_max_ttl_hours[namespace], 24 * 31)
+    max_ttl_hours = min(_max_ttl_hours[namespace], 24 * 365)
     assert max_ttl_hours > 0, f'max_ttl_hours must be positive, got {max_ttl_hours}'
     if ttl_hours is None:
         return max_ttl_hours
@@ -59,7 +63,7 @@ class DiskTTLCacheEntry:
     def __bool__(self) -> bool:
         return self.is_valid
 
-    def invalidate_entry(self) -> DiskTTLCacheEntry | None:
+    def manual_expire(self) -> DiskTTLCacheEntry | None:
         if self:
             return DiskTTLCacheEntry(
                 namespace=self.namespace,
@@ -67,7 +71,7 @@ class DiskTTLCacheEntry:
                 value=self.value,
                 ttl_hours=self.ttl_hours,
                 created_at=self.created_at,
-                expires_at=datetime.now(tz=BJ_TZ) - timedelta(seconds=1),
+                expires_at=_current_time() - timedelta(seconds=1),
             )
         else:
             return None
@@ -81,15 +85,22 @@ class DiskTTLCacheEntry:
             'ttl_hours': self.ttl_hours,
         }
 
+    def put(self, value: Any , ttl_hours: float | None = None) -> DiskTTLCacheEntry:
+        assert self.ttl_hours or ttl_hours, f'ttl_hours is required when updating entry : {self.key} in namespace : {self.namespace}'
+        ttl_hours = ttl_hours or self.ttl_hours
+        return DiskTTLCache.put(self.namespace, self.key, value, ttl_hours=ttl_hours)
+
     @classmethod
     def create(cls, namespace: TypeNamespace, key: str, value: Any, ttl_hours: float) -> DiskTTLCacheEntry:
+        created_at = _current_time()
+        expires_at = created_at + timedelta(hours=ttl_hours)
         return cls(
             namespace=namespace,
             key=key,
             value=value,
             ttl_hours=ttl_hours,
-            created_at=datetime.now(tz=BJ_TZ),
-            expires_at=datetime.now(tz=BJ_TZ) + timedelta(hours=ttl_hours),
+            created_at=created_at,
+            expires_at=expires_at,
         )
 
     @classmethod
@@ -118,13 +129,39 @@ class DiskTTLCacheEntry:
         )
 
     @property
+    def age(self) -> float:
+        return (_current_time() - self.created_at).total_seconds() / 3600
+        
+    @property
     def is_valid(self) -> bool:
         """Return whether this entry is still before ``expires_at``."""
-        return self.value is not None and datetime.now(tz=BJ_TZ) <= self.expires_at
+        return self.value is not None and not self.is_expired
+
+    @property
+    def is_expired(self) -> bool:
+        return _current_time() > self.expires_at
+    
+    @property
+    def expired_within_ttl(self) -> bool:
+        return self.is_expired and self.expires_at - self.created_at < timedelta(hours=self.ttl_hours)
 
     @property
     def create_time_str(self) -> str:
         return self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+
+    @property
+    def valid_value(self) -> Any | None:
+        return self.value if self.is_valid else None
+
+    @property
+    def time_str(self) -> str:
+        if self.expired_within_ttl:
+            return f'{self.age:.1f} hours ago but expired at {self.expires_at.strftime('%Y-%m-%d %H:%M:%S')}'
+        if self.is_expired:
+            return f'{self.age:.1f} hours ago, expired'
+        if self.age > 24 * 365:
+            return f'first record'
+        return f'{self.age:.1f} hours ago'
 
 class DiskTTLCache:
     """Disk JSON cache with per-entry TTL (hours), callable via classmethods.
@@ -178,16 +215,14 @@ class DiskTTLCache:
         return entry
 
     @classmethod
-    def get(cls, namespace: TypeNamespace, key: str) -> DiskTTLCacheEntry | None:
+    def get(cls, namespace: TypeNamespace, key: str) -> DiskTTLCacheEntry:
         """Return the cache entry, or ``None`` if missing or past ``expires_at``."""
         with cls._thread_lock(namespace):
             entries = cls._load_entries_unlocked(namespace)
         raw = entries.get(key)
         if raw is None or not isinstance(raw, dict):
-            return None
+            return DiskTTLCacheEntry.empty_entry(namespace=namespace, key=key)
         entry = DiskTTLCacheEntry.from_dict(namespace=namespace, key=key, **raw)
-        if entry is None or not entry.is_valid:
-            return None
         return entry
 
     @classmethod
@@ -217,10 +252,10 @@ class DiskTTLCache:
         cls._mutate_store(namespace, mutate)
 
     @classmethod
-    def invalidate_all(cls, namespace: TypeNamespace) -> None:
+    def manual_expire(cls, namespace: TypeNamespace) -> None:
         """Invalidate the cache entry for the given ``namespace`` and ``key``."""
         def mutate(entries: dict[str, Any]) -> None:
-            cls._invalidate_entries(namespace=namespace, entries=entries)
+            cls._manual_expire_entries(namespace=namespace, entries=entries)
         cls._mutate_store(namespace, mutate)
 
     @classmethod
@@ -298,9 +333,9 @@ class DiskTTLCache:
             entries.pop(key)
 
     @classmethod
-    def _invalidate_entries(cls, namespace: TypeNamespace, entries: dict[str, Any]) -> None:
+    def _manual_expire_entries(cls, namespace: TypeNamespace, entries: dict[str, Any]) -> None:
         cache_entries = cls.entries_from(namespace=namespace, entries=entries)
-        invalid = [entry.invalidate_entry() for entry in cache_entries.values()]
+        invalid = [entry.manual_expire() for entry in cache_entries.values()]
         invalid = [entry for entry in invalid if entry is not None]
         updates = {entry.key: entry.to_dict() for entry in invalid}
         entries.update(updates)

@@ -41,8 +41,8 @@ criterion.accuracy:
   # mse, pearson, ccc, spearman
 
 criterion.weight:
-  fit:    'equal' # 'top'
-  test:   'equal' # 'top'
+  fit:    'equal' # 'top' , 'polar'
+  test:   'equal' # 'top' , 'polar'
 
 # multilosses params , should be a dict, 
 # keys (e.g. 'hybrid', 'dwa', 'ruw', 'ewa', 'gls', 'rws') and multilosses_kwargs (e.g. {'phi' : null , 'tau' : 2}) 

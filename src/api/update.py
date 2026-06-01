@@ -1,4 +1,5 @@
 from src.proj import Logger , MACHINE , CALENDAR , Proj
+from src.proj.util import DiskTTLCache
 
 from .data import DataAPI
 from .factor import FactorAPI
@@ -8,7 +9,7 @@ from .trading import TradingAPI
 from .summary import SummaryAPI
 from .notification import NotificationAPI
 
-from .util import wrap_update , print_update_records
+from .util import print_update_records
 
 class UpdateAPI:
     @classmethod
@@ -32,6 +33,11 @@ class UpdateAPI:
         if not MACHINE.updatable:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
+        record_entry = DiskTTLCache.get('cache_meta', 'daily_update_manual_expire')
+        if not record_entry.valid_value or record_entry.valid_value < CALENDAR.update_to():
+            Logger.info(f'Daily update manual set to expire due to first call to update to {CALENDAR.update_to()} ...')
+            DiskTTLCache.manual_expire('daily_update')
+            record_entry.put(CALENDAR.update_to())
         DataAPI.update()
         if not DataAPI.is_updated():
             Logger.conclude('Data is not updated to the latest date, skip model update' , level = 'error')
@@ -43,8 +49,7 @@ class UpdateAPI:
         FactorAPI.update_pooling_factors(timeout = 3)
         FactorAPI.update_factor_stats()
         FactorAPI.export_factor_table()
-        with Proj.vb.temporary_vb(1):
-            wrap_update(ModelAPI.resume_testing , 'resume testing')
+        ModelAPI.resume_testing(force_resume = True , daily_update_component = True)
         TradingAPI.update()
         SummaryAPI.update()
         NotificationAPI.update()

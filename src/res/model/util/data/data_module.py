@@ -78,7 +78,6 @@ class DataModule(BaseClass.BoundLogger):
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
 
-        print(f'factor_start_dt : {self.factor_start_dt} , factor_end_dt : {self.factor_end_dt}')
         self.datas.load()
         self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb = 10)
         
@@ -183,10 +182,7 @@ class DataModule(BaseClass.BoundLogger):
                     start_date = max(CALENDAR.cd(self.model_date , 1) , CALENDAR.td(self.config.resumed_max_pred_date , -1).as_int())
                     end_date = self.next_model_date(self.model_date)
                     possible_dates = self.test_full_dates
-                    print(f'possible_dates: {possible_dates}')
-                    print(f'start_date: {start_date} , end_date: {end_date}')
-                    print(f'self.config.resumed_max_pred_date: {self.config.resumed_max_pred_date}')
-
+                    
                 before_dates = self.datas.date[self.datas.date < min(possible_dates)][-y_extend:]
                 possible_dates = np.concatenate([before_dates , possible_dates])
                 self.early_test_dates = possible_dates[possible_dates < start_date][-(y_extend-1):] if y_extend > 1 else possible_dates[-1:-1]
@@ -383,15 +379,10 @@ class DataModule(BaseClass.BoundLogger):
         datas = []
         for model_data_type , data in x.items():
             if data[index0,index1].isnan().all():
-                self.logger.error(f'Get all nan in {model_data_type} at index {index0} , {index1}')
                 self.logger.error(f'x valid_dates: {self.datas.x[model_data_type].valid_dates}')
-                self.logger.error(f'date: {self.y_date[index1[0]]}')
-                self.logger.error(f'keys: {x.keys()}')
-                self.logger.error(f'seq_lens: {self.seq_lens}')
-                self.logger.error(f'seq_steps: {self.seq_steps}')
+                self.logger.error(f'date: {self.y_date[index1[0]]} , keys: {x.keys()}')
+                self.logger.error(f'seq_lens: {self.seq_lens} , seq_steps: {self.seq_steps}')
                 self.logger.error(f'early_test_dates: {self.early_test_dates}')
-                self.logger.error(f'model_test_dates: {self.model_test_dates}')
-                
                 raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)

@@ -71,9 +71,9 @@ class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         collect FactorCalculator jobs for all factors between start and end date
         """
         self.jobs.clear()
-        record_cache = DiskTTLCache.get('daily_update', f'{self.name}_empty_jobs')
-        if record_cache and record_cache.value:
-            self.logger.skipping(f'There is no {self.name} Jobs to Proceed (refreshed at {record_cache.create_time_str}) ...' , idt = 1 , vb = 1)
+        record_entry = DiskTTLCache.get('daily_update', f'{self.name}_empty_jobs')
+        if record_entry.valid_value:
+            self.logger.skipping(f'There is no {self.name} Jobs to Proceed ({record_entry.time_str}) ...' , idt = 1 , vb = 1)
             return
         
         if end is None: 
@@ -103,7 +103,7 @@ class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             self.logger.success(f'Collecting {len(self.jobs)} Jobs for {self.name}' , idt = 1 , vb = 1)
         else:
             self.logger.skipping(f'There is no {self.name} Jobs to Proceed...' , idt = 1 , vb = 1)
-            DiskTTLCache.put('daily_update' , f'{self.name}_empty_jobs' , True , ttl_hours = 8)
+            record_entry.put(True , ttl_hours = 8)
         
     def before_process_jobs(self , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,

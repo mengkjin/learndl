@@ -991,13 +991,13 @@ class ModelConfig(BaseModelConfig):
         if self.module_type == "nn" and x_data:
             self.algo_config.update_data_param(x_data, self)
 
-    def weight_scheme(self, stage: str, no_weight=False) -> str | None:
-        if stage == "fit":
-            stg = "fit"
-        else:
-            # includes test / predict / retrospective
-            stg = "test"
-        return None if no_weight else self.model_config.Param[f"train.criterion.weight"].get(stg, "equal")
+    def weight_scheme(self, stage: str, no_weight=False) -> Literal['equal' , 'top' , 'polar']:
+        if no_weight:
+            return "equal"
+        stage = "fit" if stage == "fit" else "test"
+        weight_scheme = self.model_config.Param[f"train.criterion.weight"].get(stage, "equal")
+        assert weight_scheme in ["equal" , "top" , "polar"] , weight_scheme
+        return weight_scheme
 
     @staticmethod
     def set_random_seed(seed=None):
