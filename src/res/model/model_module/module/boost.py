@@ -18,8 +18,10 @@ class BoostPredictor(PredictorModel):
         cuda = self.device.is_cuda     if self.config else None
         seed = self.config.random_seed if self.config else None
 
-        self.boost = AlgoModule.get_boost(module , param , cuda , seed , given_name = self.model_full_name ,
-                                        optuna = self.config.boost_optuna , n_trials = self.config.boost_optuna_trials)
+        self.boost = AlgoModule.get_boost(
+            module , param , cuda , seed , given_name = self.model_full_name ,
+            optuna = self.config.boost_optuna , override_criterion = self.config.criterion_boost,
+            n_trials = self.config.boost_optuna_trials)
 
         self.model_dict.reset()
         self.complete_model_param = param

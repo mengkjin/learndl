@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import threading
-
+from datetime import datetime
 from copy import deepcopy
 from typing import Any , Callable , Mapping , TypeVar , cast
 from matplotlib.figure import Figure
@@ -152,14 +152,21 @@ class AsyncSaver:
                 return [future for future in cls._futures]
 
     @classmethod
-    def wait_all(cls , future_group : str | None = None , raise_first_error : bool = False) -> list[BaseException]:
+    def wait_all(cls , future_group : str | None = None , raise_first_error : bool = False , caller_name : str | None = None) -> list[BaseException]:
         """
         wait for all futures in the future group to complete
         """
         futures = cls.pending_futures(future_group)
         if futures:
-            Logger.note(f'Waiting for {len(futures)} AsyncSaver{f" in group {future_group}" if future_group else ""} to complete' , vb_level = 'max')
-            return _wait_futures(futures , raise_first_error = raise_first_error)
+            time_start = datetime.now()
+            exceptions = _wait_futures(futures , raise_first_error = raise_first_error)
+            time_cost = datetime.now() - time_start
+            if time_cost.total_seconds() > 1:
+                group_str = f" in group {future_group}" if future_group else ""
+                caller_str = f"{caller_name} >> " if caller_name else ""
+                msg = f'{caller_str}Waited {time_cost.total_seconds():1.f} seconds for {len(futures)} AsyncSaver{group_str} to complete'
+                Logger.note(msg , vb_level = 'max')
+            return exceptions
         else:
             return []
 

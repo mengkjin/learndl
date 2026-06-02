@@ -24,9 +24,11 @@ class XgBoost(BasicBoostModel):
     """
     DEFAULT_TRAIN_PARAM = {
         'booster' : 'gbtree' , # 'dart' , 'gbtree' , 
-        'objective': 'reg:squarederror', # 'reg:squarederror', 'reg:absoluteerror' , multi:softmax
-        'num_boost_round' : 100 , 
+        'objective': 'mse', # 'mae' , 'rank' , will be converted to 'reg:squarederror' , 'reg:absoluteerror' , 'rank:ndcg'
+        'num_boost_round' : 1000 , 
         'early_stopping' : 50 , 
+        'rank_target_size' : 100 ,
+        'n_bins' : None ,
         'eval_metric' : None , # rank:ndcg ,
         'subsample': 1.,
         'colsample_bytree':1.,
@@ -37,15 +39,36 @@ class XgBoost(BasicBoostModel):
         'max_depth': 6, 
         'monotone_constraints': 0 , 
         'rate_drop' : 0.1,
+        'lambdarank_pair_method' : 'topk',
+        'lambdarank_num_pairs_target' : 100,
+        'ndcg_exp_gain' : False,
         'device': 'cpu',
         'seed': 42,
     }
+    
+    def assert_param(self , **kwargs):
+        super().assert_param(**kwargs)
+        if self.train_param['objective'] == 'rank':
+            self.train_param['objective'] = 'rank:ndcg'
+            self.train_param['eval_metric'] = f'ndcg@{self.get_param('rank_target_size' , 100)}'
+            self.train_param['lambdarank_pair_method'] = 'topk'
+            self.train_param['lambdarank_num_pairs_target'] = self.get_param('rank_target_size' , 100)
+        else:
+            self.train_param['objective'] = {
+                'mse': 'reg:squarederror',
+                'mae': 'reg:absoluteerror',
+            }[self.train_param['objective']]
+            self.train_param['eval_metric'] = None
+            self.train_param['lambdarank_pair_method'] = None
+            self.train_param['lambdarank_num_pairs_target'] = None
+        return self
 
     def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
         self.boost_fit_inputs(train , valid , silent)
 
-        train_set = xgboost.DMatrix(**self.fit_train_ds.boost_inputs('xgboost'))
-        valid_set = xgboost.DMatrix(**self.fit_valid_ds.boost_inputs('xgboost'))
+        # group: cross-section queries by date (required for rank:* objectives e.g. rank:ndcg).
+        train_set = self.fit_train_ds.to_xgboost_dataset(rank=self.is_rankor)
+        valid_set = self.fit_valid_ds.to_xgboost_dataset(rank=self.is_rankor)
         self.fit_train_param.update({
             'seed':                 self.seed , 
             'device':               'gpu' if self.use_gpu else 'cpu' , 
@@ -55,9 +78,6 @@ class XgBoost(BasicBoostModel):
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         early_stopping  = self.fit_train_param.pop('early_stopping')
         verbose_eval    = self.fit_train_param['verbosity']
-        num_class       = self.fit_train_param.pop('n_bins' , None)
-        if self.fit_train_param['objective'] in ['softmax']: 
-            self.fit_train_param['num_class'] = num_class
 
         self.evals_result = dict()
         self.model : xgboost.Booster = xgboost.train(
@@ -73,7 +93,7 @@ class XgBoost(BasicBoostModel):
         
     def predict(self , x : BoostInput | str = 'test'):
         data = self.boost_input(x)
-        X = xgboost.DMatrix(**data.Dataset().boost_inputs('xgboost'))
+        X = data.Dataset().to_xgboost_dataset(rank=self.is_rankor)
         return data.output(self.model.predict(X))
     
     def to_dict(self):

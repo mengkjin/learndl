@@ -22,9 +22,9 @@ module.nn                  : gru     # if module is Literal['nn'] , use this to 
 module.nn.boost_head       : False   # for nn module, if True, the last layer of the nn is a boost
 module.nn.boost_head.boost : lgbm    # for nn module with boost head, use this to specify the boost module
 
-module.boost               : xgboost # if module is Literal['boost'] , use this to specify the boost module. also use as boost head if module is Literal['nn']
-module.boost.optuna        : False   # for boost module, if True, use optuna to optimize the boost parameters
-module.boost.optuna.trials : 10      # for boost module with optuna, use this to specify the number of trials for optuna
+module.boost               : lgbm    # if module is Literal['boost'] , use this to specify the boost module. also use as boost head if module is Literal['nn']
+module.boost.optuna        : True    # for boost module, if True, use optuna to optimize the boost parameters
+module.boost.optuna.trials : null    # for boost module with optuna, use this to specify the number of trials for optuna
 
 module.factor              : null    # if module is Literal['factor'] , use this to specify the factor module
 

@@ -3,6 +3,8 @@ model:
   name          : lgbm_of_hidden # any name or null
   module        : lgbm  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
   submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
+  
+  module.boost.optuna: True
 
   window  : 480
   # labels specification ------------------------------------------------------------
@@ -19,6 +21,10 @@ input:
   hidden.types: # list of hidden states , use if input_type is hidden
     - gru@gru_day@0@best
     - gru@gru_avg@0@best
+
+train:
+  criterion.boost:
+    objective: mse # null , mse , mae , rank
 
 algo:
   lgbm:

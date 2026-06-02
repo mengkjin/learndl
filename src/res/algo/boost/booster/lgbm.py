@@ -33,10 +33,11 @@ class Lgbm(BasicBoostModel):
           ``device_type='gpu'``.
     """
     DEFAULT_TRAIN_PARAM = {
-        'objective': 'mse', # 'mae' , 'quantile' ,'softmax'
-        'metric' : None , # ndcg
-        'num_boost_round' : 100 , 
+        'objective': 'mse', # 'mae' , 'lambdarank'
+        'metric' : '' , # ndcg
+        'num_boost_round' : 1000 , 
         'early_stopping' : 50 , 
+        'rank_target_size' : 100 ,
         'boosting':'gbdt',
         'linear_tree': False, 
         'learning_rate': 0.3, 
@@ -51,31 +52,42 @@ class Lgbm(BasicBoostModel):
         'force_col_wise': True, 
         'monotone_constraints': 0 , 
         'zero_as_missing' : False ,
+        'ndcg_eval_at' : 100,
+        'label_gain': list(range(101)) ,
+        'lambdarank_truncation_target' : 100,
         'device_type': 'cpu',
         'seed': 42,
         'n_bins' : None,
     }
-
-    def assert_param(self):
-        super().assert_param()
+    
+    def assert_param(self , **kwargs):
+        super().assert_param(**kwargs)
+        assert self.train_param['objective'] in ['mse', 'mae', 'rank'] , self.train_param['objective']
+        if self.train_param['objective'] == 'rank':
+            self.train_param['objective'] = 'lambdarank'
+            self.train_param['metric'] = 'ndcg'
+            self.train_param['ndcg_eval_at'] = [100]
+            self.train_param['lambdarank_truncation_target'] = self.get_param('rank_target_size' , 100)
+        else:
+            self.train_param['objective'] = 'mse'
+            self.train_param['metric'] = None
+            self.train_param['ndcg_eval_at'] = None
+            self.train_param['lambdarank_truncation_target'] = None
         return self
 
     def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
         self.boost_fit_inputs(train , valid , silent)
 
-        train_set = lightgbm.Dataset(**self.fit_train_ds.boost_inputs('lgbm'))
-        valid_set = lightgbm.Dataset(**self.fit_valid_ds.boost_inputs('lgbm') , reference = train_set)
+        # group: cross-section queries by date (required for lambdarank / ranking metrics).
+        train_set = self.fit_train_ds.to_lgbm_dataset(rank=self.is_rankor)
+        valid_set = self.fit_valid_ds.to_lgbm_dataset(rank=self.is_rankor , reference=train_set)
         
         num_boost_round = self.fit_train_param.pop('num_boost_round')
-        num_class       = self.fit_train_param.pop('n_bins' , None)
         self.fit_train_param.update({
             'seed':                 self.seed , 
             'device_type':          'gpu' if self.use_gpu else 'cpu' , 
             'verbosity':            -1 if silent else 1 ,
             'monotone_constraints': self.mono_constr(self.fit_train_param , self.fit_train_ds.nfeat)}) 
-        if self.fit_train_param['objective'] in ['softmax']: 
-            self.fit_train_param['num_class'] = num_class
-        
         self.evals_result = dict()
         self.model : lightgbm.Booster = lightgbm.train(
             params = self.fit_train_param ,

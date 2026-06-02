@@ -10,35 +10,66 @@ from src.res.model.util import BaseCallBack
 
 class BasicTestResult(BaseCallBack):
     '''Basic Test of RankIC'''
+
+    _stat_cols : tuple[str, ...] = ('rankic' , 'top5pct' , 'mid20pct' , 'bot5pct')
     
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.snap_folder.mkdir(exist_ok=True , parents=True)
 
     @property
-    def model_test_dates(self) -> np.ndarray: return self.trainer.data.model_test_dates
+    def model_test_dates(self) -> np.ndarray: 
+        return self.trainer.data.model_test_dates
     @property
-    def test_full_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
+    def test_full_dates(self) -> np.ndarray: 
+        return self.trainer.data.test_full_dates
     @property
-    def snap_folder(self): return self.config.base_path.snapshot('basic_test')
+    def snap_folder(self): 
+        return self.config.base_path.snapshot('basic_test')
     @property
-    def path_test_df(self): return self.snap_folder.joinpath('test_by_date.feather')
+    def path_test_df(self): 
+        return self.snap_folder.joinpath('test_by_date.feather')
     @property
-    def path_result(self): return self.config.base_path.rslt('basic_test.xlsx')
+    def path_result(self): 
+        return self.config.base_path.rslt('basic_test.xlsx')
+
+    @property
+    def stat_cols(self) -> list[str]:
+        return list(self._stat_cols)
+
+    def empty_test_df(self) -> pd.DataFrame:
+        return pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols])
 
     def complete_test_df(self) -> pd.DataFrame:
-        df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , 'value'])
-
+        df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else self.empty_test_df()
+        if not all(col in df.columns for col in self.stat_cols):
+            df = self.empty_test_df()
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
         preds = self.record.get_preds(target_dates).dropna()
 
         grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
-        def df_ic(subdf : pd.DataFrame , **kwargs):
+        def df_rankic(subdf : pd.DataFrame , **kwargs):
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
                 warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
                 return subdf[['pred']].corrwith(subdf['label'], method='spearman')
-        new_df = grouped.apply(df_ic , include_groups = False).rename(columns = {'pred' : 'value'}).reset_index(drop=False)
+        def df_top5pct(subdf : pd.DataFrame , **kwargs):
+            std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
+            pred_rank = subdf['pred'].rank(pct=True)
+            return std_label.loc[pred_rank >= 0.95].mean()
+        def mid_20pct(subdf : pd.DataFrame , **kwargs):
+            std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
+            pred_rank = subdf['pred'].rank(pct=True)
+            return std_label.loc[(pred_rank >= 0.4) & (pred_rank < 0.6)].mean()
+        def df_bot5pct(subdf : pd.DataFrame , **kwargs):
+            std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
+            pred_rank = subdf['pred'].rank(pct=True)
+            return std_label.loc[pred_rank < 0.05].mean()
+        rankic_df = grouped.apply(df_rankic , include_groups = False).rename(columns={'pred':'rankic'})
+        top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'label':'top5pct'})
+        mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'label':'mid20pct'})
+        bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'label':'bot5pct'})
+        new_df = rankic_df.join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
         if df.empty:
             df = new_df
         elif not new_df.empty:
@@ -64,32 +95,48 @@ class BasicTestResult(BaseCallBack):
                 df_date['model_date'] = (df_date['date'].astype(int) // 10000).apply(lambda x:f'Y{x}')
             else:
                 df_date['model_date'] = df_date['model_date'].astype(str)
-                
-            df_model = df_date.groupby(['model_num' , 'model_date' , 'submodel'])['value'].mean().reset_index().rename(columns={'model_date':'stat'})
+
+            df_date = df_date.melt(
+                id_vars=['model_num' , 'model_date' , 'submodel' , 'date'] , var_name='stat' , value_name='value').\
+                reset_index(drop=False)
+            df_model = df_date.groupby(['model_num' , 'model_date' , 'submodel' , 'stat'])[['value']].\
+                mean().reset_index().rename(columns={'model_date':'entry'})
+
+            col_cats = {
+                'submodel' : ['best' , 'swalast' , 'swabest'],
+                'stat' : self.stat_cols,
+                'entry' : [md for md in df_model['entry'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
+            }
+
+            for col, cats in col_cats.items():
+                if col in df_date.columns:
+                    df_date[col] = pd.Categorical(df_date[col] , categories = cats, ordered=True) 
+                if col in df_model.columns:
+                    df_model[col] = pd.Categorical(df_model[col] , categories = cats, ordered=True) 
+
+            df_date = df_date.sort_values(by=['model_num' , 'submodel' , 'model_date' , 'stat' , 'date']).reset_index(drop=True)
+            df_model = df_model.sort_values(by=['model_num' , 'submodel' , 'entry' , 'stat']).reset_index(drop=True)
 
             dfs : dict[str,pd.DataFrame|pd.Series|Any] = {}
-            dfs['Avg'] = df_date.groupby(['model_num','submodel'])['value'].mean()
-            dfs['Sum'] = df_date.groupby(['model_num','submodel'])['value'].sum()
-            dfs['Std'] = df_date.groupby(['model_num','submodel'])['value'].std()
+            dfs['Avg'] = df_date.groupby(['model_num','submodel','stat'],observed=True)[['value']].mean()
+            dfs['Sum'] = df_date.groupby(['model_num','submodel','stat'],observed=True)[['value']].sum()
+            dfs['Std'] = df_date.groupby(['model_num','submodel','stat'],observed=True)[['value']].std()
 
             dfs['T']   = ((dfs['Avg'] / dfs['Std']) * (len(df_date['date'].unique())**0.5))
             dfs['IR']  = ((dfs['Avg'] / dfs['Std']) * ((240 / 10)**0.5))
 
-            stat_df = pd.concat([df.reset_index().assign(stat=k) for k,df in dfs.items()])
+            stat_df = pd.concat([df.reset_index().assign(entry=k) for k,df in dfs.items()])
 
             # display summary
             df = pd.concat([df_model , stat_df])
-            cat_stat = [md for md in df_model['stat'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
-            cat_subm = ['best' , 'swalast' , 'swabest']
 
             base_name = self.config.model_module
             if self.config.module_type == 'boost' and self.config.boost_optuna: 
                 base_name += '.optuna'
             df['model_num'] = df['model_num'].map(lambda x: f'{base_name}.{x}')
-            df['submodel']  = pd.Categorical(df['submodel'] , categories = cat_subm, ordered=True) 
-            df['stat']      = pd.Categorical(df['stat']     , categories = cat_stat, ordered=True) 
-
-            test_summary = df.rename(columns={'model_num':'model'}).pivot_table('value' , 'stat' , ['model' , 'submodel'] , observed=False).round(4)
+            
+            test_summary = df.rename(columns={'model_num':'model'}).\
+                pivot_table('value' , 'entry' , ['model' , 'submodel' , 'stat'] , observed=True).round(4)
             self.container.dataframes['test_summary'] = test_summary
 
             # more than 100 rows of test_df_model means the cycle is month / day
@@ -97,15 +144,29 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            self.logger.display(df_display , caption = f'Table: Test Summary ({criterion_accuracy}) for Models:')
+            caption = f'Table: Test Summary for Models (rankic={criterion_accuracy},pct=normailized_position):'
+            self.logger.display(df_display.round(3) , caption = caption)
             
             # export excel
+            test_summary = self._revert_col_names(test_summary)
             rslt = {'test_summary' : test_summary , 'test_by_model' : df_model}
             for model_num in self.config.model_num_list:
-                df : pd.DataFrame = df_date[df_date['model_num'] == model_num].pivot_table(
-                    'value' , 'date' , 'submodel' , observed=False)
-                df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
-                df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
+                df = df_date[df_date['model_num'] == model_num]
+                df_day = df.pivot_table('value' , 'date' , ['submodel' , 'stat'] , observed=True)
+                df_cum = df_day.cumsum()
+                df_cum.columns = pd.MultiIndex.from_arrays(
+                    [df_cum.columns.get_level_values(0) , [f'{col}_cum' for col in df_cum.columns.get_level_values(1)]],
+                    names=['submodel' , 'stat']
+                )
+                df = self._revert_col_names(df_day).merge(df_cum , on = 'date')
                 rslt[f'{model_num}'] = df
             [AsyncSaver.df(df , self.snap_folder.joinpath(f'{key}.feather') , copy_for_safety = False , overwrite = True , vb_level = 'never') for key,df in rslt.items()]
             AsyncSaver.dfs(rslt , self.path_result, prefix = 'Test Summary' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+
+    @staticmethod
+    def _revert_col_names(df : pd.DataFrame) -> pd.DataFrame:
+        df.columns = pd.MultiIndex.from_arrays(
+            [df.columns.get_level_values(i).astype(str) for i in range(df.columns.nlevels)],
+            names=df.columns.names
+        )
+        return df

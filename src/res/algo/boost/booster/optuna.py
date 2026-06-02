@@ -8,20 +8,23 @@ Classes:
 """
 import optuna , random , string
 
-from contextlib import nullcontext
 from datetime import datetime
 from typing import Any , Literal
 
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Proj
 from .general import GeneralBoostModel
 
 class OptunaSilent:
     """Context manager that sets Optuna log level to ERROR on entry and restores it on exit."""
+    def __init__(self , silent : bool = True):
+        self.silent = silent
     def __enter__(self):
-        self.old_level = optuna.logging.get_verbosity()
-        optuna.logging.set_verbosity(optuna.logging.ERROR)
+        if self.silent:
+            self.old_level = optuna.logging.get_verbosity()
+            optuna.logging.set_verbosity(optuna.logging.ERROR)
     def __exit__(self , *args , **kwargs):
-        optuna.logging.set_verbosity(self.old_level)
+        if self.silent:
+            optuna.logging.set_verbosity(self.old_level)
 
 class OptunaBoostModel(GeneralBoostModel):
     """Optuna-powered hyper-parameter search over :class:`GeneralBoostModel`.
@@ -36,8 +39,6 @@ class OptunaBoostModel(GeneralBoostModel):
 
     Per-booster search spaces are defined in :meth:`trial_suggest_params`.
     """
-    DEFAULT_SILENT_CREATION = True
-    DEFAULT_SILENT_STUDY = True
     DEFAULT_N_TRIALS = 50 if MACHINE.platform_server else 20
     DEFAULT_SAVE_STUDIES = True
     DEFAULT_STORAGE = f'sqlite:///{PATH.optuna.relative_to(PATH.main)}/boost_{datetime.now().strftime("%Y%m") }.sqlite3'
@@ -45,8 +46,12 @@ class OptunaBoostModel(GeneralBoostModel):
     @property
     def best_params(self):
         return self.study.best_trial.params
+
+    @property
+    def force_objective(self) -> str | None:
+        return self.override_criterion.get('objective' , None)
     
-    def update_param(self , params : dict[str,Any] , **kwargs):
+    def update_param(self , params : dict[str,Any] | None = None , **kwargs):
         super().update_param(params , **kwargs)
         self.n_trials = kwargs.get('n_trials' , self.DEFAULT_N_TRIALS)
         return self
@@ -54,7 +59,6 @@ class OptunaBoostModel(GeneralBoostModel):
     def trial_suggest_params(self, trial : optuna.Trial):
         if self.boost_type == 'lgbm':
             params = {
-                'objective':        trial.suggest_categorical('objective', ['mse', 'mae']),  # 'mse', 'mae', 'softmax'
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':        trial.suggest_int('max_depth', 3, 12),
                 'num_leaves':       trial.suggest_int('num_leaves', 20, 100, step=10),
@@ -64,9 +68,10 @@ class OptunaBoostModel(GeneralBoostModel):
                 'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 1.0, step=0.1),
                 'bagging_fraction': trial.suggest_float('bagging_fraction', 0.5, 1.0, step=0.1),
             }
+            if not self.force_objective:
+                params['objective'] = trial.suggest_categorical('objective', ['mse', 'mae', 'rank'])
         elif self.boost_type == 'xgboost':
             params = {
-                'objective':        trial.suggest_categorical('objective', ['reg:squarederror', 'reg:absoluteerror']), # 'reg:squarederror', 'reg:absoluteerror' , multi:softmax
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':        trial.suggest_int('max_depth', 3, 12),
                 'subsample':        trial.suggest_float('subsample', 0.5, 1.0, step=0.1),
@@ -74,9 +79,10 @@ class OptunaBoostModel(GeneralBoostModel):
                 'reg_alpha':        trial.suggest_float('reg_alpha', 1e-7, 100, log=True),
                 'reg_lambda':       trial.suggest_float('reg_lambda', 1e-6, 100, log=True),
             }
+            if not self.force_objective:
+                params['objective'] = trial.suggest_categorical('objective', ['mse', 'mae', 'rank'])
         elif self.boost_type == 'catboost':
             params = {
-                'objective':                trial.suggest_categorical('objective', ['RMSE', 'MAE']),
                 'learning_rate':            trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':                trial.suggest_int('max_depth', 3, 12),
                 'l2_leaf_reg':              trial.suggest_float('l2_leaf_reg', 1e-3, 10.0, log=True),
@@ -85,6 +91,8 @@ class OptunaBoostModel(GeneralBoostModel):
                 'od_type':                  trial.suggest_categorical('od_type', ['IncToDec', 'Iter']),
                 'min_data_in_leaf':         trial.suggest_int('min_data_in_leaf', 1, 100),
             }
+            if not self.force_objective:
+                params['objective'] = trial.suggest_categorical('objective', ['mse', 'mae', 'rank'])
         elif self.boost_type == 'ada':
             params = {
                 'n_learner' :       trial.suggest_int('n_learner', 10 , 50 , step = 5), 
@@ -100,18 +108,18 @@ class OptunaBoostModel(GeneralBoostModel):
         self.boost.import_data(train=self.data['train'] , valid = self.data['valid'])
         self.boost.update_feature(use_feature)
 
-        self.study_create(silent = silent or self.DEFAULT_SILENT_CREATION)
-        self.study_optimize(self.n_trials , silent = silent or self.DEFAULT_SILENT_STUDY)
+        self.study_create()
+        self.study_optimize(self.n_trials)
         
         self.update_param(self.study.best_trial.params).boost.fit(silent=True)
         return self
     
-    def study_create(self , direction='maximize' , silent = False):
+    def study_create(self , direction='maximize'):
         name_str = self.given_name if self.given_name else self.boost.__class__.__name__
         time_str = datetime.now().strftime('%Y%m%d-%H%M%S') 
         rand_str =''.join(random.choices(string.ascii_letters + string.digits, k=10))
     
-        with OptunaSilent() if silent else nullcontext():
+        with OptunaSilent(silent = not Proj.vb.is_max_level):
             self.study = optuna.create_study(storage=self.DEFAULT_STORAGE if self.DEFAULT_SAVE_STUDIES else None, 
                                              direction = direction , study_name=f'{name_str}_{time_str}_{rand_str}')
         return self
@@ -119,9 +127,11 @@ class OptunaBoostModel(GeneralBoostModel):
     def study_objective(self , trial : optuna.Trial):
         params = self.trial_suggest_params(trial)
         boost = self.update_param(params).boost
-        return boost.fit(silent=True).predict('valid').rankic().mean().item()
+        output = boost.fit(silent=True).predict('valid')
+        result = output.top5pct() if self.force_objective == 'rank' else output.rankic()
+        return result.nanmean().item()
 
-    def study_optimize(self , n_trials : int = DEFAULT_N_TRIALS , silent = False):
+    def study_optimize(self , n_trials : int = DEFAULT_N_TRIALS):
         if self.boost_type in ['lgbm' , 'xgboost' , 'catboost']:
             max_trials = 100
         elif self.boost_type == 'ada':
@@ -130,8 +140,8 @@ class OptunaBoostModel(GeneralBoostModel):
             raise ValueError(f'Invalid boost type: {self.boost_type}')
         n_trials = min(max_trials , n_trials)
 
-        with OptunaSilent() if silent else nullcontext():
-            self.study.optimize(self.study_objective, n_trials = n_trials)
+        with OptunaSilent(silent = not Proj.vb.is_max_level):
+            self.study.optimize(self.study_objective, n_trials = n_trials , show_progress_bar = Proj.vb.is_max_level)
             
         return self
 

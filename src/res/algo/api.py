@@ -84,11 +84,12 @@ class AlgoModule:
     def get_boost(
         cls , model_module : str , model_param : dict | None = None , 
         cuda = None , seed = None , model_dict : dict | None = None , 
-        given_name : str | None = None , optuna : bool = False , **kwargs
+        given_name : str | None = None , override_criterion : dict | None = None , optuna : bool = False , **kwargs
     ):
-        model_param = model_param or {}
-        boost = (OptunaBoostModel if optuna else GeneralBoostModel)(
-            model_module , model_param , cuda = bool(cuda) , seed = seed , given_name = given_name , **kwargs)
+        boost_class = OptunaBoostModel if optuna else GeneralBoostModel
+        boost = boost_class(
+            model_module , model_param , cuda = bool(cuda) , seed = seed , given_name = given_name , 
+            override_criterion = override_criterion, **kwargs)
 
         if model_dict is not None: 
             boost.load_dict(model_dict , cuda = bool(cuda) , seed = seed)

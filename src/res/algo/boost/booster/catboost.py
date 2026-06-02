@@ -25,7 +25,10 @@ class CatBoost(BasicBoostModel):
           be on CPU — the ``to_boost_input`` path handles that.
     """
     DEFAULT_TRAIN_PARAM = {
-        'objective': 'RMSE' , # 'MAE' NDCG , RMSE
+        'objective': 'mse' , # 'mae' , 'rank' , will be converted to 'RMSE' , 'MAE' , 'YetiRank'
+        'eval_metric' : None , # 'NDCG:top=100'
+        'rank_target_size' : 100 ,
+        'n_bins' : None ,
         'num_boost_round' : 100 , 
         'early_stopping' : 50 , 
         'verbosity': 1 , 
@@ -41,12 +44,26 @@ class CatBoost(BasicBoostModel):
         'random_seed': 42,
         'allow_writing_files' : False ,
     }
+    
+    def assert_param(self , **kwargs):
+        super().assert_param(**kwargs)
+        if self.train_param['objective'] == 'rank':
+            self.train_param['objective'] = 'YetiRank'
+            self.train_param['eval_metric'] = f'NDCG:top={self.get_param('rank_target_size' , 100)}'
+        else:
+            self.train_param['objective'] = {
+                'mse': 'RMSE',
+                'mae': 'MAE',
+            }[self.train_param['objective']]
+            self.train_param['eval_metric'] = None
+        return self
 
     def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
         self.boost_fit_inputs(train , valid , silent)
 
-        train_set = catboost.Pool(**self.fit_train_ds.boost_inputs('catboost'))
-        valid_set = catboost.Pool(**self.fit_valid_ds.boost_inputs('catboost'))
+        # group_id: cross-section queries by date (required for YetiRank / NDCG-style objectives).
+        train_set = self.fit_train_ds.to_catboost_dataset(rank=self.is_rankor)
+        valid_set = self.fit_valid_ds.to_catboost_dataset(rank=self.is_rankor)
 
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         early_stopping  = self.fit_train_param.pop('early_stopping')

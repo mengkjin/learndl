@@ -15,13 +15,15 @@ import matplotlib.pyplot as plt
 
 from abc import ABC , abstractmethod
 from copy import deepcopy
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
 from src.proj import PATH , DB , BaseClass
 from src.func.metric import ic_2d , rankic_2d
 
-from .boost_io import BoostInput , BoostOutput
+from .dataset import BoostInput , BoostOutput
+from .weight import BoostWeightMethod
 
 __all__ = ['BasicBoostModel' , 'load_xingye_data']
 
@@ -43,36 +45,41 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
     """
     DEFAULT_TRAIN_PARAM = {}
     DEFAULT_WEIGHT_PARAM = {}
+    MASK_PARAM : tuple[str, ...] = ('rank_target_size',)
     DEFAULT_CATEGORICAL_N_BINS = 3
     DEFAULT_CATEGORICAL_MAX_BINS = 10
 
     def __repr__(self) -> str: 
-        return f'{self.__class__.__name__},\n,train_param={self.train_param}'
-    
-    def __init__(
-        self , train_param : dict[str,Any] = {} , weight_param : dict[str,Any] = {} ,
-        cuda = True , seed = None , **kwargs):   
-        super().__init__(**kwargs)
-        self.train_param = deepcopy(self.DEFAULT_TRAIN_PARAM)
-        self.weight_param = deepcopy(self.DEFAULT_WEIGHT_PARAM)
+        return f'{self.__class__.__name__}(train_param={self.train_param})'
+
+    @cached_property
+    def weight_keys(self) -> frozenset[str]:
+        return frozenset(BoostWeightMethod.__slots__)
+    @cached_property
+    def train_param_keys(self) -> frozenset[str]:
+        return frozenset(self.DEFAULT_TRAIN_PARAM.keys())
+
+    def set_params(
+        self , params : dict[str,Any] | None = None , cuda = True , seed = None , * , overrides : dict[str,Any] | None = None , **kwargs
+    ):
+        params = params or {}
+        overrides = overrides or {}
+        self.train_param : dict[str,Any] = deepcopy(self.DEFAULT_TRAIN_PARAM) | {k:v for k,v in params.items() if k in self.train_param_keys}
+        self.train_param.update({k:v for k,v in overrides.items() if k in self.train_param_keys and v is not None})
+        self.weight_param : dict[str,Any] = deepcopy(self.DEFAULT_WEIGHT_PARAM) | {k:v for k,v in params.items() if k in self.weight_keys}
+
         self.cuda = cuda
         self.seed = seed
-        self.update_param(train_param , weight_param , **kwargs)
-        self.data : dict[str,BoostInput] = {}
-
-    def update_param(self , train_param , weight_param , **kwargs):
-        self.train_param.update(train_param) 
-        self.weight_param.update(weight_param)
-        if 'cuda' in kwargs: 
-            self.cuda = kwargs.pop('cuda')
-        if 'seed' in kwargs: 
-            self.seed = kwargs.pop('seed')
-        self.assert_param()
+        self.assert_param(**kwargs)
         return self
     
-    def assert_param(self): 
+    def assert_param(self , **kwargs): 
+        assert self.train_param['objective'] in ['mse', 'mae', 'rank'] , self.train_param['objective']
         assert all(k in self.DEFAULT_TRAIN_PARAM for k in self.train_param) , \
             f'{str([k for k in self.train_param if k not in self.DEFAULT_TRAIN_PARAM])} not in DEFAULT_TRAIN_PARAM'
+
+    def get_param(self , key : str , default : Any = None):
+        return self.train_param.get(key , self.DEFAULT_TRAIN_PARAM.get(key , default))
     
     def import_data(self , train : Any = None , valid : Any = None , test : Any = None):
         if train is not None: 
@@ -92,6 +99,14 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
     def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False , **kwargs):
         self.boost_fit_inputs(train , valid , silent)
         return self
+
+    @cached_property
+    def data(self) -> dict[str,BoostInput]:
+        return {}
+
+    @property
+    def is_rankor(self) -> bool:
+        return 'rank' in self.train_param['objective'].lower()
     
     @property
     def boost_objective_multi(self):
@@ -109,7 +124,9 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
     def boost_fit_inputs(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False , **kwargs):
         self.silent = silent
 
-        train_param = {k:v for k,v in deepcopy(self.train_param).items() if k in self.DEFAULT_TRAIN_PARAM}
+        train_param = {
+            k:v for k,v in self.train_param.items() 
+            if k in self.DEFAULT_TRAIN_PARAM and k not in self.MASK_PARAM and v is not None}
 
         # categorical_label
         n_bins : int | None = train_param.pop('n_bins', None)
@@ -174,7 +191,7 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
         if test is None: 
             test = self.data['test']
         label = test.y
-        pred  = self.predict(test).to_2d()
+        pred  = self.predict(test).pred
         index = test.date
 
         ic = ic_2d(pred , label , dim = 0) if label is not None else torch.full_like(pred[0,:] , fill_value=torch.nan)

@@ -247,7 +247,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
         align_secid : np.ndarray | None = None , align_date : np.ndarray | None = None ,
-        load_first = False , silent = True
+        load_first = True , silent = True
     ) -> DataBlock:
         """
         Iterate hidden block of a given model number, model date, start date, and end date

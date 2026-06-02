@@ -89,7 +89,7 @@ class PredRecorder(TrainerPipeline):
             DB.save_df(df , path , overwrite = True , vb_level = 'max')
 
     def save_avg_preds(self , model_date : int , async_save : bool = False):
-        AsyncSaver.wait_all('pred_recorder')
+        AsyncSaver.wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
         df = DB.load_df(pred_paths , key_column = None)
         if df.empty:
@@ -233,7 +233,7 @@ class PredRecorder(TrainerPipeline):
 
     def purge_duplicated_model_preds(self):
         """purge duplicated model predictions"""
-        AsyncSaver.wait_all('pred_recorder')
+        AsyncSaver.wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
         pred_records = self.pred_records()
         pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
         obsolete_records = pred_records[pred_records.duplicated(subset = ['model_date' , 'model_num'])]

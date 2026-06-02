@@ -34,7 +34,9 @@ class NNBoost(PredictorModel):
 
         self.net = AlgoModule.get_nn(nn_module , nn_param , device)
         self.reset_submodels(*args , **kwargs)
-        self.boost = AlgoModule.get_boost(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
+        self.boost = AlgoModule.get_boost(
+            boost_module , boost_param, cuda , seed , given_name = self.model_full_name, 
+            override_criterion = self.config.criterion_boost)
 
         self.model_dict.reset()
         self.complete_model_param = nn_param | boost_param

@@ -310,7 +310,8 @@ class ModelAPI:
           execution_time: long
           memory_usage: medium
         '''
-        return ModelTrainer.schedule(schedule_name , short_test , start = start , end = end , resume = resume , **kwargs)
+        with Proj.vb.temporary_vb('max' if short_test else None):
+            return ModelTrainer.schedule(schedule_name , short_test , start = start , end = end , resume = resume , **kwargs)
     
     @classmethod
     def clear_st_models(cls):

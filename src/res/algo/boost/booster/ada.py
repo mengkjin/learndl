@@ -32,6 +32,8 @@ class AdaBoost(BasicBoostModel):
         'n_learner' : 30, 
         'n_bins' : 20 , 
         'max_nan_ratio' : 0.8 ,
+        'rank_target_size' : None ,
+        'objective' : None ,
     }
     DEFAULT_WEIGHT_PARAM = {
         'ts_type' : None ,

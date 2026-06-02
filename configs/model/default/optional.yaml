@@ -5,9 +5,9 @@ model.name: null
 model.module.nn: gru
 model.module.nn.boost_head: false
 model.module.nn.boost_head.boost: lgbm
-model.module.boost: xgboost
+model.module.boost: lgbm
 model.module.boost.optuna: false
-model.module.boost.optuna.trials: 10
+model.module.boost.optuna.trials: null
 model.module.factor: null
 model.module.nn_boost: lgbm
 model.interval: null
@@ -57,6 +57,10 @@ train.criterion.multilosses:
     ewa: {}
     gls: {}
     rws: {}
+train.criterion.boost:
+  objective: null # 'mse' ,'mae' , 'rank'
+  n_bins: null # positive integer value
+  rank_target_size: null
 
 callbacks.LearnRateReset: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
 callbacks.CallbackTimer: {}
@@ -72,7 +76,7 @@ conditional.short_test:
   model.end_date: 20250331
   model.window: 240
   train.max_epoch: 3
-  input.filter.secid: random.200
+  #input.filter.secid: random.200
   input.filter.date: 20230101-20250331
   callbacks.DetailedAlphaAnalysis: {tasks: ['factor']}
   callbacks.BadAttemptRetrain:  {max_attempt: 2}

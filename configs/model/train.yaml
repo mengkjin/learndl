@@ -56,3 +56,9 @@ criterion.multilosses:
     ewa: {}
     gls: {}
     rws: {}
+
+# override the default boost parameters if not null
+criterion.boost:
+  objective: null # 'mse' ,'mae' , 'rank'
+  n_bins: null # positive integer value
+  rank_target_size: null

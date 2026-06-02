@@ -500,7 +500,11 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
 
     @property
     def boost_optuna_trials(self) -> int:
-        return int(self["model.module.boost.optuna.trials"])
+        if self["model.module.boost.optuna.trials"]:
+            return int(self["model.module.boost.optuna.trials"])
+        else:
+            from src.res.algo.boost.booster.optuna import OptunaBoostModel
+            return OptunaBoostModel.DEFAULT_N_TRIALS
 
     @property
     def seq_lens(self) -> dict[str, int]:
@@ -585,6 +589,10 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
             assert kwargs["name"] in ["ewa", "hybrid", "dwa", "ruw", "gls", "rws"], f"{kwargs['name']} must be one of ewa, hybrid, dwa, ruw, gls, rws"
             kwargs = {"name": kwargs["name"],"params": kwargs["params"][kwargs["name"]]}
         return kwargs
+
+    @property
+    def criterion_boost(self) -> dict[str, dict[str, Any]]:
+        return self.Param.get("train.criterion.boost", {})
 
     @property
     def trainer_optimizer(self) -> dict[str, Any]:
@@ -950,6 +958,7 @@ class ModelConfig(BaseModelConfig):
             and self.base_path.is_resumable
         )
 
+
     @cached_property
     def resumed_max_pred_date(self) -> int:
         """
@@ -1152,6 +1161,8 @@ class ModelConfig(BaseModelConfig):
             info_strs.append((0, "Period", f"{self.beg_date} ~ {self.end_date}"))
         else:
             if self.module_type == "boost":
+                if self.criterion_boost.get('objective', None):
+                    info_strs.append((0, "Boost Objective", f"{self.criterion_boost['objective']}"))
                 if self.boost_optuna:
                     info_strs.append((0, "Boost Params", f"Optuna for {self.boost_optuna_trials} trials"))
                 else:

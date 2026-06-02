@@ -57,7 +57,7 @@ class ModelTrainer(BaseTrainer):
             base_path.log_operation(log_operation)
             if isinstance(Catcher , HtmlCatcher):
                 Catcher.set_export_files(trainer.html_catcher_export_path)
-            AsyncSaver.wait_all()
+            AsyncSaver.wait_all(caller_name = cls.__name__)
         return trainer
 
     @classmethod

@@ -426,7 +426,12 @@ class TimedOutput:
         """Create a timed output item"""
         infos = {}
         valid = True
-        if output_type is None:
+        assert output_type not in ['stdout' , 'stderr'] or isinstance(content, str) , f"{output_type} content must be a string , but got {type(content)}"
+        if isinstance(content, str) and (content.strip() == '' or content == '...'):
+            content = ''
+            valid = False
+            output_type = output_type or 'stdout'
+        elif output_type is None:
             if isinstance(content , Figure): 
                 output_type = 'figure'
             elif isinstance(content , pd.DataFrame): 
@@ -436,7 +441,7 @@ class TimedOutput:
                     Logger.warning(f"Unknown output type for catcher.TimedOutput.create: {type(content)}")
                 content = str(content)
                 output_type = 'stdout'
-        if output_type == 'stderr':
+        elif output_type == 'stderr':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
             r0 = re.search(r"^(.*?)(\d{1,3})%\|", content) # capture text before XX%|
             r1 = re.search(r"(\d+)/(\d+)", content)  # XX/XX
@@ -450,10 +455,6 @@ class TimedOutput:
                     valid = False
                 content = content.strip()
                 output_type = 'tqdm'
-        elif output_type == 'stdout':
-            assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
-            if content == '...': 
-                valid = False
 
         return cls(output_type, content , infos , valid)
     
