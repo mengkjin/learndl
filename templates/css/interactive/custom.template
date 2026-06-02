@@ -200,8 +200,14 @@
     .stVerticalBlock[class*="control-panel-buttons"] {
         padding: 0 !important;
         margin-bottom: 0 !important;
-        .stTooltipIcon {
+        .stTooltipIcon { 
             justify-content: center !important;
+        }
+        .stElementContainer {
+            align-self: center !important;
+            button {
+                color: white !important;
+            }
         }
         button {
             min-width: 60px !important;
@@ -213,34 +219,26 @@
             display: flex;
         }
         .stElementContainer[class*="script-runner-run"] {
-            align-self: center !important;
             button {
                 background-color: green !important;
-                color: white !important;
                 &:hover {background-color: darkgreen !important;}
             }
         }
         .stElementContainer[class*="reboot-app"] {
-            align-self: center !important;
             button {
                 background-color: #E63946 !important;
-                color: white !important;
                 &:hover {background-color: #A8202A !important;}
             }
         }
         .stElementContainer[class*="global-script-latest-task"] {
-            align-self: center !important;
             button {
                 background-color: lightblue !important;
-                color: white !important;
                 &:hover {background-color: #2196F3 !important;}
             }
         }
         .stElementContainer[class*="current-script-latest-task"] {
-            align-self: center !important;
             button {
                 background-color: lightcyan !important;
-                color: white !important;
                 &:hover {background-color: #00BCD4 !important;}
             }
         }
@@ -253,10 +251,8 @@
             }
         }
         .stElementContainer[class*="git-clear-pull"] {
-            align-self: center !important;
             button {
                 background-color: #D4AF37 !important;
-                color: white !important;
                 &:hover {background-color: #997922 !important;}
             }
         }

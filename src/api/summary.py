@@ -97,8 +97,8 @@ def model_ic_summary():
     ic_tables = {}
     for name , path in paths.items():
         df = DB.load_df(path)
-        ic_tables[name] = df.astype({'date' : 'int'}).query('submodel == "best"').groupby('date')['value'].mean().\
-            reset_index(drop = False).dropna().rename(columns = {'value' : 'ic'})
+        ic_tables[name] = df.astype({'date' : 'int'}).query('submodel == "best"').groupby('date')['rankic'].mean().\
+            reset_index(drop = False).dropna().rename(columns = {'rankic' : 'ic'})
     df = eval_period_ic_multi(ic_tables)
     return df
 

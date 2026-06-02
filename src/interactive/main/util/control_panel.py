@@ -7,6 +7,7 @@ Key objects:
 """
 from __future__ import annotations
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 import subprocess
 import time
 
@@ -15,6 +16,21 @@ from src.proj import Proj , MACHINE , PATH , Const , BaseClass
 from src.proj.util.options import Options
 from src.interactive.backend import ScriptRunner
 from .session_control import SC
+from . import common_operations as CO
+
+def _print_title(title : str) -> None:
+    """Render the small capitalised label below the button icon."""
+    body = f"""
+    <div style="
+        margin-bottom: 0px;
+        margin-top: -10px;
+        padding: 0 0 20px 0;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    ">{title.upper()}</div>
+    """       
+    st.markdown(body , unsafe_allow_html = True)
 
 class ControlPanelButton(ABC , BaseClass.BoundLogger):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
@@ -40,30 +56,20 @@ class ControlPanelButton(ABC , BaseClass.BoundLogger):
         """Redraw the button with updated state (override in subclasses as needed)."""
         pass
 
+    def render_area(self) -> DeltaGenerator:
+        """Render the area for the button."""
+        area_key = f"cpb-{self.key}-area"
+        if area_key not in st.session_state:
+            st.session_state[area_key] = st.empty()
+        return st.session_state[area_key]
+
     def show(self , script_key : str | None = None) -> None:
         """Render the button + label into the persistent panel placeholder slot."""
-        if self.key not in st.session_state:
-            st.session_state[self.key] = st.empty()
-        with st.session_state[self.key]:
-            with st.container():
-                self.button(script_key = script_key)
-                self.print_title()
+        with self.render_area().container():
+            self.button(script_key = script_key)
+            _print_title(self.title)
 
-    def print_title(self) -> None:
-        """Render the small capitalised label below the button icon."""
-        body = f"""
-        <div style="
-            margin-bottom: 0px;
-            margin-top: -10px;
-            padding: 0 0 20px 0;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-        ">{self.title.upper()}</div>
-        """       
-        st.markdown(body , unsafe_allow_html = True)
-
-class ScriptRunnerRunButton(ControlPanelButton):
+class ScriptRunnerRunButton(ControlPanelButton , CO.RunCurrentScript):
     """Button that submits the current script to the task queue.
 
     Rendered as disabled (greyed) when no script is selected or required
@@ -73,52 +79,24 @@ class ScriptRunnerRunButton(ControlPanelButton):
     icon = f":material/mode_off_on:"
     title = f"Run Script"
 
-    def __init__(self):
-        super().__init__()
-        from src.interactive.main.util.common_operations import RunCurrentScript
-        self.operation = RunCurrentScript()
+    @property
+    def disable_str(self) -> str:
+        return "disabled" if self.status.disabled else "enabled"
 
     def button(self , script_key : str | None = None):
-        status = self.operation.status
-        button_key = f"{self.key}-{"disabled" if status.disabled else "enabled"}-not-refreshed"
-        st.button(self.icon, key=button_key , help = status.help , disabled = status.disabled , on_click = self.operation.run)
-
-        # help = f"Please Choose a Script to Run First" if script_key is None else f"Please Fill Required Parameters"
-        # st.button(self.icon, key=f'{self.key}-disabled' , help = help)
+        button_key = f"{self.key}-disabled-not-refreshed"
+        st.button(self.icon, key=button_key , help = self.status.help , disabled = False)
 
     def refresh(self , runner : ScriptRunner):
-        with st.session_state[self.key]:
-            # if SC.param_inputs_form is None:
-            #     raise ValueError("ParamInputsForm is not initiated")
-            # params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
-            
-            # if SC.get_script_runner_validity(params):
-            #     disabled = False
-            #     preview_cmd = SC.get_script_runner_cmd(runner , params)
-            #     if preview_cmd: 
-            #         help_text = preview_cmd
-            #     else:
-            #         help_text = f"Parameters valid, run {runner.script_key}"
-            #     button_key = f"{self.key}-enabled-{runner.script_key}"
-            # else:
-            #     disabled = True
-            #     help_text = f"Parameters invalid, please check required ones"
-            #     button_key = f"{self.key}-disabled-{runner.script_key}"
+        self.update_kwargs(runner = runner)
+        status = self.status
+        button_key = f"{self.key}-{self.disable_str}-{runner.script_key}"
 
-            # with st.container():
-            #     st.button(self.icon, key=button_key , 
-            #             help = help_text , disabled = disabled , 
-            #             on_click = SC.click_script_runner_run , args = (runner, params)) 
-
-            self.operation.update(runner = runner)
-            status = self.operation.status
-            button_key = f"{self.key}-{"disabled" if status.disabled else "enabled"}-{runner.script_key}"
-
-            with st.container():
-                st.button(
-                    self.icon, key=button_key , 
-                    help = status.help , disabled = status.disabled , 
-                    on_click = self.operation.run) 
+        with self.render_area().container():
+            if status:
+                st.button(self.icon, key=button_key ,  help = status.help , disabled = False, on_click = self.run) 
+            else:
+                st.button(self.icon, key=button_key , help = status.help , disabled = True) 
 
 class GlobalScriptLatestTaskButton(ControlPanelButton):
     """Button that navigates to the latest task across all scripts."""

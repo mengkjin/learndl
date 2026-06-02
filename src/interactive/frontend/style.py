@@ -10,7 +10,6 @@ from typing import Any
 
 from src.proj import PATH
 
-
 class CustomCSS:
     """Loads and applies a set of CSS templates to the active Streamlit page.
 
@@ -22,8 +21,6 @@ class CustomCSS:
     Templates:
         Class-level dict mapping template name → :class:`~string.Template`.
     """
-    
-
     def __init__(self) -> None:
         """Build the ordered list of CSS strings from all registered templates."""
         self.templates = PATH.load_templates('css' , 'interactive')
