@@ -10,9 +10,10 @@
 # mode: shell
 
 from src.api import UpdateAPI
-from src.proj.util import SharedSync
+
 from src.proj import CALENDAR
-from src.proj.util import ScriptTool ,  TaskScheduler
+from src.proj.util.script import ScriptTool , TaskScheduler
+from src.proj.util.shared_sync import SharedSync
 
 @ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):

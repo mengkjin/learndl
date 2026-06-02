@@ -8,7 +8,8 @@ from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
 from src.proj import MACHINE , DB , Proj , CALENDAR , BaseClass , BaseType
-from src.proj.util import RequireGrad , AsyncSaver
+from src.proj.util.torch import RequireGrad
+from src.proj.util.async_save import AsyncSaver
 from src.data.util import DataBlock
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module

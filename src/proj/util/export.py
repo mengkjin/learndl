@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import polars as pl
 
-from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib.figure import Figure
-from matplotlib.text import Text
 from typing import Any , Literal , Mapping
 
 from src.proj.log import Logger
@@ -17,11 +14,14 @@ __all__ = ['dfs_to_excel' , 'figs_to_pdf']
 
 _NONCHAR_STRIP = str.maketrans({"\ufeff": "", "\ufffe": "", "\uffff": ""})
 
-def _sanitize_figure_text(fig: Figure) -> None:
+def _sanitize_figure_text(fig) -> None:
     """Strip non-characters from all text objects in figure.
 
     Matplotlib may warn when rendering non-characters like U+FFFE.
     """
+    from matplotlib.figure import Figure
+    from matplotlib.text import Text
+    assert isinstance(fig , Figure) , f'fig must be a matplotlib figure , but got {type(fig)}'
     for obj in fig.findobj(match=Text):
         try:
             s = obj.get_text()
@@ -49,12 +49,13 @@ def dfs_to_excel(dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPa
         Logger.footnote(f'{prefix} saved to {path}' , indent = indent , vb_level = vb_level)
     return path
 
-def figs_to_pdf(figs : dict[str , Figure] , path : strPath , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3):
+def figs_to_pdf(figs , path : strPath , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3):
     """Save figures to one PDF and close each figure.
 
     Returns:
         Output ``path``.
     """
+    from matplotlib.backends.backend_pdf import PdfPages
     os.makedirs(os.path.dirname(path) , exist_ok=True)
     with PdfPages(path) as pdf:
         for key, fig in figs.items():

@@ -4,7 +4,7 @@ from typing import Any , Literal
 from matplotlib.figure import Figure
 
 from src.proj import Proj , Const
-from src.proj.util import AsyncSaver
+from src.proj.util.async_save import AsyncSaver
 
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI

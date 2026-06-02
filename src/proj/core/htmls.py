@@ -1,12 +1,13 @@
 """Convert ANSI-colored text, DataFrames, and matplotlib figures to HTML-safe fragments."""
-
+from __future__ import annotations
 import re
 import html
-import base64
 import io
-import pandas as pd
-from typing import Any
-from matplotlib.figure import Figure
+from typing import Any , TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+    import pandas as pd
 
 _palette : dict[int , str] = {
     30: 'black',
@@ -82,7 +83,6 @@ def ansi_codes_to_span(codes: list[str]) -> str:
 
 def dataframe_to_html(df: pd.DataFrame | pd.Series | Any):
     """capture display object (dataframe or other object)"""
-    assert isinstance(df, (pd.DataFrame , pd.Series)) , f"obj must be a dataframe or series , but got {type(df)}"
     try:
         # get dataframe html representation
         html_table = getattr(df , '_repr_html_')() if hasattr(df, '_repr_html_') else df.to_html(classes='dataframe')
@@ -94,6 +94,7 @@ def dataframe_to_html(df: pd.DataFrame | pd.Series | Any):
 
 def figure_to_base64(fig : Figure | Any):
     """convert matplotlib figure to base64 string"""
+    import base64
     try:
         buffer = io.BytesIO()
         fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
@@ -106,9 +107,8 @@ def figure_to_base64(fig : Figure | Any):
         Logger.error(f"Error converting figure to base64: {e}")
         return None
     
-def figure_to_html(fig: Figure | Any):
+def figure_to_html(fig : Figure | Any):
     """capture matplotlib figure"""
-    assert isinstance(fig, Figure) , f"fig must be a matplotlib figure , but got {type(fig)}"
     content = None
     try:
         if fig.get_axes():  # check if figure has content

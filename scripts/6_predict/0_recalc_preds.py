@@ -23,7 +23,7 @@
 #       default : 20241231
 
 
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 from src.api import ModelAPI
 
 @ScriptTool('recalc_preds')

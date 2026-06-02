@@ -12,8 +12,7 @@ from functools import cached_property
 from typing import Literal
 
 from src.proj import BaseClass
-from src.proj.util import ProxyAPI
-from src.proj.util.proxy import ProxyCaller
+from src.proj.util.proxy import ProxyAPI , ProxyCaller
 from src.proj.util.error_handler import ErrorHandler
 
 from .sync_fetcher import AnnoucementFetcher

@@ -2,7 +2,7 @@ from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
   ModelTrainer , ModelTestor , ArchivedPredictorModel , ModelPortfolioBuilder)
 from src.proj import PATH , MACHINE , Logger , Proj
-from src.proj.util import DiskTTLCache
+from src.proj.util.disk_ttl_cache import DiskTTLCache
 from src.data import PreProcessorTask
 
 from .util import wrap_update

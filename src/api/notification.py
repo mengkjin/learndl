@@ -1,9 +1,30 @@
 import pandas as pd
-import torch
+import torch , os
 from datetime import datetime
 from src.proj import MACHINE , Logger , CALENDAR , DB
-from src.proj.util import Options , Email , TempFile , TaskRecorder , DiskTTLCache
+from src.proj.util.options import Options
+from src.proj.util.emailer import Email
+from src.proj.util.script import TaskRecorder
+from src.proj.util.disk_ttl_cache import DiskTTLCache
 from .util import wrap_update
+
+class TempFile:
+    """Context manager that deletes a filesystem path on exit."""
+
+    def __init__(self, file_name: str):
+        """Store path to remove in ``__exit__``."""
+        self.file_name = file_name
+
+    def __enter__(self):
+        """Return the temp path string."""
+        return self.file_name
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        """Best-effort ``os.remove`` with error logging."""
+        try:
+            os.remove(self.file_name)
+        except Exception as e:
+            Logger.error(f'Failed to remove temp file: {e}')
 
 class NotificationAPI:
     @classmethod

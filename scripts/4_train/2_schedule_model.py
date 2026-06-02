@@ -33,7 +33,7 @@
 #   height : 300 # optional
 
 from src.api import ModelAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2 , markdown_catcher = True)
 def main(schedule_name : str | None = None , short_test : bool | None = None , 

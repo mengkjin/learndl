@@ -5,7 +5,7 @@ from torch import nn , Tensor
 from typing import Any , Literal
 
 from src.proj import Logger
-from src.proj.util import RequireGrad
+from src.proj.util.torch import RequireGrad
 from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 from src.res.model.util.core import BatchData
 from .components import MetricComponent , LossComponent , AccuracyComponent

@@ -10,7 +10,7 @@
 # mode: shell
 
 
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 from src.res.model.util import PredictorPath
 

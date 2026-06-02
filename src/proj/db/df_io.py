@@ -1,8 +1,6 @@
 """Load, save, and path helpers for versioned tables under ``PATH.data`` (feather/parquet, tar, parallel IO)."""
 from __future__ import annotations
 
-from dask.delayed import delayed
-from dask.base import compute
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -136,6 +134,8 @@ class dfIOHandler:
         if accelerator is None:
             dfs = {d:loader(p) for d,p in paths.items() if not loader(p).empty}
         elif accelerator == 'dask':
+            from dask.delayed import delayed
+            from dask.base import compute
             ddfs = [delayed(loader)(p) for d,p in paths.items()]
             dfs = {d:df for d,df in zip(paths.keys() , compute(ddfs)[0])}
         elif accelerator in ['thread' , 'process']:

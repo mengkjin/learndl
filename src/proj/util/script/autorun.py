@@ -160,7 +160,7 @@ class AutoRunTask(BaseClass.BoundLogger):
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        from src.proj.util import AsyncSaver
+        from src.proj.util.async_save import AsyncSaver
         AsyncSaver.wait_all(caller_name = self.__class__.__name__)
         self.end_time = datetime.now()
         if isinstance(self.func_return , Path):

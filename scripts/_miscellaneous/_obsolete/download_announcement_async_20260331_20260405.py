@@ -54,7 +54,7 @@
 #       default: False
 
 from src.proj import Logger
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 from src.data.crawler.announcement.agent import AnnouncementAgent
 
 

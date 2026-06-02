@@ -4,18 +4,14 @@ import inspect , re , sys
 import cProfile
 import traceback
 
-import pandas as pd
-
 from datetime import datetime
 from pathlib import Path
 from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH , Proj
 from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silence
-
 from .display import Display
 from .logfile import LogFile
-
 LOG_LEVEL_TYPE = Literal['remark' , 'highlight' , 'debug' , 'info' , 'warning' , 'error' , 'critical']
 LOG_LEVELS : list[LOG_LEVEL_TYPE] = ['remark' , 'highlight' , 'info' , 'debug' , 'warning' , 'error' , 'critical']
 STDERR_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
@@ -213,6 +209,9 @@ class Logger:
             add_indent = 1
         else:
             add_indent = 0
+        
+        if not pair_list:
+            return
         benchmark_indent = indent + add_indent
         
         if isinstance(pair_list , dict):
@@ -644,6 +643,7 @@ class Logger:
 
         def get_df(self , sort_on = 'cumtime' , highlight = None):
             """Get the profile result as a pandas dataframe"""
+            import pandas as pd
             if not self.profiling: 
                 return pd.DataFrame()
             # highlight : 'gp_math_func.py'

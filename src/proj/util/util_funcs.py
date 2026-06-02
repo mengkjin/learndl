@@ -8,7 +8,9 @@ from typing import Any , Literal
 from src.proj.env import MACHINE
 from src.proj.log import Logger
 
-__all__ = ['get_running_scripts' , 'change_power_mode' , 'check_process_status' , 'kill_process' , 'argparse_dict' , 'unknown_args']
+__all__ = [
+    'get_running_scripts' , 'change_power_mode' , 'check_process_status' , 
+    'kill_process' , 'argparse_dict' , 'unknown_args' , 'ask_for_confirmation']
 
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py'] , default_excludes = ['kernel_interrupt_daemon.py']):
     """List script paths from running processes whose cmdline matches ``script_type``."""
@@ -104,3 +106,38 @@ def unknown_args(unknown):
             else:
                 args[key] = (args[key] , ua)
     return args
+
+
+def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = Logger.stdout):
+    """Prompt up to ``recurrent`` times with optional per-prompt timeout.
+
+    Returns:
+        Tuple of (inputs list, bool list from ``proceed_condition``).
+    """
+    
+    from pytimedinput import timedInput
+    assert isinstance(prompt , str) , prompt
+    userText_list , userText_cond = [] , []
+    for t in range(recurrent):
+        if t == 0:
+            _prompt = prompt 
+        elif t == 1:
+            _prompt = 'Really?'
+        else:
+            _prompt = 'Really again?'
+            
+        userText, timedOut = None , None
+        if timeout > 0:
+            try:
+                userText, timedOut = timedInput(f'{_prompt} (in {timeout} seconds): ' , timeout = timeout)
+            except Exception:
+                pass
+        if userText is None : 
+            userText, timedOut = input(f'{_prompt} : ') , False
+        (_timeout , _sofar) = ('Time Out! ' , 'so far') if timedOut else ('' , '')
+        print_function(f'{_timeout}User-input {_sofar} is : [{userText}].')
+        userText_list.append(userText)
+        userText_cond.append(proceed_condition(userText))
+        if not userText_cond[-1]: 
+            break
+    return userText_list , userText_cond

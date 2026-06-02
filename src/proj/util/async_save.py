@@ -1,15 +1,15 @@
 """Async save utilities"""
 from __future__ import annotations
-import torch
 import concurrent.futures
+import torch
 import numpy as np
 import pandas as pd
 import polars as pl
 import threading
 from datetime import datetime
 from copy import deepcopy
-from typing import Any , Callable , Mapping , TypeVar , cast
 from matplotlib.figure import Figure
+from typing import Any , Callable , Mapping , TypeVar , cast
 from pathlib import Path
 
 from src.proj.core import strPath
@@ -263,7 +263,7 @@ class AsyncSaver:
     @classmethod
     def figs(
         cls , 
-        figs : dict[str , Figure] , path : strPath , copy_for_safety : bool = False , * ,
+        figs , path : strPath , copy_for_safety : bool = False , * ,
         future_group : str | None = None , prefix : str | None = None , **kwargs
     ) -> Future:
         """

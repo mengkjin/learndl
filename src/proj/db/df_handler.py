@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-
 from typing import Any , Callable , Iterable , TypeVar
 
 from src.proj.log import Logger

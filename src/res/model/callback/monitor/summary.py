@@ -9,7 +9,7 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 
 from src.proj import LogFile , Duration , Proj , PATH
-from src.proj.util.func import AsyncSaver
+from src.proj.util.async_save import AsyncSaver
 from src.res.model.util import BaseCallBack
 
 def _hidden_correlation_to_chw(hcorr : torch.Tensor) -> torch.Tensor:

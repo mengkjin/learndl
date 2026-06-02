@@ -31,7 +31,7 @@ import pandas as pd
 from src.proj import Logger
 from src.proj.env import PATH
 from src.proj.db.core import DATAFRAME_SUFFIX
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('temporary_fix')
 def main(dry_run: bool = True, min_bytes: int = 1024, **kwargs):

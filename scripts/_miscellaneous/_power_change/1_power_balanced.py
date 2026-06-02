@@ -8,10 +8,9 @@
 # mode: os
 
 from src.proj import PATH
-from src.proj.util import change_power_mode
+from src.proj.util.util_funcs import change_power_mode
 
 def main():
-    #running_scripts = get_running_scripts(__file__)
     log_path = PATH.logs.joinpath('suspend','power_check.log')
     change_power_mode('balanced' , log_path , True)
 

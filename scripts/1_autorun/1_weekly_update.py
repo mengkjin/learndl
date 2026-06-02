@@ -11,7 +11,7 @@
 
 from src.api import UpdateAPI
 from src.proj import CALENDAR
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('weekly_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):

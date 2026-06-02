@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any , Generator , Literal , TypedDict
 
 from src.proj import BaseClass , Logger
-from src.proj.util import parallel
+from src.proj.util.parallel import parallel
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator

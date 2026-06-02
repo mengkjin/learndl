@@ -7,8 +7,8 @@
 # email: True
 # mode: shell
 
-from src.proj.util import Email
-from src.proj.util import ScriptTool 
+from src.proj.util.emailer import Email
+from src.proj.util.script import ScriptTool 
 
 @ScriptTool('test_email' , lock_timeout = 10)
 def main(**kwargs):

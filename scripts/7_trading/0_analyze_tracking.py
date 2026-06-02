@@ -19,7 +19,7 @@
 #       desc : end yyyymmdd
 
 from src.api import TradingAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('analyze_tradeport' , '@port_name' , lock_num = 0)
 def main(port_name : str | None = None , start : int | None = None , end : int | None = None , **kwargs):

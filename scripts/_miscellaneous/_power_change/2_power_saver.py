@@ -9,7 +9,7 @@
 
 from datetime import datetime
 from src.proj import PATH , Logger
-from src.proj.util import change_power_mode , get_running_scripts
+from src.proj.util.util_funcs import change_power_mode , get_running_scripts
 
 def main():
     running_scripts = get_running_scripts(__file__)

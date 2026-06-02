@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 import numpy as np
-import torch
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal , TYPE_CHECKING , Any
 from dataclasses import dataclass
 
 from src.proj.core import strPath
+
+if TYPE_CHECKING:
+    from torch import Tensor
 
 @dataclass
 class ArrayMeta:
@@ -44,12 +46,13 @@ class ArrayMemoryMap:
         self._full_mmap = None
 
     @classmethod
-    def save(cls, array: np.ndarray | torch.Tensor , path: strPath):
+    def save(cls, array : np.ndarray | Tensor , path: strPath):
         """Write array bytes and metadata; tensors are copied to CPU numpy first.
 
         Returns:
             ``ArrayMemoryMap`` bound to ``path``.
         """
+        import torch
         mmap = cls(path)
         mmap.path.mkdir(parents=True, exist_ok=True)
         array_type='Tensor' if torch.is_tensor(array) else 'ndarray'
@@ -68,12 +71,13 @@ class ArrayMemoryMap:
 
         return mmap
 
-    def view(self , writable: bool = False) -> torch.Tensor | np.ndarray:
+    def view(self , writable: bool = False):
         """Memory-map the binary file and return an ndarray or tensor view backed by the mmap.
 
         Args:
             writable: If True, open the file in read/write mode.
         """
+        import torch
         mode = 'r+' if writable else 'r'
         file_size = os.path.getsize(self.data_path)
         self._full_mmap = np.memmap(self.data_path, dtype='uint8', mode=mode, shape=(file_size,))
@@ -85,8 +89,9 @@ class ArrayMemoryMap:
         return result
 
     @classmethod
-    def load(cls, path: strPath) -> torch.Tensor | np.ndarray:
+    def load(cls, path: strPath):
         """Load array into a new in-memory buffer (full read, not mmap)."""
+        import torch
         mmap = cls(path)
         metas = ArrayMeta.from_json(mmap.meta_path)
         
@@ -99,17 +104,15 @@ class ArrayMemoryMap:
         return result
 
     @classmethod
-    def load_tensor(cls, path: strPath) -> torch.Tensor:
+    def load_tensor(cls, path: strPath) -> Tensor | Any:
         """Like ``load`` but asserts the stored type was ``Tensor``."""
         data = cls.load(path)
-        assert isinstance(data, torch.Tensor) , data
         return data
 
     @classmethod
-    def load_ndarray(cls, path: strPath) -> np.ndarray:
+    def load_ndarray(cls, path: strPath) -> np.ndarray | Any:
         """Like ``load`` but asserts the stored type was ``ndarray``."""
         data = cls.load(path)
-        assert isinstance(data, np.ndarray) , data
         return data
 
     def close(self):

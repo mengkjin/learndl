@@ -16,7 +16,7 @@
 #       default : 20250814
 
 from src.api import UpdateAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('rollback_update' , '@rollback_date')
 def main(rollback_date : int | None = None , **kwargs):

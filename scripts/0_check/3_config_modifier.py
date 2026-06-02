@@ -7,7 +7,7 @@
 # email: True
 # mode: shell
 
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 from src.res.model.util.config import ModelConfigsInspector , ModelConfigsBatchModifier
 
 @ScriptTool('config_modifier')

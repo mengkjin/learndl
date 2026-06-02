@@ -21,9 +21,10 @@
 import asyncio
 
 from src.proj import Logger
-from src.proj.util import ScriptTool, ProxyAPI
+from src.proj.util.script import ScriptTool
+from src.proj.util.proxy.api import ProxyAPI
 from src.proj.util.proxy.ppool import AdaptiveProxyPool
-from src.data.crawler.announcement.fetcher import FetcherTask
+from src.data.crawler.announcement.fetcher_task import FetcherTask
 
 
 @ScriptTool("test_announcement_async_minimal")

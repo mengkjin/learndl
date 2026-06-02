@@ -12,7 +12,7 @@
 #   height : 300 # optional
 
 from src.api import ModelAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('quick_train_model')
 def main(**kwargs):

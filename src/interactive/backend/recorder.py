@@ -14,8 +14,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.proj.util import argparse_dict
-from src.proj.util.func import is_main_process
+from src.proj.util.util_funcs import argparse_dict 
+from src.proj.util.parallel import is_main_process
 from .task import TaskItem , TaskDatabase
 
 class BackendTaskRecorder:
@@ -174,7 +174,7 @@ class BackendTaskRecorder:
             Handles: None, str, Path, 2-tuple ``(message, files-list)``, n-tuple,
             list, dict, AutoRunTask, and arbitrary objects (via ``str()``).
             """
-            from src.proj.util import AutoRunTask
+            from src.proj.util.script.autorun import AutoRunTask
             if ret is None:
                 return cls()
             elif isinstance(ret , cls):

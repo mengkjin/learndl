@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.proj import Logger
-from src.proj.util import ScriptTool 
+from src.proj.util.script import ScriptTool 
 
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
 def main(port_name : str = 'a' , **kwargs):

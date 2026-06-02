@@ -1,11 +1,5 @@
 """SMTP email sending using credentials from machine secrets and ``Proj`` attachments."""
 
-import smtplib , ssl
-
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 from pathlib import Path
 from typing import Literal , Any
 
@@ -53,6 +47,10 @@ class Email(BaseClass.BoundLogger, metaclass=BaseMeta.NoInstance):
                 attachments : strPath | list[strPath] | None = None ,
                 project_attachments : bool = False ,
                 title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:'):
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
         message = MIMEMultipart()
         message['From'] = cls.sender
         message['To'] = cls.recipient(recipient)
@@ -83,8 +81,9 @@ class Email(BaseClass.BoundLogger, metaclass=BaseMeta.NoInstance):
         return message
 
     @classmethod
-    def send_with_smtplib(cls , message : MIMEMultipart , recipient : str | None = None , confirmation_message : str | None = None ,
+    def send_with_smtplib(cls , message , recipient : str | None = None , confirmation_message : str | None = None ,
                           timeout : int = 20):
+        import smtplib , ssl
         if cls.smtp_port == 'auto':
             smtp_port = 25 if MACHINE.platform_server else 465
         else:

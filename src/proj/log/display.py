@@ -1,8 +1,5 @@
 """IPython-friendly display routing (DataFrame, matplotlib Figure, or fallback)."""
 
-import pandas as pd
-from matplotlib.figure import Figure
-from IPython.display import display as raw_display
 from typing import Callable
 
 __all__ = ['Display']
@@ -58,22 +55,24 @@ class Display:
         """
         for callback in cls._callbacks_before:
             callback(obj)
-            
+        from matplotlib.figure import Figure
+        import pandas as pd
         if isinstance(obj , Figure):
             cls.figure(obj , **kwargs)
         elif isinstance(obj , pd.DataFrame):
             cls.data_frame(obj , **kwargs)
         else:
-            raw_display(obj)
+            cls.raw_display(obj)
 
         for callback in cls._callbacks_after:
             callback(obj)
 
-    @staticmethod
-    def data_frame(df : pd.DataFrame , **kwargs):
+    @classmethod
+    def data_frame(cls , df , **kwargs):
         """
         display a pandas dataframe
         """
+        import pandas as pd
         with pd.option_context(
             'display.max_rows', 100,
             'display.max_columns', None,
@@ -81,11 +80,19 @@ class Display:
             'display.precision', 3,
             'display.colheader_justify', 'center' ,
             *[i for k,v in kwargs.items() for i in [k,v]]):
-            raw_display(df)
+            cls.raw_display(df)
 
-    @staticmethod
-    def figure(fig : Figure , **kwargs):
+    @classmethod
+    def figure(cls , fig , **kwargs):
         """
         display a matplotlib figure
         """
-        raw_display(fig)
+        cls.raw_display(fig)
+
+    @staticmethod
+    def raw_display(obj):
+        """
+        display the object
+        """
+        from IPython.display import display as raw_display
+        raw_display(obj)

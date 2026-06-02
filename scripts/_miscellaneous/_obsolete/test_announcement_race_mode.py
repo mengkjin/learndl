@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.proj import Proj
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 from src.data.crawler.announcement.agent import AnnouncementAgent
 
 @ScriptTool("test_announcement_race_mode")

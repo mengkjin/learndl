@@ -16,7 +16,7 @@
 #       default : 20240101
 
 from src.proj import Proj
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 from src.res.model.util import PredictorPath
 
 @ScriptTool('pack_model_files')

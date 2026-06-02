@@ -25,7 +25,7 @@
 #       default : 10
 
 from src.res.factor.api import FactorCalculatorAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('update_factors' , lock_name = 'update_factors')
 def main(start : int | None = None , end : int | None = None , timeout : float | None = 10 , **kwargs):

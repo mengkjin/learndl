@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal, Type
 
 from src.proj import PATH, MACHINE, Const, Proj , BaseClass , BaseType
-from src.proj.util import Device , FlattenDict
+from src.proj.util.device import Device
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
@@ -24,7 +24,7 @@ from src.res.model.util.core import ModelPath , model_module_type, is_null_modul
 
 __all__ = ['ModelConfig']
 
-def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> FlattenDict:
+def get_config_dict(input: dict | Path | list[Path] | BaseClass.FlattenDict | None) -> BaseClass.FlattenDict:
     """
     get flattened config dict from input
     keep nested keys if they are in the input or are not all lowercase
@@ -33,10 +33,10 @@ def get_config_dict(input: dict | Path | list[Path] | FlattenDict | None) -> Fla
         exclude_keys = ('input.sequence.lens' , 'input.sequence.steps' , 'input.factor.types' ,
                         'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses')
         return (k.endswith(exclude_keys) or not k.islower())
-    if isinstance(input, FlattenDict):
+    if isinstance(input, BaseClass.FlattenDict):
         return input
     else:
-        return FlattenDict.from_input(input , keep_nested = keep_nested)
+        return BaseClass.FlattenDict.from_input(input , keep_nested = keep_nested)
 
 class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
@@ -58,7 +58,7 @@ class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def get(self, key: str, default: Any = None) -> Any:
         return self.Param.get(key, default)
 
-    def get_config_dict(self , base_path: ModelPath | None, schedule_name: str | None) -> FlattenDict:
+    def get_config_dict(self , base_path: ModelPath | None, schedule_name: str | None) -> BaseClass.FlattenDict:
         config_path = self.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
@@ -131,17 +131,17 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def __setitem__(self, key: str, value: Any):
         self.Param[key] = value
 
-    def resumed_config_param(self) -> FlattenDict | None:
+    def resumed_config_param(self) -> BaseClass.FlattenDict | None:
         if (self.base_path and not self.base_path.is_null_model and not self.short_test):
             conf_file = self.base_path.conf_file("model")
             return get_config_dict(conf_file) if conf_file.exists() else None
         else:
             return None
 
-    def default_config_param(self) -> FlattenDict:
+    def default_config_param(self) -> BaseClass.FlattenDict:
         return self.REQUIRED_CONFIG_PARAM.combine_with(self.OPTIONAL_CONFIG_PARAM)
         
-    def current_config_param(self) -> FlattenDict:
+    def current_config_param(self) -> BaseClass.FlattenDict:
         return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
 
     def optional_load_params(self , option : Literal["current", "default"]):
@@ -179,7 +179,7 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
             "force_module": str(self.force_module).lower().replace(" ", "").replace("/", "@") if self.force_module else None,
             "schedule": self.schedule_name and self.schedule_config.get("model.module", None),
         }
-        assert np.unique([v for v in model_module_candidate.values() if v]).shape[0] <= 1, (
+        assert len(np.unique([v for v in model_module_candidate.values() if v])) <= 1, (
             f"only one of base_path , force_module , schedule can be provided, but got {model_module_candidate}"
         )
         model_modules = [v for v in model_module_candidate.values() if v]

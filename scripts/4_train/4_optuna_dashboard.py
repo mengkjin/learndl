@@ -1,14 +1,14 @@
 #! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
 # coding: utf-8
 # author: jinmeng
-# date: 2026-03-18
-# description: Launch TensorBoard for a Model
-# content: Launch TensorBoard for a model
+# date: 2026-06-02
+# description: Launch Optuna Dashboard
+# content: Launch Optuna Dashboard
 # email: False
 # mode: shell
 
 from src.api import DashboardAPI
 
 if __name__ == '__main__':
-    DashboardAPI.tensorboard()
+    DashboardAPI.optuna_dashboard()
     

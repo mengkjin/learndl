@@ -8,7 +8,6 @@ from this package for all research code.
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-import torch
 
 from datetime import datetime, timedelta, time
 from pathlib import Path
@@ -25,7 +24,7 @@ __all__ = ['CALENDAR', 'Dates']
 
 DateType = Union[int, TradeDate]
 DateTypeWithNone = Union[int, TradeDate, None]
-DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series , torch.Tensor]
+DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series]
 
 def get_cd(date: DateType) -> int:
     """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
@@ -50,8 +49,10 @@ def get_cds(dates: DatesType) -> np.ndarray:
         ...
     elif isinstance(dates, Sequence):
         dates = np.array([get_cd(d) for d in dates])
-    elif isinstance(dates , torch.Tensor):
+    elif dates.__class__.__name__ == 'Tensor':
         dates = dates.cpu().numpy()
+    else:
+        raise ValueError(f'Invalid dates type: {type(dates)}')
     return dates.astype(int)
 
 class CALENDAR(metaclass=NoInstanceMeta):

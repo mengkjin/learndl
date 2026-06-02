@@ -44,18 +44,6 @@ class Proj(metaclass=ProjMeta):
         """
         import torch
         from src.proj.log import Logger
-        
-        # def _print_project_info():
-        #     Logger.stdout_pairs(cls.info() , title = 'Project Info:')
-        #     if MACHINE.cuda_server and not torch.cuda.is_available():
-        #         Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
-
-        # if script_level and not getattr(cls.instances , identifier , False):
-        #     _print_project_info()
-        #     setattr(cls.instances , identifier , True)
-        # elif not script_level and identifier not in os.environ:
-        #     _print_project_info()
-        #     os.environ[identifier] = "1"
 
         object = 'logger' if once_type == 'script' else 'os'
         Logger.only_once(cls.info() , printer = 'stdout_pairs' , title = 'Project Info:' , object = object , mark = identifier)
@@ -66,5 +54,5 @@ class Proj(metaclass=ProjMeta):
     @classmethod
     def print_disk_info(cls):
         """Show disk space info in the best way."""
-        from src.proj.util import print_disk_space_info
+        from src.proj.util.disk_info import print_disk_space_info
         print_disk_space_info()

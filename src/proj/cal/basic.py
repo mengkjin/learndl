@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from functools import cached_property
 from zoneinfo import ZoneInfo
 
 from src.proj.core import SingletonMeta
@@ -20,6 +21,11 @@ class BasicCalendar(metaclass=SingletonMeta):
 
     def __init__(self) -> None:
         """Load and merge the calendar, build 'full'/'cal'/'trd' DataFrame and accelerate use ndarray and index."""
+        self._loaded = False
+
+    def ensure_data(self) -> None:
+        if self._loaded:
+            return
         calendar = DB.load("information_ts", "calendar", missing_ok=False).loc[:, ["calendar", "trade"]]
         reserved = pd.DataFrame(MACHINE.config.get('constant/data/calendar'))
         if not reserved.empty:
@@ -44,24 +50,63 @@ class BasicCalendar(metaclass=SingletonMeta):
         self.cal = cal_cal
         self.trd = cal_trd
 
-        cds = calendar.index.to_numpy(dtype=np.int64)
-        self._cds = cds
-        self._cd_to_pos: dict[int, int] = {int(c): i for i, c in enumerate(cds)}
-        self._trade = calendar["trade"].to_numpy(dtype=bool)
-        self._td_col = calendar["td"].to_numpy(dtype=np.int64)
-        self._cd_index = calendar["cd_index"].to_numpy(dtype=np.int64)
-        self._td_index = calendar["td_index"].to_numpy(dtype=np.int64)
-        self._td_forward = calendar["td_forward"].to_numpy(dtype=np.int64)
+        self._loaded = True
 
-        self._trade_calendar = cds[self._trade].astype(np.int64, copy=False)
-        self._trade_td = calendar["td"].to_numpy(dtype=np.int64)[self._trade]
+    @cached_property
+    def _cds(self) -> np.ndarray:
+        self.ensure_data()
+        return self.full.index.to_numpy(dtype=np.int64)
 
-        self.min_date = int(cds.min())
-        self.max_date = int(cds.max())
-        self.n_cal: int = len(cds)
-        self.n_td: int = int(self._trade.sum())
-        self.max_td_index: int = int(cal_trd.index.max())
-        self._cd_pd_index = pd.Index(cds)
+    @cached_property
+    def _cd_to_pos(self) -> dict[int, int]:
+        return {int(c): i for i, c in enumerate(self._cds)}
+
+    @cached_property
+    def _trade(self) -> np.ndarray:
+        return self.full["trade"].to_numpy(dtype=bool)
+
+    @cached_property
+    def _td_col(self) -> np.ndarray:
+        return self.full["td"].to_numpy(dtype=np.int64)
+
+    @cached_property
+    def _cd_index(self) -> np.ndarray:
+        return self.full["cd_index"].to_numpy(dtype=np.int64)
+
+    @cached_property
+    def _td_index(self) -> np.ndarray:
+        return self.full["td_index"].to_numpy(dtype=np.int64)
+
+    @cached_property
+    def _td_forward(self) -> np.ndarray:
+        return self.full["td_forward"].to_numpy(dtype=np.int64)
+
+    @cached_property
+    def _trade_calendar(self) -> np.ndarray:
+        return self.full.index.to_numpy(dtype=np.int64)[self._trade].astype(np.int64, copy=False)
+
+    @cached_property
+    def _trade_td(self) -> np.ndarray:
+        return self.full["td"].to_numpy(dtype=np.int64)[self._trade]
+
+    @cached_property
+    def min_date(self) -> int:
+        return int(self._cds.min())
+    @cached_property
+    def max_date(self) -> int:
+        return int(self._cds.max())
+    @cached_property
+    def n_cal(self) -> int:
+        return len(self._cds)
+    @cached_property
+    def n_td(self) -> int:
+        return int(self._trade.sum())
+    @cached_property
+    def max_td_index(self) -> int:
+        return int(self._td_index.max())
+    @cached_property
+    def _cd_pd_index(self) -> pd.Index:
+        return pd.Index(self._cds)
 
     def pos_cd(self, cd: int) -> int:
         """The row number of the natural date 'YYYYMMDD' in the internal sorted table; raise 'KeyError' if not exists."""

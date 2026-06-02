@@ -8,10 +8,8 @@ from typing import Any , Callable , Literal
 
 from src.proj.env import PATH
 from src.proj.log import Logger
-from src.proj.util.func import is_main_process
+from src.proj.util.parallel import is_main_process
 
-from .autorun import AutoRunTask
-from .script_lock import ScriptLockMultiple
 
 __all__ = ['ScriptTool']
 
@@ -102,11 +100,13 @@ class ScriptTool:
     @cached_property
     def script_lock(self):
         """Get the script lock"""
+        from src.proj.util.script.script_lock import ScriptLockMultiple
         return ScriptLockMultiple(self.lock_name or self.task_name , self._lock_num , self._lock_timeout)
 
     @cached_property
     def autorun_task(self):
         """Get the autorun task"""
+        from src.proj.util.script.autorun import AutoRunTask
         return AutoRunTask(
             self.task_name , self.task_key , self._forfeit_if_done , self._verbosity ,
             task_id = self.backend_recorder.task_id , markdown_catcher = self._markdown_catcher,

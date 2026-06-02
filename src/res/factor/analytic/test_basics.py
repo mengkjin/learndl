@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , DB , BaseClass , BaseType
-from src.proj.util import AsyncSaver
+from src.proj.util.async_save import AsyncSaver
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 

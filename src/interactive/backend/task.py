@@ -29,8 +29,11 @@ from datetime import datetime
 from pathlib import Path
 
 from src.proj import PATH , Duration , Logger , BaseProperty , BaseType
-from src.proj.util.func import is_main_process
-from src.proj.util import ScriptCmd , DBConnHandler , Email , check_process_status , kill_process
+from src.proj.util.parallel import is_main_process
+from src.proj.util.script import ScriptCmd
+from src.proj.util.sqlite import DBConnHandler
+from src.proj.util.emailer import Email
+from src.proj.util.util_funcs import check_process_status , kill_process
 
 def timestamp() -> float:
     """Return the current UTC time as a POSIX timestamp (seconds since epoch)."""

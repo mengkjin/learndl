@@ -14,7 +14,7 @@ from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import MACHINE , CALENDAR , DB , Dates , Duration , BaseClass , Logger
-from src.proj.util import parallel
+from src.proj.util.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {

@@ -1,7 +1,7 @@
 import platform , os
 import torch
 from src.proj import PATH
-from src.proj.util import Device
+from src.proj.util.device import Device
 
 class gpDefaults:
     plat = platform.system().lower() # Windows or Linux

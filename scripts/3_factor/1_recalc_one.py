@@ -13,7 +13,7 @@
 #       required : True
 
 from src.res.factor.api import FactorCalculatorAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('recalc_one' , lock_name = 'update_factors')
 def main(factor_names : str | None = None , **kwargs):

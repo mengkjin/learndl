@@ -12,7 +12,7 @@ import time
 
 from abc import abstractmethod , ABC
 from src.proj import Proj , MACHINE , PATH , Const , BaseClass
-from src.proj.util import Options
+from src.proj.util.options import Options
 from src.interactive.backend import ScriptRunner
 from .session_control import SC
 
@@ -159,7 +159,7 @@ class RebootButton(ControlPanelButton):
 
     @classmethod
     def reboot_app(cls):
-        from src.proj.util.func import streamlit_hot_reload
+        from src.proj.util.deepreload import streamlit_hot_reload
         streamlit_hot_reload(PATH.main.joinpath('src') , rerun = False)
         time.sleep(1)
         st.rerun()

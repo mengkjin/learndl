@@ -41,7 +41,7 @@ import time
 from typing import Any
 
 from src.proj import CALENDAR, Logger, Proj
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 from src.res.factor.api import FactorCalculatorAPI
 from src.res.factor.calculator.update_jobs import UpdateJobDate
 

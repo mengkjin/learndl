@@ -1,9 +1,6 @@
 """Run many callables in-process, threaded, or multiprocessed with shared result dict."""
 from __future__ import annotations
 
-import multiprocessing as mp
-from multiprocessing.context import BaseContext
-
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime , timedelta
 from typing import Any , Callable , Literal , Mapping , Iterable , TypeVar
@@ -25,12 +22,14 @@ INPUT_TYPE = (
 
 def is_main_process() -> bool:
     """True only in the process that launched the job (not a ``ProcessPoolExecutor`` worker)."""
+    import multiprocessing as mp
     return mp.current_process().name == 'MainProcess'
 
 
-def process_pool_context() -> BaseContext:
+def process_pool_context():
     """Multiprocessing context for ``ProcessPoolExecutor`` (avoid fork in a threaded parent)."""
     # Python 3.12+ deprecates fork() when the parent process has threads; forkserver/spawn are safe.
+    import multiprocessing as mp
     return mp.get_context('spawn' if MACHINE.is_windows else 'forkserver')
 
 def get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:

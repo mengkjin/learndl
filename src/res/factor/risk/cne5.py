@@ -4,7 +4,7 @@ import statsmodels.api as sm
 from typing import Any , Literal
 
 from src.proj import CALENDAR , DB , Const , BaseClass
-from src.proj.util import WarningCatcher
+from src.proj.util.catcher import WarningCatcher
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 

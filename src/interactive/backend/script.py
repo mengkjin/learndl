@@ -24,7 +24,7 @@ from typing import Literal , Any , ClassVar
 from dataclasses import dataclass , asdict , field
 
 from src.proj import PATH , MACHINE , BaseType # noqa
-from src.proj.util import Options # noqa
+from src.proj.util.options import Options # noqa
 from .task import TaskItem , TaskQueue , runs_page_url
 
 def _format_path(script_key : str) -> str:

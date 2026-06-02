@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any
 
 from src.proj import DB
-from src.proj.util import AsyncSaver
+from src.proj.util.async_save import AsyncSaver
 
 from src.res.model.util import BaseCallBack
 

@@ -1,8 +1,8 @@
 """Machine identity, OS, secrets, and config loading for the current host."""
-
-import sys , socket , platform , os , torch , pytz , yaml , json , machineid
+import sys , os , pytz , yaml , json
 
 from dataclasses import dataclass
+
 from pathlib import Path
 from typing import Any , Literal
 from tzlocal import get_localzone
@@ -74,6 +74,7 @@ def _get_system_name():
     Raises:
         ValueError: If the platform is not supported.
     """
+    import platform
     system_name = platform.system()
     if system_name == 'Linux' and os.name == 'posix':
         return 'linux'
@@ -84,19 +85,11 @@ def _get_system_name():
     else:
         raise ValueError(f'Unsupported system name: {system_name}')
 
-def _get_best_device():
-    """Get the best device for the machine: CUDA, MPS, or CPU"""
-    if torch.cuda.is_available():
-        return torch.cuda.get_device_name(0).upper()
-    elif torch.mps.is_available():
-        return 'MPS'
-    else:
-        return 'CPU'
-
 def _machine_name_init() -> str:
     """
     initialize the machine name if not exists in the secret folder
     """
+    import machineid , socket
     # 0. get the machine uuid 
     machine_id = machineid.id()
 
@@ -267,7 +260,6 @@ class MACHINE:
 
     cpu_count = os.cpu_count() or 1
     max_workers = 40 if platform_server else cpu_count
-    best_device = _get_best_device()
 
     timezone = get_localzone()
     utc8 = str(timezone) == str(pytz.timezone('Asia/Shanghai') )
@@ -287,8 +279,19 @@ class MACHINE:
             'Timezone' : cls.timezone,
             'Main Path' : cls.main_path, 
             'Python Path' : cls.python_path,
-            'Best Device' : cls.best_device,
+            'Best Device' : cls.best_device(),
         }
+
+    @classmethod
+    def best_device(cls):
+        """Get the best device for the machine: CUDA, MPS, or CPU"""
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_name(0).upper()
+        elif torch.mps.is_available():
+            return 'MPS'
+        else:
+            return 'CPU'
 
     @classmethod
     def machine_main_path(cls , machine_name : str) -> Path:

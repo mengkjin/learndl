@@ -9,7 +9,7 @@
 
 from src.api import ModelAPI , SummaryAPI
 from src.proj import CALENDAR
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('resume_testing' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):

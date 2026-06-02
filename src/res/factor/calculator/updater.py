@@ -9,7 +9,8 @@ from functools import cached_property
 from typing import Any , Generator , Literal
 
 from src.proj import CALENDAR , Const , BaseMeta , BaseClass
-from src.proj.util import parallel , DiskTTLCache
+from src.proj.util.parallel import parallel
+from src.proj.util.disk_ttl_cache import DiskTTLCache
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator

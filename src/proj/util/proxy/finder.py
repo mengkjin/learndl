@@ -3,12 +3,9 @@ from __future__ import annotations
 import time
 import random
 from curl_cffi import requests
-from typing import Callable, Any ,Literal
+from typing import Callable, Any , Literal , cast
 
 from abc import ABC, abstractmethod
-from bs4 import BeautifulSoup , Tag
-from cachetools import TTLCache
-from cachetools.keys import hashkey
 from threading import RLock
 
 from src.proj.core import Silence
@@ -48,6 +45,8 @@ class ProxiesCache:
             `use_cache` (default is False), if set to False, force not to read the cache, but the calculation result
             will still try to write to the cache (if the condition is met).
         """
+        from cachetools import TTLCache
+        from cachetools.keys import hashkey
         cache = TTLCache(maxsize=maxsize, ttl=ttl_seconds)
         lock = RLock()
 
@@ -78,8 +77,8 @@ class ProxiesCache:
             return wrapper
         return decorator
 
-class BaseProxiesFinder(ABC , BaseClass.BoundLogger):
-    """Auto discover HTTP proxies from public proxy list."""
+class BaseProxiesFinder(ABC, BaseClass.BoundLogger):
+    _find_cached_impl: Callable[..., ProxySet] | None = None
 
     @classmethod
     @abstractmethod
@@ -88,28 +87,39 @@ class BaseProxiesFinder(ABC , BaseClass.BoundLogger):
         raise NotImplementedError
 
     @classmethod
-    @ProxiesCache.cached_function(ttl_seconds=60 , condition=lambda x: len(x) > 0)
-    def find(cls , level_type: Literal["any" , "anonymous"] = "anonymous" , use_cache: bool = False) -> ProxySet:
-        """Find proxies from free proxy list."""
+    def _find_impl(cls, level_type: Literal["any", "anonymous"] = "anonymous") -> ProxySet:
         try:
-            proxies = retry_call(cls.find_candidates, kwargs={'level_type': level_type}, attempts=3, base_delay=1.)
+            proxies = retry_call(cls.find_candidates, kwargs={"level_type": level_type}, attempts=3, base_delay=1.0)
             if isinstance(proxies, Exception):
                 raise proxies
-            proxies = proxies.set_source(cls.__name__)
-            return proxies
+            return proxies.set_source(cls.__name__)
         except Exception as e:
             cls.logger.alert1(f"[!] Error occurred while finding proxies through {cls.__name__} level_type={level_type}: {e}")
             return ProxySet()
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}"
-    
+    @classmethod
+    def _get_find_cached_impl(cls) -> Callable[..., ProxySet]:
+        cached_impl = cls._find_cached_impl
+        if cached_impl is None:
+            cached_impl = ProxiesCache.cached_function(
+                ttl_seconds=60,
+                condition=lambda x: len(x) > 0,
+            )(cls._find_impl)
+            cls._find_cached_impl = cached_impl
+        return cast(Callable[..., ProxySet], cached_impl)
+
+    @classmethod
+    def find(
+        cls,
+        level_type: Literal["any", "anonymous"] = "anonymous",
+        use_cache: bool = False,
+    ) -> ProxySet:
+        return cls._get_find_cached_impl()(cls, level_type=level_type, use_cache=use_cache)
+
 class ZDAYEFinder(BaseProxiesFinder):
     """Get proxies from Zdaye API"""
     MAIN_PAGE = "https://www.zdaye.com/"
     API_URL = "http://www.zdopen.com/FreeProxy/Get/"
-    APP_ID = MACHINE.secret.get('accounts' , 'zdaye/app_id')
-    AKEY   = MACHINE.secret.get('accounts' , 'zdaye/akey')
     INTERVAL = 1.2
     last_request_time = 0
 
@@ -127,8 +137,8 @@ class ZDAYEFinder(BaseProxiesFinder):
         level_type: Literal["any" , "anonymous"] = "anonymous") -> str:
         """URL of Zdaye API"""
         kwargs = {
-            "app_id": cls.APP_ID,
-            "akey": cls.AKEY,
+            "app_id": MACHINE.secret.get('accounts' , 'zdaye/app_id'),
+            "akey": MACHINE.secret.get('accounts' , 'zdaye/akey'),
             "count": count,
             "dalu": 1,
             "level_type": 3 if level_type == "anonymous" else None,
@@ -207,6 +217,7 @@ class FreeProxyListNetFinder(BaseProxiesFinder):
     @classmethod
     def _parse_proxy_table(cls , html: str , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
         """Parse the HTML proxy table from free-proxy-list.net and return a list of ``http://ip:port`` strings."""
+        from bs4 import BeautifulSoup , Tag
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if not isinstance(table, Tag):
@@ -245,6 +256,7 @@ class FreeProxyListCCFinder(BaseProxiesFinder):
     @classmethod
     def _parse_proxy_table(cls , html: str , level_type: Literal["any" , "anonymous"] = "anonymous") -> list[str]:
         """Parse the HTML proxy table from freeproxylist.cc and return a list of ``http://ip:port`` strings."""
+        from bs4 import BeautifulSoup , Tag
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if not isinstance(table, Tag):
@@ -284,6 +296,7 @@ class FreeProxyWorldFinder(BaseProxiesFinder):
     @classmethod
     def _parse_proxy_table(cls , html: str , protocol: Literal["http" , "socks4" , "socks5" , "https"] | str = "https") -> list[str]:
         """Parse the HTML proxy table from freeproxy.world and return a list of ``<protocol>://ip:port`` strings."""
+        from bs4 import BeautifulSoup , Tag
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if not isinstance(table, Tag):

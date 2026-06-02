@@ -58,7 +58,7 @@ from typing import Any
 import yaml
 
 from src.proj import Logger
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 ROOT = Path(__file__).resolve().parents[2]      # project root
 INDEX_PATH = ROOT / 'context' / '_index.yaml'

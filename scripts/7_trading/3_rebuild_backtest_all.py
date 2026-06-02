@@ -14,7 +14,7 @@
 #       default : False
 
 from src.api import TradingAPI
-from src.proj.util import ScriptTool
+from src.proj.util.script import ScriptTool
 
 @ScriptTool('backtest_rebuild_all')
 def main(confirm : bool | None = None , **kwargs):
