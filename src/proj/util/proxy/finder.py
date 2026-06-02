@@ -104,7 +104,7 @@ class BaseProxiesFinder(ABC, BaseClass.BoundLogger):
             cached_impl = ProxiesCache.cached_function(
                 ttl_seconds=60,
                 condition=lambda x: len(x) > 0,
-            )(cls._find_impl)
+            )(cls._find_impl.__func__)
             cls._find_cached_impl = cached_impl
         return cast(Callable[..., ProxySet], cached_impl)
 
