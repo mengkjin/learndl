@@ -164,7 +164,7 @@ class AsyncSaver:
             if time_cost.total_seconds() > 1:
                 group_str = f" in group {future_group}" if future_group else ""
                 caller_str = f"{caller_name} >> " if caller_name else ""
-                msg = f'{caller_str}Waited {time_cost.total_seconds():1.f} seconds for {len(futures)} AsyncSaver{group_str} to complete'
+                msg = f'{caller_str}Waited {time_cost.total_seconds():.1f} seconds for {len(futures)} AsyncSaver{group_str} to complete'
                 Logger.note(msg , vb_level = 'max')
             return exceptions
         else:

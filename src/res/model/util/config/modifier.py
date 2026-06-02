@@ -209,9 +209,13 @@ class ModelConfigModifier(BaseClass.BoundLogger):
 class ModelConfigsBatchModifier:
     def __init__(self):
         self.root = PATH.model
-        self.task_list : list[Callable[[str , DictLoader] , DictLoader]] = [
-            getattr(ModelConfigModifier , name) for name in dir(ModelConfigModifier) if not name.startswith('_')
-        ]
+        
+    def get_task_list(self) -> list[Callable[[str , DictLoader] , DictLoader]]:
+        method_names = [name for name in dir(ModelConfigModifier) if not name.startswith('_')]
+        for name in dir(BaseClass.BoundLogger):
+            if name in method_names:
+                method_names.remove(name)
+        return [getattr(ModelConfigModifier , name) for name in method_names]
 
     def load_config(self) -> dict:
         return PATH.read_yaml(self.current_path)
@@ -224,7 +228,7 @@ class ModelConfigsBatchModifier:
         for path in self.root.rglob('*.yaml'):
             self.current_path = path
             config = self.load_config
-            for task in self.task_list:
+            for task in self.get_task_list():
                 config = task(f'{path.parent.parent.stem}.{path.stem}' , config)
             if isinstance(config , dict):
                 self.dump_config(config)

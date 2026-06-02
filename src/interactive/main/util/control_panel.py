@@ -73,34 +73,52 @@ class ScriptRunnerRunButton(ControlPanelButton):
     icon = f":material/mode_off_on:"
     title = f"Run Script"
 
+    def __init__(self):
+        super().__init__()
+        from src.interactive.main.util.common_operations import RunCurrentScript
+        self.operation = RunCurrentScript()
+
     def button(self , script_key : str | None = None):
-        help = f"Please Choose a Script to Run First" if script_key is None else f"Please Fill Required Parameters"
-        st.button(self.icon, key=f'{self.key}-disabled' , help = help)
+        status = self.operation.status
+        button_key = f"{self.key}-{"disabled" if status.disabled else "enabled"}-not-refreshed"
+        st.button(self.icon, key=button_key , help = status.help , disabled = status.disabled , on_click = self.operation.run)
+
+        # help = f"Please Choose a Script to Run First" if script_key is None else f"Please Fill Required Parameters"
+        # st.button(self.icon, key=f'{self.key}-disabled' , help = help)
 
     def refresh(self , runner : ScriptRunner):
         with st.session_state[self.key]:
-            if SC.param_inputs_form is None:
-                raise ValueError("ParamInputsForm is not initiated")
-            params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
+            # if SC.param_inputs_form is None:
+            #     raise ValueError("ParamInputsForm is not initiated")
+            # params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
             
-            if SC.get_script_runner_validity(params):
-                disabled = False
-                preview_cmd = SC.get_script_runner_cmd(runner , params)
-                if preview_cmd: 
-                    help_text = preview_cmd
-                else:
-                    help_text = f"Parameters valid, run {runner.script_key}"
-                button_key = f"{self.key}-enabled-{runner.script_key}"
-            else:
-                disabled = True
-                help_text = f"Parameters invalid, please check required ones"
-                button_key = f"{self.key}-disabled-{runner.script_key}"
+            # if SC.get_script_runner_validity(params):
+            #     disabled = False
+            #     preview_cmd = SC.get_script_runner_cmd(runner , params)
+            #     if preview_cmd: 
+            #         help_text = preview_cmd
+            #     else:
+            #         help_text = f"Parameters valid, run {runner.script_key}"
+            #     button_key = f"{self.key}-enabled-{runner.script_key}"
+            # else:
+            #     disabled = True
+            #     help_text = f"Parameters invalid, please check required ones"
+            #     button_key = f"{self.key}-disabled-{runner.script_key}"
+
+            # with st.container():
+            #     st.button(self.icon, key=button_key , 
+            #             help = help_text , disabled = disabled , 
+            #             on_click = SC.click_script_runner_run , args = (runner, params)) 
+
+            self.operation.update(runner = runner)
+            status = self.operation.status
+            button_key = f"{self.key}-{"disabled" if status.disabled else "enabled"}-{runner.script_key}"
 
             with st.container():
-                st.button(self.icon, key=button_key , 
-                        help = help_text , disabled = disabled , 
-                        on_click = SC.click_script_runner_run , args = (runner, params)) 
-                self.print_title()
+                st.button(
+                    self.icon, key=button_key , 
+                    help = status.help , disabled = status.disabled , 
+                    on_click = self.operation.run) 
 
 class GlobalScriptLatestTaskButton(ControlPanelButton):
     """Button that navigates to the latest task across all scripts."""
@@ -111,8 +129,9 @@ class GlobalScriptLatestTaskButton(ControlPanelButton):
     def button(self , script_key : str | None = None):
         item = SC.get_latest_task_item()
         if item is None:
-            st.button(self.icon, key=f"{self.key}-disabled" , 
-                    help = "Please Run a Task First" , disabled = True)
+            st.button(
+                self.icon, key=f"{self.key}-disabled" , 
+                help = "Please Run a Task First" , disabled = True)
         else:
             if st.button(self.icon, key=f"{self.key}-enabled-{item.id}" , 
                         help = f":blue[**Show Latest Task**]: {item.id}" , 

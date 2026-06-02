@@ -37,13 +37,17 @@ class BasicTestResult(BaseCallBack):
     def stat_cols(self) -> list[str]:
         return list(self._stat_cols)
 
-    def empty_test_df(self) -> pd.DataFrame:
-        return pd.DataFrame(columns=['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols])
+    @property
+    def test_df_cols(self) -> list[str]:
+        return ['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols]
 
     def complete_test_df(self) -> pd.DataFrame:
-        df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else self.empty_test_df()
-        if not all(col in df.columns for col in self.stat_cols):
-            df = self.empty_test_df()
+        df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame()
+        if df.empty or not all(col in df.columns for col in self.stat_cols):
+            df = pd.DataFrame(columns=self.test_df_cols)
+        else:
+            df = df[['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols]]
+
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
         preds = self.record.get_preds(target_dates).dropna()
 
@@ -65,10 +69,10 @@ class BasicTestResult(BaseCallBack):
             std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
             pred_rank = subdf['pred'].rank(pct=True)
             return std_label.loc[pred_rank < 0.05].mean()
-        rankic_df = grouped.apply(df_rankic , include_groups = False).rename(columns={'pred':'rankic'})
-        top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'label':'top5pct'})
-        mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'label':'mid20pct'})
-        bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'label':'bot5pct'})
+        rankic_df = grouped.apply(df_rankic , include_groups = False).rename(columns={'pred':'rankic'})[['rankic']]
+        top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'label':'top5pct'})[['top5pct']]
+        mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'label':'mid20pct'})[['mid20pct']]
+        bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'label':'bot5pct'})[['bot5pct']]
         new_df = rankic_df.join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
         if df.empty:
             df = new_df
