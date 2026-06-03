@@ -320,11 +320,11 @@ class TrackingPort(TradingPort):
             pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
             val_table = DATAVENDOR.TRADE.get_val(date).reset_index().set_index('secid')
             val_table['mv_rank'] = val_table['total_mv'].rank()
-            self.logger.display(val_table)
             val_table = val_table[['total_mv' , 'mv_rank']].loc[pf['secid']]
-            self.logger.display(val_table)
             pf['mv'] = val_table['total_mv'].values
             pf['mv_rank'] = val_table['mv_rank'].values
+            universe_df = self.Universe.get_universe_df(date)
+            pf = pf.merge(universe_df , on = 'secid' , how = 'left')
             self.logger.display(pf)
         return pf.assign(name = self.name , date = date)
     
