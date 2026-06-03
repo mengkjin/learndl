@@ -44,9 +44,16 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         self._desc : pd.DataFrame | Any = DB.load('information_ts' , 'description') 
         self._desc['list_dt'] = np.maximum(self._desc['list_dt'] , CALENDAR.calendar_start())
 
-        self._cname : pd.DataFrame | Any = DB.load('information_ts' , 'change_name').rename(columns={'ann_date':'ann_dt'})
+        self._cname : pd.DataFrame | Any = DB.load('information_ts' , 'change_name').query('secid >= 0').rename(columns={'ann_date':'ann_dt'})
         self._cname['entry_dt'] = self._cname['entry_dt'].where(self._cname['entry_dt'] > 0 , self._cname['start_date'])
-        self._cname = self._cname.query('secid >= 0').sort_values(['secid','ann_dt','entry_dt','remove_dt'])
+        self._cname = self._cname.query('secid >= 0').sort_values(['secid', 'ann_dt'])
+
+        self._st_add = self._cname.loc[self._cname['change_reason'].isin(['终止上市', '暂停上市' , 'ST', '*ST'])].\
+            sort_values(['secid','entry_dt','remove_dt']).\
+            drop_duplicates(['secid','entry_dt'] , keep = 'last').reset_index(drop=True)
+        self._st_del = self._cname.loc[self._cname['change_reason'].isin(['撤销*ST', '撤销ST'])].\
+            query('remove_dt < 99991231').sort_values(['secid','entry_dt','remove_dt']).\
+            drop_duplicates(['secid','entry_dt'] , keep = 'first').reset_index(drop=True)
 
         self._indus_dict : pd.DataFrame | Any = pd.DataFrame(MACHINE.config.get('constant/data/industry/tushare'))
         self._indus_data : pd.DataFrame | Any = DB.load('information_ts' , 'industry') 
@@ -95,22 +102,6 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         self.ensure_initiation()
         return np.unique(self.get_desc(date , set_index=False)['secid'].to_numpy(int))
     
-    def get_st(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST']):
-        """
-        Return securities flagged with an abnormal status (ST, suspended, or delisted).
-
-        Filters ``cname`` to rows whose ``change_reason`` is in ``reason``.
-        When ``date`` is provided, only the most recent status *as of* ``date``
-        is returned (latest ``start_date <= date``), one row per secid.
-
-        Returns a DataFrame with columns: ``secid``, ``entry_dt``, ``remove_dt``, ``ann_dt``.
-        """
-        self.ensure_initiation()
-        marked = self.get_abnormal(date = date , reason = ['终止上市', '暂停上市' , 'ST', '*ST'])
-        demarked = self.get_abnormal(date = date , reason = ['撤销*ST', '撤销ST'])
-        marked = marked[~marked['secid'].isin(demarked['secid'])]
-        return marked.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
-    
     def get_list_dt(self , date : int | TradeDate | None = None , offset = 0):
         """
         Return a secid-indexed DataFrame with a single ``list_dt`` column.
@@ -125,21 +116,23 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             desc['list_dt'] = CALENDAR.td_array(desc['list_dt'] , offset)
         return desc.loc[:,['list_dt']].reset_index().drop_duplicates(subset='secid').set_index('secid')
     
-    def get_abnormal(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST', ]):
+    def get_st(self , date : int | TradeDate):
         """
-        Return the name-change records matching ``reason``.
+        Return securities flagged with an abnormal status (ST, suspended, or delisted).
 
-        Similar to ``get_st`` but returns the full ``cname`` subset without
-        deduplication, giving a history of all status events.
+        Filters ``cname`` to rows whose ``change_reason`` is in ``reason``.
+        When ``date`` is provided, only the most recent status *as of* ``date``
+        is returned (latest ``start_date <= date``), one row per secid.
+
+        Returns a DataFrame with columns: ``secid``, ``entry_dt``, ``remove_dt``, ``ann_dt``.
         """
         self.ensure_initiation()
-        new_cname = self._cname.loc[self._cname['change_reason'].isin(reason)]
-        new_cname = new_cname.drop_duplicates(['secid','entry_dt'] , keep = 'last')
-        if date is not None: 
-            date = int(date)
-            new_cname = new_cname.query('entry_dt <= @date & remove_dt > @date')
-        return new_cname
-    
+        date = int(date)
+        marked = self._st_add.query('entry_dt <= @date & remove_dt > @date')
+        demarked = self._st_del.query('entry_dt <= @date & remove_dt > @date')
+        marked = marked[~marked['secid'].isin(demarked['secid'])]
+        return marked.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
+
     def get_indus(self , date : int | TradeDate | None = None):
         """
         Return the most recent Tushare L2 industry classification for each secid.

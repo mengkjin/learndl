@@ -80,11 +80,6 @@ class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     def all_stocks(self) -> pd.DataFrame:
         """get all the stocks"""
         return self.INFO.get_desc(set_index=False , listed = True , exchange = ['SZSE', 'SSE', 'BSE'])
-    
-    @cached_property
-    def st_stocks(self) -> pd.DataFrame:
-        """get the st stocks"""
-        return self.INFO.get_st()
 
     def clear_all(self):
         """clear all the data in the collection"""

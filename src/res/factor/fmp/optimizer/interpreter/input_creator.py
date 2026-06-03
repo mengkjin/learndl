@@ -108,8 +108,8 @@ def append_bound_limit(opt_input : Any):
     limitation : dict[str,Any] = opt_input.cfg_limitation
     bound_limit  = StockBound()
     if limitation.get('no_st'):
-        df = DATAVENDOR.st_stocks
-        pool = df[(df['entry_dt'] <= model_date) & (df['remove_dt'] >= model_date)]['secid'].to_numpy()
+        df = DATAVENDOR.INFO.get_st(model_date)
+        pool = df['secid'].to_numpy()
         bound_limit.intersect(StockPool.bnd_ub(secid , pool , 0))
 
     if ld := limitation.get('list_days'):
