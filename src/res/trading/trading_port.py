@@ -317,7 +317,7 @@ class TrackingPort(TradingPort):
             pf['mv_rank'] = val_table['mv_rank'].values
             universe_df = self.Universe.get_universe_df(date)
             pf = pf.merge(universe_df , on = ['secid','date'] , how = 'left').drop(columns = ['name' , 'date'] , errors = 'ignore')
-            self.logger.display(pf)
+            # self.logger.display(pf)
         return pf.assign(name = self.name , date = date)
     
 class BacktestPort(TradingPort):

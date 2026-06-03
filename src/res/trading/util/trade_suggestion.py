@@ -18,13 +18,18 @@ class TradeSuggestion:
     def generate(cls , secid : np.ndarray | list[int] , d : int , direction : Literal['buy' , 'sell']):
         secid = np.array(secid) if isinstance(secid , list) else secid
         secname = DATAVENDOR.INFO.secname(secid).tolist()
-        if_st = np.isin(secid , DATAVENDOR.INFO.get_st(d)['secid'].to_numpy())
+        st_secid = DATAVENDOR.INFO.get_st(d)['secid'].to_numpy()
+
+        if_st = np.isin(secid , st_secid)
         if_registered = (secid >= 688000) + ((secid >= 300000) * (secid < 400000)) == 1
 
         pcts = np.full(len(secid) , 0.1)
         pcts[if_registered] = 0.2
         pcts[if_st] = 0.05
         
+        if 600159 in secid:
+            idx = np.where(secid == 600159)[0][0]
+            raise ValueError(f'600159 got st status {if_st[idx]} at {d}')
 
         cp = DATAVENDOR.get_cp(secid , d)
         if direction == 'buy':
