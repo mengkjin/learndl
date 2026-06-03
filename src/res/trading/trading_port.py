@@ -289,6 +289,14 @@ class TrackingPort(TradingPort):
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
+        check = universe.to_dataframe().query('secid == 2076')
+        if not check.empty:
+            print(date)
+            print(self.Universe.name)
+            print(self.exclusion)
+            print(self.Universe.get_universe_df(date).query('secid == 2076'))
+            raise ValueError(f'secid 2076 is in universe at {Dates(date)}')
+
         self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
