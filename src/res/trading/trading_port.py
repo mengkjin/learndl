@@ -9,6 +9,7 @@ from typing import Literal , Type , ClassVar , Any
 
 from src.proj import PATH , CALENDAR , DB , Dates , Const , BaseClass
 from src.proj.util.async_save import AsyncSaver
+from src.data import DATAVENDOR
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -277,11 +278,6 @@ class TrackingPort(TradingPort):
         date = CALENDAR.updated(date)
         df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True)
         self.new_ports[date] = df
-        check = df.query('secid == 600265')
-        if not check.empty:
-            print(date)
-            print(check)
-            raise ValueError(f'secid 600265 is in resulting portfolio at {Dates(date)}')
         return self
 
     def rebuild(self , date : int , export = True):
@@ -311,12 +307,6 @@ class TrackingPort(TradingPort):
 
         pf = builder.build(date).port.to_dataframe()
 
-        check = pf.query('secid == 600265')
-        if not check.empty:
-            print(date)
-            print(check)
-            raise ValueError(f'secid 600265 is in resulting portfolio at {Dates(date)}')
-
         if pf.empty: 
             return pf
 
@@ -324,10 +314,17 @@ class TrackingPort(TradingPort):
             self.save_port(pf , date)
 
         # add columns to include alpha and universe
-        if alpha_details:
+        if True or alpha_details:
             alpha_model = alpha.item()
             pf['alpha'] = alpha_model.alpha_of(pf['secid'])
             pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
+            val_table = DATAVENDOR.TRADE.get_val(date)
+            val_table = val_table.set_index('secid')
+            val_table['mv_rank'] = val_table['total_mv'].rank()
+            val_table = val_table.reindex(pf['secid'])
+            pf['mv'] = val_table['total_mv']
+            pf['mv_rank'] = val_table['mv_rank']
+            print(pf)
         return pf.assign(name = self.name , date = date)
     
 class BacktestPort(TradingPort):
