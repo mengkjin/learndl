@@ -133,7 +133,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             groupby('secid')[['entry_dt']].max().rename(columns={'entry_dt':'del_st_dt'})
         marked = marked.merge(demarked , on = 'secid' , how = 'left')
         marked['del_st_dt'] = marked['del_st_dt'].fillna(-1).astype(int)
-        marked = marked.query('entry_dt >= del_st_dt')
+        marked = marked.query('entry_dt >= del_st_dt').reset_index(drop=False)
         return marked
 
     def get_indus(self , date : int | TradeDate | None = None):

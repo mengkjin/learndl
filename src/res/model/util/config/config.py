@@ -161,6 +161,7 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
             # case 1: with schedule name, load schedule config first, then resume or load default config
             assert ScheduleConfig.check_name_exist(self.schedule_name), f"schedule_name [{self.schedule_name}] does not exist"
             self.Param = self.optional_load_params("default")
+            self['model.name'] = self.schedule_name
         else:
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
