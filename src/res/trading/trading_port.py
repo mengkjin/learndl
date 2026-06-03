@@ -277,6 +277,11 @@ class TrackingPort(TradingPort):
         date = CALENDAR.updated(date)
         df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True)
         self.new_ports[date] = df
+        check = df.query('secid == 600265')
+        if not check.empty:
+            print(date)
+            print(check)
+            raise ValueError(f'secid 600265 is in resulting portfolio at {Dates(date)}')
         return self
 
     def rebuild(self , date : int , export = True):
@@ -289,13 +294,13 @@ class TrackingPort(TradingPort):
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        check = universe.to_dataframe().query('secid == 2076')
+        check = universe.to_dataframe().query('secid == 600265')
         if not check.empty:
             print(date)
             print(self.Universe.name)
             print(self.exclusion)
-            print(self.Universe.get_universe_df(date).query('secid == 2076'))
-            raise ValueError(f'secid 2076 is in universe at {Dates(date)}')
+            print(check)
+            raise ValueError(f'secid 600265 is in universe at {Dates(date)}')
 
         self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
@@ -305,6 +310,13 @@ class TrackingPort(TradingPort):
                                    screen_ratio = self.screen_ratio , indent = self.indent + 1 , vb_level = self.vb_level + 1).setup()
 
         pf = builder.build(date).port.to_dataframe()
+
+        check = pf.query('secid == 600265')
+        if not check.empty:
+            print(date)
+            print(check)
+            raise ValueError(f'secid 600265 is in resulting portfolio at {Dates(date)}')
+
         if pf.empty: 
             return pf
 

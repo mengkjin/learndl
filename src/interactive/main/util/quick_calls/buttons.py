@@ -67,6 +67,8 @@ class Reboot(QuickCallButton):
     key = "reboot"
     icon = ":material/lightning_stand:"
     help = 'Reboot the streamlit server, will kill the current streamlit server and restart a new one.'
+    pause_when_done = False
+    close_when_done = True
     def script_string(self) -> str:
         import os
         current_pid = os.getpid()

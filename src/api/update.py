@@ -57,6 +57,25 @@ class UpdateAPI:
         Proj.print_disk_info()
 
     @classmethod
+    def tracking_port(cls):
+        """
+        Update tracking portfolios only.
+        
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [admin, developer]
+          risk: write
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: [macos]
+          execution_time: long
+          memory_usage: high
+        """
+        from src.res.trading import TrackingPortfolioManager
+        TrackingPortfolioManager.update()
+
+    @classmethod
     def rollback(cls , rollback_date : int):
         """
         Roll back data and factor layers to *rollback_date* (no model/trading rollback here).

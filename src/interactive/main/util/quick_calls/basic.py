@@ -41,6 +41,8 @@ class QuickCallButton(CO.CommonOperation , metaclass = QuickCallButtonMeta):
     key : str = ''
     icon : str = ''
     help : str = ''
+    pause_when_done : bool = True
+    close_when_done : bool = False
 
     def __init__(
         self , color : Literal[
@@ -75,8 +77,10 @@ class QuickCallButton(CO.CommonOperation , metaclass = QuickCallButtonMeta):
         script_strings = self.script_string().strip().split('\n')
         script_string = ';'.join([s.strip() for s in script_strings])
         Shell.open(
-            ["uv" , "run" , "python" , "-c" , script_string], title = self.title , 
-            as_from_workspace='QuickCallButtons')
+            ["uv" , "run" , "python" , "-c" , script_string], 
+            pause_when_done=self.pause_when_done, close_when_done=self.close_when_done, 
+            title = self.title , as_from_workspace='QuickCallButtons'
+        )
 
     def show(self , **kwargs) -> None:
         """Render the button + label into the persistent panel placeholder slot."""

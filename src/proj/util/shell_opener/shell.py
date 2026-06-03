@@ -66,6 +66,7 @@ class Shell:
         cmd: str | Sequence[str],
         *,
         pause_when_done: bool = PAUSE_WHEN_DONE ,
+        close_when_done: bool = False ,
         cwd: Optional[strPath] = None ,
         option: Any | None = None ,
         title: str | None = None ,
@@ -88,7 +89,7 @@ class Shell:
         ``pause_when_done`` defaults to ``True`` so the window stays open for review.
         """
         workdir = cls._resolve_cwd(cwd, cls.default_cwd)
-        line = compose_with_pause(to_shell_string(cmd), pause_when_done=pause_when_done)
+        line = compose_with_pause(to_shell_string(cmd), pause_when_done=pause_when_done , close_when_done=close_when_done)
         if title is None:
             title = guess_command_title(line)
         system = platform.system()
@@ -124,6 +125,7 @@ class Shell:
         cls, py_script: strPath, * ,
         py_path: str | None = None, args: Sequence[str] | None = None, kwargs : dict | None = None,
         pause_when_done: bool = PAUSE_WHEN_DONE ,
+        close_when_done: bool = False ,
         cwd: Optional[strPath] = None ,
         option: Any | None = None ,
         title: str | None = None,
@@ -137,8 +139,8 @@ class Shell:
             title = Path(py_script).name
         cmd = format_python_command(py_script, args=args , kwargs=kwargs , py_path=py_path)
         cls.open(
-            cmd, pause_when_done = pause_when_done, cwd = cwd, 
-            option = option , title=title, new_on=new_on, 
+            cmd, pause_when_done = pause_when_done, close_when_done=close_when_done, 
+            cwd = cwd, option = option , title=title, new_on=new_on, 
             as_workspace=as_workspace or as_from_workspace, 
             from_workspace=from_workspace or as_from_workspace)
 
