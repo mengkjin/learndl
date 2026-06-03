@@ -206,9 +206,9 @@ class SessionControl:
         from src.interactive.main.util.control_panel import ControlPanel
         return ControlPanel()
 
-    def refresh_run_button(self , runner : ScriptRunner):
-        """refresh run button"""
-        self.control_panel.buttons['script-runner-run'].refresh(runner)
+    def refresh_control_panel(self , runner : ScriptRunner):
+        """refresh control panel buttons"""
+        self.control_panel.refresh_buttons(runner)
     
     def get_task_item(self , task_id : str | None = None) -> TaskItem | None:
         """Look up *task_id* in the queue; returns ``None`` if not found."""

@@ -90,3 +90,8 @@ class ControlPanel:
                     popover = popovers[irow * ncols + icol]
                     with col:
                         popover.show(script_key = script_key)
+
+    def refresh_buttons(self , runner):
+        """Refresh the control panel buttons."""
+        for button in self.buttons.values():
+            button.refresh(runner)

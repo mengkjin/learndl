@@ -299,7 +299,7 @@ def show_endpoint_parameters(endpoint: stAPIEndpoint | None = None) -> None:
         param_control_buttons(runner)
         SC.set_param_inputs_form(ParamInputsForm.from_api_endpoint(endpoint , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs())
 
-    SC.refresh_run_button(runner)
+    SC.refresh_control_panel(runner)
 
 def show_api_endpoint_console() -> None:
     """render api console"""

@@ -231,7 +231,7 @@ def show_param_settings(runner : ScriptRunner | str | None) -> None:
         runner = SC.get_script_runner(runner)
     if runner.disabled:
         st.error(f":material/disabled_by_default: This script is disabled")
-        SC.refresh_run_button(runner)
+        SC.refresh_control_panel(runner)
         return
     param_inputs = runner.header.get_param_inputs()
     
@@ -250,7 +250,7 @@ def show_param_settings(runner : ScriptRunner | str | None) -> None:
             param_control_buttons(runner)
         SC.set_param_inputs_form(ParamInputsForm.from_runner(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs())
         if empty_param: 
-            SC.refresh_run_button(runner)
+            SC.refresh_control_panel(runner)
             return
 
         # param_control_buttons(runner)
@@ -270,7 +270,7 @@ def show_param_settings(runner : ScriptRunner | str | None) -> None:
                 file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
                 file_previewer.preview()
 
-    SC.refresh_run_button(runner)
+    SC.refresh_control_panel(runner)
 
 def conditional_path(format_str : str , params : dict[str, Any] , root: Path = PATH.main) -> str:
     """Resolve a format string to a file path, with fallback alternatives.
