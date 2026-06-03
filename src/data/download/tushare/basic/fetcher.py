@@ -75,7 +75,7 @@ class TushareIterateFetcher(BaseClass.BoundLogger):
     Typical use: pass as a helper inside a ``TushareFetcher.get_data(date)``
     implementation to handle large paginated tables (e.g. analyst reports).
     """
-    base_path : Path = PATH.temp.joinpath('tushare_fetcher_breakpoint')
+    base_path : Path = PATH.cache.joinpath('tushare_fetcher_breakpoint')
     base_path.mkdir(parents=True, exist_ok=True)
     survival_time : int = 4 # in hours
 

@@ -16,9 +16,9 @@ Covers data ingestion, factor engineering, NN/boost/GP models, and portfolio tra
 | Trading | `src/res/trading/`, `src/api/trading.py` | `TradingAPI`, `SummaryAPI` |
 
 ## Context Library
-Full module documentation lives in `context/`. See `context/CLAUDE.md` for the index.
+Full module documentation lives in `.context/`. See `.context/CLAUDE.md` for the index.
 
-When answering questions or writing code for this project, read the relevant doc in `context/modules/` first.
+When answering questions or writing code for this project, read the relevant doc in `.context/modules/` first.
 
 ## Key Rules
 1. **Never hardcode paths** — always use `PATH.xxx` from `src/proj/path.py`

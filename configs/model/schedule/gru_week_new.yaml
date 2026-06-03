@@ -1,7 +1,7 @@
 model:
   # main model configs ----------------------------------------------------------------
-  name          : gru_new # any name or null
-  module        : gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+  name          : gru_week_new # any name or null
+  module        : resnet_gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
   submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
 
   # labels specification ------------------------------------------------------------
@@ -11,28 +11,32 @@ model:
   labels: 
     - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
+  special:
+    global2top: true
+
+train:
+  criterion.weight:
+    fit:    'polar'
+
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
-  data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
-  sequence.lens: {day: 30}
-  sequence.steps: {day: 1}
+  data.types: week # ['day+30m' , 30m , day , ...] , use if input_type is data
+  sequence.lens: {week: 50}
+  sequence.steps: {week: 5}
 
 algo:
-  gru:
-    hidden_dim:     [64 , 64] #  2**5
+  resnet_gru:
+    hidden_dim:     [64] #  2**5
+    seqlens:        [{'week': 50 , '30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in:         [true , false]
-    enc_att:        [false] 
+    enc_in:         [true]
+    enc_att:        [true] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
     rnn_layers:     [2]
-    dec_mlp_layers: [2] 
+    dec_mlp_layers: [1] 
     num_output:     [1]
-    which_output:   [null]
-    kernel_size:    [3] # for tcn
+    which_output:   [0]
+    resnet_blocks:  [1 , 2 , 3]
+    enc_in_dim   :  [16]
     hidden_as_factor:    [true]
-    ordered_param_group: [false]  # multiple data input , if train sequentially
-
-  
-
-  

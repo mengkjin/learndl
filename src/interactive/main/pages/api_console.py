@@ -1,5 +1,5 @@
 """Streamlit API console: browse exposed ``src.api`` endpoints and run them."""
-from src.interactive.main.util import SC
+from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.api_adapter import show_api_endpoint_console
 
 PAGE_NAME = "api_console"

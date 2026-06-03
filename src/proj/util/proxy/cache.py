@@ -45,7 +45,7 @@ class ProxyCache:
     """
 
     _cached_proxies = None
-    _proxies_file = PATH.local_machine.joinpath('proxies' , 'proxies.json')
+    _proxies_file = PATH.runtime.joinpath('proxies' , 'proxies.json')
     _locks = {
         'cache': threading.Lock(),
         'file': threading.Lock(),

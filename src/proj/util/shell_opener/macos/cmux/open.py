@@ -84,9 +84,8 @@ class CmuxTree:
     def refresh_saved_workspace(self):
         """Remove stale entries from ``SavedWorkspace`` whose workspace refs no longer exist."""
         workspace_refs = [workspace.ref for workspace in self.workspaces]
-        for title , ref in self.SavedWorkspace.items():
-            if ref not in workspace_refs:
-                self.SavedWorkspace.pop(title)
+        pop_titles = [title for title , ref in self.SavedWorkspace.items() if ref not in workspace_refs]
+        [self.SavedWorkspace.pop(title) for title in pop_titles]
         return self
 
     def refresh(self):

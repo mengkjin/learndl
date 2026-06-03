@@ -4,7 +4,7 @@ from typing import Literal , Callable
 
 from src.proj import PATH
 
-from src.interactive.main.util import SC
+from src.interactive.main.util.session_control import SC
 
 __all__ = ['show_task_queue']
 

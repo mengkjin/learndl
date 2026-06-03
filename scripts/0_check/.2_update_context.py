@@ -61,7 +61,7 @@ from src.proj import Logger
 from src.proj.util.script import ScriptTool
 
 ROOT = Path(__file__).resolve().parents[2]      # project root
-INDEX_PATH = ROOT / 'context' / '_index.yaml'
+INDEX_PATH = ROOT / '.context' / '_index.yaml'
 STALE_RE = re.compile(r'<!--\s*STALE\s*:\s*(.*?)\s*-->', re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ def main(mode: str | None = None,
                 for lineno, note in stale:
                     Logger.stdout(f'  - line {lineno}: {note}')
             Logger.stdout(f'ACTION : Re-explore source code and rewrite {target}.')
-            Logger.stdout(f'         Consider adding this doc to context/_index.yaml.')
+            Logger.stdout(f'         Consider adding this doc to .context/_index.yaml.')
             return
         for entry in matching:
             print_brief(entry, 'forced refresh requested',

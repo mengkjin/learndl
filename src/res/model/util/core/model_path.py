@@ -245,7 +245,7 @@ class ModelPath:
         if self.is_null_model:
             assert self.model_module == self.model_name , f'{self} is a null model, {self.model_module} and {self.model_name} do not match'
 
-    def find_resumable_candidates(self , sort = True) -> list[ModelPath]:
+    def find_resumable_candidates(self , sort = True , folder_not_exist = False) -> list[ModelPath]:
         if self.is_null_model and self.model_module == self.model_name:
             return []
         else:
@@ -254,18 +254,19 @@ class ModelPath:
                 if path.is_file() or path.name.startswith('./$@'):
                     continue
                 model_path = self if path == self.base else ModelPath(path)
-                if model_path.model_clean_name == self.model_clean_name and model_path.is_resumable:
+                if model_path.model_clean_name == self.model_clean_name and (model_path.is_resumable or folder_not_exist):
                     candidates.append(model_path)
             if sort:
                 candidates.sort(key = lambda x: x.model_name_index)
             return candidates
 
-    def find_resumable_candidates_indices(self) -> list[int]:
-        candidates = self.find_resumable_candidates(sort = False)
+    def find_resumable_candidates_indices(self , folder_not_exist = False) -> list[int]:
+        candidates = self.find_resumable_candidates(sort = False, folder_not_exist = folder_not_exist)
         return [mp.model_name_index for mp in candidates]
 
-    def find_new_index(self) -> int:
-        candidates_indices = self.find_resumable_candidates_indices()
+    def find_new_index(self , folder_not_exist = False) -> int:
+        """find unoccupied new index for a new model"""
+        candidates_indices = self.find_resumable_candidates_indices(folder_not_exist = folder_not_exist)
         if not candidates_indices:
             return 1
         return int(np.setdiff1d(np.arange(1, max(candidates_indices) + 2),candidates_indices).min())
@@ -331,6 +332,41 @@ class ModelPath:
         time_elapsed = datetime.now() - last_time
         skip = time_elapsed.total_seconds() / 3600  < interval_hours
         return last_time , time_elapsed , skip
+
+    def move_to_archive(self):
+        """move model to archive"""
+        assert self.base.exists() , f'{self.base} does not exist'
+        self.log_operation('move_to_archive')
+        source = self.base
+        target = PATH.model_archive.joinpath(f'{self.full_name}.{datetime.now().strftime("%Y%m%d%H%M%S")}')
+        assert not target.exists() , f'{target} already exists'
+        shutil.move(source , target)
+        Logger.success(f'{source.relative_to(PATH.main)} has been moved to archive {target.relative_to(PATH.main)}')
+
+    @classmethod
+    def resume_from_archive(cls , start_with : str):
+        """
+        revert model from archive
+        full_name can be the full name of the model, or the full name of the model with the datetime suffix
+        """
+        candidates = [path for path in PATH.model_archive.iterdir() if path.is_dir() and path.name.startswith(start_with)]
+        if not candidates:
+            Logger.alert1(f'No candidates found for {start_with}')
+            return None
+        if len(candidates) == 1:
+            source = candidates[0]
+        else:
+            Logger.alert1(f'Multiple ({len(candidates)}) candidates found for {start_with}, please choose one by yourself:')
+            for i , candidate in enumerate(candidates):
+                Logger.note(f'{i+1:02d}. {candidate.relative_to(PATH.main)}')
+            source = candidates[int(input(f'Which one to choose? (1-{len(candidates)}): ')) - 1]
+        model_path = cls(source.name.split('.')[0])
+        model_path = model_path.with_new_index(model_path.find_new_index(folder_not_exist = True))
+        target = model_path.base
+        shutil.move(source , target)
+        Logger.success(f'{source.relative_to(PATH.main)} has been reverted from archive {target.relative_to(PATH.main)}')
+        model_path.log_operation('resume_from_archive')
+        return model_path
 
 class PredictorPath(ModelPath , BaseClass.BoundLogger):
     '''

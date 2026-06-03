@@ -30,6 +30,13 @@ module.factor              : null    # if module is Literal['factor'] , use this
 
 module.nn_boost            : lgbm    # if module is Literal['nn_boost'] , use this to specify the boost module
 
+# special modules ----------------------------------------------------------------
+special:
+  global2top         : false
+  vae                : false
+  tra                : false
+  dsize              : false
+
 # model update interval in days , nn is prefered to be 120 , others is prefered to be 20 , but is up to you
 interval         : null 
 interval.nn      : 120

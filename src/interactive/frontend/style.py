@@ -45,6 +45,9 @@ class CustomCSS:
         </style>
         ''' , unsafe_allow_html = True)
 
+    def button_colors(self) -> str:
+        ...
+
 def style() -> None:
     """Instantiate :class:`CustomCSS` and apply all templates to the current page."""
     css = CustomCSS()

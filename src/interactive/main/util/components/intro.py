@@ -25,38 +25,47 @@ def show_tutorial() -> None:
         4. :gray[:material/file_present:] Preview the generated HTML/PDF files
         """)
 
-def show_system_info() -> None:
-    """Render the system info expander (OS, memory, GPU, CPU, Python, Streamlit)."""
+def get_system_info() -> dict[str, str]:
     options : dict[str, str] = {}
     # os
     options[':material/keyboard_command_key: OS'] = f"{platform.system()} {platform.release()} ({platform.machine()})"
     # memory
     mem = psutil.virtual_memory()
-    options[':material/memory: Memory Usage'] = \
-        f"{(mem.total - mem.available) / 1024**3:.1f} GB / {mem.total / 1024**3:.1f} GB ({mem.percent:.1f}%)"
+    options[':material/memory: Memory'] = \
+        f"{(mem.total - mem.available) / 1024**3:.1f} G / {mem.total / 1024**3:.1f} G ({mem.percent:.1f}%)"
     # gpu
     if torch.cuda.is_available():
         used = torch.cuda.memory_allocated() / 1024**3
         total = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        gpu_info = "**GPU Usage (CUDA)**" , f"{used:.1f} / {total:.1f} GB ({used / total * 100:.1f}%)"
+        gpu_info = "**GPU (CUDA)**" , f"{used:.1f} / {total:.1f} G ({used / total * 100:.1f}%)"
     elif torch.backends.mps.is_available():
         used = torch.mps.current_allocated_memory() / 1024**3
         if torch.__version__ >= '2.3.0':
             recommend = torch.mps.recommended_max_memory() / 1024**3 # type:ignore
-            gpu_info = "GPU Usage (MPS)" , f"{used:.1f} / {recommend:.1f} GB ({used / recommend * 100:.1f}%)"
+            gpu_info = "GPU (MPS)" , f"{used:.1f} / {recommend:.1f} G ({used / recommend * 100:.1f}%)"
         else:
-            gpu_info = "GPU Usage (MPS)" , f"{used:.1f} GB Used"
+            gpu_info = "GPU (MPS)" , f"{used:.1f} G Used"
     else:
-        gpu_info = "GPU Usage (None)" , "No GPU"
+        gpu_info = "GPU (None)" , "No GPU"
     options[f':material/memory_alt: {gpu_info[0]}'] = f"{gpu_info[1]}"
     # cpu
-    options[':material/select_all: CPU Usage'] = f"{psutil.cpu_percent():.1f}%"
+    options[':material/select_all: CPU'] = f"{psutil.cpu_percent():.1f}%"
+    # disk
+    disk = psutil.disk_usage(str(PATH.main))
+    options[':material/hard_drive: Disk'] = f"{disk.used / 1024**3:.1f} G / {disk.total / 1024**3:.1f} G ({disk.percent:.1f}%)"
     # python
-    options[':material/commit: Python Version'] = f"{sys.version.split(' ')[0]}"
+    options[':material/commit: Python'] = f"{sys.version.split(' ')[0]}"
     # streamlit
-    options[':material/commit: Streamlit Version'] = f"{st.__version__}"
-    
-    with subheader_expander('System Info' , ':material/computer:' , True , help = 'System Info , includes OS, memory, GPU, CPU, Python, and Streamlit version.' , key = 'home-system-info'):
+    options[':material/commit: Streamlit'] = f"{st.__version__}"
+    return options
+
+def show_system_info() -> None:
+    """Render the system info expander (OS, memory, GPU, CPU, Python, Streamlit)."""
+    options = get_system_info()
+    with subheader_expander(
+        'System Info' , ':material/computer:' , True , 
+        help = 'System Info , includes OS, memory, GPU, CPU, Python, and Streamlit version.' , 
+        key = 'home-system-info'):
         for i , (label , value) in enumerate(options.items()):
             cols = st.columns([2,3])
             cols[0].markdown(f"***{label}***")
@@ -130,7 +139,7 @@ def show_developer_info(H = 500):
         for seg , content in segments.items():
             if seg not in st.session_state['developer-info-selected']: 
                 continue
-            with subheader_expander(f'developer-info-{seg}' , seg , content['icon'] , height = H):
+            with subheader_expander(f'developer-info-{seg}' , content['icon'] , height = H , key = f'developer-info-{seg}'):
                 content['operation']()
 
 def show_script_structure():

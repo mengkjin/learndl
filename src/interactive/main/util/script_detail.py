@@ -6,8 +6,8 @@ header, historical-task selector, parameter-settings form, and the running /
 completed task report in sequence.
 """
 
-from .session_control import SC
-from .components import show_task_history , show_param_settings , show_report_main
+from src.interactive.main.util.session_control import SC
+from src.interactive.main.util.components import show_task_history , show_param_settings , show_report_main
 
 __all__ = ['show_script_detail']
 

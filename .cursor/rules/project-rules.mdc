@@ -16,7 +16,6 @@ learndl/
 ├── configs/                # all YAML configuration (see below)
 ├── src/                    # source code (see below)
 ├── scripts/                # numbered pipeline scripts (0–7)
-├── context/                # living documentation vault (Obsidian-compatible)
 ├── runs/                   # .bat / .sh shell helpers
 ├── resources/              # shared code resources
 ├── templates/              # html / css / img / font
@@ -24,6 +23,7 @@ learndl/
 ├── models/                 # trained model checkpoints (not synced)
 ├── results/                # exports & analysis output (not synced)
 ├── logs/                   # log files (not synced)
+├── .context/               # living documentation vault (Obsidian-compatible)
 ├── .local_resources/       # local-only assets (not synced)
 └── .secret/                # secrets (not synced)
 ```

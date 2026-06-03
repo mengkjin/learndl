@@ -1,5 +1,5 @@
 """script structure page"""
-from src.interactive.main.util import SC
+from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_script_structure
 
 PAGE_NAME = 'script_structure'

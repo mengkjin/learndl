@@ -1,5 +1,5 @@
 """Task queue page: full task list with filter controls, pagination, and inline reports."""
-from src.interactive.main.util import SC
+from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_task_queue
 
 PAGE_NAME = 'task_queue'

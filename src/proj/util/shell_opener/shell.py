@@ -72,6 +72,7 @@ class Shell:
         new_on: str | None = None ,
         as_workspace: str | None = None ,
         from_workspace: str | None = None ,
+        as_from_workspace: str | None = None ,
     ) -> None:
         """
         Open a terminal and run ``cmd`` 
@@ -96,8 +97,8 @@ class Shell:
             "option": option,
             "title": title,
             "new_on": new_on,
-            "as_workspace": as_workspace,
-            "from_workspace": from_workspace,
+            "as_workspace": as_workspace or as_from_workspace,
+            "from_workspace": from_workspace or as_from_workspace,
         }
         if system == "Darwin":
             open_in_macos(line , **kwargs)
@@ -129,13 +130,17 @@ class Shell:
         new_on: str | None = None,
         as_workspace: str | None = None ,
         from_workspace: str | None = None ,
+        as_from_workspace: str | None = None ,
     ) -> None:
         """Open a Python script in a visible terminal via :meth:`open`; title defaults to the script filename."""
         if title is None:
             title = Path(py_script).name
         cmd = format_python_command(py_script, args=args , kwargs=kwargs , py_path=py_path)
-        cls.open(cmd, pause_when_done = pause_when_done, cwd = cwd, option = option ,
-                 title=title, new_on=new_on, as_workspace=as_workspace, from_workspace=from_workspace)
+        cls.open(
+            cmd, pause_when_done = pause_when_done, cwd = cwd, 
+            option = option , title=title, new_on=new_on, 
+            as_workspace=as_workspace or as_from_workspace, 
+            from_workspace=from_workspace or as_from_workspace)
 
     @classmethod
     def py_cmd(cls, py_script: strPath, * ,

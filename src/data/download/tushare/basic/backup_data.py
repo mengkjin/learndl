@@ -15,8 +15,8 @@ import numpy as np
 from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
 from .core import TS
 
-path_bak_data   = PATH.backup.joinpath('tushare' , 'data')
-path_bak_record = PATH.backup.joinpath('tushare' , 'record')
+path_bak_data   = PATH.resource.joinpath('backup' , 'tushare' , 'data')
+path_bak_record = PATH.resource.joinpath('backup' , 'tushare' , 'record')
 
 class TSBackUpDataTransform(BaseClass.BoundLogger):
     """

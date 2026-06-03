@@ -8,14 +8,11 @@
 # mode: shell
 
 from src.proj.util.script import ScriptTool
-from src.res.model.util.config import ModelConfigsInspector , ModelConfigsBatchModifier
+from src.res.model.util.config import check_all_config_files
 
 @ScriptTool('config_modifier')
 def main(**kwargs):     
-    modifier = ModelConfigsBatchModifier()
-    modifier.batch_modify()
-    inspecter = ModelConfigsInspector()
-    inspecter.inspect_key_values()
+    check_all_config_files()
 
 if __name__ == '__main__':
     main()

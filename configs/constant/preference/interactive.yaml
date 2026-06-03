@@ -9,6 +9,6 @@ navigation_top_intro_only: true # true, false
 task_queue_backend_refresh_interval: 5 # seconds
 task_starting_timeout: 20 # seconds
 
-control_panel_width_ratio : 0.8 # a float between 0 and 1, the width ratio of the control panel
+control_panel_width_ratio : 0.9 # a float between 0 and 1, the width ratio of the control panel
 control_panel_buttons_columns : [3 , 5]
-control_panel_popovers_columns : [2 , 3]
+control_panel_popovers_columns : [2 , 4]

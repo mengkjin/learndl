@@ -26,7 +26,7 @@ class OptionsDefinition:
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules in the config/model/schedule directory"""
-        return sorted([p.stem for p in PATH.schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')])
+        return sorted([p.stem for p in PATH.sched.glob('*.yaml')] + [p.stem for p in PATH.sched_shared.glob('*.yaml')])
 
     @classmethod
     def available_trackingports(cls) -> list[str]:
@@ -48,7 +48,7 @@ class OptionsDefinition:
 
 class OptionsCache:
     """Cache for the options , used to accelerate the streamlit interactive app"""
-    cache_path = PATH.local_machine.joinpath('options_cache.json')
+    cache_path = PATH.cache.joinpath('options_cache.json')
     cache : dict[str , list[str]] = {}
 
     def __init__(self):

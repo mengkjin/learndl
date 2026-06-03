@@ -136,6 +136,7 @@ button:hover {
 }
 .stColumn {
     display: flex;
+    justify-content: center;
 }
 .stExpander {
     summary p {

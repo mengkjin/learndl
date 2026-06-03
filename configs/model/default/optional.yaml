@@ -2,6 +2,9 @@
 # if not exists, do not show any information and will use the default value
 # do not modify this file directly (unless change code of TrainParam / TrainConfig)
 model.name: null
+
+model.special.global2top: false
+
 model.module.nn: gru
 model.module.nn.boost_head: false
 model.module.nn.boost_head.boost: lgbm

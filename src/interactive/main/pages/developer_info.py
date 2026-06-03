@@ -1,5 +1,5 @@
 """Developer info page: session state, task queue JSON, and log management."""
-from src.interactive.main.util import SC
+from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_developer_info
 
 PAGE_NAME = 'developer_info'

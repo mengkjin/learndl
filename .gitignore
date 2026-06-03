@@ -4,7 +4,6 @@
 .python-version
 .claude
 
-
 # Windows:
 Thumbs.db
 ehthumbs.db
@@ -17,11 +16,10 @@ Desktop.ini
 __old_version__/
 /.local_resources
 /.secret
+/.logs
 /data
-/logs
 /models
 /results
-/log.txt
 
 # temporary created files
 /src/interactive/main/pages/_*.py

@@ -1,0 +1,239 @@
+.stVerticalBlock[class*="queue-header-buttons"] {
+    div {
+        justify-content: center !important;
+        align-items: center !important;
+    }
+    button {
+        min-width: 60px !important;
+        height: 60px !important;
+        width: 60px !important;
+        span {font-size: 36px !important;}
+    }
+    .stElementContainer[class*="-sync"] button {
+        color: #1E88E5 !important;
+        &:hover {
+            background-color: #1E88E5 !important;
+            color: white !important;
+        }
+    } 
+    .stElementContainer[class*="-refresh"] button {
+        color: green !important;
+        &:hover {
+            background-color: green !important;
+            color: white !important;
+        }
+    }   
+    .stElementContainer[class*="-clean"] button {
+        color: lightblue !important;
+        &:hover {
+            background-color: lightblue !important;
+            color: white !important;
+        }
+    }  
+    .stElementContainer[class*="-delist"] button {
+        color: violet !important;
+        &:hover {
+            background-color: violet !important;
+            color: white !important;
+        }
+    }
+    .stElementContainer[class*="-remove"] button {
+        color: red !important;
+        &:hover {
+            background-color: red !important;
+            color: white !important;
+        }
+    }
+    .stElementContainer[class*="-restore"] button {
+        color: darkgreen !important;
+        &:hover {
+            background-color: darkgreen !important;
+            color: white !important;
+        }
+    }
+}
+
+.stVerticalBlock[class*="control-panel-buttons"] {
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+    .stTooltipIcon {justify-content: center !important;}
+    .stElementContainer {align-self: center !important;}
+    button {
+        align-self: center !important;
+        min-width: 60px !important;
+        min-height: 60px !important;
+        height: 60px !important;
+        width: 60px !important;
+        border-radius: 50%;
+        border: none;
+        display: flex;
+        color: white !important;
+    }
+    p {
+        font-size: 40px !important;
+        font-weight: bold !important;
+        align-self: center !important;
+    }
+    .stElementContainer[class*="script-runner-run"] button {
+        background-color: green !important;
+        &:hover {background-color: darkgreen !important;}
+    }
+    .stElementContainer[class*="reboot-app"] button {
+        background-color: #E63946 !important;
+        &:hover {background-color: #A8202A !important;}
+    }
+    .stElementContainer[class*="global-script-latest-task"] button {
+        background-color: lightblue !important;
+        &:hover {background-color: #2196F3 !important;}
+    }
+    .stElementContainer[class*="current-script-latest-task"] button {
+        background-color: lightcyan !important;
+        &:hover {background-color: #00BCD4 !important;}
+    }
+    .stElementContainer[class*="control-refresh-interactive"] button {
+        background-color: lightgreen !important;
+        &:hover {background-color: #4CAF50 !important;}
+    }
+    .stElementContainer[class*="git-clear-pull"] button {
+        background-color: #D4AF37 !important;
+        &:hover {background-color: #997922 !important;}
+    }
+    .stElementContainer[class*="pull-and-run"] button {
+        background-color:rgb(178, 219, 33) !important;
+        &:hover {background-color:rgb(126, 188, 25) !important;}
+    }
+    .stElementContainer[class*="-disabled"] button {
+        background-color: lightgray !important;
+        &:hover {background-color: lightgray !important;}
+        align-self: center !important;
+        border: 1px solid lightgray !important;
+    }
+}
+
+.stVerticalBlock[class*="sidebar-intro-links"] {
+    padding-top: 10px !important;
+    .stTooltipIcon {justify-content: center !important;}
+    button {
+        height: 40px !important;
+        width: 40px !important;
+        border-radius: 25% !important;
+        border: none !important;
+        color: white !important;
+        span {
+            font-size: 28px !important;
+            font-weight: bold !important;
+            justify-content: center !important;
+        }
+    }
+    .stElementContainer[class*="-home"] button {
+        background-color: lightgray !important;
+        &:hover {background-color: gray !important;}
+    }
+    .stElementContainer[class*="-developer"] button {
+        background-color: #87CEEB !important;
+        &:hover {background-color: #1E88E5 !important;}
+    }
+    .stElementContainer[class*="-config"] button {
+        background-color: #ff8080 !important; 
+        &:hover {background-color: #ff4040 !important;} 
+    }
+    .stElementContainer[class*="-task"] button {
+        background-color: #90EE90 !important; 
+        &:hover {background-color: #008000 !important;} 
+    }
+    .stElementContainer[class*="-script"] button {
+        background-color: #EE82EE !important; 
+        &:hover {background-color: #8B008B !important;}
+    }
+} 
+.stVerticalBlock[class*="home-intro-pages"] {
+    button {
+        height: 60px !important;
+        width: 88% !important;
+        border-radius: 12px !important;
+        color: white !important;
+        p {
+            font-size: 20px !important;
+            font-weight: bold !important;
+        }            
+    }
+    .stElementContainer[class*="-developer"] button {
+        background: #87CEEB !important;
+        &:hover {background: #1E88E5 !important;}
+    }
+    .stElementContainer[class*="-config"] button {
+        background: #ff8080 !important;
+        &:hover {background: #ff4040 !important;} 
+    }
+    .stElementContainer[class*="-task"] button {
+        background: #90EE90 !important; 
+        &:hover {background: #008000 !important;}
+    }
+    .stElementContainer[class*="-script"] button {
+        background: #EE82EE !important; 
+        &:hover {background: #8B008B !important;}
+    }
+}
+
+.stElementContainer[class*="quick-call-"] {
+    padding: 0 !important;
+    margin-bottom: 0 !important;
+    .stTooltipIcon {justify-content: center !important;}
+    .stElementContainer {align-self: center !important;}
+    button {
+        align-self: center !important;
+        min-width: 50px !important;
+        min-height: 50px !important;
+        height: 50px !important;
+        width: 50px !important;
+        border-radius: 50%;
+        border: none;
+        display: flex;
+        color: white !important;
+    }
+    p {
+        font-size: 30px !important;
+        font-weight: bold !important;
+        align-self: center !important;
+    }
+}
+.stElementContainer[class*="quick-call-red"] button {
+    background-color: #E63946 !important;
+    &:hover {background-color: #A8202A !important;}
+}
+.stElementContainer[class*="quick-call-green"] button {
+    background: green !important; 
+    &:hover {background:darkgreen !important;}
+}
+.stElementContainer[class*="quick-call-blue"] button {
+    background-color: blue !important;
+    &:hover {background-color: darkblue !important;}
+}
+.stElementContainer[class*="quick-call-gray"] button {
+    background-color: lightgray !important;
+    &:hover {background-color: gray !important;}
+}
+.stElementContainer[class*="quick-call-yellow"] button {
+    background-color:rgb(255, 255, 0) !important; 
+    &:hover {background-color:rgb(128, 128, 0) !important;}
+}
+.stElementContainer[class*="quick-call-pink"] button {
+    background-color: #EE82EE !important; 
+    &:hover {background-color:rgb(148, 80, 148) !important;}
+}
+.stElementContainer[class*="quick-call-gold"] button {
+    background-color: #D4AF37 !important;
+    &:hover {background-color: #997922 !important;}
+}
+.stElementContainer[class*="quick-call-cyan"] button {
+    background-color:rgb(130, 224, 238) !important; 
+    &:hover {background-color:rgb(14, 166, 190) !important;}
+}
+.stElementContainer[class*="quick-call-orange"] button {
+    background-color:rgb(255, 128, 0) !important; 
+    &:hover {background-color:rgb(180, 90, 0) !important;}
+}
+.stElementContainer[class*="quick-call-purple"] button {
+    background-color: #8B008B !important; 
+    &:hover {background-color:rgb(86, 0, 86) !important;}
+}

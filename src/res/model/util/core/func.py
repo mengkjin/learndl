@@ -59,7 +59,7 @@ def combine_full_name(st : str , module_type : str , module_name : str , model_c
     """
     if is_null_module_type(module_type):
         assert module_name == model_clean_name , f'module_name {module_name} and model_clean_name {model_clean_name} are not the same a {module_type} model'
-        assert model_name_index == '' or (isinstance(model_name_index , int) and model_name_index == 0), f'model_name_index {model_name_index} is not empty as a {module_type} model'
+        assert model_name_index == '' or (isinstance(model_name_index , int) and model_name_index == 1), f'model_name_index {model_name_index} is not empty as a {module_type} model'
         name = f'{module_type}@{module_name}'
     else:
         name = f'{module_type}@{module_name}@{model_clean_name}'

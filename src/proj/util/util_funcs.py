@@ -10,7 +10,8 @@ from src.proj.log import Logger
 
 __all__ = [
     'get_running_scripts' , 'change_power_mode' , 'check_process_status' , 
-    'kill_process' , 'argparse_dict' , 'unknown_args' , 'ask_for_confirmation']
+    'kill_process' , 'argparse_dict' , 'unknown_args' , 
+    'ask_for_confirmation' , 'ask_for_selections' , 'ask_for_retry']
 
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py'] , default_excludes = ['kernel_interrupt_daemon.py']):
     """List script paths from running processes whose cmdline matches ``script_type``."""
@@ -107,8 +108,48 @@ def unknown_args(unknown):
                 args[key] = (args[key] , ua)
     return args
 
+class AskFlag:
+    """
+    Ask for confirmation, selections, or retry.
+    
+    Args:
+        flag : Literal['yes' , 'no' , 'abort']
+        result : Any = None
+        
+    Returns:
+        AskFlag object with the following properties:
+        - yes : bool
+        - no : bool
+        - abort : bool
+        - result : Any
+          - list of selections for ask_for_selections
+    """
+    def __init__(
+        self , 
+        flag : Literal['yes' , 'no' , 'abort'] ,
+        result : Any = None):
+        self.flag : Literal['yes' , 'no' , 'abort'] = flag
+        self.result : Any = result
 
-def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = Logger.stdout):
+    def __repr__(self) -> str:
+        return f'AskFlag({self.flag})'
+    def __str__(self) -> str:
+        return self.flag
+
+    @property
+    def yes(self) -> bool:
+        return self.flag == 'yes'
+    @property
+    def no(self) -> bool:
+        return self.flag == 'no'
+    @property
+    def abort(self) -> bool:
+        return self.flag == 'abort'
+
+    def __bool__(self) -> bool:
+        return self.yes
+
+def ask_for_confirmation(msg = '' , timeout = -1 , ask_times = 1):
     """Prompt up to ``recurrent`` times with optional per-prompt timeout.
 
     Returns:
@@ -116,28 +157,59 @@ def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_con
     """
     
     from pytimedinput import timedInput
-    assert isinstance(prompt , str) , prompt
-    userText_list , userText_cond = [] , []
-    for t in range(recurrent):
-        if t == 0:
-            _prompt = prompt 
-        elif t == 1:
-            _prompt = 'Really?'
-        else:
-            _prompt = 'Really again?'
+    for i in range(ask_times):
+        prefix = f'{msg} Please confirm (y/n) ({i+1}/{ask_times} rounds): '
             
-        userText, timedOut = None , None
+        value, is_timeout = None , False
         if timeout > 0:
             try:
-                userText, timedOut = timedInput(f'{_prompt} (in {timeout} seconds): ' , timeout = timeout)
+                value, is_timeout = timedInput(f'{prefix} (in {timeout} seconds): ' , timeout = timeout)
             except Exception:
                 pass
-        if userText is None : 
-            userText, timedOut = input(f'{_prompt} : ') , False
-        (_timeout , _sofar) = ('Time Out! ' , 'so far') if timedOut else ('' , '')
-        print_function(f'{_timeout}User-input {_sofar} is : [{userText}].')
-        userText_list.append(userText)
-        userText_cond.append(proceed_condition(userText))
-        if not userText_cond[-1]: 
-            break
-    return userText_list , userText_cond
+        if value is None : 
+            value, is_timeout = input(f'{prefix} : ') , False
+        if value.lower() not in ['y' , 'n']:
+            Logger.error(f'Invalid input: {value}')
+            return AskFlag('no')
+        if is_timeout:
+            Logger.stdout(f'Input is timed out at the {i+1}th round.')
+            return AskFlag('no')
+        elif value.lower() == 'n':
+            Logger.stdout(f'Confirmation is rejected at the {i+1}th round.')
+            return AskFlag('no')
+        
+    return AskFlag('yes')
+
+def ask_for_selections(msg : str , options : int , start : int = 1) -> AskFlag:
+    """Parse the selections."""
+    min , max = start , options + start - 1
+    
+    selection = input(f'{msg} ({min}-{max}, seperated by comma , q to quit): ')
+    if selection.lower() == 'q':
+        return AskFlag('no')
+    selections = [s.strip() for s in selection.split(',') if s.strip()]
+    if any(not s.isdigit() for s in selections):
+        Logger.error(f'Contains non-digit characters: {selection}')
+        return AskFlag('abort')
+
+    selections = [int(i) for i in selections]
+    if any(s < start or s > options + start - 1 for s in selections):
+        Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
+        return AskFlag('abort')
+
+    flag = input(f'Are you sure to resume the {len(selections)} selected models? (press y to confirm): ')
+    if flag.lower() == 'y':
+        return AskFlag('yes' , result = selections)
+    else:
+        return AskFlag('abort')
+
+def ask_for_retry(msg : str) -> AskFlag:
+    """Ask for exit."""
+    while True:
+        flag = input(f'{msg} (y/n): ')
+        if flag.lower() == 'n':
+            return AskFlag('no')
+        elif flag.lower() == 'y':
+            return AskFlag('yes')
+        else:
+            Logger.error(f'Invalid input: {flag}')

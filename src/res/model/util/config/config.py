@@ -78,8 +78,8 @@ class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
         elif not name:
             return None
         else:
-            schedule_path_0 = PATH.schedule.joinpath(f"{name}.yaml")
-            schedule_path_1 = PATH.shared_schedule.joinpath(f"{name}.yaml")
+            schedule_path_0 = PATH.sched.joinpath(f"{name}.yaml")
+            schedule_path_1 = PATH.sched_shared.joinpath(f"{name}.yaml")
             assert not (schedule_path_0.exists() and schedule_path_1.exists()), \
                 f"{name} exists in both config/model/schedule and .local_resources/shared/schedule_model/schedule"
             if schedule_path_0.exists():
@@ -350,6 +350,10 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     @property
     def nn_category(self) -> str | None:
         return AlgoModule.nn_category(self.model_module)
+
+    @property
+    def special(self) -> dict[str , bool]:
+        return self.Param.get("model.special" , dict)
 
     @property
     def short_test(self) -> bool:

@@ -21,7 +21,9 @@ class PATH:
         PATH.fac_def
         PATH.conf
     """
-    main        = MACHINE.main_path
+    main            = MACHINE.main_path
+    share_folder    = MACHINE.share_folder
+
     scpt        = main.joinpath('scripts')
     fac_def     = main.joinpath('src' , 'res' , 'factor' , 'defs')
 
@@ -46,45 +48,45 @@ class PATH:
     fmp_account = export.joinpath('factor_model_account')
     trade_port  = export.joinpath('trading_portfolio')
 
-    # logs folder and subfolders
-    logs        = main.joinpath('logs')
-    log_model   = logs.joinpath('model')
-
     # results folder and subfolders
     result      = main.joinpath('results')
     rslt_factor = result.joinpath('factor')
     rslt_trade  = result.joinpath('trade')
 
     # models folder and subfolders
-    model       = main.joinpath('models')
-    model_nn    = model.joinpath('nn')
-    model_boost = model.joinpath('boost')
-    model_factor= model.joinpath('factor')
-    model_st    = model.joinpath('st')
+    model         = main.joinpath('models')
+    model_nn      = model.joinpath('nn')
+    model_boost   = model.joinpath('boost')
+    model_factor  = model.joinpath('factor')
+    model_st      = model.joinpath('st')
+    model_archive = model.joinpath('archive')
     
     # configs folder and subfolders
     conf        = main.joinpath('configs')
-    schedule    = conf.joinpath('model' , 'schedule')
+    
+    # templates folder and subfolders
+    template    = main.joinpath('templates')
+
+    # logs folder and subfolders
+    logs        = main.joinpath('.logs')
 
     # resouces folder (for update)
-    resource      = main.joinpath('resources')
-    backup        = resource.joinpath('backup')
-
-    template      = main.joinpath('templates') # html , css , img , font
-
+    resource      = main.joinpath('.resources')
+    
     # local_resources folder
     local_resources = main.joinpath('.local_resources')
     local_share     = local_resources.joinpath('shared')
     local_machine   = local_resources.joinpath(MACHINE.name)
-    temp            = local_resources.joinpath('temp')
-
+    
     app_db          = local_machine.joinpath('app_db')
     runtime         = local_machine.joinpath('runtime')
+    cache           = local_machine.joinpath('cache')
     optuna          = local_machine.joinpath('optuna')
     tensorboard     = local_machine.joinpath('tensorboard')
 
-    share_folder    = MACHINE.share_folder
-    shared_schedule = local_share.joinpath('schedule_model')
+    sched          = conf.joinpath('model' , 'schedule')
+    sched_archive  = conf.joinpath('model' , 'schedule' , 'archive')
+    sched_shared   = local_share.joinpath('schedule_model')
 
     @classmethod
     def path_at_machine(cls , path : strPath , machine_name : str) -> strPath:

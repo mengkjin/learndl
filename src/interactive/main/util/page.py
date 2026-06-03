@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.proj import Proj , Const
 
-from .session_control import SC
+from src.interactive.main.util.session_control import SC
 
 __all__ = ['intro_pages' , 'script_pages' , 'get_page' , 'PAGE_TITLE']
 
@@ -43,7 +43,7 @@ SCRIPT_ICONS = {
     'data'    : ':material/database:' ,
     'factor'  : ':material/graph_3:' ,
     'train'   : ':material/model_training:' ,
-    'test'    : ':material/experiment:' ,
+    'test'    : ':material/query_stats:' ,
     'predict' : ':material/online_prediction:' ,
     'trading' : ':material/payments:',
 }
