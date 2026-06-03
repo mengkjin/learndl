@@ -158,7 +158,7 @@ def ask_for_confirmation(msg = '' , timeout = -1 , ask_times = 1):
     
     from pytimedinput import timedInput
     for i in range(ask_times):
-        prefix = f'{msg} Please confirm (y/n) ({i+1}/{ask_times} rounds): '
+        prefix = f'{msg} Please confirm (y/n/q) ({i+1}/{ask_times} rounds): '
             
         value, is_timeout = None , False
         if timeout > 0:
@@ -168,13 +168,13 @@ def ask_for_confirmation(msg = '' , timeout = -1 , ask_times = 1):
                 pass
         if value is None : 
             value, is_timeout = input(f'{prefix} : ') , False
-        if value.lower() not in ['y' , 'n']:
+        if value.lower() not in ['y' , 'n' , 'q']:
             Logger.error(f'Invalid input: {value}')
             return AskFlag('no')
         if is_timeout:
             Logger.stdout(f'Input is timed out at the {i+1}th round.')
             return AskFlag('no')
-        elif value.lower() == 'n':
+        elif value.lower() in ['n' , 'q']:
             Logger.stdout(f'Confirmation is rejected at the {i+1}th round.')
             return AskFlag('no')
         
@@ -197,7 +197,7 @@ def ask_for_selections(msg : str , options : int , start : int = 1) -> AskFlag:
         Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
         return AskFlag('abort')
 
-    flag = input(f'Are you sure to resume the {len(selections)} selected models? (press y to confirm): ')
+    flag = input(f'Are you sure to select {selections}? (press y to confirm): ')
     if flag.lower() == 'y':
         return AskFlag('yes' , result = selections)
     else:
@@ -206,8 +206,8 @@ def ask_for_selections(msg : str , options : int , start : int = 1) -> AskFlag:
 def ask_for_retry(msg : str) -> AskFlag:
     """Ask for exit."""
     while True:
-        flag = input(f'{msg} (y/n): ')
-        if flag.lower() == 'n':
+        flag = input(f'{msg} (y/n/q): ')
+        if flag.lower() in ['n' , 'q']:
             return AskFlag('no')
         elif flag.lower() == 'y':
             return AskFlag('yes')

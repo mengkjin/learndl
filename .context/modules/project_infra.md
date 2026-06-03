@@ -74,7 +74,7 @@ PATH.main           # project root
 PATH.scpt           # scripts/
 PATH.fac_def        # src/res/factor/defs/
 PATH.conf           # configs/
-PATH.schedule       # configs/model/schedule/
+PATH.sched          # configs/model/schedule/
 
 # data/ tree
 PATH.data           # data/
