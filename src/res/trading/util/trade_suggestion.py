@@ -19,7 +19,7 @@ class TradeSuggestion:
         secid = np.array(secid) if isinstance(secid , list) else secid
         secname = DATAVENDOR.INFO.secname(secid).tolist()
         st_secid = DATAVENDOR.INFO.get_st(d)['secid'].to_numpy()
-
+        
         if_st = np.isin(secid , st_secid)
         if_registered = (secid >= 688000) + ((secid >= 300000) * (secid < 400000)) == 1
 

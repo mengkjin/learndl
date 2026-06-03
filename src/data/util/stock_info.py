@@ -44,8 +44,9 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         self._desc : pd.DataFrame | Any = DB.load('information_ts' , 'description') 
         self._desc['list_dt'] = np.maximum(self._desc['list_dt'] , CALENDAR.calendar_start())
 
-        self._cname : pd.DataFrame | Any = DB.load('information_ts' , 'change_name') 
-        self._cname = self._cname.query('secid >= 0').sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
+        self._cname : pd.DataFrame | Any = DB.load('information_ts' , 'change_name').rename(columns={'ann_date':'ann_dt'})
+        self._cname['entry_dt'] = self._cname['entry_dt'].where(self._cname['entry_dt'] > 0 , self._cname['start_date'])
+        self._cname = self._cname.query('secid >= 0').sort_values(['secid','ann_dt','entry_dt','remove_dt'])
 
         self._indus_dict : pd.DataFrame | Any = pd.DataFrame(MACHINE.config.get('constant/data/industry/tushare'))
         self._indus_data : pd.DataFrame | Any = DB.load('information_ts' , 'industry') 
@@ -105,10 +106,10 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         Returns a DataFrame with columns: ``secid``, ``entry_dt``, ``remove_dt``, ``ann_dt``.
         """
         self.ensure_initiation()
-        new_cname = self._cname[self._cname['change_reason'].isin(reason)]
-        if date is not None: 
-            new_cname = new_cname.query('start_date <= @date').copy().drop_duplicates('secid' , keep = 'last')
-        return new_cname.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
+        marked = self.get_abnormal(date = date , reason = ['终止上市', '暂停上市' , 'ST', '*ST'])
+        demarked = self.get_abnormal(date = date , reason = ['撤销*ST', '撤销ST'])
+        marked = marked[~marked['secid'].isin(demarked['secid'])]
+        return marked.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
     
     def get_list_dt(self , date : int | TradeDate | None = None , offset = 0):
         """
@@ -132,12 +133,11 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         deduplication, giving a history of all status events.
         """
         self.ensure_initiation()
-        if date is None: 
-            new_cname = self._cname.copy()
-        else:
+        new_cname = self._cname.loc[self._cname['change_reason'].isin(reason)]
+        new_cname = new_cname.drop_duplicates(['secid','entry_dt'] , keep = 'last')
+        if date is not None: 
             date = int(date)
-            new_cname = self._cname.query('start_date <= @date').copy().drop_duplicates('secid' , keep = 'last')
-        new_cname = new_cname[new_cname['change_reason'].isin(reason)]
+            new_cname = new_cname.query('entry_dt <= @date & remove_dt > @date')
         return new_cname
     
     def get_indus(self , date : int | TradeDate | None = None):

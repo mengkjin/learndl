@@ -187,7 +187,7 @@ class TuShareCNE5_Calculator(BaseClass.BoundLogger):
         dates = CALENDAR.td_trailing(date , 63)
 
         new_desc = DATAVENDOR.INFO.get_desc(date)
-        abnormal = DATAVENDOR.INFO.get_abnormal(date)
+        st_secid = DATAVENDOR.INFO.get_st(date)['secid'].to_numpy()
         new_list_dt = DATAVENDOR.INFO.get_list_dt(date , list_days)
 
         trd = DATAVENDOR.TRADE.get_trd(CALENDAR.td(date , -21)).loc[:,['secid','status']]
@@ -207,7 +207,7 @@ class TuShareCNE5_Calculator(BaseClass.BoundLogger):
         rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt['list_dt'] <= date)) | \
             (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
         # not st
-        rule2 = ~new_desc.index.isin(abnormal['secid'])
+        rule2 = ~new_desc.index.isin(st_secid)
 
         # total_mv not nan
         rule3 = val['total_mv'] > 0
