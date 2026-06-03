@@ -25,7 +25,7 @@ train:
 
 algo:
   gru:
-    hidden_dim:     [64] #  2**5
+    hidden_dim:     [32 , 32] #  2**5
     dropout:        [0.1]
     enc_in:         [false]
     enc_att:        [false] 
