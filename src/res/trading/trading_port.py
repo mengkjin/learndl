@@ -318,13 +318,12 @@ class TrackingPort(TradingPort):
             alpha_model = alpha.item()
             pf['alpha'] = alpha_model.alpha_of(pf['secid'])
             pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
-            val_table = DATAVENDOR.TRADE.get_val(date)
-            val_table = val_table.set_index('secid')
+            val_table = DATAVENDOR.TRADE.get_val(date).reset_index().set_index('secid')
             val_table['mv_rank'] = val_table['total_mv'].rank()
             val_table = val_table.reindex(pf['secid'])
             pf['mv'] = val_table['total_mv']
             pf['mv_rank'] = val_table['mv_rank']
-            print(pf)
+            self.logger.display(pf)
         return pf.assign(name = self.name , date = date)
     
 class BacktestPort(TradingPort):
