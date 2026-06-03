@@ -76,11 +76,12 @@ class BasicCreatorConfig:
         bench_port : Port | None = None
     ) -> np.ndarray:
         alpha_model = alpha_model if isinstance(alpha_model , AlphaModel) else alpha_model.to_alpha_model()
-        candidates = alpha_model.get(model_date).secid
+        alpha_secid = alpha_model.get(model_date).secid
         universe = bench_port.secid if (bench_port and not bench_port.emtpy) else None
+        candidates = alpha_secid if universe is None else np.intersect1d(alpha_secid , universe)
         screened = self.alpha_screener.screened_pool(model_date , universe , other_models = alpha_model if 'self' in self.screener else None)
         secid = np.setdiff1d(candidates , screened)
-        print(bench_port)
+        
         assert 600265 not in secid , f'secid 600265 is in candidate pool'
         return secid
 
