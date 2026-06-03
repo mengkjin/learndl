@@ -27,10 +27,6 @@ class TradeSuggestion:
         pcts[if_registered] = 0.2
         pcts[if_st] = 0.05
         
-        if 600159 in secid:
-            idx = np.where(secid == 600159)[0][0]
-            raise ValueError(f'600159 got st status {if_st[idx]} at {d}')
-
         cp = DATAVENDOR.get_cp(secid , d)
         if direction == 'buy':
             price = cp * (1 + pcts).round(2)

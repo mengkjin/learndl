@@ -50,10 +50,10 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
 
         self._st_add = self._cname.loc[self._cname['change_reason'].isin(['终止上市', '暂停上市' , 'ST', '*ST'])].\
             sort_values(['secid','entry_dt','remove_dt']).\
-            drop_duplicates(['secid','entry_dt'] , keep = 'last').reset_index(drop=True)
+            drop_duplicates(['secid','change_reason','entry_dt'] , keep = 'last').reset_index(drop=True)
         self._st_del = self._cname.loc[self._cname['change_reason'].isin(['撤销*ST', '撤销ST'])].\
-            query('remove_dt < 99991231').sort_values(['secid','entry_dt','remove_dt']).\
-            drop_duplicates(['secid','entry_dt'] , keep = 'first').reset_index(drop=True)
+            sort_values(['secid','entry_dt','remove_dt']).\
+            drop_duplicates(['secid','change_reason','entry_dt'] , keep = 'first').reset_index(drop=True)
 
         self._indus_dict : pd.DataFrame | Any = pd.DataFrame(MACHINE.config.get('constant/data/industry/tushare'))
         self._indus_data : pd.DataFrame | Any = DB.load('information_ts' , 'industry') 
@@ -128,10 +128,13 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         """
         self.ensure_initiation()
         date = int(date)
-        marked = self._st_add.query('entry_dt <= @date & remove_dt > @date')
-        demarked = self._st_del.query('entry_dt <= @date & remove_dt > @date')
-        marked = marked[~marked['secid'].isin(demarked['secid'])]
-        return marked.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
+        marked = self._st_add.query('entry_dt <= @date & remove_dt > @date').groupby(['secid','change_reason']).last()
+        demarked = self._st_del.query('entry_dt <= @date & remove_dt > @date').\
+            groupby('secid')[['entry_dt']].max().rename(columns={'entry_dt':'del_st_dt'})
+        marked = marked.merge(demarked , on = 'secid' , how = 'left')
+        marked['del_st_dt'] = marked['del_st_dt'].fillna(-1).astype(int)
+        marked = marked.query('entry_dt >= del_st_dt')
+        return marked
 
     def get_indus(self , date : int | TradeDate | None = None):
         """
