@@ -78,13 +78,9 @@ class BasicCreatorConfig:
         alpha_model = alpha_model if isinstance(alpha_model , AlphaModel) else alpha_model.to_alpha_model()
         alpha_secid = alpha_model.get(model_date).secid
         universe = bench_port.secid if (bench_port and not bench_port.emtpy) else alpha_secid
-        candidates = alpha_secid # if universe is None else np.intersect1d(alpha_secid , universe)
+        candidates = alpha_secid if universe is None else np.intersect1d(alpha_secid , universe)
         all_screened = self.alpha_screener.screened_pool(model_date , universe , other_models = alpha_model if 'self' in self.screener else None)
         screened = np.intersect1d(all_screened , candidates)
-        print(f'alpha_secid: {len(alpha_secid)}')
-        print(f'universe: {len(universe)}')
-        print(f'intersect: {len(np.intersect1d(alpha_secid , universe))}')
-        print(f'screened: {len(screened)}')
         secid = np.setdiff1d(candidates , screened)
         
         return secid

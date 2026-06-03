@@ -74,7 +74,7 @@ class OptunaDBAPI:
         db_path = f'sqlite:///{str(db_path.relative_to(PATH.main)).lstrip('/')}'
         try:
             port = get_free_port(8080)
-            print(f"Optuna Dashboard will be launched on http://127.0.0.1:{port}/")
+            Logger.stdout(f"Optuna Dashboard will be launched on http://127.0.0.1:{port}/")
             if open_browser:
                 import threading
                 threading.Thread(target=open_url, args=("127.0.0.1",port)).start()
@@ -147,7 +147,7 @@ class TSBoardAPI:
             log_dir = log_dir.as_posix()
         try:
             port = get_free_port(6006)
-            print(f"TensorBoard will be launched on http://localhost:{port}/")
+            Logger.stdout(f"TensorBoard will be launched on http://localhost:{port}/")
             if open_browser:
                 import threading
                 threading.Thread(target=open_url, args=("localhost",port)).start()
