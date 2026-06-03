@@ -80,6 +80,8 @@ class BasicCreatorConfig:
         universe = bench_port.secid if (bench_port and not bench_port.emtpy) else None
         screened = self.alpha_screener.screened_pool(model_date , universe , other_models = alpha_model if 'self' in self.screener else None)
         secid = np.setdiff1d(candidates , screened)
+        print(bench_port)
+        assert 600265 not in secid , f'secid 600265 is in candidate pool'
         return secid
 
     @property
