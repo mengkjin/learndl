@@ -324,7 +324,7 @@ class TrackingPort(TradingPort):
             pf['mv'] = val_table['total_mv'].values
             pf['mv_rank'] = val_table['mv_rank'].values
             universe_df = self.Universe.get_universe_df(date)
-            pf = pf.merge(universe_df , on = 'secid' , how = 'left')
+            pf = pf.merge(universe_df , on = 'secid' , how = 'left').drop(columns = ['name' , 'date'])
             self.logger.display(pf)
         return pf.assign(name = self.name , date = date)
     
