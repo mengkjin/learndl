@@ -372,6 +372,8 @@ class DataModule(BaseClass.BoundLogger):
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
 
+                print(f'batch_input of date {batch_input.date0}: {batch_input.shape}')
+
                 batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)
                 batch_keys.append(batch_key)
