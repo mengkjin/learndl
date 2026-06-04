@@ -1,13 +1,9 @@
 """ABC for database path"""
-
-import pandas as pd
-import polars as pl
-
-from typing import Literal , Union , Iterable , Callable , TypeAlias
+from typing import Literal
 
 __all__ = [
     'DATAFRAME_SUFFIX' , 'SRC_ALTERNATIVES' , 'DB_BY_NAME' , 'DB_BY_DATE' , 
-    'EXPORT_BY_NAME' , 'EXPORT_BY_DATE' , 'PL_MAPPER_TYPE' , 'PD_MAPPER_TYPE']
+    'EXPORT_BY_NAME' , 'EXPORT_BY_DATE']
 
 DATAFRAME_SUFFIX   : Literal['feather' , 'parquet'] = 'feather'
 
@@ -26,6 +22,3 @@ EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_s
 EXPORT_BY_DATE : list[str] = ['pred' , 'stock' , 'stock_factor' , 'model_prediction' , 'universe']
 for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
     assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
-
-PL_MAPPER_TYPE : TypeAlias = Union[Iterable[Callable[[pl.DataFrame], pl.DataFrame]] , Callable[[pl.DataFrame], pl.DataFrame] , None]
-PD_MAPPER_TYPE : TypeAlias = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]

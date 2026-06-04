@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal, Type
 
 from src.proj import PATH, MACHINE, Const, Proj , BaseClass , BaseType
-from src.proj.util.device import Device
+from src.proj.util.functional.device import Device
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 

@@ -53,6 +53,11 @@ class BasicCalendar(metaclass=SingletonMeta):
         self._loaded = True
 
     @cached_property
+    def full(self) -> pd.DataFrame:
+        self.ensure_data()
+        return self.full
+
+    @cached_property
     def _cds(self) -> np.ndarray:
         self.ensure_data()
         return self.full.index.to_numpy(dtype=np.int64)
@@ -105,8 +110,9 @@ class BasicCalendar(metaclass=SingletonMeta):
     def max_td_index(self) -> int:
         return int(self._td_index.max())
     @cached_property
-    def _cd_pd_index(self) -> pd.Index:
-        return pd.Index(self._cds)
+    def _cd_pd_index(self):
+        from pandas import Index
+        return Index(self._cds)
 
     def pos_cd(self, cd: int) -> int:
         """The row number of the natural date 'YYYYMMDD' in the internal sorted table; raise 'KeyError' if not exists."""
@@ -115,7 +121,7 @@ class BasicCalendar(metaclass=SingletonMeta):
     def pos_cd_array(self, cd_arr: np.ndarray) -> np.ndarray:
         """The row numbers of the natural dates 'YYYYMMDD'; raise 'KeyError' if any key not in the calendar."""
         cd_arr = np.asarray(cd_arr, dtype=np.int64)
-        pos = self._cd_pd_index.get_indexer(pd.Index(cd_arr))
+        pos = self._cd_pd_index.get_indexer(cd_arr.tolist())
         if (pos < 0).any():
             raise KeyError("date not in calendar")
         return pos.astype(np.int64, copy=False)

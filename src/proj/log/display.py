@@ -1,5 +1,6 @@
 """IPython-friendly display routing (DataFrame, matplotlib Figure, or fallback)."""
-
+from __future__ import annotations
+import pandas as pd
 from typing import Callable
 
 __all__ = ['Display']
@@ -56,7 +57,6 @@ class Display:
         for callback in cls._callbacks_before:
             callback(obj)
         from matplotlib.figure import Figure
-        import pandas as pd
         if isinstance(obj , Figure):
             cls.figure(obj , **kwargs)
         elif isinstance(obj , pd.DataFrame):
@@ -72,7 +72,6 @@ class Display:
         """
         display a pandas dataframe
         """
-        import pandas as pd
         with pd.option_context(
             'display.max_rows', 100,
             'display.max_columns', None,

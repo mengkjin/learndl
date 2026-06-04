@@ -44,7 +44,6 @@ class Proj(metaclass=ProjMeta):
         """
         import torch
         from src.proj.log import Logger
-
         object = 'logger' if once_type == 'script' else 'os'
         Logger.only_once(cls.info() , printer = 'stdout_pairs' , title = 'Project Info:' , object = object , mark = identifier)
         if MACHINE.cuda_server and not torch.cuda.is_available():
@@ -54,5 +53,5 @@ class Proj(metaclass=ProjMeta):
     @classmethod
     def print_disk_info(cls):
         """Show disk space info in the best way."""
-        from src.proj.util.disk_info import print_disk_space_info
+        from src.call.computer import print_disk_space_info
         print_disk_space_info()

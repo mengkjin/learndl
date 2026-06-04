@@ -11,7 +11,7 @@ import pandas as pd
 
 from datetime import datetime, timedelta, time
 from pathlib import Path
-from typing import Any, Literal, Union , Sequence , Iterable
+from typing import Any, Literal, Union , Sequence , Iterable , TYPE_CHECKING
 
 from src.proj.core import NoInstanceMeta
 from src.proj.env import PATH
@@ -22,19 +22,18 @@ from .trade_date import TradeDate
 
 __all__ = ['CALENDAR', 'Dates']
 
-DateType = Union[int, TradeDate]
-DateTypeWithNone = Union[int, TradeDate, None]
-DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series]
+if TYPE_CHECKING:
+    DateType = Union[int, TradeDate]
+    DateTypeWithNone = Union[int, TradeDate, None]
+    DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series]
 
 def get_cd(date: DateType) -> int:
     """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
     return int(date.cd if isinstance(date, TradeDate) else date)
 
-
 def get_td(date: DateType) -> int:
     """Trading-aligned day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.td``."""
     return int(date.td if isinstance(date, TradeDate) else date)
-
 
 def get_cds(dates: DatesType) -> np.ndarray:
     """
@@ -42,27 +41,36 @@ def get_cds(dates: DatesType) -> np.ndarray:
     Single element of this package 'TradeDate' will be expanded to its 'td'; 'pd.Series' will be converted to 'ndarray'.
     """
     if isinstance(dates, (TradeDate , int)):
-        dates = np.array([get_cd(dates)])
-    elif isinstance(dates, pd.Series):
-        dates = dates.to_numpy(int)
+        ds = np.array([get_cd(dates)])
     elif isinstance(dates, np.ndarray):
-        ...
-    elif isinstance(dates, Sequence):
-        dates = np.array([get_cd(d) for d in dates])
+        ds = dates
+    elif isinstance(dates, pd.Series):
+        ds = dates.to_numpy()
     elif dates.__class__.__name__ == 'Tensor':
-        dates = dates.cpu().numpy()
+        ds = dates.cpu().numpy() # type: ignore
+    elif isinstance(dates, Iterable):
+        ds = np.array([get_cd(d) for d in dates])
     else:
         raise ValueError(f'Invalid dates type: {type(dates)}')
-    return dates.astype(int)
+    assert isinstance(ds, np.ndarray), f'dates is not np.ndarray: {type(ds)}'
+    return ds.astype(int)
 
 class CALENDAR(metaclass=NoInstanceMeta):
     """Static tools for trading date and natural date conversion, interval truncation, quarter end, etc."""
 
-    ME = pd.date_range(start="1997-01-01", end="2099-12-31", freq="ME").strftime("%Y%m%d").to_numpy(int)
-    QE = pd.date_range(start="1997-01-01", end="2099-12-31", freq="QE").strftime("%Y%m%d").to_numpy(int)
-    YE = pd.date_range(start="1997-01-01", end="2099-12-31", freq="YE").strftime("%Y%m%d").to_numpy(int)
+    _ME : np.ndarray | Any = None
+    _QE : np.ndarray | Any = None
+    _YE : np.ndarray | Any = None
+    _update_to : int | None = None
 
-    _update_to = None
+    @classmethod
+    def ensure_period_ends(cls):
+        if cls._ME is None:
+            cls._ME = pd.date_range(start="1997-01-01", end="2099-12-31", freq="ME").strftime("%Y%m%d").to_numpy(int)
+        if cls._QE is None:
+            cls._QE = pd.date_range(start="1997-01-01", end="2099-12-31", freq="QE").strftime("%Y%m%d").to_numpy(int)
+        if cls._YE is None:
+            cls._YE = pd.date_range(start="1997-01-01", end="2099-12-31", freq="YE").strftime("%Y%m%d").to_numpy(int)
 
     @staticmethod
     def now(bj_tz: bool = True) -> datetime:
@@ -456,7 +464,8 @@ class CALENDAR(metaclass=NoInstanceMeta):
     @classmethod
     def quarter_end(cls, date: DateType):
         """The last day of the quarter."""
-        return cls.QE[cls.QE >= get_td(date)][0]
+        cls.ensure_period_ends()
+        return cls._QE[cls._QE >= get_td(date)][0]
 
     @classmethod
     def quarter_start(cls, date: DateType):
@@ -467,7 +476,8 @@ class CALENDAR(metaclass=NoInstanceMeta):
     @classmethod
     def month_end(cls, date: DateType):
         """The last day of the month."""
-        return cls.ME[cls.ME >= get_td(date)][0]
+        cls.ensure_period_ends()
+        return cls._ME[cls._ME >= get_td(date)][0]
 
     @classmethod
     def month_start(cls, date: DateType):
@@ -487,8 +497,8 @@ class CALENDAR(metaclass=NoInstanceMeta):
             year_only: whether to calculate the trailing year ends
         """
         assert n_past >= 1 and n_future >= 0, f"{n_past} and {n_future} must be greater than 1 and 0"
-        
-        dates = cls.YE if year_only else cls.QE
+        cls.ensure_period_ends()
+        dates = cls._YE if year_only else cls._QE
         d0 = get_td(date)
         d1 = get_td(another_date) if another_date is not None else d0
         d0 , d1 = min(d0, d1), max(d0, d1)
@@ -500,9 +510,10 @@ class CALENDAR(metaclass=NoInstanceMeta):
     @classmethod
     def qe_within(cls, start : DateType, end : DateType, year_only : bool = False):
         """The set of quarter ends (or year ends) within the interval. optionally can only include year ends."""
+        cls.ensure_period_ends()
         if year_only:
-            return cls.YE[(cls.YE >= get_td(start)) & (cls.YE <= get_td(end))]
-        return cls.QE[(cls.QE >= get_td(start)) & (cls.QE <= get_td(end))]
+            return cls._YE[(cls._YE >= get_td(start)) & (cls._YE <= get_td(end))]
+        return cls._QE[(cls._QE >= get_td(start)) & (cls._QE <= get_td(end))]
 
     @classmethod
     def qe_interpolate(cls, incomplete_qtr_ends: DatesType):
@@ -521,7 +532,6 @@ class CALENDAR(metaclass=NoInstanceMeta):
         assert get_td(rollback_date) >= earliest_rollback_date, (
             f"rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}"
         )
-
 
 class Dates(np.ndarray[int, Any]):
     """

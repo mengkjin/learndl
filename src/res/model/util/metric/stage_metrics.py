@@ -8,7 +8,7 @@ from torch import Tensor
 from typing import Any , Callable , Literal
 from pathlib import Path
 
-from src.proj.util.async_save import AsyncSaver
+from src.proj.util.io.async_save import AsyncSaver
 from src.res.model.util.core import epoch_key , attempt_key
 
 from .aggregator import MetricAggregator , AggregatorType

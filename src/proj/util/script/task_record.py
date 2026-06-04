@@ -5,12 +5,11 @@ from datetime import datetime
 from src.proj.core import strPath
 from src.proj.env import PATH
 
-from ..sqlite import DBConnHandler
-
 class TaskRecorder:
     """Persist and query task execution records in ``task_record.db``."""
 
     def __init__(self , type : str , name : str | None = None , key : str | None = None):
+        from src.proj.util.filesys.sqlite import DBConnHandler
         self._type = type
         self._name = name
         self._key = key

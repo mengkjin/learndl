@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Any , Callable
 from pathlib import Path
 from copy import deepcopy
-from pprint import pformat
 from src.proj import Logger , PATH
 
 class FlattenDict:
@@ -32,6 +31,7 @@ class FlattenDict:
 
     def __repr__(self) -> str:
         """Pretty-printed flattened dict."""
+        from pprint import pformat
         return f'{self.__class__.__name__}({pformat(self.flattened)})'
 
     def __str__(self) -> str:

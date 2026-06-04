@@ -1,11 +1,10 @@
 import pandas as pd
 import torch , os
 from datetime import datetime
-from src.proj import MACHINE , Logger , CALENDAR , DB
-from src.proj.util.options import Options
-from src.proj.util.emailer import Email
+from src.proj import MACHINE , Logger , CALENDAR , DB , Options
+from src.proj.util.web.emailer import Email
 from src.proj.util.script import TaskRecorder
-from src.proj.util.disk_ttl_cache import DiskTTLCache
+from src.proj.util.filesys.ttl_cache import DiskTTLCache
 from .util import wrap_update
 
 class TempFile:

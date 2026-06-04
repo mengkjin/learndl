@@ -2,8 +2,8 @@ from contextlib import nullcontext
 from typing import Literal
 
 from src.proj import MACHINE , Proj , PATH , BaseType
-from src.proj.util.catcher import HtmlCatcher
-from src.proj.util.async_save import AsyncSaver
+from src.proj.util.io.catcher import HtmlCatcher
+from src.proj.util.io.async_save import AsyncSaver
 from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal , Any
 
 from src.proj import CALENDAR , DB , Dates , Const , BaseClass , BaseType
-from src.proj.util.parallel import parallel
+from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 

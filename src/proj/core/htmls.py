@@ -3,11 +3,11 @@ from __future__ import annotations
 import re
 import html
 import io
+import pandas as pd
 from typing import Any , TYPE_CHECKING
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
-    import pandas as pd
 
 _palette : dict[int , str] = {
     30: 'black',

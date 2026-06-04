@@ -3,7 +3,6 @@
 from __future__ import annotations
 import io
 from pathlib import Path
-import threading
 
 from src.proj.core import stderr , strPath
 
@@ -24,14 +23,13 @@ class LogWriterFile:
     def __get__(self , instance, owner):
         """Return the current log file handle, or ``None``."""
         return self.value
-
-
 class UniqueFileList:
     """Thread-safe deduplicated list of paths, keyed by logical name (e.g. email attachments)."""
 
     _file_lists : dict[str , list[Path]] = {}
     def __init__(self , name : str):
         """Register a named list stored in the class-level ``_file_lists`` map."""
+        import threading
         self.name = name
         self.lock = threading.Lock()
         self._file_lists[self.name] = []

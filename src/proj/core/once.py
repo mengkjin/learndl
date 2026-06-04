@@ -1,7 +1,6 @@
 """Run-once guards for callables keyed by object identity and a user mark."""
 import os
 import functools
-import threading
 from typing import Any, Callable , Iterable , Literal
 
 class Once:
@@ -40,11 +39,19 @@ class Once:
 
     """
     _executed = set()
-    lock = threading.Lock()
+    _lock = None
+
+    @classmethod
+    def get_lock(cls):
+        """get the lock for the once"""
+        from threading import Lock
+        if cls._lock is None:
+            cls._lock = Lock()
+        return cls._lock
 
     @classmethod
     def run(cls, func: Callable, func_args : Iterable, func_kwargs : dict , mark: Any = 'default' , object: Any | None | Literal['os'] = None) -> Any:
-        with cls.lock:
+        with cls.get_lock():
             if object is None:
                 object = cls
             if object == 'os':
@@ -61,7 +68,7 @@ class Once:
             try:
                 return func(*func_args, **func_kwargs)
             except Exception:
-                with cls.lock:
+                with cls.get_lock():
                     if object == 'os':
                         os.environ.pop(os_key)
                     else:
@@ -82,11 +89,5 @@ class Once:
             @functools.wraps(method)
             def wrapper(*args, **kwargs):
                 return cls.run(method , args , kwargs , mark , object if object is not None else args[0])
-                # use_object = object if object is not None else args[0]
-                # key = (use_object.__class__.__name__ , id(use_object) , mark)
-                # if key not in cls._executed:
-                #     cls._executed.add(key)
-                #     return method(*args, **kwargs)
-                # return None
             return wrapper
         return decorator

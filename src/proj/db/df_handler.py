@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import polars as pl
-
-from typing import Any , Callable , Iterable , TypeVar
+from typing import Any , Callable , Iterable , TypeVar , TYPE_CHECKING
 
 from src.proj.log import Logger
 from .code_mapper import secid2secid
 
-__all__ = ['dfHandler']
+if TYPE_CHECKING:
+    import polars as pl
+    T = TypeVar('T' , bound = pd.DataFrame | pl.DataFrame)
 
-T = TypeVar('T' , bound = pd.DataFrame | pl.DataFrame)
+__all__ = ['dfHandler']
 
 class dfHandler:
     @classmethod
@@ -23,7 +23,7 @@ class dfHandler:
             return df
         old_index = [index for index in df.index.names if index]
         df = df.reset_index(old_index , drop = False)
-        if isinstance(df.index , pd.RangeIndex):
+        if df.index.__class__.__qualname__ == 'RangeIndex':
             df = df.reset_index(drop = True)
         return df
 
@@ -31,6 +31,7 @@ class dfHandler:
     def default_mapper(cls , df : T) -> T:
         """reset index which default mapper not None"""
         ret : Any = df
+        import polars as pl
         if isinstance(df , pd.DataFrame):
             if 'date' in df.index.names and 'date' in df.columns:
                 df = df.reset_index('date' , drop = True)
@@ -78,6 +79,7 @@ class dfHandler:
         syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'
     ) -> pl.DataFrame:
         """process polars dataframe , check empty / all-NA and try reset index"""
+        import polars as pl
         if reassign_date_col and date is not None: 
             if isinstance(date, (pl.Expr, pl.Series, list, tuple, np.ndarray)):
                 # if date is a list/array, convert it to pl.Series first
@@ -118,7 +120,7 @@ class dfHandler:
 
     @classmethod
     def apply_mapper(cls , df : T , *mappers : Iterable[Callable[[T], T]] | Callable[[T], T] | None) -> T:
-        if (isinstance(df , pd.DataFrame) and df.empty) or (isinstance(df , pl.DataFrame) and len(df) == 0):
+        if len(df) == 0:
             return df
 
         ret : Any = df

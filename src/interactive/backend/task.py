@@ -29,11 +29,11 @@ from datetime import datetime
 from pathlib import Path
 
 from src.proj import PATH , Duration , Logger , BaseProperty , BaseType
-from src.proj.util.parallel import is_main_process
+from src.proj.util.functional.parallel import is_main_process
 from src.proj.util.script import ScriptCmd
-from src.proj.util.sqlite import DBConnHandler
-from src.proj.util.emailer import Email
-from src.proj.util.util_funcs import check_process_status , kill_process
+from src.proj.util.filesys.sqlite import DBConnHandler
+from src.proj.util.web.emailer import Email
+from src.proj.util.shell import process
 
 def timestamp() -> float:
     """Return the current UTC time as a POSIX timestamp (seconds since epoch)."""
@@ -945,7 +945,7 @@ class TaskItem:
         changed = self.reload()
 
         if self.pid and self.is_running:
-            status = check_process_status(self.pid)
+            status = process.check_status(self.pid)
             if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
                 raise ValueError(f"Process {self.pid} is {status}")
             if status in ['complete' , 'zombie']:
@@ -1108,7 +1108,7 @@ class TaskItem:
         Returns True on success or if the process is not running, False on failure.
         """
         if self.pid and self.is_running:
-            if kill_process(self.pid):
+            if process.kill(self.pid):
                 self.check_killed()
                 return True
             else:

@@ -13,8 +13,7 @@ import ast
 import re
 
 from dataclasses import dataclass
-from src.proj import Logger
-from src.proj.util.options import Options # noqa
+from src.proj import Logger , Options  # noqa
 from src.interactive.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 class NoCachedValue:

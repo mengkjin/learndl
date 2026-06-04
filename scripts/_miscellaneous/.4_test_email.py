@@ -7,7 +7,7 @@
 # email: True
 # mode: shell
 
-from src.proj.util.emailer import Email
+from src.proj.util.web.emailer import Email
 from src.proj.util.script import ScriptTool 
 
 @ScriptTool('test_email' , lock_timeout = 10)

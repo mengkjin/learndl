@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Sequence , Literal , Any
 
 from src.proj import PATH , BaseClass , BaseType
-from src.proj.util.torch import torch_load
+from src.proj.util.io.torch_load import torch_load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus

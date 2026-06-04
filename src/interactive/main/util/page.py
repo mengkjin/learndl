@@ -38,13 +38,13 @@ PAGE_HELPS = {
 }
 
 SCRIPT_ICONS = {
-    'check'   : ':material/question_mark:' ,
-    'autorun' : ':material/schedule:' ,
+    'check'   : ':material/owl:' ,
+    'autorun' : ':material/time_auto:' ,
     'data'    : ':material/database:' ,
-    'factor'  : ':material/graph_3:' ,
-    'train'   : ':material/model_training:' ,
+    'factor'  : ':material/function:' ,
+    'train'   : ':material/cognition:' ,
     'test'    : ':material/query_stats:' ,
-    'predict' : ':material/online_prediction:' ,
+    'predict' : ':material/blur_on:' ,
     'trading' : ':material/payments:',
 }
 

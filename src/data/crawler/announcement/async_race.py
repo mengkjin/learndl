@@ -3,7 +3,7 @@ Async scheduler for normal mode + race mode over a shared proxy pool.
 """
 import asyncio
 from typing import Any
-from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
+from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
 
 from .fetcher_task import FetcherTask
 from .util import Announcement, CrawlerLogger

@@ -90,7 +90,7 @@
         background-color: lightcyan !important;
         &:hover {background-color: #00BCD4 !important;}
     }
-    .stElementContainer[class*="control-refresh-interactive"] button {
+    .stElementContainer[class*="refresh-interactive"] button {
         background-color: lightgreen !important;
         &:hover {background-color: #4CAF50 !important;}
     }

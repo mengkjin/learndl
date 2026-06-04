@@ -1,24 +1,25 @@
 """Load dataframes from tar file and save dataframes to tar file."""
-
+from __future__ import annotations
 import pandas as pd
-import polars as pl
 import tarfile
 import json
 import io
 
 from pathlib import Path
-from typing import Any , TypeVar
+from typing import Any , Iterable , Callable , Union , TYPE_CHECKING
 
 from src.proj.env import PATH , Proj
 from src.proj.log import Logger
 from src.proj.core import strPath
 
-from .core import PD_MAPPER_TYPE
 from .df_handler import dfHandler
 from .df_io import dfIOHandler
 
+if TYPE_CHECKING:
+    PD_MAPPER_TYPE = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]
+
 __all__ = ['tar_suffixes' , 'load_tar_meta' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 'pack_files_to_tar' , 'unpack_files_from_tar']
-T = TypeVar('T' , bound = pd.DataFrame | pl.DataFrame)
+
 tar_suffixes = ['.tar' , '.tar.gz' , '.tar.bz2' , '.tar.xz' , '.tar.zst']
 
 def load_tar(path : strPath , mapper : PD_MAPPER_TYPE = None) -> dict[str , pd.DataFrame]:
@@ -82,7 +83,7 @@ def save_tar(dfs : dict[str , pd.DataFrame] , path : strPath , meta : dict[str, 
 
             buffer = io.BytesIO()
             df = dfHandler.reset_index_pandas(df)
-            if not isinstance(df.index , pd.RangeIndex):
+            if df.index.__class__.__qualname__ != 'RangeIndex':
                 Logger.error(f'{df} is not a RangeIndex DataFrame')
                 Logger.display(df , caption = 'Error saving DataFrame')
                 raise ValueError(f'{df} is not a RangeIndex DataFrame')

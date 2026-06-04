@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any , Generator , Literal , TypedDict
 
 from src.proj import BaseClass , Logger
-from src.proj.util.parallel import parallel
+from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
 from .factor_calc import FactorCalculator
@@ -124,7 +124,7 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
     Rebuilds jobs in the worker, runs :meth:`BaseUpdateJobList.process`, and returns
     a serializable report for the parent process.
     """
-    from src.proj.util.catcher import MPOutputCatcher
+    from src.proj.util.io.catcher import MPOutputCatcher
 
     jobs = [_job_from_spec(s) for s in payload['specs']]
     chunk = BaseUpdateJobList(

@@ -3,22 +3,25 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import polars as pl
 import io
 import os
 from uuid import uuid4
 
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any , Literal , Mapping
+from typing import Any , Literal , Mapping , Iterable , Callable , Union , TYPE_CHECKING
 
 from src.proj.env import MACHINE
 from src.proj.log import Logger
 from src.proj.core import strPath , strPaths
 
-from .core import DATAFRAME_SUFFIX , PD_MAPPER_TYPE , PL_MAPPER_TYPE
+from .core import DATAFRAME_SUFFIX
 from .df_handler import dfHandler
 from .db_path import path_date , DBPath
+
+if TYPE_CHECKING:
+    import polars as pl
+    PL_MAPPER_TYPE = Union[Iterable[Callable[[pl.DataFrame], pl.DataFrame]] , Callable[[pl.DataFrame], pl.DataFrame] , None]
+    PD_MAPPER_TYPE = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]
 
 __all__ = [
     'dfIOHandler' ,
@@ -27,7 +30,6 @@ __all__ = [
     'load_df' , 'load_dfs' , 'load_df_pl' , 'load_dfs_pl' , 
     'load_df_max_date' , 'load_df_min_date'
 ]
-
 class dfIOHandler:
     """File IO operations handler"""
     @classmethod
@@ -53,6 +55,7 @@ class dfIOHandler:
     @classmethod
     def load_polars(cls , path : strPath | io.BytesIO , * , missing_ok = True , mapper : PL_MAPPER_TYPE = None) -> pl.DataFrame:
         """load dataframe from path"""
+        import polars as pl
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
             return pl.DataFrame()
         if DATAFRAME_SUFFIX == 'feather':
@@ -65,6 +68,7 @@ class dfIOHandler:
     @classmethod
     def save_df(cls , df : pd.DataFrame | pl.DataFrame , path : strPath | io.BytesIO):
         """save dataframe to path"""
+        import polars as pl
         if isinstance(df , pd.DataFrame) and None in df.index.names:
             df = df.reset_index(None , drop = True)
         # Atomic write for filesystem paths: write to a temp file in the same directory,
@@ -115,7 +119,7 @@ class dfIOHandler:
     @classmethod
     def load_pandas_multiple(
         cls , paths : strPaths , * ,
-        accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+        accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
         mapper : PD_MAPPER_TYPE = None
     ) -> dict[int | Any, pd.DataFrame]:
         """load dataframe from multiple paths in accelerating mode"""
@@ -138,11 +142,10 @@ class dfIOHandler:
             from dask.base import compute
             ddfs = [delayed(loader)(p) for d,p in paths.items()]
             dfs = {d:df for d,df in zip(paths.keys() , compute(ddfs)[0])}
-        elif accelerator in ['thread' , 'process']:
-            assert accelerator == 'thread' or (not MACHINE.is_windows and accelerator == 'process'), (accelerator , MACHINE.system_name)
+        elif accelerator == 'thread':
+            from concurrent.futures import ThreadPoolExecutor, as_completed
             max_workers = min(MACHINE.max_workers , max(len(paths) // 5 , 1))
-            PoolExecutor = ThreadPoolExecutor if accelerator == 'thread' else ProcessPoolExecutor
-            with PoolExecutor(max_workers=max_workers) as pool:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 futures = {pool.submit(loader , p):d for d,p in paths.items()}
                 dfs = {futures[future]:future.result() for future in as_completed(futures)}
         else:
@@ -167,6 +170,7 @@ class dfIOHandler:
         if accelerator is None:
             dfs = {d:loader(p) for d,p in paths.items()}
         elif accelerator == 'thread':
+            from concurrent.futures import ThreadPoolExecutor, as_completed
             max_workers = min(MACHINE.max_workers , max(len(paths) // 5 , 1))
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 futures = {pool.submit(loader , p):d for d,p in paths.items()}
@@ -205,7 +209,6 @@ def append_df(
     """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
     if df is None or df.empty: 
         return False
-
     path = Path(path)
     if not path.exists():
         return save_df(df , path , overwrite = True , prefix = prefix , indent = indent , vb_level = vb_level)
@@ -224,7 +227,7 @@ def append_df(
 def load_df(
     path : strPath | strPaths , * , 
     missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
-    accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
     mapper : PD_MAPPER_TYPE = None
 ):
     """
@@ -237,7 +240,7 @@ def load_df(
         if True, return empty dataframe for missing path(s)
     key_column : str | None
         key column name , if None, use date column
-    accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread']
+    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread']
         accelerating mode
     mapper : Callable[[pd.DataFrame], pd.DataFrame]
         mapper function to execute on each dataframe
@@ -270,7 +273,7 @@ def load_df(
 
 def load_dfs(
     paths : strPaths , * ,  
-    accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
     mapper : PD_MAPPER_TYPE = None
 ) -> dict[int | Any, pd.DataFrame]:
     """
@@ -279,7 +282,7 @@ def load_dfs(
     ----------
     paths : dict[int, strPath] | Iterable[strPath]
         paths to load , key is date
-    accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None
+    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None
         accelerating mode
     mapper : Iterable[Callable[[pd.DataFrame], pd.DataFrame]] | Callable[[pd.DataFrame], pd.DataFrame] | None
         mapper function to execute on each dataframe
@@ -305,6 +308,7 @@ def load_df_pl(
     mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
         mapper function to execute on each dataframe
     """
+    import polars as pl
     if isinstance(path , strPath):
         df = dfIOHandler.load_polars(path , missing_ok = missing_ok , mapper = None)
     else:
@@ -327,10 +331,6 @@ def load_df_pl(
         if isinstance(df , pl.LazyFrame):
             df = df.collect()
     return dfHandler.wrapped_mapper(mapper)(df)
-
-# def load_df_one_pl(path : PATH_TYPE | io.BytesIO , *, missing_ok = True , mapper : PL_MAPPER_TYPE = None):
-#     """load dataframe from path"""
-#     return FileIOHandler.load_polars(path , missing_ok = missing_ok , mapper = mapper)
 
 def load_dfs_pl(
     paths : strPaths , * ,  
@@ -416,11 +416,10 @@ def load_pl(db_src : str , db_key : str , date : int | None = None , *,
 
 def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
           key_column = 'date' , override_existing_key = False , use_alt = False , closest = False ,
-          accelerator : Literal['thread' , 'process' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+          accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
           fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database"""
     assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load instead'
-
     db_path = DBPath(db_src , db_key)
     paths = db_path.get_paths(dates , start , end , use_alt = use_alt , closest = closest)
     if not paths:
@@ -438,6 +437,7 @@ def loads_pl(db_src : str , db_key : str , dates : np.ndarray | list[int] | None
              fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs):
     """load multiple dates from database but use polars to load"""
     assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load_pl instead'
+    import polars as pl
     db_path = DBPath(db_src , db_key)
     paths = db_path.get_paths(dates , start , end , use_alt = use_alt , closest = closest)
     if not paths:

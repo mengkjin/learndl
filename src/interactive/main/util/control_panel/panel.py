@@ -70,7 +70,7 @@ class ControlPanel:
                         break
                     button = buttons[irow * ncols + icol]
                     with col:
-                        button.show(script_key = script_key)
+                        button.cold_start(script_key = script_key)
 
     def show_popovers(self , script_key : str | None = None) -> None:
         """Render the control panel popovers area.
@@ -94,4 +94,4 @@ class ControlPanel:
     def refresh_buttons(self , runner):
         """Refresh the control panel buttons."""
         for button in self.buttons.values():
-            button.refresh(runner)
+            button.refresh(runner = runner)

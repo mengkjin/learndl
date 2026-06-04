@@ -12,7 +12,7 @@ from typing import Any , Callable , Literal, Type , Generator
 from ..util import StockFactor
 
 from src.proj import PATH , CALENDAR , DB , Dates , Const , BaseMeta , BaseClass
-from src.proj.util.parallel import parallel
+from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
 __all__ = [

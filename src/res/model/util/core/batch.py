@@ -8,7 +8,7 @@ from functools import cached_property
 from typing import Any, Literal
 
 from src.proj import Proj , Logger , BaseProperty
-from src.proj.util.device import Device
+from src.proj.util.functional.device import Device
 
 __all__ = ['BatchInput' , 'BatchOutput' , 'BatchData']
 

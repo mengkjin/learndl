@@ -14,8 +14,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.proj.util.util_funcs import argparse_dict 
-from src.proj.util.parallel import is_main_process
+from src.proj.util.shell.util import argparse_dict 
+from src.proj.util.functional.parallel import is_main_process
 from .task import TaskItem , TaskDatabase
 
 class BackendTaskRecorder:

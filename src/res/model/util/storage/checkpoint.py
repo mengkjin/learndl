@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import PATH
-from src.proj.util.torch import torch_load
-from src.proj.util.device import Device
-from src.proj.util.async_save import AsyncSaver
+from src.proj.util.io.torch_load import torch_load
+from src.proj.util.functional.device import Device
+from src.proj.util.io.async_save import AsyncSaver
 from src.res.model.util.core import epoch_key
 
 @dataclass

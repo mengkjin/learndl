@@ -16,7 +16,7 @@ from typing import Any
 from abc import ABC, abstractmethod
 
 from src.proj import BaseClass
-from src.proj.util.web import (
+from src.proj.util.web.request import (
     async_http_session,
     CHROME_UA,
     request_with_timeouterror_async,

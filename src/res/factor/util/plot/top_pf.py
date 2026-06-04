@@ -3,7 +3,7 @@ import pandas as pd
 from plottable import ColumnDefinition
 from typing import Any
 
-from src.proj.util.plot import (
+from src.proj.util.functional.plot import (
     plot_table , get_twin_axes , set_xaxis , set_yaxis , sns_lineplot , sns_barplot
 )
 from .plot_basic import PlotDfFigIterator

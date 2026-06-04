@@ -63,7 +63,7 @@ configs/
 ├── setting/
 │   ├── model.yaml         # project model settings
 │   └── trading_port.yaml  # portfolio specifications (NOT configs/trading/)
-├── preference/       # app preferences (project, interactive, logger, shell_opener)
+├── preference/       # app preferences (project, interactive, logger, shell)
 └── util/
     ├── factor/       # factor opt configs, risk_factors.yaml
     ├── industry/     # industry classification (tushare.yaml)

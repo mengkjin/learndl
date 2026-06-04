@@ -1,20 +1,18 @@
 """
 Code mapper tools, used to transform between code and secid.
 """
-
-import pandas as pd
+from __future__ import annotations
 import numpy as np
-from typing import Any , Union , TypeVar , Iterable
+import pandas as pd
+from typing import Any , TypeVar , Iterable
 
 from src.proj.env import MACHINE
 
 __all__ = ['code2secid' , 'code2code' , 'secid2secid' , 'secid2code']
 
-CodeType = Union[pd.Series , np.ndarray , list[str | int] , str , int]
-
 T = TypeVar("T")
 
-def _to_series(input : Any) -> pd.Series:
+def _to_series(input : Any):
     """Convert input to a pandas series"""
     if isinstance(input , Iterable):
         output = pd.Series([i for i in input])
@@ -63,7 +61,7 @@ def code2code(code : T , decode_first = False) -> T:
 
     Returns:
         Same container shape/type as ``code`` where possible.
-    """
+    """ 
     new_code = _to_series(code)
     if decode_first: 
         new_code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in new_code])

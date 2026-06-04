@@ -12,10 +12,6 @@ from src.proj.core import strPath
 from src.proj.cal import CALENDAR
 from src.proj.bases import BaseClass
 
-from .task_record import TaskRecorder
-from ..emailer import Email
-from ..catcher import HtmlCatcher , MarkdownCatcher , WarningCatcher , CrashProtectorCatcher
-
 class TaskName:
     def __init__(self):
         self._name = None
@@ -67,6 +63,7 @@ class AutoRunCatchers:
         self.warning_catcher = warning_catcher
 
     def enter(self , title : str , category : str , init_time : datetime):
+        from src.proj.util.io.catcher import CrashProtectorCatcher , HtmlCatcher , MarkdownCatcher , WarningCatcher
         self.catchers = []
         if self.crash_protector_catcher:
             self.catchers.append(CrashProtectorCatcher(self.task_id))
@@ -149,6 +146,7 @@ class AutoRunTask(BaseClass.BoundLogger):
         return f'AutoRunTask(task_name={self.task_name},task_key={self.task_key},email={self.email},source={self.source},time={self.time_str})'
 
     def __enter__(self):
+        from src.proj.util.script.task_record import TaskRecorder
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.already_done = self.task_recorder.is_finished()
         self.catchers.enter(self.task_full_name , self.task_name , self.init_time)
@@ -160,7 +158,7 @@ class AutoRunTask(BaseClass.BoundLogger):
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        from src.proj.util.async_save import AsyncSaver
+        from src.proj.util.io.async_save import AsyncSaver
         AsyncSaver.wait_all(caller_name = self.__class__.__name__)
         self.end_time = datetime.now()
         if isinstance(self.func_return , Path):
@@ -323,6 +321,7 @@ class AutoRunTask(BaseClass.BoundLogger):
                 f'Final Messages : ' + '-' * 20 ,
                 self.exit_message ,
             ]
+            from src.proj.util.web.emailer import Email
             Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
 
     @classmethod

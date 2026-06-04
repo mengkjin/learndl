@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any , Literal , Type , Callable , TypeVar
 
 from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
-from src.proj.util.error_handler import retry_call
+from src.proj.util.functional.handler import retry_call
 from .core import TS
 
 T = TypeVar('T')

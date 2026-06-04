@@ -12,6 +12,7 @@ from src.proj.env import PATH , Proj
 from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silence
 from .display import Display
 from .logfile import LogFile
+
 LOG_LEVEL_TYPE = Literal['remark' , 'highlight' , 'debug' , 'info' , 'warning' , 'error' , 'critical']
 LOG_LEVELS : list[LOG_LEVEL_TYPE] = ['remark' , 'highlight' , 'info' , 'debug' , 'warning' , 'error' , 'critical']
 STDERR_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {

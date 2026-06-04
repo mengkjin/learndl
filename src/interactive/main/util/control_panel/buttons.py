@@ -4,43 +4,41 @@ import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING , Literal
-
-from src.interactive.main.util.components import common_operations as CO
+from typing import TYPE_CHECKING
+from src.proj import Proj , MACHINE , Options
+from src.interactive.main.util.session_control import SC
+from src.interactive.main.util.components.operations import ButtonOperation
 
 if TYPE_CHECKING:
     from src.interactive.backend import TaskItem , ScriptRunner
 
-def _print_title(title : str) -> None:
-    """Render the small capitalised label below the button icon."""
-    body = f"""
-    <div style="
-        margin-bottom: 0px;
-        margin-top: -10px;
-        padding: 0 0 20px 0;
-        font-size: 12px;
-        font-weight: 600;
-        white-space: nowrap;
-    ">{title.upper()}</div>
-    """       
-    st.markdown(body , unsafe_allow_html = True)
-
-class ControlPanelButton(CO.CommonOperation):
+class ControlPanelButton(ButtonOperation):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
 
     Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class
     variables and implement :meth:`button` to render the Streamlit widget.
     """
-    key : str = ''
-    icon : str = ''
-    title : str = ''
+
+    @property
+    def runner(self) -> ScriptRunner | None:
+        return self.get('runner')
+
+    @property
+    def script_key(self) -> str | None:
+        return self.get('script_key')
 
     @abstractmethod
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
-        """Get the key for the button."""
-        return f"{self.key}-{"disabled" if status.disabled else "enabled"}"
+    def update_status(self):
+        """Update the status of the button."""
+        pass
 
-    def refresh(self , *args , **kwargs) -> None:
+    def cold_start(self , script_key : str | None = None):
+        """Cold start the button when the page is loaded."""
+        self.reset().update(script_key = script_key)
+        self.update_status()
+        self.show()
+
+    def refresh(self , **kwargs) -> None:
         """Redraw the button with updated state (override in subclasses as needed)."""
         pass
 
@@ -51,107 +49,174 @@ class ControlPanelButton(CO.CommonOperation):
             st.session_state[area_key] = st.empty()
         return st.session_state[area_key]
 
-    def render_button(self , **kwargs) -> None:
+    def render_button(self) -> None:
         """Render the button."""
-        status = self.status
-        button_key = self.button_key(status , **kwargs)
-        st.button(self.icon, key=button_key , help = status.help , disabled = status.disabled , on_click = self.run , args = (status,))
+        st.button(self.icon, key=self.button_key , help = self.help , disabled = self.disabled , on_click = self.run)
+        self.render_title(font_size = 12 , uppercase = True)
 
-    def show(self , script_key : str | None = None) -> None:
+    def show(self) -> None:
         """Render the button + label into the persistent panel placeholder slot."""
         with self.render_area().container():
-            self.render_button(script_key = script_key)
-            _print_title(self.title)
+            self.render_button()
 
-class ScriptRunnerRunButton(ControlPanelButton , CO.RunCurrentScript):
+class ScriptRunnerRunButton(ControlPanelButton):
     """Button that submits the current script to the task queue."""
     key = f"script-runner-run"
     icon = f":material/mode_off_on:"
     title = f"Run Script"
 
-    def button_key(self , status : CO.OperationStatus , stage : Literal[0,1] = 0 , **kwargs) -> str:
-        if stage == 0:
-            return f"{self.key}-{"disabled" if status.disabled else "enabled"}-not-refreshed"
-        elif stage == 1:
-            runner : ScriptRunner = status.kwargs['runner']
-            return f"{self.key}-{"disabled" if status.disabled else "enabled"}-{runner.script_key}"
+    def update_status(self):
+        """Update the status of the button."""
+        if self.script_key is None:
+            return self.update(True , "Please Choose a Script to Run First" , "no-script-key")
+        if self.runner is None:
+            return self.update(True , "Please Supply a Script Runner First" , "no-runner")
+        if SC.param_inputs_form is None:
+            return self.update(True , "Please Fill Required Parameters" , "no-param-form")
+        params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
+        if SC.get_script_runner_validity(params):
+            preview_cmd = SC.get_script_runner_cmd(self.runner , params)
+            help = preview_cmd if preview_cmd else f"Parameters valid, run {self.script_key}"
+            self.update(False , help , self.script_key , params = params)
         else:
-            raise ValueError(f"Invalid stage: {stage}")
+            help = "Parameters invalid, please check required ones"
+            self.update(True , help , self.script_key , params = params)
+        return self
 
-    def refresh(self , runner : ScriptRunner):
-        self.update_kwargs(runner = runner)
-        with self.render_area().container():
-            self.render_button(stage = 1)
+    def refresh(self , runner : ScriptRunner , **kwargs) -> None:
+        raw_state = self.status.state
+        self.update(runner = runner).update_status()
+        if self.status.state != raw_state:
+            self.show()
 
-class GlobalScriptLatestTaskButton(ControlPanelButton , CO.GlobalScriptLatestTask):
+    def run(self) -> None:
+        SC.click_script_runner_run(self.runner , self.get('params'))
+
+class GlobalScriptLatestTaskButton(ControlPanelButton):
     """Button that navigates to the latest task across all scripts."""
     key = f"global-script-latest-task"
     icon = f":material/reply_all:"
     title = f"Global Last Task"
 
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
-        item : TaskItem | None = status.kwargs.get('item')
-        return f"{self.key}-{"disabled" if status.disabled else "enabled"}-{"no-id" if item is None else item.id}"
+    def update_status(self):
+        item = SC.get_latest_task_item()
+        if item is None:
+            self.update(True , "Please Run a Task First" , "no-item")
+        else:
+            self.update(False , f":blue[**Show Latest Task**]: {item.id}" , item.id , item = item)
 
-class CurrentScriptLatestTaskButton(ControlPanelButton , CO.CurrentScriptLatestTask):
+    def run(self) -> None:
+        item : TaskItem | None = self.get('item')
+        if item is None:
+            return
+        SC.click_show_complete_report(item)
+        if SC.current_page_name != repr(item.script_key):
+            meta = SC.get_page(item.script_key)
+            if meta:
+                st.switch_page(meta['page'])
+        else:
+            st.rerun()
+
+class CurrentScriptLatestTaskButton(ControlPanelButton):
     """Button that shows the latest task for the currently displayed script."""
     key = f"current-script-latest-task"
     icon = f":material/reply:"
     title = f"Current Last Task"
+    
+    def update_status(self):
+        """Update the status of the button."""
+        if self.script_key is None:
+            return self.update(True , "Please Choose a Script First" , "no-script-key")
+        item = SC.get_latest_task_item(self.script_key)
+        if item is None:
+            self.update(True , "Please Run a Task of This Script First" , "no-item")
+        else:
+            self.update(False , f":blue[**Show Latest Task of This Script**]: {item.id}" , item.id , item = item)
+    
+    def run(self) -> None:
+        item : TaskItem | None = self.get('item')
+        if item is None:
+            return
+        SC.click_show_complete_report(item)
+        st.rerun()
 
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
-        item : TaskItem | None = status.kwargs.get('item')
-        return f"{self.key}-{"disabled" if status.disabled else "enabled"}-{"no-id" if item is None else item.id}"
-
-class RebootButton(ControlPanelButton , CO.RebootApp):
-    """Button that reboots the streamlit app by hot reloading all the modules and clearing the cache."""
-    key = f"control-reboot-app"
-    icon = f":material/restart_alt:"
-    title = f"Reboot App"
-
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
-        return f"{self.key}-{"disabled" if status.disabled else "enabled"}"
-
-class ControlRefreshInteractiveButton(ControlPanelButton , CO.RefreshAll):
+class ControlRefreshInteractiveButton(ControlPanelButton):
     """Button that regenerates all script-detail pages and reinitialises the session."""
-    key = f"control-refresh-interactive"
+    key = f"refresh-interactive"
     icon = f":material/directory_sync:"
     title = f"Refresh All"
 
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
-        return f"{self.key}-{"disabled" if status.disabled else "enabled"}"
+    def update_status(self):
+        """Update the status of the button."""
+        self.update(False , "Refresh Task Queue / Options / Scripts" , "ok")
 
-class ControlGitClearPullButton(ControlPanelButton , CO.GitClearPull):
+    def run(self) -> None:
+        with st.spinner("Refreshing...") , Proj.silence:
+            Options.update()
+        SC.rerun()
+        st.rerun()
+
+class ControlGitClearPullButton(ControlPanelButton):
     """Button that resets local changes and pulls the latest code from remote.
 
     Disabled automatically on coding platforms (``MACHINE.platform_coding``).
     """
-    key = f"control-pull-and-run"
+    key = f"git-clear-pull"
     icon = f":material/cloud:"
     title = f"Git Pull"
 
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
-        return f"{self.key}-{"disabled" if status.disabled else "enabled"}"
+    def update_status(self):
+        if MACHINE.platform_coding:
+            self.update(True, f"Git Pull is not available on coding platform {MACHINE.name}" , "platform-coding")
+        else:
+            self.update(False, "Reset Local Changes and Pull Latest Code" , "ok")
 
-class ControlGitClearPullRunButton(ControlPanelButton , CO.GitClearPullRun):
+    def run(self) -> None:
+        if MACHINE.platform_coding:
+            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
+        else:
+            from src.call.files import clear_git_pull
+            clear_git_pull(verbose_level = 1)
+
+class ControlGitClearPullRunButton(ControlPanelButton):
     """Button that resets local changes and pulls the latest code from remote.
 
     Disabled automatically on coding platforms (``MACHINE.platform_coding``).
     """
-    key = f"control-git-clear-pull"
+    key = f"pull-and-run"
     icon = f":material/cloud_sync:"
     title = f"Pull & Run"
 
-    def button_key(self , status : CO.OperationStatus , stage : Literal[0,1] = 0 , **kwargs) -> str:
-        if stage == 0:
-            return f"{self.key}-{"disabled" if status.disabled else "enabled"}-not-refreshed"
-        elif stage == 1:
-            runner : ScriptRunner = status.kwargs['runner']
-            return f"{self.key}-{"disabled" if status.disabled else "enabled"}-{runner.script_key}"
+    def update_status(self):
+        """Update the status of the button."""
+        if MACHINE.platform_coding:
+            return self.update(True, f"Git Pull is not available on coding platform {MACHINE.name}" , "platform-coding")
+        if self.script_key is None:
+            return self.update(True , "Please Choose a Script to Run First" , "no-script-key")
+        if self.runner is None:
+            return self.update(True , "Please Supply a Script Runner First" , "no-runner")
+        if SC.param_inputs_form is None:
+            return self.update(True , "Please Fill Required Parameters" , "no-param-form")
+        params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
+        if SC.get_script_runner_validity(params):
+            preview_cmd = SC.get_script_runner_cmd(self.runner , params)
+            help = preview_cmd if preview_cmd else f"Parameters valid, run {self.script_key}"
+            self.update(False , help , self.script_key , params = params)
         else:
-            raise ValueError(f"Invalid stage: {stage}")
+            help = "Parameters invalid, please check required ones"
+            self.update(True , help , self.script_key , params = params)
+        return self
 
-    def refresh(self , runner : ScriptRunner):
-        self.update_kwargs(runner = runner)
-        with self.render_area().container():
-            self.render_button(stage = 1)
+    def refresh(self , runner : ScriptRunner , **kwargs) -> None:
+        raw_state = self.status.state
+        self.update(runner = runner).update_status()
+        if self.status.state != raw_state:
+            self.show()
+
+    def run(self) -> None:
+        if MACHINE.platform_coding:
+            raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
+        else:
+            from src.call.files import clear_git_pull
+            clear_git_pull(verbose_level = 1)
+        SC.click_script_runner_run(self.runner , self.get('params'))

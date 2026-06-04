@@ -8,7 +8,7 @@ from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
 from src.proj import PATH , MACHINE , Logger
-from src.proj.util.catcher import IOCatcher
+from src.proj.util.io.catcher import IOCatcher
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
 DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']

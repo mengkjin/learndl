@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any , ClassVar , Literal , Iterable
 
 from src.proj import PATH , CALENDAR , DB , Logger , BaseProperty , BaseType
-from src.proj.util.torch import torch_load
+from src.proj.util.io.torch_load import torch_load
 from src.func import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice
 
 from .nd import NdData

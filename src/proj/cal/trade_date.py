@@ -2,20 +2,8 @@
 Self defined TradeDate class, used to represent a date and its closest trading date.
 """
 import numpy as np
-import pandas as pd
 from typing import Any
 from .basic import BC
-
-idx = pd.Index(BC._cds)
-if not idx.is_unique:
-    info = f'''
-    unique: {idx.is_unique}
-    len: {len(BC._cds)}
-    nunique: {idx.nunique()}
-    value_counts: {pd.Series(BC._cds).value_counts().head(20)}
-    '''
-    raise ValueError(info)
-
 class TradeDate:
     """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""
     def __new__(cls, date: int | Any, *args, **kwargs):

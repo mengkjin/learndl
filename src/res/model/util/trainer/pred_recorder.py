@@ -6,7 +6,7 @@ from functools import cached_property
 from pathlib import Path
 
 from src.proj import DB , PATH , Const , CALENDAR
-from src.proj.util.async_save import AsyncSaver
+from src.proj.util.io.async_save import AsyncSaver
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer

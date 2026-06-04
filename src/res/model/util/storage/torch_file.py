@@ -7,8 +7,8 @@ import pandas as pd
 from typing import Any , Literal , TypeVar , Sequence
 
 from src.proj import PATH
-from src.proj.util.torch import torch_load
-from src.proj.util.device import Device
+from src.proj.util.io.torch_load import torch_load
+from src.proj.util.functional.device import Device
 
 T = TypeVar('T')
 class TorchFileStorage:

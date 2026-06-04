@@ -8,7 +8,7 @@
 # mode: shell
 
 from src.proj.util.script import ScriptTool
-from src.res.model.util.config import check_all_config_files
+from src.call.files import check_all_config_files
 
 @ScriptTool('config_modifier')
 def main(**kwargs):     

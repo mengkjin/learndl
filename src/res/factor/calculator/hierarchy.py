@@ -7,7 +7,7 @@ from typing import Generator , Iterator , Type , Literal , Any
 from .factor_calc import FactorCalculator
 
 from src.proj import PATH , MACHINE , BaseClass
-from src.proj.util.parallel import parallel
+from src.proj.util.functional.parallel import parallel
 
 class StockFactorHierarchy(BaseClass.BoundLogger):
     '''hierarchy of factor classes'''

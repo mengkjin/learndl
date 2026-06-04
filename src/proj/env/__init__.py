@@ -4,3 +4,4 @@ from .machine import MACHINE
 from .path import PATH
 from .constant import Const
 from .proj import Proj
+from .options import Options

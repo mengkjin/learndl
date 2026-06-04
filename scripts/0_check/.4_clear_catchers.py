@@ -13,7 +13,7 @@
 #       default : 30
 
 from src.proj.util.script import ScriptTool
-from src.proj.util.catcher import clear_outdated_catcher_logs
+from src.call.files import clear_outdated_catcher_logs
 
 @ScriptTool('clear_catchers')
 def main(days_ago : int = 30 , **kwargs): 

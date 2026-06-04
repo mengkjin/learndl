@@ -6,7 +6,7 @@ import shutil , threading , torch , json
 from typing import Any
 
 from src.proj import PATH , Logger , BaseType
-from src.proj.util.torch import torch_load
+from src.proj.util.io.torch_load import torch_load
 
 __all__ = ['DataCache']
 

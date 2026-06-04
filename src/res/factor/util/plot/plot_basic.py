@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from src.proj.util.plot import PlotMultipleData , PlotFactorData
+from src.proj.util.functional.plot import PlotMultipleData , PlotFactorData
 
 class PlotDfFigIterator:
     def __init__(self , default_prefix : str):

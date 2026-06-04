@@ -8,7 +8,6 @@ from typing import Any , Callable , Literal
 
 from src.proj.env import PATH
 from src.proj.log import Logger
-from src.proj.util.parallel import is_main_process
 
 
 __all__ = ['ScriptTool']
@@ -124,6 +123,7 @@ class ScriptTool:
 
         @wraps(func)
         def wrapper(*args , **kwargs):
+            from src.proj.util.functional.parallel import is_main_process
             if not is_main_process():
                 return inner(*args , **kwargs)
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs

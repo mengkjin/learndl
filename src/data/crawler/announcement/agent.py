@@ -11,9 +11,9 @@ from typing import Literal , Any , Iterable
 
 
 from src.proj import CALENDAR , Dates , MACHINE , BaseClass
-from src.proj.util.proxy import ProxyAPI , ProxyVerifier
-from src.proj.util.proxy.caller import ProxyCallerList
-from src.proj.util.proxy.ppool import AsyncAdaptiveProxyPool
+from src.proj.util.web.proxy import ProxyAPI , ProxyVerifier
+from src.proj.util.web.proxy.caller import ProxyCallerList
+from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool
 
 from . import const
 from .fetcher_task import FetcherTask

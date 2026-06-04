@@ -343,7 +343,7 @@ class FactorStats:
             return
         old_stat = self.get_stat(params)
         if not old_stat.empty:
-            from src.proj.util.catcher import WarningCatcher
+            from src.proj.util.io.catcher import WarningCatcher
             try:
                 with WarningCatcher(['behavior of DataFrame concatenation']):
                     stat = pd.concat([old_stat , stat])

@@ -10,8 +10,6 @@ from src.proj.core import strPath
 from src.proj.env import MACHINE , PATH
 from src.proj.log import Logger
 
-from ..shared_sync import SharedSync
-
 if PATH.share_folder is not None:
     root_path = PATH.share_folder.joinpath('task_schedule')
     root_path.mkdir(parents=True, exist_ok=True)
@@ -140,6 +138,7 @@ class TaskScheduler:
     @staticmethod
     def get_machine_tasks() -> dict[str , ScheduledTask]:
         """get all the tasks"""
+        from src.proj.util.filesys.shared_sync import SharedSync
         SharedSync.sync()
         return ScheduledTask.get_all_tasks().get(MACHINE.name , {})
 
@@ -161,6 +160,7 @@ class TaskScheduler:
     @classmethod
     def run_machine_tasks(cls , exclude_script : str | None = None):
         """run all the tasks of the machine"""
+        from src.proj.util.filesys.shared_sync import SharedSync
         SharedSync.sync()
         tasks = cls.get_machine_tasks()
         for task in tasks.values():

@@ -7,21 +7,7 @@ import streamlit as st
 from abc import abstractmethod , ABCMeta
 from typing import Literal , Any
 
-from src.interactive.main.util.components import common_operations as CO
-
-def _print_title(title : str) -> None:
-    """Print the title."""
-    body = f"""
-    <div style="
-        margin-bottom: 0px;
-        margin-top: -10px;
-        padding: 0 0 20px 0;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-    ">{title.title()}</div>
-    """       
-    st.markdown(body , unsafe_allow_html = True)
+from src.interactive.main.util.components.operations import ButtonOperation
 
 class QuickCallButtonMeta(ABCMeta):
     """Meta class for QuickCallButton."""
@@ -32,63 +18,59 @@ class QuickCallButtonMeta(ABCMeta):
             cls.registry[name] = new_cls
         return new_cls
 
-class QuickCallButton(CO.CommonOperation , metaclass = QuickCallButtonMeta):
+class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
 
     Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class
     variables and implement :meth:`button` to render the Streamlit widget.
     """
-    key : str = ''
-    icon : str = ''
-    help : str = ''
-    pause_when_done : bool = True
-    close_when_done : bool = False
+    default_help : str = ''
+    done_action : Literal['pause' , 'close' , 'keep'] = 'pause'
 
     def __init__(
         self , color : Literal[
-            'red' , 'green' , 'blue' , 'orange' , 'purple' , 'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any = 'green' , 
+            'red' , 'green' , 'blue' , 'orange' , 'purple' , 
+            'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any = 'green' , 
         **kwargs):
         super().__init__(**kwargs)
-        self.color = color
+        self.update(help = self.default_help , color = color)
 
     @property
     def title(self) -> str:
         return self.key.replace('-', ' ').title()
 
     @property
-    def status(self) -> CO.OperationStatus:
-        """Get the status of the button."""
-        return CO.OperationStatus(False , self.help)
+    def color(self) -> Literal[
+            'red' , 'green' , 'blue' , 'orange' , 'purple' , 'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any:
+        return self.get('color')
 
-    def run(self , status : CO.OperationStatus) -> None:
+    def run(self) -> None:
         raise NotImplementedError('run method is not implemented in QuickCallButton')
 
     @abstractmethod
     def script_string(self) -> str:
         """Run the script."""
 
-    def button_key(self , status : CO.OperationStatus , **kwargs) -> str:
+    @property
+    def button_key(self) -> str:
         """Get the key for the button."""
-        return f"quick-call-{self.color}-{self.key}-{"disabled" if status.disabled else "enabled"}"
+        return f"quick-call-{self.color}-{self.key}-{"disabled" if self.disabled else "enabled"}"
 
     def call_shell_run(self) -> None:
         """Call the shell run."""
-        from src.proj.util.shell_opener import Shell
+        from src.proj.util.shell import Shell
         script_strings = self.script_string().strip().split('\n')
         script_string = ';'.join([s.strip() for s in script_strings])
         Shell.open(
             ["uv" , "run" , "python" , "-c" , script_string], 
-            pause_when_done=self.pause_when_done, close_when_done=self.close_when_done, 
-            title = self.title , as_from_workspace='QuickCallButtons'
+            done_action=self.done_action,  title = self.title , as_from_workspace='QuickCallButtons'
         )
 
-    def show(self , **kwargs) -> None:
+    def show(self) -> None:
         """Render the button + label into the persistent panel placeholder slot."""
-        status = self.status
-        button_key = self.button_key(status , **kwargs)
         with st.container():
-            st.button(self.icon, key=f'{button_key}-button' , help = status.help , disabled = status.disabled , on_click = self.call_shell_run)
-            _print_title(self.title)
+            st.button(self.icon, key=f'{self.button_key}-button' , help = self.help , disabled = self.disabled , on_click = self.call_shell_run)
+            self.render_title(font_size = 11 , uppercase = False)
 
     @classmethod
     def get_buttons(cls) -> list[QuickCallButton]:
@@ -104,6 +86,5 @@ class QuickCallButton(CO.CommonOperation , metaclass = QuickCallButtonMeta):
             cls.registry['ArchiveModel'](color = 'pink'),
             cls.registry['ResumeModel'](color = 'green'),
             cls.registry['ClearCatcherLogs'](color = 'red'),
-
         ]
         return buttons

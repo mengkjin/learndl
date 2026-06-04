@@ -8,7 +8,7 @@ import torch
 from pathlib import Path
 from typing import Any
 from src.proj import BaseType
-from src.proj.util.torch import torch_load
+from src.proj.util.io.torch_load import torch_load
 
 __all__ = ['ModelDict' , 'ModelFile']
 

@@ -22,6 +22,6 @@ class Preference:
         return MACHINE.preference('logger')
 
     @property
-    def shell_opener(self) -> dict[str , Any]:
+    def shell(self) -> dict[str , Any]:
         """Get the shell opener preference"""
-        return MACHINE.preference('shell_opener')
+        return MACHINE.preference('shell')

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.proj import CALENDAR , Const , BaseClass
-from src.proj.util.torch import torch_load
+from src.proj.util.io.torch_load import torch_load
 from src.func import tensor as T
 from src.data import DATAVENDOR
 from src.data.util import DataBlock

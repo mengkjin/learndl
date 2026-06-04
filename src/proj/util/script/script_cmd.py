@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Literal
 
 from src.proj.core import strPath
-from src.proj.util.shell_opener import Shell , ProcessDiscovery
 
 __all__ = ['ScriptCmd']
 
@@ -28,13 +27,16 @@ class ScriptCmd:
         return f'TerminalCmd(script={self.script}, params={self.params}, mode={self.mode})'
 
     def __str__(self):
+        from src.proj.util.shell import Shell
         return Shell.py_cmd(self.script, py_path=self.py_path, kwargs=self.params)
     
     def get_real_pid(self):
+        from src.proj.util.shell import ProcessDiscovery
         pids = ProcessDiscovery.wait_for_running_instances(script=self.script, task_id=self.params.get('task_id',None))
         return pids[-1] if pids else None
 
     def run(self , as_workspace: str | None = None , from_workspace: str | None = None):
+        from src.proj.util.shell import Shell
         if self.mode == 'shell':
             Shell.open_py(self.script, py_path=self.py_path, kwargs=self.params , 
                           as_workspace=as_workspace, from_workspace=from_workspace)

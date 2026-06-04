@@ -8,11 +8,21 @@ from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
 from src.proj import MACHINE , DB , Proj , CALENDAR , BaseClass , BaseType
-from src.proj.util.torch import RequireGrad
-from src.proj.util.async_save import AsyncSaver
+from src.proj.util.io.async_save import AsyncSaver
 from src.data.util import DataBlock
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
+
+class _Grads:
+    def __init__(self , require_grad : bool = True):
+        self.require_grad = require_grad
+
+    def __enter__(self):
+        self.prev = torch.is_grad_enabled()
+        torch.set_grad_enabled(self.require_grad)
+
+    def __exit__(self , exc_type , exc_value , traceback):
+        torch.set_grad_enabled(self.prev)
 
 class ArchivedPredictorModel(BaseClass.BoundLogger):
     '''for a model to predict recent/history data'''
@@ -190,7 +200,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             self.data.setup('retrospective' , model_param , date , retro_start_date = retro_start_date , retro_end_date = retro_end_date)
             model = self.model.load_model(model_num , model_date , self.path.use_submodel , model_param = model_param , cache_model = True)
             self.dataloader = self.data.retrospective_dataloader()
-        with RequireGrad(require_grad):
+        with _Grads(require_grad):
             batch_input = self.dataloader.of_date(date)
             return model.get_batch_data(batch_input)
 
@@ -232,7 +242,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             self.data.setup('retrospective' , model_param , start_date , retro_start_date = start_date , retro_end_date = end_date)
             model = self.model.load_model(model_num , model_date , submodel , model_param = model_param , cache_model = True)
             self.dataloader = self.data.retrospective_dataloader()
-        with RequireGrad(require_grad):
+        with _Grads(require_grad):
             for batch_input in self.dataloader:
                 batch_data = model.get_batch_data(batch_input)
                 if len(self.data.early_test_dates) == 0 and batch_input.date0 not in dates:

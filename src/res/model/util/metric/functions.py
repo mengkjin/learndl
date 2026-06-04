@@ -5,12 +5,22 @@ from torch import nn , Tensor
 from typing import Any , Literal
 
 from src.proj import Logger
-from src.proj.util.torch import RequireGrad
 from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 from src.res.model.util.core import BatchData
 from .components import MetricComponent , LossComponent , AccuracyComponent
 
 __all__ = ['MetricFunction' , 'LossFunction' , 'AccuracyFunction']
+
+class _Grads:
+    def __init__(self , require_grad : bool = True):
+        self.require_grad = require_grad
+
+    def __enter__(self):
+        self.prev = torch.is_grad_enabled()
+        torch.set_grad_enabled(self.require_grad)
+
+    def __exit__(self , exc_type , exc_value , traceback):
+        torch.set_grad_enabled(self.prev)
 
 class MetricFunction:
     SearchList : list[str] = []
@@ -35,7 +45,7 @@ class MetricFunction:
         which_label : int | list[int] | None = None , 
         require_grad : bool = True
     ) -> dict[str,Tensor]:
-        with RequireGrad(require_grad):
+        with _Grads(require_grad):
             inputs = data.loss_inputs(exclude_nan = self.ExcludeNan)
             results : dict[str,Tensor] = {}
             for criterion , component in self.components.items():
@@ -142,7 +152,7 @@ class RankICFunction:
         which_label : int | list[int] | None = None , 
         **kwargs
     ) -> Tensor:
-        with RequireGrad(False):
+        with _Grads(False):
             inputs = data.loss_inputs(exclude_nan = self.ExcludeNan)
             value = self.rankic_calculator(which_output = which_output , which_label = which_label , **inputs)
             assert isinstance(value , Tensor) , f'rankic value should be a Tensor, but got {value}'
@@ -156,7 +166,7 @@ class RankICFunction:
         assert not require_grad , 'hidden accuracies do not support require_grad'
         hidden = data.output.hidden
         label = data.input.y[...,which_label:which_label+1]
-        with RequireGrad(require_grad):
+        with _Grads(require_grad):
             accu = self.rankic_calculator(pred = hidden , label = label , dim = 0)
             assert isinstance(accu , Tensor) , f'hidden rankic value should be a Tensor, but got {accu}'
             return accu

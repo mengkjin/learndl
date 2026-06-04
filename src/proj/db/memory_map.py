@@ -77,21 +77,19 @@ class ArrayMemoryMap:
         Args:
             writable: If True, open the file in read/write mode.
         """
-        import torch
         mode = 'r+' if writable else 'r'
         file_size = os.path.getsize(self.data_path)
         self._full_mmap = np.memmap(self.data_path, dtype='uint8', mode=mode, shape=(file_size,))
         metas = ArrayMeta.from_json(self.meta_path)
         result = np.ndarray(metas.shape, dtype=metas.dtype, buffer=self._full_mmap[:], order='C')
         if metas.array_type == 'Tensor':
+            import torch
             result = torch.from_numpy(result)
-
         return result
 
     @classmethod
     def load(cls, path: strPath):
         """Load array into a new in-memory buffer (full read, not mmap)."""
-        import torch
         mmap = cls(path)
         metas = ArrayMeta.from_json(mmap.meta_path)
         
@@ -100,6 +98,7 @@ class ArrayMemoryMap:
             f.seek(0)
             result = np.fromfile(f, dtype=dtype , count=np.prod(metas.shape)).reshape(metas.shape)
         if metas.array_type == 'Tensor':
+            import torch
             result = torch.from_numpy(result)
         return result
 
