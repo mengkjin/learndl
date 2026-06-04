@@ -1,6 +1,6 @@
--- mkdir -p ~/.config/wezterm
--- touch ~/.config/wezterm/wezterm.lua
--- gedit ~/.config/wezterm/wezterm.lua
+-- config path:
+-- ~/.config/wezterm/wezterm.lua in linux / macos
+-- %USERPROFILE%\.config\wezterm\wezterm.lua in windows
 
 --- __      __      _
 --- \ \    / /__ __| |_ ___ _ _ _ __
@@ -24,7 +24,7 @@ config.color_scheme = "Banana Blueberry"
 
 -- Font settings
 -- config.font = wezterm.font("0xProto Nerd Font")
-config.font_size = 11
+config.font_size = $FONT_SIZE$
 
 -- Window setting/ appearance
 config.window_decorations = "TITLE|RESIZE"

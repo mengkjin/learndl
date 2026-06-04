@@ -178,11 +178,27 @@ def replace_wezterm_config():
 
     content = wezterm_config.read_text()
 
-    # conditionally replace the content
     if MACHINE.is_macos:
-        content = content.replace('config.font_size = 11', 'config.font_size = 12')
+        replacements = {
+            'FONT_SIZE' : 12 ,
+        }
     elif MACHINE.is_linux:
-        content = content.replace('config.font_size = 11', 'config.font_size = 10')
+        replacements = {
+            'FONT_SIZE' : 9,
+        }
+    else:
+        replacements = {
+            'FONT_SIZE' : 9
+        }
+    
+    for key, value in replacements.items():
+        content = content.replace(f'${key}$', str(value))
 
+    if '$' in content:
+        Logger.error(f"Placeholder not replaced in content:")
+        for i , line in enumerate(content.split('\n')):
+            if '$' in line:
+                Logger.error(f"line{i+1: 3d} >> {line}")
+        return
     target_config.write_text(content)
     Logger.success(f"Wezterm config file replaced with the latest one.")
