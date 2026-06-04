@@ -175,5 +175,14 @@ def replace_wezterm_config():
         target_config.parent.mkdir(parents=True, exist_ok=True)
         target_config.touch()
         Logger.success(f"Target config file created: {target_config}")
-    target_config.write_text(wezterm_config.read_text())
+
+    content = wezterm_config.read_text()
+
+    # conditionally replace the content
+    if MACHINE.is_macos:
+        content = content.replace('config.font_size = 11', 'config.font_size = 12')
+    elif MACHINE.is_linux:
+        content = content.replace('config.font_size = 11', 'config.font_size = 10')
+
+    target_config.write_text(content)
     Logger.success(f"Wezterm config file replaced with the latest one.")

@@ -64,9 +64,10 @@ class OptionsCache:
 
     def get(self , key : str) -> list[str]:
         """Get the options from the cache"""
+        self.ensure_load_cache()
         if key not in self.cache:
             self.cache[key] = getattr(OptionsDefinition , key)()
-            PATH.dump_json(self.cache, self.cache_path)
+            PATH.dump_json(self.cache, self.cache_path , overwrite = True)
         return self.cache[key]
 
     @classmethod

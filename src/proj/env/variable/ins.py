@@ -7,8 +7,9 @@ from src.proj.core import SingletonMeta
 class _Trainer:
     """Descriptor returning ``BaseTrainer._instance``."""
     def __get__(self , instance, owner):
-        from src.res.model.util import BaseTrainer
-        return BaseTrainer._trainer
+        from src.res.model.model_module.application.trainer import ModelTrainer
+        from src.res.model.util.trainer import BaseTrainer
+        return ModelTrainer._trainer or BaseTrainer._trainer
 
 class _Account:
     """Descriptor returning ``PortfolioAccount._account``."""
