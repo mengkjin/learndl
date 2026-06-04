@@ -99,6 +99,9 @@ class BatchInput:
     
     @property
     def date0(self) -> int:
+        print(f'y_date: {self.y_date}')
+        print(f'i: {self.i}')
+        print(f'date: {self.date}')
         date = self.date
         assert (date == date[0]).all() , date
         return self.date.astype(int)[0]
