@@ -190,6 +190,9 @@ class DataOperator:
             print(f'index1: {index1}')
             print(f'sum_dim: {sum_dim}')
             print(f'data shape: {data.shape}')
+            print(f'data at 4: {data[0,4]}')
+            print(f'data at 6: {data[0,6]}')
+            print(f'data at 8: {data[0,8]}')
             print(f'agg: {agg[0,:51]}')
             unfolded = agg.unfold(1,seqlen*step,1)[...,step-1::step]
             print(f'unfolded shape: {unfolded.shape}')
