@@ -1,5 +1,6 @@
 """Tushare fetchers for convertible bond data: issuance info and daily quotes."""
 # do not use relative import in this file because it will be running in top-level directory
+from __future__ import annotations
 from src.proj import MACHINE
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher
 

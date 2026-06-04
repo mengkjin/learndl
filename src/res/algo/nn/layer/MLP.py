@@ -1,4 +1,5 @@
 """Simple multi-layer perceptron."""
+from __future__ import annotations
 from torch import nn
 from .Act import get_activation_fn
 

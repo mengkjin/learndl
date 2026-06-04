@@ -1,4 +1,5 @@
 """Shared utilities for loss and accuracy modules."""
+from __future__ import annotations
 import torch
 
 def mask_topx(tensor : torch.Tensor , x_percent : float , dim : int = 0 , ascending : bool = True , fill_nan : bool = False):

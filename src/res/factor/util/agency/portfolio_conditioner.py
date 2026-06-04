@@ -6,6 +6,7 @@ for example,
 2. the rebounce is sufficient, we add back the position to 1
 '''
 
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 from abc import ABC , abstractmethod

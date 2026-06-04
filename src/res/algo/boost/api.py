@@ -7,6 +7,7 @@ Re-exports:
     :class:`BoostInput`        — aligned 3-D data container.
     :class:`BoostOutput`       — flat prediction container with index.
 """
+from __future__ import annotations
 from .util import BoostInput , BoostOutput
 from .booster import GeneralBoostModel , OptunaBoostModel , AVAILABLE_BOOSTS
 

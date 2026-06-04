@@ -15,6 +15,7 @@ Both classes inherit the thread-safe ``add`` / ``get`` / ``gets`` /
 ``truncate`` interface from the abstract base ``_df_collection``.
 Each instance uses its own ``threading.Lock`` (no cross-instance ordering).
 """
+from __future__ import annotations
 import threading
 import warnings
 import numpy as np

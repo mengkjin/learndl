@@ -9,6 +9,7 @@ All underlying singletons (``TRADE``, ``RISK``, ``BS``/``IS``/``CF``/``INDI``/``
 ``ANALYST``, ``MKLINE``, ``EXPO``, ``INFO``) are exposed as class attributes so
 callers can access specialised methods directly if needed.
 """
+from __future__ import annotations
 import threading
 import torch
 import numpy as np

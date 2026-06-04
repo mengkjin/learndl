@@ -1,5 +1,6 @@
 """Tushare fetchers for mutual fund data: fund list, daily NAV, holdings."""
 # do not use relative import in this file because it will be running in top-level directory
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 

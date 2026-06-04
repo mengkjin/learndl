@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.proj import Logger
 from src.res.gp.util import GeneticProgramming
 

@@ -1,5 +1,5 @@
 """SQLite-backed history of task runs (status, timing, logs) under ``PATH.app_db``."""
-
+from __future__ import annotations
 from datetime import datetime
 
 from src.proj.core import strPath

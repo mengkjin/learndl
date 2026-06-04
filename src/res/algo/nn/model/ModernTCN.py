@@ -3,6 +3,7 @@
 Reference: Luo & Wang (2024) "ModernTCN: A Modern Pure Convolution Structure
 for General Time Series Analysis."
 """
+from __future__ import annotations
 import torch
 
 from torch import nn , Tensor

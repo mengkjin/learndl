@@ -6,6 +6,7 @@ inconsistency is documented in ``TODO_res_algo.md``.
 
 The loss logic here largely duplicates ``ABCMLoss`` in ``loss/loss.py``.
 """
+from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

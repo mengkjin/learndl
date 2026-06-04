@@ -5,6 +5,7 @@ Provides 1-minute and 5-minute OHLCV bar data from the ``trade_ts`` database.
 Uses a ``PLDFCollection`` (Polars) cache for memory efficiency.
 Exported as the ``MKLINE`` singleton.
 """
+from __future__ import annotations
 import polars as pl
 
 from typing import Literal

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import torch
 from torch import set_grad_enabled
 from typing import Any

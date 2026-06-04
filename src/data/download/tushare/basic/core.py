@@ -5,6 +5,7 @@ The module-level ``TS`` singleton is the sole interface to the Tushare API.
 All Tushare fetchers should call ``TS.api`` for the Tushare Pro API handle and
 use ``TS.lock`` (via ``TS.locked()``) to serialise API calls.
 """
+from __future__ import annotations
 import threading
 import functools
 

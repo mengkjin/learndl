@@ -5,6 +5,7 @@ Note: ``SellsideFTPDownloader.update()`` is currently a no-op (dead code after
 an early ``return`` statement).  The FTP infrastructure is in place but the
 actual update logic is not yet implemented.  See TODO_data.md item C1.
 """
+from __future__ import annotations
 import os , tempfile
 import pandas as pd
 

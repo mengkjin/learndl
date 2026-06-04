@@ -3,6 +3,7 @@
 Reference: Ye et al. (2021) "Temporal Routing Adaptor for Dynamic Scene
 Understanding."
 """
+from __future__ import annotations
 import torch
 from torch import nn , Tensor
 

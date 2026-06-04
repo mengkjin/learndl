@@ -1,5 +1,5 @@
 """Matplotlib/seaborn helpers: grouped figures, factor panels, and plottable tables."""
-
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 import seaborn as sns

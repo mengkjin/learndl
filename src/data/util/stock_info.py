@@ -8,6 +8,7 @@ The ``INFO`` singleton is instantiated at import time and loaded from the
 - ST / suspended status (``change_name`` table)
 - Tushare level-2 industry classification (``industry`` table)
 """
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 from typing import Any

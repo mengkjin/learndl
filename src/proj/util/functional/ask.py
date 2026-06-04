@@ -1,5 +1,5 @@
 """Process discovery, power profile (non-Windows), and CLI arg parsing helpers."""
-
+from __future__ import annotations
 from typing import Any , Literal
 
 from src.proj.log import Logger

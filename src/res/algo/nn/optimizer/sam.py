@@ -9,7 +9,7 @@ Helper utilities:
     disable_running_stats / enable_running_stats — freeze BatchNorm momentum
     during the second forward pass to avoid polluting running statistics.
 """
-
+from __future__ import annotations
 import contextlib
 from collections import defaultdict
 

@@ -4,6 +4,7 @@ Reference: Liu et al. (2021) "FactorVAE: A Probabilistic Dynamic Factor
 Model Based on Variational Autoencoder for Predicting Cross-Sectional Stock
 Returns."
 """
+from __future__ import annotations
 import torch
 from torch import nn,Tensor
 from torch.distributions import Normal , kl_divergence

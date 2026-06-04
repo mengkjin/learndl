@@ -15,6 +15,7 @@ Features
 ``ret_volatility``    : cross-bar 5-min return standard deviation
 ``ret_skewness``      : cross-bar 5-min return skewness
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 

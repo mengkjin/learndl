@@ -5,6 +5,7 @@ Classes:
                         ``AVAILABLE_BOOSTS`` back-ends and manages parameter
                         splitting between train/weight/verbosity namespaces.
 """
+from __future__ import annotations
 import torch
 
 from functools import cached_property

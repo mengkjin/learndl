@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import statsmodels.api as sm
 import polars as pl

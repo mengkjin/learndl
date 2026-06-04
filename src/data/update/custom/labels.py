@@ -7,6 +7,7 @@ avoid execution-day look-ahead bias.
 
 Stored in the ``labels_ts`` database under keys like ``ret5``, ``ret10_lag``, etc.
 """
+from __future__ import annotations
 import pandas as pd
 
 import numpy as np

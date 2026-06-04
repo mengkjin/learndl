@@ -5,6 +5,7 @@ Classes:
                  resolve its type (``'nn'`` or ``'boost'``), and export the full
                  module list to a text file.
 """
+from __future__ import annotations
 import torch
 
 from typing import Any , Literal

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.res.model.util import ModelConfig , is_null_module_type
 
 from .nn import NNPredictor

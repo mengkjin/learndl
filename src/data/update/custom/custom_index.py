@@ -9,6 +9,7 @@ Currently registered indices
 ----------------------------
 - ``MicroCap_400``: equal-weight portfolio of the 400 smallest non-ST A-share stocks.
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 

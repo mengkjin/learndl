@@ -5,7 +5,7 @@ This module is the main content of every auto-generated script wrapper page.
 header, historical-task selector, parameter-settings form, and the running /
 completed task report in sequence.
 """
-
+from __future__ import annotations
 from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_task_history , show_param_settings , show_report_main
 

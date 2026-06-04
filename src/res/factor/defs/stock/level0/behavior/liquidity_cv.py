@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import LiquidityFactor

@@ -20,6 +20,7 @@ Concrete fetcher base classes
 ``FinaFetcher``        — financial statement tables
 ``RollingFetcher``     — range-fetch with per-date splitting
 """
+from __future__ import annotations
 import time
 import numpy as np
 import pandas as pd

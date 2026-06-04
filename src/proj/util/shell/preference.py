@@ -1,5 +1,5 @@
 """User-configurable defaults for shell, loaded from ``CONST.Pref`` under the ``shell`` section."""
-
+from __future__ import annotations
 from typing import Literal
 from src.proj.env import Const
 

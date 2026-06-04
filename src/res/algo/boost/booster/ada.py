@@ -8,6 +8,7 @@ Classes:
     WeakLearner — Single decision stump selected by minimum Gini impurity over
                   rank-binned features.
 """
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd

@@ -1,5 +1,5 @@
 """Thread-safe singleton decorator and metaclasses."""
-
+from __future__ import annotations
 from abc import ABCMeta
 
 class NoInstanceMeta(type):

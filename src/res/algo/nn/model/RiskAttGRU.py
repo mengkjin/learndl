@@ -3,6 +3,7 @@
 The model uses style and industry risk factors as attention keys and queries
 to produce a context vector that attends over the GRU hidden state.
 """
+from __future__ import annotations
 import torch
 import torch.nn as nn
 

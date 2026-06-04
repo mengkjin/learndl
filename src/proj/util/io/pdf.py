@@ -1,5 +1,5 @@
 """Export DataFrames to Excel and matplotlib figures to a single PDF."""
-
+from __future__ import annotations
 import os
 
 from typing import Any

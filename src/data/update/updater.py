@@ -12,13 +12,13 @@ CustomDataUpdater
     Iterates over all registered ``BasicCustomUpdater`` subclasses (labels,
     daily risk features, multi-kline, custom indices, etc.).
 """
-from .custom import BasicCustomUpdater
-from .hfm import JSDataUpdater
+from __future__ import annotations
 
 from src.data.download import (
     TushareDataDownloader , OtherSourceDownloader , SellsideSQLDownloader , SellsideFTPDownloader
 )
-
+from .custom import BasicCustomUpdater
+from .hfm import JSDataUpdater
 __all__ = ['CoreDataUpdater' , 'SellsideDataUpdater' , 'JSDataUpdater' , 'CustomDataUpdater']
 
 class CoreDataUpdater:

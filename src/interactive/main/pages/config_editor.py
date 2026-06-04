@@ -1,4 +1,5 @@
 """Config editor page: YAML file editor for model and algo config files."""
+from __future__ import annotations
 from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_config_editor
     

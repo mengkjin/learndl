@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.proj import Logger , CALENDAR
 from src.data import CoreDataUpdater , SellsideDataUpdater , CustomDataUpdater , PreProcessorTask
 from src.data.crawler import AnnouncementAgent

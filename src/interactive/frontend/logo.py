@@ -5,6 +5,7 @@ Generates a rocket icon (:func:`draw_rocket`), a rainbow-gradient banner
 (:func:`create_banner`), and a combined logo (:func:`create_logo`) using Pillow.
 Fonts are downloaded on demand from dafont.com if not already cached locally.
 """
+from __future__ import annotations
 import requests
 import zipfile
 import shutil

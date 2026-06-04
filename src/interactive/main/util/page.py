@@ -2,6 +2,7 @@
 
 Maintains the static lists of intro pages and dynamically discovered script
 """
+from __future__ import annotations
 import re
 import streamlit as st
 from pathlib import Path

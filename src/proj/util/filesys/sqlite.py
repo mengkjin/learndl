@@ -1,5 +1,5 @@
 """SQLite connection context manager, backups, and datetime adapter for Python 3.12+."""
-
+from __future__ import annotations
 import sqlite3 , shutil
 from datetime import datetime
 from pathlib import Path

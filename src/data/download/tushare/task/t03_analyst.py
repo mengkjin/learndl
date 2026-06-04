@@ -1,5 +1,6 @@
 """Tushare fetchers for sell-side analyst reports."""
 # do not use relative import in this file because it will be running in top-level directory
+from __future__ import annotations
 from src.data.download.tushare.basic import RollingFetcher , TS
 
 class AnalystReport(RollingFetcher):

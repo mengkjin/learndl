@@ -9,6 +9,7 @@ Key helpers:
 * :func:`directly_open_file` — opens a file in the host OS file viewer
   (typo preserved from original).
 """
+from __future__ import annotations
 import streamlit as st
 import os , subprocess
 

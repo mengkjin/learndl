@@ -5,7 +5,7 @@ Used internally by DataBlock.from_pandas and DataBlock.from_polars as an interme
 representation when converting a long-format DataFrame into a structured multi-dimensional
 array before constructing the final 4-D tensor.
 """
-
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd

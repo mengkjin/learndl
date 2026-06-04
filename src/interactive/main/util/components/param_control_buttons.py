@@ -2,6 +2,7 @@
 param control buttons
 a horizontal row of buttons for resetting and last parameters
 """
+from __future__ import annotations
 from src.interactive.backend import ScriptRunner
 
 from src.interactive.frontend import SacBoundButton , SacOnClickButtons

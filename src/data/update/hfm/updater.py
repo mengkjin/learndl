@@ -9,6 +9,7 @@ Bridges data from a Windows-based JinMeng R terminal to the Linux server:
 
 The pipeline runs incrementally; each archive is deleted after successful extraction.
 """
+from __future__ import annotations
 import tarfile
 import numpy as np
 import pandas as pd

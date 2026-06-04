@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.data import BlockLoader
 from src.res.model.util import BaseCallBack
 

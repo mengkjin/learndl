@@ -1,3 +1,4 @@
+from __future__ import annotations
 import platform , os
 import torch
 from src.proj import PATH

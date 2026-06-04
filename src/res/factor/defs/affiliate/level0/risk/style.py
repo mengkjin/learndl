@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.res.factor.calculator.factor_calc import StyleFactor
 
 class risk_lncap(StyleFactor):

@@ -15,6 +15,7 @@ Singletons exported
 ``FinData`` provides an expression-based DSL for composing multi-statement
 financial ratios (e.g. ``'is@revenue@ttm / bs@total_assets@acc'``).
 """
+from __future__ import annotations
 import re
 import numpy as np
 import pandas as pd

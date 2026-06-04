@@ -8,6 +8,7 @@ time series stored as a long-form CSV in ``market_daily/risk``.
 Unlike ``DailyRiskUpdater``, results are appended to a single CSV file rather
 than stored per date, using ``append_result`` to merge and deduplicate.
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 

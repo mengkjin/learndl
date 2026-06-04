@@ -6,6 +6,7 @@ Usage (from project root)::
     python -m src.data.preprocess.task               # fit mode
     python -m src.data.preprocess.task --predict 1   # predict mode
 """
+from __future__ import annotations
 import argparse
 
 from typing import Any

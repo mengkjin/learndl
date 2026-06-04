@@ -1,5 +1,5 @@
 """Decorator to expose callables as named Streamlit tasks with locking and default kwargs."""
-
+from __future__ import annotations
 import inspect , os
 from pathlib import Path
 

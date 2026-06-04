@@ -8,6 +8,7 @@ Strategies available (``name`` argument to MultiHeadLosses):
     'rws'    — Random Weight Loss (Lin et al. 2021)
     'hybrid' — Hybrid of DWA epoch weights + RUW uncertainty weights
 """
+from __future__ import annotations
 import torch
 from torch import nn , Tensor
 from typing import Any

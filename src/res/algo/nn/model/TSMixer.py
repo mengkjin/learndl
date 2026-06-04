@@ -3,6 +3,7 @@
 Reference: Chen et al. (2023) "TSMixer: An All-MLP Architecture for Time
 Series Forecasting."
 """
+from __future__ import annotations
 import torch
 
 from torch import nn , Tensor

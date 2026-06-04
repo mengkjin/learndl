@@ -5,6 +5,7 @@ Classes:
               Serialisation round-trips through a temporary JSON file because
               ``xgboost.Booster`` has no native ``to_string`` API.
 """
+from __future__ import annotations
 import json , tempfile , xgboost
 
 from pathlib import Path

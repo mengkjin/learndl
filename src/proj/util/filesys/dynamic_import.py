@@ -1,5 +1,5 @@
 """Load Python modules from disk paths and enumerate their public callables/classes."""
-
+from __future__ import annotations
 import inspect
 import importlib.util
 

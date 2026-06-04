@@ -1,5 +1,5 @@
 """Home page: tutorial, system info, and pending-features banner."""
-
+from __future__ import annotations
 import streamlit as st
 from src.interactive.frontend import subheader_expander
 from .basic import QuickCallButton

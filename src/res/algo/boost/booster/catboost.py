@@ -5,6 +5,7 @@ Classes:
                ``eval_metric: None`` is explicitly popped before ``fit()`` is
                called because CatBoost rejects a ``None`` value for that key.
 """
+from __future__ import annotations
 import json , tempfile , catboost
 
 from pathlib import Path

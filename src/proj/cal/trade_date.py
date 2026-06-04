@@ -1,6 +1,7 @@
 """
 Self defined TradeDate class, used to represent a date and its closest trading date.
 """
+from __future__ import annotations
 import numpy as np
 from typing import Any
 from .basic import BC

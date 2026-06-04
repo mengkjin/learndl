@@ -1,5 +1,6 @@
 """HTTP clients: sync/async ``curl_cffi`` session helpers and timeout retry wrappers."""
 
+from __future__ import annotations
 import httpx
 import ssl
 import sys

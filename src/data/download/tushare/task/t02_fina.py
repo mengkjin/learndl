@@ -1,5 +1,6 @@
 """Tushare fetchers for financial statements: income, balance sheet, cash flow, indicators."""
 # do not use relative import in this file because it will be running in top-level directory
+from __future__ import annotations
 from src.data.download.tushare.basic import FinaFetcher , TS
 
 class FinaIndicator(FinaFetcher):

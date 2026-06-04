@@ -3,6 +3,7 @@
 Reference: Lim et al. (2021) "Temporal Fusion Transformers for Interpretable
 Multi-horizon Time Series Forecasting."
 """
+from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

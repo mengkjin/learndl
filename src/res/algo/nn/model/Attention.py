@@ -1,6 +1,7 @@
 """Attention-based building blocks: transformer encoder, time-wise attention,
 module-wise attention, and positional encoding modules.
 """
+from __future__ import annotations
 import torch
 from torch import nn , Tensor
 

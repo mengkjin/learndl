@@ -14,6 +14,7 @@ Concrete singletons in this package
 - ``MKLINE`` (MinKLineAccess)
 - ``EXPO``  (ExposureAccess)
 """
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 

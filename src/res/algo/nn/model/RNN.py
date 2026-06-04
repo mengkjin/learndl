@@ -5,6 +5,7 @@ Univariate models (single input stream): simple_lstm, gru, lstm, transformer,
 Multivariate models (multiple input streams): rnn_general
 Named entry points all inherit from rnn_univariate or rnn_multivariate.
 """
+from __future__ import annotations
 import torch
 
 from torch import nn , Tensor

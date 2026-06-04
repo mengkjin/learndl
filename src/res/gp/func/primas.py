@@ -1,3 +1,4 @@
+from __future__ import annotations
 import torch
 from functools import wraps
 from typing import Literal , Callable

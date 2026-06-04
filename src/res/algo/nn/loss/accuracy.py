@@ -5,6 +5,7 @@ corresponding loss functions where applicable).
 
 Registry keys: 'mse', 'pearson', 'ccc', 'spearman'
 """
+from __future__ import annotations
 import torch
 import torch.nn as nn
 from typing import Literal , Any

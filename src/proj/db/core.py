@@ -1,4 +1,5 @@
 """ABC for database path"""
+from __future__ import annotations
 from typing import Literal
 
 __all__ = [

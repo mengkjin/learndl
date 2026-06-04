@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
   ModelTrainer , ModelTestor , ArchivedPredictorModel , ModelPortfolioBuilder)

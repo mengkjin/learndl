@@ -11,6 +11,7 @@ with a thread-pool for parallel downloads.
 Note: Windows R paths are hard-coded as ``D:/Coding/ChinaShareModel/...``.
 See TODO_data.md item A3 for the proposed externalisation.
 """
+from __future__ import annotations
 import pyreadr , re
 import pandas as pd
 import numpy as np
@@ -484,7 +485,6 @@ class JSDownloader(BaseClass.BoundLogger):
     @classmethod
     def kline_download(cls):
         import boto3 , re , datetime , os    # type: ignore
-        from pathlib import Path
 
         key_id = MACHINE.secret.get('accounts' , 'aws/access_key_id')
         access_key = MACHINE.secret.get('accounts' , 'aws/secret_access_key')

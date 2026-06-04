@@ -1,5 +1,6 @@
 """Facade: cached working proxies and shared ``AdaptiveProxyPool`` instances per target URL set."""
 
+from __future__ import annotations
 from typing import Iterable
 from src.proj import BaseClass
 from .finder import FreeProxyFinder as ProxyFinder

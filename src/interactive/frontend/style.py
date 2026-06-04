@@ -4,6 +4,7 @@ Custom CSS injection for the interactive Streamlit application.
 Loads CSS template strings from the project's template directory and applies
 them to the page via :func:`style`.
 """
+from __future__ import annotations
 import streamlit as st
 from collections import defaultdict
 from typing import Any

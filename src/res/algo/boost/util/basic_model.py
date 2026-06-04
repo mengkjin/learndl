@@ -7,6 +7,7 @@ Classes:
 Functions:
     load_xingye_data — Load the Xingye (兴业) factor dataset for offline testing.
 """
+from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd

@@ -1,5 +1,5 @@
 """Copy missing files between network ``PATH.share_folder`` and local ``PATH.local_share_folder``."""
-
+from __future__ import annotations
 import shutil
 from pathlib import Path
 

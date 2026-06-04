@@ -1,3 +1,4 @@
+from __future__ import annotations
 def setup_mosek_lic():
     import shutil
     from src.proj import MACHINE , PATH , Logger

@@ -1,5 +1,5 @@
 """Home page: tutorial, system info, and pending-features banner."""
-
+from __future__ import annotations
 from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_pending_features # show_tutorial  , show_system_info
 from src.interactive.main.util.quick_calls.main import show_quick_calls

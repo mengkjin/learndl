@@ -6,6 +6,7 @@ Classes:
                        the full ``fit()`` call in an Optuna study; the best
                        trial params are applied before the final fit.
 """
+from __future__ import annotations
 import optuna , random , string
 
 from datetime import datetime

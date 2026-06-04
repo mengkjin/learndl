@@ -8,6 +8,7 @@ the 5-minute source.
 Note: ``START_DATE = 20401231`` is a far-future sentinel that effectively
 disables this source on most machines.  Override to activate.
 """
+from __future__ import annotations
 import baostock as bs
 import numpy as np
 import pandas as pd

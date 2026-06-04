@@ -1,3 +1,4 @@
+from __future__ import annotations
 from src.res.factor.calculator.factor_calc import SellsideFactor
 
 class df_scores_v0(SellsideFactor):

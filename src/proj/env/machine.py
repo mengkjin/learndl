@@ -1,4 +1,5 @@
 """Machine identity, OS, secrets, and config loading for the current host."""
+from __future__ import annotations
 import sys , os , pytz , yaml , json
 
 from dataclasses import dataclass

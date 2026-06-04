@@ -3,6 +3,7 @@
 Includes optional Realformer residual attention (He et al. 2020) and
 Locality Self-Attention (LSA) learnable scaling (Lee et al. 2021).
 """
+from __future__ import annotations
 import torch
 
 from torch import nn , Tensor

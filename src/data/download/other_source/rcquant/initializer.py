@@ -2,6 +2,7 @@
 RiceQuant (rqdatac) initializer.
 Call RcQuantInitializer.init to initialize the RiceQuant API.
 """
+from __future__ import annotations
 import rqdatac , re
 
 from rqdatac.share.errors import QuotaExceeded

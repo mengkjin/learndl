@@ -5,6 +5,7 @@ Provides access to analyst earnings estimates (EPS, NP, ROE, etc.),
 consensus target prices, and report-level data from the ``analyst_ts`` database.
 Exported as the ``ANALYST`` singleton.
 """
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 

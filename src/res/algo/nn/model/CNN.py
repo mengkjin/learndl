@@ -1,6 +1,7 @@
 """Convolutional building blocks: Temporal Convolutional Network (TCN) and
 1-D / 2-D ResNet blocks for intra-day feature extraction.
 """
+from __future__ import annotations
 import torch
 
 from torch import nn , Tensor

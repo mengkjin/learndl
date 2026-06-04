@@ -1,4 +1,5 @@
 """Run-once guards for callables keyed by object identity and a user mark."""
+from __future__ import annotations
 import os
 import functools
 from typing import Any, Callable , Iterable , Literal

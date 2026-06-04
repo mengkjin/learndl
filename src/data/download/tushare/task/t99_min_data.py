@@ -1,5 +1,6 @@
 """Tushare fetchers for minute-bar data: 1-minute and 5-minute intraday bars."""
 # do not use relative import in this file because it will be running in top-level directory
+from __future__ import annotations
 import tushare as ts
 
 from src.data.download.tushare.basic import TS

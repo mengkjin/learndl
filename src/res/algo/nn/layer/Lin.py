@@ -1,4 +1,5 @@
 """Closed-form (non-learnable) linear regression residualization layer."""
+from __future__ import annotations
 from torch import linalg , nn , Tensor
 
 class HardLinearRegression(nn.Module):

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import gc
 import pandas as pd
 import torch

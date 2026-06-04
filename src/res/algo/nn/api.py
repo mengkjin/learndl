@@ -11,6 +11,7 @@ Special class attributes read by the training loop:
                         a 3-tuple input (trade, style, indus) instead of a
                         plain daily feature tensor.
 """
+from __future__ import annotations
 from torch import nn
 
 from . import layer as Layer

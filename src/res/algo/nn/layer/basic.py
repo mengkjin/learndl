@@ -6,6 +6,7 @@ Classes:
     MeanPool   — temporal mean pooling along a specified dimension
     Parallel   — runs N independent copies of a sub-module in parallel
 """
+from __future__ import annotations
 import torch
 
 from torch import nn , Tensor

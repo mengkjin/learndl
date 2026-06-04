@@ -3,6 +3,7 @@
 Reference: Kim et al. (2022) "Reversible Instance Normalization for Accurate
 Time-Series Forecasting against Distribution Shift."
 """
+from __future__ import annotations
 import torch
 from torch import nn , Tensor
 

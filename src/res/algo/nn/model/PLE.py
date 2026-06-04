@@ -3,6 +3,7 @@
 Reference: Tang et al. (2021) "Progressive Layered Extraction (PLE):
 A Novel Multi-Task Learning (MTL) Model for Personalized Recommendations."
 """
+from __future__ import annotations
 import torch
 import torch.nn as nn
 

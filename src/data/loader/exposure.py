@@ -5,6 +5,7 @@ Provides per-stock daily risk feature exposures computed by
 ``DailyRiskUpdater`` and stored in the ``exposure/daily_risk`` database.
 Exported as the ``EXPO`` singleton.
 """
+from __future__ import annotations
 import pandas as pd
 
 from typing import Literal

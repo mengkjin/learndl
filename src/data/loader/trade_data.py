@@ -4,6 +4,7 @@ Daily market data access singleton for the Chinese A-share market.
 Provides adjusted OHLCV, valuation, moneyflow, and limit data from the
 ``trade_ts`` database.  Exported as the ``TRADE`` singleton.
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 from typing import Any , Literal

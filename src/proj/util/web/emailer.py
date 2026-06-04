@@ -1,5 +1,5 @@
 """SMTP email sending using credentials from machine secrets and ``Proj`` attachments."""
-
+from __future__ import annotations
 from pathlib import Path
 from typing import Literal , Any
 

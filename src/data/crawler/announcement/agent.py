@@ -5,6 +5,7 @@ Uses rotating proxies to fetch announcement metadata from the Shanghai and
 Shenzhen stock exchange websites.  Only active on CUDA servers
 (``MACHINE.cuda_server``); disabled on other machines.
 """
+from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from typing import Literal , Any , Iterable

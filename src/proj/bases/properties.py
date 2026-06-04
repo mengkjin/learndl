@@ -1,5 +1,5 @@
 """Generic emptiness, shape introspection, and date extrema helpers."""
-
+from __future__ import annotations
 from typing import Any
 
 __all__ = ['empty' , 'shape' , 'max_of_date' , 'min_of_date']

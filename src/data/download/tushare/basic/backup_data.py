@@ -9,6 +9,7 @@ This is a fallback path for periods when the live Tushare API was unavailable.
 Backup CSVs must be placed in ``PATH.backup/tushare/data/`` following the naming
 convention ``{key}_{Dates(date)}.csv``.
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 

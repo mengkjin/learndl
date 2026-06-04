@@ -1,3 +1,4 @@
+from __future__ import annotations
 from copy import deepcopy
 
 from src.res.model.util import BaseCallBack , Optimizer

@@ -1,5 +1,6 @@
 """Tushare fetchers for index data: index weights and daily index quotes."""
 # do not use relative import in this file because it will be running in top-level directory
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 

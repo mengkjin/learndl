@@ -1,3 +1,4 @@
+from __future__ import annotations
 import pandas as pd
 from pathlib import Path
 from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount

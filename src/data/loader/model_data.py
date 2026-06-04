@@ -5,6 +5,7 @@ Provides factor exposures, residual returns, specific risk, covariance matrices,
 and model coefficients from the ``models`` database.
 Exported as the ``RISK`` singleton.
 """
+from __future__ import annotations
 from src.proj import TradeDate , DB
 from .access import DateDataAccess
 

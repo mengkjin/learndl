@@ -1,4 +1,5 @@
 """Positional encoding utilities for patch-based time-series models."""
+from __future__ import annotations
 import math , torch
 
 from torch import nn , Tensor

@@ -8,6 +8,7 @@ Functions cover:
 - Minute-bar price filling and resampling (``trade_min_fillna``, ``trade_min_reform``)
 - Chinese text → pinyin conversion (``chinese_to_pinyin``)
 """
+from __future__ import annotations
 import re
 import pandas as pd
 import numpy as np

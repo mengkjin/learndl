@@ -7,6 +7,7 @@ Registry keys: 'mse', 'pearson', 'ccc', 'hidden_corr_deprecated',
                'hidden_corr', 'quantile', 'ccc_hcorr', 'abcm' , 'global2top'
 ! important: 'lamb' is a special keyword argument for loss functions, cannot be used as a key in the dictionary
 """
+from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

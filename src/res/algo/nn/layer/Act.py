@@ -2,6 +2,7 @@
 
 Supported string keys: 'relu', 'gelu', 'leaky' (LeakyReLU), 'softplus'.
 """
+from __future__ import annotations
 from torch import nn
 
 # Mapping from lower-case string key to nn.Module constructor.

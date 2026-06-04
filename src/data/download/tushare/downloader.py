@@ -8,6 +8,7 @@ and calls their ``update()`` or ``rollback()`` methods.
 ``TSBackUpDataTransform.clear/update/rollback`` manages the manually-downloaded
 CSV backup data that supplements the live Tushare pipeline.
 """
+from __future__ import annotations
 from typing import Generator , Type , Any
 
 from src.proj import BaseClass

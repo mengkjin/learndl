@@ -9,6 +9,7 @@ Run with::
     uv run streamlit run src/interactive/main/launch.py
 """
 
+from __future__ import annotations
 import pathlib , os
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh

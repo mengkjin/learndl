@@ -1,6 +1,7 @@
 """
 Async scheduler for normal mode + race mode over a shared proxy pool.
 """
+from __future__ import annotations
 import asyncio
 from typing import Any
 from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats

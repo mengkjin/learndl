@@ -13,6 +13,7 @@ FactorLoader
 FactorCategory1Loader
     Loads all factors in a given ``category1`` group via ``FactorCalculator``.
 """
+from __future__ import annotations
 import pandas as pd
 
 from typing import Any , Literal

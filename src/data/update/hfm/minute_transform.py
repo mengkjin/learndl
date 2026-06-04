@@ -8,6 +8,7 @@ incrementally updates the ``trade_ts/min`` (equity + ETF) and
 
 Futures minute bars (from ``JSFutMinute/``) are handled separately.
 """
+from __future__ import annotations
 import zipfile
 import numpy as np
 import pandas as pd

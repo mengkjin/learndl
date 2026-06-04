@@ -8,6 +8,7 @@ Start date behaviour:
 - Equity bars: enabled from 2024-11-01 on non-HFM machines; disabled on HFM machines.
 - ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
 """
+from __future__ import annotations
 import rqdatac
 import pandas as pd
 import numpy as np

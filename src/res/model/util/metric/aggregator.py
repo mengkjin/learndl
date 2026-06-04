@@ -13,6 +13,7 @@ Comparison:
 - compare epochs of a fitting attempt (in validation dataset mostly) to select the best one (early stopping, phase transition)
 - compare attempts of model to select the best one (model selection)
 """
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 import torch
