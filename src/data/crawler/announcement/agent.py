@@ -91,6 +91,7 @@ class AnnouncementAgent(BaseClass.BoundLogger):
         with cls.logger.timer(f"Warmup ProxyPool", idt = 1, vb = 1) as timer:
             proxy_pool = ProxyAPI.get_proxy_pool(urls , go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
+            timer.set_printer('success')
         return proxy_pool
 
     @classmethod
@@ -104,6 +105,7 @@ class AnnouncementAgent(BaseClass.BoundLogger):
                 target_urls = list(urls)
             proxy_pool = AsyncAdaptiveProxyPool(target_urls, go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
+            timer.set_printer('success')
         return proxy_pool
 
     @classmethod
@@ -171,7 +173,11 @@ class AnnouncementAgent(BaseClass.BoundLogger):
         max_total_inflight_per_exchange: int = 20,
     ) -> Literal['skipping' , 'success' , 'failed']:
         tasks = FetcherTask.tasks_flat(start, end, step, redownload , force_update=force_update)
-        if not tasks:
+        if tasks:
+            min_date = min(task.start for task in tasks)
+            max_date = max(task.end for task in tasks)
+            cls.logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , idt = 1, vb = 1)
+        else:
             return 'skipping'
         grouped_tasks: dict[str, list[FetcherTask]] = defaultdict(list)
         for task in tasks:

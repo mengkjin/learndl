@@ -153,8 +153,4 @@ class FetcherTask(BaseClass.BoundLogger):
                     tasks.append(task)
         if (len(tasks) >= 100):
             cls.logger.error(f"Too many tasks in {start}~{end}, be cautious!")
-        if tasks:
-            min_date = min(task.start for task in tasks)
-            max_date = max(task.end for task in tasks)
-            cls.logger.stdout(f"Total Announcement Crawling Tasks: {len(tasks)} at {min_date}~{max_date} for {len(const.EXCHANGES)} exchanges")
         return tasks

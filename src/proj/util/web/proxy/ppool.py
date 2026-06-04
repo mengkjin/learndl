@@ -30,7 +30,7 @@ class WorkingProxies(BaseClass.BoundLogger):
         if target_url == 'test':
             return cls.TEST_PROXIES
         
-        cls.logger.highlight(f'Get working proxies for {target_url}' + (f' with dummy verification' if dummy else '') , vb_level = 0 if detail_level in ['all' , 'simple'] else 'max')
+        cls.logger.stdout(f'Get working proxies for {target_url}' + (f' with dummy verification' if dummy else '') , idt = 1, vb_level = 0 if detail_level in ['all' , 'simple'] else 'max')
         finder = ProxyFinder()
         finder_use_cache = True
         timer_vb_level = 1 if detail_level == 'all' else 'max'

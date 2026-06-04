@@ -108,7 +108,7 @@ class SSEAnnFetcher(AnnoucementFetcher):
             r = request_with_timeouterror(
                 self.session ,'get' , self.JSONP_URL, 
                 params=params, headers={"Referer": self.REFERER} , expansion=1, 
-                title=title , indent = self.indent + 1)
+                title=title , indent = self.indent + 1, vb_level = self.vb_level + 1)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, dict):
                 break
@@ -148,7 +148,7 @@ class SZSEAnnFetcher(AnnoucementFetcher):
             r = request_with_timeouterror(
                 self.session , 'post' , url, 
                 json=body, headers=headers , 
-                expansion=1, title=title , indent = self.indent + 1)
+                expansion=1, title=title , indent = self.indent + 1, vb_level = self.vb_level + 1)
             data = r.json()
             chunk = data.get("data") or []
             if not chunk:
@@ -184,7 +184,7 @@ class BSEAnnFetcher(AnnoucementFetcher):
             r = request_with_timeouterror(
                 self.session , 'post' , self.ANNOUNCE_URL, 
                 data=body, headers=headers , expansion=1, 
-                title=title , indent = self.indent + 1)
+                title=title , indent = self.indent + 1, vb_level = self.vb_level + 1)
             payload = parse_jsonp(r.text)
             if not isinstance(payload, list) or not payload:
                 break

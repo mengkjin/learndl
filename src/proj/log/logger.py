@@ -519,7 +519,10 @@ class Logger:
             if not self.silent:
                 if self.exit_infos:
                     Logger.stdout(','.join(self.exit_infos) , indent = self.indent + 1 , vb_level = self.vb_level)
-                Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
+                if hasattr(self, '_printer'):
+                    getattr(Logger, self._printer)(self.exit_str , indent = self.indent , vb_level = self.vb_level)
+                else:
+                    Logger.stdout(self.exit_str , indent = self.indent , vb_level = self.vb_level)
         def __repr__(self):
             return f'{self.__class__.__name__}({self.key},vb_level={self.vb_level},enter_vb_level={self.enter_vb_level})'
         def add_exit_infos(self , *msgs):
@@ -528,6 +531,9 @@ class Logger:
         def add_key_suffix(self , *msgs):
             """Set the exit string"""
             self.key_suffix = ' '.join(msgs)
+        def set_printer(self , printer : str):
+            """Set the printer"""
+            self._printer = printer
 
         @property
         def prefix(self):
