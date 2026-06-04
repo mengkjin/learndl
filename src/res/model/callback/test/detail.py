@@ -113,7 +113,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         task , factor , test_path = self.snap_folder , 
                         resume = self.config.is_resuming , save_resumable = True , 
                         start = self.trainer.config.beg_date , end = self.trainer.config.end_date ,
-                        indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1,
+                        indent = self.indent + 1 , vb_level = self.vb_level + 1,
                         title_prefix=self.config.model_name)
 
                     self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
@@ -142,7 +142,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         task , factor , test_path = self.snap_folder , 
                         resume = self.config.is_resuming , save_resumable = True , 
                         start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
-                        indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1,
+                        indent = self.indent + 1 , vb_level = self.vb_level + 1,
                         title_prefix=self.config.model_name)
 
                     self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
@@ -171,10 +171,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
         AsyncSaver.dfs(
             self.test_results , self.path_result_data , 
-            prefix='Detailed Alpha Analysis Datas' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            prefix='Detailed Alpha Analysis Datas' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         AsyncSaver.figs(
             self.test_figures , self.path_result_plot , 
-            prefix='Detailed Alpha Analysis Plots' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            prefix='Detailed Alpha Analysis Plots' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 
     def on_test_end(self):

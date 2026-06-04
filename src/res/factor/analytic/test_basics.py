@@ -220,10 +220,10 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
         rslts , figs = self.get_rslts() , self.get_figs()
         AsyncSaver.dfs(
             rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , 
-            prefix=f'{self.__class__.__name__} Analytic Datas' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            prefix=f'{self.__class__.__name__} Analytic Datas' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         AsyncSaver.figs(
             figs , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , 
-            prefix=f'{self.__class__.__name__} Analytic Plots' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            prefix=f'{self.__class__.__name__} Analytic Plots' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return self
 
     def save(self , path : BaseType.strPath):

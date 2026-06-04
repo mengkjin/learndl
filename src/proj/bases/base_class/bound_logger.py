@@ -29,10 +29,10 @@ class ModuleLogger:
     
     @property
     def module_vb_level(self) -> int:
-        return self.module.vb_level if isinstance(self.module , BoundLogger) else self.module.GetClassVB()
+        return self.module._get_instance_vb_level() if isinstance(self.module , BoundLogger) else self.module._get_class_vb_level()
     @property
     def module_indent(self) -> int:
-        return self.module.indent if isinstance(self.module , BoundLogger) else self.module.GetClassIndent()
+        return self.module._get_instance_indent() if isinstance(self.module , BoundLogger) else self.module._get_class_indent()
     @property
     def vb_level(self) -> int:
         return self.module_vb_level + sum(self.vbs)
@@ -194,6 +194,13 @@ class ModuleLoggerGetter:
         else:
             return instance._self_logger
 
+class VBLevelGetter:
+    def __get__(self, instance : BoundLogger | None, owner : Type[BoundLogger]) -> int:
+        return instance.logger.vb_level if instance is not None else owner.logger.vb_level
+class IndentGetter:
+    def __get__(self, instance : BoundLogger | None, owner : Type[BoundLogger]) -> int:
+        return instance.logger.indent if instance is not None else owner.logger.indent
+
 class BoundLogger:
     """
     Bounded logger for the module, include most methods of Logger, and can set base indent and vb_level
@@ -210,6 +217,9 @@ class BoundLogger:
         a.logger.info('hello')
     """
     logger = ModuleLoggerGetter()
+    vb_level = VBLevelGetter()
+    indent = IndentGetter()
+
     def __init__(self , * , indent: int = 0 , vb_level: Any = 1 , **kwargs):
         self.set_vb(vb_level , indent)
 
@@ -232,27 +242,25 @@ class BoundLogger:
         if indent is not None:
             self._instance_indent = indent
     @classmethod
-    def GetClassVB(cls) -> int:
+    def _get_class_vb_level(cls) -> int:
         return Proj.vb(cls._class_vb_level if hasattr(cls, '_class_vb_level') else 1)
     @classmethod
-    def GetClassIndent(cls) -> int:
+    def _get_class_indent(cls) -> int:
         return cls._class_indent if hasattr(cls, '_class_indent') else 0
-    @property
-    def vb_level(self) -> int:
+    def _get_instance_vb_level(self) -> int:
         if hasattr(self, '_instance_vb_level'):
             return self._instance_vb_level
         elif hasattr(self.binder, 'vb_level'):
             return getattr(self.binder, 'vb_level') + 1
         else:
-            return self.GetClassVB() + 1
-    @property
-    def indent(self) -> int:
+            return self._get_class_vb_level() + 1
+    def _get_instance_indent(self) -> int:
         if hasattr(self, '_instance_indent'):
             return self._instance_indent
         elif hasattr(self.binder, 'indent'):
             return getattr(self.binder, 'indent')
         else:
-            return self.GetClassIndent() + 1
+            return self._get_class_indent() + 1
 
     @cached_property
     def _self_logger(self) -> ModuleLogger:

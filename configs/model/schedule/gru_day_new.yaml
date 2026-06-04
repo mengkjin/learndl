@@ -25,9 +25,9 @@ train:
 
 algo:
   gru:
-    hidden_dim:     [32 , 32] #  2**5
+    hidden_dim:     [64 , 64] #  2**5
     dropout:        [0.1]
-    enc_in:         [false]
+    enc_in:         [false , true]
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]

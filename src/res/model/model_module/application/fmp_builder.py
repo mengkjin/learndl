@@ -124,7 +124,7 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
     def load_accounts(self , resume = True):
         if resume: 
             self.account_manager.load_dir()
-            self.logger.stdout(f'accounts include names: {self.account_manager.account_names}' , idt = 1 , vb = 1)
+            self.logger.stdout(f'accounts include names: {self.account_manager.account_names}' , idt = 1 , vb = 2)
         return self
     
     def account_last_model_dates(self , fmp_names : list[str] | None = None):

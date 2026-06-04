@@ -73,7 +73,7 @@ class FactorAPI:
         if record_entry.valid_value:
             def bypass_export():
                 path = StockFactorHierarchy.factor_table_path()
-                Logger.skipping(f'Factor table already exported {record_entry.time_str} ...')
+                Logger.skipping(f'Factor table already exported {record_entry.time_str} ...' , indent = 1)
                 return path
             path = wrap_update(bypass_export , 'export factor table')
         else:

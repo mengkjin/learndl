@@ -181,9 +181,10 @@ class rnn_univariate(nn.Module):
         in: [bs x seq_len x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
         '''
-        if not hasattr(self, '_gru_week_new_shape'):
-            from src.proj import Proj
-            self._gru_week_new_shape = Proj.instances.trainer and 'gru_week_new' in Proj.instances.trainer.config.model_name
+        from src.proj import Proj
+        if not hasattr(self, '_gru_week_new_shape') and Proj.instances.trainer:
+            print(Proj.instances.trainer.config.model_name)
+            self._gru_week_new_shape = 'gru_week_new' in Proj.instances.trainer.config.model_name
         if self._gru_week_new_shape:
             print(x.shape)
         x = self.encoder(x) # [bs x hidden_dim]

@@ -197,7 +197,7 @@ class SummaryWriter(BaseCallBack):
         AsyncSaver.pack(
             ts_folder, tar_filename , overwrite = True , 
             prefix = f'{self.__class__.__name__} Tensorboard Dir' , 
-            indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     def append_batch_hidden_summary(self):
         if self.HIDDEN_FEATURE_MODE and 'hidden' in self.batch_data.output.other:

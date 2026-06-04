@@ -21,10 +21,10 @@ class TrackingPortfolioManager(BaseClass.BoundLogger):
         assert not reset_ports or all([port in TrackingPort.candidate_ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
         
-        cls.logger.stdout(f'Build Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1 , add_prefix = True)
+        cls.logger.stdout(f'Build Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1)
         updated_ports : dict[str, TrackingPort] = {}
         for name in TrackingPort.candidate_ports:
-            tp = TrackingPort.load(name , vb_level = cls.logger.vb_level + 1, indent = cls.logger.indent + 1)
+            tp = TrackingPort.load(name , vb_level = cls.vb_level + 1, indent = cls.indent + 1)
             with tp.logger.subprocess(idt = 1):
                 tp.build(date , name in reset_ports)
                 if not tp.new_ports[date].empty:
@@ -53,10 +53,10 @@ class TrackingPortfolioManager(BaseClass.BoundLogger):
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Proj.email_attachments.append(path)
 
-        cls.logger.stdout(f'Analyze Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1 , add_prefix = True)
+        cls.logger.stdout(f'Analyze Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1)
         
         for name in TrackingPort.candidate_ports:
-            tp = TrackingPort.load(name , vb_level = cls.logger.vb_level + 1 , indent = cls.logger.indent + 1)
+            tp = TrackingPort.load(name , vb_level = cls.vb_level + 1 , indent = cls.indent + 1)
             with tp.logger.subprocess(idt = 1):
                 tp.analyze(key_fig = '')
         cls.logger.success(f'{len(TrackingPort.candidate_ports)} Tracking Portfolios Analyzed at {Dates(date)}' , idt = 1)

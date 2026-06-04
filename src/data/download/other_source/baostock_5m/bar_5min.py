@@ -140,7 +140,7 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
                 for x_min in x_mins_to_update(dt):
                     five_min_df = DB.load('trade_ts' , '5min' , dt)
                     x_min_df = trade_min_reform(five_min_df , x_min , 5)
-                    DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , indent = self.logger.indent , vb_level = self.logger.vb_level)
+                    DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , indent = self.indent , vb_level = self.vb_level)
                     updated = updated or mark
                 self.logger.stdout(f'baostock {x_min}min bars at {dt} transformed')
         if len(dates) > 0:

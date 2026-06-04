@@ -364,7 +364,7 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             status += 1
         return status
 

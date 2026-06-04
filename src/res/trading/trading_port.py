@@ -220,14 +220,14 @@ class TradingPort(BaseClass.BoundLogger):
             self.logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Dates(port_dates)} start ...')
+        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Dates(port_dates)} start ...' , vb = 1 , idt = 1)
         account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine).df
         if len(account_df) <= 1:
-            self.logger.stdout(f'Portfolio [{self.name}] just start accounting and has no record' , vb = 1)
+            self.logger.stdout(f'Portfolio [{self.name}] just start accounting and has no record' , vb = 1 , idt = 1)
             return self
         
         candidates = {task.task_name():task for task in TASK_LIST}
-        self.tasks = {k:v(indent = self.logger.indent + 1, vb_level = self.logger.vb_level + 2, **kwargs) for k,v in candidates.items()}
+        self.tasks = {k:v(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
             task.calc(account_df) 
             task.plot(show = False)  
@@ -239,11 +239,11 @@ class TradingPort(BaseClass.BoundLogger):
             AsyncSaver.dfs(
                 rslts , self.result_path_data , 
                 prefix=f'Portfolio Analysis of {self.name} Datas' , 
-                indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 2)
+                indent = self.indent + 1 , vb_level = self.vb_level + 2)
             AsyncSaver.figs(
                 figs   , self.result_path_plot , 
                 prefix=f'Portfolio Analysis of {self.name} Plots' , 
-                indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 2)
+                indent = self.indent + 1 , vb_level = self.vb_level + 2)
 
         for name , fig in figs.items():
             if (key_fig and key_fig.lower() in name.lower()) or display_all:
@@ -251,7 +251,7 @@ class TradingPort(BaseClass.BoundLogger):
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        self.logger.success(f'Analyze Portfolio [{self.name}]!' , vb = 1)
+        self.logger.success(f'Analyze Portfolio [{self.name}]!' , vb = 1 , idt = 1)
         return self
 
 class TrackingPort(TradingPort):

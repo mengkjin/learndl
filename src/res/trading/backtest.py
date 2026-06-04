@@ -37,11 +37,11 @@ class BacktestPortfolioManager(BaseClass.BoundLogger):
         updated_ports = {name:tp for name,tp in updated_ports.items() if not tp.new_ports[date].empty}
             
         if len(updated_ports) == 0: 
-            cls.logger.alert1(f'No Backtest Portfolios Updated at {Dates(date)}' , idt = 1)
+            cls.logger.alert1(f'No Backtest Portfolios Updated at {Dates(date)}' , idt = 1 , vb = 1)
         else:
-            cls.logger.success(f'{len(updated_ports)} Backtest Portfolios Updated at {Dates(date)}' , idt = 1 , vb = 2)
+            cls.logger.success(f'{len(updated_ports)} Backtest Portfolios Updated at {Dates(date)}' , idt = 1 , vb = 1)
 
         for name in BacktestPort.candidate_ports:
-            tp = BacktestPort.load(name , vb_level = vb_level + 2 , indent = indent + 1)
+            tp = BacktestPort.load(name , vb_level = cls.vb_level + 1 , indent = cls.indent + 1)
             tp.analyze(key_fig = '')
-        cls.logger.success(f'{len(BacktestPort.candidate_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , idt = 1)
+        cls.logger.success(f'{len(BacktestPort.candidate_ports)} Backtest Portfolios Analyzed at {Dates(date)}' , idt = 1 , vb = 1)

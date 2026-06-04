@@ -304,7 +304,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         if df.height > 0 and len(dates) > 0:
             AsyncSaver.df(
                 df , hidden_path , overwrite = True , 
-                prefix = f'{self.pred_name} Hidden Values' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+                prefix = f'{self.pred_name} Hidden Values' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             
         if align_secid is not None:
             df = df.filter(pl.col('secid').is_in(align_secid))

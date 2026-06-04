@@ -83,7 +83,7 @@ class BasicTestResult(BaseCallBack):
         
         AsyncSaver.df(
             df , self.path_test_df , copy_for_safety = False , overwrite = True , 
-            prefix = f'Basic Test Result' , vb_level = self.logger.vb_level + 1 , indent = self.logger.indent + 1)
+            prefix = f'Basic Test Result' , vb_level = self.vb_level + 1 , indent = self.indent + 1)
 
         return df
 
@@ -166,7 +166,7 @@ class BasicTestResult(BaseCallBack):
                 df = self._revert_col_names(df_day).merge(df_cum , on = 'date')
                 rslt[f'{model_num}'] = df
             [AsyncSaver.df(df , self.snap_folder.joinpath(f'{key}.feather') , copy_for_safety = False , overwrite = True , vb_level = 'never') for key,df in rslt.items()]
-            AsyncSaver.dfs(rslt , self.path_result, prefix = 'Test Summary' , indent = self.logger.indent + 1 , vb_level = self.logger.vb_level + 1)
+            AsyncSaver.dfs(rslt , self.path_result, prefix = 'Test Summary' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     @staticmethod
     def _revert_col_names(df : pd.DataFrame) -> pd.DataFrame:
