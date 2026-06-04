@@ -181,8 +181,11 @@ class rnn_univariate(nn.Module):
         in: [bs x seq_len x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
         '''
+        print(x.shape)
         x = self.encoder(x) # [bs x hidden_dim]
+        print(x.shape)
         x = self.decoder(x) # tuple of [bs x hidden_dim] , len is num_output
+        print(x.shape)
         o = self.mapping(x) # [bs x num_output]
         return o , {'hidden' : x[0]}
         

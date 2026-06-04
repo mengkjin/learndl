@@ -1,5 +1,6 @@
 -- mkdir -p ~/.config/wezterm
---touch ~/.config/wezterm/wezterm.lua
+-- touch ~/.config/wezterm/wezterm.lua
+-- gedit ~/.config/wezterm/wezterm.lua
 
 --- __      __      _
 --- \ \    / /__ __| |_ ___ _ _ _ __
