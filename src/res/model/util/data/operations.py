@@ -184,7 +184,8 @@ class DataOperator:
         agg = data.sum(sum_dim).isfinite()
         print(f'data shape: {data.shape}')
         print(f'agg shape: {agg.shape}')
-        print(f'agg: {agg[0,:51]}')
+        print(f'agg: {agg[0:2*seqlen*step]}')
+        print(f'agg False count for 0: {(~agg[0]).sum()}')
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
