@@ -354,7 +354,7 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
 
     @property
     def special(self) -> dict[str , bool]:
-        return self.Param.get("model.special" , dict)
+        return self.Param.get("model.special" , {})
 
     @property
     def short_test(self) -> bool:
