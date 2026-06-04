@@ -188,7 +188,9 @@ class DataOperator:
             predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
             print(f'seq_len: {seqlen} , step: {step}')
             print(f'index1: {index1}')
-            print(f'agg: {agg[0][:51][...,0]}')
+            print(f'sum_dim: {sum_dim}')
+            print(f'data shape: {data.shape}')
+            print(f'agg: {agg[0,:51]}')
             unfolded = agg.unfold(1,seqlen*step,1)[...,step-1::step]
             print(f'unfolded shape: {unfolded.shape}')
             print(f'unfolded: {unfolded[0][:51][...,0]}')
