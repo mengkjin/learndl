@@ -186,7 +186,11 @@ class DataOperator:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
             predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
+            print(f'seq_len: {seqlen} , step: {step}')
+            print(f'index1: {index1}')
+            print(f'agg: {agg[0][:51][...,0]}')
             valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
+            print(f'valid: {valid[0]}')
         except MemoryError:
             predicate = torch.multiply if all_valid else torch.add
             valid = torch.full_like((agg[:,:len(index1)]), all_valid)
