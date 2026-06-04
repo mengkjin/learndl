@@ -187,6 +187,12 @@ class DataOperator:
         print(f'agg: {agg[0,:2*seqlen*step]}')
         print(f'agg where False: {agg[0].where(agg[0],False)}')
         print(f'agg False count for 0: {(~agg[0]).sum()}')
+        print(f'data 75:80 , 0: {data[0,75:80 , :,0]}')
+        print(f'data 75:80 , 1: {data[0,75:80 , :,1]}')
+        print(f'data 75:80 , 2: {data[0,75:80 , :,2]}')
+        print(f'data 75:80 , 3: {data[0,75:80 , :,3]}')
+        print(f'data 75:80 , 4: {data[0,75:80 , :,4]}')
+        print(f'data 75:80 , 5: {data[0,75:80 , :,5]}')
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
