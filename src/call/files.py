@@ -157,3 +157,23 @@ def check_all_config_files():
     inspecter = ModelConfigsInspector()
     inspecter.inspect_key_values()
     Logger.success('All config files checked.')
+
+# %% other files related operations ------------------------------------------------------------
+def replace_wezterm_config():
+    """Replace the wezterm config file with the latest one."""
+    from pathlib import Path
+    from src.proj import PATH
+    wezterm_config = PATH.template.joinpath('lua' , 'wezterm.lua')
+    if not wezterm_config.exists():
+        Logger.error(f"Wezterm config file not found: {wezterm_config}")
+        return
+    if MACHINE.is_windows:
+        target_config = Path.home() / ".config" / "wezterm" / "wezterm.lua"
+    else:
+        target_config = Path('~/.config/wezterm/wezterm.lua').expanduser()
+    if not target_config.exists():
+        target_config.parent.mkdir(parents=True, exist_ok=True)
+        target_config.touch()
+        Logger.success(f"Target config file created: {target_config}")
+    target_config.write_text(wezterm_config.read_text())
+    Logger.success(f"Wezterm config file replaced with the latest one.")

@@ -26,6 +26,7 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
     """
     default_help : str = ''
     done_action : Literal['pause' , 'close' , 'keep'] = 'pause'
+    color : Literal['red' , 'green' , 'blue' , 'orange' , 'purple' , 'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any = 'green'
 
     def __init__(
         self , color : Literal[
@@ -33,16 +34,11 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
             'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any = 'green' , 
         **kwargs):
         super().__init__(**kwargs)
-        self.update(help = self.default_help , color = color)
+        self.update(help = self.default_help)
 
     @property
     def title(self) -> str:
         return self.key.replace('-', ' ').title()
-
-    @property
-    def color(self) -> Literal[
-            'red' , 'green' , 'blue' , 'orange' , 'purple' , 'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any:
-        return self.get('color')
 
     def run(self) -> None:
         raise NotImplementedError('run method is not implemented in QuickCallButton')
@@ -77,14 +73,5 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
         """Get the buttons dictionary."""
         from importlib import import_module
         import_module('src.interactive.main.util.quick_calls.buttons')
-        buttons = [
-            cls.registry['TestLogger'](color = 'cyan'),
-            cls.registry['CheckConfigFiles'](color = 'cyan'),
-            cls.registry['Tensorboard'](color = 'gold'),
-            cls.registry['OptunaDashboard'](color = 'gold'),
-            cls.registry['Reboot'](color = 'purple'),
-            cls.registry['ArchiveModel'](color = 'pink'),
-            cls.registry['ResumeModel'](color = 'green'),
-            cls.registry['ClearCatcherLogs'](color = 'red'),
-        ]
+        buttons = [qcb() for qcb in cls.registry.values()]
         return buttons

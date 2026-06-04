@@ -78,6 +78,3 @@ def print_disk_space_info():
     info = get_disk_space_info()
     Logger.stdout_pairs(info , title = 'Disk Space Info:')
     return info
-
-if __name__ == '__main__':
-    suspend_this_machine()

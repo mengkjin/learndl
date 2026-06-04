@@ -26,7 +26,7 @@ TASK_LIST : list[Type[TopCalc]] = [
 class TradingPort(BaseClass.BoundLogger):
     name        : str 
     alpha       : str | list[str]
-    universe    : str = 'top-400'
+    universe    : str = 'top-500'
     category    : Literal['top' , 'screen' , 'reinforce'] = 'top'
     components  : list[str] | None = None
     weights     : list[float] | Literal['equal'] | None = None
