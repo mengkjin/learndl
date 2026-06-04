@@ -182,6 +182,9 @@ class DataOperator:
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
         agg = data.sum(sum_dim).isfinite()
+        print(f'data shape: {data.shape}')
+        print(f'agg shape: {agg.shape}')
+        print(f'agg: {agg[0,:51]}')
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
@@ -193,7 +196,10 @@ class DataOperator:
             print(f'data at 4: {data[0,4]}')
             print(f'data at 6: {data[0,6]}')
             print(f'data at 8: {data[0,8]}')
-            print(f'agg: {agg[0,:51]}')
+            print(f'agg at 4: {agg[0,seqlen * step+4]}')
+            print(f'agg at 6: {agg[0,seqlen * step+6]}')
+            print(f'agg at 8: {agg[0,seqlen * step+8]}')
+            print(f'agg: {agg[0,seqlen * step:seqlen * step+51]}')
             unfolded = agg.unfold(1,seqlen*step,1)[...,step-1::step]
             print(f'unfolded shape: {unfolded.shape}')
             print(f'unfolded: {unfolded[0][:51][...,0]}')
