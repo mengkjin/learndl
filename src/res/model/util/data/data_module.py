@@ -242,6 +242,11 @@ class DataModule(BaseClass.BoundLogger):
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
         self.y_std = self.labels[:,self.d0:self.d1]
 
+        self.logger.stdout(f'datas shape: {self.datas.shape}')
+        self.logger.stdout(f'x_full: {x_full.keys()}')
+        self.logger.stdout(f'x_full shapes: {[x.shape for x in x_full.values()]}')
+        self.logger.stdout(f'y_std: {self.y_std.shape}')
+
         x_shapes = [x.shape[:2] for x in x_full.values()]
         assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
