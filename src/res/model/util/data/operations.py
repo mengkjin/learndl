@@ -189,7 +189,10 @@ class DataOperator:
             print(f'seq_len: {seqlen} , step: {step}')
             print(f'index1: {index1}')
             print(f'agg: {agg[0][:51][...,0]}')
-            valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
+            unfolded = agg.unfold(1,seqlen*step,1)[...,step-1::step]
+            print(f'unfolded shape: {unfolded.shape}')
+            print(f'unfolded: {unfolded[0][:51][...,0]}')
+            valid = predicate(unfolded,-1)[:,index1]
             print(f'valid: {valid[0]}')
         except MemoryError:
             predicate = torch.multiply if all_valid else torch.add
