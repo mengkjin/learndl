@@ -336,12 +336,13 @@ class DataModule(BaseClass.BoundLogger):
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
             valids.append(finites.all(dim=-1) if all_valid else finites.any(dim=-1))
-
+            print(f'x week: {x["week"][:5][:,:51]}')
             print(f'x finites: {finites[:5][:,:20]}')
         if y is not None:
             finites = self.data_operator.finite_position(None , y, index1)
             print(f'y finites: {finites[:5][:,:20]}')
             valids.append(finites)
+        raise ValueError('stop here')
         if valids:
             return torch.stack(valids , dim = -1).all(dim = -1)
         else:
@@ -366,6 +367,7 @@ class DataModule(BaseClass.BoundLogger):
             for bnum , b_i in enumerate(set_samples):
                 if b_i.numel() == 0:
                     continue
+
                 assert torch.isin(b_i[:,1] , index1).all() , f'all b_i[:,1] must be in index1'
                 index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1) # here
 
