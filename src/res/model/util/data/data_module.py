@@ -336,8 +336,12 @@ class DataModule(BaseClass.BoundLogger):
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
             valids.append(finites.all(dim=-1) if all_valid else finites.any(dim=-1))
+
+            print(f'x finites: {finites[:5][:,:20]}')
         if y is not None:
-            valids.append(self.data_operator.finite_position(None , y, index1))
+            finites = self.data_operator.finite_position(None , y, index1)
+            print(f'y finites: {finites[:5][:,:20]}')
+            valids.append(finites)
         if valids:
             return torch.stack(valids , dim = -1).all(dim = -1)
         else:

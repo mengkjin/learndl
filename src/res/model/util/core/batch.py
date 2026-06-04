@@ -91,19 +91,15 @@ class BatchInput:
 
     @cached_property
     def date(self) -> np.ndarray:
-        return self.y_date[self.i.cpu()[:,1]]
+        return self.y_date[self.i.cpu()[:,1].numpy()]
     
     @cached_property
     def secid(self) -> np.ndarray:
-        return self.y_secid[self.i.cpu()[:,0]]
+        return self.y_secid[self.i.cpu()[:,0].numpy()]
     
     @property
     def date0(self) -> int:
-        print(f'y_date: {self.y_date}')
-        print(f'i: {self.i}')
-        print(f'date: {self.date}')
-        date = self.date
-        assert (date == date[0]).all() , date
+        assert np.all(self.date == self.date[0]) , self.date
         return self.date.astype(int)[0]
 
     @property
