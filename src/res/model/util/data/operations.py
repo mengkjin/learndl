@@ -1,3 +1,15 @@
+"""
+Special operations for data module datas.
+Includes:
+- PrenormOperator: prenorm operator for data module datas
+  - prenorm data according to the prenorm method : divlast, histnorm, channelnorm
+- DataOperator: operations for data module datas
+  - standardize y and weight
+  - rolling rotation
+  - finite position
+  - split sample
+"""
+
 from __future__ import annotations
 
 import torch
@@ -14,7 +26,6 @@ from src.data import DataBlockNorm
 from src.res.model.util.config import ModelConfig
 
 from .batch_input_loader import DataloaderParam
-
 
 __all__ = ['PrenormOperator' , 'DataOperator']
 
