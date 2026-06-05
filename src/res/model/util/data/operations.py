@@ -218,11 +218,12 @@ class DataOperator:
         pos2 = 21
         print(f'index1: {index1}')
         print(f'data shape: {data.shape}')
-        print(f'x_pos sum: {valid[:,pos2].sum()}')
-        for p in range(pos, pos + 250, 5):
-            print(f'valid_raw of pos {p}: {valid_raw[:,p-249].sum()} {valid_raw[valid[:,pos2],p-249].all()}')
-            print(f'agg of pos {p}: {agg[:,p].sum()} {agg[valid[:,pos2],p].all()}')
-        data_x_pos = data[valid[:,pos2]][:,pos2:pos2+250:5]
+        print(f'x_pos sum: {valid[:,pos2].sum()} , {valid_raw[:,pos].sum()}')
+        for p in range(pos-249, pos + 1, 5):
+            idx = valid[:,pos2]
+            print(f'unfold_slice of pos {p}: {unfold_slice[:,pos,p-pos + 249].sum()} {unfold_slice[idx,pos,p-pos + 249].all()}')
+            print(f'agg of pos {p}: {agg[:,p+249].sum()} {agg[idx,p+249].all()}')
+        data_x_pos = data[idx][:,pos-249:pos+1:5]
         print(f'data_x_pos shape: {data_x_pos.shape}')
         print(f'data_x_pos nan: {data_x_pos.isnan().any()}')
         return valid
