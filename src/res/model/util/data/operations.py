@@ -210,9 +210,9 @@ class DataOperator:
         pos = 361 
         print(f'data shape: {data.shape}')
         print(f'x_pos sum: {valid[:,pos].sum()}')
-        for p in range(pos-249, pos + 1, 5):
+        for p in range(pos, pos + 250, 5):
             print(f'agg of pos {p}: {agg[:,p].sum()} {agg[valid[:,pos],p].all()}')
-        data_x_pos = data[valid[:,pos]][:,pos-249:pos+1:5]
+        data_x_pos = data[valid[:,pos]][:,pos:pos+250:5]
         print(f'data_x_pos shape: {data_x_pos.shape}')
         print(f'data_x_pos nan: {data_x_pos.isnan().any()}')
         return valid
