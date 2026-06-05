@@ -196,10 +196,17 @@ class DataOperator:
         print(f'agg shape: {agg.shape}')
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
+        print(f'agg shape: {agg.shape}')
         try:
             predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
-            valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
-            print('here')
+            unfold = agg.unfold(1,seqlen*step,1)
+            print(f'unfold shape: {unfold.shape}')
+            unfold_slice = unfold[...,step-1::step]
+            print(f'unfold_slice shape: {unfold_slice.shape}')
+            valid = predicate(unfold_slice,-1)
+            print(f'valid shape: {valid.shape}')
+            valid = valid[:,index1]
+            print(f'valid shape: {valid.shape}')
         except MemoryError:
             predicate = torch.multiply if all_valid else torch.add
             valid = torch.full_like((agg[:,:len(index1)]), all_valid)
