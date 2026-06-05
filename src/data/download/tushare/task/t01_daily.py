@@ -78,7 +78,7 @@ class DailyLimit(DayFetcher):
         lmt = self.locked_fetch(self.api.stk_limit , trade_date=str(date))
         lmt = TS.code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
-'''
+"""
 class DailyOpenAuction(DateFetcher):
     """Daily Open Auction Infomation"""
     START_DATE = 20070101
@@ -96,6 +96,6 @@ class DailyCloseAuction(DateFetcher):
         auc = self.locked_fetch(self.api.stk_auction_c , trade_date=str(date))
         auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return auc
-'''
+"""
 
 

@@ -196,7 +196,7 @@ class Distrib_Qtile(FactorPerfCalc):
     def plotter(self): return plotter.plot_distrib_qtile
 
 class FactorPerfTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Performance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -218,7 +218,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         deprecated : 
             'grp_decay_ret' : Group Return Decay
             'distr_qtile' : Distribution Quantile
-    '''
+    """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[FactorPerfCalc]] = [
         FrontFace ,

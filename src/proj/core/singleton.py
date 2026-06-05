@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABCMeta
 
 class NoInstanceMeta(type):
-    '''metaclass to block direct instantiation of a class'''
+    """metaclass to block direct instantiation of a class"""
     def __new__(cls, name, bases, namespace, **kwargs):
         return super().__new__(cls, name, bases, namespace)
     def __call__(cls, *args, **kwargs):

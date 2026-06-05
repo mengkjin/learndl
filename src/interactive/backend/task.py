@@ -91,7 +91,7 @@ class TaskDatabase:
         # task_queues : task queues and their task_ids
             
         with self.conn_handler(check_same_thread = True) as (conn, cursor):
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS task_records (
                     task_id TEXT PRIMARY KEY,
                     script TEXT NOT NULL,
@@ -106,35 +106,35 @@ class TaskDatabase:
                     exit_message TEXT,
                     exit_error TEXT
                 )
-                ''')
+                """)
             cursor.execute('CREATE INDEX IF NOT EXISTS ix_task_records_script ON task_records(script)')
             cursor.execute('CREATE INDEX IF NOT EXISTS ix_task_records_status ON task_records(status)')
 
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS task_exit_files (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id TEXT NOT NULL,
                     file_path TEXT NOT NULL,
                     FOREIGN KEY (task_id) REFERENCES task_records(task_id)
                 )
-                ''')
+                """)
             
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS task_backend_updated (
                     task_id TEXT NOT NULL,
                     updated_time REAL NOT NULL,
                     FOREIGN KEY (task_id) REFERENCES task_records(task_id)
                 )
-                ''')
+                """)
             
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS queue_records (
                     queue_id TEXT NOT NULL PRIMARY KEY,
                     create_time REAL NOT NULL
                 )
-                ''')
+                """)
             
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS task_queues (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     queue_id TEXT NOT NULL,
@@ -142,7 +142,7 @@ class TaskDatabase:
                     FOREIGN KEY (queue_id) REFERENCES queue_records(queue_id),
                     FOREIGN KEY (task_id) REFERENCES task_records(task_id)
                 )
-                ''')
+                """)
             
     @property
     def empty(self) -> bool:
@@ -196,13 +196,13 @@ class TaskDatabase:
             if overwrite:
                 cursor.execute('DELETE FROM task_records WHERE task_id = ?', (task.id,))
                 
-            cursor.execute('''
+            cursor.execute("""
             INSERT INTO task_records (
                 task_id, script, cmd, create_time, 
                 status, source, pid, start_time, end_time, 
                 exit_code, exit_message, exit_error
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
+            """, (
                 task.id,
                 task.script,
                 task.cmd,
@@ -219,10 +219,10 @@ class TaskDatabase:
 
             cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task.id,))
             for file_path in task.exit_files or []:
-                cursor.execute('''
+                cursor.execute("""
                 INSERT INTO task_exit_files (task_id, file_path)
                 VALUES (?, ?)
-                ''', (task.id, file_path))
+                """, (task.id, file_path))
 
     def new_queue(self, queue_id: str , exist_ok: bool = False) -> None:
         """Register a new queue in queue_records.
@@ -239,10 +239,10 @@ class TaskDatabase:
                 cursor.execute('SELECT * FROM queue_records WHERE queue_id = ?', (queue_id,))
                 if cursor.fetchone() is not None: 
                     return
-            cursor.execute('''
+            cursor.execute("""
             INSERT INTO queue_records (queue_id, create_time)
                 VALUES (?, ?)
-                ''', (queue_id, timestamp()))
+                """, (queue_id, timestamp()))
     
     def update_task(self, task_id: str, backend_updated: bool = False, **kwargs) -> None:
         """Update one or more columns of an existing task record.
@@ -272,16 +272,16 @@ class TaskDatabase:
             if exit_files:
                 cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))
                 for file_path in exit_files:
-                    cursor.execute('''
+                    cursor.execute("""
                     INSERT INTO task_exit_files (task_id, file_path)
                     VALUES (?, ?)
-                    ''', (task_id, file_path))
+                    """, (task_id, file_path))
             if backend_updated:
                 cursor.execute(
-                    '''
+                    """
                     INSERT INTO task_backend_updated (task_id, updated_time)
                     VALUES (?, ?)
-                    ''',
+                    """,
                     (task_id, timestamp()),
                 )
 
@@ -398,7 +398,7 @@ class TaskDatabase:
             return self.get_tasks(task_ids)
     
     def active_queue(self) -> str:
-        '''get the last queue in table queue_records'''
+        """get the last queue in table queue_records"""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT queue_id FROM queue_records ORDER BY create_time DESC LIMIT 1')
             queue = cursor.fetchone()
@@ -605,7 +605,7 @@ class TaskQueue:
         return {k : v for k, v in changed.items() if v}
     
     def sync(self) -> None:
-        '''sync tasks in record into current queue'''
+        """sync tasks in record into current queue"""
         self.task_db.sync_queue(self.queue_id)
         self.reload()
             
@@ -941,7 +941,7 @@ class TaskItem:
         return item
     
     def refresh(self) -> dict[str, Any]:
-        '''refresh task item status , return True if status changed'''
+        """refresh task item status , return True if status changed"""
         changed = self.reload()
 
         if self.pid and self.is_running:

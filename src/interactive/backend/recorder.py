@@ -19,7 +19,7 @@ from src.proj.util.functional.parallel import is_main_process
 from .task import TaskItem , TaskDatabase
 
 class BackendTaskRecorder:
-    '''
+    """
     convert script main function to one that can be used as a task in streamlit project
     use BackendTaskRecorder to record task, take acceptable return as exit message
     params will be passed to the warpped function as kwargs, example:
@@ -50,7 +50,7 @@ class BackendTaskRecorder:
         - dict of key-value pairs (message , files , code , error)
         - AutoRunTask object
         - any other type (converted to str)
-    '''
+    """
     def __init__(self , **kwargs) -> None:
         """Store kwargs; task DB registration happens in :meth:`_resolve_task_id` / :meth:`__enter__`."""
         parsed_kwargs = self.parse_kwargs(kwargs)
@@ -125,7 +125,7 @@ class BackendTaskRecorder:
 
     @property
     def task_id(self) -> str:
-        '''task_id : script_name@time_id'''
+        """task_id : script_name@time_id"""
         return self._task_id
 
     def __enter__(self) -> BackendTaskRecorder:
@@ -158,10 +158,10 @@ class BackendTaskRecorder:
 
     @dataclass(slots = True)
     class ExitMessage:
-        '''
+        """
         can use ExitMessage.from_return(ret) to convert return to ExitMessage
         ret can be of variaous form
-        '''
+        """
         message : str | None = None
         files : list[Any] | None = None
         code : int = 0

@@ -40,11 +40,11 @@ class CustomCSS:
         sub_kwargs = self.substitute_kwargs(**kwargs)
         css_str = '\n'.join([template.substitute(sub_kwargs[name]) for name , template in self.templates.items()])
         
-        st.markdown(f'''
+        st.markdown(f"""
         <style>
         {css_str}
         </style>
-        ''' , unsafe_allow_html = True)
+        """ , unsafe_allow_html = True)
 
     def button_colors(self) -> str:
         ...

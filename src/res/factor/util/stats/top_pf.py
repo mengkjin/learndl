@@ -7,7 +7,7 @@ from .basic import eval_pf_stats , eval_cum_ret , eval_drawdown
 from ..agency import BaseConditioner
 
 def _filter_account(acc : pd.DataFrame , lag0 = True , pos_model_date = False):
-    '''drop lag if exists , and select lag0'''
+    """drop lag if exists , and select lag0"""
     if lag0:
         if 'lag' in acc.index.names: 
             acc = acc.reset_index('lag',drop=False)
@@ -58,7 +58,7 @@ def calc_perf_drawdown(acc : pd.DataFrame):
         dfs.append(sub)
     df = pd.concat(dfs)
 
-    '''
+    """
     df = eval_detailed_drawdown(df['pf'] , groupby = index_names)
 
     df['warning'] = (df['recover_ratio'].fillna(0) < 0.25) * (df['uncovered_max_drawdown'] < -0.1) * 1.0
@@ -66,7 +66,7 @@ def calc_perf_drawdown(acc : pd.DataFrame):
     df['stopped'] = eval_cum_ret(df['stopped'] , 'exp' , groupby = index_names)
     df['trade_date'] = trade_date
     df = df.set_index('trade_date' , append=True).drop(columns=['pf']).rename(columns={'cum_ret':'pf'})
-    '''
+    """
     return df
 
 def calc_perf_excess_drawdown(acc : pd.DataFrame):
@@ -80,7 +80,7 @@ def calc_perf_excess_drawdown(acc : pd.DataFrame):
     return df
 
 def calc_perf_period(acc : pd.DataFrame , period : Literal['year' , 'yearmonth' , 'month'] = 'year'):
-    '''Calculate performance stats for each period'''
+    """Calculate performance stats for each period"""
     if period=='year': 
         acc[period] = acc['end'].astype(str).str[:4]
     elif period == 'yearmonth':  
@@ -97,11 +97,11 @@ def calc_perf_period(acc : pd.DataFrame , period : Literal['year' , 'yearmonth' 
     return df
 
 def calc_perf_year(acc : pd.DataFrame):
-    '''Calculate performance stats for each year'''
+    """Calculate performance stats for each year"""
     return calc_perf_period(acc , 'year')
 
 def calc_perf_month(acc : pd.DataFrame):
-    '''Calculate performance stats for each calendar month'''
+    """Calculate performance stats for each calendar month"""
     return calc_perf_period(acc , 'month')
 
 def calc_exp_style(acc : pd.DataFrame):

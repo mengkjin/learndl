@@ -6,18 +6,18 @@ from src.res.model.util.trainer.status import EpochRecord
 from src.res.model.util import BaseCallBack
 
 def arr_plateau(arr , n : int , eps = 0.) -> bool:
-    '''Last n element of arr are all smaller than the previous one'''
+    """Last n element of arr are all smaller than the previous one"""
     return arr_peaked(arr , n) or arr_converge(arr , n)
 
 def arr_peaked(arr , n : int) -> bool:
-    '''Last n element of arr are all smaller than the previous one'''
+    """Last n element of arr are all smaller than the previous one"""
     if len(arr) <= n:
         return False
     arr = arr[-(n + 1):]
     return max(arr[1:]) < arr[0]
 
 def arr_converge(arr , n : int , tolerance = 1e-4) -> bool:
-    '''Last n element of arr are running within tolerance of norm'''
+    """Last n element of arr are running within tolerance of norm"""
     hist_norm = np.sqrt(np.mean(np.square(arr)))
     if len(arr) < n:
         return False
@@ -25,7 +25,7 @@ def arr_converge(arr , n : int , tolerance = 1e-4) -> bool:
     return max(arr) - min(arr) < hist_norm * tolerance
 
 class EarlyStoppage(BaseCallBack):
-    '''Early Stoppage of Fitting, Peaked / Converged Valid Accuracy or Train Loss'''
+    """Early Stoppage of Fitting, Peaked / Converged Valid Accuracy or Train Loss"""
     CB_KEY_PARAMS = ['peak_patience' , 'converge_patience' , 'converge_dataset']
     def __init__(self , trainer , peak_patience = 20 , converge_patience = 5 , converge_dataset : Literal['valid' , 'any'] = 'valid' , **kwargs) -> None:
         super().__init__(trainer , **kwargs)

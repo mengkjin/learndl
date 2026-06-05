@@ -58,7 +58,7 @@ class Excess_Drawdown(ReinforceCalc):
     def plotter(self): return plotter.plot_perf_excess_drawdown
 
 class ReinforceFMPTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -68,7 +68,7 @@ class ReinforceFMPTest(BaseFactorAnalyticTest):
             'perf_excess' : Performance Excess
             'perf_drawdown' : Performance Drawdown
             'perf_year' : Performance Yearly Stats
-    '''
+    """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[ReinforceCalc]] = [
         FrontFace , 

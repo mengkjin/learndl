@@ -205,7 +205,7 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     return data_new.reset_index(drop=False)
 
 def chinese_to_pinyin(text : str):
-    '''convert chinese characters to pinyin'''
+    """convert chinese characters to pinyin"""
     text = text.replace('\'' , '2').replace('因子' , '')
     hanzi_pattern = re.compile(r'[\u4e00-\u9fff]+')
     hanzi_parts = hanzi_pattern.findall(text)

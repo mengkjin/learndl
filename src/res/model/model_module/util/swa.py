@@ -10,7 +10,7 @@ from typing import Any , Literal
 from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
 
 def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
-    '''get a subclass of _BaseEnsembler'''
+    """get a subclass of _BaseEnsembler"""
     if submodel == 'best': 
         return EnsembleBestOne
     elif submodel == 'swabest': 
@@ -21,7 +21,7 @@ def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
         raise KeyError(submodel)
 
 class SWAEnsembler(ABC):
-    '''abstract class of fittest model, e.g. model with the best accuracy, swa model of best accuracies or last ones'''
+    """abstract class of fittest model, e.g. model with the best accuracy, swa model of best accuracies or last ones"""
     def __init__(self, ckpt : Checkpoint ,  *args , **kwargs) -> None:
         self.ckpt = ckpt
         self.reset()
@@ -30,10 +30,10 @@ class SWAEnsembler(ABC):
     def reset(self): ...
     @abstractmethod
     def assess(self , status : TrainerStatus , metrics : TrainerMetrics): 
-        '''accuracy or loss to update assessment'''
+        """accuracy or loss to update assessment"""
     @abstractmethod
     def collect(self , trainer : BaseTrainer , *args , **kwargs) -> nn.Module: 
-        '''output the final fittest model state dict'''
+        """output the final fittest model state dict"""
 
 class SWAModel:
     def __init__(self , module : nn.Module) -> None:
@@ -81,7 +81,7 @@ def update_swa_bn(loader , model : AveragedModel):
     model.train(was_training)
 
 class EnsembleBestOne(SWAEnsembler):
-    '''state dict of epoch with best accuracy or least loss'''
+    """state dict of epoch with best accuracy or least loss"""
     def __init__(self, ckpt : Checkpoint , *args , **kwargs) -> None:
         super().__init__(ckpt , *args , **kwargs)
 
@@ -105,7 +105,7 @@ class EnsembleBestOne(SWAEnsembler):
         return net
 
 class EnsembleSWABest(SWAEnsembler):
-    '''state dict of n_best epochs with best accuracy or least loss'''
+    """state dict of n_best epochs with best accuracy or least loss"""
     def __init__(self, ckpt : Checkpoint , n_best = 5 ,  *args , **kwargs) -> None:
         super().__init__(ckpt ,  *args , **kwargs)
         assert n_best > 0, n_best
@@ -135,7 +135,7 @@ class EnsembleSWABest(SWAEnsembler):
         return swa.module.cpu()
     
 class EnsembleSWALast(SWAEnsembler):
-    '''state dict of n_last epochs around best accuracy or least loss'''
+    """state dict of n_last epochs around best accuracy or least loss"""
     def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 ,  *args , **kwargs) -> None:
         super().__init__(ckpt , *args , **kwargs)
         assert n_last > 0 and interval > 0, (n_last , interval)

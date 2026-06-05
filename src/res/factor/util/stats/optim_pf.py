@@ -7,7 +7,7 @@ from .basic import eval_pf_stats , eval_cum_ret , eval_drawdown
 from ..agency import BaseConditioner
 
 def _filter_account(acc : pd.DataFrame , lag0 = True , pos_model_date = False):
-    '''drop lag if exists , and select lag0'''
+    """drop lag if exists , and select lag0"""
     if lag0:
         if 'lag' in acc.index.names: 
             acc = acc.reset_index('lag',drop=False)
@@ -83,7 +83,7 @@ def calc_perf_lag(acc : pd.DataFrame):
     return df
 
 def calc_perf_period(acc : pd.DataFrame , period : Literal['year' , 'yearmonth' , 'month'] = 'year'):
-    '''Calculate performance stats for each period'''
+    """Calculate performance stats for each period"""
     if period=='year': 
         acc[period] = acc['end'].astype(str).str[:4]
     elif period == 'yearmonth':  
@@ -100,11 +100,11 @@ def calc_perf_period(acc : pd.DataFrame , period : Literal['year' , 'yearmonth' 
     return df
 
 def calc_perf_year(acc : pd.DataFrame):
-    '''Calculate performance stats for each year'''
+    """Calculate performance stats for each year"""
     return calc_perf_period(acc , 'year')
 
 def calc_perf_month(acc : pd.DataFrame):
-    '''Calculate performance stats for each calendar month'''
+    """Calculate performance stats for each calendar month"""
     return calc_perf_period(acc , 'month')
 
 def calc_exp_style(acc : pd.DataFrame):

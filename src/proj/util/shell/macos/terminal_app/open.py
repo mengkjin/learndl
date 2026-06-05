@@ -25,7 +25,7 @@ class TerminalAppOpener(BasicOpener):
         if cwd:
             command = f"cd {shlex.quote(cwd)} && {command}"
         apple_script_cmd = _applescript_escape(command)
-        script = f'''
+        script = f"""
     tell application "Terminal"
         -- Create a new terminal window
         set new_window to do script ""
@@ -34,6 +34,6 @@ class TerminalAppOpener(BasicOpener):
         -- Bring the main application window to the front
         activate
     end tell
-    '''
+    """
         # script = f'tell application "Terminal" to do script "{_applescript_escape(inner)}"'
         popen_detached(["osascript", "-e", script])

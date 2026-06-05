@@ -77,7 +77,7 @@ class PathItem:
     @classmethod
     def iter_folder(cls, folder_path: BaseType.strPath = PATH.scpt, level: int = 0 ,
                     min_level: int = 0 , max_level: int = 2) -> list[PathItem]:
-        '''get all valid items from folder recursively'''
+        """get all valid items from folder recursively"""
         items : list[PathItem] = []
         if level < min_level or level > max_level:
             return items
@@ -397,10 +397,10 @@ class ScriptRunner:
     @property
     def information(self) -> str:
         """Combined content and todo text for display."""
-        infos = f'''
+        infos = f"""
 {self.content} /
 {self.todo}
-'''
+"""
         return infos
 
     def build_task(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> TaskItem:

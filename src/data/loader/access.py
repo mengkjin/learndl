@@ -59,11 +59,11 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
        
     @abstractmethod
     def data_loader(self , date , data_type : str) -> pd.DataFrame | None:
-        '''
+        """
         loader function should return a pd.DataFrame or None
         if None is returned , the data will not be added to the collection
         if DataFrame is returned , it will be added to the collection , even if it is empty
-        '''
+        """
 
     def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
         """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""

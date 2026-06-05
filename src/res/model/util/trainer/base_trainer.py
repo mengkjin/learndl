@@ -53,7 +53,7 @@ class TrainerHookWrapper:
         return wrapper
 
 class BaseTrainer(BasePipeline):
-    '''run through the whole process of training'''
+    """run through the whole process of training"""
     _trainer : BaseTrainer | None = None
 
     def __new__(cls , *args , **kwargs):
@@ -241,7 +241,7 @@ class BaseTrainer(BasePipeline):
         return self.status.stage == 'fit'
     
     def main_process(self):
-        '''Main stage of data & fit & test'''
+        """Main stage of data & fit & test"""
         self.stage_setup()
 
         if 'data' in self.queue_of_stages:
@@ -258,11 +258,11 @@ class BaseTrainer(BasePipeline):
         return self
 
     def go(self):
-        '''alias of main_process'''
+        """alias of main_process"""
         return self.main_process()
 
     def stage_setup(self):
-        '''stage of setting up'''
+        """stage of setting up"""
         with self.logger.paragraph('Stage [Setup]' , 2):
             self.init_config()
             self.init_cores()
@@ -271,7 +271,7 @@ class BaseTrainer(BasePipeline):
             self.print_out()
 
     def stage_data(self):
-        '''stage of loading model data'''
+        """stage of loading model data"""
         with self.logger.paragraph('Stage [Data]' , 2):
             self.on_data_start_before()
             self.on_data_start()
@@ -280,7 +280,7 @@ class BaseTrainer(BasePipeline):
             self.on_data_end_after()
         
     def stage_fit(self):
-        '''stage of fitting'''
+        """stage of fitting"""
         with self.logger.paragraph('Stage [Fit]' , 2):
             self.config.log_operation('fit' , 'start')
             self.on_fit_start_before()
@@ -298,7 +298,7 @@ class BaseTrainer(BasePipeline):
             self.config.log_operation('fit' , 'end')
 
     def stage_test(self):
-        '''stage of testing'''
+        """stage of testing"""
         with self.logger.paragraph('Stage [Test]' , 2):
             self.config.log_operation('test' , 'start')
             self.on_test_start_before()
@@ -317,12 +317,12 @@ class BaseTrainer(BasePipeline):
             self.config.log_operation('test' , 'end')
 
     def stage_summary(self):
-        '''stage of summarizing'''
+        """stage of summarizing"""
         with self.logger.paragraph('Stage [Summary]' , 2):
             self.on_summarize_model()
 
     def iter_model_num_date(self): 
-        '''iter of model_date and model_num , considering is_resuming'''
+        """iter of model_date and model_num , considering is_resuming"""
        
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage

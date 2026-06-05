@@ -9,7 +9,7 @@ from src.res.model.util.core import ModelDict, ModelPath
 T = TypeVar('T')
 
 class Deposition:
-    '''model saver'''
+    """model saver"""
     def __init__(self , base_path_like : ModelPath | Any):
         if hasattr(base_path_like , 'base_path'):
             base_path = getattr(base_path_like , 'base_path')
@@ -53,5 +53,5 @@ class Deposition:
         return self.base_path.exists(model_num , model_date , submodel)
     
     def model_path(self , model_num , model_date , submodel = 'best'):
-        '''get model path of deposition giving model date / num / submodel'''
+        """get model path of deposition giving model date / num / submodel"""
         return self.base_path.full_path(model_num , model_date , submodel)

@@ -209,7 +209,7 @@ class IndustryPool:
 
 @dataclass
 class GeneralBound:
-    '''one of abs , rel , por bound'''
+    """one of abs , rel , por bound"""
     key : str | Literal[f'abs' , 'rel' , 'por']
     lb : float | np.ndarray | None = None
     ub : float | np.ndarray | None = None
@@ -312,7 +312,7 @@ class GeneralBound:
     
 @dataclass
 class ValidRange:
-    '''one of abs , rel , por bound'''
+    """one of abs , rel , por bound"""
     key : str
     lb : float | None = None
     ub : float | None = None

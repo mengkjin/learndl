@@ -25,7 +25,7 @@ class _Grads:
         torch.set_grad_enabled(self.prev)
 
 class ArchivedPredictorModel(BaseClass.BoundLogger):
-    '''for a model to predict recent/history data'''
+    """for a model to predict recent/history data"""
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
@@ -140,7 +140,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         return self
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None):
-        '''get update dates and predict these dates'''
+        """get update dates and predict these dates"""
         assert update != overwrite , 'update and overwrite must be different here'
         
         dates = CALENDAR.slice(CALENDAR.diffs(self.path.pred_target_dates , self.path.pred_dates if update else []) , start , end)
@@ -323,7 +323,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         return self.path.snapshot('hidden_values' , f'{model_num}.{model_date}.{submodel}.feather')
 
     def predict_dates(self , dates : np.ndarray | list[int]):
-        '''predict recent days'''
+        """predict recent days"""
         if len(dates) == 0: 
             return self
         dates = np.array(dates)
@@ -378,7 +378,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         return MACHINE.hfm_factor_dir is not None
 
     def deploy(self , overwrite = False):
-        '''deploy df by day to class.destination'''
+        """deploy df by day to class.destination"""
         if MACHINE.hfm_factor_dir is None: 
             return self
         try:
@@ -400,7 +400,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         return self
     
     def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
-        '''prediction correlation of ecent days'''
+        """prediction correlation of ecent days"""
         if df is None: 
             df = self.cached_df
         if df is None: 
@@ -418,7 +418,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
 
     @classmethod
     def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
-        '''Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
+        """Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' """
         cls.SetClassVB(vb_level , indent)
         cls.logger.note('Update since last update!')
         if start is not None or end is not None:

@@ -8,7 +8,7 @@ from .basic import BasicCreatorConfig , BasicPortfolioCreator
 builder_type = 'reinforce'
 
 class ReinforcePortfolioCreatorConfig(BasicCreatorConfig):
-    '''
+    """
     Config for Reverse Screening Portfolio Generator
     Screen (by screener) + Sorting (by target alpha) = (RevScreen) = (Reinforce)
     Screening is based on a screen alpha to screen stocks (e.g. choose top 50% of stocks with the gru_day_V1)
@@ -16,7 +16,7 @@ class ReinforcePortfolioCreatorConfig(BasicCreatorConfig):
 
     kwargs:
         screener     : str | list[str] = CONST.Fmp.default[builder_type]['screener'] , source and key of alpha to be used for sorting
-    '''
+    """
     slots = ['screener' , 'screen_ratio' , 'n_best' , 'turn_control' , 'buffer_zone' , 'no_zone' , 'indus_control']
 
     def __init__(

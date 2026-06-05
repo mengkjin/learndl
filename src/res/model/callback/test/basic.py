@@ -10,7 +10,7 @@ from src.proj.util.io.async_save import AsyncSaver
 from src.res.model.util import BaseCallBack
 
 class BasicTestResult(BaseCallBack):
-    '''Basic Test of RankIC'''
+    """Basic Test of RankIC"""
 
     _stat_cols : tuple[str, ...] = ('rankic' , 'top5pct' , 'mid20pct' , 'bot5pct')
     

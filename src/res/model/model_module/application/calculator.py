@@ -7,7 +7,7 @@ from src.res.model.util import ModelPath , BatchData , DataModule
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelCalculator(BaseClass.BoundLogger):
-    '''for a model_name/model_path to get batch_data easily'''
+    """for a model_name/model_path to get batch_data easily"""
     def __init__(self , model : str | ModelPath | Any , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.model_path = ModelPath(model)

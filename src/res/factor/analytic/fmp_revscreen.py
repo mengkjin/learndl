@@ -58,7 +58,7 @@ class Excess_Drawdown(RevScreenCalc):
     def plotter(self): return plotter.plot_perf_excess_drawdown
 
 class RevScreenFMPTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -68,7 +68,7 @@ class RevScreenFMPTest(BaseFactorAnalyticTest):
             'perf_excess' : Performance Excess
             'perf_drawdown' : Performance Drawdown
             'perf_year' : Performance Yearly Stats
-    '''
+    """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[RevScreenCalc]] = [
         FrontFace , 

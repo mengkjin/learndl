@@ -6,7 +6,7 @@ from src.res.model.util import PredictorModel , BatchInput
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
 
 class BoostPredictor(PredictorModel):
-    '''a group of ensemble models , of same net structure'''
+    """a group of ensemble models , of same net structure"""
     def init_model(self , 
                    model_module : str | None = None , 
                    model_param : dict | None = None ,
@@ -29,11 +29,11 @@ class BoostPredictor(PredictorModel):
         return self
     
     def reload_model(self , *args , **kwargs):
-        '''call when fitting new model'''
+        """call when fitting new model"""
         return self.init_model(*args , **kwargs)
 
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , cache_model = False , **kwargs):
-        '''call when testing new model'''
+        """call when testing new model"""
         model_file = self.load_model_file(model_num , model_date , submodel)
         assert self.model_submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
         if not cache_model or self.current_model_file.model_path != model_file.model_path:
@@ -43,7 +43,7 @@ class BoostPredictor(PredictorModel):
         return self
 
     def ckpt_state_dict(self):
-        '''revert model to an earlier epoch drom checkpoint'''
+        """revert model to an earlier epoch drom checkpoint"""
         return {
             'epoch' : self.status.epoch,
             'phase' : self.status.phase,
@@ -53,7 +53,7 @@ class BoostPredictor(PredictorModel):
         return self
     
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs): 
-        '''model object that can be called to forward'''
+        """model object that can be called to forward"""
         if len(batch_input) == 0: 
             return None
         x = batch_data_flatten_x(batch_input) if isinstance(batch_input , BatchInput) else batch_input

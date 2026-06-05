@@ -7,18 +7,18 @@ from src.res.model.util import BaseCallBack
 from src.res.model.util.core import epoch_key
 
 def arr_plateau(arr , n : int , eps = 0.) -> bool:
-    '''Last n element of arr are all smaller than the previous one'''
+    """Last n element of arr are all smaller than the previous one"""
     return arr_peaked(arr , n) or arr_converge(arr , n)
 
 def arr_peaked(arr , n : int) -> bool:
-    '''Last n element of arr are all smaller than the previous one'''
+    """Last n element of arr are all smaller than the previous one"""
     if len(arr) <= n:
         return False
     arr = arr[-(n + 1):]
     return max(arr[1:]) < arr[0]
 
 def arr_converge(arr , n : int , tolerance = 1e-4) -> bool:
-    '''Last n element of arr are running within tolerance of norm'''
+    """Last n element of arr are running within tolerance of norm"""
     hist_norm = np.sqrt(np.mean(np.square(arr)))
     if len(arr) < n:
         return False
@@ -60,7 +60,7 @@ def aggregator_factory(phase : Literal['global' , 'top'] , glb_climax : float | 
     return _aggregator
 
 class SpecificCB_Global2Top(BaseCallBack):
-    '''Fitting Control of Global2Top'''
+    """Fitting Control of Global2Top"""
     CB_KEY_PARAMS = ['protect' , 'plateau_patience' , 'converge_patience' , 'top_converge_alpha']
     OverrideCallbacks = ['EarlyStoppage']
     ConflictModuleTypes = ['factor']

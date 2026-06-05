@@ -5,14 +5,14 @@ from .data_module import DataModule
 __all__ = ['get_realistic_batch_data' , 'get_random_batch_data']
 
 def get_realistic_batch_data(input_data_types='day') -> BatchInput:
-    '''
+    """
     get a sample of realistic batch_input , 'day' , 'day+style' , '15m+style' ...
     day : stock_num x seq_len x 6
     30m : stock_num x seq_len x 8 x 6
     style : stock_num x 1 x 10
     indus : stock_num x 1 x 35
     ...
-    '''
+    """
     override = {
         'model.module':'gru',
         'input.type':'data',
@@ -26,7 +26,7 @@ def get_realistic_batch_data(input_data_types='day') -> BatchInput:
     return batch_input
 
 def get_random_batch_data(batch_size = 10 , seq_len = 30 , n_inputs = 6 , predict_steps = 1) -> BatchInput:
-    '''
+    """
     get a sample of random batch_input , 'day' , 'day+style' , '15m+style' ...
-    '''
+    """
     return BatchInput.random(batch_size , seq_len , n_inputs , predict_steps)

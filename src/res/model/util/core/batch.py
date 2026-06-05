@@ -23,7 +23,7 @@ def _object_shape(obj : Any) -> Any:
         return type(obj)
 @dataclass
 class BatchInput:
-    '''custom data component of a batch(x,y,w,i,valid)'''
+    """custom data component of a batch(x,y,w,i,valid)"""
     x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
     y       : torch.Tensor 
     w       : torch.Tensor | None
@@ -275,7 +275,7 @@ class BatchOutput:
     def hidden_df(self , secid : np.ndarray , date : np.ndarray , * , 
                   narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' ,
                   **kwargs):
-        '''kwargs will be used in df.assign(**kwargs)'''
+        """kwargs will be used in df.assign(**kwargs)"""
         full_hidden : torch.Tensor | Any = self.other['hidden']
         full_hidden = full_hidden.cpu().numpy()
 

@@ -64,7 +64,7 @@ class FactorValue:
         return self.value if isinstance(self.value , torch.Tensor) else torch.Tensor(self.value.values)
 
 def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
-    '''
+    """
     ------------------------ process factor value ------------------------
     处理因子值 , 'inf_trim_winsor_norm_neutral_nan'
     input:
@@ -75,7 +75,7 @@ def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , di
         norm_tol:      if norm required, the tolerance to eliminate factor if standard deviation is too trivial
     output:
         value:         processed factor value
-    '''
+    """
     if value is None or T.allna(value , inf_as_na = True): 
         return None
 
@@ -208,11 +208,11 @@ def svd_factors(mat : torch.Tensor | None , raw_factor : torch.Tensor | None , t
     return vector , svd
 
 def top_svd_factors(mat : torch.Tensor | None , raw_factor : torch.Tensor | None , top_n = 1 , top_ratio = 0. , dim = -1 , inplace = True):
-    '''
+    """
     mat1 = factor_coef_mean(raw_factor , dim = -1 , weight = None)
     mat2 = factor_coef_total(raw_factor, dim = -1)
     mat3 = factor_coef_with_y(raw_factor , y , corr_dim=1 , dim = -1)
-    '''
+    """
     if mat is None or raw_factor is None: 
         return raw_factor
     vector , svd = svd_factors(mat , raw_factor , dim = dim , inplace = inplace)

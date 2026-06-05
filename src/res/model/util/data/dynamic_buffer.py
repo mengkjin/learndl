@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any , Literal , Callable
 
 class DynamicDataBuffer:
-    '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''
+    """dynamic buffer space for some module to use (tra), can be updated at each batch / epoch """
     def __init__(self , device : Callable | None = None , always_on_device = False) -> None:
         self.device = device
         self.always = always_on_device

@@ -177,10 +177,10 @@ class rnn_univariate(nn.Module):
         MultiHeadLosses.add_params(self , num_output)
 
     def forward(self , x : Tensor) -> tuple[Tensor,dict]:
-        '''
+        """
         in: [bs x seq_len x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
-        '''
+        """
         x = self.encoder(x) # [bs x hidden_dim]
         x = self.decoder(x) # tuple of [bs x hidden_dim] , len is num_output
         o = self.mapping(x) # [bs x num_output]
@@ -264,10 +264,10 @@ class rnn_multivariate(nn.Module):
         MultiHeadLosses.add_params(self , num_output)
     
     def forward(self, x : Tensor) -> tuple[Tensor,dict]:
-        '''
+        """
         in: tuple of [bs x seq_len x input_dim[i]] , len is num_rnn
         out:[bs x 1] , [bs x num_rnn * hidden_dim]
-        '''
+        """
         x = self.encoder(x) # tuple of [bs x hidden_dim] , len is num_rnn
         x = self.decoder(x) # tuple of [bs x num_rnn * hidden_dim] , len is num_output
         o = self.mapping(x) # [bs, 1]
@@ -312,10 +312,10 @@ class uni_rnn_encoder(nn.Module):
             self.fc_enc_att = None
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in: [bs x seq_len x input_dim]
         out:[bs x hidden_dim]
-        '''
+        """
         x = self.fc_enc_in(x)
         x = self.fc_rnn(x)
         x = self.fc_enc_att(x) if self.fc_enc_att else x[:,-1]
@@ -348,10 +348,10 @@ class uni_rnn_decoder(nn.Module):
             self.fc_hid_out = nn.Linear(mlp_dim , 1 if map_to_one else hidden_dim)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in: [bs x hidden_dim]
         out:[bs x out_dim/hidden_dim]
-        '''
+        """
         x = self.fc_dec_mlp(x)
         return self.fc_hid_out(x)
     
@@ -372,10 +372,10 @@ class uni_rnn_mapping(nn.Module):
         if output_as_factors: 
             self.fc_map_out.append(nn.BatchNorm1d(1))
     def forward(self , x : Tensor) -> Tensor:
-        '''
+        """
         in: [bs x hidden_dim]
         out:[bs x 1]
-        '''
+        """
         return self.fc_map_out(x)
 
 class multi_rnn_encoder(nn.Module):
@@ -393,10 +393,10 @@ class multi_rnn_encoder(nn.Module):
         self.enc_list = nn.ModuleList([uni_rnn_encoder(input_dim=indim,hidden_dim=hidden_dim,**kwargs) for indim in input_dim])
 
     def forward(self, x : Tensor) -> list | tuple:
-        '''
+        """
         in: tuple of [bs x seq_len x input_dim[i]] , seq can be different 
         out:tuple of [bs x hidden_dim]
-        '''
+        """
         return [mod(inp) for inp , mod in zip(x , self.enc_list)]
     
 class multi_rnn_decoder(nn.Module):
@@ -425,10 +425,10 @@ class multi_rnn_decoder(nn.Module):
             self.fc_hid_out = nn.Linear(num_rnn*hidden_dim , hidden_dim)
 
     def forward(self, x : list[Tensor] | tuple[Tensor]) -> Tensor:
-        '''
+        """
         in: tuple of [bs x hidden_dim] , len is num_rnn
         out:[bs x hidden_dim]
-        '''
+        """
         x = [mod(inp) for inp , mod in zip(x , self.dec_list)]
         o = torch.cat(self.fc_mod_att(x) , dim = -1)
         return self.fc_hid_out(o)
@@ -452,10 +452,10 @@ class multi_rnn_mapping(nn.Module):
         if output_as_factors:  
             self.fc_map_out.append(nn.BatchNorm1d(1))
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in: [bs x hidden_dim]
         out:[bs x 1]
-        '''
+        """
         return self.fc_map_out(x)
     
 class gru(rnn_univariate):

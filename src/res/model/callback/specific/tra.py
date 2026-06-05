@@ -3,7 +3,7 @@ import torch
 from src.res.model.util import BaseCallBack
     
 class SpecificCB_TRA(BaseCallBack):
-    '''In [TRA], Fill [y] [hist_loss] in batch_input.kwargs , Update [hist_loss] in data.buffer'''
+    """In [TRA], Fill [y] [hist_loss] in batch_input.kwargs , Update [hist_loss] in data.buffer"""
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         

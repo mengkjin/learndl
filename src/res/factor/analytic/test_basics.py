@@ -70,10 +70,10 @@ class BaseFactorAnalyticCalculator(ABC, BaseClass.BoundLogger):
 
     @abstractmethod
     def calculator(self) -> Callable[...,pd.DataFrame]: 
-        '''Define calculator'''
+        """Define calculator"""
     @abstractmethod
     def plotter(self) -> Callable: 
-        '''Define plotter'''
+        """Define plotter"""
     @abstractmethod
     def calc(self , *args , **kwargs):
         self.calc_rslt = self.calculator()(*args , **kwargs)

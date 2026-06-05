@@ -86,7 +86,7 @@ class HiddenCorrDeprecated(BaseLoss):
     """
     key = 'hidden_corr_deprecated'
     def forward(self , *args , hidden : torch.Tensor | list | tuple , **kwargs) -> torch.Tensor:
-        '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
+        """if kwargs containse hidden, calculate 2nd-norm of hTh"""
         if isinstance(hidden,(tuple,list)):
             hidden = torch.cat(hidden,dim=-1)
         std_hidden = (hidden - hidden.mean(dim=0,keepdim=True)) / (hidden.std(dim=0,keepdim=True) + 1e-6)
@@ -101,7 +101,7 @@ class HiddenCorr(BaseLoss):
     """
     key = 'hidden_corr'
     def forward(self , *args , hidden : torch.Tensor | list | tuple , **kwargs) -> torch.Tensor:
-        '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
+        """if kwargs containse hidden, calculate 2nd-norm of hTh"""
         if isinstance(hidden,(tuple,list)):
             hidden = torch.cat(hidden,dim=-1)
         std_hidden = (hidden - hidden.mean(dim=0,keepdim=True)) / (hidden.std(dim=0,keepdim=True) + 1e-6)

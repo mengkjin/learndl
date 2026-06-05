@@ -8,7 +8,7 @@ from typing import Any
 __all__ = ['GeneralModel']
 
 class GeneralModel(ABC):
-    '''Any model composed of daily models. Must define abstractmethod: __init__ , load_day_model'''
+    """Any model composed of daily models. Must define abstractmethod: __init__ , load_day_model"""
     @abstractmethod
     def __init__(self , *args , **kwargs) -> None:
         self.models : dict[int,Any] = {}

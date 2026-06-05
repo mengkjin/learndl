@@ -128,7 +128,7 @@ class ScaledDotProductAttention(nn.Module):
                 prev:Tensor | None = None, 
                 key_padding_mask:Tensor | None = None, 
                 attn_mask:Tensor | None = None):
-        '''
+        """
         Input shape:
             q               : [bs x n_heads x max_q_len x d_k]
             k               : [bs x n_heads x d_k x seq_len]
@@ -140,7 +140,7 @@ class ScaledDotProductAttention(nn.Module):
             output:  [bs x n_heads x q_len x d_v]
             attn   : [bs x n_heads x q_len x seq_len]
             scores : [bs x n_heads x q_len x seq_len]
-        '''
+        """
 
         # Scaled MatMul (q, k) - similarity scores for all pairs of positions in an input sequence
         attn_scores = torch.matmul(q, k) * self.scale      # attn_scores : [bs x n_heads x max_q_len x q_len]

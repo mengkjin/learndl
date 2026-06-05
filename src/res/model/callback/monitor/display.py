@@ -10,7 +10,7 @@ from src.proj import Duration , Proj
 from src.res.model.util import BaseCallBack , BatchInputLoader
 
 class CallbackTimer(BaseCallBack):
-    '''Time Cost of Callback Hooks'''
+    """Time Cost of Callback Hooks"""
     CB_ORDER = 1000
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -40,7 +40,7 @@ class CallbackTimer(BaseCallBack):
                 self.logger.display(df , caption = 'Table: Callback Time Costs:')  
             
 class StatusDisplay(BaseCallBack):
-    '''Display Epoch and Event Information'''
+    """Display Epoch and Event Information"""
     CB_ORDER : int = 100
 
     def __init__(self , trainer , **kwargs) -> None:

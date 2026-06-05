@@ -94,7 +94,12 @@ def spearman(x : torch.Tensor , y : torch.Tensor , w = None , dim = None , **kwa
         Spearman correlation.
     """
     x , y = rank(x , dim = dim) , rank(y , dim = dim)
-    return pearson(x , y , w , dim , **kwargs)
+    value = pearson(x , y , w , dim , **kwargs)
+
+    if value.isnan().any():
+        print(x)
+        print(y)
+    return value
 
 def wpearson(x : torch.Tensor , y : torch.Tensor , dim = None , **kwargs):
     """Pearson with weights from ``rank_weight(y, dim)``.

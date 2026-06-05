@@ -49,12 +49,12 @@ def calc_ic_decay(
     ic_type : Literal['pearson' , 'spearman'] = 'spearman' , 
     ret_type : Literal['close' , 'vwap'] = 'close'
 ) -> pd.DataFrame:
-    '''
+    """
     nday : days of future return
     lag_init : starting lag of most recent future return , usually 1 or 2
     lag_num  : how many lagging period to calculate ic
     benchmark : within some benchmark
-    '''
+    """
     factor = factor.within(benchmark)
     decay_pnl_dfs : list[pd.DataFrame] = []
     for lag in range(lag_num):

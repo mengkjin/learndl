@@ -88,10 +88,10 @@ def eval_uncovered_max_drawdown(dd : pd.Series | Any , groupby : str | list[str]
     return umd
 
 def eval_detailed_drawdown(pf : pd.Series , groupby : str | list[str] | None = None):
-    '''
+    """
     based on the pf , calculate the detailed drawdown , including:
     cum_ret , peak , drawdown , uncovered_max_drawdown , recover_ratio
-    '''
+    """
     df = pf.to_frame('pf')
     df['cum_ret'] = eval_cum_ret(df['pf'] , how = 'exp' , groupby = groupby)
     df['peak'] = eval_cum_peak(df['pf'] , how = 'exp' , groupby = groupby)

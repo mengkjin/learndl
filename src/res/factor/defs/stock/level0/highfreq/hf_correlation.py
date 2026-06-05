@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 def eval_corr_expression(expression : str):
-    '''expression : val1@lag1,val2@lag2,beta'''
+    """expression : val1@lag1,val2@lag2,beta"""
     default_expression = {
         'beta' : 'ret,mkt,True' ,
         'corr' : 'ret,mkt' ,

@@ -7,7 +7,7 @@ from .basic import BasicCreatorConfig , BasicPortfolioCreator
 builder_type = 'screen'
 
 class ScreeningPortfolioCreatorConfig(BasicCreatorConfig):
-    '''
+    """
     Config for Screening Portfolio Generator
     Screen (by target alpha) + Sorting (by sorter) = Screening
     Screening is based on the target alpha to screen stocks (e.g. choose top 50% of stocks with the target alpha)
@@ -15,7 +15,7 @@ class ScreeningPortfolioCreatorConfig(BasicCreatorConfig):
 
     kwargs:
         sorter          : str | list[str] = CONST.Fmp.default[builder_type]['sorter'] , source and key of alpha to be used for sorting
-    '''
+    """
 
     def __init__(
         self , 

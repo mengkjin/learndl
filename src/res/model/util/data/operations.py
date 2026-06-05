@@ -77,7 +77,7 @@ class Prenormer:
 
 
 class PrenormOperator:
-    '''prenorm operator for data module datas'''
+    """prenorm operator for data module datas"""
     def __init__(self, config: ModelConfig , histnorms : dict[str, DataBlockNorm] | None = None):
         self.config = config
         self.histnorms = histnorms or {}
@@ -109,7 +109,7 @@ class PrenormOperator:
         return self[key](x , self.histnorms.get(key , None))
 
 class DataOperator:
-    '''operations for data module datas'''
+    """operations for data module datas"""
     def __init__(self, config: ModelConfig , loader_param: DataloaderParam):
         self.config = config
         self.loader_param = loader_param
@@ -127,7 +127,7 @@ class DataOperator:
         return self.config.seq_steps
 
     def get_seqlen_step(self , key : str | None) -> tuple[int,int]:
-        '''get seqlen and step for a given key'''
+        """get seqlen and step for a given key"""
         if not key:
             return 1 , 1
         else:
@@ -136,7 +136,7 @@ class DataOperator:
 
     def standardize_y(
         self , y : torch.Tensor , valid : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
-        '''standardize y and weight'''
+        """standardize y and weight"""
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if valid is not None: 
             y.nan_to_num_(0)[~valid] = torch.nan
@@ -146,7 +146,7 @@ class DataOperator:
         return y, w
 
     def label_weighting(self , weight_scheme : Literal['equal' , 'top' , 'polar'] , y : torch.Tensor) -> torch.Tensor | None:
-        '''weighting for label'''
+        """weighting for label"""
         if weight_scheme == 'equal' or y.isnan().all().item(): 
             return None
         if weight_scheme == 'top':
@@ -163,7 +163,7 @@ class DataOperator:
         return w
 
     def rolling_rotation(self , key : str | None , x : torch.Tensor , index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , * , dim = 1 , squeeze_out = True) -> torch.Tensor:
-        '''rotate [stock , date , inday , feature] to [sample , rolling sequence (by step) , inday , feature]'''
+        """rotate [stock , date , inday , feature] to [sample , rolling sequence (by step) , inday , feature]"""
         
         seqlen , step = self.get_seqlen_step(key)
         assert x.ndim == 4 , x.ndim
@@ -186,7 +186,7 @@ class DataOperator:
         return new_x
 
     def finite_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
-        '''return finite position (with shape of len(index[0]) * step_len) the first 2 dims'''
+        """return finite position (with shape of len(index[0]) * step_len) the first 2 dims"""
         all_valid = self.config.module_type == 'nn'
         endpoint_nonzero = key and (key in DataBlockNorm.DIVLAST)
         seqlen , step = self.get_seqlen_step(key)
@@ -208,13 +208,13 @@ class DataOperator:
         return valid
 
     def split_sample(self , valid : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:
-        '''
+        """
         update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
         sample_tensor should be boolean tensor , True indicates non
 
         train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
         test sample method: sequential
-        '''
+        """
         sample_method = self.config.sample_method
         train_ratio = self.config.train_ratio
         batch_size = self.config.batch_size

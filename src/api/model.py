@@ -11,7 +11,7 @@ from .util import wrap_update
 class ModelAPI:
     @classmethod
     def update(cls):
-        '''
+        """
         Update prediction interims and results periodically:
 
         [API Interaction]:
@@ -23,14 +23,14 @@ class ModelAPI:
           disable_platforms: []
           execution_time: short
           memory_usage: medium
-        '''
+        """
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
         wrap_update(ArchivedPredictorModel.update , 'update predictors')
         wrap_update(ModelPortfolioBuilder.update , 'update predictor portfolios')
     
     @classmethod
     def update_models(cls , force_update : bool = False):
-        '''
+        """
         Update models for both laptop and server:
         a. for laptop, do nothing
         b. for server, continue training prediction models in model'
@@ -47,7 +47,7 @@ class ModelAPI:
           disable_platforms: [windows, macos]
           execution_time: long
           memory_usage: high
-        '''
+        """
         if MACHINE.cuda_server:
             wrap_update(cls.prepare_fit_data , 'prepare fit data')
             ModelTrainer.update_models(force_update = force_update)
@@ -56,7 +56,7 @@ class ModelAPI:
 
     @classmethod
     def resume_testing(cls , force_resume : bool = False , daily_update_component : bool = False):
-        '''
+        """
         Resume testing models for both laptop and server:
 
         Args:
@@ -71,7 +71,7 @@ class ModelAPI:
           disable_platforms: []
           execution_time: medium
           memory_usage: medium
-        '''
+        """
         if daily_update_component:
             record_entry = DiskTTLCache.get('daily_update', 'resume_testing')
             if record_entry.valid_value:
@@ -85,7 +85,7 @@ class ModelAPI:
     
     @classmethod
     def update_preds(cls):
-        '''
+        """
         Update factors for prediction models for both laptop and server:
 
         [API Interaction]:
@@ -97,13 +97,13 @@ class ModelAPI:
           disable_platforms: []
           execution_time: short
           memory_usage: medium
-        '''
+        """
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
         wrap_update(ArchivedPredictorModel.update , 'update predictors')
 
     @classmethod
     def recalculate_preds(cls , start : int | None = None , end : int | None = None):
-        '''
+        """
         Recalculate factors for prediction models for both laptop and server:
 
         Args:
@@ -119,12 +119,12 @@ class ModelAPI:
           disable_platforms: [macos]
           execution_time: long
           memory_usage: medium
-        '''
+        """
         wrap_update(ArchivedPredictorModel.recalculate , 'recalculate all predictors' , start = start , end = end)
     
     @classmethod
     def test_models(cls , module : str = 'tra_lstm' , data_types : str = 'day'):
-        '''
+        """
         Lightweight forward-pass smoke test for *module* on *data_types*.
 
         Args:
@@ -140,21 +140,21 @@ class ModelAPI:
           disable_platforms: []
           execution_time: immediate
           memory_usage: low
-        '''
+        """
         return ModelTestor(module , data_types).try_forward()
     
     @classmethod
     def initialize_trainer(cls , stage : int = 0 , resume : int = 0 , selection : int = 0):
-        '''
+        """
         stage:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose] , [0,no]       , [1,yes]
         selection: [-1,choose] , [0,raw model name if resuming, create a new model name dir otherwise]  , [1,2,3,...: choose by number, start from 1]
-        '''
+        """
         return ModelTrainer.initialize(stage = stage , resume = resume , selection = selection)
     
     @classmethod
     def prepare_predict_data(cls): 
-        '''
+        """
         prepare latest(1 year or so) train data for predict use, do it after 'update'
 
         [API Interaction]:
@@ -166,12 +166,12 @@ class ModelAPI:
           disable_platforms: []
           execution_time: short
           memory_usage: medium
-        '''
+        """
         PreProcessorTask.update(predict=True)
 
     @classmethod
     def prepare_fit_data(cls): 
-        '''
+        """
         prepare historical(since 2007 , use for models starting at 2017) train data, extend based on existing data
 
         [API Interaction]:
@@ -183,12 +183,12 @@ class ModelAPI:
           disable_platforms: []
           execution_time: short
           memory_usage: medium
-        '''
+        """
         PreProcessorTask.update(predict=False , confirm = True)
 
     @classmethod
     def reconstruct_train_data(cls , confirm : bool = True): 
-        '''
+        """
         Reconstruct historical(since 2007 , use for models starting at 2017) train data
 
         Args:
@@ -203,13 +203,13 @@ class ModelAPI:
           disable_platforms: [macos]
           execution_time: long
           memory_usage: high
-        '''
+        """
         PreProcessorTask.reconstruct(predict=False , confirm=confirm)
 
     @classmethod
     def train_model(cls , module : str | None = None , short_test : bool | None = None , 
                     start : int | None = None , end : int | None = None , **kwargs):
-        '''
+        """
         Train a model
 
         Args:
@@ -228,7 +228,7 @@ class ModelAPI:
           disable_platforms: [windows, macos]
           execution_time: long
           memory_usage: high
-        '''
+        """
         with Proj.vb.temporary_vb('max' if short_test else None):
             trainer = ModelTrainer.train(module , short_test , start = start , end = end , 
                                          stage = 0 , resume = 0 , selection = 0 , **kwargs)
@@ -236,7 +236,7 @@ class ModelAPI:
 
     @classmethod
     def resume_model(cls , model_name : str):
-        '''
+        """
         Resume a trained model
 
         Args:
@@ -251,13 +251,13 @@ class ModelAPI:
           disable_platforms: [windows, macos]
           execution_time: long
           memory_usage: medium
-        '''
+        """
         return ModelTrainer.resume_train(model_name = model_name)
     
     @classmethod
     def test_model(cls , model_name : str | None = None , resume : int = 0 ,
                    start : int | None = None , end : int | None = None , **kwargs):
-        '''
+        """
         Test a existing model
 
         Args:
@@ -276,13 +276,13 @@ class ModelAPI:
           disable_platforms: []
           execution_time: medium
           memory_usage: medium
-        '''
+        """
         return ModelTrainer.test(model_name , resume = int(resume) , start = start , end = end , **kwargs)
 
     @classmethod
     def test_factor(cls , factor_name : str | None = None , resume : int = 0 ,
                     start : int | None = None , end : int | None = None , **kwargs):
-        '''
+        """
         Test a existing factor
 
         Args:
@@ -301,13 +301,13 @@ class ModelAPI:
           disable_platforms: []
           execution_time: long
           memory_usage: high
-        '''
+        """
         return ModelTrainer.test_factor(factor_name , resume = resume , start = start , end = end , **kwargs)
 
     @classmethod
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , resume : int = 1 , 
                        start : int | None = None , end : int | None = None , **kwargs):
-        '''
+        """
         Train a schedule model in config/model/schedule or .local_resources/shared/schedule_model folder
 
         Args:
@@ -327,13 +327,13 @@ class ModelAPI:
           disable_platforms: [windows, macos]
           execution_time: long
           memory_usage: medium
-        '''
+        """
         with Proj.vb.temporary_vb('max' if short_test else None):
             return ModelTrainer.schedule(schedule_name , short_test , start = start , end = end , resume = resume , **kwargs)
     
     @classmethod
     def clear_st_models(cls):
-        '''
+        """
         Clear short test models in model folder
 
         [API Interaction]:
@@ -346,14 +346,14 @@ class ModelAPI:
           disable_platforms: []
           execution_time: short
           memory_usage: medium
-        '''
+        """
         for path in PATH.model_st.iterdir():
             model_path = ModelPath(path)
             model_path.clear_model_path()
 
     @classmethod
     def available_models(cls , include_short_test : bool = False , include_factors : bool = False):
-        '''
+        """
         Get available models in model folder
 
         Args:
@@ -370,12 +370,12 @@ class ModelAPI:
           disable_platforms: []
           execution_time: immediate
           memory_usage: low
-        '''
+        """
         return ModelTrainer.available_models(include_short_test = include_short_test , include_factors = include_factors)
 
     @classmethod
     def rename_model(cls , old_full_name : str , new_clean_name : str):
-        '''
+        """
         Rename a model
 
         Args:
@@ -392,6 +392,6 @@ class ModelAPI:
           disable_platforms: []
           execution_time: short
           memory_usage: medium
-        '''
+        """
         model_path = ModelPath(old_full_name)
         return model_path.rename(new_clean_name)

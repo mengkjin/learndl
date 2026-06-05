@@ -85,9 +85,9 @@ class PortCreator(ABC , BaseClass.BoundLogger):
             raise ValueError(f'Unknown category: {category}')
 
 class PortCreateUtility:
-    '''compute final utility of a portfolio'''
+    """compute final utility of a portfolio"""
     def __init__(self , **kwargs) -> None:
-        '''input any numerical component of utility function'''
+        """input any numerical component of utility function"""
         self.component = {}
         self.add(**kwargs)
 
@@ -108,12 +108,12 @@ class PortCreateUtility:
         return sum(utilities) if utilities else 0
     
 class PortCreateAccuracy:
-    '''record custom optimization accuracy'''
+    """record custom optimization accuracy"""
     EPS = 1e-5
     EPS_DICT = {'excess_turn' : 1e-4}
 
     def __init__(self , **kwargs) -> None:
-        '''input any numerical component of accuracy function'''
+        """input any numerical component of accuracy function"""
         self.component = {}
         self.add(**kwargs)
 

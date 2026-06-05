@@ -66,7 +66,7 @@ class LossAggregator:
     
 
 class MetricAggregator:
-    '''perform aggregation operations on a list of metrics (loss and accuracy)'''
+    """perform aggregation operations on a list of metrics (loss and accuracy)"""
     def __init__(self):
         self.accuracy_aggregators : list[AccuracyAggregator] = [AccuracyAggregator()]
         self.loss_aggregators : list[LossAggregator] = [LossAggregator()]

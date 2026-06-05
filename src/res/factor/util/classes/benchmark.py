@@ -12,9 +12,9 @@ from .portfolio import Port , Portfolio
 __all__ = ['Benchmark']
 
 class Benchmark(Portfolio):
-    '''
+    """
     orthodox benchmark in AVAIL_BENCHMARK : csi300 , csi500 , csi800 , csi1000
-    '''
+    """
     _instance_dict = {}
     
     AVAILABLES = Const.Factor.BENCH.availables
@@ -187,5 +187,5 @@ class Benchmark(Portfolio):
         return pd.Categorical(bm , categories = cls.CATEGORIES + new_bm , ordered=True) 
     
     def accounting(self , **kwargs):
-        '''Benchmark cannot be accounted'''
+        """Benchmark cannot be accounted"""
         raise NotImplementedError('Benchmark cannot be accounted')

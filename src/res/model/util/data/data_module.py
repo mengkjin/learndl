@@ -7,7 +7,7 @@ import gc , torch
 from functools import cached_property
 from typing import Any , Literal , Callable
 
-from src.proj import CALENDAR , Const, MACHINE , BaseClass
+from src.proj import CALENDAR , Const, MACHINE , BaseClass , Proj
 from src.data import ModuleData
 
 from src.func import match_values
@@ -67,7 +67,7 @@ class DataModule(BaseClass.BoundLogger):
         return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'    
     
     def load_data(self):
-        '''load prepared data at training begin , only load data once in a fitting'''
+        """load prepared data at training begin , only load data once in a fitting"""
         self.datas = ModuleData.initialize(
             self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
             use_data = self._use_data ,
@@ -79,7 +79,7 @@ class DataModule(BaseClass.BoundLogger):
             dtype = self.config.precision)
 
         self.datas.load()
-        self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb = 10)
+        self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb = 1)
         
         self.config.update_data_param(self.datas.x)
         
@@ -101,7 +101,7 @@ class DataModule(BaseClass.BoundLogger):
         return self
 
     def set_critical_dates(self):
-        '''set critical dates for model date list and test full dates'''
+        """set critical dates for model date list and test full dates"""
         dates = self.datas.date_within(self.beg_date , self.end_date)
         # check if dates is align with CALENDAR
         assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
@@ -214,11 +214,11 @@ class DataModule(BaseClass.BoundLogger):
             assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
 
     def setup_loader_inputs(self):
-        '''additional input prepare for hidden input'''
+        """additional input prepare for hidden input"""
         self.setup_loader_inputs_hidden()
 
     def setup_loader_inputs_hidden(self):
-        '''additional input prepare for hidden input , calculate hiddens and temporary store them'''
+        """additional input prepare for hidden input , calculate hiddens and temporary store them"""
         if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
             return
         from src.res.model.model_module.application import ArchivedPredictorModel
@@ -242,11 +242,6 @@ class DataModule(BaseClass.BoundLogger):
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
         self.y_std = self.labels[:,self.d0:self.d1]
 
-        self.logger.stdout(f'datas shape: {self.datas.shape}')
-        self.logger.stdout(f'x_full: {x_full.keys()}')
-        self.logger.stdout(f'x_full shapes: {[x.shape for x in x_full.values()]}')
-        self.logger.stdout(f'y_std: {self.y_std.shape}')
-
         x_shapes = [x.shape[:2] for x in x_full.values()]
         assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
@@ -254,6 +249,16 @@ class DataModule(BaseClass.BoundLogger):
         valid_y = self.y_std if self.is_fitting else None
 
         valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
+
+        if Proj.verbose(self.vb_level + 2):
+            self.logger.stdout(f'loader_param: {self.loader_param}')
+            self.logger.stdout(f'x shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
+            if valid_sampled is not None:
+                valid_sample_by_date = valid_sampled.sum(dim=0)
+                min_valid_sampled = valid_sample_by_date.min()
+                max_valid_sampled = valid_sample_by_date.max()
+                self.logger.stdout(f'valid samples by date: {min_valid_sampled} ~ {max_valid_sampled}' , idt = 1)
+
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_sampled , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
@@ -327,11 +332,11 @@ class DataModule(BaseClass.BoundLogger):
         return self.labels_np[:,self.datas.y.date == date][...,0].squeeze()
 
     def valid_position(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
-        '''
+        """
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
         others : rolling window non-nan , default as self.seqy
-        '''
+        """
         valids : list[torch.Tensor] = []
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
@@ -349,7 +354,7 @@ class DataModule(BaseClass.BoundLogger):
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
        
     def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
-        '''update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them'''   
+        """update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them"""   
         if valid is None: 
             valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx

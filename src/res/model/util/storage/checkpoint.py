@@ -58,7 +58,7 @@ class CkptEpochRecord:
         return self
 
 class Checkpoint:
-    '''model checkpoint for epochs'''
+    """model checkpoint for epochs"""
     def __init__(self , * , memory_buffer_epochs = 20):
         """
         mem_storage: whether to store in memory

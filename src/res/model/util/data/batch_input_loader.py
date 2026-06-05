@@ -11,6 +11,7 @@ __all__ = ['BatchInputLoader' , 'DataloaderParam']
 
 @dataclass
 class DataloaderParam:
+    """parameters for data loader"""
     stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] = 'fit'
     model_date : int | Any = None
     seqlens : dict[str,int] | Any = None
@@ -41,7 +42,7 @@ class DataloaderParam:
             match_attrs.append('model_date')
         return all([getattr(self , attr) == getattr(other , attr) for attr in match_attrs])
 class BatchInputLoader:
-    '''wrap loader to impletement DataModule Callbacks'''
+    """wrap loader to impletement DataModule Callbacks"""
     def __init__(self , raw_loader : Sequence[BatchInput] , data_module , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
         from src.res.model.util.data import DataModule
         assert isinstance(data_module , DataModule) , f'data_module must be an instance of BaseDataModule, but got {type(data_module)}'

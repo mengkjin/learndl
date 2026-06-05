@@ -71,13 +71,13 @@ class AccTimer(BaseClass.BoundLogger):
         return wrapper
 
 class gpTimer(BaseClass.BoundLogger):
-    '''
+    """
     ------------------------ gp timers ------------------------
     includes:
         PTimer     : record a process and its time cost
         AccTimer   : record a series of time costs, can average later
         EmptyTimer : do nothing
-    '''
+    """
     _instance = None
     _primas_decorated = False
     def __new__(cls , *args , **kwargs):

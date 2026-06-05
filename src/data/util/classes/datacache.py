@@ -99,7 +99,7 @@ class DataCache:
                 metadata = self.load_metadata()
                 data = torch_load(self.path.joinpath('data.pt'))
         except ModuleNotFoundError as e:
-            '''can be caused by different package version'''
+            """can be caused by different package version"""
             Logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!' , indent = 1 , vb_level = 2)
             data , metadata = None , {}
             self._remove_cache_file(self.key)

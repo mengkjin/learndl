@@ -13,7 +13,7 @@ from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
 
 class PredictorModel(TrainerPipeline):
-    '''a group of ensemble models , of same net structure'''
+    """a group of ensemble models , of same net structure"""
     COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
     
     def __init__(self, *args , vb_level : Any = 1 , **kwargs) -> None:
@@ -83,7 +83,7 @@ class PredictorModel(TrainerPipeline):
         return ModelFile(None)
 
     def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
-        '''call when fitting/testing new model'''
+        """call when fitting/testing new model"""
         if model_num is not None: 
             self._model_num  = model_num
         else: 
@@ -101,39 +101,39 @@ class PredictorModel(TrainerPipeline):
     
     @abstractmethod
     def reload_model(self , *args , **kwargs):
-        '''call when fitting new model or having new attempt, reload model parameters and initialize weights and optimizer'''
+        """call when fitting new model or having new attempt, reload model parameters and initialize weights and optimizer"""
         from src.res.model.util.trainer.optimizer import Optimizer
         self.optimizer : Optimizer
         return self
     
     @abstractmethod
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
-        '''call when testing new model'''
+        """call when testing new model"""
         return self
     @abstractmethod
     def ckpt_state_dict(self) -> dict[str , Any]:
-        '''state dict of model at epoch to be saved in checkpoint'''
+        """state dict of model at epoch to be saved in checkpoint"""
     @abstractmethod
     def load_state_dict(self , state_dict : dict):
-        '''load state dict of model from checkpoint'''
+        """load state dict of model from checkpoint"""
         return self
     @abstractmethod
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
-        '''model object that can be called to forward'''
+        """model object that can be called to forward"""
     @abstractmethod
     def fit(self) -> None:
-        '''fit the model inside'''
+        """fit the model inside"""
     @abstractmethod
     def collect(self , submodel = 'best' , *args) -> ModelDict: 
-        '''collect model params, called before stacking model'''
+        """collect model params, called before stacking model"""
 
     def new_model(self , *args , **kwargs):
-        '''call when fitting new model'''
+        """call when fitting new model"""
         self.reload_model(*args , **kwargs)
         return self
     
     def stack_model(self):
-        '''temporaly save self to somewhere'''
+        """temporaly save self to somewhere"""
         self.metrics.collect_attempt()
         if self.metrics.epoch_train_metrics.nanloss:
             # skip saving model when nan loss is encountered
@@ -144,7 +144,7 @@ class PredictorModel(TrainerPipeline):
             self.deposition.stack_model(model_dict , self.status.attempt_key , self.model_num , self.model_date , self.model_submodel) 
 
     def dump_model(self):
-        '''dump model to somewhere'''
+        """dump model to somewhere"""
         self.metrics.collect_model()
         self.trainer.on_before_dump_model()
         best_attempt = self.metrics.model_metrics.best_attempt()
@@ -152,7 +152,7 @@ class PredictorModel(TrainerPipeline):
             self.deposition.dump_stacked_model(best_attempt , self.model_num , self.model_date , self.model_submodel) 
 
     def test(self):
-        '''test the model inside'''
+        """test the model inside"""
         if self.data.no_date_to_test:
             return
         for _ in self.trainer.iter_model_submodels():

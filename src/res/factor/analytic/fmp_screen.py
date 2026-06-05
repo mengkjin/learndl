@@ -59,7 +59,7 @@ class Perf_Year(ScreenCalc):
 
 
 class ScreenFMPTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -69,7 +69,7 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
             'perf_excess' : Performance Excess
             'perf_drawdown' : Performance Drawdown
             'perf_year' : Performance Yearly Stats
-    '''
+    """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[ScreenCalc]] = [
         FrontFace , 

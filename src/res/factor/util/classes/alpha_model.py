@@ -30,7 +30,7 @@ def _to_dates(date : int | list[int] | np.ndarray) -> np.ndarray:
 
 @dataclass
 class Amodel:
-    '''Alpha model of one day instance'''
+    """Alpha model of one day instance"""
     date  : int
     alpha : np.ndarray
     secid : np.ndarray
@@ -229,7 +229,7 @@ class Amodel:
         return cls(date , np.array([]) , np.array([]) , name)
 
 class AlphaModel(GeneralModel):
-    '''Alpha model instance, contains alpha for multiple days'''
+    """Alpha model instance, contains alpha for multiple days"""
     def __init__(self , name : str = 'Alpha0' , models : Amodel | list[Amodel] | dict[int,Amodel] | Any = None) -> None:
         self.name = name
         self.models : dict[int,Amodel] = {}

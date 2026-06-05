@@ -35,7 +35,7 @@ class NNPredictor(PredictorModel):
         return self
 
     def reload_model(self , lr_multiplier = 1. , *args , **kwargs):
-        '''call when fitting/testing new model'''
+        """call when fitting/testing new model"""
         self.init_model(*args , **kwargs)
         transferred = False
         if self.trainer and self.trainer.if_transfer:
@@ -47,7 +47,7 @@ class NNPredictor(PredictorModel):
         return self
     
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , cache_model = False , **kwargs):
-        '''call when testing new model'''
+        """call when testing new model"""
         model_file = self.load_model_file(model_num , model_date , submodel)
         if not cache_model or self.current_model_file.model_path != model_file.model_path:
             self.init_model(*args , **kwargs)
@@ -56,7 +56,7 @@ class NNPredictor(PredictorModel):
         return self
     
     def ckpt_state_dict(self):
-        '''state dict of model at epoch to be saved in checkpoint'''
+        """state dict of model at epoch to be saved in checkpoint"""
         return {
             'epoch' : self.status.epoch,
             'phase' : self.status.phase,
@@ -72,7 +72,7 @@ class NNPredictor(PredictorModel):
         return self
     
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
-        '''model object that can be called to forward'''
+        """model object that can be called to forward"""
         if len(batch_input) == 0: 
             return None
         x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input

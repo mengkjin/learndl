@@ -1,10 +1,10 @@
-'''
+"""
 In this module, we will define the portfolio conditioner
 The purpose of the portfolio conditioner is to adjust the portfolio according to conditions,
 for example, 
 1. the drawdown is too high, we need cut the position to 0
 2. the rebounce is sufficient, we add back the position to 1
-'''
+"""
 
 from __future__ import annotations
 import pandas as pd
@@ -20,9 +20,9 @@ from src.res.factor.util.stats import eval_cum_ret , eval_drawdown , eval_uncove
 from .portfolio_accountant import PortfolioAccount
 
 def select_conditioner(name : str):
-    '''
+    """
     select the conditioner based on the name
-    '''
+    """
     subclasses = BaseConditioner.__subclasses__()
     candidates = [subclass for subclass in subclasses if subclass.match(name)]
     if len(candidates) == 0:
@@ -70,9 +70,9 @@ class AccountConditioner:
         return pf
     
 class BaseConditioner(ABC):
-    '''
+    """
     the base abstract class of the conditioner
-    '''
+    """
     CONDITIONER_NAME : str | list[str] | None = None
 
     def __init__(self , portfolio : Portfolio | None = None):
@@ -90,11 +90,11 @@ class BaseConditioner(ABC):
         
     @staticmethod
     def drawdown_rebound_condition(account : PortfolioAccount , stop_threshold : float = 0.1 , rebounce_threshold : float = 0.25) -> pd.Series:
-        '''
+        """
         the basic drawdown rebound condition
             stop_threshold : the threshold of the stop to change the condition to 0
             rebounce_threshold : the threshold of the rebounce from bottom to change the condition to 1
-        '''
+        """
         drawdown = eval_drawdown(account.pf , how = 'exp')
         umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
         rebounce = drawdown - umd.fillna(1)
@@ -111,13 +111,13 @@ class BaseConditioner(ABC):
             rebounce_threshold : float = 0.25 ,
             progressive_add_stop : float | None = None ,
         ) -> pd.Series:
-        '''
+        """
         the progressive condition
             stop_threshold : the threshold of the stop to change the condition to 0
             rebounce_threshold : the threshold of the rebounce from bottom to change the condition to 1
             progressive_add_stop : additive stop to change the stop_threshold every rebounce , 
                     if None, will use the rebounce_threshold to change the stop_threshold
-        '''
+        """
         drawdown = eval_drawdown(account.pf , how = 'exp')
         umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
         recover_ratio = (1 - drawdown / umd.fillna(1))
@@ -146,15 +146,15 @@ class BaseConditioner(ABC):
 
     @abstractmethod
     def conditions(self , account : PortfolioAccount) -> pd.Series:
-        '''
+        """
         account : PortfolioAccount
             the account of the portfolio
         return : condition signal pd.Series , latent magnified factor, on the exact date of the input
-        '''
+        """
         ...
     
     def conditioning(self , input : Portfolio | pd.DataFrame | pd.Series | np.ndarray | list[float] | None = None):
-        '''
+        """
         input : Portfolio | pd.DataFrame | pd.Series | np.ndarray | PortfolioAccount | None
             if input is None, will use the self.portfolio's account
             if input is Portfolio, will use the input's account
@@ -163,7 +163,7 @@ class BaseConditioner(ABC):
             if input is np.ndarray, it should be the daily pf return of the portfolio
             if input is PortfolioAccount, it should be the account of the portfolio
         return : pd.Series , designated magnified factor, on the exact date of the input
-        '''
+        """
         account = self.account if input is None else PortfolioAccount(input)
         conditions = self.conditions(account)
         return AccountConditioner(account , conditions)
@@ -174,9 +174,9 @@ class BaseConditioner(ABC):
     
     def conditioned_pf_ret(self , input : Portfolio | pd.DataFrame | pd.Series | np.ndarray | list[float] | None = None , 
                            plot = False) -> np.ndarray:
-        '''
+        """
         return the conditioned comparison pf return
-        '''
+        """
         conditioner = self.conditioning(input)
         cum_cond_pf = eval_cum_ret(conditioner.conditioned_pf , 'exp')
         assert isinstance(cum_cond_pf , pd.Series) , f'cum_cond_pf must be pd.Series not pd.DataFrame {cum_cond_pf}'
@@ -210,9 +210,9 @@ class BaseConditioner(ABC):
         return self.adjusted_portfolio(self.portfolio)
 
 class BalanceOptimisticConditioner(BaseConditioner):
-    '''
+    """
     the default conditioner, which is the balance_neutral conditioner
-    '''
+    """
     CONDITIONER_NAME = ['balance', 'balance_optimistic']
     def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.1 , rebounce_threshold = 0.025)

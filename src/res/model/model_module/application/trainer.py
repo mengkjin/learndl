@@ -9,7 +9,7 @@ from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
 class ModelTrainer(BaseTrainer):
-    '''run through the whole process of training'''
+    """run through the whole process of training"""
     @classmethod
     def initialize(cls , base_path = None , * ,
                    module = None , schedule_name = None , override : dict | None = None , 
@@ -17,11 +17,11 @@ class ModelTrainer(BaseTrainer):
                    use_data : Literal['fit','predict','both'] = 'fit' ,
                    stage = -1 , resume = -1 , selection = -1 , 
                    **kwargs):
-        '''
+        """
         state:     [-1,choose if optional] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose if optional] , [0,no]       , [1,yes]
         selection: [-1,choose if optional] , [0,raw model name unless fitting and not resuming]  , [1,2,3,...: choose by number, start from 1]
-        '''
+        """
         app = cls(base_path = base_path , 
                   module = module , schedule_name = schedule_name , override = override ,
                   stage = stage , resume = resume , selection = selection , 
@@ -77,9 +77,9 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def resume_testing(cls , models = True , factors = True , force_resume = False):
-        '''
+        """
         Resume testing prediction models and factors:
-        '''
+        """
 
         resumable_models = cls.resumable_models() if models else []
         resumable_factors = cls.resumable_factors() if factors else []

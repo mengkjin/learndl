@@ -11,7 +11,7 @@ __all__ = [
 ]
 
 def get_indrank_delta(expression : str , date : int):
-    '''4 quarter delta of industry ranking'''
+    """4 quarter delta of industry ranking"""
     df = DATAVENDOR.get_fin_hist(expression , date , 5 , new_name = 'value')
     df = DATAVENDOR.INFO.add_indus(df , date , 'unknown')
 

@@ -73,7 +73,7 @@ class FactorVAE(nn.Module):
     def forward(self, x : Tensor, y : Tensor | None = None , 
                 factor_noise : Tensor | None = None ,
                 alpha_noise : Tensor | None = None):
-        '''
+        """
         in  : 
             x : [bs x seq_len x input_dim]
             y : [bs x 1]
@@ -82,7 +82,7 @@ class FactorVAE(nn.Module):
         out :
             in training : y_hat , loss_KL
             in eval     : y_hat , 
-        '''
+        """
         if self.training:
             assert y is not None , f'{self.__class__.__name__} y is None when training'
             assert factor_noise is None or factor_noise.numel() == self.factor_num , factor_noise
@@ -118,11 +118,11 @@ class FactorVAE(nn.Module):
         return mu_dec, sigma_dec
     
 class FeatureExtractor(nn.Module):
-    '''
+    """
     Use GRU to extract hidden features
     in  : [bs x seq_len x nvars]
     out : [bs x hidden_dim]
-    '''
+    """
     def __init__(self , input_dim : int = 6 , hidden_dim : int = 32, gru_input_size : int = 16):
         super().__init__()
         # self.proj = MLP(input_dim,gru_input_size)
@@ -137,11 +137,11 @@ class FeatureExtractor(nn.Module):
         return x
     
 class PortfolioLayer(nn.Module):
-    '''
+    """
     Use hidden features to create synthetic portfolios
     in  : [bs x hidden_dim]
     out : [bs x portfolio_size]
-    '''
+    """
     def __init__(self, hidden_dim : int = 32 , portfolio_size : int = 100):
         super().__init__()
         self.net = nn.Linear(hidden_dim , portfolio_size)
@@ -169,11 +169,11 @@ class VAESampling(nn.Module):
         return mu + sigma * eps
 
 class DistributionLayer(nn.Module):
-    '''
+    """
     Use hidden features to predict mu and sigma
     in  : [1 x input_dim]
     out : ([1 x output_dim] , [1 x output_dim])
-    '''
+    """
     def __init__(self, input_dim : int , output_dim : int , hidden_size : int | None = None):
         super().__init__()
         if hidden_size is None: 
@@ -187,11 +187,11 @@ class DistributionLayer(nn.Module):
         return mu , sigma
     
 class FactorEncoder(nn.Module):
-    '''
+    """
     Factor Encoder : Return mu_post, sigma_post
     in  : ([bs x hidden_dim] , [bs x 1]) , hidden features and future returns
     out : ([1 x factor_num] , [1 x factor_num])
-    '''
+    """
     def __init__(self, 
                  hidden_dim : int = 32,
                  factor_num : int = 64, 
@@ -202,10 +202,10 @@ class FactorEncoder(nn.Module):
         self.mapping_layer = DistributionLayer(portfolio_size, factor_num , encoder_h_size)
 
     def forward(self, x : Tensor, y : Tensor):
-        '''
+        """
         x : [bs x hidden_dim] , hidden features 
         y : [bs x 1] , future returns
-        '''
+        """
         p = self.portfolio_layer(x)         # [bs x portfolio_size]
         y = torch.mm(y.T , p)               # [1 x portfolio_size]
         mu_post, sigma_post = self.mapping_layer(y) # ([1 x factor_num] , [1 x factor_num])
@@ -214,10 +214,10 @@ class FactorEncoder(nn.Module):
         return mu_post, sigma_post
     
 class BetaLayer(nn.Module):
-    '''
+    """
     in  : [bs x hidden_dim] , hidden features 
     out : [bs x factor_num]
-    '''
+    """
     def __init__(self, hidden_dim : int = 32 , factor_num : int = 64):
         super().__init__()
         self.beta_layer = nn.Linear(hidden_dim , factor_num)
@@ -225,10 +225,10 @@ class BetaLayer(nn.Module):
         return self.beta_layer(x)
     
 class AlphaLayer(nn.Module):
-    '''
+    """
     in  : [bs x hidden_dim] , hidden features
     out : [bs x 2] , mu and sigma for each sample
-    '''
+    """
     def __init__(self, hidden_dim : int = 32 , hidden_size : int = 32):
         super().__init__()
         self.mapping = nn.Sequential(nn.Linear(hidden_dim , hidden_size) , nn.LeakyReLU())
@@ -238,11 +238,11 @@ class AlphaLayer(nn.Module):
         return self.alpha_net(self.mapping(x))
     
 class FactorDecoder(nn.Module):
-    '''
+    """
     Generate Stock return y_hat from hidden features and factor sample.
     in  : ([bs x hidden_dim] , [1 x factor_num]) , hidden features and factor sample
     out : ([bs x 1] , [bs x 1] , [bs x 1] , [bs x factor_num]) , y_hat , mu_alpha, sigma_alpha , beta
-    '''
+    """
     def __init__(self, hidden_dim : int = 32 , factor_num : int = 64 , alpha_h_size : int = 64):
         super().__init__()
         self.factor_num = factor_num

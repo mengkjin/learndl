@@ -87,7 +87,7 @@ class Attrib_Style(TopCalc):
     def plotter(self): return plotter.plot_attrib_style
 
 class TopFMPTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -101,7 +101,7 @@ class TopFMPTest(BaseFactorAnalyticTest):
             'exp_indus' : Industry Deviation
             'attrib_source' : Attribution Source
             'attrib_style' : Attribution Style
-    '''
+    """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[TopCalc]] = [
         FrontFace , 

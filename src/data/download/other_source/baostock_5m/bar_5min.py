@@ -208,11 +208,11 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
             df = baostock_5min_to_normal_5min(df)
             DB.save(df , 'trade_ts' , '5min' , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         # del after : No!
-        '''
+        """
         if first_n <= 0:
             [d.unlink() for d in tmp_dir.iterdir()]
             tmp_dir.unlink()
-        '''
+        """
             
         return True
 

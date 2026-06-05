@@ -33,7 +33,7 @@ class ModelTestor(BaseClass.BoundLogger):
         return f'{self.__class__.__name__}(model={self.model}) , check [.model][.batch_input][.metrics]'
 
     def try_forward(self) :
-        '''as name says, try to forward'''
+        """as name says, try to forward"""
         if isinstance(self.batch_input.x , torch.Tensor):
             self.logger.stdout(f'x shape is {self.batch_input.x.shape}')
         else:
@@ -44,7 +44,7 @@ class ModelTestor(BaseClass.BoundLogger):
         return self
 
     def try_metrics(self):
-        '''as name says, try to calculate metrics'''
+        """as name says, try to calculate metrics"""
         if not hasattr(self , 'outputs'): 
             self.try_forward()
         batch_data = BatchData(self.batch_input , self.output)
@@ -54,13 +54,13 @@ class ModelTestor(BaseClass.BoundLogger):
         return self
     
     def get_realistic_batch_data(self):
-        '''
+        """
         get a sample of realistic batch_input , 'day' , 'day+style' , '15m+style' ...
         day : stock_num x seq_len x 6
         30m : stock_num x seq_len x 8 x 6
         style : stock_num x 1 x 10
         indus : stock_num x 1 x 35
         ...
-        '''
+        """
         return get_realistic_batch_data()
     

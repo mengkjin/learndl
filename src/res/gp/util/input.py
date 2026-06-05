@@ -87,7 +87,7 @@ INPUT_MAPPING = {
 INPUT_MAPPING.update({k.upper():v.fac_input() for k,v in INPUT_MAPPING.items()})
 
 def get_features_block(src : str , key : str , features : list[str] | None , start : int = 20100101 , end : int = 20241231) -> DataBlock:
-    '''
+    """
     获取特征
     input:
         features:    features
@@ -95,7 +95,7 @@ def get_features_block(src : str , key : str , features : list[str] | None , sta
         end:      end date
     output:
         block:       DataBlock        
-    '''
+    """
     secid = DATAVENDOR.secid(end)
     dates = CALENDAR.range(start , end , 'td')
     block = BlockLoader(src , key , feature = features , vb_level = 'never').load(start , end).\
@@ -103,7 +103,7 @@ def get_features_block(src : str , key : str , features : list[str] | None , sta
     return block
 
 def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 20241231 , cp_block : DataBlock | None = None) -> DataBlock:
-    '''
+    """
     读取输入因子并转化成DataBlock,额外返回secid和date的ndarray
     input:
         filename:    filename gp data
@@ -112,7 +112,7 @@ def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 202412
         input_freq:  1 , 5 , ...
     output:
         block:       DataBlock        
-    '''
+    """
 
     input_elements = [INPUT_MAPPING[input] for input in inputs]
     load_tuples = list(set([element.load_tuple() for element in input_elements]))
@@ -142,18 +142,18 @@ def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 202412
     return block
 
 def get_cp_block(start : int = 20100101 , end : int = 20241231) -> DataBlock:
-    '''
+    """
     获取收盘价
     input:
         start:       start date
         end:      end date
     output:
         cp_block:          close price tensor
-    '''
+    """
     return get_features_block('trade_ts' , 'day' , ['close'] , start , end)
 
 def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int = 10 , delay : int = 1) -> DataBlock:
-    '''
+    """
     获取收益率
     input:
         start:    start date
@@ -161,7 +161,7 @@ def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int 
         extend:      extend
     output:
         return_block:      return tensor
-    '''
+    """
     element = InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01)
     secid = DATAVENDOR.secid(end)
     dates = CALENDAR.range(start , end , 'td')
@@ -172,14 +172,14 @@ def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int 
     return block
 
 def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device : torch.device | str | None = None) -> torch.Tensor:
-    '''
+    """
     获取中性化使用的行业因子和市值因子
     input:
         start:        start date
         end:       end date
     output:
         neutral_exp:  neutral_exp tensor
-    '''
+    """
     secid = DATAVENDOR.secid(end)
     dates = CALENDAR.range(start , end , 'td')
     block = BlockLoader('models' , 'tushare_cne5_exp' , vb_level = 'never').load(start , end).\
@@ -189,7 +189,7 @@ def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device 
 
 def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
                     device : torch.device | str | None = None) -> torch.Tensor:
-    '''
+    """
     生成原始预测标签,中性化后的10日收益
     input:
         neutral_exp:    neutral_exp , industry and size factors
@@ -199,7 +199,7 @@ def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_
         end:         end date
     output:
         labels_raw:     
-    '''
+    """
     
     rtn = get_return_block(start , end , nday , delay).values.squeeze().to(device)
     if neutral_exp is not None:

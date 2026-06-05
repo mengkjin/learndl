@@ -88,7 +88,7 @@ class Attrib_Style(OptimCalc):
     def plotter(self): return plotter.plot_attrib_style
 
 class OptimFMPTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -103,7 +103,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
             'exp_indus' : Industry Deviation
             'attrib_source' : Attribution Source
             'attrib_style' : Attribution Style
-    '''
+    """
     TEST_TYPE = 'optim'
     TASK_LIST : list[Type[OptimCalc]] = [
         FrontFace , 

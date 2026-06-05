@@ -76,12 +76,12 @@ class ModernTCN(nn.Module):
             self.head = ModernTCNPredictionHead(self.nvars, d_model, num_patch, predict_steps, head_dropout , shared = shared_head)
 
     def forward(self, x : Tensor) -> Tensor:  
-        '''
+        """
         in:  [bs x seq_len x nvars]
         out: [bs x seq_len x nvars] for pretrain
              [bs x predict_steps] for prediction
         
-        '''
+        """
         if self.revin is not None: 
             x = self.revin(x , 'norm')              # [bs x seq_len x nvars]
         x = self.embed(x)                           # [bs x nvars x num_patch x d_model]
@@ -95,10 +95,10 @@ class ModernTCN(nn.Module):
         return x
 
 class MtcnTSMixer(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x nvars * d_model x num_patch]
-    '''
+    """
     def __init__(self, nvars, d_model, kernel_size = 3, activation = 'gelu'):
         super().__init__()
         self.nvars   = nvars
@@ -114,10 +114,10 @@ class MtcnTSMixer(nn.Module):
         self.bn = nn.BatchNorm1d(nvars * d_model)
         
     def forward(self , x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x nvars * d_model x num_patch]
-        '''
+        """
         bs = x.shape[0]
         x = x.reshape(bs,self.nvars*self.d_model,-1)    # [bs x nvars * d_model x num_patch]
         x = self.dw_conv(x)                             # [bs x nvars * d_model x num_patch]
@@ -126,10 +126,10 @@ class MtcnTSMixer(nn.Module):
         return x
 
 class MtcnFeatureMixer(nn.Module):
-    '''
+    """
     in : [bs x nvars * d_model x num_patch]
     out: [bs x nvars x d_model x num_patch]
-    '''
+    """
     def __init__(self, nvars, d_model, kernel_size = 1 , activation = 'gelu'):
         super().__init__()
         self.nvars   = nvars
@@ -149,10 +149,10 @@ class MtcnFeatureMixer(nn.Module):
         )
         
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars * d_model x num_patch]
         out: [bs x nvars x d_model x num_patch]
-        '''
+        """
         bs = x.shape[0]
         x = self.pw_con_up(x)                           # [bs x kernel_size * nvars * d_model x num_patch]
         x = self.act(x)                                 # [bs x kernel_size * nvars * d_model x num_patch]
@@ -162,10 +162,10 @@ class MtcnFeatureMixer(nn.Module):
     
     
 class MtcnChannelMixer(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x nvars x d_model x num_patch]
-    '''
+    """
     def __init__(self, nvars, d_model, kernel_size = 1 , activation = 'gelu'):
         super().__init__()
         self.nvars   = nvars
@@ -185,10 +185,10 @@ class MtcnChannelMixer(nn.Module):
         )
         
     def forward(self , x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x nvars x d_model x num_patch]
-        ''' 
+        """ 
         bs = x.shape[0]
         x = x.permute(0,2,1,3)                                      # [bs x d_model x nvars x num_patch]
         x = x.reshape(bs,self.nvars*self.d_model,-1)                # [bs x d_model * nvars x num_patch]
@@ -200,10 +200,10 @@ class MtcnChannelMixer(nn.Module):
         return x  
 
 class ModernTCNBlock(nn.Module):
-    '''
+    """
     in : [bs x nvars x num_patch x d_model]
     out: [bs x nvars x num_patch x d_model]
-    '''
+    """
     def __init__(self, nvars, d_model, kernel_size, expansion_factor = 1,channel_mixer=True,activation='gelu'):
         super().__init__()
         self.ts_mixer = MtcnTSMixer(nvars, d_model, kernel_size, activation)
@@ -211,10 +211,10 @@ class ModernTCNBlock(nn.Module):
         self.channel_mixer = MtcnChannelMixer(nvars, d_model, expansion_factor,activation) if channel_mixer else nn.Sequential()
     
     def forward(self , x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model]
         out: [bs x nvars x num_patch x d_model]
-        '''
+        """
         z = x.permute(0,1,3,2)      # [bs x nvars x d_model x num_patch]
         z = self.ts_mixer(z)        # [bs x nvars x d_model x num_patch]
         z = self.feature_mixer(z)   # [bs x nvars x d_model x num_patch]
@@ -223,10 +223,10 @@ class ModernTCNBlock(nn.Module):
         return z + x
     
 class ModernTCNEncoder(nn.Module):
-    '''
+    """
     in : [bs x nvars x num_patch x d_model]   
     out: [bs x nvars x d_model x num_patch]
-    '''
+    """
     def __init__(self, nvars, num_patch, n_layers=3, d_model=128, kernel_size=3, expansion_factor = 1 , 
                  channel_mixer = True, dropout=0., activation='gelu', pe='zeros', learn_pe=True,  **kwargs):
 
@@ -240,20 +240,20 @@ class ModernTCNEncoder(nn.Module):
                            for _ in range(n_layers)])
         
     def forward(self , x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
-        '''
+        """
         x = self.dropout(x + self.W_pos)            # [bs x nvars x num_patch x d_model]
         x = self.encoder(x)                         # [bs x nvars x num_patch x d_model]
         x = x.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
         return x
     
 class ModernTCNPredictionHead(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x predict_steps]
-    '''
+    """
     def __init__(self, nvars, d_model, num_patch, predict_steps = 1 , head_dropout=0, flatten=False , shared = False):
         super().__init__()
 
@@ -274,10 +274,10 @@ class ModernTCNPredictionHead(nn.Module):
         )
     
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x predict_steps]
-        '''
+        """
         if self.shared:
             x = self.layers[0](x)          # [bs x nvars x d_model]
         else:
@@ -288,20 +288,20 @@ class ModernTCNPredictionHead(nn.Module):
         return x
 
 class ModernTCNPretrainHead(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x seq_len x nvars]
-    '''
+    """
     def __init__(self, d_model , num_patch , seq_len , dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(d_model * num_patch , seq_len)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x seq_len x nvars]
-        '''
+        """
         x = self.dropout(x)                     # [bs x nvars x d_model x num_patch]
         x = x.flatten(start_dim=2)              # [bs x nvars x d_model (x) num_patch]
         x = self.linear(x)                      # [bs x nvars x seq_len]

@@ -26,7 +26,7 @@ def _get_net(model : nn.Module | Any) -> nn.Module | None:
     else:
         return None
 class TrainerMetrics(TrainerPipeline):
-    '''calculator of batch output'''
+    """calculator of batch output"""
     MetricOptions : tuple[MetricTypes,...] = ('accuracy' , 'loss' , 'rankic')
     
     def __init__(self , trainer : BaseTrainer | ModelConfig , **kwargs) -> None:
@@ -104,7 +104,7 @@ class TrainerMetrics(TrainerPipeline):
     def ignore_accuracy(self) -> list[str]:
         return []
     def calculate(self , dataset : Literal['train','valid','test','predict'] , batch_key : Any , batch_data : BatchData):
-        '''Calculate loss(with gradient), penalty , accuracy'''
+        """Calculate loss(with gradient), penalty , accuracy"""
         if dataset not in ['train' , 'valid' , 'test']:
             dataset = 'test'
         self.new_batch(batch_key = batch_key)

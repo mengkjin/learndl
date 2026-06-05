@@ -104,10 +104,10 @@ class TSMixer(nn.Module):
         return x
     
 class TSMixerPredictionHead(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x predict_steps]
-    '''
+    """
     def __init__(self, nvars, d_model, num_patch, predict_steps = 1 , head_dropout=0, 
                  flatten=False , shared = False , act_type = 'gelu'):
         super().__init__()
@@ -131,10 +131,10 @@ class TSMixerPredictionHead(nn.Module):
         )
     
     def forward(self, x : Tensor) -> Tensor:                     
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x predict_steps]
-        '''
+        """
         if self.shared:
             x = self.layers[0](x)          # [bs x nvars x d_model]
         else:
@@ -145,20 +145,20 @@ class TSMixerPredictionHead(nn.Module):
         return x
 
 class TSMixerPretrainHead(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x seq_len x nvars]
-    '''
+    """
     def __init__(self, d_model , num_patch , seq_len , dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(d_model * num_patch , seq_len)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x seq_len x nvars]
-        '''
+        """
         x = self.dropout(x)                     # [bs x nvars x d_model x num_patch]
         x = x.flatten(start_dim=2)              # [bs x nvars x d_model (x) num_patch]
         x = self.linear(x)                      # [bs x nvars x seq_len]
@@ -166,12 +166,12 @@ class TSMixerPretrainHead(nn.Module):
         
         return x
 class MixerNormLayer(nn.Module):
-    '''
+    """
     Batch / Layer Norm
     in : [bs x nvars x num_patch x d_model] 
     out: [bs x nvars x num_patch x d_model] 
     same as patchTST
-    '''
+    """
     def __init__(self, norm_type : str , d_model : int):
         super().__init__()
         self.batch_norm = 'batch' in norm_type.lower()
@@ -181,10 +181,10 @@ class MixerNormLayer(nn.Module):
             self.norm = nn.LayerNorm(d_model)  # 默认对最后一个维度进行LayerNorm
             
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
-        '''
+        """
         if self.batch_norm:
             bs = x.shape[0]
             x = x.permute(0,1,3,2)                  # [bs x nvars x d_model x num_patch] 
@@ -197,10 +197,10 @@ class MixerNormLayer(nn.Module):
         return x
 
 class GatedAttention(nn.Module):
-    '''
+    """
     in : [... x in_features]
     out: [... x out_features]
-    '''
+    """
     def __init__(self, in_size: int, out_size: int):
         super().__init__()
         self.attn_layer = nn.Linear(in_size, out_size)
@@ -211,11 +211,11 @@ class GatedAttention(nn.Module):
         return x * attn_weight
  
 class MixerMLP(nn.Module):
-    '''
+    """
     similar to FFN
     in : [... x in_features]
     out: [... x out_features]
-    '''
+    """
     def __init__(self, in_size: int, out_size: int, expansion_factor=1,dropout=0.,act_type='gelu'):
         super().__init__()
         num_hidden = in_size * expansion_factor
@@ -231,11 +231,11 @@ class MixerMLP(nn.Module):
         return self.layers(x)
 
 class PatchMixerBlock(nn.Module):
-    '''
+    """
     inter patch information extraction with channel independence
     in : [bs x nvars x num_patch x d_model] 
     out: [bs x nvars x num_patch x d_model] 
-    '''
+    """
     def __init__(self,
                  num_patch,
                  d_model,
@@ -252,10 +252,10 @@ class PatchMixerBlock(nn.Module):
         self.gating = GatedAttention(num_patch, num_patch) if gated_attn else nn.Sequential()
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
-        '''
+        """
         residual = x
         x = self.norm(x)          # [bs x nvars x num_patch x d_model] 
         x = x.permute(0,1,3,2)    # [bs x nvars x d_model x num_patch] 
@@ -265,11 +265,11 @@ class PatchMixerBlock(nn.Module):
         return residual + x       # [bs x nvars x num_patch x d_model] 
     
 class FeatureMixerBlock(nn.Module):
-    '''
+    """
     inter Feature information extraction
     in : [bs x nvars x num_patch x d_model] 
     out: [bs x nvars x num_patch x d_model] 
-    '''
+    """
     def __init__(self , 
                  d_model ,
                  dropout = 0. ,
@@ -285,10 +285,10 @@ class FeatureMixerBlock(nn.Module):
         self.gating = GatedAttention(d_model, d_model) if gated_attn else nn.Sequential()
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
-        '''
+        """
         residual = x
         x = self.norm(x)          # [bs x nvars x num_patch x d_model] 
         x = self.mlp(x)           # [bs x nvars x d_model x num_patch] 
@@ -296,11 +296,11 @@ class FeatureMixerBlock(nn.Module):
         return residual + x       # [bs x nvars x num_patch x d_model] 
 
 class ChannelMixerBlock(nn.Module):
-    '''
+    """
     inter Channel information extraction
     in : [bs x nvars x num_patch x d_model] 
     out: [bs x nvars x num_patch x d_model] 
-    '''
+    """
 
     def __init__(self,
                  d_model,
@@ -319,10 +319,10 @@ class ChannelMixerBlock(nn.Module):
         self.gating = GatedAttention(in_channel, in_channel) if gated_attn else nn.Sequential()
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
-        '''
+        """
         residual = x
         x = self.norm(x)          # [bs x nvars x num_patch x d_model]
         x = x.permute(0,3,2,1)    # [bs x d_model x num_patch x nvars]
@@ -332,10 +332,10 @@ class ChannelMixerBlock(nn.Module):
         return x + residual       # [bs x nvars x num_patch x d_model]
     
 class TSMixerEncoder(nn.Module):
-    '''
+    """
     in : [bs x nvars x num_patch x d_model]
     out: [bs x nvars x d_model x num_patch]
-    '''
+    """
     def __init__(self, nvars, num_patch, d_model , channel_mixer = True, 
                  dropout=0., expansion_factor = 2, gated_attn = True , norm_type = 'batch', act_type='gelu', 
                  pe='zeros', learn_pe=True, **kwargs):
@@ -354,10 +354,10 @@ class TSMixerEncoder(nn.Module):
         self.mixer_c = ChannelMixerBlock(d_model, nvars , dropout , expansion_factor , gated_attn , norm_type , act_type) if channel_mixer else nn.Sequential()
         
     def forward(self, x : Tensor) -> Tensor:          
-        '''
+        """
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
-        '''
+        """
         x = self.dropout(x + self.W_pos)            # [bs x nvars x num_patch x d_model]
         x = self.mixer_p(x)                         # [bs x nvars x num_patch x d_model]
         x = self.mixer_f(x)                         # [bs x nvars x num_patch x d_model]

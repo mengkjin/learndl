@@ -369,10 +369,10 @@ class ModelPath:
         return model_path
 
 class PredictorPath(ModelPath , BaseClass.BoundLogger):
-    '''
+    """
     for a prediction model to predict recent/history data
     model dict stored in configs/proj/model_settings.yaml file under prediction section
-    '''
+    """
     START_DATE = 20170101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']

@@ -9,7 +9,7 @@ from src.proj import Const
 from src.data import DATAVENDOR
 
 class Port:
-    '''portfolio realization of one day'''
+    """portfolio realization of one day"""
     weight_eps = 1 / 10 ** Const.Factor.ROUNDING.weight
 
     def __init__(self , port : pd.DataFrame | None , date : int | Any = -1 , 

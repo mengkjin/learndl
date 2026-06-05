@@ -7,11 +7,11 @@ from torch import nn , Tensor
 import torch.nn.functional as F
 
 class LinearPatch(nn.Module):
-    '''
+    """
     Linear patch layer.
     in : [bs x seq_len x nvars]
     out: [bs x nvars x num_patch x d_model] 
-    '''
+    """
     def __init__(self, nvars : int, d_model : int, patch_len : int, stride : int, mask_ratio : float = 0. , shared : bool = True):
         super().__init__()
         self.nvars = nvars
@@ -26,10 +26,10 @@ class LinearPatch(nn.Module):
         ])
 
     def forward(self, x : Tensor, mask = False) -> Tensor:
-        '''
+        """
         in : [bs x seq_len x nvars]
         out: [bs x nvars x num_patch x d_model] 
-        '''
+        """
         if mask:
             x = self.patch_masking(x , self.patch_len, self.stride, self.mask_ratio)[0]
         else:
@@ -90,11 +90,11 @@ class LinearPatch(nn.Module):
         return x_masked, x_kept, mask, ids_restore
 
 class ConvolutionalPatch(nn.Module):
-    '''
+    """
     Convolutional patch layer.
     in : [bs x nvars x seq_len]
     out: [bs x nvars x num_patch x d_model] 
-    '''
+    """
     def __init__(self, nvars : int, d_model : int, patch_len : int = 8, stride : int = 4, shared = True):
         # nvars , d_model , patch_len, stride , mask_ratio = 0. , shared = True
         super().__init__()
@@ -108,10 +108,10 @@ class ConvolutionalPatch(nn.Module):
         ])
         
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x seq_len x nvars]
         out: [bs x nvars x num_patch x d_model] 
-        '''
+        """
         bs , seq_len , nvars = x.shape
         x = x.permute(0,2,1)                        # [bs x nvars x seq_len]
         x = x.unsqueeze(2)                          # [bs x nvars x 1 x seq_len]

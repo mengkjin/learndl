@@ -11,7 +11,7 @@ from src.proj import PATH , MACHINE , BaseClass
 from src.proj.util.functional.parallel import parallel
 
 class StockFactorHierarchy(BaseClass.BoundLogger):
-    '''hierarchy of factor classes'''
+    """hierarchy of factor classes"""
     assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
     _instance = None
     pool = FactorCalculator.registry
@@ -43,16 +43,16 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
         return f'StockFactorHierarchy({str_level_factors})'
     
     def __iter__(self):
-        '''return a generator of factor classes'''
+        """return a generator of factor classes"""
         return self.iter_factors()
     
     def __getitem__(self , key : str):
-        '''return a list of factor classes in a given level / or a factor class by factor_name'''
+        """return a list of factor classes in a given level / or a factor class by factor_name"""
         return self.pool[key] if key in self.pool else self.hier[key]
 
     @classmethod
     def load_factor_table(cls) -> pd.DataFrame:
-        '''export factor stats to csv'''
+        """export factor stats to csv"""
         if MACHINE.updatable:
             df = pd.read_csv(PATH.local_share.joinpath('factor_list.csv'))
         elif PATH.share_folder is not None:
@@ -63,12 +63,12 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
 
     @classmethod
     def factor_table_path(cls) -> Path:
-        '''return the factor table cache'''
+        """return the factor table cache"""
         return PATH.local_share.joinpath('factor_list.csv')
     
     @classmethod
     def export_factor_table(cls) -> Path:
-        '''export factor list to csv'''
+        """export factor list to csv"""
         if MACHINE.updatable:
             df = cls.full_factor_table()
             df.to_csv(cls.factor_table_path() , index = False)
@@ -78,13 +78,13 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:
-        '''export factor stats to csv'''
+        """export factor stats to csv"""
         df = cls.factor_df().merge(cls.factor_stats(), on = 'factor_name' , how = 'left')
         return df
 
     @classmethod
     def factor_df(cls , **kwargs) -> pd.DataFrame:
-        '''
+        """
         return a DataFrame of all factors with given attributes
         factor_name : str | None = None
         level : str | None = None 
@@ -92,7 +92,7 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
         meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
-        '''
+        """
         attr_list = ['meta_type' , 'level' , 'factor_name' , 'init_date' , 'final_date' , 
         'file_name' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
         df_datas = []
@@ -104,7 +104,7 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
 
     @classmethod
     def factor_stats(cls , **kwargs) -> pd.DataFrame:
-        '''
+        """
         return a DataFrame of all factors with given attributes
         factor_name : str | None = None
         level : str | None = None 
@@ -112,7 +112,7 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
         meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
-        '''
+        """
         dfs = []
         for calc in FactorCalculator.iter(**kwargs): 
             daily_stats = calc.daily_stats()
@@ -148,37 +148,37 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
 
     @classmethod
     def factor_names(cls) -> list[str]:
-        '''return a list of factor names'''
+        """return a list of factor names"""
         return [obj.factor_name for obj in cls().pool.values()]
 
     @classmethod
     def iter_levels(cls) -> Iterator[str]:
-        '''return a list of levels'''
+        """return a list of levels"""
         return iter(cls().hier)
     
     @classmethod
     def iter_level_factors(cls , level : str) -> Generator[Type[FactorCalculator] , None , None]: 
-        '''return a list of factor classes in a given level'''
+        """return a list of factor classes in a given level"""
         return (factor for factor in cls().hier[level])
 
     @classmethod
     def iter_factors(cls , **kwargs) -> Generator[Type[FactorCalculator] , None , None]:
-        '''return a list of factor classes with given attributes'''
+        """return a list of factor classes with given attributes"""
         return (factor for level in cls().iter_levels() for factor in cls().iter_level_factors(level))
     
     @classmethod
     def get_factor(cls , factor_name : str) -> Type[FactorCalculator]:
-        '''
+        """
         return a factor class by factor_name
         e.g.
         factor_name = 'turn_12m'
         factor_cls = StockFactorHierarchy()[factor_name]
-        '''
+        """
         return cls().pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
                               multi_thread = True , ignore_error = True , **kwargs) -> dict[str , pd.Series]:
-        '''
+        """
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
         level : str | None = None 
@@ -186,7 +186,7 @@ class StockFactorHierarchy(BaseClass.BoundLogger):
         meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = 'stock'
         category0 : str | None = None 
         category1 : str | None = None 
-        '''
+        """
         
         def calculate_factor(obj : FactorCalculator) -> pd.Series:
             factor_value = obj.calc_factor(date)

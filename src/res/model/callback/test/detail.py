@@ -12,7 +12,7 @@ from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
 
 class DetailedAlphaAnalysis(BaseCallBack):
-    '''Detailed Factor and Portfolio Level Analysis'''
+    """Detailed Factor and Portfolio Level Analysis"""
     CB_ORDER : int = 50
     CB_KEY_PARAMS = ['tasks']
     TABLE_VB_LEVELS = {'factor@frontface':'max'}

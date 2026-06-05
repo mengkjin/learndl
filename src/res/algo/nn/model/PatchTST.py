@@ -93,11 +93,11 @@ class PatchTST(nn.Module):
                                                head_dropout , shared = shared_head , act_type = act_type)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in:  [bs x seq_len x nvars]
         out: [bs x seq_len x nvars] for pretrain
              [bs x predict_steps] for prediction
-        '''   
+        """   
 
         if self.revin is not None: 
             x = self.revin(x , 'norm')              # [bs x seq_len x nvars]
@@ -126,10 +126,10 @@ class ModelPredict(PatchTST):
         super().__init__(head_type = 'prediction', **kwargs)
    
 class PatchTSTPredictionHead(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x predict_steps]
-    '''
+    """
     def __init__(self, nvars, d_model, num_patch, predict_steps = 1 , head_dropout=0, 
                  flatten=False , shared = False , act_type = 'gelu'):
         super().__init__()
@@ -153,10 +153,10 @@ class PatchTSTPredictionHead(nn.Module):
         )
     
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x predict_steps]
-        '''
+        """
         if self.shared:
             x = self.layers[0](x)          # [bs x nvars x d_model]
         else:
@@ -167,20 +167,20 @@ class PatchTSTPredictionHead(nn.Module):
         return x
 
 class PatchTSTPretrainHead(nn.Module):
-    '''
+    """
     in : [bs x nvars x d_model x num_patch]
     out: [bs x seq_len x nvars]
-    '''
+    """
     def __init__(self, d_model , num_patch , seq_len , dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(d_model * num_patch , seq_len)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x d_model x num_patch]
         out: [bs x seq_len x nvars]
-        '''
+        """
         x = self.dropout(x)                     # [bs x nvars x d_model x num_patch]
         x = x.flatten(start_dim=2)              # [bs x nvars x d_model (x) num_patch]
         x = self.linear(x)                      # [bs x nvars x seq_len]
@@ -189,10 +189,10 @@ class PatchTSTPretrainHead(nn.Module):
         return x
 
 class PatchTSTEncoder(nn.Module):
-    '''
+    """
     in : [bs x nvars x num_patch x d_model]   
     out: [bs x nvars x d_model x num_patch]
-    '''
+    """
     def __init__(self, nvars, num_patch, d_model, n_layers=3, n_heads=8, 
                  d_ff=64, norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu', store_attn=False,
                  res_attention=True, pre_norm=False,
@@ -214,10 +214,10 @@ class PatchTSTEncoder(nn.Module):
             store_attn=store_attn)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
-        '''
+        """
         x = x.reshape(-1,*x.shape[-2:])             # [bs * nvars x num_patch x d_model]
         x = self.dropout(x + self.W_pos)            # [bs * nvars x num_patch x d_model]
         x = self.encoder(x)                         # [bs * nvars x num_patch x d_model]
@@ -226,10 +226,10 @@ class PatchTSTEncoder(nn.Module):
         return x
     
 class TSTEncoder(nn.Module):
-    '''
+    """
     in : [bs x num_patch x d_model]
     out: [bs x num_patch x d_model]
-    '''
+    """
     def __init__(self, d_model, n_heads, d_ff = 64, 
                  norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu',
                  res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
@@ -242,10 +242,10 @@ class TSTEncoder(nn.Module):
         self.res_attention = res_attention
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in : [bs x num_patch x d_model]
         out: [bs x num_patch x d_model]
-        '''
+        """
         scores = None
         for mod in self.layers: 
             x, scores = mod(x, prev = scores)
@@ -288,9 +288,9 @@ class TSTEncoderLayer(nn.Module):
         self.store_attn = store_attn
 
     def forward(self, x : Tensor , prev : Tensor | None = None) -> tuple[Tensor,Tensor | None]:
-        '''
+        """
         x: tensor [bs x q_len x d_model]
-        '''
+        """
         # Multi-Head attention sublayer
         if self.pre_norm:
             x = self.norm_attn(x)

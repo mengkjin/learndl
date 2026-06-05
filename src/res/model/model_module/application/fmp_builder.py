@@ -93,7 +93,7 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
             yield PortfolioBuilder(**kwargs).setup()
         
     def update_fmps(self , update = True , overwrite = False):
-        '''get update dates and build portfolios'''
+        """get update dates and build portfolios"""
         assert update != overwrite , 'update and overwrite must be different here'
         
         dates = CALENDAR.diffs(self.pred_path.fmp_target_dates , self.pred_path.fmp_dates if update else [])
@@ -173,7 +173,7 @@ class ModelPortfolioBuilder(BaseClass.BoundLogger):
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , indent : int = 0 , vb_level : Any = 1):
-        '''Update prediction models' factor model portfolios'''
+        """Update prediction models' factor model portfolios"""
         cls.SetClassVB(vb_level , indent)
         cls.logger.note(f'Update since last update!')
         models = PredictorPath.SelectModels(model_name)

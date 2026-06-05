@@ -8,7 +8,7 @@ from src.res.model.util.core import BatchInput
 __all__ = ['DataCallbacks']
 
 class DataCallbacks:
-    '''callbacks for data module'''
+    """callbacks for data module"""
     def __init__(self):
         self.callbacks = defaultdict(list)
     def register_callbacks(self , hook_name : str , *callbacks : Callable):

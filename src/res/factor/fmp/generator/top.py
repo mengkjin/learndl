@@ -7,11 +7,11 @@ from .basic import BasicCreatorConfig , BasicPortfolioCreator
 builder_type = 'top'
 
 class TopStocksPortfolioCreatorConfig(BasicCreatorConfig):
-    '''
+    """
     Config for PortfolioGenerator (Top Portfolio Generator)
     kwargs:
         no additioanl kwargs
-    '''
+    """
     slots = ['n_best' , 'screener' , 'screen_ratio' , 'turn_control' , 'buffer_zone' , 'no_zone' , 'indus_control']
     def __init__(
         self , 

@@ -3,7 +3,7 @@ import torch
 from src.res.model.util import BaseCallBack
 
 class SpecificCB_VAE(BaseCallBack):
-    '''In [VAE], Fill [y] [alpha_noise] [factor_noise] in batch_input.kwargs'''
+    """In [VAE], Fill [y] [alpha_noise] [factor_noise] in batch_input.kwargs"""
     CB_KEY_PARAMS = ['manual_seed']
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)

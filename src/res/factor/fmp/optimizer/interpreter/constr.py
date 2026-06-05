@@ -7,12 +7,12 @@ from typing import Any, Literal
 
 @dataclass
 class LinearConstraint:
-    '''
+    """
     A   : (K , N) exposure matrix
     type: (K , ) str, ra(w<=ub & w>=lb)、lo(w>=lb)、up(w<=ub)、fx(w=lb&w=lb)四种。
     lb  : (K , ) float, lower bound
     ub  : (K , ) float, upper bound
-    '''
+    """
     A : np.ndarray
     type : np.ndarray 
     lb : np.ndarray
@@ -82,11 +82,11 @@ class LinearConstraint:
 
 @dataclass
 class BoundConstraint:
-    '''
+    """
     type: str, ra(w<=ub & w>=lb)、lo(w>=lb)、up(w<=ub)、fx(w=lb&w=lb)四种。
     lb  : float, lower bound
     ub  : float, upper bound
-    '''
+    """
     type : np.ndarray
     lb : np.ndarray
     ub : np.ndarray
@@ -116,10 +116,10 @@ class BoundConstraint:
 
 @dataclass
 class TurnConstraint:
-    '''
+    """
     bdl : float, double side constraint
     rho: float, penalty factor in objective function
-    '''
+    """
     dbl : float | Any = None
     rho : float | Any = None
 
@@ -145,10 +145,10 @@ class TurnConstraint:
 
 @dataclass
 class ShortConstraint:
-    '''
+    """
     pos: float, total abs short upper bound
     cost: float, penalty factor in objective function
-    '''
+    """
     pos  : float | Any = None
     cost : float | Any = None
 
@@ -174,7 +174,7 @@ class ShortConstraint:
 
 @dataclass
 class CovConstraint:
-    '''
+    """
     lmbd: float, risk aversion
     te  : float, tracking error constraint
 
@@ -185,7 +185,7 @@ class CovConstraint:
 
     input type 2
     cov: (N , N) array, instrument covariance
-    '''
+    """
     lmbd : float | Any = None
     te   : float | Any = None
     F    : np.ndarray | Any = None

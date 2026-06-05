@@ -258,13 +258,13 @@ class Relaxer(BaseClass.BoundLogger):
 
 @dataclass
 class SolveCond:
-    '''
+    """
     additional condition for solver
     turn : if consider turnover constrains
     qobj : if consider quad objective for risk aversion
     qcon : if consider quad constraint for tracking error
     short : if consider possible short position
-    '''
+    """
     turn : bool = True
     qobj : bool = True
     qcon : bool = True
@@ -272,14 +272,14 @@ class SolveCond:
 
 @dataclass
 class SolveVars:
-    '''
+    """
     record number of vars or start position of vars in solver
     N : weight variable to solve
     T : turnover variable , 0 or N , must be positive
     S : shortsell variable , 0 or N , must be positive
     L : risk model factor variable , 0 or len(cov_con.F) , equals portfolio risk factor exposure
     Q : risk model quad constraint variable , 0 or 2 , equals portfolio common risk and spec risk
-    '''
+    """
     N : int         # normal variable
     T : int = 0     # turnover variable
     S : int = 0     # shortsell variable

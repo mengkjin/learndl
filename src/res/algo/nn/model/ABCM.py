@@ -74,10 +74,10 @@ class Astgnn(nn.Module):
         self.loss_corr_lamb = loss_corr_lamb
 
     def forward(self, input : Tensor | tuple[Tensor,...] | list[Tensor]):
-        '''
+        """
         in: [bs x seq_len x input_dim]
         out:[bs x hidden_dim]
-        '''
+        """
         x = input if isinstance(input , Tensor) else torch.concat(input , dim = -1) 
         x = self.fc_enc_in(x)
         x = self.fc_rnn(x)

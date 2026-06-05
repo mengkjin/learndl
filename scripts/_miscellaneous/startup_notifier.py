@@ -236,7 +236,7 @@ def send_email(subject, body, config):
             logging.info("SMTP connection closed.")
 
 def run_additional_cmds():
-    '''run additional cmds'''
+    """run additional cmds"""
     for cmd in ADDITIONAL_CMDS:
         try:
         

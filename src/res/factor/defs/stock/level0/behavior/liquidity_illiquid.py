@@ -4,9 +4,9 @@ from src.res.factor.calculator import LiquidityFactor
 
 
 def amihud(date , n_months : int , lag_months : int = 0):
-    '''
+    """
     Amihud illiquidity factor
-    '''
+    """
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
     ret = DATAVENDOR.TRADE.get_returns(start , end , pivot=True)
     vol = DATAVENDOR.TRADE.get_volumes(start , end , volume_type='volume' , pivot=True)
@@ -14,9 +14,9 @@ def amihud(date , n_months : int , lag_months : int = 0):
     return amihud
 
 def mif(date , n_months : int , lag_months : int = 0):
-    '''
+    """
     market impact factor
-    '''
+    """
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
     vwap = DATAVENDOR.TRADE.get_quotes(start , end , 'vwap' , pivot=True)
     cp   = DATAVENDOR.TRADE.get_quotes(start , end , 'close' , pivot=True)

@@ -84,11 +84,11 @@ class FilePreviewer:
             
             # use base64 to encode PDF
             pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
-            pdf_display = f'''
+            pdf_display = f"""
             <iframe src="data:application/pdf;base64,{pdf_base64}" 
                     width="200%" height="600px" type="application/pdf">
             </iframe>
-            '''
+            """
             st.markdown(pdf_display, unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Cannot preview PDF file: {str(e)}" , icon = ":material/error:")

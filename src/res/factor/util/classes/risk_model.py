@@ -20,9 +20,9 @@ _indus = Const.Factor.RISK.indus
 
 @dataclass
 class Rmodel:
-    '''
+    """
     risk model instance for one day
-    '''
+    """
     date : int
     F : pd.DataFrame
     C : pd.DataFrame
@@ -91,7 +91,7 @@ class Rmodel:
         variance = common_exp.dot(self.C).dot(common_exp.T) + self._specific_risk(port)
         return RiskProfile(self.common_factors , common_exp , variance)
     def analyze(self , port : Port , bench : Port | Any = None , init : Port | Any = None):
-        '''Analyze day end risk profile'''
+        """Analyze day end risk profile"""
         rslt = RiskAnalytic(self.date)
         rslt.append('portfolio' , self._analysis(port))
         rslt.append('initial'   , self._analysis(init))
@@ -99,11 +99,11 @@ class Rmodel:
         rslt.append('active'    , self._analysis(None if bench is None else port - bench))
         return rslt
     def attribute(self , port : Port , bench : Port | Any = None , target_date : int | None = None , other_cost : float = 0.):
-        '''Attribute the portfolio of the next day (trading day)'''
+        """Attribute the portfolio of the next day (trading day)"""
         rslt = Attribution.create(self , port , bench , target_date=target_date , other_cost = other_cost)
         return rslt
     def regress_fut_ret(self , target_date : int | None = None):
-        '''regress future day return , most likely daily , but can given any target date'''
+        """regress future day return , most likely daily , but can given any target date"""
         if target_date is None: 
             target_date = self.next_date
         futret = DATAVENDOR.get_quote_ret(self.date , target_date)
@@ -140,9 +140,9 @@ class Rmodel:
         return new_df
 
 class RiskModel(GeneralModel):
-    '''
+    """
     risk model instance for multiple days
-    '''
+    """
     _instance_dict : dict = {}
     _singleton_names = ['cne5']
 
@@ -205,9 +205,9 @@ class RiskModel(GeneralModel):
 
 @dataclass
 class RiskProfile:
-    '''
+    """
     basic risk profile of a portfolio / benchmark / active , i.e. risk exposure / standard deviation / variance
-    '''
+    """
     factors  : list | np.ndarray | None = None
     exposure : np.ndarray | None = None
     variance : float | None = None
@@ -241,9 +241,9 @@ def get_unique_date(dfs : dict[str,pd.DataFrame] , col : str = 'date') -> int:
 
 @dataclass
 class RiskAnalytic:
-    '''
+    """
     portfolio risk analysis result
-    '''
+    """
     date     : int = 0
     industry : pd.DataFrame | Any = None
     style    : pd.DataFrame | Any = None
@@ -355,9 +355,9 @@ class RiskAnalytic:
 
 @dataclass
 class Attribution:
-    '''
+    """
     portfolio risk attribution result
-    '''
+    """
     start    : int = 0
     end      : int = 0
     source   : pd.DataFrame | Any = None

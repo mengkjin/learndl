@@ -10,13 +10,13 @@ from src.res.gp.func import factor_func as FF
 from src.res.gp.util import EliteGroup , GeneticProgramming
 
 class gpGenerator(BaseClass.BoundLogger):
-    '''
+    """
     构成因子生成器,返回输入因子表达式则输出历史因子值的函数
     input:
         kwargs:  specific gp parameters, suggestion is to leave it alone
     output:
         GP:      gp_generator
-    '''
+    """
     def __init__(self , job_id : int | None = None , 
                  process_key : str = 'inf_winsor_norm' ,  
                  weight_scheme : Literal['ic' , 'ir' , 'ew'] = 'ic', 
@@ -48,18 +48,18 @@ class gpGenerator(BaseClass.BoundLogger):
             **kwargs)
 
     def __call__(self, syntax : str | FF.FactorValue , process_key : str | None = None , print_info = True) -> FF.FactorValue:
-        '''
+        """
         Calcuate FactorValue of a syntax
-        '''
+        """
         if process_key is None: 
             process_key = self.process_key
         factor = self.gp.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
         return factor
 
     def to_dataframe(self , syntax : str | FF.FactorValue , process_key : str | None = None , print_info = True) -> pd.DataFrame | None:
-        '''
+        """
         Convert FactorValue to DataFrame
-        '''
+        """
         if process_key is None: 
             process_key = self.process_key
         factor = self.gp.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
@@ -83,9 +83,9 @@ class gpGenerator(BaseClass.BoundLogger):
         return self.gp.recorder.load_state(key)
 
     def entire_elites(self , block_len = 50 , process_key = None):
-        '''
+        """
         Load all elite factors
-        '''
+        """
         elite_log  = self.load_log('elitelog') 
         hof_log    = self.load_log('hoflog')
         hof_elites = EliteGroup(start_i_elite=0 , device=self.gp.device , block_max_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
@@ -100,17 +100,17 @@ class gpGenerator(BaseClass.BoundLogger):
         return self
 
     def load_elite(self , i_elite : int , factor = False):
-        '''
+        """
         Load a single elite factor
-        '''
+        """
         elite_syntax = str(self.elitelog.loc[i_elite , 'syntax'])
         return self(elite_syntax) if factor else elite_syntax
     
     def multi_factor(self , *factors , labels = None , **kwargs):
-        '''
+        """
         Calculate MultiFactorValue given factors and labels
         None kwargs will use default values
-        '''
+        """
         factor_list = list(factors)
         if len(factor_list) == 1 and isinstance(factor_list[0] , torch.Tensor) and factor_list[0].dim() == 3:
             factor = factor_list[0]
@@ -136,10 +136,10 @@ class gpGenerator(BaseClass.BoundLogger):
             halflife : int | None = None , 
             min_coverage :float | None = None , 
             **kwargs):
-        '''
+        """
         Load all elite factors and calculate MultiFactorValue.
         None kwargs will use default values
-        '''
+        """
         if elites is None:
             elites = self.entire_elites(process_key = process_key)
         if isinstance(elites , EliteGroup):

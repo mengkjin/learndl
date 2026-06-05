@@ -7,7 +7,7 @@ MemoryOptimizationOption: dict[str, bool] = {
     'cuda' : False,
 }
 class MemoryOptimization(BaseCallBack):
-    '''Empty Cuda Cache Every Few Batches (Pretty Slow)'''
+    """Empty Cuda Cache Every Few Batches (Pretty Slow)"""
     CB_KEY_PARAMS = ['batch_interval']
     TurnOn : bool = False
     def __init__(self , trainer , batch_interval = 20 , **kwargs) -> None:

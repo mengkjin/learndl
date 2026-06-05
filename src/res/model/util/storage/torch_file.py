@@ -12,7 +12,7 @@ from src.proj.util.functional.device import Device
 
 T = TypeVar('T')
 class TorchFileStorage:
-    '''Interface of mem or disk storage, methods'''
+    """Interface of mem or disk storage, methods"""
     def __init__(self , mem_storage : bool = False):
         self.is_mem = mem_storage
         self.memdisk : dict[str,Any] = {}
@@ -70,7 +70,7 @@ class TorchFileStorage:
         gc.collect()
 
 class StoredTorchFileLoader(Sequence):
-    ''''retrieve batch_input from a Storage'''
+    """'retrieve batch_input from a Storage"""
     def __init__(self, loader_storage : TorchFileStorage , keys : list[str] , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
         self.storage = loader_storage
         self.shufopt = shuffle_option
@@ -84,7 +84,7 @@ class StoredTorchFileLoader(Sequence):
         for key in self.shuf(self.keys , 'epoch'): 
             yield self.storage.load(key)
     def shuf(self , loader : list[T] , stage : Literal['init' , 'epoch'] = 'init') -> list[T]:
-        '''shuffle at init or each epoch'''
+        """shuffle at init or each epoch"""
         new_loader : Any = loader
         if stage == self.shufopt: 
             indices = np.random.permutation(np.arange(len(loader)))

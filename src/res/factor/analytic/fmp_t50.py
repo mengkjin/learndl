@@ -58,7 +58,7 @@ class Perf_Year(T50Calc):
     def plotter(self): return plotter.plot_perf_year
 
 class T50FMPTest(BaseFactorAnalyticTest):
-    '''
+    """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
         which : str | list[str] | Literal['all']
@@ -68,7 +68,7 @@ class T50FMPTest(BaseFactorAnalyticTest):
             'perf_excess' : Performance Excess
             'perf_drawdown' : Performance Drawdown
             'perf_year' : Performance Yearly Stats
-    '''
+    """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[T50Calc]] = [
         FrontFace , 

@@ -10,7 +10,7 @@ __all__ = [
 ]
 
 def get_compound_growth(expression: str , date: int , n_year : int = 5 , **kwargs):
-    '''cannot deal with < -100% growth compounding, use simple instead'''
+    """cannot deal with < -100% growth compounding, use simple instead"""
     df = DATAVENDOR.get_fin_hist(expression , date , 4*n_year + 1 , pivot = False).iloc[:,0].reset_index('end_date',drop=False)
     df = pd.concat([df.groupby('secid').first() , df.groupby('secid').last()], axis=0)
     val = df.columns[-1]

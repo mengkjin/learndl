@@ -4,7 +4,7 @@ from typing import Literal
 from src.res.model.util import BaseCallBack
 
 class BadAttemptRetrain(BaseCallBack):
-    '''Retrain if nan loss, exit too early, or get a very low RankIC'''
+    """Retrain if nan loss, exit too early, or get a very low RankIC"""
     CB_KEY_PARAMS = ['early_exit' , 'min_ic' , 'max_attempt' , 'max_nan_redo']
     def __init__(self, 
         trainer , 
@@ -42,11 +42,11 @@ class BadAttemptRetrain(BaseCallBack):
     def on_fit_epoch_end_before(self):
         if not self.is_nanloss and (not self.status.loop_end or self.status.attempt >= self.max_attempt):
             return
-        if self.is_nanloss and self.remain_nan_life <= 0:
+        if self.is_nanloss and self.remain_nan_redo <= 0:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
         if self.is_nanloss:
-            self.logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_life} chances.')
-            self.remain_nan_life -= 1
+            self.logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_redo} chances.')
+            self.remain_nan_redo -= 1
             message = f'Get nanloss for {self.texts.attempt_key}. Redo current attempt {self.status.attempt}'
             self.trigger_retrain('redo_attempt' , 'nanloss' , message)
         elif self.is_early_exit:

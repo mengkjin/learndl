@@ -10,7 +10,7 @@ VbLevelCallback = Proj.vb.get('callback')
 CallbackModules = frozenset([fit , monitor , test])
 
 class ConsolidateCallBack(BaseCallBack):
-    '''consolidate all callbacks into one'''
+    """consolidate all callbacks into one"""
     def __init__(self , trainer_or_config : BaseTrainer | ModelConfig , *args , **kwargs):
         super().__init__(trainer_or_config)   
         self.init_callbacks()

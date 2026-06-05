@@ -17,7 +17,7 @@ NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False
 
 class Optimizer:
-    '''specify trainer optimizer and scheduler'''
+    """specify trainer optimizer and scheduler"""
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 
     def __init__(
@@ -64,7 +64,7 @@ class Optimizer:
         return cls.base_scheduler(optimizer, shd_param['name'], **shd_param['param'])
 
     def backward(self , batch_metrics : BatchMetrics):
-        '''BP of optimizer.parameters'''
+        """BP of optimizer.parameters"""
         self.optimizer.zero_grad()
         batch_metrics.total_loss.backward(retain_graph = NAN_GRADS_HALT)
         self.check_nan_gradients(batch_metrics)
@@ -74,7 +74,7 @@ class Optimizer:
         self.optimizer.step()
 
     def scheduler_step(self , epoch : int = 0) -> str | None:
-        '''scheduler step on learn rate , reset learn rate to base_lr on conditions'''
+        """scheduler step on learn rate , reset learn rate to base_lr on conditions"""
         self.scheduler.step()
         
     @property

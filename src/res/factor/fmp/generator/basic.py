@@ -10,9 +10,9 @@ from src.proj import Const , Logger
 from ...util import Port , AlphaModel , AlphaScreener , Amodel , AlphaComposite , PortCreator , PortCreateResult
 
 class BasicCreatorConfig:
-    '''
+    """
     Config for Generator of Basic Portfolio
-    '''
+    """
     slots = ['n_best' , 'turn_control' , 'buffer_zone' , 'no_zone' , 'indus_control' , 'sorter' , 'screener' , 'screen_ratio']
 
     def __init__(

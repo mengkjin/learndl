@@ -14,7 +14,7 @@ from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_su
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name , category_title)
 
 class PortfolioBuilder(BaseClass.BoundLogger):
-    '''
+    """
     category : str but in BUILDER_TYPES
     alpha : AlphaModel
     benchmark : Benchmark | Portfolio | Port | str
@@ -66,7 +66,7 @@ class PortfolioBuilder(BaseClass.BoundLogger):
         buffer_zone : float = 0.8
         no_zone : float = 0.5
         indus_control : float = 0.1
-    '''
+    """
     def __init__(self , category : str | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
@@ -177,7 +177,7 @@ class PortfolioBuilder(BaseClass.BoundLogger):
                    analytic = True , attribution = True , * ,
                    trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
                    daily = False):
-        '''Accounting portfolio through date, require at least portfolio'''
+        """Accounting portfolio through date, require at least portfolio"""
         self.portfolio.accounting(self.benchmark , start , end , 
                                   analytic and self.lag == 0 , attribution and self.lag == 0 ,
                                   trade_engine = trade_engine , daily = daily , with_index = self.port_index ,
@@ -199,7 +199,7 @@ class PortfolioBuilder(BaseClass.BoundLogger):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
 class PortfolioGroupBuilder(BaseClass.BoundLogger):
-    '''
+    """
     parallel_kwargs:
         can have list of builder_kwargs' components, but cannot overlap with builder_kwargs
     builder_kwargs:
@@ -231,7 +231,7 @@ class PortfolioGroupBuilder(BaseClass.BoundLogger):
         daily : bool = False
         analytic : bool = True
         attribution : bool = True
-    '''
+    """
     def __init__(
         self , 
         category : str ,

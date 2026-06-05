@@ -7,7 +7,7 @@ from src.proj import PATH , BaseClass
 from .default import gpDefaults
 
 class gpParameters(BaseClass.BoundLogger):
-    '''
+    """
     主要遗传规划参数初始化
     注：为方便跑多组实验,需设置job_id参数,设置方式为: python xxx.py --job_id 123456
     input:
@@ -15,7 +15,7 @@ class gpParameters(BaseClass.BoundLogger):
         train:          if True, will first check dirs and device  
         continuation:   if True, will continue on start_iter / start_gen
         test_code:      if only to test code validity
-    '''
+    """
 
     def __init__(
         self , job_id : int | None = None , train : bool = True , 
@@ -38,7 +38,7 @@ class gpParameters(BaseClass.BoundLogger):
             torch.multiprocessing.set_start_method('spawn' if gpDefaults.plat == 'windows' else 'forkserver', force=True) 
 
     def make_job_dir(self):
-        '''
+        """
         确定目标文件夹
         input:
             job_id:         when test_code is not True, determines f'{_DIR_pop}/{job_id}' 
@@ -47,7 +47,7 @@ class gpParameters(BaseClass.BoundLogger):
             test_code:      if only to test code validity
         output:
             gp_params: dict that includes all gp parameters
-        '''
+        """
         # directory setting and making
         if self.job_id is None: 
             self.test_code = True

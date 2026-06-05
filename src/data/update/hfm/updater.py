@@ -24,10 +24,10 @@ from .jsfetcher import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform
 
 class JSDataUpdater(BaseClass.BoundLogger):
-    '''
+    """
     in JS environment, update js source data from jinmeng's terminal
     must update after the original R database is updated
-    '''
+    """
     UPDATER_BASE        = PATH.data
     UPDATER_TITLE       = 'DB_updater'
     UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MACHINE.platform_server else [PATH.updater]
@@ -68,7 +68,7 @@ class JSDataUpdater(BaseClass.BoundLogger):
             cls.logger.divider()
             cls.logger.stdout(f'Delete {len(paths)} updaters after completion')
             cls.logger.stdout(paths)
-            # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
+            # del_after_dumping = input(f"""Delete {len(paths)} updaters after completion? (press yes/y) : {paths}""")[0].lower() == 'y'
 
         for tar_filename in paths:
             with tarfile.open(tar_filename, 'r') as tar:  
@@ -258,11 +258,11 @@ class JSDataUpdater(BaseClass.BoundLogger):
 
     @classmethod
     def update(cls):
-        '''
+        """
         in JS environment, update js source data from jinmeng's terminal
         1. In terminal, update js source data from R project to updaters
         2. In server, unpack update files and move to Database
-        '''
+        """
         if MACHINE.platform_server:
             cls.update_server()
         elif MACHINE.belong_to_jinmeng and MACHINE.belong_to_hfm:

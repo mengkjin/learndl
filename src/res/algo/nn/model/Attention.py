@@ -31,10 +31,10 @@ class mod_transformer(nn.Module):
         enc_layer = nn.TransformerEncoderLayer(output_dim , num_heads, dim_feedforward=ffn_dim , dropout=dropout , batch_first=True)
         self.trans = nn.TransformerEncoder(enc_layer , num_layers)
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in: [bs x seq_len x input_dim]
         out:[bs x seq_len x output_dim]
-        '''
+        """
         x = self.fc_in(x)
         x = self.pos_enc(x)
         return self.trans(x)
@@ -67,10 +67,10 @@ class TimeWiseAttention(nn.Module):
         self.fc_out = nn.Linear(2*att_dim,output_dim)
 
     def forward(self, x : Tensor) -> Tensor:
-        '''
+        """
         in: [bs x seq_len x input_dim]
         out:[bs x seq_len x output_dim]
-        '''
+        """
         x = self.fc_in(x)
         scores = self.att_net(x)  # [batch, seq_len, 1]
         o = torch.mul(x , scores).sum(dim=1)

@@ -112,10 +112,10 @@ class EliteGroup(BaseClass.BoundLogger):
         return self.blocks[i].select(j)
 
     def corrmat_of_all(self):
-        '''
+        """
         Calculate correlation matrix of all members
         The corrmat is average(over dim 0) corr(over dim 1), of shape nfactors * nfactors(dim 2)
-        '''
+        """
         total = self.total_len()
         corr_mat = torch.eye(total).to(self.device)
         iterator = [(i,*self.elite_positions[i],j,*self.elite_positions[j]) for i in range(total) for j in range(i+1,total)]

@@ -184,7 +184,7 @@ class AggregatedMetrics:
         return df.assign(**self.key).reset_index(drop = False).set_index(cols)
 
 class EpochMetrics(AggregatedMetrics):
-    '''record a list of batch metric and perform agg operations, usually used in an epoch'''
+    """record a list of batch metric and perform agg operations, usually used in an epoch"""
     def new(self , dataset , epoch = 0 , phase = 0 , **kwargs):
         super().new(dataset = dataset , epoch = epoch , phase = phase)
     
@@ -267,7 +267,7 @@ class EpochMetrics(AggregatedMetrics):
         }
 
 class AttemptMetrics(AggregatedMetrics):
-    '''record a list of dataset metric and perform agg operations, usually used in an attempt'''
+    """record a list of dataset metric and perform agg operations, usually used in an attempt"""
     def new(self , attempt : int = 0 , redo : int = 0 , **kwargs):
         super().new(attempt = attempt , redo = redo)
         self.epoch_metric_results : list[EpochMetricResult] = []
