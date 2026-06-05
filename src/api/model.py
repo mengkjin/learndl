@@ -49,7 +49,7 @@ class ModelAPI:
           memory_usage: high
         '''
         if MACHINE.cuda_server:
-            wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
+            wrap_update(cls.prepare_fit_data , 'prepare fit data')
             ModelTrainer.update_models(force_update = force_update)
         else:
             Logger.alert1('This is not a server with cuda, skip this process')
@@ -170,7 +170,24 @@ class ModelAPI:
         PreProcessorTask.update(predict=True)
 
     @classmethod
-    def reconstruct_train_data(cls , confirm : int = 1): 
+    def prepare_fit_data(cls): 
+        '''
+        prepare historical(since 2007 , use for models starting at 2017) train data, extend based on existing data
+
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [developer, admin]
+          risk: write
+          lock_num: 1
+          disable_platforms: []
+          execution_time: short
+          memory_usage: medium
+        '''
+        PreProcessorTask.update(predict=False , confirm = True)
+
+    @classmethod
+    def reconstruct_train_data(cls , confirm : bool = True): 
         '''
         Reconstruct historical(since 2007 , use for models starting at 2017) train data
 
@@ -181,13 +198,13 @@ class ModelAPI:
           expose: true
           email: true
           roles: [developer, admin]
-          risk: write
+          risk: destructive
           lock_num: 1
           disable_platforms: [macos]
           execution_time: long
-          memory_usage: medium
+          memory_usage: high
         '''
-        PreProcessorTask.update(predict=False , confirm=confirm)
+        PreProcessorTask.reconstruct(predict=False , confirm=confirm)
 
     @classmethod
     def train_model(cls , module : str | None = None , short_test : bool | None = None , 

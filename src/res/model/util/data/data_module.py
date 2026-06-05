@@ -8,7 +8,7 @@ from functools import cached_property
 from typing import Any , Literal , Callable
 
 from src.proj import CALENDAR , Const, MACHINE , BaseClass
-from src.data import PreProcessorTask , ModuleData
+from src.data import ModuleData
 
 from src.func import match_values
 from src.res.model.util.core import BatchInput
@@ -536,8 +536,3 @@ class DataModule(BaseClass.BoundLogger):
     @property
     def no_date_to_test(self):
         return self.stage not in ['fit'] and len(self.model_test_dates) == 0
-
-    @staticmethod
-    def prepare_data(data_types : list[str] | None = None):
-        PreProcessorTask.update(predict = False , data_types = data_types)
-        PreProcessorTask.update(predict = True , data_types = data_types)

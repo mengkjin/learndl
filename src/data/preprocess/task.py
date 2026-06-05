@@ -7,7 +7,6 @@ Usage (from project root)::
     python -m src.data.preprocess.task --predict 1   # predict mode
 """
 from __future__ import annotations
-import argparse
 
 from typing import Any
 
@@ -27,8 +26,9 @@ class PreProcessorTask(BaseClass.BoundLogger):
     Called from scripts or the CLI; uses argparse for the ``--confirm`` flag.
     """
     @classmethod
-    def update(cls , predict = False, confirm = 0 , * , parser = None , data_types : list[str] | None = None , 
-               indent : int = 0 , vb_level : Any = 1 , force_update : bool = False):
+    def update(
+        cls , predict : bool = False, * , confirm : bool = True , data_types : list[str] | None = None , 
+        indent : int = 0 , vb_level : Any = 1 , force_update : bool = False):
         """
         Run the preprocessing update for all (or selected) registered processors.
 
@@ -36,8 +36,8 @@ class PreProcessorTask(BaseClass.BoundLogger):
         ----------
         predict : bool
             If True, use ``'predict'`` mode; otherwise use ``'fit'`` mode.
-        confirm : int
-            Non-zero value skips the interactive confirmation prompt.
+        confirm : bool
+            If True, will prompt for confirmation.
         parser : argparse.ArgumentParser | None
             Pre-built parser (used when called from a parent script).
         data_types : list[str] | None
@@ -46,13 +46,12 @@ class PreProcessorTask(BaseClass.BoundLogger):
             If True, skip the "already updated today" check.
         """
         cls.SetClassVB(vb_level , indent)
-        if parser is None:
-            parser = argparse.ArgumentParser(description = 'manual to this script')
-            parser.add_argument("--confirm", type=str, default = confirm)
-            args , _ = parser.parse_known_args()
-        if not predict and not args.confirm and \
-            not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : 
-            return
+        
+        if not predict and confirm: 
+            from src.proj.util.functional.ask import AskFor
+            flag = AskFor.Confirmation(title = 'Are you sure to update the preprocessed data?')
+            if not flag.yes:
+                return
         
         if data_types is not None:
             keys = data_types
@@ -65,4 +64,41 @@ class PreProcessorTask(BaseClass.BoundLogger):
         for key in keys:
             proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)
             proc.update(force_update = force_update)
+            cls.logger.divider(vb = 3)
+
+    @classmethod
+    def reconstruct(
+        cls , predict : bool = False, * , confirm : bool = True , 
+        data_types : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
+        """
+        Run the preprocessing update for all (or selected) registered processors.
+
+        Parameters
+        ----------
+        predict : bool
+            If True, use ``'predict'`` mode; otherwise use ``'fit'`` mode.
+        confirm : bool
+            If True, will prompt for confirmation.
+        data_types : list[str] | None
+            Explicit list of processor keys to update.  Defaults to all.
+        """
+        cls.SetClassVB(vb_level , indent)
+        
+        if confirm:
+            from src.proj.util.functional.ask import AskFor
+            flag = AskFor.Confirmation(ask_times = 3 , title = 'Are you sure to reconstruct all the preprocessed data?')
+            if not flag.yes:
+                return
+        
+        if data_types is not None:
+            keys = data_types
+        else:
+            keys = DATASET_PREDICT if predict else DATASET_FIT
+            
+        cls.logger.note(f'Data PreProcessing for {"fitting" if not predict else "predicting"} start with {keys} datas !')
+        cls.logger.stdout(f'Will process {keys} from {Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , idt = 1 , vb = 1)
+
+        for key in keys:
+            proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)
+            proc.update(reconstruct = True , confirm = False)
             cls.logger.divider(vb = 3)
