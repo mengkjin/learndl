@@ -6,6 +6,9 @@ from src.proj.log import Logger
 
 __all__ = ['AskFor']
 
+def _print_title(title : str):
+    if title:
+        Logger.stdout(f'{title}' , color = 'lightpurple')
 class AskFlag:
     """
     Ask for confirmation, selections, or retry.
@@ -53,6 +56,7 @@ class AskFor:
     example:
         flag = AskFor.Confirmation('Are you sure to continue?')
         flag = AskFor.Selections('Which model to archive?' , len(model_paths))
+        flag = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
         flag = AskFor.Retry('Do you want to archive more models?')
     """
     @staticmethod
@@ -62,39 +66,36 @@ class AskFor:
         Returns:
             Tuple of (inputs list, bool list from ``proceed_condition``).
         """
+        assert ask_times > 0 , 'ask_times must be greater than 0'
         
-        from pytimedinput import timedInput
+        _print_title(title)
         for i in range(ask_times):
-            if title:
-                Logger.critical(f'{title}')
-            prefix = f'Please confirm (y/n/q) ({i+1}/{ask_times} rounds): '
-                
+            prefix = f'Please press y to confirm' 
+            if ask_times > 1:
+                prefix += f' ({i+1}/{ask_times} rounds): '
             value, is_timeout = None , False
             if timeout > 0:
                 try:
+                    from pytimedinput import timedInput
                     value, is_timeout = timedInput(f'{prefix} (in {timeout} seconds): ' , timeout = timeout)
+                    value = value.strip()
                 except Exception:
                     pass
             if value is None : 
-                value, is_timeout = input(f'{prefix} : ') , False
-            if value.lower() not in ['y' , 'n' , 'q']:
-                Logger.error(f'Invalid input: {value}')
-                return AskFlag('no')
+                value, is_timeout = input(f'{prefix} : ').strip() , False
             if is_timeout:
                 Logger.stdout(f'Input is timed out at the {i+1}th round.')
                 return AskFlag('no')
-            elif value.lower() in ['n' , 'q']:
-                Logger.stdout(f'Confirmation is rejected at the {i+1}th round.')
-                return AskFlag('no')
-            
+            if value.strip().lower() != 'y':
+                Logger.error(f'Invalid input: {value} , confirmation is rejected at the {i+1}th round')
+                return AskFlag('no') 
         return AskFlag('yes')
 
-    @staticmethod
-    def Selections(options : int , start : int = 1 , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
+    @classmethod
+    def Selections(cls ,options : int , start : int = 1 , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
         """Parse the selections."""
         min , max = start , options + start - 1
-        if title:
-            Logger.note(f'{title}')
+        _print_title(title)
         if multiple:
             selection = input(f'Choose from {min} to {max}, seperated by comma , q to quit: ')
             if selection.lower() == 'q':
@@ -117,38 +118,32 @@ class AskFor:
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
                 return AskFlag('abort')
 
-
         if confirm:
-            flag = input(f'Are you sure to select {choices}? (press y to confirm): ')
-            if flag.lower() == 'y':
-                return AskFlag('yes' , result = choices)
-            else:
-                return AskFlag('abort')
+            flag = cls.Confirmation(title = f'Are you sure to select {choices}?')
+            return AskFlag('yes' , result = choices) if flag.yes else AskFlag('abort')
         else:
             return AskFlag('yes' , result = choices)
 
     @staticmethod
     def Retry(title : str = '') -> AskFlag:
         """Ask for exit."""
+        _print_title(title)
         while True:
-            if title:
-                Logger.note(f'{title}')
-            flag = input(f'Choose yes or no or quit (y/n/q): ')
-            if flag.lower() in ['n' , 'q']:
+            value = input(f'Choose yes or no or quit (y/n/q): ')
+            if value.strip().lower() in ['n' , 'q']:
                 return AskFlag('no')
-            elif flag.lower() == 'y':
+            elif value.strip().lower() == 'y':
                 return AskFlag('yes')
             else:
-                Logger.error(f'Invalid input: {flag}')
+                Logger.error(f'Invalid input: {value} , please choose yes or no or quit (y/n/q)')
 
     @classmethod
     def Options(cls , options : list[Any] , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
         """Ask for options."""
-        if title:
-            Logger.note(f'{title}')
-        Logger.note(f'There are {len(options)} options available...')
+        _print_title(title)
+        Logger.stdout(f'There are {len(options)} options available...')
         for i , option in enumerate(options):
-            Logger.note(f'{i+1:02d}. {option}' , indent = 1)
+            Logger.stdout(f'{i+1:02d}. {option}' , indent = 1)
         flag = cls.Selections(len(options) , confirm = confirm , multiple = multiple)
         if flag.yes:
             if multiple:

@@ -359,7 +359,7 @@ class ModelPath:
             Logger.alert1(f'Multiple ({len(candidates)}) candidates found for {start_with}, please choose one by yourself:')
             for i , candidate in enumerate(candidates):
                 Logger.note(f'{i+1:02d}. {candidate.relative_to(PATH.main)}')
-            source = candidates[int(input(f'Which one to choose? (1-{len(candidates)}): ')) - 1]
+            source = candidates[int(input(f'Which one to choose? (1-{len(candidates)}): ').strip()) - 1]
         model_path = cls(source.name.split('.')[0])
         model_path = model_path.with_new_index(model_path.find_new_index(folder_not_exist = True))
         target = model_path.base

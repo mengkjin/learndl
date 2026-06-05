@@ -175,7 +175,7 @@ class LogFile:
         """Delete host and all rotation files (optional interactive confirm)."""
         if confirm:
             value = input(f'Are you sure you want to delete all {self} log files? (y/n): ')
-            if value != 'y':
+            if value.strip().lower() != 'y':
                 return
         for log_file in self.rotation_files:
             log_file.unlink(missing_ok=True)

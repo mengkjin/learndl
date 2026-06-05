@@ -12,13 +12,13 @@ def reconstruct_preprocessed_data() -> None:
         if not data_keys:
             Logger.note('No data keys found for preprocess.')
             return
-        flag = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to reconstruct?')
-        if flag.no:
+        flag_key = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to reconstruct?')
+        if flag_key.no:
             return
-        if flag.abort:
+        if flag_key.abort:
             continue
         
-        data_key = flag.result
+        data_key = flag_key.result
         Logger.note(f'Select [{data_key}] data to reconstruct...')
         flag_type = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
         if flag_type.no:
@@ -39,6 +39,5 @@ def reconstruct_preprocessed_data() -> None:
                     PrePros.get_processor(data_key, type = 'predict').update(reconstruct = True , confirm = False)
                 else:
                     raise ValueError(f'Invalid data type: {data_type}')
-        flag = AskFor.Retry(title = f'Do you want to reconstruct more data?')
-        if flag.no:
+        if AskFor.Retry(title = f'Do you want to reconstruct more data?').no:
             return

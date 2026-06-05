@@ -844,6 +844,7 @@ class DataBlock:
         Sets ``volume_adjusted=True`` to prevent double-adjustment.
         No-op if both ``multiply`` and ``divide`` are None.
         """
+        Logger.stdout(f'Adjusting volume... fillna: {ffill}' )
         if self.volume_adjusted or self.empty: 
             return self
         if multiply is None and divide is None: 
@@ -860,7 +861,10 @@ class DataBlock:
         if divide   is not None: 
             v_vol /= divide
         if ffill:
+            print(f'v_vol.shape: {v_vol.shape}')
+            print(f'v_vol.nan count: {v_vol.isnan().sum()}')
             v_vol = torch.from_numpy(forward_fillna(v_vol.cpu().numpy() , axis = 1 , force_value = 0)).to(v_vol)
+            print(f'v_vol.nan count after fillna: {v_vol.isnan().sum()}')
         self.values[...,i_vol] = v_vol
         self.volume_adjusted = True
         return self
