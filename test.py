@@ -1,4 +1,5 @@
 from pathlib import Path
+
 def main():
     path = Path('src')
     for file in path.glob('**/*.py'):

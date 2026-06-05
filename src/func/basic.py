@@ -146,7 +146,7 @@ def array_to_tensor_slice(array : np.ndarray | list) -> slice | torch.Tensor:
     else:
         return torch.from_numpy(array_slice)
     
-def forward_fillna(arr , axis = 0):
+def forward_fillna(arr , axis = 0 , * , force_value = None):
     """Last-observation-carried-forward along one axis (NumPy).
 
     Args:
@@ -170,9 +170,11 @@ def forward_fillna(arr , axis = 0):
     idx = np.maximum.accumulate(idx, axis=1)
     out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
     out = np.transpose(out.reshape(new_shape) , new_axes)
+    if force_value is not None:
+        out = np.where(np.isnan(out) , np.nan , np.nan_to_num(arr , force_value))
     return out
 
-def backward_fillna(arr, axis = 0):
+def backward_fillna(arr, axis = 0 , * , force_value = None):
     """Next-observation-carried-backward along one axis (NumPy).
 
     Args:
@@ -197,6 +199,8 @@ def backward_fillna(arr, axis = 0):
 
     out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
     out = np.transpose(out.reshape(new_shape) , new_axes)
+    if force_value is not None:
+        out = np.where(np.isnan(out) , np.nan , np.nan_to_num(arr , force_value))
     return out
 
 def trim_index(index : np.ndarray | Any , min_value = None , max_value = None) -> np.ndarray:

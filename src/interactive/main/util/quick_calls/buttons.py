@@ -46,6 +46,19 @@ class CheckConfigFiles(QuickCallButton):
             check_all_config_files()
         """
 
+class RebuildPreprocessedData(QuickCallButton):
+    """Button that rebuilds the preprocessed data."""
+    key = "rebuild-preprocess"
+    icon = ":material/calculate:"
+    default_help = 'Rebuild the preprocessed data, you can choose which data and which type to rebuild.'
+    color = 'gold'
+    
+    def script_string(self) -> str:
+        return """
+            from src.call.data import rebuild_preprocessed_data
+            rebuild_preprocessed_data()
+        """
+
 class Tensorboard(QuickCallButton):
     """Button that launches Tensorboard."""
     key = "tensorboard"

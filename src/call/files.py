@@ -12,8 +12,7 @@ from typing import Literal
 
 from src.proj import MACHINE , PATH , Logger
 
-# %% git related operations
-
+# %% project code related operations
 def git_commit_sync(commit_message : str = 'auto commit' , verbose_level : Literal[0,1,2] = 1) -> None:
     """
     commit and sync the code
@@ -72,6 +71,16 @@ def clear_git_pull(verbose_level : Literal[0,1,2] = 1) -> None:
     if verbose_level >= 1:
         Logger.success(f"Removed {len(empty_folders)} empty folders done")
 
+def check_future_annotations():
+    """Check if the future annotations are used in the project code."""
+    path = PATH.main.joinpath('src')
+    for file in path.glob('**/*.py'):
+        if file.name.startswith('__init__'):
+            continue
+        context = file.read_text()
+        if 'from __future__ import annotations' not in context:
+            Logger.error(f"Future annotations not used in file: {file}")
+
 # %% model files related operations ------------------------------------------------------------
 
 def archive_current_model() -> None:
@@ -93,7 +102,7 @@ def archive_current_model() -> None:
                 Logger.note(f'{root_name.upper()} models:')
                 last_root = root_name
             Logger.note(f'{i+1:02d}. {model_path.relative_to(PATH.model)}' , indent = 1)
-        flag = AskFor.Selections(f'Which model to archive?' , len(model_paths))
+        flag = AskFor.Selections(len(model_paths) , multiple=True , title = f'Which model to archive?')
         if flag.no:
             return
         if flag.yes:
@@ -113,17 +122,13 @@ def resume_archived_model() -> None:
         if not archive_paths:
             Logger.note('No models found in the archive directory.')
             return
-        Logger.note(f'There are {len(archive_paths)} models currently in the archive directory...')
-
-        for i , archive_path in enumerate(archive_paths):
-            Logger.note(f'{i+1:02d}. {archive_path.relative_to(PATH.model_archive)}' , indent = 1)
-        flag = AskFor.Selections(f'Which model to resume?' , len(archive_paths))
+        flag = AskFor.Options(archive_paths , confirm = False , multiple=True , title = f'Which model to resume from archive?')
         if flag.no:
             return
         if flag.yes:
-            for i in flag.result:
-                ModelPath.resume_from_archive(archive_paths[i - 1].name)
-        flag = AskFor.Retry(f'Do you want to resume more models?')
+            for path in flag.result:
+                ModelPath.resume_from_archive(path.name)
+        flag = AskFor.Retry(title = f'Do you want to resume more models?')
         if flag.no:
             return
 

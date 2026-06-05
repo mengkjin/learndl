@@ -196,7 +196,7 @@ class PrePro_week(TradePreProcessor):
         return blocks
     
     def process(self , blocks): 
-        data_block = blocks['day'].adjust_price()
+        data_block = blocks['day'].adjust_price(ffill = True).adjust_volume(ffill = True)
 
         new_values = np.full(np.multiply(data_block.shape,(1, 1, self.WEEKDAYS, 1)),np.nan)
         for i in range(self.WEEKDAYS): 

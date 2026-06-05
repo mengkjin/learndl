@@ -54,7 +54,7 @@ class PreProcessorTask(BaseClass.BoundLogger):
             not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : 
             return
         
-        if data_types:
+        if data_types is not None:
             keys = data_types
         else:
             keys = DATASET_PREDICT if predict else DATASET_FIT

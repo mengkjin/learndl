@@ -748,7 +748,7 @@ class DataBlock:
         if self.empty:
             return self
         if if_fill:
-            self.values = forward_fillna(self.values , axis = 1)
+            self.values = torch.from_numpy(forward_fillna(self.values.cpu().numpy() , axis = 1)).to(self.values)
         return self
 
     def fillna(self , value : Any = 0):
@@ -790,7 +790,7 @@ class DataBlock:
         return self
 
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 ,
-                     price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
+                     price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] , ffill = False):
         """
         Apply price adjustment factors to OHLCV price columns.
 
@@ -818,6 +818,8 @@ class DataBlock:
             v_price *= multiply
         if divide    is not None: 
             v_price /= divide
+        if ffill:
+            v_price = torch.from_numpy(forward_fillna(v_price.cpu().numpy() , axis = 1)).to(v_price)
         self.values[...,i_price] = v_price 
 
         if 'vwap' in self.feature:
@@ -835,7 +837,7 @@ class DataBlock:
         return self
     
     def adjust_volume(self , multiply = None , divide = None ,
-                      vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr']):
+                      vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr'] , ffill = False):
         """
         Scale volume/amount/turnover columns by optional multiply/divide factors.
 
@@ -857,6 +859,8 @@ class DataBlock:
             v_vol *= multiply
         if divide   is not None: 
             v_vol /= divide
+        if ffill:
+            v_vol = torch.from_numpy(forward_fillna(v_vol.cpu().numpy() , axis = 1 , force_value = 0)).to(v_vol)
         self.values[...,i_vol] = v_vol
         self.volume_adjusted = True
         return self

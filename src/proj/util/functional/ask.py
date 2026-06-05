@@ -88,37 +88,69 @@ class AskFor:
         return AskFlag('yes')
 
     @staticmethod
-    def Selections(msg : str , options : int , start : int = 1) -> AskFlag:
+    def Selections(options : int , start : int = 1 , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
         """Parse the selections."""
         min , max = start , options + start - 1
-        
-        selection = input(f'{msg} ({min}-{max}, seperated by comma , q to quit): ')
-        if selection.lower() == 'q':
-            return AskFlag('no')
-        selections = [s.strip() for s in selection.split(',') if s.strip()]
-        if any(not s.isdigit() for s in selections):
-            Logger.error(f'Contains non-digit characters: {selection}')
-            return AskFlag('abort')
+        if title:
+            Logger.note(f'{title}')
+        if multiple:
+            selection = input(f'Choose from {min} to {max}, seperated by comma , q to quit: ')
+            if selection.lower() == 'q':
+                return AskFlag('no')
+            choices = [s.strip() for s in selection.split(',') if s.strip()]
+            if any(not s.isdigit() for s in choices):
+                Logger.error(f'Contains non-digit characters: {selection}')
+                return AskFlag('abort')
 
-        selections = [int(i) for i in selections]
-        if any(s < start or s > options + start - 1 for s in selections):
-            Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
-            return AskFlag('abort')
-
-        flag = input(f'Are you sure to select {selections}? (press y to confirm): ')
-        if flag.lower() == 'y':
-            return AskFlag('yes' , result = selections)
+            choices = [int(i) for i in choices]
+            if any(s < start or s > options + start - 1 for s in choices):
+                Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
+                return AskFlag('abort')
         else:
-            return AskFlag('abort')
+            selection = input(f'Choose from {min} to {max}, q to quit: ')
+            if selection.lower() == 'q':
+                return AskFlag('no')
+            choices = int(selection)
+            if choices < start or choices > options + start - 1:
+                Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
+                return AskFlag('abort')
+
+
+        if confirm:
+            flag = input(f'Are you sure to select {choices}? (press y to confirm): ')
+            if flag.lower() == 'y':
+                return AskFlag('yes' , result = choices)
+            else:
+                return AskFlag('abort')
+        else:
+            return AskFlag('yes' , result = choices)
 
     @staticmethod
-    def Retry(msg : str) -> AskFlag:
+    def Retry(title : str = '') -> AskFlag:
         """Ask for exit."""
         while True:
-            flag = input(f'{msg} (y/n/q): ')
+            if title:
+                Logger.note(f'{title}')
+            flag = input(f'Choose yes or no or quit (y/n/q): ')
             if flag.lower() in ['n' , 'q']:
                 return AskFlag('no')
             elif flag.lower() == 'y':
                 return AskFlag('yes')
             else:
                 Logger.error(f'Invalid input: {flag}')
+
+    @classmethod
+    def Options(cls , options : list[Any] , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
+        """Ask for options."""
+        if title:
+            Logger.note(f'{title}')
+        Logger.note(f'There are {len(options)} options available...')
+        for i , option in enumerate(options):
+            Logger.note(f'{i+1:02d}. {option}' , indent = 1)
+        flag = cls.Selections(len(options) , confirm = confirm , multiple = multiple)
+        if flag.yes:
+            if multiple:
+                flag.result = [options[i - 1] for i in flag.result]
+            else:
+                flag.result = options[flag.result - 1]
+        return flag
