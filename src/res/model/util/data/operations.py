@@ -16,7 +16,7 @@ import torch
 import numpy as np
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any , Callable , Literal
+from typing import Any , Literal
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
@@ -192,40 +192,20 @@ class DataOperator:
         seqlen , step = self.get_seqlen_step(key)
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
-        agg = data.sum(sum_dim).isfinite()
-        print(f'agg shape: {agg.shape}')
+        if all_valid:
+            agg_raw = data.sum(sum_dim).isfinite()
+        else:
+            agg_raw = ~data.isnan().all(sum_dim)
         if seqlen * step > 1:
-            agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
-        print(f'agg shape: {agg.shape}')
+            agg = torch.nn.functional.pad(agg_raw, (seqlen * step - 1,0) , value = False)
         try:
-            predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
-            unfold = agg.unfold(1,seqlen*step,1)
-            print(f'unfold shape: {unfold.shape}')
-            unfold_slice = unfold[...,step-1::step]
-            print(f'unfold_slice shape: {unfold_slice.shape}')
-            valid_raw = predicate(unfold_slice,-1)
-            print(f'valid_raw shape: {valid_raw.shape}')
-            valid = valid_raw[:,index1]
-            print(f'valid shape: {valid.shape}')
+            valid = agg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].all(dim=-1)
         except MemoryError:
-            predicate = torch.multiply if all_valid else torch.add
             valid = torch.full_like((agg[:,:len(index1)]), all_valid)
             for i in range(seqlen):
-                valid = predicate(valid , agg[:,index1 + i * step])
+                valid = torch.multiply(valid , agg[:,index1 + i * step])
         if endpoint_nonzero: 
             valid *= data[:,index1].not_equal(0).all(sum_dim)   
-        pos = 361 
-        pos2 = 21
-        print(f'index1: {index1}')
-        print(f'data shape: {data.shape}')
-        print(f'x_pos sum: {valid[:,pos2].sum()} , {valid_raw[:,pos].sum()}')
-        for i , p in enumerate(range(pos-249, pos + 1, 5)):
-            idx = valid[:,pos2]
-            print(f'unfold_slice of pos {p}: {unfold_slice[:,pos,i].sum()} {unfold_slice[idx,pos,i].all()}')
-            print(f'agg of pos {p}: {agg[:,p+249].sum()} {agg[idx,p+249].all()}')
-        data_x_pos = data[idx][:,pos-249:pos+1:5]
-        print(f'data_x_pos shape: {data_x_pos.shape}')
-        print(f'data_x_pos nan: {data_x_pos.isnan().any()}')
         return valid
 
     def split_sample(self , valid : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:

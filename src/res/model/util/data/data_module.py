@@ -263,8 +263,6 @@ class DataModule(BaseClass.BoundLogger):
                 max_valid_sampled = valid_sample_by_date.max()
                 self.logger.stdout(f'valid samples by date: {min_valid_sampled} ~ {max_valid_sampled}' , idt = 1)
 
-        assert all(~v[:,self.step_idx][valid_sampled].isnan().any() for v in x_full.values()), 'Encountered nan in x_full with valid_sampled'
-
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_sampled , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
@@ -343,7 +341,6 @@ class DataModule(BaseClass.BoundLogger):
         x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
         others : rolling window non-nan , default as self.seqy
         """
-        print(f'all_valid: {all_valid}')
         valids : list[torch.Tensor] = []
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
@@ -390,6 +387,9 @@ class DataModule(BaseClass.BoundLogger):
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
 
                 if batch_input.x_has_nan:
+                    print(f'index0: {index0}')
+                    print(f'xindex1: {xindex1}')
+                    print(f'yindex1: {yindex1}')
                     y_date_idx = self.y_date.tolist().index(batch_input.date0)
                     v_date_idx = self.y_date[self.step_idx].tolist().index(batch_input.date0)
                     print(batch_input.date0)
@@ -401,10 +401,9 @@ class DataModule(BaseClass.BoundLogger):
                     print(f'step_idx shape: {self.step_idx.shape}')
                     
                     idx0 = self.valid_sampled[:,v_date_idx]
-                    x_window = self.x_full['week'][idx0][:,y_date_idx-249:y_date_idx+1]
+                    x_window = self.x_full['week'][idx0][:,y_date_idx-249:y_date_idx+1:5]
                     print(x_window.shape)
-                    print(x_window)
-                    print(x_window.isnan().any())
+                    print(x_window.isnan().sum())
                     
                     raise ValueError('Encountered nan in x_full with valid_sampled')
 
