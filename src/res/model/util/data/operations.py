@@ -199,16 +199,18 @@ class DataOperator:
         try:
             predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
             valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
+            print('here')
         except MemoryError:
             predicate = torch.multiply if all_valid else torch.add
             valid = torch.full_like((agg[:,:len(index1)]), all_valid)
             for i in range(seqlen):
                 valid = predicate(valid , agg[:,index1 + i * step])
         if endpoint_nonzero: 
-            valid *= data[:,index1].not_equal(0).all(sum_dim)    
-        x_pos = valid[:,361]
-        print(f'x_pos sum: {x_pos.sum()}')
-        data_x_pos = data[x_pos][:,361-249:362]
+            valid *= data[:,index1].not_equal(0).all(sum_dim)   
+        pos = 361 
+        print(f'data shape: {data.shape}')
+        print(f'x_pos sum: {valid[:,pos].sum()}')
+        data_x_pos = data[valid[:,pos]][:,pos-249:pos+1:5]
         print(f'data_x_pos shape: {data_x_pos.shape}')
         print(f'data_x_pos nan: {data_x_pos.isnan().any()}')
         return valid
