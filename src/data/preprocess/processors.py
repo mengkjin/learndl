@@ -203,7 +203,7 @@ class PrePro_week(TradePreProcessor):
             new_values[:,self.WEEKDAYS-1-i:,i] = data_block.values[:,:len(data_block.date)-self.WEEKDAYS+1+i,0]
         new_block = DataBlock(values = new_values , secid = data_block.secid , date = data_block.date , feature = data_block.feature)
         print(f'new_block.shape: {new_block.shape}')
-        print(f'new_block.finite: {new_block.values[:1].sum(dim = (2,3)).isfinite()[1000:]}')
+        print(f'new_block.finite: {new_block.values[0][1000:].sum(dim = (1,2)).isfinite()}')
         new_block = new_block.adjust_price(adjfactor = False , divide=new_block.loc(inday = 0,feature = 'preclose'))
         return new_block
     

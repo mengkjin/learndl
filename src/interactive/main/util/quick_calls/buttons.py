@@ -55,8 +55,8 @@ class RebuildPreprocessedData(QuickCallButton):
     
     def script_string(self) -> str:
         return """
-            from src.call.data import rebuild_preprocessed_data
-            rebuild_preprocessed_data()
+            from src.call.data import reconstruct_preprocessed_data
+            reconstruct_preprocessed_data()
         """
 
 class Tensorboard(QuickCallButton):

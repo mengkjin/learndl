@@ -314,7 +314,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
             return True
         return False
 
-    def update(self , force_update : bool = False , reconstruct : bool = False):
+    def update(self , force_update : bool = False , reconstruct : bool = False , confirm : bool = True):
         """
         Run the full incremental update: extend dump, save dump, save norms.
 
@@ -324,10 +324,11 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """
         if reconstruct:
             self.logger.critical('Reconstructing the preprocessed data...')
-            from src.proj.util.functional.ask import AskFor
-            flag = AskFor.Confirmation(title = 'Are you sure to reconstruct the preprocessed data?')
-            if not flag.yes:
-                return
+            if confirm:
+                from src.proj.util.functional.ask import AskFor
+                flag = AskFor.Confirmation(title = 'Are you sure to reconstruct the preprocessed data?')
+                if not flag.yes:
+                    return
             force_update = True
 
         if self.should_be_skipped(force_update):

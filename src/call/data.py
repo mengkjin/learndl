@@ -1,8 +1,8 @@
 from __future__ import annotations
 from src.proj import Logger , Proj , MACHINE
 
-def rebuild_preprocessed_data() -> None:
-    """Archive the model."""
+def reconstruct_preprocessed_data() -> None:
+    """Reconstruct the preprocessed data."""
 
     from src.proj.util.functional.ask import AskFor
     from src.data.preprocess.processors import PrePros
@@ -36,7 +36,7 @@ def rebuild_preprocessed_data() -> None:
                     PrePros.get_processor(data_key, type = 'predict').update(reconstruct = True)
                 elif data_type == 'both':
                     PrePros.get_processor(data_key, type = 'fit').update(reconstruct = True)
-                    PrePros.get_processor(data_key, type = 'predict').update(reconstruct = True)
+                    PrePros.get_processor(data_key, type = 'predict').update(reconstruct = True , confirm = False)
                 else:
                     raise ValueError(f'Invalid data type: {data_type}')
         flag = AskFor.Retry(title = f'Do you want to reconstruct more data?')

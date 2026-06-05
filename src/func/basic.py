@@ -162,6 +162,8 @@ def forward_fillna(arr , axis = 0 , * , force_value = None):
     new_axes  = list(range(len(arr.shape)))
     new_axes[0] , new_axes[axis] = axis , 0
     
+    filled_arr = np.nan_to_num(arr , force_value) if force_value is not None else None
+
     arr = np.transpose(arr , new_axes)
     new_shape = arr.shape
 
@@ -170,8 +172,8 @@ def forward_fillna(arr , axis = 0 , * , force_value = None):
     idx = np.maximum.accumulate(idx, axis=1)
     out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
     out = np.transpose(out.reshape(new_shape) , new_axes)
-    if force_value is not None:
-        out = np.where(np.isnan(out) , np.nan , np.nan_to_num(arr , force_value))
+    if filled_arr is not None:
+        out = np.where(np.isnan(out) , np.nan , filled_arr)
     return out
 
 def backward_fillna(arr, axis = 0 , * , force_value = None):
@@ -190,6 +192,8 @@ def backward_fillna(arr, axis = 0 , * , force_value = None):
     new_axes  = list(range(len(arr.shape)))
     new_axes[0] , new_axes[axis] = axis , 0
 
+    filled_arr = np.nan_to_num(arr , force_value) if force_value is not None else None
+
     arr = np.transpose(arr , new_axes)
     new_shape = arr.shape
 
@@ -199,8 +203,8 @@ def backward_fillna(arr, axis = 0 , * , force_value = None):
 
     out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
     out = np.transpose(out.reshape(new_shape) , new_axes)
-    if force_value is not None:
-        out = np.where(np.isnan(out) , np.nan , np.nan_to_num(arr , force_value))
+    if filled_arr is not None:
+        out = np.where(np.isnan(out) , np.nan , filled_arr)
     return out
 
 def trim_index(index : np.ndarray | Any , min_value = None , max_value = None) -> np.ndarray:
