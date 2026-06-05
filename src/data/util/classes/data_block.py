@@ -855,10 +855,7 @@ class DataBlock:
         if divide   is not None: 
             v_vol /= divide
         if ffill:
-            print(f'v_vol.shape: {v_vol.shape}')
-            print(f'v_vol.nan count: {v_vol.isnan().sum()}')
             v_vol = forward_fillna(v_vol , axis = 1 , force_value = 0)
-            print(f'v_vol.nan count after fillna: {v_vol.isnan().sum()}')
         self.values[...,i_vol] = v_vol
         self.volume_adjusted = True
         return self

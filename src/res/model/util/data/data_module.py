@@ -336,14 +336,9 @@ class DataModule(BaseClass.BoundLogger):
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
             valids.append(finites.all(dim=-1) if all_valid else finites.any(dim=-1))
-            print(f'self.d0: {self.d0} , self.d1: {self.d1}')
-            print(f'x week: {x["week"][0][:51]}')
-            print(f'x finites: {finites[0][:,:20]}')
         if y is not None:
             finites = self.data_operator.finite_position(None , y, index1)
-            print(f'y finites: {finites[:5][:,:20]}')
             valids.append(finites)
-        raise ValueError('stop here')
         if valids:
             return torch.stack(valids , dim = -1).all(dim = -1)
         else:
@@ -368,6 +363,9 @@ class DataModule(BaseClass.BoundLogger):
             for bnum , b_i in enumerate(set_samples):
                 if b_i.numel() == 0:
                     continue
+                if b_i.numel() <= 100:
+                    self.logger.error(f'batch_input of date {self.y_date[int(b_i[:,1][0].item())]} is too small: {b_i.numel()}')
+                    continue
 
                 assert torch.isin(b_i[:,1] , index1).all() , f'all b_i[:,1] must be in index1'
                 index0 , xindex1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1) # here
@@ -378,8 +376,6 @@ class DataModule(BaseClass.BoundLogger):
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
-
-                print(f'batch_input of date {batch_input.date0}: {batch_input.shape}')
 
                 batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)

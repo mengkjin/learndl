@@ -182,29 +182,11 @@ class DataOperator:
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
         agg = data.sum(sum_dim).isfinite()
-        print(f'data shape: {data.shape}')
-        print(f'agg shape: {agg.shape}')
-        print(f'agg: {agg[0,:2*seqlen*step]}')
-        print(f'agg where False: {agg[0].where(agg[0],False)}')
-        print(f'agg False count for 0: {(~agg[0]).sum()}')
-        print(f'data 75:80 , 0: {data[0,75:80 , :,0]}')
-        print(f'data 75:80 , 1: {data[0,75:80 , :,1]}')
-        print(f'data 75:80 , 2: {data[0,75:80 , :,2]}')
-        print(f'data 75:80 , 3: {data[0,75:80 , :,3]}')
-        print(f'data 75:80 , 4: {data[0,75:80 , :,4]}')
-        print(f'data 75:80 , 5: {data[0,75:80 , :,5]}')
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
             predicate : Callable[...,torch.Tensor] = torch.all if all_valid else torch.any
-            print(f'seq_len: {seqlen} , step: {step}')
-            print(f'index1: {index1}')
-            print(f'sum_dim: {sum_dim}')
-            print(f'data shape: {data.shape}')
-            unfolded = agg.unfold(1,seqlen*step,1)[...,step-1::step]
-            print(f'unfolded shape: {unfolded.shape}')
-            valid = predicate(unfolded,-1)[:,index1]
-            print(f'valid: {valid[0]}')
+            valid = predicate(agg.unfold(1,seqlen*step,1)[...,step-1::step],-1)[:,index1]
         except MemoryError:
             predicate = torch.multiply if all_valid else torch.add
             valid = torch.full_like((agg[:,:len(index1)]), all_valid)
