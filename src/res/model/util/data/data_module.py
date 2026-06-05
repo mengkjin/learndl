@@ -250,7 +250,7 @@ class DataModule(BaseClass.BoundLogger):
 
         valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
 
-        if Proj.verbose(self.vb_level + 2):
+        if Proj.verbose(self.vb_level + 1):
             self.logger.stdout(f'loader_param: {self.loader_param}')
             self.logger.stdout(f'x shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
             if valid_sampled is not None:
