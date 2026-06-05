@@ -250,6 +250,8 @@ class DataModule(BaseClass.BoundLogger):
 
         valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
 
+        assert all(~v[valid_sampled].isnan().any() for v in x_full.values()), 'Encountered nan in x_full with valid_sampled'
+
         if Proj.verbose(self.vb_level + 1):
             self.logger.stdout(f'loader_param: {self.loader_param}')
             self.logger.stdout(f'x shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
@@ -379,6 +381,10 @@ class DataModule(BaseClass.BoundLogger):
                 b_y = self.batch_data_y(y , index0 , yindex1)
                 b_w = self.batch_data_y(w , index0 , yindex1)
                 b_v = self.batch_data_y(valid , index0 , yindex1)
+
+                print({k:v.shape for k,v in x.items()})
+                print([v.shape for v in b_x])
+                print([v.isnan().any() for v in b_x])
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
 
