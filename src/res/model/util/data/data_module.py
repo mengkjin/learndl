@@ -250,8 +250,7 @@ class DataModule(BaseClass.BoundLogger):
 
         valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
 
-        assert all(~v[valid_sampled].isnan().any() for v in x_full.values()), 'Encountered nan in x_full with valid_sampled'
-
+        
         if Proj.verbose(self.vb_level + 1):
             self.logger.stdout(f'loader_param: {self.loader_param}')
             self.logger.stdout(f'x shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
@@ -260,6 +259,8 @@ class DataModule(BaseClass.BoundLogger):
                 min_valid_sampled = valid_sample_by_date.min()
                 max_valid_sampled = valid_sample_by_date.max()
                 self.logger.stdout(f'valid samples by date: {min_valid_sampled} ~ {max_valid_sampled}' , idt = 1)
+
+        assert all(~v[:,self.step_idx][valid_sampled].isnan().any() for v in x_full.values()), 'Encountered nan in x_full with valid_sampled'
 
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_sampled , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
