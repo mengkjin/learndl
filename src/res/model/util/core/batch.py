@@ -88,6 +88,9 @@ class BatchInput:
     def info(self):
         return f'{self.__class__.__name__}:\n' + \
             '\n'.join([f'{k} : {shape}' for k,shape in self.shape.items()])
+    @property
+    def x_has_nan(self):
+        return self.x.isnan().any() if isinstance(self.x , torch.Tensor) else any(v.isnan().any() for v in self.x)
 
     @cached_property
     def date(self) -> np.ndarray:

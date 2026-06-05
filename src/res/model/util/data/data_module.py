@@ -248,9 +248,11 @@ class DataModule(BaseClass.BoundLogger):
 
         valid_x = x_full if self.config.module_type == 'nn' else {}
         valid_y = self.y_std if self.is_fitting else None
+        self.valid_x = valid_x
+        self.valid_y = valid_y
 
         valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
-
+        self.valid_sampled = valid_sampled
         
         if Proj.verbose(self.vb_level + 1):
             self.logger.stdout(f'loader_param: {self.loader_param}')
@@ -386,17 +388,23 @@ class DataModule(BaseClass.BoundLogger):
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
 
-                if batch_input.x.isnan().any():
+                if batch_input.x_has_nan:
+                    y_date_idx = self.y_date.tolist().index(batch_input.date0)
+                    v_date_idx = self.y_date[self.step_idx].tolist().index(batch_input.date0)
                     print(batch_input.date0)
-                    y_date_idx = self.y_date[self.step_idx].tolist().index(batch_input.date0)
-
-                    x_full = self.x_full
-                    valid_x = x_full if self.config.module_type == 'nn' else {}
-                    valid_y = self.y_std if self.is_fitting else None
-
-                    valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
-                    valid_sampled_date0 = valid_sampled[:,y_date_idx]
-                    print(valid_sampled_date0.isnan().any())
+                    print(y_date_idx)
+                    print(v_date_idx)
+                    print(f'valid_x shape : {[v.shape for v in self.valid_x.values()]}')
+                    print(f'valid_y shape : {self.valid_y.shape}')
+                    print(f'valid_sampled shape : {self.valid_sampled.shape}')
+                    print(f'step_idx shape: {self.step_idx.shape}')
+                    
+                    idx0 = self.valid_sampled[:,v_date_idx]
+                    x_window = self.x_full['week'][idx0][:,y_date_idx-249:y_date_idx+1]
+                    print(x_window.shape)
+                    print(x_window)
+                    print(x_window.isnan().any())
+                    
                     raise ValueError('Encountered nan in x_full with valid_sampled')
 
                 batch_key = f'{set_key}.{bnum}'
