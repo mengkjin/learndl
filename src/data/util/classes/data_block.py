@@ -96,6 +96,19 @@ def load_dict(file_path : BaseType.strPath , keys = None) -> dict[str,Any]:
     data = {k:file[k] for k in keys}
     return data
 
+def as_array(values : np.ndarray | torch.Tensor | list | tuple | str | int | float | Any) -> np.ndarray:
+    """Convert various array-like inputs to a 1-D or N-D numpy array."""
+    if isinstance(values , np.ndarray):
+        return values
+    elif isinstance(values , torch.Tensor):
+        return values.cpu().numpy()
+    elif isinstance(values , (list , tuple)):
+        return np.asarray(values)
+    elif isinstance(values , (int , float , str)):
+        return np.asarray([values])
+    else:
+        raise TypeError(f'Unsupported type: {type(values)}')
+
 @dataclass
 class DataBlock:
     """
@@ -144,20 +157,6 @@ class DataBlock:
         self.date    = None
         self.feature = None
 
-    @classmethod
-    def as_array(cls , values : np.ndarray | torch.Tensor | list | tuple | str | int | float | Any) -> np.ndarray:
-        """Convert various array-like inputs to a 1-D or N-D numpy array."""
-        if isinstance(values , np.ndarray):
-            return values
-        elif isinstance(values , torch.Tensor):
-            return values.cpu().numpy()
-        elif isinstance(values , (list , tuple)):
-            return np.asarray(values)
-        elif isinstance(values , (int , float , str)):
-            return np.asarray([values])
-        else:
-            raise ValueError(f'Unsupported type: {type(values)} for {cls.__name__} values')
-
     def to_dict(self):
         return {
             'values' : self.values,
@@ -198,11 +197,11 @@ class DataBlock:
         - Asserts shape consistency between ``values`` and the coordinate arrays.
         """
         if self.secid is not None:
-            self.secid = self.as_array(self.secid)
+            self.secid = as_array(self.secid)
         if self.date is not None:
-            self.date = self.as_array(self.date)
+            self.date = as_array(self.date)
         if self.feature is not None:
-            self.feature = self.as_array(self.feature)
+            self.feature = as_array(self.feature)
 
         if self.values is not None: 
             if isinstance(self.values , (int , float)):
@@ -411,7 +410,7 @@ class DataBlock:
         """
         if not self.initiated:
             return self
-        secid = None if secid is None else self.as_array(secid)
+        secid = None if secid is None else as_array(secid)
         if not inplace:
             self = self.copy()
         if secid is None or len(secid) == 0 or np.array_equal(secid , self.secid): 
@@ -432,7 +431,7 @@ class DataBlock:
         """
         if not self.initiated:
             return self
-        date = None if date is None else self.as_array(date)
+        date = None if date is None else as_array(date)
         if not inplace:
             self = self.copy()
         if date is None or len(date) == 0 or np.array_equal(date , self.date): 
@@ -465,8 +464,8 @@ class DataBlock:
         # to speed up than .align_secid(secid = secid).align_date(date = date)
         if not self.initiated:
             return self
-        secid = None if secid is None else self.as_array(secid)
-        date = None if date is None else self.as_array(date)
+        secid = None if secid is None else as_array(secid)
+        date = None if date is None else as_array(date)
         if not inplace:
             self = self.copy()
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
@@ -494,7 +493,7 @@ class DataBlock:
         """
         if not self.initiated:
             return self
-        feature = None if feature is None else self.as_array(feature) 
+        feature = None if feature is None else as_array(feature) 
         if not inplace:
             self = self.copy()
         if feature is None or len(feature) == 0 or np.array_equal(feature , self.feature): 
@@ -748,19 +747,14 @@ class DataBlock:
         if self.empty:
             return self
         if if_fill:
-            self.values = torch.from_numpy(forward_fillna(self.values.cpu().numpy() , axis = 1)).to(self.values)
+            self.values = forward_fillna(self.values , axis = 1)
         return self
 
     def fillna(self , value : Any = 0):
         """Replace all NaN values in ``values`` with the given scalar."""
         if self.empty:
             return self
-        if isinstance(self.values , torch.Tensor):
-            self.values = self.values.nan_to_num(value)
-        elif isinstance(self.values , np.ndarray):
-            self.values = np.nan_to_num(self.values , value)
-        else:
-            raise TypeError(f'Unsupported type: {type(self.values)} for {self.__class__.__name__} values')
+        self.values = self.values.nan_to_num(value)
         return self
         
     @staticmethod
@@ -802,7 +796,7 @@ class DataBlock:
         if self.price_adjusted or self.empty: 
             return self
         adjfactor = adjfactor and ('adjfactor' in self.feature)
-        if multiply is None and divide is None and (not adjfactor): 
+        if multiply is None and divide is None and (not adjfactor) and not ffill: 
             return self  
 
         if isinstance(price_feat , (str,)): 
@@ -819,7 +813,7 @@ class DataBlock:
         if divide    is not None: 
             v_price /= divide
         if ffill:
-            v_price = torch.from_numpy(forward_fillna(v_price.cpu().numpy() , axis = 1)).to(v_price)
+            v_price = forward_fillna(v_price , axis = 1)
         self.values[...,i_price] = v_price 
 
         if 'vwap' in self.feature:
@@ -847,7 +841,7 @@ class DataBlock:
         Logger.stdout(f'Adjusting volume... fillna: {ffill}' )
         if self.volume_adjusted or self.empty: 
             return self
-        if multiply is None and divide is None: 
+        if multiply is None and divide is None and not ffill: 
             return self
 
         if isinstance(vol_feat , (str,)): 
@@ -863,7 +857,7 @@ class DataBlock:
         if ffill:
             print(f'v_vol.shape: {v_vol.shape}')
             print(f'v_vol.nan count: {v_vol.isnan().sum()}')
-            v_vol = torch.from_numpy(forward_fillna(v_vol.cpu().numpy() , axis = 1 , force_value = 0)).to(v_vol)
+            v_vol = forward_fillna(v_vol , axis = 1 , force_value = 0)
             print(f'v_vol.nan count after fillna: {v_vol.isnan().sum()}')
         self.values[...,i_vol] = v_vol
         self.volume_adjusted = True

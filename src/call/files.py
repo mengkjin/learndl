@@ -71,15 +71,38 @@ def clear_git_pull(verbose_level : Literal[0,1,2] = 1) -> None:
     if verbose_level >= 1:
         Logger.success(f"Removed {len(empty_folders)} empty folders done")
 
-def check_future_annotations():
+def check_code_issues():
     """Check if the future annotations are used in the project code."""
+    from src.proj.util.functional.ask import AskFor
+    from typing import Callable
+    def _check_lacking_future_annotations(context : str) -> bool:
+        return 'from __future__ import annotations' not in context
+    def _check_py_file_has_no_module_docstring(context : str) -> bool:
+        lines = context.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.startswith('"""') or line.startswith("'''"):
+                return False
+            return True
+        return True
+    check_list : dict[str , Callable[[str], bool]] = {
+        'lacking future annotations' : _check_lacking_future_annotations,
+        'py file has no module docstring' : _check_py_file_has_no_module_docstring,
+    }
+    flag = AskFor.Options(list(check_list.keys()) , confirm = False , multiple = False , title = f'What code issues to check?')
+    if not flag.yes:
+        return
+    predicate = check_list[flag.result]
     path = PATH.main.joinpath('src')
+    Logger.note(f"Code issue {flag.result} found in path:")
     for file in path.glob('**/*.py'):
         if file.name.startswith('__init__'):
             continue
         context = file.read_text()
-        if 'from __future__ import annotations' not in context:
-            Logger.error(f"Future annotations not used in file: {file}")
+        if predicate(context):
+            Logger.stdout(file , indent = 1)
 
 # %% model files related operations ------------------------------------------------------------
 

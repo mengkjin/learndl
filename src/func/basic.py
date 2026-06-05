@@ -5,7 +5,7 @@ Module attribute ``DIV_TOL`` is a small denominator tolerance shared with ``func
 from __future__ import annotations
 import torch , sys
 import numpy as np
-from typing import Any , Literal
+from typing import Any , Literal , overload
 
 DIV_TOL = 1e-6
 
@@ -146,12 +146,17 @@ def array_to_tensor_slice(array : np.ndarray | list) -> slice | torch.Tensor:
     else:
         return torch.from_numpy(array_slice)
     
-def forward_fillna(arr , axis = 0 , * , force_value = None):
-    """Last-observation-carried-forward along one axis (NumPy).
+def forward_fillna_np(arr , axis = 0 , * , force_value = None):
+    """[ARCHIVED] NumPy-only last-observation-carried-forward along one axis.
+
+    Kept for reference/regression checks. New code should use :func:`forward_fillna`,
+    which also accepts ``torch.Tensor`` directly and uses a faster path for ``force_value``.
 
     Args:
         arr: Input array (any shape).
         axis: Axis along which to propagate last valid values forward.
+        force_value: If given, NaNs at/after the first valid observation are set to this
+            value (leading NaNs before any valid observation stay NaN).
 
     Returns:
         Array of the same shape with NaNs filled from the left along the chosen axis.
@@ -162,7 +167,7 @@ def forward_fillna(arr , axis = 0 , * , force_value = None):
     new_axes  = list(range(len(arr.shape)))
     new_axes[0] , new_axes[axis] = axis , 0
     
-    filled_arr = np.nan_to_num(arr , force_value) if force_value is not None else None
+    filled_arr = np.nan_to_num(arr , nan = force_value) if force_value is not None else None
 
     arr = np.transpose(arr , new_axes)
     new_shape = arr.shape
@@ -176,12 +181,17 @@ def forward_fillna(arr , axis = 0 , * , force_value = None):
         out = np.where(np.isnan(out) , np.nan , filled_arr)
     return out
 
-def backward_fillna(arr, axis = 0 , * , force_value = None):
-    """Next-observation-carried-backward along one axis (NumPy).
+def backward_fillna_np(arr, axis = 0 , * , force_value = None):
+    """[ARCHIVED] NumPy-only next-observation-carried-backward along one axis.
+
+    Kept for reference/regression checks. New code should use :func:`backward_fillna`,
+    which also accepts ``torch.Tensor`` directly and uses a faster path for ``force_value``.
 
     Args:
         arr: Input array.
         axis: Axis along which to propagate next valid values backward.
+        force_value: If given, NaNs at/before the last valid observation are set to this
+            value (trailing NaNs after the last valid observation stay NaN).
 
     Returns:
         Array of the same shape with NaNs filled from the right along the chosen axis.
@@ -192,7 +202,7 @@ def backward_fillna(arr, axis = 0 , * , force_value = None):
     new_axes  = list(range(len(arr.shape)))
     new_axes[0] , new_axes[axis] = axis , 0
 
-    filled_arr = np.nan_to_num(arr , force_value) if force_value is not None else None
+    filled_arr = np.nan_to_num(arr , nan = force_value) if force_value is not None else None
 
     arr = np.transpose(arr , new_axes)
     new_shape = arr.shape
@@ -206,6 +216,112 @@ def backward_fillna(arr, axis = 0 , * , force_value = None):
     if filled_arr is not None:
         out = np.where(np.isnan(out) , np.nan , filled_arr)
     return out
+
+def _active_mask_np(notnan : np.ndarray , axis : int , backward : bool) -> np.ndarray:
+    """Boolean mask of positions at/after (forward) or at/before (backward) the first/last valid value."""
+    if backward:
+        return np.flip(np.maximum.accumulate(np.flip(notnan , axis) , axis = axis) , axis)
+    return np.maximum.accumulate(notnan , axis = axis)
+
+def _active_mask_torch(notnan : torch.Tensor , axis : int , backward : bool) -> torch.Tensor:
+    """Boolean mask of positions at/after (forward) or at/before (backward) the first/last valid value."""
+    m = notnan.to(torch.long)
+    if backward:
+        m = torch.cummax(m.flip(axis) , dim = axis).values.flip(axis)
+    else:
+        m = torch.cummax(m , dim = axis).values
+    return m.bool()
+
+def _fillna(arr , axis : int , force_value , backward : bool):
+    """Shared engine for forward/backward NaN fill supporting both NumPy arrays and torch tensors.
+
+    When ``force_value`` is given, only the cheap active-mask path is used (no carry-forward
+    gather): NaNs inside the active span are set to ``force_value`` while leading/trailing NaNs
+    outside the span are left untouched. Otherwise the last/next valid value is carried along ``axis``.
+    """
+    if axis < 0:
+        axis = arr.ndim + axis
+
+    if isinstance(arr , torch.Tensor):
+        notnan = ~torch.isnan(arr)
+        if force_value is not None:
+            active = _active_mask_torch(notnan , axis , backward)
+            out = arr.clone()
+            out[(~notnan) & active] = force_value
+            return out
+        n = arr.shape[axis]
+        view = [1] * arr.ndim
+        view[axis] = n
+        ar = torch.arange(n , device = arr.device).reshape(view).expand(arr.shape)
+        if backward:
+            idx = torch.where(notnan , ar , torch.full_like(ar , n - 1))
+            idx = torch.cummin(idx.flip(axis) , dim = axis).values.flip(axis)
+        else:
+            idx = torch.where(notnan , ar , torch.zeros_like(ar))
+            idx = torch.cummax(idx , dim = axis).values
+        return torch.gather(arr , axis , idx)
+    elif isinstance(arr , np.ndarray):
+        notnan = ~np.isnan(arr)
+        if force_value is not None:
+            active = _active_mask_np(notnan , axis , backward)
+            out = arr.copy()
+            out[(~notnan) & active] = force_value
+            return out
+        n = arr.shape[axis]
+        view = [1] * arr.ndim
+        view[axis] = n
+        ar = np.broadcast_to(np.arange(n).reshape(view) , arr.shape)
+        if backward:
+            idx = np.where(notnan , ar , n - 1)
+            idx = np.flip(np.minimum.accumulate(np.flip(idx , axis) , axis = axis) , axis)
+        else:
+            idx = np.where(notnan , ar , 0)
+            idx = np.maximum.accumulate(idx , axis = axis)
+        return np.take_along_axis(arr , idx , axis = axis)
+    else:
+        raise TypeError(f'Unsupported type: {type(arr)}')
+
+@overload
+def forward_fillna(arr : torch.Tensor , axis : int = 0 , * , force_value = None) -> torch.Tensor: ...
+@overload
+def forward_fillna(arr : np.ndarray , axis : int = 0 , * , force_value = None) -> np.ndarray: ...
+def forward_fillna(arr , axis = 0 , * , force_value = None):
+    """Last-observation-carried-forward along one axis (NumPy array or torch tensor).
+
+    Accepts ``np.ndarray`` or ``torch.Tensor`` and returns the same type, preserving the tensor's
+    device and dtype (no NumPy round-trip required for tensors).
+
+    Args:
+        arr: Input array/tensor (any shape).
+        axis: Axis along which to propagate last valid values forward.
+        force_value: If given, take the fast path: NaNs at/after the first valid observation are
+            set to this value (leading NaNs before any valid observation stay NaN); no carry-forward.
+
+    Returns:
+        Array/tensor of the same shape with NaNs filled from the left along the chosen axis.
+    """
+    return _fillna(arr , axis , force_value , backward = False)
+
+@overload
+def backward_fillna(arr : torch.Tensor , axis : int = 0 , * , force_value = None) -> torch.Tensor: ...
+@overload
+def backward_fillna(arr : np.ndarray , axis : int = 0 , * , force_value = None) -> np.ndarray: ...
+def backward_fillna(arr , axis = 0 , * , force_value = None):
+    """Next-observation-carried-backward along one axis (NumPy array or torch tensor).
+
+    Accepts ``np.ndarray`` or ``torch.Tensor`` and returns the same type, preserving the tensor's
+    device and dtype (no NumPy round-trip required for tensors).
+
+    Args:
+        arr: Input array/tensor (any shape).
+        axis: Axis along which to propagate next valid values backward.
+        force_value: If given, take the fast path: NaNs at/before the last valid observation are
+            set to this value (trailing NaNs after the last valid observation stay NaN); no carry-backward.
+
+    Returns:
+        Array/tensor of the same shape with NaNs filled from the right along the chosen axis.
+    """
+    return _fillna(arr , axis , force_value , backward = True)
 
 def trim_index(index : np.ndarray | Any , min_value = None , max_value = None) -> np.ndarray:
     """Clip a 1-D index array by inclusive bounds.

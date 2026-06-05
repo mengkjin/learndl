@@ -33,6 +33,19 @@ class TestLogger(QuickCallButton):
             Logger.test_logger()
         """
 
+class CheckCodeIssues(QuickCallButton):
+    """Button that checks the code issues."""
+    key = "check-code-issues"
+    icon = ":material/troubleshoot:"
+    default_help = 'Check the code issues in the project code.'
+    color = 'cyan'
+    
+    def script_string(self) -> str:
+        return """
+            from src.call.files import check_code_issues
+            check_code_issues()
+        """
+
 class CheckConfigFiles(QuickCallButton):
     """Button that modifies the config files."""
     key = "check-configs"
