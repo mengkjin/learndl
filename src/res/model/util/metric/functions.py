@@ -139,6 +139,7 @@ class AccuracyFunction(MetricFunction):
             print(data.input.x.isnan().any())
             print(data.input.valid.sum())
             print(data.batch_date)
+            print(self.net.named_parameters())
             #print(data)
             raise ValueError('Encountered nan accuracies!')
         accuracies = {key:value.item() if isinstance(value , Tensor) else value for key,value in accuracies.items()}
