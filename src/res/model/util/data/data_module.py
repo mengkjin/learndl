@@ -240,6 +240,7 @@ class DataModule(BaseClass.BoundLogger):
             return
 
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
+        self.x_full = x_full
         self.y_std = self.labels[:,self.d0:self.d1]
 
         x_shapes = [x.shape[:2] for x in x_full.values()]
@@ -383,11 +384,20 @@ class DataModule(BaseClass.BoundLogger):
                 b_w = self.batch_data_y(w , index0 , yindex1)
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
-                print({k:v.shape for k,v in x.items()})
-                print([v.shape for v in b_x])
-                print([v.isnan().any() for v in b_x])
-
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
+
+                if batch_input.x.isnan().any():
+                    print(batch_input.date0)
+                    y_date_idx = self.y_date[self.step_idx].tolist().index(batch_input.date0)
+
+                    x_full = self.x_full
+                    valid_x = x_full if self.config.module_type == 'nn' else {}
+                    valid_y = self.y_std if self.is_fitting else None
+
+                    valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
+                    valid_sampled_date0 = valid_sampled[:,y_date_idx]
+                    print(valid_sampled_date0.isnan().any())
+                    raise ValueError('Encountered nan in x_full with valid_sampled')
 
                 batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)
