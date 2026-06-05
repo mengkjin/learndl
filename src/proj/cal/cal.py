@@ -180,7 +180,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def update_to(cls):
-        """The cached "updated to" natural date; take today or yesterday based on whether the current time is after 19:59."""
+        """The cached 'updated to' natural date; take today or yesterday based on whether the current time is after 19:59."""
         if cls._update_to is None:
             cls._update_to = cls.today(-1 if cls.now(bj_tz=True).time() <= time(19, 59, 0) else 0)
         return cls._update_to

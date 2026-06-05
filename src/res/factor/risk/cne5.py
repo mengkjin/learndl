@@ -464,14 +464,14 @@ class TuShareCNE5_Calculator(BaseClass.BoundLogger):
         
     @classmethod
     def updatable_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
-        """get updatable dates of a given job of "exposure" or "risk""""
+        """get updatable dates of a given job of 'exposure' or 'risk'"""
         end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.diffs(cls.START_DATE , end , cls.updated_dates(job))
         return dates
 
     @classmethod
     def updated_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
-        """get updated dates of a given job of "exposure" or "risk""""
+        """get updated dates of a given job of 'exposure' or 'risk'"""
         all_updated : np.ndarray | Any = None
         if job == 'exposure':
             check_list = ['tushare_cne5_exp','tushare_cne5_coef','tushare_cne5_res']
@@ -486,7 +486,7 @@ class TuShareCNE5_Calculator(BaseClass.BoundLogger):
         return all_updated
         
     def update_date(self , date : int , job : Literal['exposure' , 'risk']) -> None:
-        """update a given date of a given job of "exposure" or "risk""""
+        """update a given date of a given job of 'exposure' or 'risk'"""
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
             DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , indent = 2 , vb_level = 3)

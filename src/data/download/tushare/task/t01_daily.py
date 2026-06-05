@@ -78,24 +78,22 @@ class DailyLimit(DayFetcher):
         lmt = self.locked_fetch(self.api.stk_limit , trade_date=str(date))
         lmt = TS.code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
-"""
-class DailyOpenAuction(DateFetcher):
-    """Daily Open Auction Infomation"""
-    START_DATE = 20070101
-    DB_KEY = 'day_open_auction'       
-    def get_data(self , date : int):
-        auc = self.locked_fetch(self.api.stk_auction_o , trade_date=str(date))
-        auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
-        return auc
-    
-class DailyCloseAuction(DateFetcher):
-    """Daily Close Auction Infomation"""
-    START_DATE = 20070101
-    DB_KEY = 'day_close_auction'       
-    def get_data(self , date : int):
-        auc = self.locked_fetch(self.api.stk_auction_c , trade_date=str(date))
-        auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
-        return auc
-"""
 
+# class DailyOpenAuction(DayFetcher):
+#     """Daily Open Auction Infomation"""
+#     START_DATE = 20070101
+#     DB_KEY = 'day_open_auction'       
+#     def get_data(self , date : int):
+#         auc = self.locked_fetch(self.api.stk_auction_o , trade_date=str(date))
+#         auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+#         return auc
+    
+# class DailyCloseAuction(DayFetcher):
+#     """Daily Close Auction Infomation"""
+#     START_DATE = 20070101
+#     DB_KEY = 'day_close_auction'       
+#     def get_data(self , date : int):
+#         auc = self.locked_fetch(self.api.stk_auction_c , trade_date=str(date))
+#         auc = TS.code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+#         return auc
 

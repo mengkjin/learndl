@@ -336,7 +336,7 @@ class AnnouncementExporter:
                 DB.save_df(df_date, path , empty_ok = True)
 
     def should_skip_download(self, start: int, end: int, *, redownload: bool = False,) -> bool:
-        """If file exists and date is earlier than "today" (Shanghai), skip; ``redownload`` is true never skip."""
+        """If file exists and date is earlier than 'today' (Shanghai), skip; 'redownload' is true never skip."""
         if redownload:
             return False
 

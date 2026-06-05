@@ -14,7 +14,7 @@ from src.proj.core import strPath
 __all__ = ["format_python_command" , "to_shell_string" , "guess_command_title"]
 
 def _win_cmd_quote(s: str) -> str:
-    """Quote a token for ``cmd.exe`` (double quotes; internal ``\"\"``)."""
+    """Quote a token for 'cmd.exe' (double quotes; internal '\"\"')."""
     if not s:
         return '""'
     return '"' + s.replace('"', '""') + '"'

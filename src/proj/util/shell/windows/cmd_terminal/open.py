@@ -1,4 +1,4 @@
-"""Windows: same pattern as ``example.py`` — ``start cmd /c "…"`` + ``shell=True``."""
+"""Windows: same pattern as 'example.py' — 'start cmd /c "…"' + 'shell=True'."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from .verify import CmdTerminalVerifier
 
 
 def _cmd_quoted(s: str) -> str:
-    """Double-quote for ``cmd.exe`` metasyntax (internal ``"`` → ``""``)."""
+    """Double-quote for 'cmd.exe' metasyntax (internal '"' → '""')."""
     return '"' + s.replace('"', '""') + '"'
 
 
 class CmdTerminalOpener(BasicOpener):
-    """Open commands in a new cmd.exe console window on Windows via ``start cmd /c "…"``."""
+    """Open commands in a new cmd.exe console window on Windows via 'start cmd /c "…"'."""
 
     def available(self) -> bool:
         """Return True if ``cmd.exe`` is reachable on this Windows system."""
