@@ -409,7 +409,9 @@ class DataModule(BaseClass.BoundLogger):
                     nan_index0 = index0[x_data.isnan().any(dim=(1,2,3))]
                     print(x_data[x_data.isnan().any(dim=(1,2,3))])
                     print(f'nan_index0: {nan_index0}')
-                    print(x_data[nan_index0])
+
+                    nan_index0 = index0[x_window.isnan().any(dim=(1,2,3))]
+                    print(f'nan_index0: {nan_index0}')
                     
                     raise ValueError('Encountered nan in x_full with valid_sampled')
 
