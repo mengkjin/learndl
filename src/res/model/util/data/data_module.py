@@ -400,15 +400,14 @@ class DataModule(BaseClass.BoundLogger):
                     print(f'valid_sampled shape : {self.valid_sampled.shape}')
                     print(f'step_idx shape: {self.step_idx.shape}')
                     
-                    idx0 = self.valid_sampled[:,v_date_idx]
-                    x_window = self.x_full['week'][idx0][:,y_date_idx-249:y_date_idx+1:5]
+                    x_window = self.x_full['week'][index0][:,y_date_idx-249:y_date_idx+1:5]
                     x_data = batch_input.x
                     print(x_data == x_window)
                     
                     print(x_window.isnan().sum())
-                    nan_index0 = index0[x_window.isnan().any(dim=(1,2,3))]
+                    nan_index0 = index0[x_data.isnan().any(dim=(1,2,3))]
                     print(f'nan_index0: {nan_index0}')
-                    print(x_window[nan_index0])
+                    print(x_data[nan_index0])
                     
                     raise ValueError('Encountered nan in x_full with valid_sampled')
 
