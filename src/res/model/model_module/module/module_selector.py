@@ -1,10 +1,9 @@
+"""
+select the appropriate predictor module based on input module name or ModelConfig
+"""
+
 from __future__ import annotations
 from src.res.model.util import ModelConfig , is_null_module_type
-
-from .nn import NNPredictor
-from .boost import BoostPredictor
-from .nn_boost import NNBoost
-from .null import NullPredictor
 
 def get_predictor_module(module : str | ModelConfig , *args , **kwargs):
     if isinstance(module , str):
@@ -12,13 +11,19 @@ def get_predictor_module(module : str | ModelConfig , *args , **kwargs):
     module_type = module.module_type
     boost_head = module.boost_head
 
-    if module_type == 'nn':
-        mod = NNPredictor if not boost_head else NNBoost
+    if module_type == 'nn' and boost_head:
+        from src.res.model.model_module.module.nn_boost import NNBoost
+        predictor = NNBoost(*args , **kwargs)
+    elif module_type == 'nn':
+        from src.res.model.model_module.module.nn import NNPredictor
+        predictor = NNPredictor(*args , **kwargs)
     elif module_type == 'boost':
-        mod = BoostPredictor
+        from src.res.model.model_module.module.boost import BoostPredictor
+        predictor = BoostPredictor(*args , **kwargs)
     elif is_null_module_type(module_type):
-        mod = NullPredictor
+        from src.res.model.model_module.module.null import NullPredictor
+        predictor = NullPredictor(*args , **kwargs)
     else:
         raise ValueError(f'invalid module type: {module_type}')
-    predictor = mod(*args , **kwargs).bound_with(module)
+    predictor.bound_with(module)
     return predictor    

@@ -1,3 +1,8 @@
+"""
+A Very restricted type of nn, direcly use nn as feature extractor, and use boost as prediction head
+can be replaced by structured nn + boost model, only to save some space of intermediate data
+"""
+
 from __future__ import annotations
 import torch
 from torch import set_grad_enabled
@@ -9,7 +14,7 @@ from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
 class NNBoost(PredictorModel):
-    """a group of ensemble models , of same net structure, still a nn model"""    
+    """A Very restricted type of nn, direcly use nn as feature extractor, and use boost as prediction head"""    
     @property
     def boost_param(self): 
         assert self.config.boost_head , f'{self.config.boost_head} is not a valid boost head'

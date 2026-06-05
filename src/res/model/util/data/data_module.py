@@ -240,33 +240,32 @@ class DataModule(BaseClass.BoundLogger):
             return
 
         x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
-        self.x_full = x_full
         self.y_std = self.labels[:,self.d0:self.d1]
 
         x_shapes = [x.shape[:2] for x in x_full.values()]
         assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
-        valid_x = x_full if self.config.module_type == 'nn' else {}
-        valid_y = self.y_std if self.is_fitting else None
-        self.valid_x = valid_x
-        self.valid_y = valid_y
+        x_to_check = x_full if self.config.module_type == 'nn' else {}
+        y_to_check = self.y_std if self.is_fitting else None
 
-        valid_sampled = self.valid_position(valid_x , valid_y , self.step_idx , all_valid=(self.config.module_type == 'nn'))
-        self.valid_sampled = valid_sampled
+        valid_position = self.valid_position(x_to_check , y_to_check , self.step_idx , all_valid=(self.config.module_type == 'nn'))
         
         if Proj.verbose(self.vb_level + 1):
             self.logger.stdout(f'loader_param: {self.loader_param}')
             self.logger.stdout(f'x shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
-            if valid_sampled is not None:
-                valid_sample_by_date = valid_sampled.sum(dim=0)
-                min_valid_sampled = valid_sample_by_date.min()
-                max_valid_sampled = valid_sample_by_date.max()
+            if valid_position is not None:
+                valid_num_by_date = valid_position.sum(dim=0)
+                min_valid_sampled = valid_num_by_date.min()
+                max_valid_sampled = valid_num_by_date.max()
                 self.logger.stdout(f'valid samples by date: {min_valid_sampled} ~ {max_valid_sampled}' , idt = 1)
+                ### calculate total num by date
+                ### calculate pct of valid sample
+                ### plot coverage if vb is high
 
-        y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_sampled , self.step_idx)
+        y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_position , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
-        self.static_dataloader(x_full , y_sampled , w_sampled , valid_sampled)
+        self.static_dataloader(x_full , y_sampled , w_sampled , valid_position)
 
         if self.config.gc_collect_each_model:
             gc.collect() 
@@ -385,35 +384,8 @@ class DataModule(BaseClass.BoundLogger):
                 b_v = self.batch_data_y(valid , index0 , yindex1)
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
-
-                if batch_input.x_has_nan:
-                    print(f'index0: {index0}')
-                    print(f'xindex1: {xindex1}')
-                    print(f'yindex1: {yindex1}')
-                    y_date_idx = self.y_date.tolist().index(batch_input.date0)
-                    v_date_idx = self.y_date[self.step_idx].tolist().index(batch_input.date0)
-                    print(batch_input.date0)
-                    print(y_date_idx)
-                    print(v_date_idx)
-                    print(f'valid_x shape : {[v.shape for v in self.valid_x.values()]}')
-                    print(f'valid_y shape : {self.valid_y.shape}')
-                    print(f'valid_sampled shape : {self.valid_sampled.shape}')
-                    print(f'step_idx shape: {self.step_idx.shape}')
-                    x_window = self.x_full['week'][index0][:,y_date_idx-249:y_date_idx+1:5]
-                    x_data = batch_input.x
-                    print(x_data[0][-2:][:,0])
-                    print(x_window[0][-2:][:,0])
-                    print(x_data == x_window)
-                    
-                    print(x_window.isnan().sum())
-                    nan_index0 = index0[x_data.isnan().any(dim=(1,2,3))]
-                    print(x_data[x_data.isnan().any(dim=(1,2,3))])
-                    print(f'nan_index0: {nan_index0}')
-
-                    nan_index0 = index0[x_window.isnan().any(dim=(1,2,3))]
-                    print(f'nan_index0: {nan_index0}')
-                    
-                    raise ValueError('Encountered nan in x_full with valid_sampled')
+                if self.config.module_type == 'nn':
+                    batch_input = batch_input.check_x_integrity_for_nn(auto_fix = False)
 
                 batch_key = f'{set_key}.{bnum}'
                 self.storage.save(batch_input , batch_key , group = self.stage)

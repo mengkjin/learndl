@@ -40,6 +40,7 @@ class BatchInput:
         assert self.i is not None , 'i must not be None'
         assert self.valid is not None , 'valid must not be None'
         assert self.w is None or self.w.shape == self.y.shape , (self.w.shape , self.y.shape)
+        
     def to(self , device = None): 
         if device is None: 
             return self
@@ -48,6 +49,40 @@ class BatchInput:
                 device = device.device
             inputs = {name:Device.send_to(getattr(self , name) , device) for name in ['x' , 'y' , 'w' , 'i' , 'valid' , 'y_date' , 'y_secid' , 'kwargs']}
             return BatchInput(**inputs)
+
+    def check_x_integrity_for_nn(self , auto_fix = False):
+        """
+        check if x has nan, if yes, remove the rows with nan
+        ! now default auto_fix as False, because ideally input of BatchInput should be valid_sampled first so have no nan
+        ! careful, some prenormer if defined incorrectly might include new nans, so need to check and fix manually
+        """
+        if not auto_fix:
+            return self
+        if not self.x_has_nan:
+            return self
+        # self.auto_fix_nan_in_x()
+        raise ValueError('Encountered nan in x for nn')
+
+    def auto_fix_nan_in_x(self):
+        if isinstance(self.x , torch.Tensor):
+            nan_row = self.x.flatten(start_dim=1).isnan().any(dim=-1)
+            self.x = self.x[~nan_row]
+        else:
+            nan_row = torch.stack([v.flatten(start_dim=1).isnan().any(dim=-1) for v in self.x], dim=-1).any(dim=-1)
+            self.x = [v[~nan_row] for v in self.x]
+        self.y = self.y[~nan_row]
+        if self.w is not None:
+            self.w = self.w[~nan_row]
+        self.valid = self.valid[~nan_row]
+        self.i = self.i[~nan_row]
+        for key , value in self.kwargs.items():
+            if not isinstance(value , torch.Tensor) or len(value) != len(nan_row):
+                continue
+            if value.ndim == 2 and value.shape[1] == len(value):
+                self.kwargs[key] = value[nan_row][:,nan_row]
+            else:
+                self.kwargs[key] = value[nan_row]
+        return self
         
     def cpu(self):  
         return self.to('cpu')

@@ -62,7 +62,7 @@ class Prenormer:
                 x[:,-1] = 0
         if option_channelnorm:
             norm_dim = tuple(range(1 , x.ndim - 1))
-            x = x / x.mean(dim = norm_dim, keepdim = True) + 1e-6 - 1
+            x = x / (x.mean(dim = norm_dim, keepdim = True).abs() + 1e-6) - 1
         return x
 
     @classmethod
