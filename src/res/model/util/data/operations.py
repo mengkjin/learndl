@@ -193,11 +193,11 @@ class DataOperator:
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
         if all_valid:
-            agg_raw = data.sum(sum_dim).isfinite()
+            agg = data.sum(sum_dim).isfinite()
         else:
-            agg_raw = ~data.isnan().all(sum_dim)
+            agg = ~data.isnan().all(sum_dim)
         if seqlen * step > 1:
-            agg = torch.nn.functional.pad(agg_raw, (seqlen * step - 1,0) , value = False)
+            agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
             valid = agg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].all(dim=-1)
         except MemoryError:
