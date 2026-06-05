@@ -225,9 +225,9 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         """Load data for the given dates, disabling dump saving (query mode)."""
         return self.load_with_extension(dates_for_query = dates , secid = secid)
 
-    def load_dump(self):
+    def load_dump(self , reconstruct : bool = False):
         """Load the preprocessed dump from disk; returns empty DataBlock if not found."""
-        if not self.dump_exists():
+        if not self.dump_exists() or reconstruct:
             return DataBlock()
         with self.logger.timer(f'{self.key} dumped loading' , vb = 2):
             block = DataBlock.load_dump(category = 'preprocess' , preprocess_key = self.key , type = self.type)
@@ -251,7 +251,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         with self.logger.timer(f'{self.key} blocks norming' , vb = 3):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
-    def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None) -> DataBlock:
+    def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None , reconstruct : bool = False) -> DataBlock:
         """
         load data with extension , try dumped data first , then extend to the end date
         Args:
@@ -259,7 +259,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         Returns:
             tuple[DataBlock , bool]: the data block and a boolean indicating if the data is extended
         """
-        block = self.load_dump()
+        block = self.load_dump(reconstruct = reconstruct)
         
         block = block.align_secid(secid , inplace = True)
 
@@ -314,7 +314,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
             return True
         return False
 
-    def update(self , force_update : bool = False):
+    def update(self , force_update : bool = False , reconstruct : bool = False):
         """
         Run the full incremental update: extend dump, save dump, save norms.
 
@@ -322,19 +322,28 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         Calls ``load_with_extension(dates_for_query=None)`` which triggers a full
         date-range update from ``load_start`` to ``load_end``.
         """
+        if reconstruct:
+            self.logger.critical('Reconstructing the preprocessed data...')
+            from src.proj.util.functional.ask import AskFor
+            flag = AskFor.Confirmation(title = 'Are you sure to reconstruct the preprocessed data?')
+            if not flag.yes:
+                return
+            force_update = True
+
         if self.should_be_skipped(force_update):
             return
 
         tt1 = datetime.now()
-        self.logger.stdout(f'Update Preprocessed ({self.type}) of [{self.key.upper()}] start...' , vb = 2 , add_prefix = False)
-        data_block = self.load_with_extension(dates_for_query = None)
+        status = 'reconstruct' if reconstruct else 'update'
+        self.logger.stdout(f'{status.upper()} Preprocessed ({self.type}) of [{self.key.upper()}] start...' , vb = 2 , add_prefix = False)
+        data_block = self.load_with_extension(dates_for_query = None , reconstruct = reconstruct)
         
         self.save_dump(data_block)
         self.save_norm(data_block)
         
         # gc.collect()
         self.logger.success(
-            f'Update Preprocessed ({self.type}) of [{self.key.upper()}] at '
+            f'{status.upper()} Preprocessed ({self.type}) of [{self.key.upper()}] at '
             f'{Dates(data_block.date)} finished! Cost {Duration(since = tt1)}' , 
             add_prefix = False)
     

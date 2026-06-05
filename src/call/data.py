@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Literal
 from src.proj import Logger , Proj , MACHINE
 
 def rebuild_preprocessed_data() -> None:
@@ -13,27 +12,33 @@ def rebuild_preprocessed_data() -> None:
         if not data_keys:
             Logger.note('No data keys found for preprocess.')
             return
-        flag = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to rebuild?')
+        flag = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to reconstruct?')
         if flag.no:
             return
         if flag.abort:
             continue
         
         data_key = flag.result
-        Logger.note(f'Select [{data_key}] data to rebuild...')
-        flag_type = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to rebuild? (fit/predict/both)')
+        Logger.note(f'Select [{data_key}] data to reconstruct...')
+        flag_type = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
         if flag_type.no:
             return
         if flag_type.abort:
             continue
         data_type = flag_type.result
         if MACHINE.platform_coding and data_type != 'predict':
-            Logger.alert1('This is a coding machine, skip the fit data rebuild.')
+            Logger.alert1('This is a coding machine, skip the fit data reconstruct.')
         else:
             with Proj.vb.temporary_vb('max'):
-                data_types : list[Literal['fit' , 'predict']] = ['fit' , 'predict'] if data_type == 'both' else [data_type]
-                for dt in data_types:
-                    PrePros.get_processor(data_key, type = dt).update(force_update = True)
-        flag = AskFor.Retry(title = f'Do you want to rebuild more data?')
+                if data_type == 'fit':
+                    PrePros.get_processor(data_key, type = 'fit').update(reconstruct = True)
+                elif data_type == 'predict':
+                    PrePros.get_processor(data_key, type = 'predict').update(reconstruct = True)
+                elif data_type == 'both':
+                    PrePros.get_processor(data_key, type = 'fit').update(reconstruct = True)
+                    PrePros.get_processor(data_key, type = 'predict').update(reconstruct = True)
+                else:
+                    raise ValueError(f'Invalid data type: {data_type}')
+        flag = AskFor.Retry(title = f'Do you want to reconstruct more data?')
         if flag.no:
             return

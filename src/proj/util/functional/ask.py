@@ -56,7 +56,7 @@ class AskFor:
         flag = AskFor.Retry('Do you want to archive more models?')
     """
     @staticmethod
-    def Confirmation(msg = '' , timeout = -1 , ask_times = 1):
+    def Confirmation(timeout = -1 , ask_times = 1 , title = ''):
         """Prompt up to ``recurrent`` times with optional per-prompt timeout.
 
         Returns:
@@ -65,7 +65,9 @@ class AskFor:
         
         from pytimedinput import timedInput
         for i in range(ask_times):
-            prefix = f'{msg} Please confirm (y/n/q) ({i+1}/{ask_times} rounds): '
+            if title:
+                Logger.critical(f'{title}')
+            prefix = f'Please confirm (y/n/q) ({i+1}/{ask_times} rounds): '
                 
             value, is_timeout = None , False
             if timeout > 0:
