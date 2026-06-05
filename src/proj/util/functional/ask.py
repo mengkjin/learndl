@@ -1,6 +1,6 @@
 """Process discovery, power profile (non-Windows), and CLI arg parsing helpers."""
 from __future__ import annotations
-from typing import Any , Literal
+from typing import Any , Literal , Generator
 
 from src.proj.log import Logger
 
@@ -151,3 +151,12 @@ class AskFor:
             else:
                 flag.result = options[flag.result - 1]
         return flag
+
+    @classmethod
+    def LoopTillExit(cls , message : str = 'Do you want to try again?', * , max_trials : int = 20) -> Generator[int, None, None]:
+        """Loop until the user exits."""
+        for trial in range(max_trials):
+            yield trial
+            flag = AskFor.Retry(message)
+            if flag.no:
+                return

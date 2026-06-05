@@ -91,18 +91,15 @@ def check_code_issues():
         'lacking future annotations' : _check_lacking_future_annotations,
         'py file has no module docstring' : _check_py_file_has_no_module_docstring,
     }
-    flag = AskFor.Options(list(check_list.keys()) , confirm = False , multiple = False , title = f'What code issues to check?')
-    if not flag.yes:
-        return
-    predicate = check_list[flag.result]
-    path = PATH.main.joinpath('src')
-    Logger.note(f"Code issue {flag.result} found in path:")
-    for file in path.glob('**/*.py'):
-        if file.name.startswith('__init__'):
+    for _ in AskFor.LoopTillExit(message = f'Do you want to check more code issues?'):
+        flag = AskFor.Options(list(check_list.keys()) , confirm = False , multiple = False , title = f'What code issues to check?')
+        if not flag.yes:
             continue
-        context = file.read_text()
-        if predicate(context):
-            Logger.stdout(file , indent = 1)
+        predicate = check_list[flag.result]
+        Logger.note(f"Code issue {flag.result} found in path:")
+        for file in PATH.main.joinpath('src').glob('**/*.py'):
+            if not file.name.startswith('__') and predicate(file.read_text()):
+                Logger.stdout(file , indent = 1)
 
 # %% model files related operations ------------------------------------------------------------
 
@@ -113,7 +110,7 @@ def archive_current_model() -> None:
     from src.proj.util.functional.ask import AskFor
     roots = [PATH.model_nn , PATH.model_boost , PATH.model_st , PATH.model_factor]
 
-    while True:
+    for _ in AskFor.LoopTillExit(message = f'Do you want to archive more models?'):
         model_paths = [(root.name , path) for root in roots for path in root.iterdir() if path.is_dir()]
         if not model_paths:
             Logger.note('No models found in the model directory.')
@@ -126,34 +123,28 @@ def archive_current_model() -> None:
                 last_root = root_name
             Logger.note(f'{i+1:02d}. {model_path.relative_to(PATH.model)}' , indent = 1)
         flag = AskFor.Selections(len(model_paths) , multiple=True , title = f'Which model to archive?')
-        if flag.no:
-            return
-        if flag.yes:
-            for i in flag.result:
-                ModelPath(model_paths[i - 1][1]).move_to_archive()
-        flag = AskFor.Retry(f'Do you want to archive more models?')
-        if flag.no:
-            return
+        if not flag.yes:
+            continue
+        for i in flag.result:
+            ModelPath(model_paths[i - 1][1]).move_to_archive()
+        
 
 def resume_archived_model() -> None:
     """Resume the model."""
     from src.res.model.util import ModelPath
     from src.proj.util.functional.ask import AskFor
     
-    while True:
+    for _ in AskFor.LoopTillExit(message = f'Do you want to resume more models?'):
         archive_paths = [path for path in PATH.model_archive.iterdir() if path.is_dir()]
         if not archive_paths:
             Logger.note('No models found in the archive directory.')
             return
         flag = AskFor.Options(archive_paths , confirm = False , multiple=True , title = f'Which model to resume from archive?')
-        if flag.no:
-            return
-        if flag.yes:
-            for path in flag.result:
-                ModelPath.resume_from_archive(path.name)
-        flag = AskFor.Retry(title = f'Do you want to resume more models?')
-        if flag.no:
-            return
+        if  not flag.yes:
+            continue
+        for path in flag.result:
+            ModelPath.resume_from_archive(path.name)
+
 
 # %% log files related operations ------------------------------------------------------------
 def clear_outdated_catcher_logs(days_ago : int = 30): 
