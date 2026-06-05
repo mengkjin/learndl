@@ -203,9 +203,9 @@ class DataOperator:
             print(f'unfold shape: {unfold.shape}')
             unfold_slice = unfold[...,step-1::step]
             print(f'unfold_slice shape: {unfold_slice.shape}')
-            valid = predicate(unfold_slice,-1)
-            print(f'valid shape: {valid.shape}')
-            valid = valid[:,index1]
+            valid_raw = predicate(unfold_slice,-1)
+            print(f'valid_raw shape: {valid_raw.shape}')
+            valid = valid_raw[:,index1]
             print(f'valid shape: {valid.shape}')
         except MemoryError:
             predicate = torch.multiply if all_valid else torch.add
@@ -215,11 +215,12 @@ class DataOperator:
         if endpoint_nonzero: 
             valid *= data[:,index1].not_equal(0).all(sum_dim)   
         pos = 361 
+        pos2 = 21
         print(f'data shape: {data.shape}')
-        print(f'x_pos sum: {valid[:,pos].sum()}')
+        print(f'x_pos sum: {valid[:,pos2].sum()}')
         for p in range(pos, pos + 250, 5):
-            print(f'agg of pos {p}: {agg[:,p].sum()} {agg[valid[:,pos],p].all()}')
-        data_x_pos = data[valid[:,pos]][:,pos:pos+250:5]
+            print(f'agg of pos {p}: {agg[:,p].sum()} {agg[valid[:,pos2],p].all()}')
+        data_x_pos = data[valid[:,pos2]][:,pos2:pos2+250:5]
         print(f'data_x_pos shape: {data_x_pos.shape}')
         print(f'data_x_pos nan: {data_x_pos.isnan().any()}')
         return valid
