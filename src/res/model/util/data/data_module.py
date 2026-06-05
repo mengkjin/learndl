@@ -399,13 +399,15 @@ class DataModule(BaseClass.BoundLogger):
                     print(f'valid_y shape : {self.valid_y.shape}')
                     print(f'valid_sampled shape : {self.valid_sampled.shape}')
                     print(f'step_idx shape: {self.step_idx.shape}')
-                    
                     x_window = self.x_full['week'][index0][:,y_date_idx-249:y_date_idx+1:5]
                     x_data = batch_input.x
+                    print(x_data[0][-2:][:,0])
+                    print(x_window[0][-2:][:,0])
                     print(x_data == x_window)
                     
                     print(x_window.isnan().sum())
                     nan_index0 = index0[x_data.isnan().any(dim=(1,2,3))]
+                    print(x_data[x_data.isnan().any(dim=(1,2,3))])
                     print(f'nan_index0: {nan_index0}')
                     print(x_data[nan_index0])
                     
