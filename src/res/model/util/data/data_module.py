@@ -343,6 +343,7 @@ class DataModule(BaseClass.BoundLogger):
         x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
         others : rolling window non-nan , default as self.seqy
         """
+        print(f'all_valid: {all_valid}')
         valids : list[torch.Tensor] = []
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)

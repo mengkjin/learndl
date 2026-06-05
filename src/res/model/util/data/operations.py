@@ -193,6 +193,7 @@ class DataOperator:
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
         agg = data.sum(sum_dim).isfinite()
+        print(f'agg shape: {agg.shape}')
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
@@ -204,7 +205,12 @@ class DataOperator:
             for i in range(seqlen):
                 valid = predicate(valid , agg[:,index1 + i * step])
         if endpoint_nonzero: 
-            valid *= data[:,index1].not_equal(0).all(sum_dim)     
+            valid *= data[:,index1].not_equal(0).all(sum_dim)    
+        x_pos = valid[:,361]
+        print(f'x_pos sum: {x_pos.sum()}')
+        data_x_pos = data[x_pos][:,361-249:362]
+        print(f'data_x_pos shape: {data_x_pos.shape}')
+        print(f'data_x_pos nan: {data_x_pos.isnan().any()}')
         return valid
 
     def split_sample(self , valid : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:
