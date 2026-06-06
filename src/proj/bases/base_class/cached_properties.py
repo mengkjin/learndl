@@ -73,7 +73,7 @@ class GroupedCachedProperties:
     @overload
     def query(self, group: str, key: str, default_generator: Callable[[], T], /) -> T: ...
     def query(
-        self, group: str, key: str | Callable[[], T] , 
+        self, group: str, key: str | Callable[[], T], 
         default_generator: Callable[[], T] | None = None,
     ) -> T:
         if callable(key) and default_generator is None:

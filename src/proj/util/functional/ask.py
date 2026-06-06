@@ -1,10 +1,13 @@
 """Process discovery, power profile (non-Windows), and CLI arg parsing helpers."""
 from __future__ import annotations
+
+import sys
 from typing import Any , Literal , Generator
 
 from src.proj.log import Logger
 
 __all__ = ['AskFor']
+
 
 def _print_title(title : str):
     if title:
@@ -59,13 +62,19 @@ class AskFor:
         flag = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
         flag = AskFor.Retry('Do you want to archive more models?')
     """
-    @staticmethod
-    def Confirmation(timeout = -1 , ask_times = 1 , title = ''):
+   
+    not_interactive = not sys.stdin.isatty()
+
+    @classmethod
+    def Confirmation(cls , timeout = -1 , ask_times = 1 , title = ''):
         """Prompt up to ``recurrent`` times with optional per-prompt timeout.
 
         Returns:
             Tuple of (inputs list, bool list from ``proceed_condition``).
         """
+        if cls.not_interactive:
+            Logger.error('Not interactive mode, return false!')
+            return AskFlag('no')
         assert ask_times > 0 , 'ask_times must be greater than 0'
         
         _print_title(title)
@@ -82,7 +91,8 @@ class AskFor:
                 except Exception:
                     pass
             if value is None : 
-                value, is_timeout = input(f'{prefix} : ').strip() , False
+                value = input(f'{prefix} : ')
+                is_timeout = False
             if is_timeout:
                 Logger.stdout(f'Input is timed out at the {i+1}th round.')
                 return AskFlag('no')
@@ -94,6 +104,9 @@ class AskFor:
     @classmethod
     def Selections(cls ,options : int , start : int = 1 , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
         """Parse the selections."""
+        if cls.not_interactive:
+            Logger.error('Not interactive mode, return false!')
+            return AskFlag('no')
         min , max = start , options + start - 1
         _print_title(title)
         if multiple:
@@ -124,9 +137,12 @@ class AskFor:
         else:
             return AskFlag('yes' , result = choices)
 
-    @staticmethod
-    def Retry(title : str = '') -> AskFlag:
+    @classmethod
+    def Retry(cls , title : str = '') -> AskFlag:
         """Ask for exit."""
+        if cls.not_interactive:
+            Logger.error('Not interactive mode, return false!')
+            return AskFlag('no')
         _print_title(title)
         while True:
             value = input(f'Choose yes or no or quit (y/n/q): ')
@@ -140,6 +156,9 @@ class AskFor:
     @classmethod
     def Options(cls , options : list[Any] , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
         """Ask for options."""
+        if cls.not_interactive:
+            Logger.error('Not interactive mode, return false!')
+            return AskFlag('no')
         _print_title(title)
         Logger.stdout(f'There are {len(options)} options available...')
         for i , option in enumerate(options):
@@ -155,6 +174,9 @@ class AskFor:
     @classmethod
     def LoopTillExit(cls , message : str = 'Do you want to try again?', * , max_trials : int = 20) -> Generator[int, None, None]:
         """Loop until the user exits."""
+        if cls.not_interactive:
+            Logger.error('Not interactive mode, return!')
+            return
         for trial in range(max_trials):
             yield trial
             flag = AskFor.Retry(message)

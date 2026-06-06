@@ -30,7 +30,7 @@ from .batch_input_loader import DataloaderParam
 __all__ = ['PrenormOperator' , 'DataOperator']
 
 @dataclass(slots=True)
-class Prenormer:
+class SingleDataPrenorm:
     name : str
     divlast  : bool = False
     histnorm : bool = False
@@ -75,26 +75,24 @@ class Prenormer:
             channelnorm = prenorm_method.get('channelnorm' , False)
         )
 
-
 class PrenormOperator:
     """prenorm operator for data module datas"""
     def __init__(self, config: ModelConfig , histnorms : dict[str, DataBlockNorm] | None = None):
         self.config = config
         self.histnorms = histnorms or {}
         
-        
-        self.prenorms = {name: Prenormer.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
+        self.prenorms = {name: SingleDataPrenorm.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
         [Logger.success(f'{name} {prenorm} initialized' , vb_level = 'max') for name , prenorm in self.prenorms.items() if prenorm]
 
     def __repr__(self):
         return f'{self.__class__.__name__}(prenorms={self.prenorms})'
 
-    def __getitem__(self , key : str) -> Prenormer:
+    def __getitem__(self , key : str) -> SingleDataPrenorm:
         return self.prenorms.get(key , self.empty_prenormer)
 
     @cached_property
-    def empty_prenormer(self) -> Prenormer:
-        return Prenormer(name = 'empty')
+    def empty_prenormer(self) -> SingleDataPrenorm:
+        return SingleDataPrenorm(name = 'empty')
 
     @property
     def input_keys(self) -> list[str]:
@@ -110,8 +108,14 @@ class PrenormOperator:
 
 class DataOperator:
     """operations for data module datas"""
-    def __init__(self, config: ModelConfig , loader_param: DataloaderParam):
+    def __init__(self, config: ModelConfig , loader_param: DataloaderParam | None = None):
         self.config = config
+        self.loader_param = loader_param or DataloaderParam()
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(config={self.config})'
+
+    def update_loader_param(self , loader_param: DataloaderParam):
         self.loader_param = loader_param
 
     @property
@@ -185,6 +189,32 @@ class DataOperator:
             new_x = new_x.squeeze(-2)
         return new_x
 
+    def effective_samples(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor ) -> torch.Tensor | None:
+        """
+        return effective sample position (with shape of len(index[0]) * step_len) the first 2 dims
+        effective sample:
+            1. x should be non-nan, all for nn, any for others
+            2. x should be active, that is for any channel, block of seq_len * inday should be chaning any
+        x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
+        y : endpoint non-nan if y is not None
+        """
+        effs : list[torch.Tensor] = []
+        if x:
+            finites = torch.stack([self.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
+            eff = finites.all(dim=-1) if self.config.module_type == 'nn' else finites.any(dim=-1)
+            effs.append(eff)
+        if x and self.config.input_data_types:
+            keys = [k for k in x.keys() if k in self.config.input_data_types]
+            eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
+            effs.append(eff)
+        if y is not None:
+            eff = self.finite_position(None , y, index1)
+            effs.append(eff)
+        if effs:
+            return torch.stack(effs , dim = -1).all(dim = -1)
+        else:
+            return None
+
     def finite_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
         """return finite position (with shape of len(index[0]) * step_len) the first 2 dims"""
         require_all = self.config.module_type == 'nn'
@@ -193,20 +223,53 @@ class DataOperator:
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
         if require_all:
-            agg = data.sum(sum_dim).isfinite()
+            fin = data.sum(sum_dim).isfinite()
         else:
-            agg = ~data.isnan().all(sum_dim)
-        if seqlen * step > 1:
-            agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
+            fin = ~data.isnan().all(sum_dim)
+        if seqlen * step == 1:
+            return fin[:,index1]
+        pad_fin = torch.nn.functional.pad(fin, (seqlen * step - 1,0) , value = False)
         try:
-            finites = agg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].all(dim=-1)
+            finite = pad_fin.unfold(1,seqlen*step,1)[...,step-1::step][:,index1]
+            finite = finite.all(dim=-1) if require_all else finite.any(dim=-1)
         except MemoryError:
-            finites = torch.full_like((agg[:,:len(index1)]), require_all)
-            for i in range(seqlen):
-                finites = torch.multiply(finites , agg[:,index1 + (i + 1) * step - 1])
+            if require_all:
+                finite = torch.full((len(data),len(index1)), True).to(dtype = torch.bool , device = data.device)
+                for i in range(seqlen):
+                    finite &= pad_fin[:,index1 + (i + 1) * step - 1]
+            else:
+                finite = torch.full((len(data),len(index1)), False).to(dtype = torch.bool , device = data.device)
+                for i in range(seqlen):
+                    finite |= pad_fin[:,index1 + (i + 1) * step - 1]
         if endpoint_nonzero: 
-            finites *= data[:,index1].not_equal(0).all(sum_dim)   
-        return finites
+            finite &= data[:,index1].not_equal(0).all(sum_dim)   
+        return finite
+
+    def active_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
+        """return active position (with shape of len(index[0]) * step_len) the first 2 dims"""
+        seqlen , step = self.get_seqlen_step(key)
+        assert data.ndim > 2 , data.ndim
+        if seqlen * step <= 2:
+            return torch.full((len(data),len(index1)) , True).to(dtype = torch.bool , device = data.device)
+        if data.ndim == 3:
+            avg = data
+            pos_std = torch.full(data.shape[:2] , False).to(dtype = torch.bool)
+        else:
+            avg = data.mean(dim = tuple(range(2,data.ndim - 1)))
+            pos_std = (data.std(dim = tuple(range(2,data.ndim - 1)),unbiased = False) > 0).any(-1)
+        pad_avg = torch.nn.functional.pad(avg, (0 , 0 ,seqlen * step - 1,0) , mode = 'replicate')
+        pad_std = torch.nn.functional.pad(pos_std, (seqlen * step - 1,0) , value = 0)
+        try:
+            moving_avg = (pad_avg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].std(dim = -1 , unbiased = False) > 0).any(-1)
+            moving_std = (pad_std.unfold(1,seqlen*step,1)[...,step-1::step][:,index1] > 0).any(-1)
+            active = moving_avg | moving_std
+        except MemoryError:
+            active = torch.full((len(pad_avg),len(index1)), False).to(dtype = torch.bool)
+            avg_benchmark = pad_avg[:,index1 + step - 1]
+            for i in range(seqlen):
+                active |= (pad_avg[:,index1 + (i + 1) * step - 1] - avg_benchmark).to(torch.bool).any(-1)
+                active |= pad_std[:,index1 + (i + 1) * step - 1] > 0
+        return active.nan_to_num_(False)
 
     def split_sample(self , effective : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:
         """
