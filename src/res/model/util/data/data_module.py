@@ -278,7 +278,8 @@ class DataModule(Base.BoundLogger):
             eff_counts['Coverage'] = eff_counts['Effective Count'] / eff_counts['listed_num']
             eff_stats = eff_counts.groupby('Year').agg({'Effective Count' : stat_types , 'Coverage' : stat_types}).\
                 rename_axis(['' , 'Stat'] , axis = 1).astype({('Effective Count',) : int , ('Coverage',) : float}).round(3)
-            self.logger.display(eff_stats , title = 'Effective Count Statistics by Year' , idt = 1)
+            self.logger.stdout(f'Effective Count Statistics by Year:' , idt = 1)
+            self.logger.display(eff_stats , idt = 1)
 
         setattr(self , f'_display_loader_static_stats_{self.stage}_done' , True)
 
