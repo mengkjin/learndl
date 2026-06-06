@@ -24,4 +24,4 @@ EXPORT_BY_DATE : list[str] = ['pred' , 'stock' , 'stock_factor' , 'model_predict
 for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
     assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
 
-TAR_SUFFIXES : tuple[str, ...] = ('tar' , 'tar.gz' , 'tar.bz2' , 'tar.xz' , 'tar.zst')
+TAR_SUFFIXES : tuple[str, ...] = ('.tar' , '.tar.gz' , '.tar.bz2' , '.tar.xz' , '.tar.zst')

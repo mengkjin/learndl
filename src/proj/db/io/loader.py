@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any , Iterable , Callable , Union , Literal , TYPE_CHECKING
 
 from src.proj.core import strPath , strPaths
@@ -102,7 +101,7 @@ class Load:
         path : strPath | strPaths
             path to tar file
         """
-        if isinstance(path , strPath) and Path(path).suffix in TAR_SUFFIXES:
+        if isinstance(path , strPath) and str(path).endswith(TAR_SUFFIXES):
             from src.proj.db.io.tarfile import load_dfs_from_tar
             return load_dfs_from_tar(path , missing_ok = missing_ok , mapper = mapper , **kwargs)
         else:

@@ -289,7 +289,7 @@ class PortfolioAccount:
         if path.suffix == '.pkl':
             raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
             # account = cls(pd.read_pickle(path))
-        elif path.name.endswith(tuple(DB.TAR_SUFFIXES)):
+        elif path.name.endswith(DB.TAR_SUFFIXES):
             account = cls.from_dfs(Load.dfs(path))
         else:
             raise ValueError(f'{path} is not a pkl or tar file')
@@ -575,7 +575,7 @@ class PortfolioAccountManager(Base.BoundLogger):
     @cached_property
     def account_paths(self):
         account_paths = {path.stem:path for path in self.account_dir.iterdir()}
-        assert all(path.name.endswith(tuple(DB.TAR_SUFFIXES)) for path in account_paths.values()), \
+        assert all(path.name.endswith(DB.TAR_SUFFIXES) for path in account_paths.values()), \
             f'{self.account_dir} contains non-tar files : {list(set(path.name for path in self.account_dir.iterdir()) - set(DB.TAR_SUFFIXES))}'
         return account_paths
 
