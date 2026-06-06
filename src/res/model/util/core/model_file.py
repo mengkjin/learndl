@@ -7,8 +7,7 @@ import torch
 
 from pathlib import Path
 from typing import Any
-from src.proj import BaseType
-from src.proj.util.io.torch_load import torch_load
+from src.proj import Base , Load
 
 __all__ = ['ModelDict' , 'ModelFile']
 
@@ -31,7 +30,7 @@ class ModelDict:
         self.boost_head = None
         self.boost_dict = None
 
-    def save(self , path : BaseType.strPath) -> None:
+    def save(self , path : Base.types.strPath) -> None:
         """uniformly save model dictionary"""
         if isinstance(path , str): 
             path = Path(path)
@@ -62,7 +61,7 @@ class ModelFile:
         """load model dictionary"""
         assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
         path = self.model_path.joinpath(f'{key}.pt')
-        return torch_load(path , map_location='cpu') if path.exists() else None
+        return Load.torch(path , map_location='cpu') if path.exists() else None
     def exists(self) -> bool: 
         """check if model file exists"""
         return any([self.model_path.joinpath(f'{key}.pt').exists() for key in ModelDict.__slots__])

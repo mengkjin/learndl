@@ -9,14 +9,14 @@ from datetime import datetime , timedelta
 from typing import Iterable , Literal , Any
 
 from src.proj.env import Proj
-from src.proj.bases import BaseClass
+from src.proj.bases import BoundLogger
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
 from .verifier import ProxyVerifier
 from .finder import FreeProxyFinder as ProxyFinder
 from .cache import ProxyCache
 from .caller import ProxyCallerList , ProxyCallerInput
 
-class WorkingProxies(BaseClass.BoundLogger):
+class WorkingProxies(BoundLogger):
     TEST_PROXIES = ProxySet(["http://1.2.3.4:8080", "http://5.6.7.8:3128", "http://9.10.11.12:9999", "http://4.4.4.4:8080", "http://5.5.5.5:3129"])
     @classmethod
     def get(
@@ -72,8 +72,8 @@ class WorkingProxies(BaseClass.BoundLogger):
             ProxyCache.update(target_url, verified_proxies)
         return verified_proxies
 
-class ProxyStatsSetURL(ProxyStatsSet , BaseClass.BoundLogger):
-    """
+class ProxyStatsSetURL(ProxyStatsSet , BoundLogger):
+    """ 
     Per-URL singleton :class:`ProxyStatsSet` with optional adaptive refresh.
 
     One instance is kept per target URL (singleton via ``__new__``). It tracks proxy health
@@ -202,7 +202,7 @@ class ProxyStatsSetURL(ProxyStatsSet , BaseClass.BoundLogger):
             urls = [urls]
         return {url: cls(url = url, **kwargs) for url in urls}
 
-class ProxyPool(BaseClass.BoundLogger):
+class ProxyPool(BoundLogger):
     """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""
 
     def __init__(
@@ -362,7 +362,7 @@ class AdaptiveProxyPool(ProxyPool):
         """Return an AdaptiveProxyPool pointing at the 'test' URL (uses synthetic fake proxies)."""
         return cls('test' , refresh_interval=refresh_interval , refresh_max_attempts=refresh_max_attempts , refresh_threshold=refresh_threshold)
 
-class AsyncProxyPool(BaseClass.BoundLogger):
+class AsyncProxyPool(BoundLogger):
     """Asyncio-native proxy pool corresponding to ``ProxyPool``."""
 
     def __init__(

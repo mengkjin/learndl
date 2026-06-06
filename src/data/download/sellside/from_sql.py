@@ -13,7 +13,7 @@ from functools import cached_property
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import MACHINE , CALENDAR , DB , Dates , Duration , BaseClass , Logger
+from src.proj import MACHINE , CALENDAR , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
@@ -144,7 +144,7 @@ class Connection:
                 Logger.error(f'{key} connection test failed: {e}' , indent = 1 , vb_level = 2)
                 Logger.print_exc(e)
 
-class SellsideSQLDownloader(BaseClass.BoundLogger):
+class SellsideSQLDownloader(Base.BoundLogger):
     """a downloader for sellside sql data"""
     DB_SRC : str = 'sellside'
     MAX_WORKERS: int = min(1 , MAX_MAX_WORKERS)
@@ -245,7 +245,7 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
             return 
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
+        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
         calls = [(self.download_period, inter) for inter in date_intervals]
@@ -257,14 +257,14 @@ class SellsideSQLDownloader(BaseClass.BoundLogger):
             try:
                 df = self.query_factor_values(start , end)
             except Exception as e:
-                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
+                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}: {e}')
                 self.logger.print_exc(e)
                 return False
             num_dates = self.save_data(df)
             if num_dates > 0:
-                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Duration(since = t0)}')
+                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}, total {num_dates} dates, time cost {Base.Duration(since = t0)}')
             else:
-                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}')
+                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}')
             return True
 
     def query_start_dt(self):

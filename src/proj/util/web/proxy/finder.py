@@ -10,7 +10,7 @@ from threading import RLock
 
 from src.proj.core import Silence
 from src.proj.env import MACHINE
-from src.proj.bases import BaseClass
+from src.proj.bases import BoundLogger
 from .core import ProxySet
 
 class ProxiesCache:
@@ -76,7 +76,7 @@ class ProxiesCache:
             return wrapper
         return decorator
 
-class BaseProxiesFinder(ABC, BaseClass.BoundLogger):
+class BaseProxiesFinder(ABC, BoundLogger):
     _find_cached_impl: Callable[..., ProxySet] | None = None
 
     @classmethod

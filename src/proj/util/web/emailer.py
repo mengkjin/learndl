@@ -5,7 +5,7 @@ from typing import Literal , Any
 
 from src.proj.env import MACHINE , Proj
 from src.proj.core import strPath
-from src.proj.bases import BaseClass , BaseMeta
+from src.proj.bases import BoundLogger , NoInstance
 
 EmailSettings : dict = {}
 
@@ -21,7 +21,7 @@ def get_email_setting(name : str , server : Literal['netease'] = 'netease') -> A
     assert name in EmailSettings , f'{name} is not set in email settings'
     return EmailSettings.get(name.lower() , None)
 
-class Email(BaseClass.BoundLogger, metaclass=BaseMeta.NoInstance):
+class Email(BoundLogger, metaclass=NoInstance):
     """
     Email class for sending email with attachment
     example:

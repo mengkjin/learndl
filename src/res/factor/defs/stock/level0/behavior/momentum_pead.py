@@ -4,7 +4,7 @@ from collections import defaultdict
 from threading import Lock
 from typing import Literal
 
-from src.proj import CALENDAR , BaseClass
+from src.proj import CALENDAR , Base
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
@@ -20,7 +20,7 @@ def get_profit_ann_dt(date : int):
     ann_dt = ann_dt[positive_yoy.reindex(ann_dt.index) > 0]
     return ann_dt.reset_index(drop=False)
 
-class PeadCalculator(BaseClass.BoundLogger):
+class PeadCalculator(Base.BoundLogger):
     """
     Thread-safe, per-date cache for PEAD intermediate data (ann calendar + quotes).
     """

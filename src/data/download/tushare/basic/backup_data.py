@@ -7,19 +7,19 @@ Tushare pipeline.
 
 This is a fallback path for periods when the live Tushare API was unavailable.
 Backup CSVs must be placed in ``PATH.backup/tushare/data/`` following the naming
-convention ``{key}_{Dates(date)}.csv``.
+convention ``{key}_{Base.Dates(date)}.csv``.
 """
 from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
+from src.proj import PATH , CALENDAR , DB , Base
 from .core import TS
 
 path_bak_data   = PATH.resource.joinpath('backup' , 'tushare' , 'data')
 path_bak_record = PATH.resource.joinpath('backup' , 'tushare' , 'record')
 
-class TSBackUpDataTransform(BaseClass.BoundLogger):
+class TSBackUpDataTransform(Base.BoundLogger):
     """
     Transformer that reads backup CSVs and writes them to the live database format.
 
@@ -35,7 +35,7 @@ class TSBackUpDataTransform(BaseClass.BoundLogger):
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
-        record_file = path_bak_data.joinpath(f'{key}_{Dates(date)}.csv')
+        record_file = path_bak_data.joinpath(f'{key}_{Base.Dates(date)}.csv')
         df = pd.read_csv(record_file)
         df.columns = df.columns.str.lower()
         return df

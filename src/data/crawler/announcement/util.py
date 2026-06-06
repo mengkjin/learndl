@@ -17,7 +17,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import TypeVar
 
-from src.proj import CALENDAR , DB , Proj , BaseClass
+from src.proj import CALENDAR , DB , Proj , Base , Save , Load
 from . import const
 
 T = TypeVar("T")
@@ -43,7 +43,7 @@ def parse_jsonp(text: str) -> object:
 def now_iso() -> str:
     return datetime.now(tz=const.BJTZ).replace(microsecond=0).isoformat()
 
-class CrawlerLogger(BaseClass.BoundLogger):
+class CrawlerLogger(Base.BoundLogger):
     _class_vb_level = Proj.vb.get('crawler')
     _class_indent = 1
 
@@ -286,7 +286,7 @@ class AnnouncementExporter:
         df["_attempt_error"] = ""
         path = self.temp_attempt_path(task_key, attempt_id)
         with PathLock.get(path):
-            DB.save_df(df, path, empty_ok=True , vb_level= 'never')
+            Save.df(df, path, empty_ok=True , vb_level= 'never')
             CrawlerLogger.stdout(f"Saved temp attempt to {path}")
         return path
 
@@ -294,7 +294,7 @@ class AnnouncementExporter:
         path = self.temp_attempt_path(task_key, attempt_id)
         if not path.exists():
             return pd.DataFrame(columns=Announcement.df_columns() + ["_attempt_id", "_attempt_error"])
-        return DB.load_df(path)
+        return Load.df(path)
 
     def cleanup_temp_attempts(self, task_key: str, keep_attempt_id: str | None = None) -> list[Path]:
         sample = self.export_path(CALENDAR.update_to())
@@ -328,12 +328,12 @@ class AnnouncementExporter:
             df_date = df.query("date == @date").reset_index(drop=True)
             path = self.export_path(date)
             with PathLock.get(path):
-                old = DB.load_df(path)
+                old = Load.df(path)
                 if not old.empty:
                     df_date = pd.concat([old, df_date], ignore_index=True).drop_duplicates(
                         subset=self.DEDUPE_SUBSET, keep="last"
                     )
-                DB.save_df(df_date, path , empty_ok = True)
+                Save.df(df_date, path , empty_ok = True)
 
     def should_skip_download(self, start: int, end: int, *, redownload: bool = False,) -> bool:
         """If file exists and date is earlier than 'today' (Shanghai), skip; 'redownload' is true never skip."""

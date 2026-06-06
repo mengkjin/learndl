@@ -11,10 +11,10 @@ CSV backup data that supplements the live Tushare pipeline.
 from __future__ import annotations
 from typing import Generator , Type , Any
 
-from src.proj import BaseClass
+from src.proj import Base
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
 
-class TushareDataDownloader(BaseClass.BoundLogger):
+class TushareDataDownloader(Base.BoundLogger):
     """Orchestrate incremental updates for all registered Tushare fetchers."""
     @classmethod
     def iter_fetchers(cls) -> Generator[Type[TushareFetcher] , None , None]:

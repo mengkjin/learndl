@@ -10,7 +10,7 @@ from typing import Any , Literal , Callable , Union , Sequence
 
 from src.proj import Const , DB
 from src.data import DATAVENDOR
-from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
+from src.func.transform import fill_na_as_const , winsorize_by_dist , standard_normal
 
 from .general_model import GeneralModel
 
@@ -92,7 +92,7 @@ class Amodel:
         return self
     def zscore(self , inplace = False):
         new = self if inplace else self.copy()
-        new.alpha = zscore(new.alpha)
+        new.alpha = standard_normal(new.alpha)
         return new
     def pre_process(self , pre_fill = None , after_fill = 0 , inplace = False):
         # nan_as_num for pre_fill , winsor , normal , nan_as_num for after_fill
@@ -100,7 +100,7 @@ class Amodel:
         alpha = new.alpha
         alpha = fill_na_as_const(alpha , pre_fill)
         alpha = winsorize_by_dist(alpha , winsor_rng=0.5)
-        alpha = zscore(alpha)
+        alpha = standard_normal(alpha)
         alpha = fill_na_as_const(alpha , after_fill)
         new.alpha = alpha
         return new
@@ -203,7 +203,6 @@ class Amodel:
 
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
         all_alphas = np.stack([alpha.alpha_of(secid , rank = True) for alpha in alphas] , axis = 0)
-        # rank_pct = _rank_pct(all_alphas , axis = 1)
         
         if method == 'worst':
             has_data = np.any(~np.isnan(all_alphas), axis=0)

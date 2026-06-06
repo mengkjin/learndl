@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from src.proj import PATH , BaseClass
+from src.proj import PATH , Base
 from typing import Callable , TypeAlias
 
 __all__ = ['ModelConfigModifier' , 'ModelConfigsBatchModifier']
 
 DictLoader : TypeAlias = Callable[[] , dict] | dict
 
-class ModelConfigModifier(BaseClass.BoundLogger):
+class ModelConfigModifier(Base.BoundLogger):
     @classmethod
     def rename_ResetOptimizer(cls , key : str , config : DictLoader) -> DictLoader:
         if not key.endswith('.model'):
@@ -212,7 +212,7 @@ class ModelConfigsBatchModifier:
         
     def get_task_list(self) -> list[Callable[[str , DictLoader] , DictLoader]]:
         method_names = [name for name in dir(ModelConfigModifier) if not name.startswith('_')]
-        for name in dir(BaseClass.BoundLogger):
+        for name in dir(Base.BoundLogger):
             if name in method_names:
                 method_names.remove(name)
         return [getattr(ModelConfigModifier , name) for name in method_names]

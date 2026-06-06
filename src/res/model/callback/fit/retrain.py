@@ -45,7 +45,19 @@ class BadAttemptRetrain(BaseCallBack):
         if self.is_nanloss and self.remain_nan_redo <= 0:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
         if self.is_nanloss:
-            self.logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_redo} chances.')
+            if self.model.param_has_nan:
+                self.logger.warning(f'Encounter Nan Loss, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_redo} chances.')
+            elif self.model.grad_has_nan:
+                self.logger.warning(f'Encounter Nan Grad, redo current attempt {self.status.attempt}! Remaining {self.remain_nan_redo} chances.')
+            elif self.batch_input.x_has_nan:
+                self.logger.alert2('This is a bug, possible reasons include:')
+                self.logger.alert2('1. Prenormer.prenorm introduce new nan after valid_position calculation' , idt = 1)
+                self.logger.alert2('2. DataOperator.rolling_rotation does not match valid_position calculation (unlikely)' , idt = 1)
+                self.logger.alert2('3. DataOperator.finite_position wrong calculation (almost impossible)' , idt = 1)
+                raise ValueError('Encounter Nan Loss, but parameters and gradients have no nan, batch_input has nan to cause nan loss!')
+            else:
+                raise ValueError('Encounter Nan Loss for unknown reason!')
+                    
             self.remain_nan_redo -= 1
             message = f'Get nanloss for {self.texts.attempt_key}. Redo current attempt {self.status.attempt}'
             self.trigger_retrain('redo_attempt' , 'nanloss' , message)

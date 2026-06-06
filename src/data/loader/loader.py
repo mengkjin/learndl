@@ -18,9 +18,9 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import PATH , DB , CALENDAR , Const , BaseClass
+from src.proj import PATH , DB , CALENDAR , Const , Base
 from src.data.util import DataBlock
-class BlockLoader(BaseClass.BoundLogger):
+class BlockLoader(Base.BoundLogger):
     """
     Loader for block data of db_src , db_key
     example:
@@ -74,7 +74,7 @@ class BlockLoader(BaseClass.BoundLogger):
         else:
             return [self.db_key]
 
-class FrameLoader(BaseClass.BoundLogger):
+class FrameLoader(Base.BoundLogger):
     """
     Loader for frame data of db_src , db_key
     example:

@@ -69,12 +69,12 @@ class TushareUtils:
         if code_col not in df.columns.values: 
             return df
         if ashare: 
-            valid = df[code_col].astype(str).str.split('.').str[-1].str.lower().isin(['sh' , 'sz' , 'bj'])
+            effective = df[code_col].astype(str).str.split('.').str[-1].str.lower().isin(['sh' , 'sz' , 'bj'])
         else:
-            valid = None
+            effective = None
         df = secid_adjust(df , code_cols = code_col , drop_old = drop_old)
-        if valid is not None: 
-            df['secid'] = df['secid'].where(valid , -1)
+        if effective is not None: 
+            df['secid'] = df['secid'].where(effective , -1)
         return df
 
     @classmethod

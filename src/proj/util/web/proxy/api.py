@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Iterable
-from src.proj import BaseClass
+from src.proj import Base
 from .finder import FreeProxyFinder as ProxyFinder
 from .verifier import ProxyVerifier
 from .cache import ProxyCache
@@ -10,7 +10,7 @@ from .ppool import AdaptiveProxyPool , WorkingProxies
 
 __all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool']
 
-class ProxyAPI(BaseClass.BoundLogger):
+class ProxyAPI(Base.BoundLogger):
     """Process-wide registry of ``AdaptiveProxyPool`` keyed by sorted target URL tuples."""
 
     proxy_pools : dict[tuple[str, ...], AdaptiveProxyPool] = {}

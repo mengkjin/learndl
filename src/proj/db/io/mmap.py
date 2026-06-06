@@ -13,6 +13,8 @@ from src.proj.core import strPath
 if TYPE_CHECKING:
     from torch import Tensor
 
+__all__ = ['ArrayMemoryMap']
+
 @dataclass
 class ArrayMeta:
     """Serializable descriptor for a memory-mapped array (dtype, shape, tensor vs ndarray)."""

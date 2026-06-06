@@ -18,12 +18,12 @@ from datetime import datetime
 from functools import reduce
 from pathlib import Path
 
-from src.proj import PATH , MACHINE , Duration , DB , BaseClass
+from src.proj import PATH , MACHINE , DB , Base , Save
 
 from .jsfetcher import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform
 
-class JSDataUpdater(BaseClass.BoundLogger):
+class JSDataUpdater(Base.BoundLogger):
     """
     in JS environment, update js source data from jinmeng's terminal
     must update after the original R database is updated
@@ -62,7 +62,7 @@ class JSDataUpdater(BaseClass.BoundLogger):
 
         paths : list[Path] = []
         for sdir in cls.UPDATER_SEARCH_DIRS:
-            paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith('.tar')]
+            paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith(DB.TAR_SUFFIXES)]
         paths.sort()
         if del_after_dumping and paths:
             cls.logger.divider()
@@ -157,7 +157,7 @@ class JSDataUpdater(BaseClass.BoundLogger):
         abs_path = str(target_path.absolute())
         rel_path = str(target_path.relative_to(self.UPDATER_BASE))
         if isinstance(result , pd.DataFrame):
-            DB.save_df(result , target_path , prefix = f'JS Data')
+            Save.df(result , target_path , prefix = f'JS Data')
             with tarfile.open(self.Updater, 'a') as tar:  
                 tar.add(abs_path , arcname = rel_path) 
             self.Success.append(target_path)
@@ -185,7 +185,7 @@ class JSDataUpdater(BaseClass.BoundLogger):
             df , target_path = param()
             target_str = self.handle_result(df , target_path , result)
             if target_str: 
-                self.logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
+                self.logger.success(f'Fetching {target_str}! Cost {Base.Duration(since = start_time)}')
         return result
     
     def fetch_by_date(self , db_src , start = None , end = None , force = False):
@@ -207,7 +207,7 @@ class JSDataUpdater(BaseClass.BoundLogger):
                 if param.db_src == 'trade_js' and param.db_key == 'min': 
                     temporal['df_min'] = df
                 if target_str: 
-                    self.logger.success(f'Fetching {target_str}! Cost {Duration(since = start_time)}')
+                    self.logger.success(f'Fetching {target_str}! Cost {Base.Duration(since = start_time)}')
         return result
 
     def fetch_all(self ,start = None , end = None , force = False):
@@ -229,7 +229,7 @@ class JSDataUpdater(BaseClass.BoundLogger):
             start_time = datetime.now()
             target_str = self.handle_result(path , path)
             if target_str: 
-                self.logger.success(f'Download {target_str}! Cost {Duration(since = start_time)}')
+                self.logger.success(f'Download {target_str}! Cost {Base.Duration(since = start_time)}')
             paths.append(path)
         return paths
 

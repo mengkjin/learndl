@@ -18,8 +18,8 @@ def calc_acce(data : pd.DataFrame | pd.Series):
         data = data.to_frame()
     delta1 = (data - data.groupby('secid').shift(4)) / data.groupby('secid').shift(4).abs()
     delta2 = (data.groupby('secid').shift(1) - data.groupby('secid').shift(5)) / data.groupby('secid').shift(5).abs()
-    valid = data.groupby('secid').size() > 6
-    df = (delta1 - delta2).groupby('secid').last().where(valid , np.nan).iloc[:,0]
+    effective = data.groupby('secid').size() > 6
+    df = (delta1 - delta2).groupby('secid').last().where(effective , np.nan).iloc[:,0]
     return df
 
 def calc_accv(data : pd.DataFrame | pd.Series):
@@ -29,8 +29,8 @@ def calc_accv(data : pd.DataFrame | pd.Series):
     data2 = data.groupby('secid').shift(1).groupby('secid').tail(8)
     delta1 = (data1 - data1.groupby('secid').shift(4)) / data1.groupby('secid').std()
     delta2 = (data2 - data2.groupby('secid').shift(4)) / data2.groupby('secid').std()
-    valid = data.groupby('secid').size() > 6
-    df = (delta1 - delta2).groupby('secid').last().where(valid , np.nan).iloc[:,0]
+    effective = data.groupby('secid').size() > 6
+    df = (delta1 - delta2).groupby('secid').last().where(effective , np.nan).iloc[:,0]
     return df
 
 def get_acce(expression : str , date : int):

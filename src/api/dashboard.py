@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os , shutil , subprocess , webbrowser , time , socket
 from pathlib import Path
-from src.proj import PATH , Logger , BaseType
+from src.proj import PATH , Logger , Base
 
 def get_free_port(start_port=8080):
     """Finds an available TCP port starting from start_port."""
@@ -62,7 +62,7 @@ class DashboardAPI:
 
 class OptunaDBAPI:
     @classmethod
-    def call_optuna_dashboard(cls , db_path : BaseType.strPath , * , open_browser : bool = False):
+    def call_optuna_dashboard(cls , db_path : Base.types.strPath , * , open_browser : bool = False):
         """
         Launch Optuna Dashboard via ``optuna-dashboard`` (blocks until user interrupt).
 
@@ -136,7 +136,7 @@ class OptunaDBAPI:
 
 class TSBoardAPI:
     @classmethod
-    def call_tensorboard(cls , log_dir : BaseType.strPath , * , open_browser : bool = False):
+    def call_tensorboard(cls , log_dir : Base.types.strPath , * , open_browser : bool = False):
         """
         Launch TensorBoard via ``uv run tensorboard --logdir`` (blocks until user interrupt).
 

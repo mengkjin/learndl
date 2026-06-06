@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 from typing import Any
 
-from src.proj import DB
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import Save , Load
 
 from src.res.model.util import BaseCallBack
 
@@ -43,7 +42,7 @@ class BasicTestResult(BaseCallBack):
         return ['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols]
 
     def complete_test_df(self) -> pd.DataFrame:
-        df = DB.load_df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame()
+        df = Load.df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame()
         if df.empty or not all(col in df.columns for col in self.stat_cols):
             df = pd.DataFrame(columns=self.test_df_cols)
         else:
@@ -81,8 +80,8 @@ class BasicTestResult(BaseCallBack):
             df = pd.concat([df , new_df]).drop_duplicates(subset=['model_num' , 'model_date' , 'submodel' , 'date'] , keep='last').\
                 sort_values(by=['model_num' , 'model_date' , 'submodel' , 'date']).reset_index(drop=True).dropna()
         
-        AsyncSaver.df(
-            df , self.path_test_df , copy_for_safety = False , overwrite = True , 
+        Save.df(
+            df , self.path_test_df , async_save = True , copy_for_safety = False , overwrite = True , 
             prefix = f'Basic Test Result' , vb_level = self.vb_level + 1 , indent = self.indent + 1)
 
         return df
@@ -150,7 +149,7 @@ class BasicTestResult(BaseCallBack):
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
             caption = f'Table: Test Summary for Models (rankic={criterion_accuracy},pct=normailized_position):'
-            self.logger.display(df_display.round(3) , caption = caption)
+            self.logger.display(df_display.round(3) , title = caption)
             
             # export excel
             test_summary = self._revert_col_names(test_summary)
@@ -165,8 +164,9 @@ class BasicTestResult(BaseCallBack):
                 )
                 df = self._revert_col_names(df_day).merge(df_cum , on = 'date')
                 rslt[f'{model_num}'] = df
-            [AsyncSaver.df(df , self.snap_folder.joinpath(f'{key}.feather') , copy_for_safety = False , overwrite = True , vb_level = 'never') for key,df in rslt.items()]
-            AsyncSaver.dfs(rslt , self.path_result, prefix = 'Test Summary' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            for key,df in rslt.items():
+                Save.df(df , self.snap_folder.joinpath(f'{key}.feather') , async_save = True , copy_for_safety = False , overwrite = True , vb_level = 'never') 
+            Save.dfs(rslt , self.path_result, async_save = True , prefix = 'Test Summary' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     @staticmethod
     def _revert_col_names(df : pd.DataFrame) -> pd.DataFrame:

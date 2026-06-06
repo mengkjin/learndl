@@ -140,8 +140,8 @@ class LossQuantile(BaseLoss):
         for i, q in enumerate(quantiles):
             pred_q = predictions[..., i:i+1]
             error = label - pred_q
-            valid = ~error.isnan()
-            loss = torch.max(q * error[valid], (q - 1) * error[valid])
+            effective = ~error.isnan()
+            loss = torch.max(q * error[effective], (q - 1) * error[effective])
             losses.append((w1 * loss).mean(dim=dim,keepdim=True))
         
         v = torch.stack(losses,dim=-1).mean(dim=-1)

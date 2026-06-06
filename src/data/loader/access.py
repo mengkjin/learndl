@@ -21,10 +21,10 @@ import pandas as pd
 from abc import abstractmethod
 from typing import Any
 
-from src.proj import CALENDAR , TradeDate , BaseMeta , BaseClass
+from src.proj import CALENDAR , Base
 from src.data.util import INFO , DFCollection , PLDFCollection
 
-class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
+class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
     """
     Abstract date-keyed data accessor. Singleton ABC class.
 
@@ -84,7 +84,7 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
             if data_type in self.pl_collections: 
                 self.pl_collections[data_type].truncate()
 
-    def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str , rename_date_key = None):
+    def loads(self , dates: list[Base.types.intDate] | np.ndarray | int | None , data_type : str , rename_date_key = None):
         """Bulk-load ``data_type`` for all dates that are not yet cached."""
         if dates is None:
             return pd.DataFrame()
@@ -94,7 +94,7 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
         self.collections[data_type].ensure_dates(
             dates , lambda d: self.data_loader(d , data_type) , overwrite = True)
 
-    def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def get(self , date: Base.types.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return the cached DataFrame for a single ``date``, loading from DB if missing."""
         collection = self.collections[data_type]
         if overwrite or int(date) not in collection:
@@ -102,7 +102,7 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
                 [date] , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.get(date , field , rename_date_key = rename_date_key)
 
-    def gets(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets(self , dates: list[Base.types.intDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return a multi-date DataFrame for ``data_type``, loading any missing dates from DB."""
         dates = np.array([int(d) for d in dates])
         collection = self.collections[data_type]
@@ -110,7 +110,7 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
             dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
     
-    def get_pl(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def get_pl(self , date: Base.types.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``get`` — returns a ``pl.DataFrame`` from ``PLDFCollection``."""
         collection = self.pl_collections[data_type]
         if overwrite or int(date) not in collection:
@@ -118,7 +118,7 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
                 [date] , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.get(date , field , rename_date_key = rename_date_key)
 
-    def gets_pl(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets_pl(self , dates: list[Base.types.intDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``gets`` — returns a multi-date ``pl.DataFrame``."""
         dates = np.array([int(d) for d in dates])
         collection = self.pl_collections[data_type]
@@ -126,7 +126,7 @@ class DateDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.SingletonABC):
             dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
     
-    def get_specific_data(self , start : int | TradeDate , end : int | TradeDate ,
+    def get_specific_data(self , start : Base.types.intDate , end : Base.types.intDate ,
                           data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True ,
                           date_step = 1):
         """

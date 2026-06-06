@@ -16,9 +16,9 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.proj import BaseClass
+from src.proj import Base
 
-class MultiHeadLosses(BaseClass.BoundLogger):
+class MultiHeadLosses(Base.BoundLogger):
     """Orchestrator for multi-task / multi-head loss combination.
 
     When ``num_head > 1`` and ``name`` is provided, wraps a concrete

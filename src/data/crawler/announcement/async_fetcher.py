@@ -15,7 +15,7 @@ from functools import cached_property
 from typing import Any
 from abc import ABC, abstractmethod
 
-from src.proj import BaseClass
+from src.proj import Base
 from src.proj.util.web.request import (
     async_http_session,
     CHROME_UA,
@@ -24,7 +24,7 @@ from src.proj.util.web.request import (
 from . import const
 from .util import Announcement , parse_jsonp , sse_parse_groups , bse_query_body
 
-class AsyncAnnoucementFetcher(ABC, BaseClass.BoundLogger):
+class AsyncAnnoucementFetcher(ABC, Base.BoundLogger):
     exchange : const.ExchangeType
     FETCH_KWARGS : tuple[dict[str, Any],...] = ({},)
 

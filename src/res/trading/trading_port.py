@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Type , ClassVar , Any
 
-from src.proj import PATH , CALENDAR , DB , Dates , Const , BaseClass
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load
 from src.data import DATAVENDOR
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
@@ -23,7 +22,7 @@ TASK_LIST : list[Type[TopCalc]] = [
 ]
 
 @dataclass
-class TradingPort(BaseClass.BoundLogger):
+class TradingPort(Base.BoundLogger):
     name        : str 
     alpha       : str | list[str]
     universe    : str = 'top-500'
@@ -161,7 +160,7 @@ class TradingPort(BaseClass.BoundLogger):
     def load_port(self , date : int) -> pd.DataFrame:
         path = self.export_path(date)
         if path.exists():
-            return DB.load_df(path).assign(date = date , name = self.name)
+            return Load.df(path).assign(date = date , name = self.name)
         else:
             return pd.DataFrame()
 
@@ -188,11 +187,11 @@ class TradingPort(BaseClass.BoundLogger):
     def save_port(self , pf : pd.DataFrame , date : int):
         path = self.export_path(date)
         path.parent.mkdir(parents=True, exist_ok=True)
-        DB.save_df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = self.indent + 1 , vb_level = self.vb_level + 2)
+        Save.df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = self.indent + 1 , vb_level = self.vb_level + 2)
     
     def load_portfolio(self , start : int | None = None , end : int | None = None):
         dates = self.stored_dates(start , end)
-        df = DB.load_df({date:self.export_path(date) for date in dates}).assign(name = self.name)
+        df = Load.df({date:self.export_path(date) for date in dates}).assign(name = self.name)
         self.portfolio = Portfolio.from_dataframe(df , name = self.name)
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
@@ -220,38 +219,38 @@ class TradingPort(BaseClass.BoundLogger):
             self.logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Dates(port_dates)} start ...' , vb = 1 , idt = 1)
-        account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine).df
-        if len(account_df) <= 1:
-            self.logger.stdout(f'Portfolio [{self.name}] just start accounting and has no record' , vb = 1 , idt = 1)
-            return self
-        
-        candidates = {task.task_name():task for task in TASK_LIST}
-        self.tasks = {k:v(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs) for k,v in candidates.items()}
-        for task in self.tasks.values():
-            task.calc(account_df) 
-            task.plot(show = False)  
+        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Base.Dates(port_dates)} start ...' , vb = 1 , idt = 1)
+        with self.logger.timer(f'Analyze Portfolio [{self.name}] at {Base.Dates(port_dates)}' , vb = 1 , idt = 1 , enter_vb = 2):
+            account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine).df
+            if len(account_df) <= 1:
+                self.logger.stdout(f'Portfolio [{self.name}] just start accounting and has no record' , vb = 1 , idt = 1)
+                return self
+            
+            candidates = {task.task_name():task for task in TASK_LIST}
+            self.tasks = {k:v(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs) for k,v in candidates.items()}
+            for task in self.tasks.values():
+                task.calc(account_df) 
+                task.plot(show = False)  
 
-        rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
-        figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
+            rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
+            figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
-        if write_down:
-            AsyncSaver.dfs(
-                rslts , self.result_path_data , 
-                prefix=f'Portfolio Analysis of {self.name} Datas' , 
-                indent = self.indent + 1 , vb_level = self.vb_level + 2)
-            AsyncSaver.figs(
-                figs   , self.result_path_plot , 
-                prefix=f'Portfolio Analysis of {self.name} Plots' , 
-                indent = self.indent + 1 , vb_level = self.vb_level + 2)
+            if write_down:
+                Save.dfs(
+                    rslts , self.result_path_data , async_save = True ,
+                    prefix=f'Portfolio Analysis of {self.name} Datas' , 
+                    indent = self.indent + 1 , vb_level = self.vb_level + 2)
+                Save.figs(
+                    figs   , self.result_path_plot , async_save = True ,
+                    prefix=f'Portfolio Analysis of {self.name} Plots' , 
+                    indent = self.indent + 1 , vb_level = self.vb_level + 2)
 
-        for name , fig in figs.items():
-            if (key_fig and key_fig.lower() in name.lower()) or display_all:
-                self.logger.display(fig , caption = f'Figure: {name.title()}:')
+            for name , fig in figs.items():
+                if (key_fig and key_fig.lower() in name.lower()) or display_all:
+                    self.logger.display(fig , title = f'Figure: {name.title()}:')
 
-        self.analyze_results = rslts
-        self.analyze_figs = figs
-        self.logger.success(f'Analyze Portfolio [{self.name}]!' , vb = 1 , idt = 1)
+            self.analyze_results = rslts
+            self.analyze_figs = figs
         return self
 
 class TrackingPort(TradingPort):
@@ -290,7 +289,7 @@ class TrackingPort(TradingPort):
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
+        self.logger.stdout(f'Perform portfolio building for {self.name} at {Base.Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
@@ -348,7 +347,7 @@ class BacktestPort(TradingPort):
 
     def rebuild(self , date : int | None = None , export = True):
         date = CALENDAR.updated(date)
-        self.logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...')
+        self.logger.stdout(f'Rebuild portfolio for {self.name} at {Base.Dates(date)} start ...')
         df = self.build_backward(date , reset_port = True , export = export)
         self.new_ports[date] = df
         return self
@@ -370,12 +369,12 @@ class BacktestPort(TradingPort):
         date_list = date_list[date_list > self.end_date()]
         if len(date_list) == 0: 
             return pd.DataFrame()
-        self.logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}')
+        self.logger.stdout(f'Loading alpha for {self.name} at {Base.Dates(date_list)}')
         alpha = self.Alpha.get(date_list)
-        self.logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}')
+        self.logger.stdout(f'Loading universe for {self.name} at {Base.Dates(date_list)}')
         univ_port = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])
-        self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date_list)}')
+        self.logger.stdout(f'Perform portfolio building for {self.name} at {Base.Dates(date_list)}')
         builder = PortfolioBuilder(self.category , alpha , univ_port , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 

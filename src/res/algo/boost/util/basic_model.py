@@ -20,7 +20,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH , DB , BaseClass
+from src.proj import PATH , DB , Load , Base
 from src.func.metric import ic_2d , rankic_2d
 
 from .dataset import BoostInput , BoostOutput
@@ -28,7 +28,7 @@ from .weight import BoostWeightMethod
 
 __all__ = ['BasicBoostModel' , 'load_xingye_data']
 
-class BasicBoostModel(ABC, BaseClass.BoundLogger):
+class BasicBoostModel(ABC, Base.BoundLogger):
     """Abstract base class for all gradient-boost wrappers.
 
     Sub-classes must implement :meth:`fit`, :meth:`predict`, :meth:`to_dict`,
@@ -252,7 +252,7 @@ class BasicBoostModel(ABC, BaseClass.BoundLogger):
         return self.cuda and torch.cuda.is_available()
 
 def load_xingye_data():
-    factor_data = DB.load_df(PATH.miscel.joinpath('CombStdByZXMkt_All_TrainLabel.feather')) # 训练集，带Label
+    factor_data = Load.df(PATH.miscel.joinpath('CombStdByZXMkt_All_TrainLabel.feather')) # 训练集，带Label
     factor_data['date'] = factor_data['date'].astype(str).str.replace('-','').astype(int)
     factor_data['secid'] = DB.code2secid(factor_data['StockID'])
 

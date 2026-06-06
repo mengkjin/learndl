@@ -4,8 +4,8 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal
 
-from src.proj import CALENDAR , DB , Const , BaseClass
-from src.proj.util.io.catcher import WarningCatcher
+from src.proj import CALENDAR , DB , Const , Base
+from src.proj.util.catcher import WarningCatcher
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
@@ -82,7 +82,7 @@ class DateSeriesDict:
         else: 
             return None   
 
-class TuShareCNE5_Calculator(BaseClass.BoundLogger):
+class TuShareCNE5_Calculator(Base.BoundLogger):
     """calculator for CNE5 risk model"""
     START_DATE = 20050101
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
@@ -189,7 +189,7 @@ class TuShareCNE5_Calculator(BaseClass.BoundLogger):
 
         new_desc = DATAVENDOR.INFO.get_desc(date)
         st_secid = DATAVENDOR.INFO.get_st(date)['secid'].to_numpy()
-        new_list_dt = DATAVENDOR.INFO.get_list_dt(date , list_days)
+        new_list_dt = DATAVENDOR.INFO.get_list_dt(date , list_days)['list_dt']
 
         trd = DATAVENDOR.TRADE.get_trd(CALENDAR.td(date , -21)).loc[:,['secid','status']]
         trd = DATAVENDOR.TRADE.get_trd(date).loc[:,['secid','status']].merge(trd , on = 'secid' , how = 'left').\
@@ -205,7 +205,7 @@ class TuShareCNE5_Calculator(BaseClass.BoundLogger):
         rule0 = status.reindex(new_desc.index) > 0
 
         # list date 1 year earlier and not delisted or total mv in the top 20%
-        rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt['list_dt'] <= date)) | \
+        rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt <= date)) | \
             (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
         # not st
         rule2 = ~new_desc.index.isin(st_secid)

@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from typing import Any , Literal
 
-from src.proj import CALENDAR , TradeDate , DB
+from src.proj import CALENDAR , DB , Base
 from src.data.util import INFO
 
 from .access import DateDataAccess
@@ -50,7 +50,7 @@ class TradeDataAccess(DateDataAccess):
             if data_key == db_key:
                 self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 
-    def loads(self , dates: list[int | TradeDate] | np.ndarray | int | None , data_type : str):
+    def loads(self , dates: list[Base.types.intDate] | np.ndarray | int | None , data_type : str):
         dates = CALENDAR.td_array(dates)
         if len(dates) == 0:
             return
@@ -74,7 +74,7 @@ class TradeDataAccess(DateDataAccess):
         return self.get(date , 'limit' , field)
 
     def get_quotes(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         field : Literal['adjfactor','open','high','low','close','amount','volume',
                         'vwap','status','limit','pctchange','preclose','turn_tt',
                         'turn_fl','turn_fr'] | list ,
@@ -103,14 +103,14 @@ class TradeDataAccess(DateDataAccess):
         return qte
     
     def get_adjfactor(
-        self , start : int | TradeDate , end : int | TradeDate , pivot = False , drop_old = False
+        self , start : Base.types.intDate , end : Base.types.intDate , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return the daily adjustment factor series for ``[start, end]``."""
         return self.get_specific_data(start , end , 'trd' , 'adjfactor' , prev = False , 
                                       mask = False , pivot = pivot , drop_old = drop_old)
     
     def get_val_data(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         field : Literal[
             'turnover_rate','turnover_rate_f','volume_ratio','pe','pe_ttm','pb',
             'ps','ps_ttm','dv_ratio','dv_ttm','total_share','float_share',
@@ -122,7 +122,7 @@ class TradeDataAccess(DateDataAccess):
                                       prev = prev , mask = mask , pivot = pivot , drop_old = drop_old)
 
     def get_mf_data(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         field : Literal[
             'buy_sm_vol','buy_sm_amount','sell_sm_vol','sell_sm_amount','buy_md_vol',
             'buy_md_amount','sell_md_vol','sell_md_amount','buy_lg_vol','buy_lg_amount',
@@ -135,7 +135,7 @@ class TradeDataAccess(DateDataAccess):
                                       prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
 
     def get_limit_data(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         field : Literal['up_limit','down_limit','pre_close',] | list ,
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
@@ -144,7 +144,7 @@ class TradeDataAccess(DateDataAccess):
                                       prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
     
     def get_returns(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         return_type : Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight'] = 'close' ,
         pivot = True , mask = True
     ) -> pd.DataFrame:
@@ -193,7 +193,7 @@ class TradeDataAccess(DateDataAccess):
         return rets
     
     def get_volumes(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         volume_type : Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr'] = 'volume' , pivot = True , mask = True
     ) -> pd.DataFrame:
         """Return daily trading volume / amount / turnover for the requested type."""
@@ -201,7 +201,7 @@ class TradeDataAccess(DateDataAccess):
         return volumes
 
     def get_turnovers(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         turnover_type : Literal['tt' , 'fl' , 'fr'] = 'fr' , pivot = True , mask = True
     ) -> pd.DataFrame:
         """Return turnover rate (0-1 scale) for ``'tt'`` / ``'fl'`` / ``'fr'`` types."""
@@ -210,7 +210,7 @@ class TradeDataAccess(DateDataAccess):
         return turns
 
     def get_mv(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         mv_type : Literal['circ_mv' , 'total_mv'] = 'circ_mv' , prev = True , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return circulating or total market cap (unit: 万元 / 10,000 CNY)."""
@@ -222,7 +222,7 @@ class TradeDataAccess(DateDataAccess):
         return mv
 
     def get_market_return(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         return_type : Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight'] = 'close'
     ) -> pd.DataFrame:
         """Return the cap-weighted market return series indexed by date."""
@@ -234,7 +234,7 @@ class TradeDataAccess(DateDataAccess):
         return mkt_ret.rename('market').to_frame()
     
     def get_market_amount(
-        self , start : int | TradeDate , end : int | TradeDate
+        self , start : Base.types.intDate , end : Base.types.intDate
     ) -> pd.DataFrame:
         """Return total market trading amount (sum across all stocks) indexed by date."""
         amount = self.get_volumes(start , end , volume_type = 'amount' , mask = False , pivot = False)

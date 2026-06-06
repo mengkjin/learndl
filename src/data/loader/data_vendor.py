@@ -19,7 +19,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , Literal
 
-from src.proj import CALENDAR , Proj , DB , Dates , Const , BaseMeta , BaseClass
+from src.proj import CALENDAR , Proj , DB , Const , Base
 from src.data.util import DataBlock , INFO
 
 from .financial_data import BS , IS , CF , INDI , FINA , FinData
@@ -29,7 +29,7 @@ from .model_data import RISK
 from .trade_data import TRADE
 from .exposure import EXPO
 
-class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
+class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
     """
     Singleton aggregation facade for factor analysis and portfolio construction.
 
@@ -50,8 +50,9 @@ class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
     ``get_quote_ret(d0, d1)``      : single-period return between two dates
     """
     CALENDAR = CALENDAR
-    TRADE = TRADE
     INFO = INFO
+
+    TRADE = TRADE
     RISK = RISK
     
     INDI = INDI
@@ -84,8 +85,8 @@ class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
 
     def clear_all(self):
         """clear all the data in the collection"""
-        self.TRADE.clear_all()
         self.INFO.clear_all()
+        self.TRADE.clear_all()
         self.RISK.clear_all()
         self.INDI.clear_all()
         self.BS.clear_all()
@@ -161,12 +162,6 @@ class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         if isinstance(names , str): 
             names = [names]
         dates = DATAVENDOR.td_within(start , end , step)
-
-        # values = [DB.loads(factor_type , name , dates , key_column = 'date') for name in names]
-        # values = [v.set_index(['secid','date']) for v in values if not v.empty]
-        # if values:
-        #     return DataBlock.from_pandas(pd.concat(values , axis=1).sort_index())
-
         values = [DB.loads_pl(factor_type , name , dates , key_column = 'date') for name in names]
         values = [v for v in values if len(v) > 0]
         if values:
@@ -233,7 +228,7 @@ class DataVendor(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             if data_key == 'daily_quotes':
                 block0 = block0.adjust_price()
 
-            self.logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
+            self.logger.success(f'DATAVENDOR.{data_key} expand from {Base.Dates(loaded_start,loaded_end)} to {Base.Dates(target_start,target_end)}')
             self.blocks_cache[data_key] = block0
 
     def update_return_block(self , start : int , end : int):

@@ -167,12 +167,12 @@ class ModuleLogger:
         """Print the exception stack"""
         return Logger.print_traceback_stack(color = color , bold = bold)
 
-    def display(self , obj , caption : str | None = None , vb : int = 0 , **kwargs):
+    def display(self , obj , title : str | None = None , vb : int = 0 , **kwargs):
         """
         display the object
         """
         kwargs = self.grep_kwargs(vb, add_prefix = False, **kwargs)
-        Logger.display(obj , caption = caption , **kwargs)
+        Logger.display(obj , title = title , **kwargs)
 
     def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs):
         kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = add_prefix, **kwargs)

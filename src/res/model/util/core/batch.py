@@ -7,7 +7,7 @@ from dataclasses import dataclass , field
 from functools import cached_property
 from typing import Any, Literal
 
-from src.proj import Proj , Logger , BaseProperty
+from src.proj import Proj , Logger , Base
 from src.proj.util.functional.device import Device
 
 __all__ = ['BatchInput' , 'BatchOutput' , 'BatchData']
@@ -23,12 +23,12 @@ def _object_shape(obj : Any) -> Any:
         return type(obj)
 @dataclass
 class BatchInput:
-    """custom data component of a batch(x,y,w,i,valid)"""
+    """custom data component of a batch(x,y,w,i,effective)"""
     x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
     y       : torch.Tensor 
     w       : torch.Tensor | None
     i       : torch.Tensor 
-    valid   : torch.Tensor
+    eff     : torch.Tensor
     y_date  : np.ndarray
     y_secid : np.ndarray
     kwargs  : dict[str,Any] = field(default_factory=dict)
@@ -38,7 +38,7 @@ class BatchInput:
             self.x = self.x[0]
         assert self.y is not None , 'y must not be None'
         assert self.i is not None , 'i must not be None'
-        assert self.valid is not None , 'valid must not be None'
+        assert self.eff is not None , 'eff must not be None'
         assert self.w is None or self.w.shape == self.y.shape , (self.w.shape , self.y.shape)
         
     def to(self , device = None): 
@@ -47,7 +47,7 @@ class BatchInput:
         else:
             if isinstance(device , Device): 
                 device = device.device
-            inputs = {name:Device.send_to(getattr(self , name) , device) for name in ['x' , 'y' , 'w' , 'i' , 'valid' , 'y_date' , 'y_secid' , 'kwargs']}
+            inputs = {name:Device.send_to(getattr(self , name) , device) for name in ['x' , 'y' , 'w' , 'i' , 'eff' , 'y_date' , 'y_secid' , 'kwargs']}
             return BatchInput(**inputs)
 
     def check_x_integrity_for_nn(self , auto_fix = False):
@@ -73,7 +73,7 @@ class BatchInput:
         self.y = self.y[~nan_row]
         if self.w is not None:
             self.w = self.w[~nan_row]
-        self.valid = self.valid[~nan_row]
+        self.eff = self.eff[~nan_row]
         self.i = self.i[~nan_row]
         for key , value in self.kwargs.items():
             if not isinstance(value , torch.Tensor) or len(value) != len(nan_row):
@@ -101,12 +101,12 @@ class BatchInput:
             return self.w
         elif key == 'i': 
             return self.i
-        elif key == 'valid': 
-            return self.valid
+        elif key == 'eff': 
+            return self.eff
         else: 
             return self.kwargs[key]
     def keys(self):
-        return ['x' , 'y' , 'w' , 'i' , 'valid' , *self.kwargs.keys()]
+        return ['x' , 'y' , 'w' , 'i' , 'eff' , *self.kwargs.keys()]
     def items(self):
         return {k:self[k] for k in self.keys()}
     
@@ -118,7 +118,7 @@ class BatchInput:
         return self.y.device
     @property
     def shape(self): 
-        return BaseProperty.shape(self , self.keys())
+        return Base.shape(self , self.keys())
     @property
     def info(self):
         return f'{self.__class__.__name__}:\n' + \
@@ -174,7 +174,7 @@ class BatchInput:
             y.append(bd.y)
             w.append(bd.w)
             i.append(bd.i)
-            v.append(bd.valid)
+            v.append(bd.eff)
             if len(y_date) == 0:
                 y_date = bd.y_date
             else:
@@ -239,7 +239,7 @@ class BatchOutput:
         return {k:self[k] for k in self.keys()}
     @property
     def shape(self):
-        return BaseProperty.shape(self , self.keys())
+        return Base.shape(self , self.keys())
     @property    
     def empty(self): 
         return len(self) == 0
@@ -356,7 +356,7 @@ class BatchData:
     def __getitem__(self, key) -> Any:
         if key in self.input.kwargs.keys() and key in self.output.other.keys():
             return {f'input.{key}':self.input[key] , f'output.{key}':self.output.other[key]}
-        elif key in ['x' , 'y' , 'w' , 'i' , 'valid' , *self.input.kwargs.keys()]:
+        elif key in ['x' , 'y' , 'w' , 'i' , 'eff' , *self.input.kwargs.keys()]:
             return self.input[key]
         elif key in ['pred' , *self.output.other.keys()]:
             return self.output[key]

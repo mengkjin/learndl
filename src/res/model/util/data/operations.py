@@ -135,11 +135,11 @@ class DataOperator:
             return self.seq_lens[key] , self.seq_steps[key]
 
     def standardize_y(
-        self , y : torch.Tensor , valid : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
+        self , y : torch.Tensor , effective : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
         """standardize y and weight"""
         y = y[:,index1].clone() if index1 is not None else y.clone()
-        if valid is not None: 
-            y.nan_to_num_(0)[~valid] = torch.nan
+        if effective is not None: 
+            y.nan_to_num_(0)[~effective] = torch.nan
         y = standardize(y , dim=0)
         weight_scheme = self.config.weight_scheme(self.stage , no_weight)
         w = self.label_weighting(weight_scheme , y)
@@ -187,28 +187,28 @@ class DataOperator:
 
     def finite_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
         """return finite position (with shape of len(index[0]) * step_len) the first 2 dims"""
-        all_valid = self.config.module_type == 'nn'
+        require_all = self.config.module_type == 'nn'
         endpoint_nonzero = key and (key in DataBlockNorm.DIVLAST)
         seqlen , step = self.get_seqlen_step(key)
         assert data.ndim > 2 , data.ndim
         sum_dim = tuple(range(2,data.ndim))
-        if all_valid:
+        if require_all:
             agg = data.sum(sum_dim).isfinite()
         else:
             agg = ~data.isnan().all(sum_dim)
         if seqlen * step > 1:
             agg = torch.nn.functional.pad(agg, (seqlen * step - 1,0) , value = False)
         try:
-            valid = agg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].all(dim=-1)
+            finites = agg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].all(dim=-1)
         except MemoryError:
-            valid = torch.full_like((agg[:,:len(index1)]), all_valid)
+            finites = torch.full_like((agg[:,:len(index1)]), require_all)
             for i in range(seqlen):
-                valid = torch.multiply(valid , agg[:,index1 + i * step])
+                finites = torch.multiply(finites , agg[:,index1 + (i + 1) * step - 1])
         if endpoint_nonzero: 
-            valid *= data[:,index1].not_equal(0).all(sum_dim)   
-        return valid
+            finites *= data[:,index1].not_equal(0).all(sum_dim)   
+        return finites
 
-    def split_sample(self , valid : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:
+    def split_sample(self , effective : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:
         """
         update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
         sample_tensor should be boolean tensor , True indicates non
@@ -219,27 +219,27 @@ class DataOperator:
         sample_method = self.config.sample_method
         train_ratio = self.config.train_ratio
         batch_size = self.config.batch_size
-        l0 , l1 = valid.shape[:2]
+        l0 , l1 = effective.shape[:2]
         pos = torch.stack([index0.repeat_interleave(l1) , index1.repeat(l0)] , -1).reshape(l0,l1,2)
         
         def _shuffle(i , bs = batch_size):
             return [i[p] for p in BatchSampler(permutation(np.arange(len(i))) , bs , drop_last=False)]
-        def _sequential(beg , end , posit = pos , valid = valid):
-            return [posit[:,j][valid[:,j]] for j in range(beg , end)]
+        def _sequential(beg , end , posit = pos , effective = effective):
+            return [posit[:,j][effective[:,j]] for j in range(beg , end)]
 
         sample_index = {}
         if self.stage == 'fit':
             sep = int(l1 * train_ratio)
             if sample_method == 'total_shuffle':
-                pool = torch.Tensor(permutation(np.arange(valid.sum().item())))
+                pool = torch.Tensor(permutation(np.arange(effective.sum().item())))
                 sep = int(len(pool) * train_ratio)
-                sample_index['train'] = _shuffle(pos[valid][pool[:sep]])
-                sample_index['valid'] = _shuffle(pos[valid][pool[sep:]])
+                sample_index['train'] = _shuffle(pos[effective][pool[:sep]])
+                sample_index['valid'] = _shuffle(pos[effective][pool[sep:]])
             elif sample_method == 'both_shuffle':
-                sample_index['train'] = _shuffle(pos[:,:sep][valid[:,:sep]])
-                sample_index['valid'] = _shuffle(pos[:,sep:][valid[:,sep:]])
+                sample_index['train'] = _shuffle(pos[:,:sep][effective[:,:sep]])
+                sample_index['valid'] = _shuffle(pos[:,sep:][effective[:,sep:]])
             elif sample_method == 'train_shuffle':
-                sample_index['train'] = _shuffle(pos[:,:sep][valid[:,:sep]])
+                sample_index['train'] = _shuffle(pos[:,:sep][effective[:,:sep]])
                 sample_index['valid'] = _sequential(sep , l1)
             else:
                 sample_index['train'] = _sequential(0 , sep)

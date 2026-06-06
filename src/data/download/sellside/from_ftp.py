@@ -12,9 +12,9 @@ import pandas as pd
 from ftplib import FTP
 from typing import Any
 
-from src.proj import MACHINE , BaseClass
+from src.proj import MACHINE , Base
 
-class SellsideFTPDownloader(BaseClass.BoundLogger):
+class SellsideFTPDownloader(Base.BoundLogger):
     """
     FTP client for downloading sell-side data delivered via file transfer.
 

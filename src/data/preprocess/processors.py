@@ -300,7 +300,7 @@ class PrePro_dfl2(MicellaneousPreProcessor):
 
         Features are processed in chunks of ``FEATURE_CHUNK_SIZE`` to limit peak
         memory.  The rolling window is ``CALCULATION_WINDOW`` bars with a minimum
-        of ``MIN_SAMPLES`` valid observations.
+        of ``MIN_SAMPLES`` effective observations.
 
         Note: the Polars expression currently has a parenthesisation bug —
         ``.alias()`` is applied to the std denominator before division, and

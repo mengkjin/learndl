@@ -7,10 +7,10 @@ from typing import Generator , Iterator , Type , Literal , Any
 
 from .factor_calc import FactorCalculator
 
-from src.proj import PATH , MACHINE , BaseClass
+from src.proj import PATH , MACHINE , Base
 from src.proj.util.functional.parallel import parallel
 
-class StockFactorHierarchy(BaseClass.BoundLogger):
+class StockFactorHierarchy(Base.BoundLogger):
     """hierarchy of factor classes"""
     assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
     _instance = None

@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , TS
-from src.proj import DB , CALENDAR , PATH
+from src.proj import DB , CALENDAR , PATH , Load
 from typing import Any
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start , end , limit = 4000):
@@ -92,7 +92,7 @@ class IndexDaily(TimeSeriesFetcher):
             old_df = pd.DataFrame()
             start = self.START_DATE
             if path.exists():
-                _df = DB.load_df(path)
+                _df = Load.df(path)
                 if 'trade_date' in old_df.columns:
                     start = int(old_df['trade_date'].max()) + 1
                     old_df = _df

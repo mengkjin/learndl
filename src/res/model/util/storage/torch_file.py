@@ -6,8 +6,7 @@ import pandas as pd
 
 from typing import Any , Literal , TypeVar , Sequence
 
-from src.proj import PATH
-from src.proj.util.io.torch_load import torch_load
+from src.proj import PATH , Load
 from src.proj.util.functional.device import Device
 
 T = TypeVar('T')
@@ -52,7 +51,7 @@ class TorchFileStorage:
             return self.memdisk[key]
         else:
             path = self.real_path(key)
-            return torch_load(path) if path.exists() else None
+            return Load.torch(path) if path.exists() else None
     
     def del_one(self , key : str):
         if not self.is_mem:

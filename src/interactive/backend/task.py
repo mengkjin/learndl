@@ -28,7 +28,7 @@ from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
 
-from src.proj import PATH , Duration , Logger , BaseProperty , BaseType
+from src.proj import PATH , Logger , Base
 from src.proj.util.functional.parallel import is_main_process
 from src.proj.util.script import ScriptCmd
 from src.proj.util.filesys.sqlite import DBConnHandler
@@ -60,7 +60,7 @@ class TaskDatabase:
     task_queues
         Many-to-many mapping of queues to task IDs.
     """
-    def __init__(self , db_name: BaseType.strPath | None = None) -> None:
+    def __init__(self , db_name: Base.types.strPath | None = None) -> None:
         """Initialise the database connection and create tables if they don't exist.
 
         Parameters
@@ -152,7 +152,7 @@ class TaskDatabase:
             return cursor.fetchone() is None
         
     @classmethod
-    def backup_stats(cls , backup_path : BaseType.strPath):
+    def backup_stats(cls , backup_path : Base.types.strPath):
         """Get task count from backup database"""
         with DBConnHandler(backup_path) as (conn, cursor):
             cursor.execute('SELECT COUNT(*) FROM task_records')
@@ -440,7 +440,7 @@ class TaskDatabase:
         """Return a list of all backup database file paths."""
         return self.conn_handler.all_backup_paths()
 
-    def restore_backup(self , backup_path : BaseType.strPath) -> None:
+    def restore_backup(self , backup_path : Base.types.strPath) -> None:
         """Clear the live database and restore from a backup file.
 
         Parameters
@@ -518,7 +518,7 @@ class TaskQueue:
     @property
     def empty(self) -> bool:
         """True if the queue contains no task items."""
-        return BaseProperty.empty(self.queue)
+        return Base.empty(self.queue)
 
     def reload(self) -> None:
         """Re-fetch all queue tasks from the database and do an initial refresh."""
@@ -543,7 +543,7 @@ class TaskQueue:
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : BaseType.strPath | None , source : str | None = None) -> TaskItem:
+    def create_item(self , script : Base.types.strPath | None , source : str | None = None) -> TaskItem:
         """Create a new :class:`TaskItem`, persist it, and add it to this queue."""
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
@@ -878,7 +878,7 @@ class TaskItem:
         return runs_page_url(self.script_key)
     
     @classmethod
-    def create(cls, script : BaseType.strPath | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
+    def create(cls, script : Base.types.strPath | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
                queue : TaskQueue | bool | None = None) -> TaskItem:
         """Factory: create and persist a new :class:`TaskItem`.
 
@@ -921,7 +921,7 @@ class TaskItem:
         return item
     
     @classmethod
-    def preview_cmd(cls , script : BaseType.strPath | None ,
+    def preview_cmd(cls , script : Base.types.strPath | None ,
                     source : Literal['py', 'bash','app'] | str | None = None ,
                     mode: Literal['shell', 'os'] = 'shell' ,
                     **kwargs) -> str:
@@ -992,7 +992,7 @@ class TaskItem:
             - Create Time: {self.time_str('create')}
             - Start Time: {self.time_str('start')}
             - End Time: {self.time_str('end')}
-            - Duration: {self.duration_str}
+            - Base.Duration: {self.duration_str}
             - Exit Code: {self.exit_code}
             - Exit Error: {self.exit_error}
             - Exit Files: {crash_protector_paths}
@@ -1044,7 +1044,7 @@ class TaskItem:
             refresh_time += refresh_interval
         return True
 
-    def get_crash_protector(self) -> list[BaseType.strPath]:
+    def get_crash_protector(self) -> list[Base.types.strPath]:
         """Return paths of crash-protector marker files matching this task's ID."""
         if self.task_id is None:
             return []
@@ -1233,7 +1233,7 @@ class TaskItem:
     @property
     def duration_str(self) -> str:
         """Human-readable duration string (e.g. ``'1m 23s'``)."""
-        return Duration(self.duration).fmtstr if self.duration > 0 else 'N/A'
+        return Base.Duration(self.duration).fmtstr if self.duration > 0 else 'N/A'
 
     @property
     def running_str(self) -> str:
@@ -1304,7 +1304,7 @@ class TaskItem:
             enter_info.append(('Create Time', self.time_str('create')))
             enter_info.append(('Start Time', self.time_str('start')))
             enter_info.append(('End Time', self.time_str('end')))
-            enter_info.append(('Duration', self.duration_str))
+            enter_info.append(('Base.Duration', self.duration_str))
             enter_info.append(('Status', self.status))
         exit_info : list[tuple[str, str]] = []
         if info_type in ['all' , 'exit']:

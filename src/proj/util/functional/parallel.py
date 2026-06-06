@@ -62,7 +62,7 @@ def parallel(
                 # Thread pool: child can mutate parent ``result_dict``; use Future return value.
                 returned = future.result()
     elif method == 2:
-        from src.proj.util.io.catcher import MPOutputCatcher
+        from src.proj.util.catcher import MPOutputCatcher
         mp_run_id = uuid4().hex[:12] if capture_mp_output else None
         mp_kwargs = {'initializer': MPOutputCatcher.pool_initializer,'initargs': (mp_run_id ,)}
         try:

@@ -22,8 +22,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal , Iterable
 
-from src.proj import DB , CALENDAR , Logger , BaseProperty , BaseType
-from src.func import transform as T
+from src.proj import DB , CALENDAR , Logger , Base , Save , Load
+from src.func.transform import standard_normal , winsorize
 from src.data import DataBlock , DATAVENDOR
 
 from .alpha_model import AlphaModel
@@ -110,9 +110,9 @@ def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True) -> pd.
     if ffmv_weighted:
         df = append_ffmv(df)
         # df = df.groupby(by=['date' , 'factor_name'] , group_keys=False).apply(lambda x:whiten(x['value'] , weight = x['weight']))
-        df = df.groupby(by=['date' , 'factor_name']).transform(lambda x:T.whiten(x['value'] , weight = x['weight']))
+        df = df.groupby(by=['date' , 'factor_name']).transform(lambda x:standard_normal(x['value'] , weight = x['weight']))
     else:
-        df = df.groupby(by=['date' , 'factor_name']).transform(T.whiten)
+        df = df.groupby(by=['date' , 'factor_name']).transform(standard_normal)
     # if isinstance(df , pd.Series): df = df.to_frame()
     if pivot: 
         df = pivot_frame(df)
@@ -123,7 +123,7 @@ def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs) -> pd.DataFrame:
     winsorize the factors by date / factor_name
     """
     df = melt_frame(df)
-    df = df.groupby(by=['date' , 'factor_name']).transform(T.winsorize , **kwargs)
+    df = df.groupby(by=['date' , 'factor_name']).transform(winsorize , **kwargs)
     if isinstance(df , pd.Series): 
         df = df.to_frame()
     if pivot: 
@@ -343,7 +343,7 @@ class FactorStats:
             return
         old_stat = self.get_stat(params)
         if not old_stat.empty:
-            from src.proj.util.io.catcher import WarningCatcher
+            from src.proj.util.catcher import WarningCatcher
             try:
                 with WarningCatcher(['behavior of DataFrame concatenation']):
                     stat = pd.concat([old_stat , stat])
@@ -385,13 +385,13 @@ class FactorStats:
         assert path.is_dir() , f'path {path} is not a directory'
         files = list(path.glob('*.feather'))
         for file in files:
-            self.stats[file.stem] = DB.load_df(file)
+            self.stats[file.stem] = Load.df(file)
         return len(files)
 
     def save(self , path : Path) -> int:
         path.mkdir(parents=True , exist_ok=True)
         for name , stat in self.stats.items():
-            DB.save_df(stat , path.joinpath(f'{name}.feather') , vb_level = 'never')
+            Save.df(stat , path.joinpath(f'{name}.feather') , vb_level = 'never')
         return len(self.stats)
 
     @classmethod
@@ -426,7 +426,7 @@ class CacheFactorStats:
         return common_elements(dates)
 
     @classmethod
-    def saved_dates(cls , path : BaseType.strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
+    def saved_dates(cls , path : Base.types.strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
                     exclude_csi2000 : bool = True) -> np.ndarray:
         path = Path(path)
         if not path.exists():
@@ -437,7 +437,7 @@ class CacheFactorStats:
             for file in path.joinpath(name).glob('*.feather'):
                 if exclude_csi2000 and 'bm=csi2000' in file.stem:
                     continue
-                dates.append(FactorStats.stat_dates(DB.load_df(file)))
+                dates.append(FactorStats.stat_dates(Load.df(file)))
         return common_elements(dates)
 
     @property
@@ -522,7 +522,7 @@ class StockFactor:
     @property
     def empty(self) -> bool:
         """return True if the factor is empty"""
-        return BaseProperty.empty(self.prior_input)
+        return Base.empty(self.prior_input)
 
     def update(self , factor : pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None = None , 
                normalized : bool | None = None , benchmark : Benchmark | str | None = None ,
@@ -935,9 +935,9 @@ class StockFactor:
         if fut_ret: 
             df = append_fut_ret(df , nday , lag , ret_type)
             if valid_fut_ret:
-                df['valid'] = df['ret'].notna()
-                df['valid_date'] = df.groupby(['date'])['valid'].transform('any')
-                df = df.query('valid_date').drop(columns=['valid' , 'valid_date'])
+                df['effective'] = df['ret'].notna()
+                df['effective_date'] = df.groupby(['date'])['effective'].transform('any')
+                df = df.query('effective_date').drop(columns=['effective' , 'effective_date'])
         if ffmv:    
             df = append_ffmv(df)
         return df   

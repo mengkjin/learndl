@@ -1,4 +1,8 @@
-from . import base_meta as BaseMeta
-from . import base_class as BaseClass
-from . import properties as BaseProperty
-from src.proj.core import types as BaseType
+from . import base_meta as metas
+from . import base_class as classes
+from . import properties as properties
+from . import types as types
+
+from .base_class import *
+from .base_meta import *
+from .properties import *

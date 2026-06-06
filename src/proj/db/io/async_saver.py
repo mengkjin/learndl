@@ -5,15 +5,15 @@ import pandas as pd
 import threading
 from datetime import datetime
 from copy import deepcopy
-from pathlib import Path
 from typing import Any , Callable , Mapping , TypeVar , cast , TYPE_CHECKING
 
-from src.proj.core import strPath
-from src.proj.db import save_df
+from src.proj.core import strPath , strPaths
 from src.proj.log import Logger
 from concurrent.futures import Future , CancelledError
-from .pdf import figs_to_pdf
-from .excel import dfs_to_excel
+from .torch import torch_save
+from .tarfile import packing
+from .dataframe import save_df , save_dfs_router
+from .figure import figs_to_pdf
 
 if TYPE_CHECKING:
     import polars as pl
@@ -59,20 +59,12 @@ def _wait_futures(futures : list[Future] , raise_first_error : bool = False) -> 
                 raise
     return errors
 
-def _torch_save_with_footnote(obj : Any , path : strPath , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3) -> None:
-    """
-    save torch object to path with footnote
-    """
-    import torch
-    torch.save(obj, path)
-    if prefix:
-        Logger.footnote(f'{prefix} saved to {path}' , indent = indent , vb_level = vb_level)
-
-def _aprefix(prefix : str | None = None) -> str:
+def async_prefix(prefix : str | None = None) -> str:
     """
     get the async prefix
     """
     return f'(Async) {prefix}' if prefix else ''
+
 class AsyncSaver:
     """
     AsyncSaver is a class that provides a way to save data asynchronously using a global thread pool.
@@ -211,9 +203,8 @@ class AsyncSaver:
             future: concurrent.futures.Future object
         """
         obj = _prepare_data(obj, copy_for_safety = copy_for_safety)
-        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
-        future = cls.submit(_torch_save_with_footnote, obj, path, **kwargs)
-        return future
+        kwargs = kwargs | {'prefix': async_prefix(prefix) , 'future_group': future_group}
+        return cls.submit(torch_save, obj, path, **kwargs)
 
     @classmethod
     def df(
@@ -234,22 +225,21 @@ class AsyncSaver:
             future: concurrent.futures.Future object
         """
         df = _prepare_data(df, copy_for_safety = copy_for_safety)
-        kwargs = kwargs | {'footnote': True , 'prefix': _aprefix(prefix) , 'future_group': future_group}
-        future = cls.submit(save_df, df, path, **kwargs)
-        return future
+        kwargs = kwargs | {'footnote': True , 'prefix': async_prefix(prefix) , 'future_group': future_group}
+        return cls.submit(save_df, df, path, **kwargs)
 
     @classmethod
     def dfs(
         cls , 
         dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , copy_for_safety : bool = False , * ,
-        future_group : str | None = None , prefix : str | None = None , **kwargs
+        future_group : str | None = None , prefix : str | None = None , meta : dict[str, Any] | None = None , **kwargs
     ) -> Future:
         """
-        async save multiple dataframes to path (excel format)
+        async save multiple dataframes to path (excel if suffix is .xlsx, tar if path in [.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst])
         
         Args:
             dfs: dictionary of dataframes to save
-            path: save path
+            path: save path , should be a .xlsx file or a tar file
             copy_for_safety: if True, copy the dataframes for safety
             future_group: group name for the future , used for waiting for all futures in the group to complete or cancel
             **kwargs: kwargs for dfs_to_excel
@@ -257,9 +247,8 @@ class AsyncSaver:
             future: concurrent.futures.Future object
         """
         dfs = _prepare_data(dfs, copy_for_safety = copy_for_safety)
-        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
-        future = cls.submit(dfs_to_excel, dfs, path, **kwargs)
-        return future
+        kwargs = kwargs | {'prefix': async_prefix(prefix) , 'future_group': future_group}
+        return cls.submit(save_dfs_router, dfs, path, meta = meta, **kwargs)
 
     @classmethod
     def figs(
@@ -280,34 +269,17 @@ class AsyncSaver:
             future: concurrent.futures.Future object
         """
         figs = _prepare_data(figs, copy_for_safety = copy_for_safety)
-        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
-        future = cls.submit(figs_to_pdf, figs, path, **kwargs)
-        return future
+        kwargs = kwargs | {'prefix': async_prefix(prefix) , 'future_group': future_group}
+        return cls.submit(figs_to_pdf, figs, path, **kwargs)
 
     @classmethod
     def pack(
         cls , 
-        source_path : strPath , target_path : strPath , overwrite = False , * ,
+        source_path : strPath | strPaths , target_path : strPath , overwrite = False , * ,
         future_group : str | None = None , prefix : str | None = None , **kwargs
     ) -> Future:
         """
         pack the source path to the target path
         """
-        source_path , target_path = Path(source_path) , Path(target_path)
-        assert source_path.exists() and source_path.is_dir() and any(source_path.iterdir()) , f'{source_path} does not exist or is empty'
-        assert target_path.suffix in ['.tar' , '.tar.gz' , '.tar.bz2' , '.tar.xz' , '.tar.zst'] , f'{target_path} is not a tar file'
-        if overwrite and target_path.exists():
-            target_path.unlink()
-        elif target_path.exists():
-            raise FileExistsError(f'{target_path} already exists')
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        import tarfile
-        def packing(prefix : str | None = None , indent : int = 1 , vb_level : Any = 3 , **kwargs):
-            with tarfile.open(target_path, 'w:gz') as tar:
-                for path in source_path.iterdir():
-                    tar.add(path, arcname=path.relative_to(source_path))
-            if prefix:
-                Logger.footnote(f'{prefix} packed to {target_path}' , indent = indent , vb_level = vb_level)
-        kwargs = kwargs | {'prefix': _aprefix(prefix) , 'future_group': future_group}
-        future = cls.submit(packing, **kwargs)
-        return future
+        kwargs = kwargs | {'prefix': async_prefix(prefix) , 'future_group': future_group}
+        return cls.submit(packing, source_path, target_path, overwrite = overwrite, **kwargs)

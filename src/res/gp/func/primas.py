@@ -2,8 +2,9 @@ from __future__ import annotations
 import torch
 from functools import wraps
 from typing import Literal , Callable
-from src.func import allna , exact
-from src.func import tensor as T
+
+from src.func.basic import allna , exact
+import src.func.tensor as T
 
 class PrimTool:
     registry : dict[str, Callable] = {}

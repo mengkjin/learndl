@@ -3,10 +3,10 @@ import torch
 import shutil
 from typing import Literal , Any
 
-from src.proj import PATH , BaseClass
+from src.proj import PATH , Base
 from .default import gpDefaults
 
-class gpParameters(BaseClass.BoundLogger):
+class gpParameters(Base.BoundLogger):
     """
     主要遗传规划参数初始化
     注：为方便跑多组实验,需设置job_id参数,设置方式为: python xxx.py --job_id 123456

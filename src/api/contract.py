@@ -179,7 +179,7 @@ def _validate_interaction_schema(
     *,
     strict_unknown_keys : bool = True ,
 ) -> list[str]:
-    """Return a list of human-readable validation errors (empty if valid)."""
+    """Return a list of human-readable validation errors (empty if validate all)."""
     errs : list[str] = []
 
     for forbidden in FORBIDDEN_SCHEMA_KEYS:

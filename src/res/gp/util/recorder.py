@@ -8,13 +8,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Sequence , Literal , Any
 
-from src.proj import PATH , BaseClass , BaseType
-from src.proj.util.io.torch_load import torch_load
+from src.proj import PATH , Base , Load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus
 
-class gpRecorder(BaseClass.BoundLogger):
+class gpRecorder(Base.BoundLogger):
     """process recorder for genetic programming"""
     _instance = None
     def __new__(cls , *args , **kwargs):
@@ -23,7 +22,7 @@ class gpRecorder(BaseClass.BoundLogger):
         return cls._instance
 
     def __init__(
-        self , job_dir : BaseType.strPath | None = None , status : gpStatus | None = None , *args ,
+        self , job_dir : Base.types.strPath | None = None , status : gpStatus | None = None , *args ,
         indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(job_dir , status , *args , **kwargs)
@@ -32,7 +31,7 @@ class gpRecorder(BaseClass.BoundLogger):
     def initiated(self) -> bool:
         return hasattr(self , 'job_dir')
 
-    def initiate(self , job_dir : BaseType.strPath | None = None , status : gpStatus | None = None) -> None:
+    def initiate(self , job_dir : Base.types.strPath | None = None , status : gpStatus | None = None) -> None:
         if self.initiated:
             return
 
@@ -156,7 +155,7 @@ class gpRecorder(BaseClass.BoundLogger):
         path = self.state_data_path(key , i_iter = i_iter)
         match key:
             case 'res' | 'neu' | 'elt':
-                data = torch_load(path)
+                data = Load.torch(path)
                 if isinstance(data , torch.Tensor):
                     data = data.to(device)
                 return data
@@ -166,7 +165,7 @@ class gpRecorder(BaseClass.BoundLogger):
                     df = df.query('i_iter <= @i_iter')
                 return df
             case 'secid' | 'date':
-                return torch_load(path)
+                return Load.torch(path)
             case 'params':
                 return PATH.read_yaml(path)
             case _:

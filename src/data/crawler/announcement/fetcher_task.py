@@ -11,7 +11,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Literal
 
-from src.proj import BaseClass
+from src.proj import Base
 from src.proj.util.web.proxy import ProxyAPI , ProxyCaller
 from src.proj.util.functional.handler import ErrorHandler
 
@@ -20,7 +20,7 @@ from .async_fetcher import AsyncAnnoucementFetcher
 from .util import Announcement , range_dates , AnnouncementExporter , CrawlerLogger
 from . import const
 
-class FetcherTask(BaseClass.BoundLogger):
+class FetcherTask(Base.BoundLogger):
     def __init__(self, exchange: const.ExchangeType, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
         super().__init__(vb_level=vb_level, indent=indent, **kwargs)
         self.exchange : const.ExchangeType = exchange

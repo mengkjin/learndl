@@ -7,9 +7,8 @@ import torch
 from dataclasses import dataclass
 from typing import Any
 
-from src.proj import CALENDAR , Const , BaseClass
-from src.proj.util.io.torch_load import torch_load
-from src.func import tensor as T
+from src.proj import CALENDAR , Const , Base , Load
+from src.func.tensor import zscore , neutralize_2d , ts_delay , ts_product
 from src.data import DATAVENDOR
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
@@ -17,8 +16,6 @@ from src.res.gp.param import gpDefaults , gpParameters
 from src.res.gp.func import factor_func as FF
 from .recorder import gpRecorder
 from .status import gpStatus
-
-# db_src , db_key , feature , scale
 
 @dataclass
 class InputElement:
@@ -61,7 +58,7 @@ class InputElement:
         if self.inverse:
             values = 1. / values
         if self.is_fac:
-            values = T.zscore(values , dim = 0)
+            values = zscore(values , dim = 0)
         elif self.scale != 1.:
             values = values * self.scale
         if self.fill_nan is not None and cp_block is not None:
@@ -167,7 +164,7 @@ def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int 
     dates = CALENDAR.range(start , end , 'td')
     new_end_dt = CALENDAR.td(end , 20).td
     block = element.get_datablock(start , new_end_dt)
-    block.values = T.ts_delay(T.ts_product(block.values + 1 , nday) - 1 , -nday-delay , no_alert = True)
+    block.values = ts_delay(ts_product(block.values + 1 , nday) - 1 , -nday-delay , no_alert = True)
     block = block.align_secid_date(secid , dates , inplace = True)
     return block
 
@@ -204,12 +201,12 @@ def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_
     rtn = get_return_block(start , end , nday , delay).values.squeeze().to(device)
     if neutral_exp is not None:
         neutral_exp = neutral_exp.to(rtn)
-    labels_raw = T.neutralize_2d(rtn , neutral_exp , method = 'torch' , inplace = True)  # 市值行业中性化
+    labels_raw = neutralize_2d(rtn , neutral_exp , method = 'torch' , inplace = True)  # 市值行业中性化
     
     assert labels_raw is not None , 'labels_raw is None'
     return labels_raw
 
-class gpInput(BaseClass.BoundLogger):
+class gpInput(Base.BoundLogger):
     """遗传规划输入,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
     def __init__(self , param : gpParameters , status : gpStatus , recorder : gpRecorder , * ,
                  indent : int = 0 , vb_level : Any = 1 , **kwargs):
@@ -303,7 +300,7 @@ class gpInput(BaseClass.BoundLogger):
             return False
 
         try:
-            package_data = torch_load(self.package_path , map_location = self.device)
+            package_data = Load.torch(self.package_path , map_location = self.device)
         except Exception as e:
             self.logger.error(f'Error loading package: {e}')
             self.package_path.unlink()
@@ -411,7 +408,7 @@ class gpInput(BaseClass.BoundLogger):
         assert isinstance(labels_res , torch.Tensor) , type(labels_res)
         if isinstance(neutra , pd.DataFrame):
             neutra = torch.Tensor(neutra.values)
-        labels_res = T.neutralize_2d(labels_res, neutra , inplace = True) 
+        labels_res = neutralize_2d(labels_res, neutra , inplace = True) 
         assert labels_res is not None , 'labels_res is None'
         self.recorder.save_state('res', labels_res, self.i_iter) 
 

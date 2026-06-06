@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 from typing import Literal
 
-from src.proj import CALENDAR , DB , Dates
+from src.proj import CALENDAR , DB , Base
 from src.data.loader import TRADE , RISK
 
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -55,7 +55,7 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
                 for date in update_dates:
                     self.update_one(date , days , lag1 , label_name)
 
-                self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , idt = 1 , vb = 1)
+                self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int , days : int , lag1 : bool , label_name : str):
         """Compute and save labels for a single ``date``."""

@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from src.proj import BaseClass
+from src.proj import Base
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
 
 __all__ = ['SolverInput' , 'Relaxer' , 'SolveCond' , 'SolveVars']
@@ -121,7 +121,7 @@ class SolverInput:
             short_con = ShortConstraint(0.1 , 0.002) ,
         )
     
-class Relaxer(BaseClass.BoundLogger):
+class Relaxer(Base.BoundLogger):
     """Relaxer for solver input"""
 
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):

@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any
 
-from src.proj import Duration , Proj
+from src.proj import Base , Proj
 from src.res.model.util import BaseCallBack , BatchInputLoader
 
 class CallbackTimer(BaseCallBack):
@@ -37,7 +37,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(10)
             if not df.empty:
-                self.logger.display(df , caption = 'Table: Callback Time Costs:')  
+                self.logger.display(df , title = 'Table: Callback Time Costs:')  
             
 class StatusDisplay(BaseCallBack):
     """Display Epoch and Event Information"""
@@ -96,12 +96,12 @@ class StatusDisplay(BaseCallBack):
     
     def on_test_end_before(self): 
         time_cost = datetime.now() - self.status.times['test_start']
-        self.logger.stdout(f'In Stage [{self.status.stage}], Finish Iterating Test Batches! Cost {Duration(time_cost)}')
+        self.logger.stdout(f'In Stage [{self.status.stage}], Finish Iterating Test Batches! Cost {Base.Duration(time_cost)}')
         self.test_end_start = datetime.now()
 
     def on_test_end_after(self): 
         time_cost = datetime.now() - self.test_end_start
-        self.logger.note(f'In Stage [{self.status.stage}], Finish Testing Callbacks! Cost {Duration(time_cost)}')
+        self.logger.note(f'In Stage [{self.status.stage}], Finish Testing Callbacks! Cost {Base.Duration(time_cost)}')
 
     def on_train_batch_end(self):  
         if self.dataloader_info: 

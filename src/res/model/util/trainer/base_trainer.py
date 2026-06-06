@@ -6,7 +6,7 @@ import numpy as np
 from functools import wraps
 from typing import Any , Literal , Sized , Callable , cast
 
-from src.proj import Const , BaseClass
+from src.proj import Const , Base
 
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
 from src.res.model.util.config import ModelConfig
@@ -344,7 +344,7 @@ class BaseTrainer(BasePipeline):
                 case _:
                     self.logger.error(f'Invalid stage for resuming iter_model_num_date: {self.status.stage}')
                     condition = np.full(len(model_iter) , True , dtype = bool)
-            model_iter = BaseClass.FilteredIterable(model_iter , condition)
+            model_iter = Base.FilteredIterable(model_iter , condition)
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         else:
             iter_info += f'{num_all_models} to go!'

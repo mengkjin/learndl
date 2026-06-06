@@ -17,9 +17,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import PATH , CALENDAR , DB , Logger , BaseProperty , BaseType
-from src.proj.util.io.torch_load import torch_load
-from src.func import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice
+from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB
+from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice
 
 from .nd import NdData
 from ..stock_info import INFO
@@ -59,7 +58,7 @@ def data_type_alias(key : str) -> list[str]:
     assert alias[-1] == key , f'{alias[-1]} != {key}'
     return alias
 
-def save_dict(data : dict , file_path : BaseType.strPath):
+def save_dict(data : dict , file_path : Base.types.strPath):
     """
     Save a dictionary to disk.
 
@@ -76,7 +75,7 @@ def save_dict(data : dict , file_path : BaseType.strPath):
     else:
         raise Exception(file_path)
 
-def load_dict(file_path : BaseType.strPath , keys = None) -> dict[str,Any]:
+def load_dict(file_path : Base.types.strPath , keys = None) -> dict[str,Any]:
     """
     Load a dictionary from disk.
 
@@ -89,7 +88,7 @@ def load_dict(file_path : BaseType.strPath , keys = None) -> dict[str,Any]:
     if file_path.suffix in ['.npz' , '.npy' , '.np']:
         file = np.load(file_path)
     elif file_path.suffix in ['.pt' , '.pth']:
-        file = torch_load(file_path)
+        file = Load.torch(file_path)
     else:
         raise Exception(file_path)
     keys = file.keys() if keys is None else np.intersect1d(keys , list(file.keys()))
@@ -238,7 +237,7 @@ class DataBlock:
     @property
     def shape(self):
         """Shape of ``values`` as a tuple ``(N_secid, N_date, N_inday, N_feature)``."""
-        return BaseProperty.shape(self.values)
+        return Base.shape(self.values)
 
     @property
     def dtype(self):
@@ -253,17 +252,17 @@ class DataBlock:
     @property
     def empty(self):
         """True if uninitiated or ``values`` has zero elements."""
-        return not self.initiated or BaseProperty.empty(self.values)
+        return not self.initiated or Base.empty(self.values)
 
     @property
     def max_date(self):
         """Maximum date in the ``date`` array, or None if empty."""
-        return BaseProperty.max_of_date(self.date)
+        return Base.max_of_date(self.date)
 
     @property
     def min_date(self):
         """Minimum date in the ``date`` array, or None if empty."""
-        return BaseProperty.min_of_date(self.date)
+        return Base.min_of_date(self.date)
 
     @property
     def inday(self) -> np.ndarray:
@@ -271,19 +270,19 @@ class DataBlock:
         return np.arange(self.shape[2])
 
     @property
-    def first_valid_date(self):
+    def first_meaningful_date(self):
         """First date that has at least one finite value; returns 99991231 if none."""
-        dates = self.valid_dates
+        dates = self.meaningful_dates
         return dates[0] if len(dates) > 0 else 99991231
 
     @property
-    def last_valid_date(self):
+    def last_meaningful_date(self):
         """Last date that has at least one finite value; returns 19000101 if none."""
-        dates = self.valid_dates
+        dates = self.meaningful_dates
         return dates[-1] if len(dates) > 0 else 19000101
 
     @property
-    def valid_dates(self):
+    def meaningful_dates(self):
         """Array of dates for which at least one finite value exists across secid/inday/feature."""
         if self.empty:
             return np.array([],dtype = int)
@@ -628,7 +627,7 @@ class DataBlock:
         except Exception as e:
             Logger.error(f'Failed to convert DataFrame to NdData: {e}')
             Logger.print_exc(e)
-            Logger.display(df[df.index.duplicated()] , caption = 'Duplicate index in DataFrame')
+            Logger.display(df[df.index.duplicated()] , title = 'Duplicate index in DataFrame')
             raise
         try:
             block = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
@@ -838,7 +837,6 @@ class DataBlock:
         Sets ``volume_adjusted=True`` to prevent double-adjustment.
         No-op if both ``multiply`` and ``divide`` are None.
         """
-        Logger.stdout(f'Adjusting volume... fillna: {ffill}' )
         if self.volume_adjusted or self.empty: 
             return self
         if multiply is None and divide is None and not ffill: 
@@ -1123,7 +1121,7 @@ class DataBlock:
         if path.exists():
             if path.suffix == '.mmap':
                 assert path.is_dir() , path
-                values = DB.ArrayMemoryMap.load_tensor(path.joinpath('values'))
+                values = Load.mmap(path.joinpath('values'))
                 index = load_dict(path.joinpath('index.pt'))
                 block = cls(values , index['secid'] , index['date'] , index['feature'])
             elif path.suffix == '.pt':
@@ -1159,7 +1157,7 @@ class DataBlock:
         elif path.suffix == '.mmap':
             assert not path.exists() or path.is_dir() , path
             path.mkdir(parents=True, exist_ok=True)
-            DB.ArrayMemoryMap.save(self.values , path.joinpath('values'))
+            Save.mmap(self.values , path.joinpath('values'))
             save_dict({'date' : self.date , 'secid' : self.secid , 'feature' : self.feature} , path.joinpath('index.pt'))
         elif path.suffix == '.pt':
             assert not path.exists() or path.is_file() , path

@@ -5,12 +5,12 @@ import torch
 from typing import Any
 from tqdm import tqdm
 
-from src.proj import BaseClass
-from src.func import tensor as T
+from src.proj import Base
+from src.func.tensor import corrwith , concat_factors_2d
 from src.res.gp.func import factor_func as FF
 from .memory import MemoryManager
 
-class EliteGroup(BaseClass.BoundLogger):
+class EliteGroup(Base.BoundLogger):
     def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.start_i_elite = start_i_elite
@@ -128,13 +128,13 @@ class EliteGroup(BaseClass.BoundLogger):
             Blk_j = self.blocks[jb].data_to_device(self.device)
             for _ , (ii,ik,jj,jk) in tqdm(sub_df.loc[:,['ii','ik','jj','jk']].iterrows(),
                                         desc=f'Block_{ib}/Block_{jb}',total=len(sub_df)):
-                corr = T.corrwith(Blk_i[...,ik] , Blk_j[...,jk] , dim=-1)
+                corr = corrwith(Blk_i[...,ik] , Blk_j[...,jk] , dim=-1)
                 corr_mat[ii, jj] = corr.nanmean() if isinstance(corr , torch.Tensor) else torch.nan
 
         corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat).cpu()
         return corr_mat
     
-class EliteBlock(BaseClass.BoundLogger):
+class EliteBlock(Base.BoundLogger):
     def __init__(self , max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.max_len = max_len
@@ -155,13 +155,13 @@ class EliteBlock(BaseClass.BoundLogger):
     def cat2cpu(self):
         if isinstance(self.data , list): 
             try:
-                data = T.concat_factors_2d(*self.data)
+                data = concat_factors_2d(*self.data)
                 if isinstance(data , torch.Tensor): 
                     self.data = data.cpu()
             except MemoryError:
                 self.logger.warning('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                 gc.collect()
-                self.data = T.concat_factors_2d(*self.data , device=torch.device('cpu')) # to cpu first
+                self.data = concat_factors_2d(*self.data , device=torch.device('cpu')) # to cpu first
         assert self.data is not None , f'{self} has data None'
         assert isinstance(self.data , torch.Tensor) , type(self.data)
         assert self.data.dim() == 3 , f'{self} data dim must be 3, but got {self.data.dim()}'
@@ -192,7 +192,7 @@ class EliteBlock(BaseClass.BoundLogger):
         value = factor[i][:,j]
         for k in range(self.len()):
             blk = block[i][:,j][...,k] if isinstance(block , torch.Tensor) else block[k][i][:,j]
-            corr = T.corrwith(value, blk , dim=dim).nanmean() 
+            corr = corrwith(value, blk , dim=dim).nanmean() 
             corr_values[k] = corr
             if exit_state := corr.abs() > abs_corr_cap: 
                 break 

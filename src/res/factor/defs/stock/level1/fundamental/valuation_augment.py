@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src.data import DATAVENDOR
-from src.func.transform import winsorize , whiten
+from src.func.transform import winsorize , standard_normal
 
 from src.res.factor.calculator import ValueFactor
 from src.res.factor.defs.stock.level0.fundamental.valuation_static import (btop , btop_rank3y , etop , etop_rank3y , cfev , cfev_rank3y)
@@ -48,7 +48,7 @@ class btop_augment(ValueFactor):
     def calc_factor(self, date: int):
         x_range = btop_augment_range(date)
         vals = [btop.EvalSeries(date) , btop_rank3y.EvalSeries(date) , btop_stability.EvalSeries(date)]
-        v = pd.concat([whiten(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
+        v = pd.concat([standard_normal(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
         return v
     
 class etop_augment(ValueFactor):
@@ -58,7 +58,7 @@ class etop_augment(ValueFactor):
     def calc_factor(self, date: int):
         x_range = etop_augment_range(date)
         vals = [etop.EvalSeries(date) , etop_rank3y.EvalSeries(date) , etop_stability.EvalSeries(date)]
-        v = pd.concat([whiten(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
+        v = pd.concat([standard_normal(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
         return v
     
 class cfev_augment(ValueFactor):
@@ -68,7 +68,7 @@ class cfev_augment(ValueFactor):
     def calc_factor(self, date: int):
         x_range = cfev_augment_range(date)
         vals = [cfev.EvalSeries(date) , cfev_rank3y.EvalSeries(date) , cfev_stability.EvalSeries(date)]
-        v = pd.concat([whiten(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
+        v = pd.concat([standard_normal(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
         return v
     
 class valuation_augment(ValueFactor):
@@ -81,6 +81,6 @@ class valuation_augment(ValueFactor):
         cfp = cfev_augment.EvalSeries(date)
         if any(f.empty or f.isna().all() for f in [bp , ep , cfp]): 
             return pd.Series()
-        v = pd.concat([whiten(winsorize(calc)) for calc in [bp , ep , cfp]] , axis = 1).mean(axis = 1)
+        v = pd.concat([standard_normal(winsorize(calc)) for calc in [bp , ep , cfp]] , axis = 1).mean(axis = 1)
         return v
     

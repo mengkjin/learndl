@@ -5,8 +5,7 @@ import pandas as pd
 from functools import cached_property
 from pathlib import Path
 
-from src.proj import DB , PATH , Const , CALENDAR
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import PATH , Const , CALENDAR , Save , Load
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
@@ -75,7 +74,7 @@ class PredRecorder(TrainerPipeline):
         old_path = [path for path in self.folder_preds.glob('*.feather') if path.name.startswith(f'{model_num}.{model_date}.')]
         assert len(old_path) <= 1 , f'Multiple old paths found for model {model_num} at date {model_date}: {old_path}'
         if old_path and append:
-            old_df = DB.load_df(old_path[0])
+            old_df = Load.df(old_path[0])
             df = pd.concat([old_df , df]).drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
             
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
@@ -83,24 +82,18 @@ class PredRecorder(TrainerPipeline):
         self.update_missing_pred_dates(CALENDAR.range(min_pred_date , max_pred_date , 'td') , df['date'].unique())
         if old_path and path != old_path[0]:
             Path(old_path[0]).unlink()
-        if async_save:
-            AsyncSaver.df(df , path , future_group = 'pred_recorder' , vb_level = 'max')
-        else:
-            DB.save_df(df , path , overwrite = True , vb_level = 'max')
+        Save.df(df , path , async_save = async_save , overwrite = True , future_group = 'pred_recorder' , vb_level = 'max')
 
     def save_avg_preds(self , model_date : int , async_save : bool = False):
-        AsyncSaver.wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
+        Save.async_wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
-        df = DB.load_df(pred_paths , key_column = None)
+        df = Load.df(pred_paths , key_column = None)
         if df.empty:
             return
         df = df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
         min_pred_date , max_pred_date = df['date'].min() , df['date'].max()
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
-        if async_save:
-            AsyncSaver.df(df , path , future_group = 'pred_recorder' , vb_level = 'max')
-        else:
-            DB.save_df(df , path , overwrite = True , vb_level = 'max')
+        Save.df(df , path , async_save = async_save , overwrite = True , future_group = 'pred_recorder' , vb_level = 'max')
 
     def update_avg_preds(self , pred_df : pd.DataFrame):
         if pred_df.empty:
@@ -111,7 +104,7 @@ class PredRecorder(TrainerPipeline):
             assert len(avg_paths) <= 1 , f'Multiple old paths found for model {model_date}: {avg_paths}'
             if avg_paths:
                 old_path = avg_paths[0]
-                old_df = DB.load_df(old_path)
+                old_df = Load.df(old_path)
             else:
                 old_path = None
                 old_df = pd.DataFrame()
@@ -124,7 +117,7 @@ class PredRecorder(TrainerPipeline):
             new_path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
             if old_path and old_path != new_path:
                 old_path.unlink()
-            DB.save_df(new_df , new_path , overwrite = True , vb_level = 'max')
+            Save.df(new_df , new_path , overwrite = True , vb_level = 'max')
             
         self.logger.note(f'Updated avg preds for pred dates {pred_df["date"].unique()}')
         return avg_df
@@ -204,7 +197,7 @@ class PredRecorder(TrainerPipeline):
                 purge_info += f', {len(trim_models)} models(date/num) trimed'
             
             for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
-                df = DB.load_df(path).query('date <= @min_retrained_model_date')
+                df = Load.df(path).query('date <= @min_retrained_model_date')
                 Path(path).unlink()
                 self.save_preds(df , model_date , model_num)
                 
@@ -224,16 +217,16 @@ class PredRecorder(TrainerPipeline):
             return
 
         purge_info = f'Purged outdated predictions, {len(df)} models(date/num) partially purged :'
-        self.logger.display(df , caption = purge_info)
+        self.logger.display(df , title = purge_info)
         for _ , (model_date , model_num , path , next_model_date) in df.loc[:,['model_date' , 'model_num' , 'path' , 'next_model_date']].iterrows():
-            df = DB.load_df(path).query('date <= @next_model_date and date >= @model_date')
+            df = Load.df(path).query('date <= @next_model_date and date >= @model_date')
             Path(path).unlink()
             self.save_preds(df , model_date , model_num)
         self.has_purged_preds = True
 
     def purge_duplicated_model_preds(self):
         """purge duplicated model predictions"""
-        AsyncSaver.wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
+        Save.async_wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
         pred_records = self.pred_records()
         pred_records = pred_records.sort_values(by = ['model_date' , 'model_num' , 'max_pred_date' , 'min_pred_date'] , ascending = [True , True , False , True])
         obsolete_records = pred_records[pred_records.duplicated(subset = ['model_date' , 'model_num'])]
@@ -337,11 +330,11 @@ class PredRecorder(TrainerPipeline):
                 pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min()')
                 closest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
                 pred_records = pred_records.query('max_pred_date == @closest_pred_date')
-                df = DB.load_df({path:path for path in pred_records['path']} , key_column = 'path')
+                df = Load.df({path:path for path in pred_records['path']} , key_column = 'path')
             else:
                 df = self.empty_preds()
         else:
-            df = DB.load_df({path:path for path in pred_records['path']} , key_column = 'path')
+            df = Load.df({path:path for path in pred_records['path']} , key_column = 'path')
             self.update_missing_pred_dates(pred_dates , df['date'].unique())
         df = self.try_fill_na_label(df , try_rewrite = True).drop(columns = ['path'] , errors = 'ignore')
         df = df.query('date in @pred_dates').reset_index(drop = True)
@@ -365,11 +358,11 @@ class PredRecorder(TrainerPipeline):
                     avg_pred_records = self.avg_pred_records().query('max_pred_date <= @pred_dates.min()')
                     closest_avg_pred_date = avg_pred_records['max_pred_date'].max() # noqa: F841
                     avg_pred_records = avg_pred_records.query('max_pred_date == @closest_avg_pred_date')
-                    df = DB.load_df({path:path for path in avg_pred_records['path']} , key_column = 'path')
+                    df = Load.df({path:path for path in avg_pred_records['path']} , key_column = 'path')
                 else:
                     df = self.empty_preds()
         else:
-            df = DB.load_df({path:path for path in avg_pred_records['path']} , key_column = 'path')
+            df = Load.df({path:path for path in avg_pred_records['path']} , key_column = 'path')
         df = self.try_fill_na_label(df , try_rewrite = True).drop(columns = ['path'] , errors = 'ignore')
         df = df.query('date in @pred_dates').reset_index(drop = True)
         return df
@@ -389,7 +382,7 @@ class PredRecorder(TrainerPipeline):
                 subdf = pred_df.query('path == @path').drop(columns = ['path']).reset_index(drop = True)
                 if not subdf.empty and subdf['new_label'].notna().any():
                     self.logger.stdout(f'Rewriting na label for {path}')
-                    DB.save_df(subdf.drop(columns = ['new_label']) , path , overwrite = True)
+                    Save.df(subdf.drop(columns = ['new_label']) , path , overwrite = True , vb_level = 'max')
         return pred_df.drop(columns = ['new_label']).reset_index(drop = True)
 
     def on_configure_model(self):

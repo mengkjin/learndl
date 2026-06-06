@@ -6,7 +6,7 @@ and model coefficients from the ``models`` database.
 Exported as the ``RISK`` singleton.
 """
 from __future__ import annotations
-from src.proj import TradeDate , DB
+from src.proj import DB , Base
 from .access import DateDataAccess
 
 class RiskModelAccess(DateDataAccess):
@@ -48,7 +48,7 @@ class RiskModelAccess(DateDataAccess):
         """Return factor exposure data for a single ``date``."""
         return self.get(date , 'exp' , field)
 
-    def get_exret(self , start : int | TradeDate , end : int | TradeDate ,
+    def get_exret(self , start : Base.types.intDate , end : Base.types.intDate ,
                   mask = True , pivot = True , drop_old = False):
         """
         Return per-stock residual (excess) returns from the risk model.

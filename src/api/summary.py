@@ -4,7 +4,7 @@ from pathlib import Path
 from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount
 from src.res.model.model_module.application.trainer import ModelTrainer
 from src.res.factor.util.stats.aggregate import eval_period_ic_multi
-from src.proj import Logger , PATH , Const , DB
+from src.proj import Logger , PATH , Const , Load
 
 from .util import wrap_update
 
@@ -24,7 +24,7 @@ def display_account_summary(accounts : dict[str , dict[str , Path]] , account_ty
     dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
     for i , df in enumerate(dfs):
         caption = f'Summary of {account_type.title()} Account Period Return (Total {len(dfs)} Tables):' if i == 0 else None
-        Logger.display(df , caption = caption)
+        Logger.display(df , title = caption)
     return dfs
 
 def model_account_summary(by_max_columns : int = 12):
@@ -97,7 +97,7 @@ def model_ic_summary():
             paths[model_path.model_name] = path
     ic_tables = {}
     for name , path in paths.items():
-        df = DB.load_df(path)
+        df = Load.df(path)
         ic_tables[name] = df.astype({'date' : 'int'}).query('submodel == "best"').groupby('date')['rankic'].mean().\
             reset_index(drop = False).dropna().rename(columns = {'rankic' : 'ic'})
     df = eval_period_ic_multi(ic_tables)

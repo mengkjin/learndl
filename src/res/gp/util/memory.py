@@ -4,9 +4,9 @@ import torch
 import numpy as np
 from typing import Any
 
-from src.proj import BaseClass
+from src.proj import Base
 
-class MemoryManager(BaseClass.BoundLogger):
+class MemoryManager(Base.BoundLogger):
     unit = 1024**3
     _instance = None
 

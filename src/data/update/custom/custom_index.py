@@ -16,7 +16,7 @@ import numpy as np
 from abc import ABCMeta , abstractmethod
 from functools import cached_property
 from typing import Literal , Type , Any
-from src.proj import CALENDAR , DB , Dates
+from src.proj import CALENDAR , DB , Base , Load , Save
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -119,14 +119,14 @@ class CustomIndex(metaclass=CustomIndexMeta):
         dates = np.sort(CALENDAR.slice(dates , self.START_DATE , CALENDAR.updated()))
         pct_chg = np.array([self.index_return(date) for date in dates]) * 100
         df = pd.DataFrame({'trade_date' : dates , 'pct_chg' : pct_chg})
-        old_df = DB.load_df(self.target_path)
+        old_df = Load.df(self.target_path)
         if not old_df.empty:
             df = pd.concat([old_df.query('trade_date not in @df.trade_date') , df]).sort_values('trade_date').reset_index(drop=True)
-        DB.save_df(df , self.target_path , indent = indent , vb_level = vb_level)
+        Save.df(df , self.target_path , indent = indent , vb_level = vb_level)
 
     def stored_dates(self) -> np.ndarray:
         """get stored dates"""
-        old_df = DB.load_df(self.target_path)
+        old_df = Load.df(self.target_path)
         if old_df.empty:
             return np.array([])
         return old_df['trade_date'].to_numpy(int)
@@ -167,7 +167,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
         if len(total_dates) == 0:
             self.logger.skipping(f'All custom indices are up to date' , idt = 1)
         else:
-            self.logger.success(f'{len(custom_indices)} custom indices updated at {Dates(total_dates)}' , idt = 1 , vb = 1)
+            self.logger.success(f'{len(custom_indices)} custom indices updated at {Base.Dates(total_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int):
         for custom_index in CustomIndex.iter_custom_indices():

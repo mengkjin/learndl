@@ -7,8 +7,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , ClassVar , Literal , overload
 
-from src.proj import MACHINE , DB , Proj , CALENDAR , BaseClass , BaseType
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import MACHINE , Proj , CALENDAR , Base , Save , Load
 from src.data.util import DataBlock
 from src.res.model.util import PredictorPath , ModelConfig , DataModule
 from src.res.model.model_module.module import get_predictor_module
@@ -24,7 +23,7 @@ class _Grads:
     def __exit__(self , exc_type , exc_value , traceback):
         torch.set_grad_enabled(self.prev)
 
-class ArchivedPredictorModel(BaseClass.BoundLogger):
+class ArchivedPredictorModel(Base.BoundLogger):
     """for a model to predict recent/history data"""
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
@@ -33,12 +32,12 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
     def __init__(self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1):
         """Initialize from a PredictorPath object"""
     @overload
-    def __init__(self , model_input : BaseType.strPath | None | Any , 
+    def __init__(self , model_input : Base.types.strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1):
         """Initialize from a model input, and convert to PredictorPath object"""
-    def __init__(self , model_input : BaseType.strPath | None | Any | PredictorPath, 
+    def __init__(self , model_input : Base.types.strPath | None | Any | PredictorPath, 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
         submodel : str | None = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs):
@@ -284,7 +283,7 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
         hidden_path = self.hidden_values_path(model_num , model_date , submodel)
         hidden_dfs : list[pl.DataFrame] = []
         existing_dates = []
-        saved_hidden_df = DB.load_df_pl(hidden_path)
+        saved_hidden_df = Load.polars(hidden_path)
         if not load_first and saved_hidden_df.height > 0:
             saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates))
         if saved_hidden_df.height > 0:
@@ -302,8 +301,8 @@ class ArchivedPredictorModel(BaseClass.BoundLogger):
             hidden_dfs.append(batch_data.hidden_df_pl())
         df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
         if df.height > 0 and len(dates) > 0:
-            AsyncSaver.df(
-                df , hidden_path , overwrite = True , 
+            Save.df(
+                df , hidden_path , async_save = True , overwrite = True , 
                 prefix = f'{self.pred_name} Hidden Values' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             
         if align_secid is not None:

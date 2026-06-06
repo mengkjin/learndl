@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.proj import Dates , BaseClass
+from src.proj import Base  
 from .processors import PrePros
 
 __all__ = ['PreProcessorTask']
@@ -18,7 +18,7 @@ __all__ = ['PreProcessorTask']
 DATASET_FIT = [*PrePros.keys()]
 DATASET_PREDICT = DATASET_FIT
 
-class PreProcessorTask(BaseClass.BoundLogger):
+class PreProcessorTask(Base.BoundLogger):
     """
     Batch runner that iterates over all registered preprocessors and calls
     ``PreProcessor.update()``.
@@ -59,7 +59,7 @@ class PreProcessorTask(BaseClass.BoundLogger):
             keys = DATASET_PREDICT if predict else DATASET_FIT
             
         cls.logger.note(f'Data PreProcessing for {"fitting" if not predict else "predicting"} start with {keys} datas !')
-        cls.logger.stdout(f'Will process {keys} from {Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , idt = 1 , vb = 1)
+        cls.logger.stdout(f'Will process {keys} from {Base.Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , idt = 1 , vb = 1)
 
         for key in keys:
             proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)
@@ -96,7 +96,7 @@ class PreProcessorTask(BaseClass.BoundLogger):
             keys = DATASET_PREDICT if predict else DATASET_FIT
             
         cls.logger.note(f'Data PreProcessing for {"fitting" if not predict else "predicting"} start with {keys} datas !')
-        cls.logger.stdout(f'Will process {keys} from {Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , idt = 1 , vb = 1)
+        cls.logger.stdout(f'Will process {keys} from {Base.Dates(PrePros.start_date(type = 'fit' if not predict else 'predict'))}' , idt = 1 , vb = 1)
 
         for key in keys:
             proc = PrePros.get_processor(key , type = 'fit' if not predict else 'predict' , indent = indent + 1 , vb_level = vb_level + 1)

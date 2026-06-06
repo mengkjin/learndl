@@ -1,10 +1,10 @@
 from __future__ import annotations
-from src.proj import PATH , BaseClass
+from src.proj import PATH , Base
 from typing import Any
 
 __all__ = ['ModelConfigsInspector']
 
-class ModelConfigsInspector(BaseClass.BoundLogger):
+class ModelConfigsInspector(Base.BoundLogger):
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.model_root = PATH.model

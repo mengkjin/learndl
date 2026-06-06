@@ -7,10 +7,8 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH
-from src.proj.util.io.torch_load import torch_load
+from src.proj import PATH , Save , Load
 from src.proj.util.functional.device import Device
-from src.proj.util.io.async_save import AsyncSaver
 from src.res.model.util.core import epoch_key
 
 @dataclass
@@ -29,7 +27,7 @@ class CkptEpochRecord:
     def save(self):
         if self.saved:
             return self
-        self.future : Future = AsyncSaver.torch(self.state_dict , self.path , copy_for_safety = False)
+        self.future : Future | Any = Save.torch(self.state_dict , self.path , async_save = True , copy_for_safety = False)
         self.saved = True
         return self
 
@@ -96,7 +94,7 @@ class Checkpoint:
             return record.state_dict
         else:
             _ = record.future.result()
-            return torch_load(record.path)
+            return Load.torch(record.path)
 
     def clear_all(self):
         self.join_messages.clear()

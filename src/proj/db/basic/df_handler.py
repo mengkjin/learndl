@@ -17,8 +17,10 @@ __all__ = ['dfHandler']
 
 class dfHandler:
     @classmethod
-    def reset_index_pandas(cls , df : pd.DataFrame | Any , reset = True) -> pd.DataFrame:
+    def reset_index_pandas(cls , df : T , reset = True) -> T:
         """reset index which are not None"""
+        if not isinstance(df , pd.DataFrame):
+            return df
         if not reset or df is None or df.empty:
             return df
         old_index = [index for index in df.index.names if index]

@@ -4,8 +4,7 @@ import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Proj , Const
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import Proj , Const , Save
 
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI
@@ -162,18 +161,18 @@ class DetailedAlphaAnalysis(BaseCallBack):
                     df[col] = df[col].map(lambda x:f'{x:.3f}')
                 elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
                     df[col] = df[col].map(lambda x:f'{x:.3%}')
-            self.logger.display(df , caption = f'Table: {name.title()}:')
+            self.logger.display(df , title = f'Table: {name.title()}:')
 
         for name , vb_level in self.figure_vb_levels.items():
             if not Proj.verbose(vb_level):
                 continue
-            self.logger.display(self.test_figures[name] , caption = f'Figure: {name.title()}:')
+            self.logger.display(self.test_figures[name] , title = f'Figure: {name.title()}:')
 
-        AsyncSaver.dfs(
-            self.test_results , self.path_result_data , 
+        Save.dfs(
+            self.test_results , self.path_result_data , async_save = True ,
             prefix='Detailed Alpha Analysis Datas' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
-        AsyncSaver.figs(
-            self.test_figures , self.path_result_plot , 
+        Save.figs(
+            self.test_figures , self.path_result_plot , async_save = True ,
             prefix='Detailed Alpha Analysis Plots' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
 

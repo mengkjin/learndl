@@ -7,10 +7,10 @@ import gc , torch
 from functools import cached_property
 from typing import Any , Literal , Callable
 
-from src.proj import CALENDAR , Const, MACHINE , BaseClass , Proj
+from src.proj import CALENDAR , Const, MACHINE , Base , Proj
 from src.data import ModuleData
 
-from src.func import match_values
+from src.func.basic import match_values
 from src.res.model.util.core import BatchInput
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.storage import TorchFileStorage , StoredTorchFileLoader
@@ -22,7 +22,7 @@ from .operations import PrenormOperator , DataOperator
 
 __all__ = ['DataModule']
 
-class DataModule(BaseClass.BoundLogger):
+class DataModule(Base.BoundLogger):
     """
     DataModule for model fitting / testing / predicting
     """
@@ -79,7 +79,7 @@ class DataModule(BaseClass.BoundLogger):
             dtype = self.config.precision)
 
         self.datas.load()
-        self.logger.stdout(f'Data loaded , shape: {self.datas.shape}' , vb = 1)
+        self.logger.stdout(f'Data loaded, shape: {self.datas.shape}' , vb = 1)
         
         self.config.update_data_param(self.datas.x)
         
@@ -248,28 +248,37 @@ class DataModule(BaseClass.BoundLogger):
         x_to_check = x_full if self.config.module_type == 'nn' else {}
         y_to_check = self.y_std if self.is_fitting else None
 
-        valid_position = self.valid_position(x_to_check , y_to_check , self.step_idx , all_valid=(self.config.module_type == 'nn'))
+        effective_samples = self.effective_sample(x_to_check , y_to_check , self.step_idx , require_all=(self.config.module_type == 'nn'))
         
         if Proj.verbose(self.vb_level + 1):
-            self.logger.stdout(f'loader_param: {self.loader_param}')
-            self.logger.stdout(f'x shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
-            if valid_position is not None:
-                valid_num_by_date = valid_position.sum(dim=0)
-                min_valid_sampled = valid_num_by_date.min()
-                max_valid_sampled = valid_num_by_date.max()
-                self.logger.stdout(f'valid samples by date: {min_valid_sampled} ~ {max_valid_sampled}' , idt = 1)
-                ### calculate total num by date
-                ### calculate pct of valid sample
-                ### plot coverage if vb is high
+            self.logger.stdout(f'Loader Parameters: stage={self.stage} , model_date={self.model_date} , seqlens={self.seq_lens}')
+            self.logger.stdout(f'Sample Input Share: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
+            self.logger.stdout(f'Sample Dates Range: {Base.Dates(self.y_date)}' , idt = 1)
+            self.display_effective_stats(effective_samples)
 
-        y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , valid_position , self.step_idx)
-        # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
+        y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , effective_samples , self.step_idx)
+        # since in fit stage , step_idx can be larger than 1 , different effective and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
-        self.static_dataloader(x_full , y_sampled , w_sampled , valid_position)
+        self.static_dataloader(x_full , y_sampled , w_sampled , effective_samples)
 
         if self.config.gc_collect_each_model:
             gc.collect() 
             torch.cuda.empty_cache()
+
+    def display_effective_stats(self , effective_samples : torch.Tensor | None , stat_types : tuple[str,...] = ('min', 'mean' , 'max')) -> None:
+        if effective_samples is not None:
+            from src.data import DATAVENDOR
+            count_dates = self.y_date[self.step_idx]
+            eff_counts = pd.DataFrame({
+                'date' : count_dates,
+                'Year' : count_dates // 10000,
+                'Effective Count' : effective_samples.sum(dim=0).cpu().numpy(),
+                'listed_num' : DATAVENDOR.INFO.list_num_by_date(count_dates , self.model_date)
+            })
+            eff_counts['Coverage'] = eff_counts['Effective Count'] / eff_counts['listed_num']
+            eff_stats = eff_counts.groupby('Year').agg({'Effective Count' : stat_types , 'Coverage' : stat_types}).\
+                rename_axis(['' , 'Stat'] , axis = 1).astype({('Effective Count',) : int , ('Coverage',) : float}).round(3)
+            self.logger.display(eff_stats , title = 'Effective Count Statistics by Year' , idt = 1)
 
     def train_dataloader(self)   -> BatchInputLoader: 
         return BatchInputLoader(self.loader_dict['train'] , self , desc = 'Train')
@@ -334,21 +343,21 @@ class DataModule(BaseClass.BoundLogger):
     def label_of_date(self , date : int) -> np.ndarray:
         return self.labels_np[:,self.datas.y.date == date][...,0].squeeze()
 
-    def valid_position(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , all_valid = True) -> torch.Tensor | None:
+    def effective_sample(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , require_all = True) -> torch.Tensor | None:
         """
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
         others : rolling window non-nan , default as self.seqy
         """
-        valids : list[torch.Tensor] = []
+        effs : list[torch.Tensor] = []
         if x:
             finites = torch.stack([self.data_operator.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
-            valids.append(finites.all(dim=-1) if all_valid else finites.any(dim=-1))
+            effs.append(finites.all(dim=-1) if require_all else finites.any(dim=-1))
         if y is not None:
             finites = self.data_operator.finite_position(None , y, index1)
-            valids.append(finites)
-        if valids:
-            return torch.stack(valids , dim = -1).all(dim = -1)
+            effs.append(finites)
+        if effs:
+            return torch.stack(effs , dim = -1).all(dim = -1)
         else:
             return None
 
@@ -356,12 +365,12 @@ class DataModule(BaseClass.BoundLogger):
         assert self.stage in ['predict' , 'test' , 'retrospective'] , f'stage should be predict , test or retrospective, but got {self.stage}'
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
        
-    def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , valid : torch.Tensor | None) -> None:
+    def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , effective : torch.Tensor | None) -> None:
         """update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them"""   
-        if valid is None: 
-            valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
-        index0, index1 = torch.arange(len(valid)) , self.step_idx
-        sample_index = self.data_operator.split_sample(valid , index0 , index1)
+        if effective is None: 
+            effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
+        index0, index1 = torch.arange(len(effective)) , self.step_idx
+        sample_index = self.data_operator.split_sample(effective , index0 , index1)
         self.storage.del_group(self.stage)
         self.loader_dates[self.stage] = []
         for set_key , set_samples in sample_index.items():
@@ -381,7 +390,7 @@ class DataModule(BaseClass.BoundLogger):
                 b_x = self.batch_data_x(x , index0 , xindex1)
                 b_y = self.batch_data_y(y , index0 , yindex1)
                 b_w = self.batch_data_y(w , index0 , yindex1)
-                b_v = self.batch_data_y(valid , index0 , yindex1)
+                b_v = self.batch_data_y(effective , index0 , yindex1)
 
                 batch_input = BatchInput(b_x , b_y , b_w , b_i , b_v , self.y_date , self.y_secid)
                 if self.config.module_type == 'nn':
@@ -399,7 +408,7 @@ class DataModule(BaseClass.BoundLogger):
         datas = []
         for model_data_type , data in x.items():
             if data[index0,index1].isnan().all():
-                self.logger.error(f'x valid_dates: {self.datas.x[model_data_type].valid_dates}')
+                self.logger.error(f'x meaningful_dates: {self.datas.x[model_data_type].meaningful_dates}')
                 self.logger.error(f'date: {self.y_date[index1[0]]} , keys: {x.keys()}')
                 self.logger.error(f'seq_lens: {self.seq_lens} , seq_steps: {self.seq_steps}')
                 self.logger.error(f'early_test_dates: {self.early_test_dates}')

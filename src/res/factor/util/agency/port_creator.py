@@ -5,10 +5,10 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from typing import Any , Literal
 
-from src.proj import BaseClass
+from src.proj import Base
 from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
-class PortCreator(ABC , BaseClass.BoundLogger):
+class PortCreator(ABC , Base.BoundLogger):
     def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.name = name

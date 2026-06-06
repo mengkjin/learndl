@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
-from src.proj import MACHINE , CALENDAR , TradeDate , DB , BaseMeta , BaseClass
+from src.proj import MACHINE , CALENDAR , DB , Base
 
-class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
+class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
     """
     Date-aware interface to static Chinese A-share stock reference data.
 
@@ -70,14 +70,14 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         self._indus_data = None
         self.initiated = False
 
-    def get_desc(self , date : int | TradeDate | None = None , set_index : bool = True , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
+    def get_desc(self , date : Base.types.intDate | None = None , set_index : bool = True , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         """
         Return the listing description table, optionally filtered to securities
         that were listed on ``date``.
 
         Parameters
         ----------
-        date : int | TradeDate | None
+        date : Base.types.intDate | None
             If given, keep only rows where ``list_dt <= date < delist_dt``.
         set_index : bool
             If True (default) return with ``secid`` as the index.
@@ -87,9 +87,11 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             Keep only these exchange codes.
         """
         self.ensure_initiation()
-        desc = self._desc
-        if date is not None: 
-            desc = desc.loc[(desc['list_dt'] <= int(date)) & (desc['delist_dt'] > int(date))]
+        if date is None:
+            desc = self._desc.copy()
+        else:
+            date = int(date)
+            desc = self._desc.query('list_dt <= @date & delist_dt > @date')
         if listed: 
             desc = desc.query('list_dt > 0')
         if exchange: 
@@ -103,7 +105,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         self.ensure_initiation()
         return np.unique(self.get_desc(date , set_index=False)['secid'].to_numpy(int))
     
-    def get_list_dt(self , date : int | TradeDate | None = None , offset = 0):
+    def get_list_dt(self , date : Base.types.intDate | None = None , offset = 0 , keep_columns : list[str] = ['list_dt']):
         """
         Return a secid-indexed DataFrame with a single ``list_dt`` column.
 
@@ -115,9 +117,20 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         desc = self.get_desc(date)
         if offset != 0: 
             desc['list_dt'] = CALENDAR.td_array(desc['list_dt'] , offset)
-        return desc.loc[:,['list_dt']].reset_index().drop_duplicates(subset='secid').set_index('secid')
-    
-    def get_st(self , date : int | TradeDate):
+        return desc.loc[:,keep_columns].reset_index().drop_duplicates(subset='secid').set_index('secid')
+
+    def list_num_by_date(self , dates : np.ndarray | list[int] , reference_date : Base.types.intDate | None = None):
+        """
+        Return the number of listed stocks on a date.
+        """
+        self.ensure_initiation()
+        list_delist_dt = self.get_list_dt(date = reference_date , offset = 30 , keep_columns = ['list_dt' , 'delist_dt'])
+        x = list_delist_dt.to_numpy()[:,None]
+        y = np.array(dates)[None,:,None]
+        listed = np.all((y - x) * np.array([[[1,-1]]]) > 0 , axis = -1)
+        return listed.sum(0)
+
+    def get_st(self , date : Base.types.intDate):
         """
         Return securities flagged with an abnormal status (ST, suspended, or delisted).
 
@@ -137,7 +150,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         marked = marked.query('entry_dt >= del_st_dt').reset_index(drop=False)
         return marked
 
-    def get_indus(self , date : int | TradeDate | None = None):
+    def get_indus(self , date : Base.types.intDate | None = None):
         """
         Return the most recent Tushare L2 industry classification for each secid.
 
@@ -152,7 +165,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         df = df.groupby('secid')[['indus']].last()
         return df
 
-    def add_indus(self , df : pd.DataFrame , date : int | TradeDate | None = None , na_industry_as : Any = None):
+    def add_indus(self , df : pd.DataFrame , date : Base.types.intDate | None = None , na_industry_as : Any = None):
         """
         Join the industry classification onto ``df`` via a left join on ``secid``.
 
@@ -160,7 +173,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
         ----------
         df : pd.DataFrame
             Frame with a ``secid`` column or index.
-        date : int | TradeDate | None
+        date : Base.types.intDate | None
             Point-in-time date for ``get_indus``.
         na_industry_as : scalar, optional
             Fill value for secids without an industry assignment.
@@ -173,7 +186,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             df['indus'] = df['indus'].fillna(na_industry_as)
         return df
 
-    def get_listed_mask(self , df : pd.DataFrame , list_dt_offset = 21 , reference_date : int | TradeDate | None = None):
+    def get_listed_mask(self , df : pd.DataFrame , list_dt_offset = 21 , reference_date : Base.types.intDate | None = None):
         """
         Build a NaN mask array (shape same as ``df``) that is NaN before listing.
 
@@ -217,7 +230,7 @@ class InfoDataAccess(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
             reference_date = date_values.max()
 
         list_dt = self.get_list_dt(date = reference_date , offset = list_dt_offset).\
-            reindex(secid_values).fillna(99991231).astype(int).values
+            reindex(secid_values).fillna(99991231).astype(int)['list_dt']
         if pivoted: 
             list_dt = list_dt.T
         

@@ -3,7 +3,7 @@ import zipfile , os
 import pandas as pd
 from pathlib import Path
 
-from src.proj import MACHINE , Logger , DB
+from src.proj import MACHINE , Logger , Save
 
 key_id = MACHINE.secret.get('accounts','aws/access_key_id')
 access_key = MACHINE.secret.get('accounts','aws/secret_access_key')
@@ -30,7 +30,7 @@ def transform_one_day(date):
     with zipfile.ZipFile(zip_file_path, 'r') as zip_ref: 
         zip_ref.extract(txt_file_path , download_path)
     df = pd.read_csv(download_path.joinpath(txt_file_path) , sep = '\t')
-    DB.save_df(df , target_path , prefix = f'Kline Tranformed' , vb_level = 'max')
+    Save.df(df , target_path , prefix = f'Kline Tranformed' , vb_level = 'max')
 
 def kline_download(start = 20100104 , end = 20241226):
     os.makedirs(download_path , exist_ok=True)

@@ -4,7 +4,7 @@ from typing import Literal
 
 __all__ = [
     'DATAFRAME_SUFFIX' , 'SRC_ALTERNATIVES' , 'DB_BY_NAME' , 'DB_BY_DATE' , 
-    'EXPORT_BY_NAME' , 'EXPORT_BY_DATE']
+    'EXPORT_BY_NAME' , 'EXPORT_BY_DATE' , 'TAR_SUFFIXES']
 
 DATAFRAME_SUFFIX   : Literal['feather' , 'parquet'] = 'feather'
 
@@ -23,3 +23,5 @@ EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_s
 EXPORT_BY_DATE : list[str] = ['pred' , 'stock' , 'stock_factor' , 'model_prediction' , 'universe']
 for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
     assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
+
+TAR_SUFFIXES : tuple[str, ...] = ('tar' , 'tar.gz' , 'tar.bz2' , 'tar.xz' , 'tar.zst')

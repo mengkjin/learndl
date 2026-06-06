@@ -467,14 +467,14 @@ class Logger:
                 cls.conclude(f'test exception: {e}' , level = 'error')
 
     @classmethod
-    def display(cls , obj , caption : str | None = None , vb_level : Any = 1 , **kwargs):
+    def display(cls , obj , title : str | None = None , vb_level : Any = 1 , indent : int = 0 , **kwargs):
         """
         display the object
         """
         if Silence.silent or not Proj.verbose(vb_level):
             return
-        if caption is not None:
-            cls.caption(caption , vb_level = vb_level)
+        if title is not None:
+            cls.caption(title , vb_level = vb_level)
         with Proj.vb.record_vb_level(vb_level):
             cls._displayer(obj , **kwargs)
 

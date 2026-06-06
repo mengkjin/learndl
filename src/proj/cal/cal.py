@@ -11,11 +11,11 @@ import pandas as pd
 
 from datetime import datetime, timedelta, time
 from pathlib import Path
-from typing import Any, Literal, Union , Sequence , Iterable , TYPE_CHECKING
+from typing import Any, Literal, Iterable , TYPE_CHECKING
 
 from src.proj.core import NoInstanceMeta
 from src.proj.env import PATH
-import src.proj.db as DB
+from src.proj.db import DB
 
 from .basic import BJ_TZ , BC
 from .trade_date import TradeDate
@@ -23,19 +23,17 @@ from .trade_date import TradeDate
 __all__ = ['CALENDAR', 'Dates']
 
 if TYPE_CHECKING:
-    DateType = Union[int, TradeDate]
-    DateTypeWithNone = Union[int, TradeDate, None]
-    DatesType = Union[DateType , Sequence[DateType], np.ndarray , pd.Series]
+    from src.proj.bases.types import intDate , intDateNone , intDates
 
-def get_cd(date: DateType) -> int:
+def get_cd(date: intDate) -> int:
     """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
     return int(date.cd if isinstance(date, TradeDate) else date)
 
-def get_td(date: DateType) -> int:
+def get_td(date: intDate) -> int:
     """Trading-aligned day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.td``."""
     return int(date.td if isinstance(date, TradeDate) else date)
 
-def get_cds(dates: DatesType) -> np.ndarray:
+def get_cds(dates: intDates) -> np.ndarray:
     """
     Convert the 'date' parameter of 'td_array' / '*_diff_array' to an integer array index key.
     Single element of this package 'TradeDate' will be expanded to its 'td'; 'pd.Series' will be converted to 'ndarray'.
@@ -186,7 +184,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return cls._update_to
 
     @staticmethod
-    def updated(date: DateTypeWithNone = None):
+    def updated(date: intDateNone = None):
         """The maximum date in the 'trade_ts/day' database table; optionally truncated by 'date'."""
         updated_date = DB.max_date("trade_ts", "day")
         if date is not None:
@@ -194,12 +192,12 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return updated_date
 
     @staticmethod
-    def td(date: DateType, offset: int = 0):
+    def td(date: intDate, offset: int = 0):
         """Return 'TradeDate'; optionally offset by 'offset' steps."""
         return TradeDate(date).offset(offset)
 
     @classmethod
-    def td_array(cls, dates: DatesType | None, offset: int = 0, backward=True):
+    def td_array(cls, dates: intDates | None, offset: int = 0, backward=True):
         """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
         if dates is None:
             return np.array([], dtype=np.int64)
@@ -215,7 +213,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return td_arr
 
     @staticmethod
-    def cd(date: DateType, offset: int = 0):
+    def cd(date: intDate, offset: int = 0):
         """Return the natural date 'YYYYMMDD'; optionally offset by 'offset' steps."""
         d = get_cd(date)
         if offset == 0 or d <= BC.min_date or d >= BC.max_date:
@@ -224,7 +222,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return int(d.strftime("%Y%m%d"))
 
     @staticmethod
-    def cd_array(dates: DatesType | None, offset: int = 0):
+    def cd_array(dates: intDates | None, offset: int = 0):
         """Shift the natural date index of the sequence; the elements must be 'TradeDate' or natural dates that can be 'int'."""
         if dates is None:
             return np.array([], dtype=np.int64)
@@ -237,7 +235,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return cd_arr
 
     @staticmethod
-    def td_diff(date1 : DateType, date2 : DateType) -> int | Any:
+    def td_diff(date1 : intDate, date2 : intDate) -> int | Any:
         """The difference in trading date index between two dates."""
         try:
             i1 = BC.pos_cd(get_cd(date1))
@@ -249,7 +247,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return diff
 
     @staticmethod
-    def cd_diff(date1 : DateType, date2 : DateType) -> int | Any:
+    def cd_diff(date1 : intDate, date2 : intDate) -> int | Any:
         """The difference in natural date index between two dates"""
         try:
             i1 = BC.pos_cd(get_cd(date1))
@@ -260,31 +258,31 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return diff
 
     @classmethod
-    def td_diff_array(cls, date1_arr : DatesType, date2_arr : DatesType) -> int | Any:
+    def td_diff_array(cls, date1_arr : intDates, date2_arr : intDates) -> int | Any:
         """The difference of two arrays of trading date."""
         p1 = BC.pos_cd_array(get_cds(date1_arr))
         p2 = BC.pos_cd_array(get_cds(date2_arr))
         return BC._td_index[p1] - BC._td_index[p2]
 
     @classmethod
-    def cd_diff_array(cls, date1_arr : DatesType, date2_arr : DatesType) -> int | Any:
+    def cd_diff_array(cls, date1_arr : intDates, date2_arr : intDates) -> int | Any:
         """The difference of two arrays of natural dates."""
         p1 = BC.pos_cd_array(get_cds(date1_arr))
         p2 = BC.pos_cd_array(get_cds(date2_arr))
         return BC._cd_index[p1] - BC._cd_index[p2]
 
     @staticmethod
-    def td_trailing(date : DateType, n: int):
+    def td_trailing(date : intDate, n: int):
         """The last 'n' trading days before 'date' (sorted slice)."""
         return np.sort(BC.td_trailing_np(get_td(date), n)).astype(int)
 
     @staticmethod
-    def cd_trailing(date : DateType, n: int):
+    def cd_trailing(date : intDate, n: int):
         """The last 'n' natural days before 'date' (sorted slice)."""
         return np.sort(BC.cd_trailing_np(get_cd(date), n)).astype(int)
 
     @classmethod
-    def as_start_date(cls, date: DateTypeWithNone) -> int:
+    def as_start_date(cls, date: intDateNone) -> int:
         """clear the start date of input date (None -> 19900101, negative -> relative to today)"""
         date_dt = 19900101 if date is None else get_cd(date)
         #if date_dt < 0:
@@ -292,7 +290,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return date_dt
 
     @classmethod
-    def as_end_date(cls, date: DateTypeWithNone) -> int:
+    def as_end_date(cls, date: intDateNone) -> int:
         """clear the end date of input date (None -> 99991231, negative -> relative to today)"""
         date = 99991231 if date is None else get_cd(date)
         if date < 0:
@@ -301,9 +299,9 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def range(
-        cls, start: DateTypeWithNone, end: DateTypeWithNone , type : Literal['td', 'cd'] = 'td' ,
+        cls, start: intDateNone, end: intDateNone , type : Literal['td', 'cd'] = 'td' ,
         step: int = 1 , until_today=True, updated=False,
-        slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None,
+        slice: tuple[intDateNone, intDateNone] | None = None,
     ) -> np.ndarray[int, Any]:
         """return the range of dates between start and end"""
         cal = BC._trade_calendar if type == 'td' else BC._cds
@@ -318,9 +316,9 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return dates
 
     @classmethod
-    def range_segments(cls, start: DateTypeWithNone, end: DateTypeWithNone , type : Literal['td', 'cd'] = 'td' , 
+    def range_segments(cls, start: intDateNone, end: intDateNone , type : Literal['td', 'cd'] = 'td' , 
                        step: int = 1 , until_today=True, updated=False,
-                       slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None) -> list[tuple[int,int]]:
+                       slice: tuple[intDateNone, intDateNone] | None = None) -> list[tuple[int,int]]:
         """return the range of dates between start and end"""
         dates = cls.range(start, end, type, step=step , until_today=until_today, updated=updated, slice=slice)
         if len(dates) == 0:
@@ -332,18 +330,18 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def td_within(
-        cls, start: DateTypeWithNone = None, end: DateTypeWithNone = None,
+        cls, start: intDateNone = None, end: intDateNone = None,
         step: int = 1, until_today=True, updated=False,
-        slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None,
+        slice: tuple[intDateNone, intDateNone] | None = None,
     ) -> np.ndarray[int, Any]:
         """All trading days within the interval; can be truncated to today, data update date, step and secondary 'slice'."""
         return cls.range(start, end, 'td', step=step, until_today=until_today, updated=updated, slice=slice)
 
     @classmethod
     def cd_within(
-        cls, start: DateTypeWithNone = None, end: DateTypeWithNone = None,
+        cls, start: intDateNone = None, end: intDateNone = None,
         step: int = 1, until_today=True, updated=False,
-        slice: tuple[DateTypeWithNone, DateTypeWithNone] | None = None,
+        slice: tuple[intDateNone, intDateNone] | None = None,
     ) -> np.ndarray[int, Any]:
         """All natural days within the interval; can be truncated to today, data update date, step."""
         return cls.range(start, end, 'cd', step=step, until_today=until_today, updated=updated, slice=slice)
@@ -370,7 +368,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return Dates(np.setdiff1d(target_dates, source_dates))
 
     @classmethod
-    def td_filter(cls, dates: DatesType):
+    def td_filter(cls, dates: intDates):
         """filter the trading dates in a date list."""
         cds = get_cds(dates)
         tds = cls.range(min(cds), max(cds), 'td')
@@ -388,7 +386,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def td_start_end(
-        cls , reference_date : DateType,
+        cls , reference_date : intDate,
         period_num: int = 1, freq: Literal["d", "w", "m", "q", "y"] | str = "m", lag_num: int = 0,
     ):
         """Calculate the start and end date of a trading date interval based on the approximate trading date length (d/w/m/q/y) from the reference date."""
@@ -399,7 +397,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def cd_start_end(
-        cls, reference_date : DateType,
+        cls, reference_date : intDate,
         period_num: int = 1, freq: Literal["d", "w", "m", "q", "y"] | str = "m", lag_num: int = 0,
     ):
         """Calculate the start and end date of a natural date interval based on the approximate natural date length (d/w/m/q/y) from the reference date."""
@@ -420,12 +418,12 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return start, end
 
     @staticmethod
-    def as_trade_date(date: DateType):
+    def as_trade_date(date: intDate):
         """Convert a natural date to a trading date."""
         return TradeDate(date)
 
     @staticmethod
-    def is_trade_date(date: DateType):
+    def is_trade_date(date: intDate):
         """Whether the date is a trading day; 'int(TradeDate)' is 'td', participate in the judgment."""
         return True if isinstance(date, TradeDate) else BC.is_trade_cd(date)
 
@@ -435,7 +433,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return BC._trade_calendar.copy()
 
     @classmethod
-    def slice(cls, dates: DatesType, start: DateTypeWithNone = None, end: DateTypeWithNone = None, year: int | None = None) -> np.ndarray:
+    def slice(cls, dates: intDates, start: intDateNone = None, end: intDateNone = None, year: int | None = None) -> np.ndarray:
         """Filter the date sequence based on 'start', 'end' and 'year'."""
         dates = get_cds(dates)
         dates = dates[(dates >= cls.as_start_date(start)) & (dates <= cls.as_end_date(end))]
@@ -452,40 +450,40 @@ class CALENDAR(metaclass=NoInstanceMeta):
             return date
 
     @classmethod
-    def year_end(cls, date: DateType):
+    def year_end(cls, date: intDate):
         """The last day of the year (December 31) of the year the date is in ('YYYYMMDD')."""
         return get_td(date) // 10000 * 10000 + 1231
 
     @classmethod
-    def year_start(cls, date: DateType):
+    def year_start(cls, date: intDate):
         """The first day of the year (January 1) of the year the date is in ('YYYYMMDD')."""
         return get_td(date) // 10000 * 10000 + 101
 
     @classmethod
-    def quarter_end(cls, date: DateType):
+    def quarter_end(cls, date: intDate):
         """The last day of the quarter."""
         cls.ensure_period_ends()
         return cls._QE[cls._QE >= get_td(date)][0]
 
     @classmethod
-    def quarter_start(cls, date: DateType):
+    def quarter_start(cls, date: intDate):
         """The first day of the quarter."""
         td = get_td(date)
         return td // 10000 * 10000 + (td % 10000 // 100 / 3).__floor__() * 300 + 101
 
     @classmethod
-    def month_end(cls, date: DateType):
+    def month_end(cls, date: intDate):
         """The last day of the month."""
         cls.ensure_period_ends()
         return cls._ME[cls._ME >= get_td(date)][0]
 
     @classmethod
-    def month_start(cls, date: DateType):
+    def month_start(cls, date: intDate):
         """The first day of the month."""
         return get_td(date) // 100 * 100 + 1
 
     @classmethod
-    def qe_trailing(cls, date: DateType, n_past=1, n_future=0, another_date: DateTypeWithNone = None, year_only=False):
+    def qe_trailing(cls, date: intDate, n_past=1, n_future=0, another_date: intDateNone = None, year_only=False):
         """
         Calculate the trailing quarter ends (or year ends) around 'date' and 'another_date'; optionally calculate the future 'n_future' quarter ends.
         
@@ -508,7 +506,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return np.concatenate([before, between, after])
 
     @classmethod
-    def qe_within(cls, start : DateType, end : DateType, year_only : bool = False):
+    def qe_within(cls, start : intDate, end : intDate, year_only : bool = False):
         """The set of quarter ends (or year ends) within the interval. optionally can only include year ends."""
         cls.ensure_period_ends()
         if year_only:
@@ -516,7 +514,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return cls._QE[(cls._QE >= get_td(start)) & (cls._QE <= get_td(end))]
 
     @classmethod
-    def qe_interpolate(cls, incomplete_qtr_ends: DatesType):
+    def qe_interpolate(cls, incomplete_qtr_ends: intDates):
         """Expand the minimum and maximum range of several quarter ends to a complete quarter end sequence."""
         qes = get_cds(incomplete_qtr_ends)
         if len(qes) == 0:
@@ -524,7 +522,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return cls.qe_within(min(qes), max(qes))
 
     @classmethod
-    def check_rollback_date(cls, rollback_date: DateTypeWithNone, max_rollback_days: int = 10):
+    def check_rollback_date(cls, rollback_date: intDateNone, max_rollback_days: int = 10):
         """Assert that 'rollback_date' is not earlier than max_rollback_days days before the updated date."""
         if rollback_date is None:
             return

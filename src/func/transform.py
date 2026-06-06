@@ -6,7 +6,6 @@ import statsmodels.api as sm
 import warnings
 
 from typing import Any , Literal
-from scipy.stats import norm, rankdata
 from scipy.linalg import lstsq
 
 from .basic import alert_message , DIV_TOL
@@ -83,93 +82,6 @@ def norm_to_1(x: np.ndarray , value : float = 1.):
             return (x - np.nanmin(x)) / (np.nanmax(x) - np.nanmin(x)) * value
     else:
         return np.zeros_like(x)
-
-def rank(x: np.ndarray, is_zscore=True, is_norm_inv=False):
-    """Dense rank with optional z-score or normal-inverse transform.
-
-    Args:
-        x_: Input; NaNs imputed with ``nanmedian`` for ranking when possible.
-        is_zscore: If True and not ``is_norm_inv``, z-score the dense ranks.
-        is_norm_inv: If True, map ranks through normal PPF and re-standardize.
-
-    Returns:
-        Transformed 1-D array, or all-NaN if ranking fails after imputation.
-    """
-    x = x.copy()
-    nan_flg = np.isnan(x)
-    if nan_flg.any():
-        x[nan_flg] = np.nanmedian(x)
-    if not np.isnan(x).any():
-        rtn = rankdata(x, method='dense')
-        if is_zscore and not is_norm_inv:
-            rtn = (rtn - rtn.mean()) / rtn.std()
-        if is_norm_inv:
-            rtn = rtn / (1 + np.max(rtn))
-            rtn = norm.ppf(rtn)
-            rtn_std = rtn.std()
-            if rtn_std <= 0.0:
-                rtn = np.zeros_like(rtn)  # 0.0 is the mean, mode, median of a norm distribution
-            else:
-                rtn = rtn / rtn_std
-    else:
-        rtn = np.full_like(x, np.nan)
-    return rtn
-
-def rank_in_category(x: list[np.ndarray], category: np.ndarray):
-    """Rank each array in ``x`` within ``category`` groups.
-
-    Args:
-        x: List of 1-D arrays aligned with ``category``.
-        category: Category labels, same length as each ``x[i]``.
-
-    Returns:
-        List of arrays with group-wise ``rank(..., True, True)``; singleton groups get 0.0.
-    """
-    cate_list = list(np.unique(category))
-    rtn = list()
-    for i in range(len(x)):
-        rtn.append(np.zeros_like(category) * np.nan)
-    for cate in cate_list:
-        fl = category == cate
-        for i in range(len(x)):
-            tmp = x[i][fl]
-            if tmp.shape[0] == 1:
-                rtn[i][fl] = 0.0
-            else:
-                rtn[i][fl] = rank(tmp, True, True)
-    return rtn
-
-def norm_inv(x: np.ndarray):
-    """Apply ``scipy.stats.norm.ppf`` elementwise (open interval (0,1)).
-
-    Args:
-        x_: Strictly in ``(0, 1)``; empty array returns zeros.
-
-    Returns:
-        Normal inverse-CDF values.
-
-    Raises:
-        AssertionError: If any value is outside ``(0, 1)``.
-    """
-    if len(x) == 0: 
-        return x * 0.0
-    assert (x > 0).all() , x.min()
-    assert (x < 1).all() , x.max()
-    rtn = norm.ppf(x)
-    return rtn
-
-def zscore(x: np.ndarray):
-    """Cross-sectional z-score: subtract ``nanmean``, divide by ``nanstd + DIV_TOL``.
-
-    Args:
-        x_: 1-D array.
-
-    Returns:
-        Z-scored array.
-    """
-    u = np.nanmean(x)
-    d = np.nanstd(x) + DIV_TOL
-    return (x - u) / d
 
 def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.05):
     """Clip a 1-D series to percentile bounds.
@@ -347,7 +259,7 @@ def weighted_mean(v , weight = None):
     else:
         return np.nanmean(v , axis = None)
 
-def whiten(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
+def standard_normal(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
     """Subtract weighted mean and divide by global nan std (with ``DIV_TOL`` for non-array path).
 
     Args:
@@ -441,7 +353,7 @@ def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','med
     Returns:
         Processed ``pd.Series``.
     """
-    v = whiten(winsorize(v) , whiten_weight)
+    v = standard_normal(winsorize(v) , whiten_weight)
     if fillna in ['max' , 'min' , 'median' , 'mean']:
         if group is not None:
             fillv = v.to_frame(name='value').join(group).groupby('indus').transform(fillna)['value']
@@ -549,7 +461,7 @@ def lm_resid(y , x : np.ndarray | pd.Series | pd.DataFrame | None , weight : Any
         y_hat = model.predict(sm.add_constant(x))
     resid = y - y_hat
     if normalize:
-        resid = whiten(winsorize(resid))
+        resid = standard_normal(winsorize(resid))
     return resid
 
 def shrink_cov(X : np.ndarray , min_periods : int | None = None , corr = False):

@@ -5,7 +5,7 @@ from typing import Callable , Any , Iterable , Union, Iterator
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.proj import BaseClass
+from src.proj import Base
 
 ProxyCallerInput = Union[Callable[..., bool | Exception] , tuple[str, Callable[..., bool | Exception]] , tuple[Callable[..., bool | Exception], str] , 'ProxyCaller']
 
@@ -92,7 +92,7 @@ class ProxyCaller:
                 assert isinstance(input , Callable) , f"single input should be a callable, but got {input}"
                 return cls(input , pool = pool)
 
-class ProxyCallerList(BaseClass.BoundLogger):
+class ProxyCallerList(Base.BoundLogger):
     """A list of proxy callers"""
     fallback_interval = 1.0
     

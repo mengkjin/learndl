@@ -8,7 +8,7 @@ from datetime import datetime , timedelta
 from functools import cached_property
 from typing import Any , Generator , Literal
 
-from src.proj import CALENDAR , Const , BaseMeta , BaseClass
+from src.proj import CALENDAR , Const , Base
 from src.proj.util.functional.parallel import parallel
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
 from src.data import DATAVENDOR
@@ -26,7 +26,7 @@ CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 MAX_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/max_workers')
 MIN_PROCESS_NUM = Const.Factor.UPDATE.get(f'update_groups_multiprocessing/min_workers')
 
-class BaseFactorUpdater(BaseClass.BoundLogger , metaclass=BaseMeta.Singleton):
+class BaseFactorUpdater(Base.BoundLogger , metaclass=Base.Singleton):
     """manager of factor update jobs"""
     update_type : Literal['stock' , 'pooling' , 'affiliate' , 'market' , 'stats']
 

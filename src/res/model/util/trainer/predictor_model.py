@@ -81,6 +81,16 @@ class PredictorModel(TrainerPipeline):
     @cached_property
     def current_model_file(self):
         return ModelFile(None)
+    @property
+    def param_has_nan(self) -> bool:
+        if self.net is None:
+            return False
+        return any(param.isnan().any() for param in self.net.parameters())
+    @property
+    def grad_has_nan(self) -> bool:
+        if self.net is None:
+            return False
+        return any(param.grad is not None and param.grad.isnan().any() for param in self.net.parameters())
 
     def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         """call when fitting/testing new model"""

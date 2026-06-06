@@ -30,7 +30,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any , Literal , Type , Callable , TypeVar
 
-from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
+from src.proj import PATH , CALENDAR , DB , Base , Save , Load
 from src.proj.util.functional.handler import retry_call
 from .core import TS
 
@@ -64,7 +64,7 @@ class TushareFetcherMeta(ABCMeta):
 
         return new_cls
 
-class TushareIterateFetcher(BaseClass.BoundLogger):
+class TushareIterateFetcher(Base.BoundLogger):
     """
     Paginated Tushare API fetcher with breakpoint/resume support.
 
@@ -164,7 +164,7 @@ class TushareIterateFetcher(BaseClass.BoundLogger):
         if not self.breakpoint:
             return
         for offset , df in datas.items():
-            DB.save_df(df , self.breakpoint_path.joinpath(f'bkpt.{offset}.feather'))
+            Save.df(df , self.breakpoint_path.joinpath(f'bkpt.{offset}.feather'))
         metadata = {
             'save_time' : CALENDAR.now().timestamp(),
             'next_offset' : next_offset,
@@ -183,7 +183,7 @@ class TushareIterateFetcher(BaseClass.BoundLogger):
                 dfs = {}
                 for bkpt in metadata['breakpoints']:
                     p = self.breakpoint_path.joinpath(f'bkpt.{bkpt}.feather')
-                    dfs[int(bkpt)] = DB.load_df(p)
+                    dfs[int(bkpt)] = Load.df(p)
                 self.logger.success(f'Loaded {self} from {self.breakpoint_path} , next_offset={metadata['next_offset']}')
                 return metadata['next_offset'] , dfs
             except Exception as e:
@@ -222,7 +222,7 @@ class TushareIterateFetcher(BaseClass.BoundLogger):
         else:
             return pd.DataFrame()
 
-class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
+class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""
     START_DATE  : int = 19970101
     DB_TYPE     : Literal['info' , 'time_series' , 'date' , 'fina' , 'rolling' , 'fundport' , ''] = ''
@@ -409,7 +409,7 @@ class TushareFetcher(BaseClass.BoundLogger , metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
-        self.logger.success(f'Fetched for {Dates(updated_dates)}' , add_prefix = True)
+        self.logger.success(f'Fetched for {Base.Dates(updated_dates)}' , add_prefix = True)
 
     def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> pd.DataFrame:
         """fetch from tushare with threading lock"""

@@ -11,7 +11,7 @@ from collections import defaultdict
 from typing import Literal , Any , Iterable
 
 
-from src.proj import CALENDAR , Dates , MACHINE , BaseClass
+from src.proj import CALENDAR , MACHINE , Base
 from src.proj.util.web.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.web.proxy.caller import ProxyCallerList
 from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool
@@ -23,7 +23,7 @@ from .util import CrawlerLogger
 
 __all__ = ["AnnouncementAgent"]
 
-class AnnouncementAgent(BaseClass.BoundLogger):
+class AnnouncementAgent(Base.BoundLogger):
     """
     Crawl and incrementally update exchange announcement metadata.
 
@@ -73,9 +73,9 @@ class AnnouncementAgent(BaseClass.BoundLogger):
         if status == 'skipping':
             cls.logger.skipping(f'Announcements have already been updated recently' , idt = 1)
         elif status == 'success':
-            cls.logger.success(f'Announcements updated at {Dates(end)}' , idt = 1)
+            cls.logger.success(f'Announcements updated at {Base.Dates(end)}' , idt = 1)
         else:
-            cls.logger.alert1(f'Announcements update at {Dates(end)} failed' , idt = 1)
+            cls.logger.alert1(f'Announcements update at {Base.Dates(end)} failed' , idt = 1)
 
     @classmethod
     def prepare_proxies(cls):

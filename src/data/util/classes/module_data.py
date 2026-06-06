@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from functools import partial, cached_property
 from typing import Any, Literal
 
-from src.proj import CALENDAR , BaseClass , Logger , BaseProperty
+from src.proj import CALENDAR , Base , Logger
 
 from .data_block import DataBlock, DataBlockNorm, data_type_abbr
 from .special_dataset import SpecialDataSet
@@ -75,7 +75,7 @@ class ModuleDataConfig:
         if isinstance(dtype, str):
             return getattr(torch, dtype)
         return dtype
-class ModuleData(BaseClass.BoundLogger):
+class ModuleData(Base.BoundLogger):
     """
     Orchestrator for multi-block model input data.
 
@@ -189,7 +189,7 @@ class ModuleData(BaseClass.BoundLogger):
     @property
     def shape(self):
         """Shape summary across x, y, secid, and date."""
-        return BaseProperty.shape(self, ["x", "y", "secid", "date"])
+        return Base.shape(self, ["x", "y", "secid", "date"])
 
     @property
     def secid(self):

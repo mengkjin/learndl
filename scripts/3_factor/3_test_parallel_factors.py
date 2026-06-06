@@ -103,7 +103,7 @@ def _collect_jobs_force(date: int, factors: list[str], overwrite: bool) -> int:
     """
     Append one job per factor for ``date`` (ignores ``target_dates``).
 
-    Use only when calendar says the day is valid but the updater would skip jobs.
+    Use only when calendar says the day is effective but the updater would skip jobs.
     """
     stock = FactorCalculatorAPI.Stock
     stock.jobs.clear()

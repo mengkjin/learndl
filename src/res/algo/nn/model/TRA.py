@@ -172,11 +172,11 @@ def shoot_infs(inp_tensor):
     Used to stabilize the Sinkhorn normalization; prevents ``exp(inf/eps)``
     from producing NaN during the iterative row/column normalization.
     """
-    valid = torch.isfinite(inp_tensor)
+    effective = torch.isfinite(inp_tensor)
 
-    if ~valid.all():
-        m = torch.max(inp_tensor[valid])
-        inp_tensor[~valid] = m
+    if ~effective.all():
+        m = torch.max(inp_tensor[effective])
+        inp_tensor[~effective] = m
 
     return inp_tensor
 

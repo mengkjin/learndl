@@ -298,13 +298,13 @@ def rankic_2d(x : torch.Tensor, y : torch.Tensor , dim = 1 , universe = None , m
     Returns:
         Rank IC tensor with insufficient-coverage entries set to NaN.
     """
-    valid = ~y.isnan()
+    effective = ~y.isnan()
     if universe is not None: 
-        valid *= universe.nan_to_num(False)
-    x = torch.where(valid , x , torch.nan)
+        effective *= universe.nan_to_num(False)
+    x = torch.where(effective , x , torch.nan)
 
     coverage = (~x.isnan()).sum(dim=dim)
     x = rank_pct(x , dim = dim)
     y = rank_pct(y , dim = dim)
     ic = ic_2d(x , y , dim=dim)
-    return ic if ic is None else torch.where(coverage < min_coverage * valid.sum(dim=dim) , torch.nan , ic)
+    return ic if ic is None else torch.where(coverage < min_coverage * effective.sum(dim=dim) , torch.nan , ic)

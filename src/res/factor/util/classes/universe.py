@@ -5,7 +5,7 @@ import numpy as np
 from typing import Literal
 
 from src.data import DATAVENDOR , DataBlock
-from src.proj import DB , CALENDAR
+from src.proj import DB , CALENDAR , Save , Load
 from .portfolio import Portfolio # , Port
 from .benchmark import Benchmark
 
@@ -61,7 +61,7 @@ class Universe:
     def get_universe_df(self , date : int) -> pd.DataFrame:
         path = DB.path('universe' , self.name , date)
         if path.exists():
-            df = DB.load_df(path)
+            df = Load.df(path)
         else:
             desc = DATAVENDOR.INFO.get_desc()
             secid = desc.index
@@ -83,7 +83,7 @@ class Universe:
  
         df_new = UniverseExclusions.append_exclusions(df , date)
         if len(df.columns) != len(df_new.columns):
-            DB.save_df(df_new , path)
+            Save.df(df_new , path)
         return df
     
     def get(self , date : Literal['all'] | int | list[int] | np.ndarray | None = None , exclusions : str = 'st_lowprice_bse_loser_warnst') -> Portfolio:
@@ -200,13 +200,13 @@ class UniverseExclusions:
         
         dates = CALENDAR.range(start_date , date , 'cd')
         paths = [path for ex in ['bse','szse','sse'] for path in [DB.path('crawler' , f'announcement_{ex}' , date) for date in dates]]
-        df = DB.load_df(paths , key_column = None)
+        df = Load.df(paths , key_column = None)
         if df.empty:
             return np.array([])
         pats = [r"可能.*(?:风险警示)",r"可能.*(?:退市)"]
         cond = pd.concat([df["title"].str.contains(pat, regex=True, na=False) for pat in pats] , axis = 1).any(axis = 1)
         df = df.loc[cond].loc[:,['sec_name','secid','title','date']].sort_values(by = 'secid')
-        DB.save_df(df , DB.path('exposure' , f'warns_st_and_delist_{window}' , date))
+        Save.df(df , DB.path('exposure' , f'warns_st_and_delist_{window}' , date))
         return df['secid'].unique()
 
 

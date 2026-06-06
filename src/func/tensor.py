@@ -85,8 +85,8 @@ class TsRoller:
             pad = tuple([0] * (x.ndim - dim - 1) * 2 + [d-1,0])
             x = F.pad(x , pad , value = nan)
         unfold = x.unfold(dim,d,1)
-        valid = unfold.sum(dim = -1 , keepdim = True).isfinite()
-        return unfold.nan_to_num(nan,pinf,ninf).where(valid , torch.nan)
+        effective = unfold.sum(dim = -1 , keepdim = True).isfinite()
+        return unfold.nan_to_num(nan,pinf,ninf).where(effective , torch.nan)
     
     @classmethod
     def fold(cls ,z : Tensor , d : int , * , dim : int = 1 , **kwargs):
@@ -360,7 +360,7 @@ def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : Te
         x: 2-D tensor.
         y: 2-D tensor, same shape as ``x``.
         dim: Axis for rank and correlation.
-        universe: Optional boolean mask for valid observations.
+        universe: Optional boolean mask for effective observations.
         min_coverage: Mask correlation to NaN where coverage is below this fraction.
 
     Returns:
@@ -370,12 +370,12 @@ def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : Te
         AssertionError: If not both 2-D.
     """
     assert x.ndim == y.ndim == 2 , (x.shape , y.shape)
-    valid = ~y.isnan()
+    effective = ~y.isnan()
     if universe is not None: 
-        valid *= universe.nan_to_num(0).to(torch.bool)
-    x = torch.where(valid , x , nan)
+        effective *= universe.nan_to_num(0).to(torch.bool)
+    x = torch.where(effective , x , nan)
 
-    coverage = (~x.isnan()).sum(dim=dim) / valid.sum(dim=dim)
+    coverage = (~x.isnan()).sum(dim=dim) / effective.sum(dim=dim)
     x = rank_pct(x , dim = dim)
     y = rank_pct(y , dim = dim)
     ic = corrwith(x , y , dim=dim)

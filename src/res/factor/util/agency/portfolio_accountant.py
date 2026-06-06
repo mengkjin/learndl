@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import CALENDAR , DB , Dates , Const , BaseClass , BaseType
+from src.proj import CALENDAR , DB , Const , Base , Save , Load
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
@@ -259,13 +259,13 @@ class PortfolioAccount:
             account.loc[date , 'attribution'] = v #type:ignore
         return cls(account.reset_index(drop = False) , index = index)
 
-    def save(self , path : BaseType.strPath | None = None , vb_level : Any = 1 , indent : int = 0):
+    def save(self , path : Base.types.strPath | None = None , vb_level : Any = 1 , indent : int = 0 , async_save = True):
         if path is None or self.empty:
             return self
         path = Path(path)
         if path.suffix == '.pkl':
             raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
-            self.df.to_pickle(path)
+            # self.df.to_pickle(path)
         else:
             account_dfs = self.to_dfs()
             meta = {
@@ -273,11 +273,13 @@ class PortfolioAccount:
                 'last_model_date' : self.max_model_date ,
                 'last_end_date' : self.max_end_date ,
             }
-            DB.save_dfs_to_tar(account_dfs , path , meta = meta , prefix = 'Account' , indent = indent , vb_level = vb_level)
+            Save.dfs(
+                account_dfs , path , async_save = async_save , meta = meta , 
+                prefix = 'Account' , indent = indent , vb_level = vb_level)
         return self
 
     @classmethod
-    def load(cls , path : BaseType.strPath | None = None) -> PortfolioAccount:
+    def load(cls , path : Base.types.strPath | None = None) -> PortfolioAccount:
         """load portfolio account from a path (a tar file or a pickle (disabled now) file)"""
         if path is None:
             return cls()
@@ -287,15 +289,15 @@ class PortfolioAccount:
         if path.suffix == '.pkl':
             raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
             # account = cls(pd.read_pickle(path))
-        elif path.name.endswith(tuple(DB.tar_suffixes)):
-            account = cls.from_dfs(DB.load_dfs_from_tar(path))
+        elif path.name.endswith(tuple(DB.TAR_SUFFIXES)):
+            account = cls.from_dfs(Load.dfs(path))
         else:
             raise ValueError(f'{path} is not a pkl or tar file')
         return account
 
     @classmethod
-    def load_meta(cls , path : BaseType.strPath) -> dict[str, Any]:
-        return DB.load_tar_meta(path)
+    def load_meta(cls , path : Base.types.strPath) -> dict[str, Any]:
+        return Load.tar_meta(path)
 
     @property
     def empty(self):
@@ -369,7 +371,7 @@ class PortfolioAccount:
             return pd.DataFrame()
         return pd.concat({name : account.eval_period_ret() for name , account in accounts.items()}, axis = 1)
 
-class PortfolioAccountant(BaseClass.BoundLogger):
+class PortfolioAccountant(Base.BoundLogger):
     """
     portfolio accountant for a portfolio , one portfolio has only one accountant
     portfolio : Portfolio
@@ -407,7 +409,7 @@ class PortfolioAccountant(BaseClass.BoundLogger):
         return self.portfolio.available_dates()
 
     @cached_property
-    def resume_path(self) -> BaseType.strPath | None:
+    def resume_path(self) -> Base.types.strPath | None:
         return None
 
     def accounting(
@@ -416,7 +418,7 @@ class PortfolioAccountant(BaseClass.BoundLogger):
         start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
         trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
         daily = False , cache = False , with_index : dict[str,Any] | None = None ,
-        resume_path : BaseType.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+        resume_path : Base.types.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
     ):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
@@ -441,7 +443,7 @@ class PortfolioAccountant(BaseClass.BoundLogger):
 
             if not self.resumed_account.empty:
                 self.logger.success(
-                    f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
+                    f'Load Account from {self.resume_path} at {Base.Dates(self.resumed_account.model_date)}' , 
                     idt = 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
@@ -489,7 +491,7 @@ class PortfolioAccountant(BaseClass.BoundLogger):
             'analytic':None , 'attribution':None}).set_index('model_date')
 
         port_old = Port.none_port(model_dates[0])
-        self.logger.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}')
+        self.logger.stdout(f'{self.config.name} has {len(df)} account dates at {Base.Dates([period_st[0] , period_ed[-1]])}')
         for i , (mdate , ed) in enumerate(zip(model_dates , period_ed)):
             port_new = self.portfolio.get(mdate) if self.portfolio.has(mdate) else port_old
             bench = self.benchmark.get(mdate , True)
@@ -545,11 +547,11 @@ class PortfolioAccountant(BaseClass.BoundLogger):
         rets['overnight_vwap'] = overnight_vwap
         return rets
 
-class PortfolioAccountManager(BaseClass.BoundLogger):
+class PortfolioAccountManager(Base.BoundLogger):
     """
     Manage portfolio accounts in a directory.
     """
-    def __init__(self , account_dir : BaseType.strPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , account_dir : Base.types.strPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.account_dir = Path(account_dir)
         self.account_dir.mkdir(exist_ok=True)
@@ -573,8 +575,8 @@ class PortfolioAccountManager(BaseClass.BoundLogger):
     @cached_property
     def account_paths(self):
         account_paths = {path.stem:path for path in self.account_dir.iterdir()}
-        assert all(path.name.endswith(tuple(DB.tar_suffixes)) for path in account_paths.values()), \
-            f'{self.account_dir} contains non-tar files : {list(set(path.name for path in self.account_dir.iterdir()) - set(DB.tar_suffixes))}'
+        assert all(path.name.endswith(tuple(DB.TAR_SUFFIXES)) for path in account_paths.values()), \
+            f'{self.account_dir} contains non-tar files : {list(set(path.name for path in self.account_dir.iterdir()) - set(DB.TAR_SUFFIXES))}'
         return account_paths
 
     def load_dir_metas(self):
@@ -613,7 +615,7 @@ class PortfolioAccountManager(BaseClass.BoundLogger):
         self.accounts.clear()
         return self
     
-    def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : Any = 1):
+    def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : Any = 1 , async_save = True):
         if fmp_names is None: 
             fmp_names = list(self.accounts.keys())
         fmp_paths = {name:self.account_dir.joinpath(f'{name}.tar') for name in fmp_names}
@@ -621,7 +623,7 @@ class PortfolioAccountManager(BaseClass.BoundLogger):
             existed = [path for path in fmp_paths.values() if path.exists()]
             assert not existed , f'Existed paths : {existed}'
         for name in fmp_names:
-            self.accounts[name].save(fmp_paths[name] , indent = indent , vb_level = vb_level)
+            self.accounts[name].save(fmp_paths[name] , indent = indent , vb_level = vb_level , async_save = async_save)
         return self
     
     def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):

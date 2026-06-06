@@ -6,11 +6,11 @@ from functools import wraps
 from typing import Any , Literal, Callable
 import pandas as pd
 
-from src.proj import BaseClass
+from src.proj import Base
 from src.res.gp.func import primas
 from .memory import MemoryManager
 
-class AccTimer(BaseClass.BoundLogger):
+class AccTimer(Base.BoundLogger):
     def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , * , 
         indent : int = 1 , vb_level : Any = 2 , memory_check = False , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -70,7 +70,7 @@ class AccTimer(BaseClass.BoundLogger):
                 return func(*args , **kwargs)
         return wrapper
 
-class gpTimer(BaseClass.BoundLogger):
+class gpTimer(Base.BoundLogger):
     """
     ------------------------ gp timers ------------------------
     includes:
@@ -119,7 +119,7 @@ class gpTimer(BaseClass.BoundLogger):
         
         df = pd.DataFrame(times, columns=['category' , 'name', 'total_time', 'avg_time', 'count'])
         display_kwargs : dict[str, Any] = {'display.float_format': '{:.4f}'.format}
-        self.logger.display(df , caption = 'Timer Table:' , **display_kwargs)
+        self.logger.display(df , title = 'Timer Table:' , **display_kwargs)
         return df
 
     def decorate_primas(self):

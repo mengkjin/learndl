@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal , Any
-from src.proj import CALENDAR , DB , Dates
+from src.proj import CALENDAR , DB , Base , Load
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -29,11 +29,11 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
             self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
             stored_dates = np.array([])
         elif update_type == 'update':
-            stored_df = DB.load_df(DB.path(self.DB_SRC , self.DB_KEY))
+            stored_df = Load.df(DB.path(self.DB_SRC , self.DB_KEY))
             stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
         elif update_type == 'rollback':
             rollback_date = CALENDAR.td(self._rollback_date)
-            stored_df = DB.load_df(DB.path(self.DB_SRC , self.DB_KEY))
+            stored_df = Load.df(DB.path(self.DB_SRC , self.DB_KEY))
             stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
             stored_dates = CALENDAR.slice(stored_dates , 0 , rollback_date - 1)
         else:
@@ -52,7 +52,7 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
 
         self.append_result(pd.concat(new_dfs))
 
-        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , idt = 1 , vb = 1)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int):
         """Compute and append market risk features for a single ``date``."""

@@ -8,7 +8,7 @@ from torch import Tensor
 from typing import Any , Callable , Literal
 from pathlib import Path
 
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import Save
 from src.res.model.util.core import epoch_key , attempt_key
 
 from .aggregator import MetricAggregator , AggregatorType
@@ -384,4 +384,4 @@ class ModelMetrics(AggregatedMetrics):
         export_path = export_path.joinpath(f'model.{self.key["model_num"]}.{self.key["model_date"]}.xlsx')
         assert export_path.suffix == '.xlsx' , f'{export_path} is not a valid excel file'
         dfs = {name:self.get_table(name).reset_index(drop = False).drop(columns = ['stage' , 'model_date' , 'model_num' , 'submodel']) for name in self.tables}
-        AsyncSaver.dfs(dfs , export_path)
+        Save.dfs(dfs , export_path , async_save = True)

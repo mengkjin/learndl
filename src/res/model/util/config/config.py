@@ -15,7 +15,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Type
 
-from src.proj import PATH, MACHINE, Const, Proj , BaseClass , BaseType
+from src.proj import PATH, MACHINE, Const, Proj , Base
 from src.proj.util.functional.device import Device
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
@@ -24,7 +24,7 @@ from src.res.model.util.core import ModelPath , model_module_type, is_null_modul
 
 __all__ = ['ModelConfig']
 
-def get_config_dict(input: dict | Path | list[Path] | BaseClass.FlattenDict | None) -> BaseClass.FlattenDict:
+def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -> Base.FlattenDict:
     """
     get flattened config dict from input
     keep nested keys if they are in the input or are not all lowercase
@@ -33,12 +33,12 @@ def get_config_dict(input: dict | Path | list[Path] | BaseClass.FlattenDict | No
         exclude_keys = ('input.sequence.lens' , 'input.sequence.steps' , 'input.factor.types' ,
                         'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses')
         return (k.endswith(exclude_keys) or not k.islower())
-    if isinstance(input, BaseClass.FlattenDict):
+    if isinstance(input, Base.FlattenDict):
         return input
     else:
-        return BaseClass.FlattenDict.from_input(input , keep_nested = keep_nested)
+        return Base.FlattenDict.from_input(input , keep_nested = keep_nested)
 
-class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
+class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
     """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
     def __init__(self, base_path: ModelPath | None = None, schedule_name: str | None = None, model_name: Any | None = None , * , indent: int = 1 , vb_level: Any = 2, **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -58,7 +58,7 @@ class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def get(self, key: str, default: Any = None) -> Any:
         return self.Param.get(key, default)
 
-    def get_config_dict(self , base_path: ModelPath | None, schedule_name: str | None) -> BaseClass.FlattenDict:
+    def get_config_dict(self , base_path: ModelPath | None, schedule_name: str | None) -> Base.FlattenDict:
         config_path = self.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
@@ -96,13 +96,13 @@ class ScheduleConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
         path = cls.find_path(None, model_name)
         return True if path else False
 
-class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
+class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     CONFIG_LIST = ["env", "model", "input", "train", "callbacks", "conditional"]
     REQUIRED_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "required.yaml"))
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
 
     def __init__(
-        self, base_path: ModelPath | BaseType.strPath | None, *,
+        self, base_path: ModelPath | Base.types.strPath | None, *,
         module: str | None = None, schedule_name: str | None = None, override=None, 
         indent: int = 1 , vb_level: Any = 2, **kwargs,
     ):
@@ -131,17 +131,17 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def __setitem__(self, key: str, value: Any):
         self.Param[key] = value
 
-    def resumed_config_param(self) -> BaseClass.FlattenDict | None:
+    def resumed_config_param(self) -> Base.FlattenDict | None:
         if (self.base_path and not self.base_path.is_null_model and not self.short_test):
             conf_file = self.base_path.conf_file("model")
             return get_config_dict(conf_file) if conf_file.exists() else None
         else:
             return None
 
-    def default_config_param(self) -> BaseClass.FlattenDict:
+    def default_config_param(self) -> Base.FlattenDict:
         return self.REQUIRED_CONFIG_PARAM.combine_with(self.OPTIONAL_CONFIG_PARAM)
         
-    def current_config_param(self) -> BaseClass.FlattenDict:
+    def current_config_param(self) -> Base.FlattenDict:
         return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
 
     def optional_load_params(self , option : Literal["current", "default"]):
@@ -638,10 +638,10 @@ class BaseModelConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
     def gc_collect_each_model(self) -> bool:
         return self.module_type == "nn"
 
-class AlgoConfig(BaseClass.BoundLogger , BaseClass.CacheProps):
+class AlgoConfig(Base.BoundLogger , Base.CacheProps):
     def __init__(
         self,
-        base_path: ModelPath | BaseType.strPath | None,
+        base_path: ModelPath | Base.types.strPath | None,
         start_with_none: bool ,
         *,
         override: dict[str, Any] | None = None,
@@ -809,7 +809,7 @@ class ModelConfigOptions:
 class ModelConfig(BaseModelConfig):
     def __init__(
         self,
-        base_path: ModelPath | BaseType.strPath | None = None, *,
+        base_path: ModelPath | Base.types.strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None,
         start: int | None = None, end: int | None = None, stage=-1, resume=-1, selection=-1,
         indent: int = 1 , vb_level: Any = 2,
@@ -847,7 +847,7 @@ class ModelConfig(BaseModelConfig):
         return self.algo_config.boost_head_config
 
     @classmethod
-    def initialize(cls, base_path: ModelPath | BaseType.strPath | None, **kwargs):
+    def initialize(cls, base_path: ModelPath | Base.types.strPath | None, **kwargs):
         config = cls(base_path, **kwargs).start_model()
         return config
 

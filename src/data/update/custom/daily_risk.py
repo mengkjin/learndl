@@ -20,7 +20,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Literal , Callable
-from src.proj import CALENDAR , DB , Dates
+from src.proj import CALENDAR , DB , Base
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -52,7 +52,7 @@ class DailyRiskUpdater(BasicCustomUpdater):
         for date in update_dates:
             self.update_one(date)
 
-        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , idt = 1 , vb = 1)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int):
         """Compute and save daily risk features for a single ``date``."""

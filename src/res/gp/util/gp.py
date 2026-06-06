@@ -4,7 +4,7 @@ import numpy as np
 from deap import tools
 from typing import Any , Sequence , Callable
 
-from src.proj import Proj , BaseClass
+from src.proj import Proj , Base
 from src.res.gp.param import gpParameters
 from .syntax import Population
 from .toolbox import BaseToolbox
@@ -16,7 +16,7 @@ from .input import gpInput
 from .status import gpStatus
 from .evaluator import gpEvaluator
 
-class GeneticProgramming(BaseClass.BoundLogger):
+class GeneticProgramming(Base.BoundLogger):
     """遗传规划空间,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""
     _instance = None
     def __new__(cls , *args , **kwargs):

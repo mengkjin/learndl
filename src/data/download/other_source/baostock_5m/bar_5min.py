@@ -15,7 +15,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import PATH , CALENDAR , DB , Dates , BaseClass
+from src.proj import PATH , CALENDAR , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
@@ -40,14 +40,14 @@ def tmp_file_path(start : int , end : int , code : str):
 def baostock_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
     if path.exists():
-        return DB.load_df(path)
+        return Load.df(path)
     end_str = f'{date // 10000}-{(date // 100) % 100}-{date % 100}'
     secdf = bs.query_all_stock(end_str).get_data()
     secdf['market'] = secdf['code'].str.slice(0,2)
     secdf['secid'] = secdf['code'].str.slice(3).astype(int)
     secdf['is_sec'] = ((secdf['market'] == 'sh') * (secdf['secid'] >= 600000) + \
         (secdf['market'] == 'sz') * (secdf['secid'] < 600000)) * (~secdf['code_name'].str.contains('指数'))
-    DB.save_df(secdf , path , vb_level = 'max' , prefix = 'Baostock Secdf')
+    Save.df(secdf , path , vb_level = 'max' , prefix = 'Baostock Secdf')
     return secdf
 
 def baostock_past_dates(file_type : Literal['secdf' , '5min']):
@@ -63,13 +63,13 @@ def updated_dates(x_min : int = 5):
 def updatable(date , last_date):
     return (len(updated_dates()) == 0) or (date > 0 and date > CALENDAR.cd(last_date , 6))
 
-def x_mins_update_dates(date) -> Dates:
+def x_mins_update_dates(date) -> Base.Dates:
     dates : list[np.ndarray] = []
     for x_min in [10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , '5min')
         stored_dates = DB.dates('trade_ts' , f'{x_min}min')
         dates.append(CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates))
-    return Dates(np.unique(np.concatenate(dates)))
+    return Base.Dates(np.unique(np.concatenate(dates)))
 
 def x_mins_to_update(date):
     x_mins : list[int] = []
@@ -109,7 +109,7 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-class Baostock5minBarDownloader(BaseClass.BoundLogger):
+class Baostock5minBarDownloader(Base.BoundLogger):
     def proceed(self , date : int | None = None , first_n : int = -1 , retry_n : int = 10):
         pending_dt = pending_date()
         end = CALENDAR.update_to() if date is None else date
@@ -131,7 +131,7 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
                     self.logger.alert1(f'baostock 5min {last_dt} - {dt} failed')
                 updated = updated or mark
         if updated:
-            self.logger.success(f'Download baostock 5min at {Dates(end)}')
+            self.logger.success(f'Download baostock 5min at {Base.Dates(end)}')
                 
         dates = x_mins_update_dates(date)
         updated = False
@@ -183,7 +183,7 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
                     assert rs is not None , f'{rs} is None , corrupted data'
                     result = rs.get_data()
                     if isinstance(result , pd.DataFrame):
-                        DB.save_df(result , tmp_file_path(start , end , code) , vb_level = 'max' , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
+                        Save.df(result , tmp_file_path(start , end , code) , vb_level = 'max' , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
 
                     if i % 100 == 0:
                         self.logger.success(f'{i + 1}/{len(task_codes)} {start} - {end} : {code}...' , end = '\r')
@@ -195,15 +195,15 @@ class Baostock5minBarDownloader(BaseClass.BoundLogger):
             else:
                 break
 
-        df_list = [DB.load_df(d) for d in tmp_dir.iterdir()]
+        df_list = [Load.df(d) for d in tmp_dir.iterdir()]
         if len(df_list) == 0: 
             return False
-        df_all = pd.concat([DB.load_df(d) for d in tmp_dir.iterdir()])
+        df_all = pd.concat([Load.df(d) for d in tmp_dir.iterdir()])
 
         for date_str in df_all['date'].unique():
             date = int(str(date_str).replace('-', ''))
             df : pd.DataFrame = df_all.query('date == @date_str').reset_index(drop = True).assign(date = date)
-            DB.save_df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = 'max' , prefix = f'Baostock 5min bars {date}')
+            Save.df(df , final_path.joinpath(f'5min_bar_{date}.feather') , vb_level = 'max' , prefix = f'Baostock 5min bars {date}')
 
             df = baostock_5min_to_normal_5min(df)
             DB.save(df , 'trade_ts' , '5min' , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)

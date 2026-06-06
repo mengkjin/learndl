@@ -78,7 +78,7 @@ class Display:
             'display.width', 1000,
             'display.precision', 3,
             'display.colheader_justify', 'center' ,
-            *[i for k,v in kwargs.items() for i in [k,v]]):
+            *[i for k,v in kwargs.items() for i in [k,v] if k.startswith('display.')]):
             cls.raw_display(df)
 
     @classmethod

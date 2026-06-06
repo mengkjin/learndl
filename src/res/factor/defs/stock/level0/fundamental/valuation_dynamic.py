@@ -24,8 +24,8 @@ def calc_stability(numerator : pd.DataFrame | pd.Series | float | int , denomina
             numerator = numerator.reindex(index = union_index).ffill().reindex_like(denominator)
     ratio = numerator / denominator
     assert isinstance(ratio , pd.DataFrame) , type(ratio)
-    valid = ratio.notna().sum() > 12
-    return (ratio.mean() / ratio.std()).where(valid , np.nan)
+    effective = ratio.notna().sum() > 12
+    return (ratio.mean() / ratio.std()).where(effective , np.nan)
 
 def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')

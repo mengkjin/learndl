@@ -11,7 +11,7 @@ from typing import Any , Callable , Literal, Type , Generator
 
 from ..util import StockFactor
 
-from src.proj import PATH , CALENDAR , DB , Dates , Const , BaseMeta , BaseClass
+from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
@@ -182,7 +182,7 @@ def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series
         return df
     return wrapper
 
-class _FactorCalculatorMeta(BaseMeta.SingletonABC):
+class _FactorCalculatorMeta(Base.SingletonABC):
     """meta class of StockFactorCalculator"""
 
     registry : dict[str,Type[FactorCalculator] | Any] = {}
@@ -218,8 +218,8 @@ class _FactorCalculatorMeta(BaseMeta.SingletonABC):
             else:
                 raise ValueError(f'undefined factor type: {name}')
 
-            assert 'category1' not in dct , f'cannot set category1 in {name} , use the corresponding BaseClass in StockFactorCalculator'
-            assert 'category0' not in dct , f'cannot set category0 in {name} , use the corresponding BaseClass in StockFactorCalculator'
+            assert 'category1' not in dct , f'cannot set category1 in {name} , use the corresponding Base in StockFactorCalculator'
+            assert 'category0' not in dct , f'cannot set category0 in {name} , use the corresponding Base in StockFactorCalculator'
 
             category0 , category1 = getattr(new_cls, 'category0' , ''), getattr(new_cls, 'category1' , '')
             if not category1:
@@ -243,7 +243,7 @@ class _FactorCalculatorMeta(BaseMeta.SingletonABC):
             import_module(module_name)
         cls.definition_imported = True
         
-class FactorCalculator(BaseClass.BoundLogger , metaclass=_FactorCalculatorMeta):
+class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
     """base class of factor calculator"""
     init_date   : int = -1
     final_date  : int = 99991231
@@ -369,7 +369,7 @@ class FactorCalculator(BaseClass.BoundLogger , metaclass=_FactorCalculatorMeta):
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
-        self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
+        self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Base.Dates(dates)}' , idt = 1)
 
     def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
         """update all factor data until date"""
@@ -947,11 +947,11 @@ class MarketFactorCalculator(FactorCalculator):
         if not path.exists():
             return False
         else:
-            df = DB.load_df(path)
+            df = Load.df(path)
             if df.empty:
                 return False
             df = df.loc[df['date'] <= date]
-            DB.save_df(df , path , overwrite = True , prefix = f'MarketFactor')
+            Save.df(df , path , overwrite = True , prefix = f'MarketFactor')
             return True
 
 class PoolingCalculator(FactorCalculator):

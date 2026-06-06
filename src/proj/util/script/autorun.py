@@ -10,7 +10,8 @@ from typing import Any , Callable , Type
 from src.proj.env import MACHINE , Proj
 from src.proj.core import strPath
 from src.proj.cal import CALENDAR
-from src.proj.bases import BaseClass
+from src.proj.bases import BoundLogger
+from src.proj.db import Save
 
 class TaskName:
     def __init__(self):
@@ -63,7 +64,7 @@ class AutoRunCatchers:
         self.warning_catcher = warning_catcher
 
     def enter(self , title : str , category : str , init_time : datetime):
-        from src.proj.util.io.catcher import CrashProtectorCatcher , HtmlCatcher , MarkdownCatcher , WarningCatcher
+        from src.proj.util.catcher import CrashProtectorCatcher , HtmlCatcher , MarkdownCatcher , WarningCatcher
         self.catchers = []
         if self.crash_protector_catcher:
             self.catchers.append(CrashProtectorCatcher(self.task_id))
@@ -85,7 +86,7 @@ class AutoRunCatchers:
             catcher.__exit__(*args)
         return self
 
-class AutoRunTask(BaseClass.BoundLogger):
+class AutoRunTask(BoundLogger):
     """
     AutoRunTask manager for common tasks
     features:
@@ -158,8 +159,7 @@ class AutoRunTask(BaseClass.BoundLogger):
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        from src.proj.util.io.async_save import AsyncSaver
-        AsyncSaver.wait_all(caller_name = self.__class__.__name__)
+        Save.async_wait_all(caller_name = self.__class__.__name__)
         self.end_time = datetime.now()
         if isinstance(self.func_return , Path):
             Proj.exit_files.append(self.func_return)

@@ -1,11 +1,11 @@
 from __future__ import annotations
 import torch
 
-from src.proj import BaseClass
+from src.proj import Base
 from src.res.model.util import ModelConfig , BatchData , TrainerMetrics , DataModule , get_realistic_batch_data
 from src.res.model.model_module.module import get_predictor_module
 
-class ModelTestor(BaseClass.BoundLogger):
+class ModelTestor(Base.BoundLogger):
     """
     Check if a newly defined model can be forward correctly
     Example:

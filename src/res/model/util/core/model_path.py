@@ -11,7 +11,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , LogFile , DB , CALENDAR , Const , Logger , BaseClass , BaseType
+from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load
 
 from .func import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
 from .model_file import ModelFile
@@ -34,7 +34,7 @@ class ModelPath:
         index: optional, model index
     
     """
-    def __init__(self , model_input : BaseType.strPath | ModelPath | None | Any , **kwargs) -> None:
+    def __init__(self , model_input : Base.types.strPath | ModelPath | None | Any , **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.parse_input(model_input.base if isinstance(model_input , ModelPath) else model_input)
@@ -46,7 +46,7 @@ class ModelPath:
     def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
-    def parse_input(self , model_input : BaseType.strPath  | None):
+    def parse_input(self , model_input : Base.types.strPath  | None):
         parsed_model_input = parse_model_input(model_input)
         self.full_name : str = parsed_model_input.pop('full_name')
         self.full_name_kwargs : dict[str,Any] = parsed_model_input
@@ -110,7 +110,8 @@ class ModelPath:
         return self.base.parent
 
     @cached_property
-    def log_file(self) -> LogFile:
+    def log_file(self):
+        from src.proj.log.logfile import LogFile
         return LogFile.initialize('model' , 'operation' , f'{self.full_name}')
 
     @property
@@ -368,7 +369,7 @@ class ModelPath:
         model_path.log_operation('resume_from_archive')
         return model_path
 
-class PredictorPath(ModelPath , BaseClass.BoundLogger):
+class PredictorPath(ModelPath , Base.BoundLogger):
     """
     for a prediction model to predict recent/history data
     model dict stored in configs/proj/model_settings.yaml file under prediction section
@@ -378,7 +379,7 @@ class PredictorPath(ModelPath , BaseClass.BoundLogger):
     MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
 
     def __init__(
-        self, model_input : BaseType.strPath | None | Any , 
+        self, model_input : Base.types.strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any ,
         submodel : str = 'best' , pred_name : str | None = None , * , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
@@ -470,14 +471,14 @@ class PredictorPath(ModelPath , BaseClass.BoundLogger):
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
         """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        DB.save_df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        Save.df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     def load_fmp(self , date : int , **kwargs) -> pd.DataFrame:
         """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             Logger.alert1(f'{path} does not exist')
-        return DB.load_df(path)
+        return Load.df(path)
     
     @property
     def account_dir(self) -> Path:
@@ -512,11 +513,11 @@ class PredictorPath(ModelPath , BaseClass.BoundLogger):
     def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
         files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
         path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
-        DB.pack_files_to_tar(files , path , overwrite = True , indent = 0 , vb_level = 1)
+        Save.pack(files , path , overwrite = True , indent = 0 , vb_level = 1)
         return path
 
     @classmethod
-    def UnpackModelArchives(cls , path : BaseType.strPath | None = None , delete_tar = True , overwrite = False) -> None:
+    def UnpackModelArchives(cls , path : Base.types.strPath | None = None , delete_tar = True , overwrite = False) -> None:
         if path is None:
             paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
             paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]
@@ -524,6 +525,6 @@ class PredictorPath(ModelPath , BaseClass.BoundLogger):
             paths = [Path(path)]
         
         for path in paths:
-            DB.unpack_files_from_tar(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
+            Load.unpack(path , PATH.main , overwrite = overwrite , indent = 0 , vb_level = 1)
             if delete_tar:
                 path.unlink()

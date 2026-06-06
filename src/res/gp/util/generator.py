@@ -4,12 +4,12 @@ import pandas as pd
 import numpy as np
 from typing import Literal
 
-from src.proj import Proj , BaseClass
+from src.proj import Proj , Base
 
 from src.res.gp.func import factor_func as FF
 from src.res.gp.util import EliteGroup , GeneticProgramming
 
-class gpGenerator(BaseClass.BoundLogger):
+class gpGenerator(Base.BoundLogger):
     """
     构成因子生成器,返回输入因子表达式则输出历史因子值的函数
     input:

@@ -4,42 +4,18 @@ from __future__ import annotations
 import numpy as np
 
 from pathlib import Path
-from typing import Any , Generator , Mapping , Iterable
+from typing import Any , Generator , Iterable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
-from src.proj.core import strPath , strPaths
 
-from .core import DATAFRAME_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE
+from src.proj.db.basic import (
+    DATAFRAME_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE ,
+    file_dates , dir_dates
+)
 
-__all__ = ['DBPath' , 'path_date' , 'file_dates' , 'dir_dates' , 'rename' , 'path' , 'dates' , 'paths' , 'min_date' , 'max_date']
+__all__ = ['DBPath' , 'rename' , 'path' , 'dates' , 'paths' , 'min_date' , 'max_date']
 
-def path_date(path : strPath) -> int:
-    """get date from path"""
-    return int(Path(path).stem[-8:])
-
-def file_dates(paths : strPaths , startswith = '' , endswith = '') -> np.ndarray[int, Any]:
-    """get dates from paths"""
-    if isinstance(paths , Mapping):
-        paths = paths.values()
-    paths = [Path(p) for p in paths]
-    datestrs = [p.stem[-8:] for p in paths if p.name.startswith(startswith) and p.name.endswith(endswith)]
-    dates = np.array([ds for ds in datestrs if ds.isdigit() and len(ds) == 8] , dtype = int)
-    dates.sort()
-    return dates
-
-def dir_dates(directory : Path , start = None , end = None , year = None):
-    """get dates from directory"""
-    paths = directory.rglob('*')
-    dates = file_dates(paths)
-    if end   is not None: 
-        dates = dates[dates <= end]
-    if start is not None: 
-        dates = dates[dates >= start]
-    if year is not None:
-        dates = dates[dates // 10000 == year]
-    return dates
-    
 class DBPath:
     """DB Path structure of db_src and db_key"""
     src_alternatives = SRC_ALTERNATIVES

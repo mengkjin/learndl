@@ -143,8 +143,8 @@ class Port:
     @classmethod
     def create(cls , secid : np.ndarray | Any , weight : np.ndarray | Any , **kwargs):
         weight = weight * ((weight >= cls.weight_eps) + (weight <= -cls.weight_eps))
-        valid = weight != 0
-        df = pd.DataFrame({'secid':secid[valid] , 'weight' : weight[valid]})
+        effective = weight != 0
+        df = pd.DataFrame({'secid':secid[effective] , 'weight' : weight[effective]})
         return cls(df , **kwargs)
     
     @classmethod

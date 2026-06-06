@@ -6,8 +6,8 @@ from deap import gp
 from torch.multiprocessing import Pool
 from tqdm import tqdm
 
-from src.proj import BaseClass
-from src.func import tensor as T
+from src.proj import Base
+from src.func.tensor import neutralize_1d , neutralize_2d , rankic_2d , nanmean , nanstd
 from src.res.gp.func import factor_func as FF
 from src.res.gp.param import gpParameters
 from .syntax import BaseIndividual , SyntaxRecord , Population
@@ -45,17 +45,17 @@ def raw_neutralize(y : torch.Tensor | None , x : torch.Tensor | None , * , insam
     elif neutral_type == 1:
         assert isinstance(y , torch.Tensor) , f'{type(y)} is not a Tensor'
         shape2d = y.shape
-        y = T.neutralize_1d(y.reshape(-1) , x.to(y).reshape(-1,x.shape[-1]) , insample = insample.reshape(-1,1).expand(y.shape)) if insample is not None else None
+        y = neutralize_1d(y.reshape(-1) , x.to(y).reshape(-1,x.shape[-1]) , insample = insample.reshape(-1,1).expand(y.shape)) if insample is not None else None
         if isinstance(y , torch.Tensor): 
             y = y.reshape(shape2d)
     elif neutral_type == 2:
-        y = T.neutralize_2d(y , x.to(y))
+        y = neutralize_2d(y , x.to(y))
     return y
 
 processor = except_MemoryError(FF.process_factor)
 neutralizer = except_MemoryError(raw_neutralize)
 
-class gpEvaluator(BaseClass.BoundLogger):
+class gpEvaluator(Base.BoundLogger):
     def __init__(self , param : gpParameters , input : gpInput , status : gpStatus ,  
                 timer : gpTimer , recorder : gpRecorder , * , indent : int = 1 , vb_level : Any = 2 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -107,18 +107,18 @@ class gpEvaluator(BaseClass.BoundLogger):
         with self.timer.timer('process' , 'Assess'):
             metrics = np.zeros(8)
             if not factor.isnull(): 
-                rankic_res = T.rankic_2d(factor.tensor_value , self.input.labels_res , universe = self.input.universe , min_coverage = min_coverage)
-                rankic_raw = T.rankic_2d(factor.tensor_value , self.input.labels_raw , universe = self.input.universe , min_coverage = min_coverage)
+                rankic_res = rankic_2d(factor.tensor_value , self.input.labels_res , universe = self.input.universe , min_coverage = min_coverage)
+                rankic_raw = rankic_2d(factor.tensor_value , self.input.labels_raw , universe = self.input.universe , min_coverage = min_coverage)
                 for j , sample in enumerate([self.input.insample , self.input.outsample]):
                     sample_ic_res = rankic_res[sample]
                     sample_ic_raw = rankic_raw[sample]
                     if sample_ic_res.isnan().sum() < 0.75 * len(sample_ic_res): # if too many nan rank_ic (due to low coverage)
-                        avg , std = T.nanmean(sample_ic_res).item() , T.nanstd(sample_ic_res).item()
+                        avg , std = nanmean(sample_ic_res).item() , nanstd(sample_ic_res).item()
                         metrics[2*j + 0] = avg * const_annual
                         metrics[2*j + 1] = (avg / (std + 1e-6) * np.sqrt(const_annual))
 
                     if sample_ic_raw.isnan().sum() < 0.75 * len(sample_ic_raw): # if too many nan rank_ic (due to low coverage)
-                        avg , std = T.nanmean(sample_ic_raw).item() , T.nanstd(sample_ic_raw).item()
+                        avg , std = nanmean(sample_ic_raw).item() , nanstd(sample_ic_raw).item()
                         metrics[4 + 2*j + 0] = avg * const_annual
                         metrics[4 + 2*j + 1] = (avg / (std + 1e-6) * np.sqrt(const_annual))
 

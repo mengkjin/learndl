@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 
 from src.proj import Logger
-from src.func import tensor as T
+from src.func.tensor import rankic_2d , corrwith , zscore_inplace , allna , ts_mean , ts_stddev , zscore
 
 def factor_repr(obj : Any):
     attr_repr = []
@@ -76,7 +76,7 @@ def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , di
     output:
         value:         processed factor value
     """
-    if value is None or T.allna(value , inf_as_na = True): 
+    if value is None or allna(value , inf_as_na = True): 
         return None
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
@@ -171,12 +171,12 @@ def factor_corr_with_y(x : torch.Tensor | None , y : torch.Tensor , * , corr_dim
     new_dim = dim if dim < corr_dim else dim - 1
     try:
         # raise torch.cuda.OutOfMemoryError
-        tscorr = T.corrwith(x , y , dim = corr_dim)
+        tscorr = corrwith(x , y , dim = corr_dim)
     except torch.cuda.OutOfMemoryError:
         torch.cuda.empty_cache()
         tscorr = []
         for i in range(x.shape[dim]):
-            tscorr.append(T.corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
+            tscorr.append(corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
         tscorr = torch.stack(tscorr , dim = new_dim)
     x = tscorr.transpose(-1 , new_dim)
     x = torch.corrcoef(x[~x.isnan().any(-1)].T)
@@ -323,7 +323,7 @@ class MultiFactor:
         except torch.cuda.OutOfMemoryError:
             Logger.warning(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
-        multi = T.zscore(multi , dim = -1)
+        multi = zscore(multi , dim = -1)
         return MultiFactorValue(value = multi , weight = weight , inputs = factor , names = names , secid = secid , date = date)
     
     def factor_weight(self , window_type = None , **kwargs):
@@ -382,7 +382,7 @@ class MultiFactor:
         assert singles.shape == weight.shape , (singles.shape , weight.shape)
         weight = singles.isfinite() * weight
         wsum = torch.nansum(singles * weight , dim = -1) 
-        return T.zscore_inplace(wsum,dim = -1)
+        return zscore_inplace(wsum,dim = -1)
     
     def calculate_icir(self , factors : torch.Tensor , labels : torch.Tensor , ir_window = None , universe = None , min_coverage = None , **kwargs):
         ir_window    = ir_window    if ir_window    is not None else self.ir_window
@@ -393,7 +393,7 @@ class MultiFactor:
         # rankic = torch.full((len(factors) , factors.shape[-1]) , fill_value=torch.nan).to(labels)
         rankic = []
         for i_factor in range(factors.shape[-1]):
-            rankic.append(T.rankic_2d(factors[...,i_factor] , labels , dim = 0 , universe = universe , min_coverage = min_coverage))
+            rankic.append(rankic_2d(factors[...,i_factor] , labels , dim = 0 , universe = universe , min_coverage = min_coverage))
         rankic = torch.stack(rankic , dim = -1) # (date , factor)
-        rankir = (T.ts_mean(rankic.T , ir_window) / T.ts_stddev(rankic.T , ir_window)).T # (date , factor)
+        rankir = (ts_mean(rankic.T , ir_window) / ts_stddev(rankic.T , ir_window)).T # (date , factor)
         return {'ic' : rankic , 'ir' : rankir}

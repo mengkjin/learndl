@@ -7,13 +7,13 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Duration, Dates, Proj , BaseClass , BaseType
+from src.proj import Proj , Base
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name , category_title)
 
-class PortfolioBuilder(BaseClass.BoundLogger):
+class PortfolioBuilder(Base.BoundLogger):
     """
     category : str but in BUILDER_TYPES
     alpha : AlphaModel
@@ -70,7 +70,7 @@ class PortfolioBuilder(BaseClass.BoundLogger):
     def __init__(self , category : str | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
-                 resume_path : BaseType.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+                 resume_path : Base.types.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         
@@ -137,7 +137,7 @@ class PortfolioBuilder(BaseClass.BoundLogger):
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
             if Proj.vb.is_max_level:
-                self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}')
+                self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Base.Dates(self.portfolio.port_date)}')
         return self
 
     def save_portfolio(self , append = False):
@@ -198,7 +198,7 @@ class PortfolioBuilder(BaseClass.BoundLogger):
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
-class PortfolioGroupBuilder(BaseClass.BoundLogger):
+class PortfolioGroupBuilder(Base.BoundLogger):
     """
     parallel_kwargs:
         can have list of builder_kwargs' components, but cannot overlap with builder_kwargs
@@ -244,7 +244,7 @@ class PortfolioGroupBuilder(BaseClass.BoundLogger):
         attribution : bool = True ,
         trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
         resume : bool = False ,
-        resume_path : BaseType.strPath | None = None ,
+        resume_path : Base.types.strPath | None = None ,
         start : int = -1 ,
         end : int = 99991231 ,
         caller = None ,
@@ -303,7 +303,7 @@ class PortfolioGroupBuilder(BaseClass.BoundLogger):
         msg = ' '.join([
             f'{self.class_name} has {self.n_builders} builders' , 
             f'({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs)' ,  
-            f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Dates(self.relevant_dates)})'])
+            f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Base.Dates(self.relevant_dates)})'])
         self.logger.stdout(msg)
     
     def builders_setup(self):
@@ -357,7 +357,7 @@ class PortfolioGroupBuilder(BaseClass.BoundLogger):
                 self.print_build_info(date , opt_count , builder)
 
         secs = (datetime.now() - t0).total_seconds()
-        self.logger.stdout(f'build finished! Cost {Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
+        self.logger.stdout(f'build finished! Cost {Base.Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
         self.save_portfolios()
         return self
 

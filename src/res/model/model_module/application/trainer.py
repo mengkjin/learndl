@@ -2,9 +2,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from typing import Literal
 
-from src.proj import MACHINE , Proj , PATH , BaseType
-from src.proj.util.io.catcher import HtmlCatcher
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import MACHINE , Proj , PATH , Base , Save
+from src.proj.util.catcher import HtmlCatcher
 from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
@@ -29,7 +28,7 @@ class ModelTrainer(BaseTrainer):
         return app
         
     @classmethod
-    def GO(cls , * , base_path : ModelPath | BaseType.strPath | None = None , title : str | None = None , 
+    def GO(cls , * , base_path : ModelPath | Base.types.strPath | None = None , title : str | None = None , 
            paragraph : bool = False , html_catcher : bool = True, 
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
            log_operation : Literal['update_models' , 'resume_testing'] | None = None , 
@@ -59,7 +58,7 @@ class ModelTrainer(BaseTrainer):
             base_path.log_operation(log_operation)
             if isinstance(Catcher , HtmlCatcher):
                 Catcher.set_export_files(trainer.html_catcher_export_path)
-            AsyncSaver.wait_all(caller_name = cls.__name__)
+            Save.async_wait_all(caller_name = cls.__name__)
         return trainer
 
     @classmethod

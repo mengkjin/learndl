@@ -20,7 +20,7 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal
 
-from src.proj import PATH , MACHINE , CALENDAR , DB , BaseClass , Logger
+from src.proj import PATH , MACHINE , CALENDAR , DB , Base , Logger
 from src.data.util import (
     secid_adjust , col_reform , row_filter , adjust_precision , 
     trade_min_reform , trade_min_fillna
@@ -476,7 +476,7 @@ class JSFetcher:
             df = adjust_precision(df)
         return df
 
-class JSDownloader(BaseClass.BoundLogger):
+class JSDownloader(Base.BoundLogger):
     @classmethod
     def proceed(cls):
         paths = cls.kline_download()

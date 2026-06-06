@@ -21,7 +21,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any , Type , Literal
 
-from src.proj import CALENDAR , Dates , Duration , Const , BaseClass
+from src.proj import CALENDAR , Const , Base
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -90,7 +90,7 @@ class PreProcessorProperty:
         assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
         return str(owner.__qualname__).removeprefix('PrePro_').lower()
 
-class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
+class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     """
     Abstract base class for all data preprocessors.
 
@@ -277,11 +277,11 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
                 return block
             
         span_tuples : list[tuple[int,int]] = []
-        valid_dates = block.valid_dates
-        if len(valid_dates) == 0:
+        meaningful_dates = block.meaningful_dates
+        if len(meaningful_dates) == 0:
             block_start , block_end = 99991231 , 19000101
         else:
-            block_start , block_end = valid_dates[0] , valid_dates[-1]
+            block_start , block_end = meaningful_dates[0] , meaningful_dates[-1]
 
         if block.empty:
             span_tuples.append((start , end))
@@ -345,7 +345,7 @@ class PreProcessor(BaseClass.BoundLogger, metaclass=PreProcessorMeta):
         # gc.collect()
         self.logger.success(
             f'{status.upper()} Preprocessed ({self.type}) of [{self.key.upper()}] at '
-            f'{Dates(data_block.date)} finished! Cost {Duration(since = tt1)}' , 
+            f'{Base.Dates(data_block.date)} finished! Cost {Base.Duration(since = tt1)}' , 
             add_prefix = False)
     
 class FactorPreProcessor(PreProcessor):

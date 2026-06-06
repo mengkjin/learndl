@@ -13,7 +13,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 from typing import Any , Literal
-from src.proj import CALENDAR , DB , Dates
+from src.proj import CALENDAR , DB , Base
 
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -48,7 +48,7 @@ class MultiKlineUpdater(BasicCustomUpdater):
 
             for date in update_dates: 
                 self.update_one(date , n_day , label_name)
-            self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Dates(update_dates)}' , idt = 1 , vb = 1)
+            self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int , n_day : int , label_name : str):
         """Compute and save the n-day OHLCV bar for a single ``date``."""

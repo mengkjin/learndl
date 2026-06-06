@@ -15,8 +15,9 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-from src.func import match_values
-from src.proj import BaseClass
+
+from src.proj import Base
+from src.func.basic import match_values
 from ..util import BasicBoostModel , BoostInput
 
 PLOT_PATH : Path | None = None
@@ -118,7 +119,7 @@ class Lgbm(BasicBoostModel):
     def plot(self): 
         return LgbmPlot(self)
 
-class LgbmPlot(BaseClass.BoundLogger):
+class LgbmPlot(Base.BoundLogger):
     """Visualization helper attached to a fitted :class:`Lgbm` instance.
 
     All plot methods save to ``plot_path`` when it is set.  Methods that
@@ -158,7 +159,7 @@ class LgbmPlot(BaseClass.BoundLogger):
             plt.yscale(yscale)
         plt.close(fig)
         if show_plot: 
-            self.logger.display(fig , caption = 'Training process of Lgbm')
+            self.logger.display(fig , title = 'Training process of Lgbm')
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)

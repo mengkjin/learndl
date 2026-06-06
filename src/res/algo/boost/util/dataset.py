@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any , Literal
 
-from src.proj import Logger , BaseProperty
-from src.func import index_merge , match_slice , intersect_meshgrid
+from src.proj import Logger , Base
+from src.func.basic import index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
 from src.func.tensor import rank_pct
 
@@ -39,7 +39,7 @@ class BoostDataset:
 
     @property
     def shape(self):
-        return BaseProperty.shape({'x' : self.x , 'y' : self.y , 'w' : self.w , 'date' : self.date})
+        return Base.shape({'x' : self.x , 'y' : self.y , 'w' : self.w , 'date' : self.date})
 
     def to(self , device : torch.device | None = None):
         self.x = self.x.to(device)
@@ -159,7 +159,7 @@ class BoostOutput:
 
     @property
     def shape(self):
-        return BaseProperty.shape({'pred' : self.pred , 'secid' : self.secid , 'date' : self.date , 'finite' : self.finite , 'label' : self.label})
+        return Base.shape({'pred' : self.pred , 'secid' : self.secid , 'date' : self.date , 'finite' : self.finite , 'label' : self.label})
 
     def to_dataframe(self):
         df = pd.DataFrame(self.pred.cpu().numpy() , columns = self.date).assign(secid=self.secid).reset_index().\

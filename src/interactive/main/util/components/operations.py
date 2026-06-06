@@ -7,7 +7,7 @@ from abc import abstractmethod , ABC
 from dataclasses import dataclass , field
 from typing import Any , final
 
-from src.proj import BaseClass
+from src.proj import Base
 
 @dataclass
 class ButtonStatus:
@@ -35,7 +35,7 @@ class ButtonStatus:
             self.state = state
         self.kwargs.update(kwargs)
 
-class ButtonOperation(ABC , BaseClass.BoundLogger):
+class ButtonOperation(ABC , Base.BoundLogger):
     """Abstract base for a single button operation.
 
     Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class

@@ -3,8 +3,7 @@ import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Callable , TypeVar
-from src.proj import Logger
-from src.proj.core import Duration
+from src.proj import Logger , Base
 
 T = TypeVar('T')
 
@@ -28,7 +27,7 @@ class UpdateWrapperRecord:
 
     def duration_str(self) -> str:
         assert self.end_time is not None , 'end_time is not set'
-        return Duration(self.end_time - self.start_time).fmtstr
+        return Base.Duration(self.end_time - self.start_time).fmtstr
 
     def to_dict(self) -> dict:
         return {
@@ -62,4 +61,4 @@ def wrap_update(update_func : Callable[..., T] , message : str , skip : bool = F
 
 def print_update_records():
     record_df = pd.DataFrame([record.to_dict() for record in _UpdateRecords if record.end_time is not None and not record.skip])
-    Logger.display(record_df , caption = 'Update Records')
+    Logger.display(record_df , title = 'Update Records')

@@ -9,8 +9,7 @@ from typing import Any
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 
-from src.proj import LogFile , Duration , Proj , PATH
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import Proj , PATH , Save , Base
 from src.res.model.util import BaseCallBack
 
 def _hidden_correlation_to_chw(hcorr : torch.Tensor) -> torch.Tensor:
@@ -64,6 +63,7 @@ class SummaryWriter(BaseCallBack):
     @property
     def summary_log_file(self):
         log_name = 'st_results' if self.config.base_path.is_short_test else 'results'
+        from src.proj.log.logfile import LogFile
         return LogFile.initialize('model' , 'summary' , log_name)
 
     @property
@@ -194,8 +194,8 @@ class SummaryWriter(BaseCallBack):
 
         # pack run folder to tar file
         tar_filename = PATH.tensorboard.joinpath(f'{self.base_path.full_name}_{self.init_time.strftime("%Y%m%d%H%m")}.tar')
-        AsyncSaver.pack(
-            ts_folder, tar_filename , overwrite = True , 
+        Save.pack(
+            ts_folder, tar_filename , overwrite = True , async_save = True ,
             prefix = f'{self.__class__.__name__} Tensorboard Dir' , 
             indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
@@ -267,7 +267,7 @@ class SummaryWriter(BaseCallBack):
         test_name = f'{self.config.base_path.full_name}'
 
         duration : dict[str,str] = {
-            stage : f'{Duration(self.status.times[f'{stage}_end'] - self.status.times[f'{stage}_start'])}' for stage in self.config.queue_of_stages
+            stage : f'{Base.Duration(self.status.times[f'{stage}_end'] - self.status.times[f'{stage}_start'])}' for stage in self.config.queue_of_stages
         }
         metrics : dict[str,str] = {}
         for col in test_summary.columns:

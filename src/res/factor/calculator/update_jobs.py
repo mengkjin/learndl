@@ -6,7 +6,7 @@ from abc import ABC , abstractmethod
 from datetime import datetime
 from typing import Any , Generator , Literal , TypedDict
 
-from src.proj import BaseClass , Logger
+from src.proj import Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
@@ -124,7 +124,7 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
     Rebuilds jobs in the worker, runs :meth:`BaseUpdateJobList.process`, and returns
     a serializable report for the parent process.
     """
-    from src.proj.util.io.catcher import MPOutputCatcher
+    from src.proj.util.catcher import MPOutputCatcher
 
     jobs = [_job_from_spec(s) for s in payload['specs']]
     chunk = BaseUpdateJobList(
@@ -138,7 +138,7 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
         MPOutputCatcher.export_current_task(payload['name'])
 
 
-class BaseUpdateJobList(BaseClass.BoundLogger):
+class BaseUpdateJobList(Base.BoundLogger):
     """base update job list class"""
     def __init__(self , name : str , jobs : list[BaseUpdateJob] | None = None , * ,
         multithreading : bool = False , timeout : float = -1 , vb_level : Any = 1 , indent : int = 0 , **kwargs):

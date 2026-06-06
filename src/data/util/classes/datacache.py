@@ -5,8 +5,7 @@ import shutil , threading , torch , json
 
 from typing import Any
 
-from src.proj import PATH , Logger , BaseType
-from src.proj.util.io.torch_load import torch_load
+from src.proj import PATH , Logger , Base , Load
 
 __all__ = ['DataCache']
 
@@ -31,12 +30,12 @@ class DataCache:
         data, _ = self.datacache.load_data(self.vb_level)
         if data is not None:
             self.blocks, self.norms = data["blocks"], data["norms"]
-            self.logger.success(f"Loaded DataBlocks from cache {self.datacache.key} of {Dates(self.date)}")
+            self.logger.success(f"Loaded DataBlocks from cache {self.datacache.key} of {Base.Dates(self.date)}")
     def _save_cache(self):
         if not self.enable_cache_save:
             return
-        valid_end = min(block.last_valid_date for block in self.blocks.values())
-        valid_start = max(block.first_valid_date for block in self.blocks.values())
+        valid_end = min(block.last_meaningful_date for block in self.blocks.values())
+        valid_start = max(block.first_meaningful_date for block in self.blocks.values())
         old_metadata = self.datacache.load_metadata()
         old_valid_end: int = old_metadata.get("valid_end", 19000101)
         old_valid_start: int = old_metadata.get("valid_start", 99991231)
@@ -97,7 +96,7 @@ class DataCache:
         try:
             with self._get_lock(self.key):
                 metadata = self.load_metadata()
-                data = torch_load(self.path.joinpath('data.pt'))
+                data = Load.torch(self.path.joinpath('data.pt'))
         except ModuleNotFoundError as e:
             """can be caused by different package version"""
             Logger.alert2(f'ModuleNotFoundError {e} when loading {self.type.title()} CacheData, possibly you have change the code!' , indent = 1 , vb_level = 2)
@@ -198,7 +197,7 @@ class DataCache:
             return cls._try_save_metadata(metadata[key] , cls._get_meta_file(key))
 
     @classmethod
-    def _try_save_metadata(cls , metadata : dict[str, Any] , path : BaseType.strPath) -> bool:
+    def _try_save_metadata(cls , metadata : dict[str, Any] , path : Base.types.strPath) -> bool:
         """Remove the metadata for a specific key"""
         try:
             _ = json.dumps(metadata)

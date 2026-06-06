@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from src.proj.core import SingletonMeta
 from src.proj.env import MACHINE
-import src.proj.db as DB
+from src.proj.db import DB
 
 #: Shanghai time zone, used by CALENDAR , TradeDate etc.
 BJ_TZ = ZoneInfo("Asia/Shanghai")

@@ -9,8 +9,7 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , DB , BaseClass , BaseType
-from src.proj.util.io.async_save import AsyncSaver
+from src.proj import PATH , DB , Base , Save
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
@@ -33,7 +32,7 @@ class TestTitle:
     def __get__(self,instance,owner) -> str:
         return test_title(str(getattr(owner, 'TEST_TYPE')))
 
-class CalcWarningsManager(BaseClass.BoundLogger):
+class CalcWarningsManager(Base.BoundLogger):
     def __init__(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.timer = self.logger.timer(*args , **kwargs)
@@ -46,7 +45,7 @@ class CalcWarningsManager(BaseClass.BoundLogger):
         warnings.resetwarnings()
         self.timer.__exit__(*args)
 
-class BaseFactorAnalyticCalculator(ABC, BaseClass.BoundLogger):
+class BaseFactorAnalyticCalculator(ABC, Base.BoundLogger):
     TEST_TYPE : TYPE_of_TEST
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     TEST_TITLE = TestTitle()
@@ -97,13 +96,13 @@ class BaseFactorAnalyticCalculator(ABC, BaseClass.BoundLogger):
             return f'{title_prefix} {self.TEST_TITLE}'
         return self.TEST_TITLE
         
-class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
+class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
     TEST_TYPE : TYPE_of_TEST
     TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
     TEST_TITLE = TestTitle()
 
     def __init__(
-        self , test_path : BaseType.strPath | None = None , 
+        self , test_path : Base.types.strPath | None = None , 
         resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
         which : str | list[str] | Literal['all'] = 'all' , **kwargs
     ):
@@ -131,7 +130,7 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
         return f'{self.__class__.__name__}'
 
     @classmethod
-    def create(cls , test_path : BaseType.strPath | None = None , resume : bool = False , save_resumable : bool = False , 
+    def create(cls , test_path : Base.types.strPath | None = None , resume : bool = False , save_resumable : bool = False , 
                start : int = -1 , end : int = 99991231 , which = 'all' , **kwargs):
         testor = cls(test_path , resume , save_resumable , start , end , which , **kwargs)
         return testor
@@ -171,7 +170,7 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
             return rslt_dir.joinpath(self.test_name)
 
     @test_path.setter
-    def test_path(self , path : BaseType.strPath | None):
+    def test_path(self , path : Base.types.strPath | None):
         self._test_path = path if path is None else Path(path)
 
     @property
@@ -182,7 +181,7 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
             return self._test_path.joinpath(camel_to_snake(self.__class__.__name__))
 
     @classmethod
-    def last_portfolio_date(cls , test_path : BaseType.strPath | None = None):
+    def last_portfolio_date(cls , test_path : Base.types.strPath | None = None):
         if test_path is None:
             return 19000101
         else:
@@ -199,7 +198,7 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
             return self.resume_path.joinpath(f'factor_stats')
 
     @classmethod
-    def factor_stats_saved_dates(cls , test_path : BaseType.strPath | None = None) -> np.ndarray:
+    def factor_stats_saved_dates(cls , test_path : Base.types.strPath | None = None) -> np.ndarray:
         if test_path is None:
             return np.array([] , dtype=int)
         else:
@@ -218,19 +217,19 @@ class BaseFactorAnalyticTest(ABC, BaseClass.BoundLogger):
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
-        AsyncSaver.dfs(
-            rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , 
+        Save.dfs(
+            rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , async_save = True ,
             prefix=f'{self.__class__.__name__} Analytic Datas' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
-        AsyncSaver.figs(
-            figs , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , 
+        Save.figs(
+            figs , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , async_save = True ,
             prefix=f'{self.__class__.__name__} Analytic Plots' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return self
 
-    def save(self , path : BaseType.strPath):
+    def save(self , path : Base.types.strPath):
         """save intermediate data to path for future use"""
         ...
 
-    def load(self , path : BaseType.strPath):
+    def load(self , path : Base.types.strPath):
         """load intermediate data from path for future use"""
 
     @classmethod

@@ -98,7 +98,7 @@ from abc import ABC , ABCMeta
 from functools import cached_property
 from typing import Any
 
-from src.proj import Logger , BaseClass
+from src.proj import Logger , Base
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.core import BatchOutput , BatchInput
 from .future_utils import FutureUtils
@@ -202,7 +202,7 @@ class _PipelineMeta(ABCMeta):
             Logger.warning(f'{new_cls.__name__} defines placeholder names for hooks: {placeholder_names}')
         return new_cls
 
-class BasePipeline(_Pipeline, BaseClass.BoundLogger, BaseClass.CacheProps, metaclass=_PipelineMeta):
+class BasePipeline(_Pipeline, Base.BoundLogger, Base.CacheProps, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)

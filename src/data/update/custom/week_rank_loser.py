@@ -15,10 +15,10 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.nn.functional import pad
-from src.func import tensor as T
-
 from typing import Literal
-from src.proj import CALENDAR , DB , Dates
+
+from src.proj import CALENDAR , DB , Base
+from src.func.tensor import rank_pct
 from src.data.loader import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -50,7 +50,7 @@ class WeekRankLoserUpdater(BasicCustomUpdater):
         for date in update_dates:
             self.update_one(date)
 
-        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Dates(update_dates)}' , idt = 1 , vb = 1)
+        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
 
     def update_one(self , date : int):
         """Compute and save loser flags for a single ``date``."""
@@ -64,7 +64,7 @@ def calc_week_rank_loser(date : int) -> pd.DataFrame:
     ret = ret_block.loc(feature = 'close').squeeze()
     logrtn = torch.log(ret + 1)
     week_rtn = pad(logrtn.unfold(1 , 5 , 1).sum(-1) , (4 , 0) , value = torch.nan)
-    week_rank = torch.floor(T.rank_pct(week_rtn) / 0.05).clip(0,19) 
+    week_rank = torch.floor(rank_pct(week_rtn) / 0.05).clip(0,19) 
 
     i_date = sum(ret_block.date < date) 
     top_ratio = (week_rank[: , i_date-245:i_date+1:5].squeeze() >= 19).to(torch.float32).mean(-1)

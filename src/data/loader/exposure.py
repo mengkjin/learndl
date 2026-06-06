@@ -10,7 +10,7 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import TradeDate , DB
+from src.proj import DB , Base
 from src.data.util import INFO
 
 from .access import DateDataAccess
@@ -39,7 +39,7 @@ class ExposureAccess(DateDataAccess):
         return self.get(date , 'daily_risk')
 
     def get_risks(
-        self , start : int | TradeDate , end : int | TradeDate ,
+        self , start : Base.types.intDate , end : Base.types.intDate ,
         field : Literal['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
         'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'] | str | list , prev = False ,
         mask = False , pivot = False , **kwargs

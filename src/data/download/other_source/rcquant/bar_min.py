@@ -15,7 +15,7 @@ import numpy as np
 
 from typing import Literal
 
-from src.proj import PATH , MACHINE , CALENDAR , DB , Dates , BaseClass
+from src.proj import PATH , MACHINE , CALENDAR , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
 
 from .initializer import RcQuantInitializer
@@ -47,24 +47,24 @@ def src_key(data_type : DATA_TYPES , x_min : int = 1):
 def load_list(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     if path.exists(): 
-        return DB.load_df(path)
+        return Load.df(path)
     return None
 
 def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    DB.save_df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} list {date}')
+    Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} list {date}')
 
 def load_min(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     if path.exists(): 
-        return DB.load_df(path)
+        return Load.df(path)
     return None
 
 def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    DB.save_df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} min {date}')
+    Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} min {date}')
 
 def rcquant_past_dates(data_type : DATA_TYPES , file_type : Literal['secdf' , 'min']):
     path = RC_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RC_PATH.joinpath(f'{data_type}df')
@@ -86,11 +86,11 @@ def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
 def target_dates(data_type : DATA_TYPES , date : int | None = None):
     start = src_start_date(data_type)
     dates = CALENDAR.range(start , date , type = 'td' , updated = True)
-    return Dates(CALENDAR.diffs(dates , stored_dates(data_type , 1)))
+    return Base.Dates(CALENDAR.diffs(dates , stored_dates(data_type , 1)))
 
-def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Dates:
+def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Base.Dates:
     if data_type != 'sec': 
-        return Dates()
+        return Base.Dates()
     dates : list[np.ndarray] = []
     end = CALENDAR.update_to() if date is None else date
     for x_min in [5 , 10 , 15 , 30 , 60]:
@@ -98,7 +98,7 @@ def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Da
         stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
         target_dates = CALENDAR.diffs(source_dates , stored_dates)
         dates.append(target_dates[(target_dates >= src_start_date(data_type)) & (target_dates <= end)])
-    return Dates(np.unique(np.concatenate(dates)))
+    return Base.Dates(np.unique(np.concatenate(dates)))
 
 def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': 
@@ -130,7 +130,7 @@ def rcquant_trading_dates(start, end):
         return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start, end, market='cn')]
 
-class RcquantMinBarDownloader(BaseClass.BoundLogger):
+class RcquantMinBarDownloader(Base.BoundLogger):
     def proceed(self , date : int | None = None , first_n : int = -1):
         data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
         for data_type in data_types:
