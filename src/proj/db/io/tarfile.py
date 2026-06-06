@@ -112,7 +112,7 @@ def save_dfs_to_tar(
     prefix = prefix or ''
     path = Path(path)
     path.parent.mkdir(parents=True , exist_ok=True)
-    assert str(path).endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
+    assert path.name.endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
     if overwrite or not path.exists(): 
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.unlink(missing_ok=True)
@@ -140,7 +140,7 @@ def pack_files_to_tar(files : strPaths , path : strPath , *, overwrite = True , 
     prefix = prefix or ''
     path = Path(path)
     path.parent.mkdir(parents=True , exist_ok=True)
-    assert str(path).endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
+    assert path.name.endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
     if overwrite or not path.exists(): 
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -163,7 +163,7 @@ def pack_dir_to_tar(
     source_path = Path(source_path)
     path = Path(path)
     assert source_path.exists() and source_path.is_dir() and any(source_path.iterdir()) , f'{source_path} does not exist or is empty'
-    assert str(path).endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
+    assert path.name.endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
     if overwrite or not path.exists(): 
         status = 'Overwritten ' if path.exists() else 'File Created'
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +183,7 @@ def unpack_files_from_tar(path : strPath , target : strPath , * ,
     """unpack files from tar file"""
     path = Path(path)
     target = Path(target)
-    assert str(path).endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
+    assert path.name.endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
     sub_vb_level = Proj.vb(vb_level) + 1
     with tarfile.open(path, 'r') as tar:  
         for member in tar.getmembers():

@@ -9,6 +9,7 @@ from typing import Literal , TYPE_CHECKING , Any
 from dataclasses import dataclass
 
 from src.proj.core import strPath
+from src.proj.log import Logger
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -98,7 +99,13 @@ class ArrayMemoryMap:
         dtype = np.dtype(metas.dtype)
         with open(mmap.data_path, 'rb') as f:
             f.seek(0)
-            result = np.fromfile(f, dtype=dtype , count=np.prod(metas.shape)).reshape(metas.shape)
+
+            try: 
+                result = np.fromfile(f, dtype=dtype , count=np.prod(metas.shape))
+                result = result.reshape(metas.shape)
+            except Exception as e:
+                Logger.error(f'Memeory Map {path} is messed up: ' , e)
+                raise Exception
         if metas.array_type == 'Tensor':
             import torch
             result = torch.from_numpy(result)

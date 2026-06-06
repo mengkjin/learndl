@@ -62,7 +62,7 @@ class JSDataUpdater(Base.BoundLogger):
 
         paths : list[Path] = []
         for sdir in cls.UPDATER_SEARCH_DIRS:
-            paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith(DB.TAR_SUFFIXES)]
+            paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE) and p.name.endswith(DB.TAR_SUFFIXES)]
         paths.sort()
         if del_after_dumping and paths:
             cls.logger.divider()
