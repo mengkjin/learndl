@@ -182,7 +182,7 @@ class Save:
             return packing(source_path, target_path, prefix = prefix, overwrite = overwrite, **kwargs)
 
     @classmethod
-    def mmap(cls , array : np.ndarray | torch.Tensor , path : strPath):
+    def mmap(cls , values : np.ndarray | torch.Tensor , path : strPath , async_save : bool = False , **kwargs):
         """save mmap to path
         Parameters
         ----------
@@ -191,8 +191,9 @@ class Save:
         path : strPath
             path to save mmap
         """
+        assert not async_save, 'async save is not supported for mmap'
         from src.proj.db.io.mmap import ArrayMemoryMap
-        return ArrayMemoryMap.save(array, path)
+        return ArrayMemoryMap.save(values, path , **kwargs)
 
     @classmethod
     def async_save(cls , save_type : Literal['df' , 'dfs' , 'figs' , 'torch' , 'pack'] , data : Any , path : strPath , * ,

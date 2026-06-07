@@ -687,20 +687,26 @@ class DataBlock:
 
     @classmethod
     def last_preprocess_date(cls , key , type : Literal['fit' , 'predict']):
-        """Return the calendar date (yyyyMMdd int) when the preprocess dump was last written."""
+        """
+        Return the calendar date (yyyyMMdd int) when the preprocess dump was last written. 
+        Use min instead of max to make sure the earliest one, on which skip update is limited.
+        """
         path = cls.path_preprocess(key , type)
         if path.suffix == '.mmap':
-            dates = [PATH.file_modified_date(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
+            dates = [PATH.file_modified_date(sub_path) for sub_path in path.rglob('*')] if path.exists() else []
             return min(dates) if dates else None
         else:
             return PATH.file_modified_date(cls.path_preprocess(key , type))
     
     @classmethod
     def last_preprocess_time(cls , key , type : Literal['fit' , 'predict']):
-        """Return the wall-clock timestamp (datetime) when the preprocess dump was last written."""
+        """
+        Return the wall-clock timestamp (datetime) when the preprocess dump was last written.
+        Use min instead of max to make sure the earliest one, on which skip update is limited.
+        """
         path = cls.path_preprocess(key , type)
         if path.suffix == '.mmap':
-            times = [PATH.file_modified_time(sub_path) for sub_path in path.iterdir() if sub_path.is_file()] if path.exists() else []
+            times = [PATH.file_modified_time(sub_path) for sub_path in path.rglob('*')] if path.exists() else []
             return min(times) if times else None
         else:
             return PATH.file_modified_time(path)
@@ -711,7 +717,7 @@ class DataBlock:
         try:
             path = cls.path_preprocess(key , type)
             if path.suffix == '.mmap':
-                return min(load_dict(path.joinpath('index.pt'))['date'])
+                return min(Load.mmap(path , values=False , index=True)['index']['date'])
             elif path.suffix == '.pt':
                 return min(load_dict(path)['date'])
             elif path.suffix == '.feather':
@@ -730,7 +736,7 @@ class DataBlock:
             if not path.exists():
                 return None
             if path.suffix == '.mmap':
-                return max(load_dict(path.joinpath('index.pt'))['date'])
+                return max(Load.mmap(path , values=False , index=True)['index']['date'])
             elif path.suffix == '.pt':
                 return max(load_dict(path)['date'])
             elif path.suffix == '.feather':
@@ -1121,9 +1127,8 @@ class DataBlock:
         if path.exists():
             if path.suffix == '.mmap':
                 assert path.is_dir() , path
-                values = Load.mmap(path.joinpath('values'))
-                index = load_dict(path.joinpath('index.pt'))
-                block = cls(values , index['secid'] , index['date'] , index['feature'])
+                data = Load.mmap(path , values=True , index=True)
+                block = cls(data['values'] , data['index']['secid'] , data['index']['date'] , data['index']['feature'])
             elif path.suffix == '.pt':
                 block = cls(**load_dict(path))
             elif path.suffix == '.feather':
@@ -1157,8 +1162,7 @@ class DataBlock:
         elif path.suffix == '.mmap':
             assert not path.exists() or path.is_dir() , path
             path.mkdir(parents=True, exist_ok=True)
-            Save.mmap(self.values , path.joinpath('values'))
-            save_dict({'date' : self.date , 'secid' : self.secid , 'feature' : self.feature} , path.joinpath('index.pt'))
+            Save.mmap(self.values , path , index = {'date' : self.date , 'secid' : self.secid , 'feature' : self.feature})
         elif path.suffix == '.pt':
             assert not path.exists() or path.is_file() , path
             save_dict({'values' : self.values , 'date' : self.date.astype(int) , 'secid' : self.secid.astype(int) , 'feature' : self.feature} , path)

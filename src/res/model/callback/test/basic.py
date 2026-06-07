@@ -134,7 +134,7 @@ class BasicTestResult(BaseCallBack):
             # display summary
             df = pd.concat([df_model , stat_df])
 
-            base_name = self.config.model_module
+            base_name = self.config.model_name
             if self.config.module_type == 'boost' and self.config.boost_optuna: 
                 base_name += '.optuna'
             df['model_num'] = df['model_num'].map(lambda x: f'{base_name}.{x}')
@@ -148,7 +148,7 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            caption = f'Table: Test Summary for Models (rankic={criterion_accuracy},pct=normailized_position):'
+            caption = f'Table: Test Summary for Models (rankic={criterion_accuracy},pct=zscore):'
             self.logger.display(df_display.round(3) , title = caption)
             
             # export excel

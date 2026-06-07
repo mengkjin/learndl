@@ -135,7 +135,7 @@ class Load:
         return unpack_files_from_tar(path , target , overwrite = overwrite , indent = indent , vb_level = vb_level)
 
     @classmethod
-    def mmap(cls , path : strPath , **kwargs):
+    def mmap(cls , path : strPath , values : bool = True , index : bool = True , **kwargs):
         """load mmap from path
         Parameters
         ----------
@@ -143,4 +143,4 @@ class Load:
             path to mmap file
         """
         from src.proj.db.io.mmap import ArrayMemoryMap
-        return ArrayMemoryMap.load(path)
+        return ArrayMemoryMap.load(path , values = values , index = index)

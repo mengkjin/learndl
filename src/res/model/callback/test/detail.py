@@ -18,13 +18,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
     FIGURE_VB_LEVELS = {
         'factor@ic_curve@best.market': 2 , 
         'factor@group_return@best':'max' ,
-        't50@drawdown@best.univ':2 ,
-        'screen@drawdown@best.univ':2 ,
-        'reinforce@drawdown@best.univ':2 ,
-        'revscreen@drawdown@best.univ':'never' , # never display
+        't50@perf_curve@best.univ':2 ,
+        # 'screen@perf_curve@best.univ':2 ,
+        'reinforce@perf_curve@best.univ':2 ,
     }
 
-    def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'reinforce'] , **kwargs) -> None:
+    def __init__(self , trainer , tasks : list = ['factor' , 't50' , 'reinforce'] , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         assert all(task in FactorTestAPI.TEST_TYPES for task in tasks) , \
             f'TASKS must be a list of valid tasks: {FactorTestAPI.TEST_TYPES} , but got {tasks}'

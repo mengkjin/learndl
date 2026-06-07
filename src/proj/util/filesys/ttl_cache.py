@@ -31,8 +31,12 @@ def _current_time() -> datetime:
 
 def _parse_datetime(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(value)
+        dt = value
+    else:
+        dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=BJ_TZ)
+    return dt.astimezone(BJ_TZ)
 
 def _ensure_json_serializable(value: Any) -> None:
     json.dumps(value, ensure_ascii=False)
@@ -105,7 +109,8 @@ class DiskTTLCacheEntry:
 
     @classmethod
     def empty_entry(cls, namespace: TypeNamespace, key: str) -> DiskTTLCacheEntry:
-        return cls(namespace=namespace, key=key, value=None, ttl_hours=0, created_at=datetime(1900,1,1), expires_at=datetime(1900,1,1))
+        sentinel = datetime(1900, 1, 1, tzinfo=BJ_TZ)
+        return cls(namespace=namespace, key=key, value=None, ttl_hours=0, created_at=sentinel, expires_at=sentinel)
 
     @classmethod
     def from_dict(
