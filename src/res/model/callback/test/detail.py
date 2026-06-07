@@ -6,7 +6,8 @@ from matplotlib.figure import Figure
 
 from src.proj import Proj , Const , Save
 
-from src.res.factor.util import StockFactor
+from src.res.factor.util import StockFactor 
+from src.res.factor.analytic import TestType
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
 
@@ -23,14 +24,17 @@ class DetailedAlphaAnalysis(BaseCallBack):
         'reinforce@perf_curve@best.univ':2 ,
     }
 
-    def __init__(self , trainer , tasks : list = ['factor' , 't50' , 'reinforce'] , **kwargs) -> None:
+    def __init__(self , 
+        trainer , 
+        tasks : list[TestType | str] = ['factor' , 't50' , 'reinforce'] , **kwargs
+    ) -> None:
         super().__init__(trainer , **kwargs)
-        assert all(task in FactorTestAPI.TEST_TYPES for task in tasks) , \
-            f'TASKS must be a list of valid tasks: {FactorTestAPI.TEST_TYPES} , but got {tasks}'
+        assert all(task in TestType for task in tasks) , \
+            f'TASKS must be a list of valid tasks: {TestType} , but got {tasks}'
 
         self.tasks = ','.join(tasks)
-        self.factor_tasks = [task for task in tasks if task in ['factor']]
-        self.fmp_tasks = [task for task in tasks if task not in ['factor']]
+        self.factor_tasks = [TestType(task) for task in tasks if task in ['factor']]
+        self.fmp_tasks = [TestType(task) for task in tasks if task not in ['factor']]
 
         self.test_results : dict[str , pd.DataFrame] = {}
         self.test_figures : dict[str , Figure] = {}

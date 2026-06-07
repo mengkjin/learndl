@@ -7,10 +7,10 @@ from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.top_pf import Plotter
 from src.res.factor.util.stats import top_pf as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
 
-test_type = 'top'
-plotter = Plotter(test_title(test_type))
+test_type = TestType.TOP
+plotter = Plotter(test_type.title())
 
 class TopCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type

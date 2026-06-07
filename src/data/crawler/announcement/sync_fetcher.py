@@ -22,10 +22,15 @@ from src.proj.util.web.request import (
     request_with_timeouterror,
 )
 from .util import parse_jsonp , Announcement , sse_parse_groups , bse_query_body
-from . import const
+from .const import (
+    ExchangeType,
+    SSE_REFERER, SSE_JSONP_URL, SSE_FETCH_KWARGS,
+    SZSE_REFERER, SZSE_ANN_LIST, 
+    BSE_REFERER, BSE_ANNOUNCE_URL,
+)
 
 class AnnoucementFetcher(ABC, Base.BoundLogger):
-    exchange: const.ExchangeType
+    exchange: ExchangeType
     FETCH_KWARGS : tuple[dict[str, Any],...] = ({},)
 
     def __init__(self, proxy: str | None = None , * , indent: int = 1 , vb_level: int = 2 , **kwargs):
@@ -69,20 +74,21 @@ class AnnoucementFetcher(ABC, Base.BoundLogger):
 
     @classmethod
     def exchange_fetcher(cls, exchange: str , proxy: str | None = None):
-        if exchange.lower() == const.sse:
+        exchange = exchange.lower()
+        if exchange == ExchangeType.SSE:
             return SSEAnnFetcher(proxy)
-        elif exchange.lower() == const.szse:
+        elif exchange == ExchangeType.SZSE:
             return SZSEAnnFetcher(proxy)
-        elif exchange.lower() == const.bse:
+        elif exchange == ExchangeType.BSE:
             return BSEAnnFetcher(proxy)
         else:
             raise ValueError(f"Invalid exchange: {exchange}")
 
 class SSEAnnFetcher(AnnoucementFetcher):
-    exchange = const.sse
-    REFERER = const.SSE_REFERER
-    JSONP_URL = const.SSE_JSONP_URL
-    FETCH_KWARGS = const.SSE_FETCH_KWARGS
+    exchange = ExchangeType.SSE
+    REFERER = SSE_REFERER
+    JSONP_URL = SSE_JSONP_URL
+    FETCH_KWARGS = SSE_FETCH_KWARGS
 
     def fetch_announcements(self, start : int, end: int, *, stock_type: str = "1", page_size: int = 50 , title : str = '') -> list[Announcement]:
         """Shanghai Stock Exchange: query.sse.com.cn JSONP, fields contain SECURITY_CODE / SECURITY_NAME / TITLE / BULLETIN_TYPE_DESC / SSEDATE / URL."""
@@ -124,9 +130,9 @@ class SSEAnnFetcher(AnnoucementFetcher):
         return all_rows
 
 class SZSEAnnFetcher(AnnoucementFetcher):
-    exchange = const.szse
-    REFERER = const.SZSE_REFERER
-    ANN_LIST = const.SZSE_ANN_LIST
+    exchange = ExchangeType.SZSE
+    REFERER = SZSE_REFERER
+    ANN_LIST = SZSE_ANN_LIST
 
     def fetch_announcements(self, start : int, end: int, *, page_size: int = 50 , title : str = '') -> list[Announcement]:
         """Shenzhen Stock Exchange: POST annList (POST JSON, paging by seDate interval."""
@@ -162,9 +168,9 @@ class SZSEAnnFetcher(AnnoucementFetcher):
         return out
 
 class BSEAnnFetcher(AnnoucementFetcher):
-    exchange = const.bse
-    REFERER = const.BSE_REFERER
-    ANNOUNCE_URL = const.BSE_ANNOUNCE_URL
+    exchange = ExchangeType.BSE
+    REFERER = BSE_REFERER
+    ANNOUNCE_URL = BSE_ANNOUNCE_URL
 
     def fetch_announcements(self, start : int, end: int, *, title : str = '') -> list[Announcement]:
         """Beijing Stock Exchange: POST companyAnnouncement.do (POST JSON, paging by page."""

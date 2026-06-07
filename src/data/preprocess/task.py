@@ -15,8 +15,8 @@ from .processors import PrePros
 
 __all__ = ['PreProcessorTask']
 
-DATASET_FIT = [*PrePros.keys()]
-DATASET_PREDICT = DATASET_FIT
+DATASET_FIT : tuple[str,...] = tuple(PrePros.keys())
+DATASET_PREDICT : tuple[str,...] = DATASET_FIT
 
 class PreProcessorTask(Base.BoundLogger):
     """

@@ -5,4 +5,4 @@ from .fmp_t50 import T50FMPTest
 from .fmp_screen import ScreenFMPTest
 from .fmp_revscreen import RevScreenFMPTest
 from .fmp_reinforce import ReinforceFMPTest
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TEST_TYPES , TYPE_of_TEST
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType

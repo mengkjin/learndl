@@ -15,15 +15,15 @@ from src.proj import Base
 from src.proj.util.web.proxy import ProxyAPI , ProxyCaller
 from src.proj.util.functional.handler import ErrorHandler
 
+from .const import ExchangeType
 from .sync_fetcher import AnnoucementFetcher
 from .async_fetcher import AsyncAnnoucementFetcher
 from .util import Announcement , range_dates , AnnouncementExporter , CrawlerLogger
-from . import const
 
 class FetcherTask(Base.BoundLogger):
-    def __init__(self, exchange: const.ExchangeType, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
+    def __init__(self, exchange: ExchangeType, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
         super().__init__(vb_level=vb_level, indent=indent, **kwargs)
-        self.exchange : const.ExchangeType = exchange
+        self.exchange : ExchangeType = exchange
         self.start = start
         self.end = end
         self.redownload = redownload
@@ -37,7 +37,7 @@ class FetcherTask(Base.BoundLogger):
 
     @property
     def url(self) -> str:
-        return const.EXCHANGE_URLS[self.exchange]
+        return self.exchange.exchange_url()
 
     @property
     def title(self) -> str:
@@ -49,7 +49,7 @@ class FetcherTask(Base.BoundLogger):
 
     @cached_property
     def proxy_pool(self):
-        return ProxyAPI.get_proxy_pool(const.URL_KEYS)
+        return ProxyAPI.get_proxy_pool(ExchangeType.all_urls())
 
     def fetch_date(self, proxy: str | None) -> list[Announcement] | Exception:
         fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, proxy)
@@ -147,7 +147,7 @@ class FetcherTask(Base.BoundLogger):
         tasks : list[FetcherTask] = []
         ranges = range_dates(start, end, step)
         for i , (s, e) in enumerate(ranges):
-            for exchange in const.EXCHANGES:
+            for exchange in ExchangeType.values():
                 task = FetcherTask(exchange, s, e , redownload)
                 if not task.should_be_skipped or (i >= (len(ranges) - force_update)):
                     tasks.append(task)

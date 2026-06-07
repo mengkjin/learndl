@@ -5,6 +5,8 @@ import pandas as pd
 import numpy as np
 
 from abc import ABC , abstractmethod
+from collections.abc import Iterable
+from enum import StrEnum
 from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
@@ -13,24 +15,37 @@ from src.proj import PATH , DB , Base , Save
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
-TYPE_of_TEST = Literal['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen' , 'reinforce']
-TEST_TYPES : list[TYPE_of_TEST] = ['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen' , 'reinforce']
-
-def test_title(test_type : str) -> str:
-    assert test_type in TEST_TYPES , f'Invalid test type: {test_type}'
-    if test_type == 'factor':
-        return test_type.title()
-    else:
-        return f'{test_type.title()} Port'
-
-def camel_to_snake(name):
+def _camel_to_snake(name : str) -> str:
     """Convert CamelCase (or mixed) identifiers to lower_snake_case."""
     s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+class TestType(StrEnum):
+    FACTOR = 'factor'
+    OPTIM = 'optim'
+    TOP = 'top'
+    T50 = 't50'
+    SCREEN = 'screen'
+    REVSCREEN = 'revscreen'
+    REINFORCE = 'reinforce'
 
-class TestTitle:
-    def __get__(self,instance,owner) -> str:
-        return test_title(str(getattr(owner, 'TEST_TYPE')))
+    @classmethod
+    def values(cls) -> list[TestType]:
+        return [m for m in cls]
+
+    @classmethod
+    def ensure_list(cls , x: TestType | Iterable[TestType] | Literal['all']) -> list[TestType]:
+        if x == 'all':
+            return list(cls)
+        if isinstance(x , TestType):
+            return [x]
+        else:
+            return [t for t in x]
+
+    def title(self) -> str:
+        if self == TestType.FACTOR:
+            return self.value.title()
+        else:
+            return f'{self.value.title()} Port'
 
 class CalcWarningsManager(Base.BoundLogger):
     def __init__(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
@@ -46,9 +61,8 @@ class CalcWarningsManager(Base.BoundLogger):
         self.timer.__exit__(*args)
 
 class BaseFactorAnalyticCalculator(ABC, Base.BoundLogger):
-    TEST_TYPE : TYPE_of_TEST
+    TEST_TYPE : TestType
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
-    TEST_TITLE = TestTitle()
 
     def __init__(self , params : dict[str,Any] | None = None , **kwargs) -> None:
         super().__init__(**kwargs)
@@ -93,13 +107,12 @@ class BaseFactorAnalyticCalculator(ABC, Base.BoundLogger):
     @property
     def title_prefix(self) -> str:
         if title_prefix := self.kwargs.get('title_prefix' , None):
-            return f'{title_prefix} {self.TEST_TITLE}'
-        return self.TEST_TITLE
+            return f'{title_prefix} {self.TEST_TYPE.title()}'
+        return self.TEST_TYPE.title()
         
 class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
-    TEST_TYPE : TYPE_of_TEST
+    TEST_TYPE : TestType
     TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
-    TEST_TITLE = TestTitle()
 
     def __init__(
         self , test_path : Base.types.strPath | None = None , 
@@ -154,7 +167,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
 
     @property
     def class_snake_name(self) -> str:
-        return camel_to_snake(self.__class__.__name__)
+        return _camel_to_snake(self.__class__.__name__)
 
     @property
     def test_name(self) -> str:
@@ -178,20 +191,20 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
         if self._test_path is None:
             return None
         else:
-            return self._test_path.joinpath(camel_to_snake(self.__class__.__name__))
+            return self._test_path.joinpath(_camel_to_snake(self.__class__.__name__))
 
     @classmethod
     def last_portfolio_date(cls , test_path : Base.types.strPath | None = None):
         if test_path is None:
             return 19000101
         else:
-            portfolio_resume_path = Path(test_path) / camel_to_snake(cls.__name__) / 'portfolio'
+            portfolio_resume_path = Path(test_path) / _camel_to_snake(cls.__name__) / 'portfolio'
             last_dates = [DB.load_df_max_date(path) for path in portfolio_resume_path.glob('*.feather')]
             return min(last_dates) if len(last_dates) else 19000101
 
     @property
     def factor_stats_resume_path(self):
-        assert self.TEST_TYPE in ['factor'] , self.TEST_TYPE
+        assert self.TEST_TYPE == TestType.FACTOR , self.TEST_TYPE
         if self.resume_path is None:
             return None
         else:
@@ -203,7 +216,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             return np.array([] , dtype=int)
         else:
             from src.res.factor.util.classes.stock_factor import CacheFactorStats
-            stats_path = Path(test_path) / camel_to_snake(cls.__name__) / 'factor_stats'
+            stats_path = Path(test_path) / _camel_to_snake(cls.__name__) / 'factor_stats'
             return CacheFactorStats.saved_dates(stats_path)
 
     def get_rslts(self) -> dict[str, pd.DataFrame]:
@@ -233,27 +246,30 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
         """load intermediate data from path for future use"""
 
     @classmethod
-    def get_test_class(cls , test_type : TYPE_of_TEST):
+    def get_test_class(cls , test_type : TestType):
+        """
+        get the test class for the given test type
+        """
         match test_type:
-            case 'factor':
+            case TestType.FACTOR:
                 from src.res.factor.analytic.factor_perf import FactorPerfTest
                 return FactorPerfTest
-            case 'optim':
+            case TestType.OPTIM:
                 from src.res.factor.analytic.fmp_optim import OptimFMPTest
                 return OptimFMPTest
-            case 'top':
+            case TestType.TOP:
                 from src.res.factor.analytic.fmp_top import TopFMPTest
                 return TopFMPTest
-            case 't50':
+            case TestType.T50:
                 from src.res.factor.analytic.fmp_t50 import T50FMPTest
                 return T50FMPTest
-            case 'screen':
+            case TestType.SCREEN:
                 from src.res.factor.analytic.fmp_screen import ScreenFMPTest
                 return ScreenFMPTest
-            case 'revscreen':
+            case TestType.REVSCREEN:
                 from src.res.factor.analytic.fmp_revscreen import RevScreenFMPTest
                 return RevScreenFMPTest
-            case 'reinforce':
+            case TestType.REINFORCE:
                 from src.res.factor.analytic.fmp_reinforce import ReinforceFMPTest
                 return ReinforceFMPTest
             case _:

@@ -25,7 +25,7 @@ from src.proj import CALENDAR , Const , Base
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
-TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
+TRADE_FEAT : tuple[str,...] = ('open','close','high','low','vwap','turn_fl')
 
 class PreProcessorMeta(ABCMeta):
     """
@@ -379,9 +379,9 @@ class TradePreProcessor(PreProcessor):
     Restricts output features to ``TRADE_FEAT`` (open/close/high/low/vwap/turn_fl).
     Subclasses must implement ``process`` and ``block_loaders``.
     """
-    def final_feat(self):
+    def final_feat(self) -> list[str]:
         """Return the standard OHLCV feature list."""
-        return TRADE_FEAT
+        return [*TRADE_FEAT]
 
 class MicellaneousPreProcessor(PreProcessor):
     """

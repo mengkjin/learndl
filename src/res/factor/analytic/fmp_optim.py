@@ -8,10 +8,10 @@ from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.optim_pf import Plotter
 from src.res.factor.util.stats import optim_pf as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
 
-test_type = 'optim'
-plotter = Plotter(test_title(test_type))
+test_type = TestType.OPTIM
+plotter = Plotter(test_type.title())
 
 class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
@@ -104,7 +104,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
             'attrib_source' : Attribution Source
             'attrib_style' : Attribution Style
     """
-    TEST_TYPE = 'optim'
+    TEST_TYPE = TestType.OPTIM
     TASK_LIST : list[Type[OptimCalc]] = [
         FrontFace , 
         Perf_Curve ,

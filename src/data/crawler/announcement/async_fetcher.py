@@ -21,11 +21,16 @@ from src.proj.util.web.request import (
     CHROME_UA,
     request_with_timeouterror_async,
 )
-from . import const
+from .const import (
+    ExchangeType,
+    SSE_REFERER, SSE_JSONP_URL, SSE_FETCH_KWARGS,
+    SZSE_REFERER, SZSE_ANN_LIST, 
+    BSE_REFERER, BSE_ANNOUNCE_URL,
+)
 from .util import Announcement , parse_jsonp , sse_parse_groups , bse_query_body
 
 class AsyncAnnoucementFetcher(ABC, Base.BoundLogger):
-    exchange : const.ExchangeType
+    exchange : ExchangeType
     FETCH_KWARGS : tuple[dict[str, Any],...] = ({},)
 
     def __init__(self, proxy: str | None = None , * , indent: int = 1 , vb_level: int = 2 , **kwargs):
@@ -68,19 +73,20 @@ class AsyncAnnoucementFetcher(ABC, Base.BoundLogger):
 
     @classmethod
     def exchange_fetcher(cls, exchange: str, proxy: str | None = None):
-        if exchange.lower() == const.sse:
+        exchange = exchange.lower()
+        if exchange == ExchangeType.SSE:
             return AsyncSSEAnnFetcher(proxy)
-        elif exchange.lower() == const.szse:
+        elif exchange == ExchangeType.SZSE:
             return AsyncSZSEAnnFetcher(proxy)
-        elif exchange.lower() == const.bse:
+        elif exchange == ExchangeType.BSE:
             return AsyncBSEAnnFetcher(proxy)
         raise ValueError(f"Invalid exchange: {exchange}")
 
 class AsyncSSEAnnFetcher(AsyncAnnoucementFetcher):
-    exchange = const.sse
-    REFERER = const.SSE_REFERER
-    JSONP_URL = const.SSE_JSONP_URL
-    FETCH_KWARGS: tuple[dict[str, Any],...] = const.SSE_FETCH_KWARGS
+    exchange = ExchangeType.SSE
+    REFERER = SSE_REFERER
+    JSONP_URL = SSE_JSONP_URL
+    FETCH_KWARGS: tuple[dict[str, Any],...] = SSE_FETCH_KWARGS
 
     async def fetch_announcements(self, start: int, end: int, *, stock_type: str = "1", page_size: int = 50, title: str = '') -> list[Announcement]:
         start_s = datetime.strptime(str(start), "%Y%m%d").date().isoformat()
@@ -119,9 +125,9 @@ class AsyncSSEAnnFetcher(AsyncAnnoucementFetcher):
         return all_rows
 
 class AsyncSZSEAnnFetcher(AsyncAnnoucementFetcher):
-    exchange = const.szse
-    REFERER = const.SZSE_REFERER
-    ANN_LIST = const.SZSE_ANN_LIST
+    exchange = ExchangeType.SZSE
+    REFERER = SZSE_REFERER
+    ANN_LIST = SZSE_ANN_LIST
 
     async def fetch_announcements(self, start: int, end: int, *, page_size: int = 50, title: str = '') -> list[Announcement]:
         start_s = datetime.strptime(str(start), "%Y%m%d").date().isoformat()
@@ -155,9 +161,9 @@ class AsyncSZSEAnnFetcher(AsyncAnnoucementFetcher):
         return out
 
 class AsyncBSEAnnFetcher(AsyncAnnoucementFetcher):
-    exchange = const.bse
-    REFERER = const.BSE_REFERER
-    ANNOUNCE_URL = const.BSE_ANNOUNCE_URL
+    exchange = ExchangeType.BSE
+    REFERER = BSE_REFERER
+    ANNOUNCE_URL = BSE_ANNOUNCE_URL
 
     async def fetch_announcements(self, start: int, end: int, *, title: str = '') -> list[Announcement]:
         r = await self.session.get(self.REFERER, headers={"User-Agent": CHROME_UA})

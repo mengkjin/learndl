@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any , Literal
+from typing import Any , Literal , Iterable
 
 from src.proj import Base
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import (
-    TEST_TYPES , TYPE_of_TEST , FactorPerfTest , OptimFMPTest , BaseFactorAnalyticTest , TopFMPTest)
+    TestType , FactorPerfTest , OptimFMPTest , BaseFactorAnalyticTest , TopFMPTest)
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
     AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
@@ -69,12 +69,13 @@ class FactorCalculatorAPI:
         StockFactorHierarchy.export_factor_table()
 
 class FactorTestAPI:
-    TEST_TYPES = TEST_TYPES
     Hierarchy = StockFactorHierarchy
 
     @classmethod
-    def get_test_class(cls , test_type : TYPE_of_TEST):
-        """get the test class for the given test type , test type"""
+    def get_test_class(cls , test_type : TestType):
+        """
+        get the test class for the given test type , test type
+        """
         return BaseFactorAnalyticTest.get_test_class(test_type)
 
     @classmethod
@@ -92,14 +93,17 @@ class FactorTestAPI:
         return factor
         
     @classmethod
-    def run_test(cls , test_type : TYPE_of_TEST , 
+    def run_test(cls , test_type : TestType | str , 
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
                  test_path : Base.types.strPath | None = None , 
                  resume : bool = False , save_resumable : bool = False , 
                  indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
                  write_down = False , display_figs = False , **kwargs):
-        testor = cls.create(test_type , test_path , resume , save_resumable , 
-                            start , end , indent = indent , vb_level = vb_level , **kwargs)
+        test_type = TestType(test_type)
+        testor = cls.create(
+            test_type , test_path , resume , save_resumable , start , end , 
+            indent = indent , vb_level = vb_level , **kwargs
+        )
         testor.proceed(factor , benchmark)
         if write_down:   
             testor.write_down()
@@ -108,7 +112,7 @@ class FactorTestAPI:
         return testor
 
     @classmethod
-    def create(cls , test_type : TYPE_of_TEST ,
+    def create(cls , test_type : TestType ,
                test_path : Base.types.strPath | None = None , resume : bool = False , save_resumable : bool = False ,
                start : int = -1 , end : int = 99991231 ,**kwargs):
         testor_type = cls.get_test_class(test_type)
@@ -116,18 +120,16 @@ class FactorTestAPI:
         return testor
 
     @classmethod
-    def last_portfolio_date(cls , test_path : Base.types.strPath , test_types : list[TYPE_of_TEST] | TYPE_of_TEST):
-        if not isinstance(test_types , list):
-            test_types = [test_types]
+    def last_portfolio_date(cls , test_path : Base.types.strPath , test_types : TestType | Iterable[TestType] | Literal['all']):
         last_portfolio_dates = []
-        for test_type in test_types:
+        for test_type in TestType.ensure_list(test_types):
             last_portfolio_date = cls.get_test_class(test_type).last_portfolio_date(test_path)
             last_portfolio_dates.append(last_portfolio_date)
         return min(last_portfolio_dates) if len(last_portfolio_dates) else 19000101
 
     @classmethod
     def factor_stats_saved_dates(cls , test_path : Base.types.strPath):
-        return cls.get_test_class('factor').factor_stats_saved_dates(test_path)
+        return cls.get_test_class(TestType.FACTOR).factor_stats_saved_dates(test_path)
 
     @classmethod
     def FactorPerf(cls , factor : StockFactor , benchmark : list[str] | str | Literal['defaults'] = 'defaults' ,

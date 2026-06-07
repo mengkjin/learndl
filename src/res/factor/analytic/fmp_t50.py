@@ -7,13 +7,13 @@ from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.top_pf import Plotter
 from src.res.factor.util.stats import top_pf as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
 
-test_type = 't50'
-plotter = Plotter(test_title(test_type))
+test_type = TestType.T50
+plotter = Plotter(test_type.title())
 
 class T50Calc(BaseFactorAnalyticCalculator):
-    TEST_TYPE = 't50'
+    TEST_TYPE = TestType.T50
     DEFAULT_BENCHMARKS = 'defaults'
 
     def calc(self , account_df : pd.DataFrame):

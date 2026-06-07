@@ -1,21 +1,40 @@
 from __future__ import annotations
-from typing import Any, Literal , TypeAlias
+from enum import StrEnum
+from typing import Any
 from zoneinfo import ZoneInfo
 
-ExchangeType : TypeAlias = Literal["sse", "szse", "bse"]
+class ExchangeType(StrEnum):
+    SSE = "sse"
+    SZSE = "szse"
+    BSE = "bse"
 
-bse : ExchangeType = "bse"
-szse : ExchangeType = "szse"
-sse : ExchangeType = "sse"
+    @classmethod
+    def values(cls) -> tuple[ExchangeType,...]:
+        return tuple(cls)
+
+    @classmethod
+    def all_urls(cls) -> tuple[str,...]:
+        return (
+            ExchangeType.SSE.exchange_url(),
+            ExchangeType.SZSE.exchange_url(),
+            ExchangeType.BSE.exchange_url(),
+        )
+
+    @classmethod
+    def str_values(cls) -> tuple[str,...]:
+        return tuple(cls.value for cls in cls)
+
+    def exchange_url(self) -> str:
+        if self == ExchangeType.SSE:
+            return "https://www.sse.com.cn"
+        elif self == ExchangeType.SZSE:
+            return "https://www.szse.cn"
+        elif self == ExchangeType.BSE:
+            return "https://www.bse.cn"
+        else:
+            raise ValueError(f"Invalid exchange type: {self}")
 
 BJTZ = ZoneInfo("Asia/Shanghai")
-EXCHANGES : tuple[ExchangeType,...] = (sse, szse, bse)
-EXCHANGE_URLS : dict[ExchangeType, str] = {
-    sse: "https://www.sse.com.cn", 
-    szse: "https://www.szse.cn", 
-    bse: "https://www.bse.cn"
-}
-URL_KEYS : tuple[str,...] = tuple(sorted(EXCHANGE_URLS.values()))
 
 SSE_REFERER = "https://www.sse.com.cn/"
 SSE_JSONP_URL = "https://query.sse.com.cn/security/stock/queryCompanyBulletinNew.do"

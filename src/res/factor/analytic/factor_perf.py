@@ -8,10 +8,10 @@ from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.util.plot.factor import Plotter
 from src.res.factor.util.stats import factor as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , test_title
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
 
-test_type = 'factor'
-plotter = Plotter(test_title(test_type))
+test_type = TestType.FACTOR
+plotter = Plotter(test_type.title())
 
 class FactorPerfCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type

@@ -15,12 +15,10 @@ from typing import Any
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
-from typing import TypeVar
 
 from src.proj import CALENDAR , DB , Proj , Base , Save , Load
-from . import const
+from .const import ExchangeType , BJTZ
 
-T = TypeVar("T")
 
 def range_dates(start: int, end: int , step: int = 1) -> list[tuple[int , int]]:
     end = min(end, CALENDAR.update_to())
@@ -41,7 +39,7 @@ def parse_jsonp(text: str) -> object:
     return json.loads(m.group(1))
 
 def now_iso() -> str:
-    return datetime.now(tz=const.BJTZ).replace(microsecond=0).isoformat()
+    return datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
 
 class CrawlerLogger(Base.BoundLogger):
     _class_vb_level = Proj.vb.get('crawler')
@@ -65,7 +63,7 @@ class CrawlerLogger(Base.BoundLogger):
 
 @dataclass
 class Announcement:
-    exchange: const.ExchangeType
+    exchange: ExchangeType
     sec_code: str
     sec_name: str
     source_id: str
@@ -96,7 +94,7 @@ class Announcement:
         title = str(raw.get("TITLE") or "").strip()
         category = str(raw.get("BULLETIN_TYPE_DESC") or "").strip()
         return cls(
-            exchange=const.sse,
+            exchange=ExchangeType.SSE,
             sec_code=f'{code:0>6s}.SH',
             sec_name=name,
             source_id=source_id,
@@ -122,7 +120,7 @@ class Announcement:
         rel_path = str(raw.get("attachPath") or "").strip()
         source_id = str(raw.get("annId") or raw.get("id") or "").strip()
         return cls(
-            exchange=const.szse,
+            exchange=ExchangeType.SZSE,
             sec_code=f'{code:0>6s}.SZ' ,
             sec_name=name,
             title=title,
@@ -151,7 +149,7 @@ class Announcement:
         name = str(raw.get("companyName") or "").strip()
         source_id = f'{code}|{date}|{title}'
         return cls(
-            exchange=const.bse,
+            exchange=ExchangeType.BSE,
             sec_code=f'{code:0>6s}.BJ' ,
             sec_name=name,
             title=title,
@@ -239,7 +237,7 @@ class AnnouncementExporter:
     _instances : dict[str, AnnouncementExporter] = {}
 
     def __new__(cls, exchange: str):
-        assert exchange in const.EXCHANGES , f'{exchange} is not in {const.EXCHANGES}'
+        assert exchange in ExchangeType , f'{exchange} is not in {ExchangeType.values()}'
         if exchange not in cls._instances:
             cls._instances[exchange] = super().__new__(cls)
             cls._instances[exchange].exchange = exchange
