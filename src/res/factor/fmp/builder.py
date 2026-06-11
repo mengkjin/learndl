@@ -7,7 +7,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-from src.proj import Proj , Base
+from src.proj import Proj , Base , Dates
 
 from src.res.factor.util import (
     Portfolio , Benchmark , AlphaModel , RISK_MODEL , 
@@ -142,7 +142,7 @@ class PortfolioBuilder(Base.BoundLogger):
             self.portfolio = port.filter_dates(dates = dates).rename(self.full_name)
             self.resumed_portfolio_end_date = -1 if self.portfolio.empty else self.portfolio.port_date.max()
             if Proj.vb.is_max_level:
-                self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Base.Dates(self.portfolio.port_date)}')
+                self.logger.success(f'Load portfolio from {self.resume_path_portfolio} at {Dates(self.portfolio.port_date)}')
         return self
 
     def save_portfolio(self , append = False):
@@ -308,7 +308,7 @@ class PortfolioGroupBuilder(Base.BoundLogger):
         msg = ' '.join([
             f'{self.class_name} has {self.n_builders} builders' , 
             f'({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs)' ,  
-            f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Base.Dates(self.relevant_dates)})'])
+            f'{self.n_builds} builds (x {len(self.relevant_dates)} dates , {Dates(self.relevant_dates)})'])
         self.logger.stdout(msg)
     
     def builders_setup(self):

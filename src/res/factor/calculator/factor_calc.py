@@ -9,7 +9,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Callable , Literal, Type , Generator
 
-from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load
+from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
@@ -366,7 +366,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
-        self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Base.Dates(dates)}' , idt = 1)
+        self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
 
     def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
         """update all factor data until date"""

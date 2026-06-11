@@ -19,7 +19,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , Literal
 
-from src.proj import CALENDAR , Proj , DB , Const , Base
+from src.proj import CALENDAR , Proj , DB , Const , Base , Dates
 from src.data.util import DataBlock , INFO
 
 from .financial_data import BS , IS , CF , INDI , FINA , FinData , DiffMethod
@@ -228,7 +228,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             if data_key == 'daily_quotes':
                 block0 = block0.adjust_price()
 
-            self.logger.success(f'DATAVENDOR.{data_key} expand from {Base.Dates(loaded_start,loaded_end)} to {Base.Dates(target_start,target_end)}')
+            self.logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
             self.blocks_cache[data_key] = block0
 
     def update_return_block(self , start : int , end : int):

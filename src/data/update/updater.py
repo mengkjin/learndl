@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from src.proj import Base
 from src.data.download import (
-    TushareDataDownloader , OtherSourceDownloader , SellsideSQLDownloader , SellsideFTPDownloader
+    TushareDataDownloader , OtherSourceDownloader , SellsideSQLDownloader , # SellsideFTPDownloader
 )
 from .custom import BasicCustomUpdater
 from .hfm import JSDataUpdater
@@ -46,7 +46,7 @@ class SellsideDataUpdater:
         """Run incremental updates for sell-side SQL and FTP data sources."""
         flags = Base.UpdateFlagList()
         flags += SellsideSQLDownloader.update()
-        flags += SellsideFTPDownloader.update()
+        # flags += SellsideFTPDownloader.update()
         return flags
 
     @classmethod
@@ -62,7 +62,7 @@ class CustomDataUpdater:
         """call ``update()`` on each updater"""
         flags = Base.UpdateFlagList()
         for updater in BasicCustomUpdater.iter_updaters():
-            flags += updater.update(indent = 1 , vb_level = 2)
+            flags += updater.update(indent = 0 , vb_level = 1)
         return flags
 
     @classmethod
@@ -70,5 +70,5 @@ class CustomDataUpdater:
         """call ``rollback()`` on each updater"""
         flags = Base.UpdateFlagList()
         for updater in BasicCustomUpdater.iter_updaters():
-            flags += updater.rollback(rollback_date , indent = 1 , vb_level = 2)
+            flags += updater.rollback(rollback_date , indent = 0 , vb_level = 1)
         return flags

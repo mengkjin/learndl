@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any , Iterable
 
-from src.proj import Base  
+from src.proj import Base , Dates
 from .processors import PrePros
 
 __all__ = ['PreProcessorTask']
@@ -69,7 +69,7 @@ class PreProcessorTask(Base.BasicUpdater):
         data_types = list(data_types) if data_types else (list(DATASET_PREDICT) if frame == 'predict' else list(DATASET_FIT))
         
         cls.logger.note(f'Data PreProcessing for {"fitting" if frame == 'fit' else "predicting"} start with {data_types} datas !')
-        cls.logger.stdout(f'Will process {data_types} from {Base.Dates(PrePros.start_date(frame = frame))}' , idt = 1 , vb = 1)
+        cls.logger.stdout(f'Will process {data_types} from {Dates(PrePros.start_date(frame = frame))}' , idt = 1 , vb = 1)
 
         flags = Base.UpdateFlagList()
         for data_type in data_types:

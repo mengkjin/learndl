@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Type , ClassVar , Any
 
-from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load
+from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.data import DATAVENDOR
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
 from src.res.factor.fmp import PortfolioBuilder
@@ -219,8 +219,8 @@ class TradingPort(Base.BoundLogger):
             self.logger.alert1(f'No portfolio dates found for {self.name} between {start} and {end} , call build(end_date) first!')
             return self
 
-        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Base.Dates(port_dates)} start ...' , vb = 1 , idt = 1)
-        with self.logger.timer(f'Analyze Portfolio [{self.name}] at {Base.Dates(port_dates)}' , vb = 1 , idt = 1 , enter_vb = 2):
+        self.logger.stdout(f'Analyze Portfolio [{self.name}] at {Dates(port_dates)} start ...' , vb = 1 , idt = 1)
+        with self.logger.timer(f'Analyze Portfolio [{self.name}] at {Dates(port_dates)}' , vb = 1 , idt = 1 , enter_vb = 2):
             account_df = self.portfolio_account(start = start , end = end , trade_engine=trade_engine).df
             if len(account_df) <= 1:
                 self.logger.stdout(f'Portfolio [{self.name}] just start accounting and has no record' , vb = 1 , idt = 1)
@@ -289,7 +289,7 @@ class TrackingPort(TradingPort):
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        self.logger.stdout(f'Perform portfolio building for {self.name} at {Base.Dates(date)}')
+        self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
@@ -347,7 +347,7 @@ class BacktestPort(TradingPort):
 
     def rebuild(self , date : int | None = None , export = True):
         date = CALENDAR.updated(date)
-        self.logger.stdout(f'Rebuild portfolio for {self.name} at {Base.Dates(date)} start ...')
+        self.logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...')
         df = self.build_backward(date , reset_port = True , export = export)
         self.new_ports[date] = df
         return self
@@ -369,14 +369,14 @@ class BacktestPort(TradingPort):
         date_list = date_list[date_list > self.end_date()]
         if len(date_list) == 0: 
             return pd.DataFrame()
-        self.logger.stdout(f'Loading alpha for {self.name} at {Base.Dates(date_list)}')
+        self.logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}')
         alpha = self.Alpha.get(date_list)
         if alpha.empty:
             return pd.DataFrame()
-        self.logger.stdout(f'Loading universe for {self.name} at {Base.Dates(date_list)}')
+        self.logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}')
         univ_port = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])
-        self.logger.stdout(f'Perform portfolio building for {self.name} at {Base.Dates(date_list)}')
+        self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date_list)}')
         builder = PortfolioBuilder(self.category , alpha , univ_port , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 

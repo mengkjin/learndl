@@ -6,7 +6,7 @@ import pandas as pd
 from functools import cached_property
 from typing import Any , Iterable
 
-from src.proj import CALENDAR , Base
+from src.proj import CALENDAR , Base , Dates
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
 from src.res.model.util import PredictorPath
@@ -153,7 +153,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
         all_fmp_dfs = pd.concat([self.pred_path.load_fmp(date) for date in account_dates])
 
         for fmp_name in update_fmp_names:
-            with self.logger.timer(f'Accounting {fmp_name} at {Base.Dates(account_dates)}' , vb = 2 , enter_vb = 4):
+            with self.logger.timer(f'Accounting {fmp_name} at {Dates(account_dates)}' , vb = 2 , enter_vb = 4):
                 elements = parse_full_name(fmp_name)
                 portfolio = Portfolio.from_dataframe(all_fmp_dfs , name = fmp_name)
                 portfolio.accounting(Benchmark(elements['benchmark']) , analytic = elements['lag'] == 0 , attribution = elements['lag'] == 0 , 
@@ -161,7 +161,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
                 self.account_manager.append_accounts(**{fmp_name : portfolio.account})
 
         if deploy:
-            with self.logger.timer(f'Deploy accounts for {self.pred_path} at {Base.Dates(account_dates)}' , vb = 1 , enter_vb = 4):
+            with self.logger.timer(f'Deploy accounts for {self.pred_path} at {Dates(account_dates)}' , vb = 1 , enter_vb = 4):
                 self.account_manager.deploy(update_fmp_names , overwrite = True , indent = self.indent + 2 , vb_level = self.vb_level + 4)
             
         self.updated_account_dates.extend(account_dates)

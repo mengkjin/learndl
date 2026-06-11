@@ -5,6 +5,6 @@ from .flatten_dict import FlattenDict
 from .updater import BasicUpdater
 
 from src.proj.core import Duration
-from src.proj.cal import Dates , Dates2
+from src.proj.cal import Dates
 
-__all__ = ['CacheProps', 'BoundLogger', 'FilteredIterable', 'FlattenDict' , 'Duration' , 'Dates' , 'Dates2' , 'BasicUpdater']
+__all__ = ['CacheProps', 'BoundLogger', 'FilteredIterable', 'FlattenDict' , 'Duration' , 'Dates' , 'BasicUpdater']

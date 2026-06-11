@@ -13,7 +13,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 from typing import Any
-from src.proj import CALENDAR , DB , Base
+from src.proj import CALENDAR , DB , Base , Dates
 from src.data.update.custom.basic import BasicCustomUpdater
 
 class MultiKlineUpdater(BasicCustomUpdater):
@@ -41,7 +41,7 @@ class MultiKlineUpdater(BasicCustomUpdater):
 
             for date in target_dates: 
                 cls.update_one(date , n_day , label_name)
-            cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Base.Dates(target_dates)}' , idt = 1 , vb = 1)
+            cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(target_dates)}' , idt = 1 , vb = 1)
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
 

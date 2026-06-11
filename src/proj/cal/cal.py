@@ -9,24 +9,17 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from copy import deepcopy
 from datetime import datetime, timedelta, time
-from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterable , Union, TypeAlias , Self , overload , Sequence
+from typing import Any, Iterable
 
 from src.proj.core import NoInstanceMeta , lit
 from src.proj.env import PATH , Const
 from src.proj.db import DB
 
-from .basic import BJ_TZ , BC
-from .trade_date import TradeDate
+from .basic import BJ_TZ , BC , TradeDate , intDate , intDateNone , intDates
 
-__all__ = ['CALENDAR', 'Dates' , 'intDate' , 'intDateNone' , 'intDates']
-
-intDate : TypeAlias = Union[int , TradeDate]
-intDateNone : TypeAlias = Union[int, TradeDate, None]
-intDates : TypeAlias = Union[intDate , Iterable[intDate] , np.ndarray , pd.Series]
+__all__ = ['CALENDAR']
     
 def get_cd(date: intDate) -> int:
     """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
@@ -391,7 +384,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
             target_dates = cls.range(start, end , type) 
         if source_dates is None:
             source_dates = np.array([], dtype=int)
-        return Dates(np.setdiff1d(target_dates, source_dates))
+        return np.setdiff1d(target_dates, source_dates)
 
     @classmethod
     def td_filter(cls, dates: intDates):
@@ -556,233 +549,3 @@ class CALENDAR(metaclass=NoInstanceMeta):
         assert get_td(rollback_date) >= earliest_rollback_date, (
             f"rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}"
         )
-
-class Dates(np.ndarray[int, Any]):
-    """
-    An integer date array view.
-    inputs:
-        0. empty input:
-            - empty dates[]
-        1. only 1 input arg:
-            - None : length 0 array
-            - date : int / TradeDate / string of digits , length 1 array
-            - tuple : (start, end) or (start, end, step) , treat as 2 / 3 inputs
-            - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
-        2. exact 2 inputs: start , end
-        3. exact 3 inputs: dates , start , end
-            - will use start and end to slice the dates
-    """
-
-    def __new__(cls, *args: Any, info=None):
-        if len(args) == 1 and isinstance(args[0], tuple):
-            args = args[0]
-        if len(args) == 0:
-            dates = []
-        elif len(args) == 1:
-            if args[0] is None:
-                dates = []
-            elif isinstance(args[0], Dates):
-                dates = args[0]
-            elif isinstance(args[0], (int, TradeDate, str)):
-                dates = [int(args[0])]
-            else:
-                dates = np.array(args[0], dtype=int)
-        elif len(args) == 2:
-            start, end = args
-            dates = CALENDAR.range(start, end, 'td')
-        elif len(args) == 3:
-            dates, start, end = args
-            dates = CALENDAR.slice(dates, start, end)
-        else:
-            raise ValueError(f"Invalid number of arguments: {len(args)}")
-        obj = np.asarray(dates, dtype=int).view(cls)
-        obj.info = info
-        return obj
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.format_str})"
-
-    def __str__(self) -> str:
-        return self.format_str()
-
-    def __array_finalize__(self, obj):
-        if obj is None:
-            return
-        self.info = getattr(obj, "info", None)
-
-    @property
-    def empty(self) -> bool:
-        """no dates in the array"""
-        return len(self) == 0
-
-    def diffs(self, *others: Any) -> "Dates":
-        """The difference set of dates."""
-        return Dates(np.setdiff1d(self, Dates(*others)), info=self.info)
-
-    def format_str(self) -> str:
-        """short text description of empty, single or multiple days."""
-        if self.empty:
-            return "Empty Dates"
-        if len(self) > 1:
-            return f"{self.min()}~{self.max()}({len(self)}days)"
-        return str(self[0])
-
-class Dates2(Sequence[int]):
-    """
-    An integer date array view.
-    inputs:
-        0. empty input:
-            - empty dates[]
-        1. only 1 input arg:
-            - None : length 0 array
-            - date : int / TradeDate / string of digits , length 1 array
-            - tuple : (start, end) or (start, end, step) , treat as 2 / 3 inputs
-            - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
-        2. exact 2 inputs: start , end
-        3. exact 3 inputs: dates , start , end
-            - will use start and end to slice the dates
-    """
-    @overload
-    def __init__(
-        self , start : intDate , end : intDateNone , / , * , 
-        type : lit.intDateType | None = None , **kwargs):
-        """input with a start and end date"""
-    @overload
-    def __init__(
-        self , dates : intDates | Dates2 | None , / , * ,
-        type : lit.intDateType | None = None , **kwargs):
-        """input with a single date or a sequence of dates"""
-    @overload
-    def __init__(
-        self , dates : intDates | Dates2 | None , 
-        start : intDate , end : intDateNone , / , * ,
-        type : lit.intDateType | None = None , **kwargs):
-        """input with a sequence of dates, start and end date"""
-    @overload
-    def __init__(self , / , * , type : lit.intDateType | None = None , **kwargs):
-        """input with no arguments"""
-    def __init__(self , *args , type : lit.intDateType | None = None , **kwargs):
-        """input with a single date or a sequence of dates"""
-        self._raw_dates = None
-        self._start , self._end = None , None
-        if len(args) == 0:
-            ...
-        elif len(args) == 1:
-            self._feed_raw_dates(args[0])
-        elif len(args) == 2:
-            self._start , self._end = args
-        elif len(args) == 3:
-            self._feed_raw_dates(args[0])
-            self._start , self._end = args[1:]
-        else:
-            raise ValueError(f"Invalid input: {args}")
-        self._type : lit.intDateType = type or getattr(self , '_type' , None) or 'td'
-
-    def _feed_raw_dates(self , raw_dates : intDates | Dates2 | None) -> Self:
-        if raw_dates is None:
-            self._raw_dates = None
-        elif isinstance(raw_dates , Dates2):
-            self._raw_dates = raw_dates._raw_dates
-            self._start = raw_dates._start
-            self._end = raw_dates._end
-            self._type = raw_dates._type
-        else:
-            self._raw_dates = np.atleast_1d(np.array(raw_dates, dtype=int))
-        return self
-
-    @cached_property
-    def dates(self) -> np.ndarray[int, Any]:
-        from src.proj.cal.cal import CALENDAR
-        if self._raw_dates is None:
-            if self._start is None and self._end is None:
-                dates = np.array([] , dtype = int)
-            else:
-                dates = CALENDAR.range(self._start , self._end , self._type)
-        else:
-            dates = np.atleast_1d(np.array(self._raw_dates , dtype = int))
-        dates = np.unique(CALENDAR.slice(dates , self._start , self._end))
-        return dates
-
-    def __len__(self):
-        return len(self.dates)
-
-    def __getitem__(self , item : int | slice):
-        return self.dates[item]
-
-    def __iter__(self):
-        return iter(self.dates)
-
-    def __array__(self , dtype = None):
-        return np.array(self.dates , dtype = dtype)
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.format_str()})"
-
-    def __str__(self) -> str:
-        return self.format_str()
-
-    def __contains__(self , item : int) -> bool:
-        return item in self.dates
-
-    def __add__(self , other : intDates | Dates2 | None) -> Self:
-        return self.union(other , inplace = False)
-
-    def __sub__(self , other : intDates | Dates2 | None) -> Self:
-        return self.diff(other , inplace = False)
-
-    def with_info(self , info : Any) -> Self:
-        self.info = info
-        return self
-
-    @property
-    def size(self) -> int:
-        return len(self)
-
-    @property
-    def empty(self) -> bool:
-        """no dates in the array"""
-        return not bool(self)
-
-    @property
-    def min(self) -> int:
-        if self.empty:
-            return 99991231
-        return min(self)
-
-    @property
-    def max(self) -> int:
-        if self.empty:
-            return 19000101
-        return max(self)
-
-    def format_str(self) -> str:
-        """short text description of empty, single or multiple days."""
-        if self.empty:
-            return "Empty Dates"
-        if len(self) > 1:
-            return f"{self.min}~{self.max}({len(self)}days)"
-        return str(self[0])
-
-    def copy(self) -> Self:
-        return deepcopy(self)
-
-    def diff(self , other : intDates | Dates2 | None , inplace : bool = True) -> Self:
-        if not inplace:
-            self = self.copy()
-        if other is not None:
-            self.dates = np.setdiff1d(self.dates , Dates2(other).dates)
-        return self
-
-    def union(self , other : intDates | Dates2 | None , inplace : bool = True) -> Self:
-        if not inplace:
-            self = self.copy()
-        if other is not None:
-            self.dates = np.union1d(self.dates , Dates2(other).dates)
-        return self
-
-    def intersect(self , other : intDates | Dates2 | None , inplace : bool = True) -> Self:
-        if not inplace:
-            self = self.copy()
-        if other is not None:
-            self.dates = np.intersect1d(self.dates , Dates2(other).dates)
-        return self

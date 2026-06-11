@@ -8,7 +8,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import CALENDAR , DB , Const , Base , Save , Load
+from src.proj import CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
@@ -418,7 +418,7 @@ class PortfolioAccountant(Base.BoundLogger):
 
             if not self.resumed_account.empty:
                 self.logger.success(
-                    f'Load Account from {self.resume_path} at {Base.Dates(self.resumed_account.model_date)}' , 
+                    f'Load Account from {self.resume_path} at {Dates(self.resumed_account.model_date)}' , 
                     idt = 1 , vb_level = 'max')
         else:
             self.resumed_account = PortfolioAccount()
@@ -466,7 +466,7 @@ class PortfolioAccountant(Base.BoundLogger):
             'analytic':None , 'attribution':None}).set_index('model_date')
 
         port_old = Port.none_port(model_dates[0])
-        self.logger.stdout(f'{self.config.name} has {len(df)} account dates at {Base.Dates([period_st[0] , period_ed[-1]])}')
+        self.logger.stdout(f'{self.config.name} has {len(df)} account dates at {Dates([period_st[0] , period_ed[-1]])}')
         for i , (mdate , ed) in enumerate(zip(model_dates , period_ed)):
             port_new = self.portfolio.get(mdate) if self.portfolio.has(mdate) else port_old
             bench = self.benchmark.get(mdate , True)

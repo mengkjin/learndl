@@ -15,7 +15,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import PATH , CALENDAR , DB , Base , Save , Load
+from src.proj import PATH , CALENDAR , Dates , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
@@ -56,17 +56,17 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates(x_min : int = 5) -> Base.Dates2:
+def updated_dates(x_min : int = 5) -> Dates:
     assert x_min in [5 , 10 , 15 , 30 , 60] , f'{x_min} is not in [5 , 10 , 15 , 30 , 60]'
-    return Base.Dates2(DB.dates('trade_ts' , f'{x_min}min'))
+    return Dates(DB.dates('trade_ts' , f'{x_min}min'))
 
 def updatable(date , last_date):
     return (updated_dates().empty) or (date > 0 and date > CALENDAR.cd(last_date , 6))
 
-def x_mins_update_dates() -> Base.Dates2:
-    dates = Base.Dates2()
+def x_mins_update_dates() -> Dates:
+    dates = Dates()
     for x_min in [10 , 15 , 30 , 60]:
-        source_dates = Base.Dates2(last_date_x_min(1 , x_min) , DB.max_date('trade_ts' , '5min'))
+        source_dates = Dates(last_date_x_min(1 , x_min) , DB.max_date('trade_ts' , '5min'))
         stored_dates = DB.dates('trade_ts' , f'{x_min}min')
         dates += source_dates.diff(stored_dates)
     return dates
@@ -148,7 +148,7 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
                     self.logger.alert1(f'baostock 5min {last_dt} - {dt} failed')
                 updated = updated or mark
         if updated:
-            self.logger.success(f'Download baostock 5min at {Base.Dates(end)}')
+            self.logger.success(f'Download baostock 5min at {Dates(end)}')
         else:
             return Base.UpdateFlag.FAILED
                 

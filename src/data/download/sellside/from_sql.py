@@ -13,7 +13,7 @@ from functools import cached_property
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal , Iterable
 
-from src.proj import MACHINE , CALENDAR , DB , Base , Logger
+from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
@@ -113,7 +113,7 @@ class Connection:
         return self
 
     @classmethod
-    def connection(cls , key : str):
+    def connection(cls , key : str) -> Connection:
         if key not in cls.stored_connections:
             kwargs : dict[str,Any] = {**MACHINE.secret.get('accounts' , f'sellside/{key}')}
             type : str = kwargs.pop('type')
@@ -231,7 +231,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         sqlline = template.substitute(date_col = self.date_col , factor_set = self.factor_set , start = start , end = end , sub_factor = sub_factor)
         return sqlline
 
-    def get_connection(self):
+    def get_connection(self) -> Connection:
         return Connection.connection(self.use_connection_key)
     
     def download(
@@ -258,7 +258,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             return Base.UpdateFlag.SKIPPED
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
-        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
+        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
         calls = [(self.download_period, inter) for inter in date_intervals]
@@ -273,14 +273,14 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             try:
                 df = self.query_factor_values(start , end)
             except Exception as e:
-                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}: {e}')
+                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
                 self.logger.print_exc(e)
                 return False
             num_dates = self.save_data(df)
             if num_dates > 0:
-                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}, total {num_dates} dates, time cost {Base.Duration(since = t0)}')
+                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Base.Duration(since = t0)}')
             else:
-                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}')
+                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}')
             return True
 
     def query_start_dt(self):

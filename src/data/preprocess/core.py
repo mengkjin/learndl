@@ -21,7 +21,7 @@ from datetime import datetime
 from functools import cached_property
 from typing import Any , Type , cast , get_args
 
-from src.proj import CALENDAR , Const , Base
+from src.proj import CALENDAR , Const , Base , Dates
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
@@ -362,7 +362,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         # gc.collect()
         self.logger.success(
             f'{status.upper()} Preprocessed ({self.frame}) of [{self.key.upper()}] at '
-            f'{Base.Dates(data_block.date)} finished! Cost {Base.Duration(since = tt1)}' , 
+            f'{Dates(data_block.date)} finished! Cost {Base.Duration(since = tt1)}' , 
             add_prefix = False)
         return Base.UpdateFlag.SUCCESS
     

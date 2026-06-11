@@ -7,7 +7,7 @@ import gc , torch
 from functools import cached_property
 from typing import Any , Callable
 
-from src.proj import CALENDAR , Const, MACHINE , Base , Proj
+from src.proj import CALENDAR , Const, MACHINE , Base , Proj , Dates
 from src.data import ModuleData
 
 from src.func.basic import match_values
@@ -262,7 +262,7 @@ class DataModule(Base.BoundLogger):
             return
         self.logger.stdout(f'Loader Parameters: stage={self.stage} , model_date={self.model_date} , seqlens={self.seq_lens}')
         self.logger.stdout(f'Sample Input Share: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
-        self.logger.stdout(f'Sample Dates Range: {Base.Dates(self.y_date)}' , idt = 1)
+        self.logger.stdout(f'Sample Dates Range: {Dates(self.y_date)}' , idt = 1)
 
         if eff_mask is not None:
             from src.data import DATAVENDOR

@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.proj import CALENDAR , DB , Base
+from src.proj import CALENDAR , DB , Base , Dates
 from src.data.loader import TRADE , RISK
 
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -52,7 +52,7 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
                 for date in target_dates:
                     cls.update_one(date , days , lag1 , label_name)
 
-                cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Base.Dates(target_dates)}' , idt = 1 , vb = 1)
+                cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(target_dates)}' , idt = 1 , vb = 1)
                 flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
 

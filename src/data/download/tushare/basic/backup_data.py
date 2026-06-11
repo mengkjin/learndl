@@ -13,7 +13,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from src.proj import PATH , CALENDAR , DB , Base
+from src.proj import PATH , CALENDAR , DB , Base , Dates
 from .core import TS
 
 path_bak_data   = PATH.resource.joinpath('backup' , 'tushare' , 'data')
@@ -35,7 +35,7 @@ class TSBackUpDataTransform(Base.BoundLogger):
     def get_bak_data(self , date : int , key : str):
         """get backup data from csv"""
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
-        record_file = path_bak_data.joinpath(f'{key}_{Base.Dates(date)}.csv')
+        record_file = path_bak_data.joinpath(f'{key}_{Dates(date)}.csv')
         df = pd.read_csv(record_file)
         df.columns = df.columns.str.lower()
         return df

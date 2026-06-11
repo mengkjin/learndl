@@ -30,7 +30,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any , Literal , Type , Callable , TypeVar
 
-from src.proj import MACHINE , PATH , CALENDAR , DB , Base , Save , Load 
+from src.proj import MACHINE , PATH , CALENDAR , Dates , DB , Base , Save , Load 
 from src.proj.util.functional.handler import retry_call
 from .core import TS
 
@@ -408,7 +408,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
-        self.logger.success(f'Fetched for {Base.Dates(updated_dates)}' , add_prefix = True)
+        self.logger.success(f'Fetched for {Dates(updated_dates)}' , add_prefix = True)
         return Base.UpdateFlag.SUCCESS
 
     def locked_fetch(self , tushare_api : Callable[..., T] , *args, **kwargs) -> pd.DataFrame:

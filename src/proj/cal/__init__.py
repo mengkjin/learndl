@@ -5,7 +5,7 @@ Implementation uses ndarray indexes and ``pandas.Index.get_indexer`` instead of 
 ``isinstance`` checks stay consistent across the codebase.
 """
 
-from .trade_date import TradeDate
-from .cal import CALENDAR, Dates, Dates2, BJ_TZ
+from .cal import CALENDAR
+from .dates import Dates
 
-__all__ = ["TradeDate", "CALENDAR", "Dates", "Dates2", "BJ_TZ"]
+__all__ = ["CALENDAR", "Dates"]
