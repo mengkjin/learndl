@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, ClassVar, Iterator, TypeVar
 import portalocker
 
-from src.proj.cal import BJ_TZ
+from src.proj.cal.basic import BJ_TZ
 from src.proj.env import PATH
 from src.proj.bases.enums import StrEnum
 
