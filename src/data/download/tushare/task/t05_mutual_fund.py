@@ -33,6 +33,7 @@ class FundPortfolioFetcher(TushareFetcher):
     DB_KEY = 'mutual_fund'
     DATA_FREQ = 'q'
     CONSIDER_FUTURE = False
+    SKIP_ON_MACHINES = ('Mathews-Mac' ,)
 
     def target_dates(self):
         dates = self._fina_fetcher_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
@@ -58,6 +59,8 @@ class ETFDailyQuote(DayFetcher):
     """ETF daily quote"""
     START_DATE = 20180101 if MACHINE.updatable else 20241215
     DB_KEY = 'etf_day'
+    SKIP_ON_MACHINES = ('Mathews-Mac' ,)
+
     def get_data(self , date : int):
         date_str = str(date)
         

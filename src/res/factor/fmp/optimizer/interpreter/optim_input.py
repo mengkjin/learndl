@@ -3,9 +3,9 @@ import numpy as np
 
 from copy import deepcopy
 from typing import Any
-
-from src.proj import Const
-from src.res.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL , Rmodel
+ 
+from src.proj import Const , Base
+from src.res.factor.util import AlphaModel , Amodel , Port , RISK_MODEL , Rmodel
 
 from .solver_input import SolverInput
 from .parser import (
@@ -56,7 +56,7 @@ class OptimizedPortfolioInput:
             self.config[key].update(given)
 
     def to_solver_input(self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
-                        benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , * ,
+                        benchmark : Base.alias.SingleBenchmark = None , init_port : Port | Any = None , * ,
                         pool_additional : dict | None = None , **kwargs):
 
         self.model_date = model_date

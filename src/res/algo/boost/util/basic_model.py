@@ -11,8 +11,6 @@ from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
 
 from abc import ABC , abstractmethod
 from copy import deepcopy
@@ -179,6 +177,7 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         return cls().load_dict(model_dict , cuda)
     
     def test_result(self , test : BoostInput | Any = None , plot_path : Path | None = None):
+        import matplotlib.pyplot as plt
         df = self.calc_ic(test)
         plt.figure()
         

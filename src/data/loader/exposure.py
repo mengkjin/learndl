@@ -39,7 +39,7 @@ class ExposureAccess(DateDataAccess):
         return self.get(date , 'daily_risk')
 
     def get_risks(
-        self , start : Base.types.intDate , end : Base.types.intDate ,
+        self , start : Base.alias.intDate , end : Base.alias.intDate ,
         field : Literal['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
         'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'] | str | list , prev = False ,
         mask = False , pivot = False , **kwargs

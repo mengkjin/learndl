@@ -3,8 +3,8 @@ import pandas as pd
 
 from typing import Any , Literal
 
+from src.res.factor.util.agency import BaseConditioner
 from .basic import eval_pf_stats , eval_cum_ret , eval_drawdown
-from ..agency import BaseConditioner
 
 def _filter_account(acc : pd.DataFrame , lag0 = True , pos_model_date = False):
     """drop lag if exists , and select lag0"""

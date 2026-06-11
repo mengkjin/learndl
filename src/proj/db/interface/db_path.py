@@ -10,7 +10,7 @@ from src.proj.env import PATH
 from src.proj.log import Logger
 
 from src.proj.db.basic import (
-    DATAFRAME_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE ,
+    DF_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE ,
     file_dates , dir_dates
 )
 
@@ -74,10 +74,10 @@ class DBPath:
     def PathExact(cls , db_src : str , db_key : str , date : int | None = None) -> Path:
         """get exact path of database"""
         if db_src in cls.db_by_name + cls.export_by_name:
-            return cls(db_src , db_key).parent.joinpath(f'{db_key}.{DATAFRAME_SUFFIX}')
+            return cls(db_src , db_key).parent.joinpath(f'{db_key}.{DF_SUFFIX}')
         else:
             assert date is not None , f'{db_src} use date type but date is None'
-            return cls(db_src , db_key).parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{DATAFRAME_SUFFIX}')
+            return cls(db_src , db_key).parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{DF_SUFFIX}')
 
     @property
     def parent(self) -> Path:

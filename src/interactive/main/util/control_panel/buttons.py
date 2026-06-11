@@ -71,6 +71,8 @@ class ScriptRunnerRunButton(ControlPanelButton):
             return self.update(True , "Please Choose a Script to Run First" , "no-script-key")
         if self.runner is None:
             return self.update(True , "Please Supply a Script Runner First" , "no-runner")
+        if self.runner.blacklisted:
+            return self.update(True , "Script is blacklisted on this machine" , "blacklisted")
         if SC.param_inputs_form is None:
             return self.update(True , "Please Fill Required Parameters" , "no-param-form")
         params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None

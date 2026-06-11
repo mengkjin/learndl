@@ -8,7 +8,7 @@ from torch import Tensor
 from typing import Any , Callable , Literal
 from pathlib import Path
 
-from src.proj import Save
+from src.proj import Save , Base
 from src.res.model.util.core import epoch_key , attempt_key
 
 from .aggregator import MetricAggregator , AggregatorType
@@ -16,7 +16,6 @@ from .metric_result import EpochMetricResult
 
 __all__ = ['BatchMetrics' , 'EpochMetrics' , 'AttemptMetrics' , 'ModelMetrics']
 
-MetricTypes = Literal['accuracy' , 'loss' , 'rankic']
 
 class BatchMetrics:
     def __init__(self , aggregator : MetricAggregator) -> None:
@@ -287,11 +286,11 @@ class AttemptMetrics(AggregatedMetrics):
             epoch = train.epoch, phase = train.phase, **valid.metrics_dict, **train.metrics_dict,
         ))
 
-    def total_metrics(self , dataset : Literal['train','valid'] , metric : MetricTypes) -> list[float]:
+    def total_metrics(self , dataset : Base.lit.DatasetFit , metric : Base.lit.MetricType) -> list[float]:
         col = 'rankic' if metric == 'rankic' else f'total_{metric}'
         return [df[col].item() for df in self.tables[f'{dataset}_epoch_totals']]
 
-    def latest(self , dataset : Literal['train','valid'] , metric : MetricTypes) -> float:
+    def latest(self , dataset : Base.lit.DatasetFit , metric : Base.lit.MetricType) -> float:
         metrics = self.total_metrics(dataset , metric)
         return metrics[-1] if metrics else 0.
 

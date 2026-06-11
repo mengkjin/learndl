@@ -8,10 +8,9 @@ Shenzhen stock exchange websites.  Only active on CUDA servers
 from __future__ import annotations
 import asyncio
 from collections import defaultdict
-from typing import Literal , Any , Iterable
+from typing import Any , Iterable
 
-
-from src.proj import CALENDAR , MACHINE , Base
+from src.proj import MACHINE , Base
 from src.proj.util.web.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.web.proxy.caller import ProxyCallerList
 from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool
@@ -23,59 +22,29 @@ from .util import CrawlerLogger
 
 __all__ = ["AnnouncementAgent"]
 
-class AnnouncementAgent(Base.BoundLogger):
+class AnnouncementAgent(Base.BasicUpdater):
     """
     Crawl and incrementally update exchange announcement metadata.
 
     Uses ``FetcherTask`` for per-date HTTP fetches and ``ProxyCallerList``
     for rotating proxy management.
     """
-    START_DATE = 20160101 if MACHINE.cuda_server else 20260101
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE, Base.UpdateType.ROLLBACK)
+    START_DATE = 20160101 if MACHINE.cuda_server else 20250101
 
     @classmethod
-    def update(cls):
-        cls.update_all('update')
+    def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
+        return super().parse_update_input(*args , key='crawler_announcement' , **kwargs)
 
     @classmethod
-    def rollback(cls , rollback_date : int):
-        cls.set_rollback_date(rollback_date)
-        cls.update_all('rollback')
-
-    @classmethod
-    def recalculate_all(cls):
-        cls.update_all('recalc')
-
-    @classmethod
-    def set_rollback_date(cls , rollback_date : int):
-        CALENDAR.check_rollback_date(rollback_date)
-        cls._rollback_date = rollback_date
-
-    @classmethod
-    def update_all(
-        cls , update_type : Literal['recalc' , 'update' , 'rollback'] , * , 
-        indent : int = 0 , vb_level : Any = 1 , workers: int = 10, force_update: int = 0, **kwargs
-    ):
-        cls.SetClassVB(vb_level , indent)
-        if update_type == 'recalc':
-            cls.logger.note(f'Recalculate all!')
-            raise ValueError(f'Recalculate all is not supported for {cls.__name__}')
-        elif update_type == 'update':
-            cls.logger.note(f'Update since last update!')
-            start , end , redownload = int(cls.START_DATE) , int(CALENDAR.update_to()) , False
-        elif update_type == 'rollback':
-            cls.logger.note(f'Rollback from {cls._rollback_date}!')
-            rollback_date = CALENDAR.td(cls._rollback_date)
-            start , end , redownload = int(rollback_date) , int(CALENDAR.update_to()) , True
-        else:
-            raise ValueError(f'Invalid update type: {update_type}')
-        
-        status = cls.run_with_proxy_async(start, end, redownload = redownload , force_update = force_update , workers = workers, fallback_to_raw_ip = False, **kwargs)
-        if status == 'skipping':
-            cls.logger.skipping(f'Announcements have already been updated recently' , idt = 1)
-        elif status == 'success':
-            cls.logger.success(f'Announcements updated at {Base.Dates(end)}' , idt = 1)
-        else:
-            cls.logger.alert1(f'Announcements update at {Base.Dates(end)} failed' , idt = 1)
+    def proceed_update(
+        cls , start : int , end : int , overwrite : bool , * , workers: int = 10, force_update: int = 0, **kwargs
+    ) -> Base.UpdateFlag:        
+        flag = cls.run_with_proxy_async(
+            start, end, redownload = overwrite , 
+            force_update = force_update , workers = workers, 
+            fallback_to_raw_ip = False, **kwargs)
+        return flag
 
     @classmethod
     def prepare_proxies(cls):
@@ -135,8 +104,8 @@ class AnnouncementAgent(Base.BoundLogger):
         force_update: int = 0, go_with_cached_proxies: bool = False,
         workers: int = 10, fallback_to_raw_ip : bool = False ,
         use_async: bool = False, race_ratio: float = 0.5, min_race_tasks: int = 2,
-        max_replicas_per_task: int = 5, max_total_inflight_per_exchange: int = 20
-    ) -> Literal['skipping' , 'success' , 'failed']:
+        max_replicas_per_task: int = 5, max_total_inflight_per_exchange: int = 20 , **kwargs
+    ) -> Base.UpdateFlag:
         """parallel run all announcement tasks"""
         if use_async:
             return cls.run_with_proxy_async(
@@ -152,9 +121,12 @@ class AnnouncementAgent(Base.BoundLogger):
             go_with_cached_proxies = go_with_cached_proxies)
         if caller_list:
             results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 50) , fallback_to_raw_ip=fallback_to_raw_ip)
-            return 'success' if all([result if isinstance(result, bool) else False for result in results]) else 'failed'
+            if all([result if isinstance(result, bool) else False for result in results]):
+                return Base.UpdateFlag.FAILED
+            else:
+                return Base.UpdateFlag.SUCCESS
         else:
-            return 'skipping'
+            return Base.UpdateFlag.SKIPPED
 
     @classmethod
     async def _run_with_proxy_async(
@@ -171,14 +143,15 @@ class AnnouncementAgent(Base.BoundLogger):
         min_race_tasks: int = 2,
         max_replicas_per_task: int = 5,
         max_total_inflight_per_exchange: int = 20,
-    ) -> Literal['skipping' , 'success' , 'failed']:
+        **kwargs,
+    ) -> Base.UpdateFlag:
         tasks = FetcherTask.tasks_flat(start, end, step, redownload , force_update=force_update)
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
             cls.logger.stdout(f"Total Announcement Clawing Tasks: {len(tasks)} at {min_date}~{max_date} for 3 exchanges" , idt = 1, vb = 1)
         else:
-            return 'skipping'
+            return Base.UpdateFlag.SKIPPED
         grouped_tasks: dict[str, list[FetcherTask]] = defaultdict(list)
         for task in tasks:
             grouped_tasks[task.exchange].append(task)
@@ -216,7 +189,7 @@ class AnnouncementAgent(Base.BoundLogger):
             for exchange, ex_tasks in grouped_tasks.items()
         ])
         all_ok = all(exchange_results)
-        return 'success' if all_ok else 'failed'
+        return Base.UpdateFlag.SUCCESS if all_ok else Base.UpdateFlag.FAILED
 
     @classmethod
     def run_with_proxy_async(
@@ -234,7 +207,8 @@ class AnnouncementAgent(Base.BoundLogger):
         min_race_tasks: int = 2,
         max_replicas_per_task: int = 5,
         max_total_inflight_per_exchange: int = 20,
-    ) -> Literal['skipping' , 'success' , 'failed']:
+        **kwargs,
+    ) -> Base.UpdateFlag:
         if fallback_to_raw_ip:
             cls.logger.alert1("fallback_to_raw_ip is ignored in async mode")
         return asyncio.run(
@@ -244,6 +218,7 @@ class AnnouncementAgent(Base.BoundLogger):
                 race_ratio=race_ratio, min_race_tasks=min_race_tasks,
                 max_replicas_per_task=max_replicas_per_task,
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
+                **kwargs,
             )
         )
 

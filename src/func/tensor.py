@@ -16,6 +16,8 @@ from sklearn.linear_model import LinearRegression
 from typing import Literal , Callable
 
 from .basic import alert_message , DIV_TOL , allna
+
+lit1 = Literal[1]
     
 def process_factor(value : Tensor | None , * , stream = 'inf_winsor_norm' , dim = 0 , trim_ratio = 7. , **kwargs):
     """Apply a chained underscore-separated pipeline to factor values (trim, winsor, norm, etc.).
@@ -68,7 +70,7 @@ class TsRoller:
     pad_first = True # whether to pad before unfold / otherwise after fold
 
     @classmethod
-    def unfold(cls , x : Tensor , d : int , * , dim :int | Literal[1] = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
+    def unfold(cls , x : Tensor , d : int , * , dim :int | lit1 = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
         """Build sliding windows of length ``d`` along ``dim``.
 
         Args:
@@ -1120,7 +1122,7 @@ def signedpower(x : Tensor , a : float):
     """
     return x.sign() * x.abs().pow(a)
 
-def pctchg(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def pctchg(x : Tensor , d : int , * , dim : lit1 = 1):
     """Relative change vs ``d``-lag along ``dim``: ``(x - x_lag) / |x_lag|``.
 
     Args:
@@ -1133,7 +1135,7 @@ def pctchg(x : Tensor , d : int , * , dim : Literal[1] = 1):
     """
     return (x - ts_delay(x,d , dim = dim)) / abs(ts_delay(x,d , dim = dim))
 
-def ts_delay(x : Tensor , d : int , * , dim : Literal[1] = 1, no_alert = False):
+def ts_delay(x : Tensor , d : int , * , dim : lit1 = 1, no_alert = False):
     """Circular roll along ``dim`` with leading segment zeroed (NaN-filled) to avoid wrap.
 
     Args:
@@ -1160,7 +1162,7 @@ def ts_delay(x : Tensor , d : int , * , dim : Literal[1] = 1, no_alert = False):
         z[:,d:] = nan
     return z
 
-def ts_delta(x : Tensor , d : int , * , dim : Literal[1] = 1, no_alert = False):
+def ts_delta(x : Tensor , d : int , * , dim : lit1 = 1, no_alert = False):
     """``x - ts_delay(x, d)`` along ``dim``.
 
     Args:
@@ -1183,7 +1185,7 @@ def ts_delta(x : Tensor , d : int , * , dim : Literal[1] = 1, no_alert = False):
     return z
 
 @TsRoller.decor(1)
-def ts_zscore(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_zscore(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling ending value of ``zscore`` along the window (last window position).
 
     Args:
@@ -1197,7 +1199,7 @@ def ts_zscore(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return zscore(x , dim = dim , index = -1)
 
 @TsRoller.decor(1)
-def ts_mean(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_mean(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling nan-mean over windows of length ``d``.
 
     Args:
@@ -1211,7 +1213,7 @@ def ts_mean(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.nanmean(x , dim = dim)
 
 @TsRoller.decor(1 , nan = np.inf)
-def ts_min(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_min(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling minimum over each window.
 
     Args:
@@ -1225,7 +1227,7 @@ def ts_min(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.min(x , dim=dim).values
 
 @TsRoller.decor(1 , nan = -np.inf)
-def ts_max(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_max(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling maximum over each window.
 
     Args:
@@ -1239,7 +1241,7 @@ def ts_max(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.max(x , dim=dim).values
 
 @TsRoller.decor(1 , nan = np.inf)
-def ts_argmin(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_argmin(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling argmin (as float) over each window.
 
     Args:
@@ -1253,7 +1255,7 @@ def ts_argmin(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.argmin(x , dim=dim).to(torch.float)
 
 @TsRoller.decor(1 , nan = -np.inf)
-def ts_argmax(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_argmax(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling argmax (as float) over each window.
 
     Args:
@@ -1267,7 +1269,7 @@ def ts_argmax(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.argmax(x , dim=dim).to(torch.float)
 
 @TsRoller.decor(1)
-def ts_rank(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_rank(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling ending rank percentile (last element of window-wise ``rank_pct``).
 
     Args:
@@ -1281,7 +1283,7 @@ def ts_rank(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return rank_pct(x,dim=dim)[...,-1]
 
 @TsRoller.decor(1 , nan = 0)
-def ts_stddev(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_stddev(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling standard deviation over each window.
 
     Args:
@@ -1295,7 +1297,7 @@ def ts_stddev(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.std(x,dim=dim)
 
 @TsRoller.decor(1 , nan = 0)
-def ts_sum(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_sum(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling sum over each window.
 
     Args:
@@ -1309,7 +1311,7 @@ def ts_sum(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.sum(x,dim=dim)
 
 @TsRoller.decor(1 , nan = 1)
-def ts_product(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_product(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling product over each window.
 
     Args:
@@ -1323,7 +1325,7 @@ def ts_product(x : Tensor , d : int , * , dim : Literal[1] = 1):
     return torch.prod(x,dim=dim)
 
 @TsRoller.decor(1)
-def ts_lin_decay(x : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_lin_decay(x : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling linear-decay weighted average (see ``lin_decay``).
 
     Args:
@@ -1336,7 +1338,7 @@ def ts_lin_decay(x : Tensor , d : int , * , dim : Literal[1] = 1):
     """
     return lin_decay(x , dim=dim)
 
-def ts_decay_pos_dif(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_decay_pos_dif(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling linear-decay of ``relu(x - y)``.
 
     Args:
@@ -1353,7 +1355,7 @@ def ts_decay_pos_dif(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 
     return ts_lin_decay(value, d , dim=dim)
 
 @TsRoller.decor(2,nan=0)
-def ts_corr(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_corr(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling Pearson correlation between ``x`` and ``y`` over each window.
 
     Args:
@@ -1368,7 +1370,7 @@ def ts_corr(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     return corrwith(x , y , dim=dim)
 
 @TsRoller.decor(2 , nan = 0)
-def ts_beta(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_beta(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling OLS beta ``cov(x,y)/var(x)`` inside each window.
 
     Args:
@@ -1383,7 +1385,7 @@ def ts_beta(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     return beta(x , y , dim=dim)
 
 @TsRoller.decor(2 , nan = 0)
-def ts_beta_pos(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_beta_pos(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling beta using only ``x >= 0`` observations within each window.
 
     Args:
@@ -1398,7 +1400,7 @@ def ts_beta_pos(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     return beta_pos(x , y , dim=dim)
 
 @TsRoller.decor(2 , nan = 0)
-def ts_beta_neg(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_beta_neg(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling beta using only ``x <= 0`` observations within each window.
 
     Args:
@@ -1413,7 +1415,7 @@ def ts_beta_neg(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     return beta_neg(x , y , dim=dim)
 
 @TsRoller.decor(2 , nan = 0)
-def ts_cov(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_cov(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling covariance between ``x`` and ``y``.
 
     Args:
@@ -1428,7 +1430,7 @@ def ts_cov(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
     return covariance(x , y , dim=dim)
 
 @TsRoller.decor(2,nan=0)
-def ts_rankcorr(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
+def ts_rankcorr(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
     """Rolling Spearman-style correlation using ``rank_pct`` of ``x`` and ``y``.
 
     Args:
@@ -1445,7 +1447,7 @@ def ts_rankcorr(x : Tensor , y : Tensor , d : int , * , dim : Literal[1] = 1):
 @TsRoller.decor(1)
 def conditional_x(
     x : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
-    dim : Literal[1] = 1, use : Literal['mean' , 'thres'] = 'mean',
+    dim : lit1 = 1, use : Literal['mean' , 'thres'] = 'mean',
     force_directional_sign : bool = False
 ):
     """Rolling statistic of ``x`` conditioned on ``x`` being among the smallest/largest ``n`` in the window.
@@ -1493,7 +1495,7 @@ def conditional_x(
 @TsRoller.decor(2)
 def conditional_y_on_x(
     x : Tensor , y : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
-    dim : Literal[1] = 1, use : Literal['mean' , 'thres'] = 'mean',
+    dim : lit1 = 1, use : Literal['mean' , 'thres'] = 'mean',
     force_directional_sign : bool = False
 ):
     """Rolling statistic of ``y`` where ``x`` selects the bottom/top ``n`` observations in each window.
@@ -1540,7 +1542,7 @@ def conditional_y_on_x(
         raise ValueError(f'Invalid number of groups: {len(z)}')
     return z
 
-def ts_btm_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
+def ts_btm_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : lit1 = 1):
     """Mean of ``y`` on the ``n`` smallest ``x`` within each length-``d`` window.
 
     Args:
@@ -1555,7 +1557,7 @@ def ts_btm_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Litera
     """
     return conditional_y_on_x(x, y, d, n, dim=dim, method='btm')
 
-def ts_top_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
+def ts_top_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : lit1 = 1):
     """Mean of ``y`` on the ``n`` largest ``x`` within each window.
 
     Args:
@@ -1570,7 +1572,7 @@ def ts_top_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Litera
     """
     return conditional_y_on_x(x, y, d, n, dim=dim, method='top')
 
-def ts_dif_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
+def ts_dif_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : lit1 = 1):
     """Top-``n`` minus bottom-``n`` mean of ``y`` ordered by ``x`` within each window.
 
     Args:
@@ -1585,7 +1587,7 @@ def ts_dif_y_on_x(x : Tensor , y : Tensor , d : int , n : int , * , dim : Litera
     """
     return conditional_y_on_x(x, y, d, n, dim=dim, method='diff')
 
-def ts_btm_x(x : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
+def ts_btm_x(x : Tensor , d : int , n : int , * , dim : lit1 = 1):
     """Mean of smallest ``n`` values of ``x`` in each rolling window.
 
     Args:
@@ -1599,7 +1601,7 @@ def ts_btm_x(x : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
     """
     return conditional_x(x, d, n, dim=dim, method='btm')
 
-def ts_top_x(x : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
+def ts_top_x(x : Tensor , d : int , n : int , * , dim : lit1 = 1):
     """Mean of largest ``n`` values of ``x`` in each rolling window.
 
     Args:
@@ -1613,7 +1615,7 @@ def ts_top_x(x : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
     """
     return conditional_x(x, d, n, dim=dim, method='top')
 
-def ts_dif_x(x : Tensor , d : int , n : int , * , dim : Literal[1] = 1):
+def ts_dif_x(x : Tensor , d : int , n : int , * , dim : lit1 = 1):
     """Difference between top-``n`` and bottom-``n`` means of ``x`` in each window.
 
     Args:

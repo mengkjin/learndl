@@ -22,7 +22,7 @@ from typing import Any , Literal
 from src.proj import CALENDAR , Proj , DB , Const , Base
 from src.data.util import DataBlock , INFO
 
-from .financial_data import BS , IS , CF , INDI , FINA , FinData
+from .financial_data import BS , IS , CF , INDI , FINA , FinData , DiffMethod
 from .analyst import ANALYST
 from .min_kline import MKLINE
 from .model_data import RISK
@@ -156,7 +156,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return CALENDAR.cd(date , offset)
 
     @classmethod
-    def real_factor(cls , factor_type : Literal['pred' , 'factor'] , names : str | list[str] | np.ndarray ,
+    def real_factor(cls , factor_type : Base.lit.FactorType , names : str | list[str] | np.ndarray ,
                     start = 20240101 , end = 20240531 , step = 5):
         """Load named factor or model prediction DataBlocks from the DB and merge them."""
         if isinstance(names , str): 
@@ -266,7 +266,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             self.update_return_block(start , end)
         return self.blocks_cache.get('daily_ret' , DataBlock())
     
-    def day_quote(self , date : int | Any , price : Literal['close' , 'vwap' , 'open'] = 'close'):
+    def day_quote(self , date : int | Any , price : Base.lit.TradePrice = 'close'):
         """Return a ``(secid, price)`` DataFrame for a single date, with adjfactor applied."""
         df = self.TRADE.get_trd(date , ['secid' , 'adjfactor' , price])
         if not df.empty:
@@ -276,8 +276,8 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             return pd.DataFrame(columns = ['secid' , 'price'])
     
     def get_quote_ret(self , date0 , date1 , 
-                      price0 : Literal['close' , 'vwap' , 'open'] = 'close' ,
-                      price1 : Literal['close' , 'vwap' , 'open'] = 'close' ,
+                      price0 : Base.lit.TradePrice = 'close' ,
+                      price1 : Base.lit.TradePrice = 'close' ,
                       secid : np.ndarray | pd.Series | Any | None = None):
         """
         get ret of single date0 and date1
@@ -296,8 +296,8 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return q
 
     def get_quote_ret_new(self , date0 , date1 , 
-                      price0 : Literal['close' , 'vwap' , 'open'] = 'close' ,
-                      price1 : Literal['close' , 'vwap' , 'open'] = 'close' ,
+                      price0 : Base.lit.TradePrice = 'close' ,
+                      price1 : Base.lit.TradePrice = 'close' ,
                       secid : np.ndarray | pd.Series | Any | None = None):
         blk = self.get_quotes_block([date0 , date1])
         p0 = blk.loc(date = date0 , feature = price0).flatten()
@@ -309,7 +309,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             q = q.reindex(secid).fillna(0)
         return q
 
-    def get_miscel_ret(self , df : pd.DataFrame , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+    def get_miscel_ret(self , df : pd.DataFrame , ret_type : Base.lit.ReturnType = 'close') -> pd.DataFrame:
         """Return per-row returns for arbitrary (secid, start, end) combinations.
 
         ``df`` must contain ``'secid'``, ``'start'``, and ``'end'`` columns.
@@ -331,7 +331,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return df
 
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 ,
-                     ret_type : Literal['close' , 'vwap'] = 'close'):
+                     ret_type : Base.lit.ReturnType = 'close'):
         """
         Compute n-day compounded forward returns for each (secid, date).
 
@@ -394,7 +394,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         fin_data = FinData(expression , **kwargs)
         return fin_data.get_hist(date , lastn , new_name)
 
-    def get_fin_qoq(self , expression : str , date : int , lastn : int , method : Literal['pct' , 'diff'] = 'pct' , **kwargs) -> pd.DataFrame:
+    def get_fin_qoq(self , expression : str , date : int , lastn : int , method : DiffMethod = 'pct' , **kwargs) -> pd.DataFrame:
         """Compute quarter-on-quarter changes for a FinData expression."""
         data = FinData(expression , **kwargs).get_hist(date = date , lastn = lastn + 2)
         full_index = pd.MultiIndex.from_product([data.index.get_level_values('secid').unique() ,
@@ -408,7 +408,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         df_yoy = df_yoy.reindex(data.index).where(~data.isna() , np.nan).replace([np.inf , -np.inf] , np.nan)
         return df_yoy.groupby('secid').tail(lastn)
     
-    def get_fin_yoy(self , expression : str , date : int , lastn : int , method : Literal['pct' , 'diff'] = 'pct' , **kwargs) -> pd.DataFrame:
+    def get_fin_yoy(self , expression : str , date : int , lastn : int , method : DiffMethod = 'pct' , **kwargs) -> pd.DataFrame:
         """Compute year-on-year changes (4-quarter lag) for a FinData expression."""
         data = FinData(expression , **kwargs).get_hist(date = date , lastn = lastn + 5)
         full_index = pd.MultiIndex.from_product([data.index.get_level_values('secid').unique() ,

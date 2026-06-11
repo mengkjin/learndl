@@ -7,7 +7,10 @@ from functools import cached_property
 from typing import Any
 
 from src.proj import Const , Logger
-from ...util import Port , AlphaModel , AlphaScreener , Amodel , AlphaComposite , PortCreator , PortCreateResult
+from src.res.factor.util import (
+    Port , AlphaModel , AlphaScreener , 
+    Amodel , AlphaComposite , PortCreator , PortCreateResult
+)
 
 class BasicCreatorConfig:
     """

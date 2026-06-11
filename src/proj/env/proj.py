@@ -6,7 +6,7 @@ from src.__version__ import __version__
 from src.proj.core import Silence , NoInstanceMeta
 from .machine import MACHINE
 from .debug_mode import DebugMode
-from .verbosity import Verbosity
+from .verbosity import Verbosity , VerbosityLevel
 from .variable import LogWriterFile , UniqueFileList , InstanceCollection
 
 __all__ = ['Proj']
@@ -27,7 +27,7 @@ class Proj(metaclass=ProjMeta):
     version = __version__
 
     @classmethod
-    def verbose(cls , vb_level : Literal['max','min','never','always'] | Any = 1):
+    def verbose(cls , vb_level : VerbosityLevel | Any = 1):
         return cls.debug['complete_verbosity'] or not cls.vb.ignore(vb_level)
 
     @classmethod

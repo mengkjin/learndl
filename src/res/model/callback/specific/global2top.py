@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal , Callable
+from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack
 from src.res.model.util.core import epoch_key
 
@@ -149,7 +150,7 @@ class SpecificCB_Global2Top(BaseCallBack):
             self.metric_best_epoch = overall_accuracies[start_len:].argmax().item() + start_len
             self.metric_best_level = self.valid_accuracies.iloc[self.metric_best_epoch].to_dict()
             self.status.add_epoch_event(
-                'end_attempt' , 'EarlyStop' , epoch = self.metric_best_epoch , 
+                FittingEventType.END_ATTEMPT , 'EarlyStop' , epoch = self.metric_best_epoch , 
                 message = f'Global2Top combined accuracy converged at {epoch_key(self.metric_best_epoch, 1)}, recognized at {self.status.epoch_key}'
             )
 

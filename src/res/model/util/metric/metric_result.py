@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any , Literal
-
+from typing import Any
+from src.proj import Base
 from src.res.model.util.core import epoch_key
 
 @dataclass
@@ -23,7 +23,7 @@ class EpochMetricResult:
     def epoch_key(self):
         return epoch_key(self.epoch , self.phase)
 
-    def metrics(self , dataset : Literal['train','valid'] , metric : Literal['accuracy','loss']) -> dict[Any,float]:
+    def metrics(self , dataset : Base.lit.DatasetFit , metric : Base.lit.MetricType) -> dict[Any,float]:
         if metric == 'accuracy':
             return self.valid_accuracies if dataset == 'valid' else self.train_accuracies
         elif metric == 'loss':

@@ -48,7 +48,7 @@ class RiskModelAccess(DateDataAccess):
         """Return factor exposure data for a single ``date``."""
         return self.get(date , 'exp' , field)
 
-    def get_exret(self , start : Base.types.intDate , end : Base.types.intDate ,
+    def get_exret(self , start : Base.alias.intDate , end : Base.alias.intDate ,
                   mask = True , pivot = True , drop_old = False):
         """
         Return per-stock residual (excess) returns from the risk model.

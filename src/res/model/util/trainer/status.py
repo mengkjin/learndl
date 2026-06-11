@@ -3,21 +3,18 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Literal , Any
+from typing import Any
 
+from src.proj import Base
 from src.res.model.util.core import epoch_key , attempt_key
 from .pipeline import BasePipeline
 
-__all__ = ['EventTypeType' , 'EpochEvent' , 'EpochRecord' , 'FittingEpochs' , 'TrainerStatus']
+__all__ = ['EpochEvent' , 'EpochRecord' , 'FittingEpochs' , 'TrainerStatus']
 
-EventTypeType = Literal[
-    'new_attempt' , 'redo_attempt' , 'end_attempt' , 
-    'recall_ckpt' , 'new_phase_recall' , 'new_phase' , 
-    'milestone' , 'logging']
 @dataclass
 class EpochEvent:
     """Epoch event class, used to store the event of the epoch"""
-    type : EventTypeType
+    type : Base.FittingEventType
     reason : str
     epoch : int
     phase : int = 0
@@ -80,7 +77,7 @@ class EpochRecord:
         return attempt_key(self.attempt , self.redo)
 
     @property
-    def continue_status(self) -> Literal['continue' , 'redo_attempt' , 'new_attempt' , 'end_attempt' , 'new_phase_recall' , 'new_phase' , 'recall_ckpt']:
+    def continue_status(self):
         event_types = list(set([event.type for event in self.events]))
         if 'redo_attempt' in event_types:
             return 'redo_attempt'
@@ -96,7 +93,7 @@ class EpochRecord:
             return 'recall_ckpt'
         return 'continue'
 
-    def find_event(self , event_type : EventTypeType , allow_multiple : bool = False) -> EpochEvent | None:
+    def find_event(self , event_type : Base.FittingEventType , allow_multiple : bool = False) -> EpochEvent | None:
         """find the first event of the given type"""
         events = [event for event in self.events if event.type == event_type]
         assert allow_multiple or len(events) <= 1 , f'Only one {event_type} event is allowed, but got {len(events)}'
@@ -156,8 +153,8 @@ class FittingEpochs:
     """Fitting epochs class, used to store the epochs of the fitting"""
     def __init__(self):
         self.epochs : list[EpochRecord] = [EpochRecord(epoch = -1)]
-        self.events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
-        self.attempt_events : dict[EventTypeType , list[EpochEvent]] = defaultdict(list)
+        self.events : dict[Base.FittingEventType , list[EpochEvent]] = defaultdict(list)
+        self.attempt_events : dict[Base.FittingEventType , list[EpochEvent]] = defaultdict(list)
     def __len__(self):
         return len(self.epochs)
     def __repr__(self):
@@ -197,7 +194,7 @@ class FittingEpochs:
         record = self.current.new_epoch() if self.epochs else EpochRecord()
         assert record is not None , 'record is None'
         self.epochs.append(record)
-    def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
+    def add_epoch_event(self , type : Base.FittingEventType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
         effective_epoch = -1 if epoch is None else epoch
         current_epoch = self.current
         event = EpochEvent(type , reason , current_epoch.epoch , current_epoch.phase , effective_epoch , message , details or {})
@@ -205,20 +202,20 @@ class FittingEpochs:
         current_epoch.add_event(event)
     def check_loop_end(self , max_epoch : int):
         if self.current.epoch >= max_epoch - 1:
-            self.add_epoch_event('end_attempt' , 'Max Epoch' , message = f'Max Epoch ({max_epoch}) reached, force end attempt')
+            self.add_epoch_event(Base.FittingEventType.END_ATTEMPT , 'Max Epoch' , message = f'Max Epoch ({max_epoch}) reached, force end attempt')
     @property
     def end_attempt_event(self) -> EpochEvent | None:
-        if not self.attempt_events['end_attempt']:
+        if not self.attempt_events[Base.FittingEventType.END_ATTEMPT]:
             return None
-        event = sorted(self.attempt_events['end_attempt'] , key = lambda x: (x.effective_epoch , x.epoch))[0]
+        event = sorted(self.attempt_events[Base.FittingEventType.END_ATTEMPT] , key = lambda x: (x.effective_epoch , x.epoch))[0]
         return event
     
 class TrainerStatus(BasePipeline):
     """Trainer status class, used to store the status of the trainer"""
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self.stage   : Literal['setup' , 'data' , 'fit' , 'test' , 'summary'] = 'setup'
-        self.dataset : Literal['train' , 'valid' , 'test' , 'predict'] = 'train'
+        self.stage   : Base.lit.StageAll = 'setup'
+        self.dataset : Base.lit.DatasetAll = 'train'
         self.model_num  : int = -1
         self.model_date : int = -1
         self.model_submodel : str = 'best'
@@ -308,7 +305,7 @@ class TrainerStatus(BasePipeline):
         self.fitting_epochs.check_loop_end(max_epoch)   
     def set_milestone_epoch(self , epoch : int):
         self.milestone_epochs.append(epoch)
-    def add_epoch_event(self , type : EventTypeType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
+    def add_epoch_event(self , type : Base.FittingEventType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
         self.fitting_epochs.add_epoch_event(type , reason , epoch , message , details)
 
     def on_data_start_before(self):  

@@ -9,22 +9,39 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Iterator, TypeVar , Literal , TypeAlias
-
+from typing import Any, Callable, ClassVar, Iterator, TypeVar
 import portalocker
 
 from src.proj.cal import BJ_TZ
 from src.proj.env import PATH
+from src.proj.bases.enums import StrEnum
 
-_T = TypeVar('_T')
+T = TypeVar('T')
+_ROOT = PATH.runtime.joinpath('disk_ttl_cache')
 _SAFE_NAMESPACE = re.compile(r'[^\w\-.]+')
 
-TypeNamespace : TypeAlias = Literal['cache_meta' , 'daily_update']
-_namespace_options : frozenset[str] = frozenset(['cache_meta' , 'daily_update'])
-_max_ttl_hours : dict[str, float] = {
-    'cache_meta': 24 * 365,
-    'daily_update': 24,
-}
+class NamespaceType(StrEnum):
+    CACHE_META = 'cache_meta'
+    DAILY_UPDATE = 'daily_update'
+
+    def cache_file(self) -> Path:
+        safe_name = _SAFE_NAMESPACE.sub('_', self.value.strip()) or 'default'
+        return _ROOT.joinpath(f'{safe_name}.json')
+
+    @property
+    def _max_ttl_hours(self) -> float:
+        return {
+            NamespaceType.CACHE_META: 24 * 365,
+            NamespaceType.DAILY_UPDATE: 24,
+        }[self]
+
+    def ttl_hours(self , ttl_hours: float | int | None = None) -> float:
+        if ttl_hours is None:
+            return self._max_ttl_hours
+        ttl_hours = float(ttl_hours)
+        assert (0 < ttl_hours <= self._max_ttl_hours), f'ttl_hours must be in (0, {self._max_ttl_hours}], got {ttl_hours!r}'
+        return ttl_hours
+
 
 def _current_time() -> datetime:
     return datetime.now(tz=BJ_TZ)
@@ -38,26 +55,14 @@ def _parse_datetime(value: str | datetime) -> datetime:
         return dt.replace(tzinfo=BJ_TZ)
     return dt.astimezone(BJ_TZ)
 
-def _ensure_json_serializable(value: Any) -> None:
+def _ensure_json_serializable(value: Any) -> Any:
     json.dumps(value, ensure_ascii=False)
-
-def _validate_ttl_hours(namespace: str, ttl_hours: float | None = None) -> float:
-    assert namespace in _namespace_options, f'namespace {namespace} is not supported, supported namespaces: {_namespace_options}'
-    max_ttl_hours = min(_max_ttl_hours[namespace], 24 * 365)
-    assert max_ttl_hours > 0, f'max_ttl_hours must be positive, got {max_ttl_hours}'
-    if ttl_hours is None:
-        return max_ttl_hours
-    if not isinstance(ttl_hours, (int, float)):
-        raise TypeError(f'ttl_hours must be numeric, got {type(ttl_hours).__name__}')
-    hours = float(ttl_hours)
-    if not (0 < hours <= max_ttl_hours + 1e-6):
-        raise ValueError(f'ttl_hours must be in (0, {max_ttl_hours}], got {ttl_hours!r}')
-    return hours
+    return value
 
 @dataclass(frozen=True, slots=True)
 class DiskTTLCacheEntry:
     """One cache record returned by :meth:`DiskTTLCache.get`."""
-    namespace: TypeNamespace
+    namespace: NamespaceType
     key: str
     value: Any
     ttl_hours: float
@@ -95,7 +100,10 @@ class DiskTTLCacheEntry:
         return DiskTTLCache.put(self.namespace, self.key, value, ttl_hours=ttl_hours)
 
     @classmethod
-    def create(cls, namespace: TypeNamespace, key: str, value: Any, ttl_hours: float) -> DiskTTLCacheEntry:
+    def create(cls, namespace: NamespaceType | str, key: str, value: Any, ttl_hours: float | int | None = None) -> DiskTTLCacheEntry:
+        namespace = NamespaceType(namespace)
+        value = _ensure_json_serializable(value)
+        ttl_hours = namespace.ttl_hours(ttl_hours)
         created_at = _current_time()
         expires_at = created_at + timedelta(hours=ttl_hours)
         return cls(
@@ -108,16 +116,18 @@ class DiskTTLCacheEntry:
         )
 
     @classmethod
-    def empty_entry(cls, namespace: TypeNamespace, key: str) -> DiskTTLCacheEntry:
+    def empty_entry(cls, namespace: NamespaceType | str, key: str) -> DiskTTLCacheEntry:
+        namespace = NamespaceType(namespace)
         sentinel = datetime(1900, 1, 1, tzinfo=BJ_TZ)
         return cls(namespace=namespace, key=key, value=None, ttl_hours=0, created_at=sentinel, expires_at=sentinel)
 
     @classmethod
     def from_dict(
-        cls, namespace: TypeNamespace, key: str, value: Any | None = None, 
+        cls, namespace: NamespaceType | str, key: str, value: Any | None = None, 
         created_at: str | None = None , expires_at: str | None = None, 
         ttl_hours: float | None = None) -> DiskTTLCacheEntry:
         """Build from on-disk dict; return ``None`` if required fields are invalid."""
+        namespace = NamespaceType(namespace)
         if value is None or created_at is None or expires_at is None or ttl_hours is None:
             return cls.empty_entry(namespace, key)
         _ttl_hours = float(ttl_hours)
@@ -194,23 +204,20 @@ class DiskTTLCache:
             entry.created_at
             entry.value
     """
-    _ROOT = PATH.runtime.joinpath('disk_ttl_cache')
     _locks_guard: ClassVar[threading.Lock] = threading.Lock()
     _namespace_locks: ClassVar[dict[str, threading.Lock]] = {}
 
     @classmethod
     def put(
         cls,
-        namespace: TypeNamespace,
+        namespace: str,
         key: str,
         value: Any,
         *,
         ttl_hours: float | None = None,
     ) -> DiskTTLCacheEntry:
         """Persist ``value`` under ``namespace``/``key`` with the given TTL in hours."""
-        hours = _validate_ttl_hours(namespace, ttl_hours)
-        _ensure_json_serializable(value)
-        entry = DiskTTLCacheEntry.create(namespace=namespace, key=key, value=value, ttl_hours=hours)
+        entry = DiskTTLCacheEntry.create(namespace, key , value, ttl_hours=ttl_hours)
 
         def mutate(entries: dict[str, Any]) -> None:
             cls._prune_entries(namespace=namespace, entries=entries)
@@ -220,7 +227,7 @@ class DiskTTLCache:
         return entry
 
     @classmethod
-    def get(cls, namespace: TypeNamespace, key: str) -> DiskTTLCacheEntry:
+    def get(cls, namespace: str, key: str) -> DiskTTLCacheEntry:
         """Return the cache entry, or ``None`` if missing or past ``expires_at``."""
         with cls._thread_lock(namespace):
             entries = cls._load_entries_unlocked(namespace)
@@ -231,12 +238,7 @@ class DiskTTLCache:
         return entry
 
     @classmethod
-    def cache_file(cls, namespace: TypeNamespace) -> Path:
-        safe_name = _SAFE_NAMESPACE.sub('_', namespace.strip()) or 'default'
-        return cls._ROOT.joinpath(f'{safe_name}.json')
-
-    @classmethod
-    def keys(cls, namespace: TypeNamespace, *, valid_only: bool = True) -> list[str]:
+    def keys(cls, namespace: str, *, valid_only: bool = True) -> list[str]:
         """List keys in ``namespace``; when ``valid_only``, omit expired entries."""
         with cls._thread_lock(namespace):
             entries = cls._load_entries_unlocked(namespace)
@@ -245,7 +247,7 @@ class DiskTTLCache:
         return sorted(entries)
 
     @classmethod
-    def clear(cls, namespace: TypeNamespace, *, expired_only: bool = False) -> None:
+    def clear(cls, namespace: str, *, expired_only: bool = False) -> None:
         """Drop all entries in ``namespace``, or only expired ones."""
         if expired_only:
             def mutate(entries: dict[str, Any]) -> None:
@@ -257,15 +259,16 @@ class DiskTTLCache:
         cls._mutate_store(namespace, mutate)
 
     @classmethod
-    def manual_expire(cls, namespace: TypeNamespace) -> None:
+    def manual_expire(cls, namespace: str) -> None:
         """Invalidate the cache entry for the given ``namespace`` and ``key``."""
         def mutate(entries: dict[str, Any]) -> None:
             cls._manual_expire_entries(namespace=namespace, entries=entries)
         cls._mutate_store(namespace, mutate)
 
     @classmethod
-    def _load_entries_unlocked(cls, namespace: TypeNamespace) -> dict[str, Any]:
-        cache_file = cls.cache_file(namespace)
+    def _load_entries_unlocked(cls, namespace: str) -> dict[str, Any]:
+        namespace = NamespaceType(namespace)
+        cache_file = namespace.cache_file()
         if not cache_file.exists():
             return {}
         with cls._locked_file(cache_file, 'r') as f:
@@ -277,9 +280,10 @@ class DiskTTLCache:
         return entries if isinstance(entries, dict) else {}
 
     @classmethod
-    def _mutate_store(cls, namespace: TypeNamespace, mutate: Callable[[dict[str, Any]], _T]) -> _T:
+    def _mutate_store(cls, namespace: str, mutate: Callable[[dict[str, Any]], T]) -> T:
         with cls._thread_lock(namespace):
-            cache_file = cls.cache_file(namespace)
+            namespace = NamespaceType(namespace)
+            cache_file = namespace.cache_file()
             cache_file.parent.mkdir(parents=True, exist_ok=True)
             with cls._locked_file(cache_file, 'a+') as f:
                 f.seek(0)
@@ -307,14 +311,15 @@ class DiskTTLCache:
 
     @classmethod
     @contextmanager
-    def _thread_lock(cls, namespace: TypeNamespace) -> Iterator[None]:
+    def _thread_lock(cls, namespace: str) -> Iterator[None]:
         lock = cls._get_thread_lock(namespace)
         with lock:
             yield
 
     @classmethod
-    def _get_thread_lock(cls, namespace: TypeNamespace) -> threading.Lock:
-        path_key = str(cls.cache_file(namespace))
+    def _get_thread_lock(cls, namespace: str) -> threading.Lock:
+        namespace = NamespaceType(namespace)
+        path_key = namespace.cache_file().as_posix()
         with cls._locks_guard:
             if path_key not in cls._namespace_locks:
                 cls._namespace_locks[path_key] = threading.Lock()
@@ -331,20 +336,20 @@ class DiskTTLCache:
                 portalocker.unlock(f)
 
     @classmethod
-    def _prune_entries(cls, namespace: TypeNamespace, entries: dict[str, Any]) -> None:
-        cache_entries = cls.entries_from(namespace=namespace, entries=entries)
+    def _prune_entries(cls, namespace: str, entries: dict[str, Any]) -> None:
+        cache_entries = cls._entries_from(namespace=namespace, entries=entries)
         stale = [key for key, entry in cache_entries.items() if not entry.is_valid]
         for key in stale:
             entries.pop(key)
 
     @classmethod
-    def _manual_expire_entries(cls, namespace: TypeNamespace, entries: dict[str, Any]) -> None:
-        cache_entries = cls.entries_from(namespace=namespace, entries=entries)
+    def _manual_expire_entries(cls, namespace: str, entries: dict[str, Any]) -> None:
+        cache_entries = cls._entries_from(namespace=namespace, entries=entries)
         invalid = [entry.manual_expire() for entry in cache_entries.values()]
         invalid = [entry for entry in invalid if entry is not None]
         updates = {entry.key: entry.to_dict() for entry in invalid}
         entries.update(updates)
 
     @classmethod
-    def entries_from(cls, namespace: TypeNamespace, entries: dict[str, Any]) -> dict[str, DiskTTLCacheEntry]:
+    def _entries_from(cls, namespace: str, entries: dict[str, Any]) -> dict[str, DiskTTLCacheEntry]:
         return {key: DiskTTLCacheEntry.from_dict(namespace=namespace, key=key, **entry) for key, entry in entries.items()}

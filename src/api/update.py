@@ -2,7 +2,7 @@ from __future__ import annotations
 from src.proj import Logger , MACHINE , CALENDAR , Proj
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
 
-from .data import DataAPI
+from .data import DataAPI , PreProcessorTask
 from .factor import FactorAPI
 from .model import ModelAPI
 
@@ -10,7 +10,7 @@ from .trading import TradingAPI
 from .summary import SummaryAPI
 from .notification import NotificationAPI
 
-from .util import print_update_records
+from .util import wrap_update , print_update_records
 
 class UpdateAPI:
     @classmethod
@@ -58,25 +58,6 @@ class UpdateAPI:
         Proj.print_disk_info()
 
     @classmethod
-    def tracking_port(cls):
-        """
-        Update tracking portfolios only.
-        
-        [API Interaction]:
-          expose: true
-          email: true
-          roles: [admin, developer]
-          risk: write
-          lock_num: 1
-          lock_timeout: 1
-          disable_platforms: [macos]
-          execution_time: long
-          memory_usage: high
-        """
-        from src.res.trading import TrackingPortfolioManager
-        TrackingPortfolioManager.update()
-
-    @classmethod
     def rollback(cls , rollback_date : int):
         """
         Roll back data and factor layers to *rollback_date* (no model/trading rollback here).
@@ -106,6 +87,9 @@ class UpdateAPI:
         FactorAPI.rollback_pooling_factors(rollback_date , timeout = 10)
         FactorAPI.rollback_factor_stats(rollback_date)
         FactorAPI.export_factor_table()
+        wrap_update(PreProcessorTask.rollback , 'rollback preprocessed data for predict' , rollback_date = rollback_date , frame = 'predict' , confirm = False)
+        wrap_update(PreProcessorTask.rollback , 'rollback preprocessed data for fit' , rollback_date = rollback_date , frame = 'fit' , confirm = False)
+        
         print_update_records()
 
     @classmethod
@@ -129,5 +113,24 @@ class UpdateAPI:
             return
         ModelAPI.update_models()
         print_update_records()
+
+    @classmethod
+    def tracking_port(cls):
+        """
+        Update tracking portfolios only.
+        
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [admin, developer]
+          risk: write
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: [macos]
+          execution_time: long
+          memory_usage: high
+        """
+        from src.res.trading import TrackingPortfolioManager
+        TrackingPortfolioManager.update()
 
     

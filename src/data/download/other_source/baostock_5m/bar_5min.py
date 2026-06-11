@@ -56,22 +56,22 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates(x_min : int = 5):
+def updated_dates(x_min : int = 5) -> Base.Dates2:
     assert x_min in [5 , 10 , 15 , 30 , 60] , f'{x_min} is not in [5 , 10 , 15 , 30 , 60]'
-    return DB.dates('trade_ts' , f'{x_min}min')
+    return Base.Dates2(DB.dates('trade_ts' , f'{x_min}min'))
 
 def updatable(date , last_date):
-    return (len(updated_dates()) == 0) or (date > 0 and date > CALENDAR.cd(last_date , 6))
+    return (updated_dates().empty) or (date > 0 and date > CALENDAR.cd(last_date , 6))
 
-def x_mins_update_dates(date) -> Base.Dates:
-    dates : list[np.ndarray] = []
+def x_mins_update_dates() -> Base.Dates2:
+    dates = Base.Dates2()
     for x_min in [10 , 15 , 30 , 60]:
-        source_dates = DB.dates('trade_ts' , '5min')
+        source_dates = Base.Dates2(last_date_x_min(1 , x_min) , DB.max_date('trade_ts' , '5min'))
         stored_dates = DB.dates('trade_ts' , f'{x_min}min')
-        dates.append(CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates))
-    return Base.Dates(np.unique(np.concatenate(dates)))
+        dates += source_dates.diff(stored_dates)
+    return dates
 
-def x_mins_to_update(date):
+def x_mins_to_update(date) -> list[int]:
     x_mins : list[int] = []
     for x_min in [10 , 15 , 30 , 60]:
         path = DB.path('trade_ts' , f'{x_min}min' , date)
@@ -109,15 +109,32 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-class Baostock5minBarDownloader(Base.BoundLogger):
-    def proceed(self , date : int | None = None , first_n : int = -1 , retry_n : int = 10):
+class Baostock5minBarDownloader(Base.BasicUpdater):
+    UPDATE_ALIAS : str = 'download'
+    ACCEPTABLE_UPDATE_TYPES : tuple[Base.UpdateType,...] = (Base.UpdateType.UPDATE, )
+
+    @classmethod
+    def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
+        return super().parse_update_input(*args , key='baostock_5min' , **kwargs)
+
+    @classmethod
+    def proceed_update(
+        cls , start : int , end : int , * , first_n : int = -1 , **kwargs
+    ) -> Base.UpdateFlag:
+        updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
+        return updater.download_since_last_data(start = start , end = end , first_n = first_n)
+    
+    def download_since_last_data(
+        self , start : int , end : int , 
+        first_n : int = -1 , retry_n : int = 10
+    ) -> Base.UpdateFlag:
         pending_dt = pending_date()
-        end = CALENDAR.update_to() if date is None else date
         prev_dates = updated_dates(5)
-        target_dates = CALENDAR.range(max(prev_dates) , end , 'cd') if len(prev_dates) > 0 else []
+        start = max(start , CALENDAR.td(max(prev_dates) , 1).td)
+        target_dates = CALENDAR.update_schedule(start , end , key = 'baostock_5min')
         if len(target_dates) == 0:
-            self.logger.skipping(f'Other source 5min {end} already updated')
-            return True
+            self.logger.skipping(f'Other source 5min {start} - {end} already updated')
+            return Base.UpdateFlag.SKIPPED
 
         if pending_dt == end: 
             pending_dt = -1
@@ -125,15 +142,17 @@ class Baostock5minBarDownloader(Base.BoundLogger):
         updated = False
         for dt in [pending_dt , end]:
             last_dt = last_date(1)
-            if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
+            if (updatable(dt , last_dt) or (dt == end)) and (dt >= last_dt):
                 mark = self.bar_5min(last_dt , dt , first_n , retry_n)
                 if not mark: 
                     self.logger.alert1(f'baostock 5min {last_dt} - {dt} failed')
                 updated = updated or mark
         if updated:
             self.logger.success(f'Download baostock 5min at {Base.Dates(end)}')
+        else:
+            return Base.UpdateFlag.FAILED
                 
-        dates = x_mins_update_dates(date)
+        dates = x_mins_update_dates()
         updated = False
         with self.logger.subprocess(idt = 1 , vb = 1):
             for dt in dates:
@@ -145,7 +164,7 @@ class Baostock5minBarDownloader(Base.BoundLogger):
                 self.logger.stdout(f'baostock {x_min}min bars at {dt} transformed')
         if len(dates) > 0:
             self.logger.success(f'Transform baostock X-min bars at {dates}')
-        return True
+        return Base.UpdateFlag.SUCCESS
 
     def bar_5min(self , start : int , end : int , first_n : int = -1 , retry_n : int = 10):
         # date = 20240704
@@ -215,9 +234,3 @@ class Baostock5minBarDownloader(Base.BoundLogger):
         """
             
         return True
-
-    @classmethod
-    def update(cls , * , indent: int = 0, vb_level: int = 1):
-        cls.SetClassVB(vb_level, indent)
-        cls.logger.note('Download since last update!')
-        cls(indent=indent + 1, vb_level=vb_level + 1).proceed()

@@ -9,7 +9,9 @@ from typing import Any , Literal
 
 from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
 
-def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
+SWAEnsemblerType = Literal['best' , 'swabest' , 'swalast']
+
+def choose_swa_method(submodel : SWAEnsemblerType | Any):
     """get a subclass of _BaseEnsembler"""
     if submodel == 'best': 
         return EnsembleBestOne

@@ -3,15 +3,15 @@
 from __future__ import annotations
 from typing import Literal
 from src.proj.core import SingletonMeta
-from src.proj.env import MACHINE
+from src.proj.env.machine import MACHINE
 
 __all__ = ['ModelConstants']
 
 class ModelConstants(metaclass=SingletonMeta):
     """
     User-tunable resume flags for training and downstream evaluations:
-    - resume_test [Literal['False' , 'last_model_date' , 'last_pred_date']]: resume option of model train: if resume testing , and if so whether to resume from last model date or last pred date
-    - resume_test_fmp [Literal[False] | str]: resume option of model train: if resume test fmp , and if so whether to resume from last pred date or trailing days
+    - resume_test [False | 'last_model_date' | 'last_pred_date']: resume option of model train: if resume testing , and if so whether to resume from last model date or last pred date
+    - resume_test_fmp [False | str]: resume option of model train: if resume test fmp , and if so whether to resume from last pred date or trailing days
     - resume_test_fmp_account [bool]: resume option of model train: if resume test fmp account
     - resume_test_factor_perf [bool]: resume option of model train: if resume test factor perf
     - SETTINGS: settings of model , including prediction models / hidden extraction models

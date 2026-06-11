@@ -19,7 +19,7 @@ import numpy as np
 from abc import abstractmethod , ABCMeta
 from datetime import datetime
 from functools import cached_property
-from typing import Any , Type , Literal
+from typing import Any , Type , cast , get_args
 
 from src.proj import CALENDAR , Const , Base
 from src.data.util import DataBlock
@@ -48,48 +48,49 @@ class PreProcessorMeta(ABCMeta):
             cls.registry[getattr(new_cls , 'key')] = new_cls
         return new_cls
 
-class PreProcessorProperty:
+class _PPKey:
     """
-    Read-only class-level descriptor that computes and caches a derived property
-    for each ``PreProcessor`` subclass.
-
-    Used to lazily derive ``key``, ``category0``, and ``category1`` from the
-    class name or CONST config, caching the result per owner class so that
-    repeated accesses are O(1).
+    return the key of the preprocessor
     """
-    def __init__(self , method : str):
+    def __init__(self):
         """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
-        assert method in dir(self) , f'{method} is not in {dir(self)}'
-        self.method = method
         self.cache_values = {}
 
-    def __get__(self , instance , owner) -> str:
+    def __get__(self , instance , owner : Type[PreProcessor]) -> str:
         """Return the cached value, computing it on first access per owner class."""
         if owner not in self.cache_values:
-            self.cache_values[owner] = getattr(self , self.method)(owner)
+            self.cache_values[owner] = str(owner.__qualname__).removeprefix('PrePro_').lower()
         return self.cache_values[owner]
 
-    def __set__(self , instance , value):
-        """Prevent assignment — these properties are read-only."""
-        raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
+class _FactorPPCategory0:
+    """
+    return the category0 of the preprocessor
+    """
+    def __init__(self):
+        """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
+        self.cache_values = {}
 
-    def key(self , owner) -> str:
-        """Derive the registration key: strip ``'PrePro_'`` prefix and lowercase."""
-        s = str(owner.__qualname__)
-        if not s.startswith('PrePro_'):
-            return s
-        return s.removeprefix('PrePro_').lower()
+    def __get__(self , instance , owner : Type[FactorPreProcessor]) -> Base.lit.FactorCategory0:
+        """Return the cached value, computing it on first access per owner class."""
+        if owner not in self.cache_values:
+            self.cache_values[owner] = Const.Factor.STOCK.cat1_to_cat0(cast(Base.lit.FactorCategory1, owner.category1))
+        return self.cache_values[owner]
 
-    def category0(self , owner) -> str:
-        """Look up the category0 for a FactorPreProcessor via CONST config."""
-        assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
-        return Const.Factor.STOCK.cat1_to_cat0(owner.category1)
+class _FactorPPCategory1:
+    """
+    return the category1 of the preprocessor
+    """
+    def __init__(self):
+        """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
+        self.cache_values = {}
 
-    def category1(self , owner) -> str:
-        """Derive category1 by stripping ``'PrePro_'`` prefix from the class name."""
-        assert issubclass(owner , FactorPreProcessor) , f'{owner.__class__.__name__} must be a FactorPreProcessor'
-        return str(owner.__qualname__).removeprefix('PrePro_').lower()
-
+    def __get__(self , instance , owner : Type[FactorPreProcessor]) -> Base.lit.FactorCategory1:
+        """Return the cached value, computing it on first access per owner class."""
+        if owner not in self.cache_values:
+            cat1 = owner.key
+            assert cat1 in get_args(Base.lit.FactorCategory1) , f'{cat1} is not in {Base.lit.FactorCategory1}'
+            self.cache_values[owner] = cast(Base.lit.FactorCategory1, cat1)
+        return self.cache_values[owner]
 class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     """
     Abstract base class for all data preprocessors.
@@ -110,35 +111,35 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         Extra trading days to load *before* the requested start date so that
         rolling calculations have sufficient history.
     predict_start : int
-        Offset from today (in trading days, negative) used as the start date in
+        Offset from update_to (in trading days, negative) used as the start date in
         ``'predict'`` mode.
     fit_start / hist_start / hist_end : int
         Date range used for ``'fit'`` mode and historical normalisation.
     """
     EXTENSION_OVERLAY  : int = 10
     CALCULATION_WINDOW : int = 1  # can be set slightly larger than the calculation window of the factor
-    key = PreProcessorProperty('key')
+    key = _PPKey()
     
     predict_start = -100
     fit_start     = 20070101
     hist_start    = fit_start
     hist_end      = 20161231
 
-    def __init__(self , type : Literal['fit' , 'predict'] = 'fit' , * , 
+    def __init__(self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
                  mask : dict[str,Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs):
         """
         Parameters
         ----------
-        type : 'fit' | 'predict'
+        frame : 'fit' | 'predict'
             Controls the start date and whether dump saving is allowed.
         mask : dict | None
             Masking rules forwarded to ``DataBlock.mask_values``.
             Defaults to ``{'list_dt': 91}`` (blank first 91 days post-IPO).
         """
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self.type : Literal['fit' , 'predict'] = type
+        self.frame : Base.lit.DataBlockTimeFrame = frame
         self.mask = mask or {'list_dt': 91}
-        self.load_start = self.start_date(type)
+        self.load_start = self.start_date(frame)
         self.load_end   = CALENDAR.updated()
 
     def __repr__(self):
@@ -158,9 +159,9 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     def final_feat(self) -> list[str] | None: ...
 
     @classmethod
-    def start_date(cls , type : Literal['fit' , 'predict'] = 'predict') -> int:
-        """Return the absolute start date (yyyyMMdd int) for the given ``type``."""
-        return CALENDAR.td(CALENDAR.updated() , cls.predict_start).td if type == 'predict' else cls.fit_start
+    def start_date(cls , frame : Base.lit.DataBlockTimeFrame = 'predict') -> int:
+        """Return the absolute start date (yyyyMMdd int) for the given ``frame``."""
+        return CALENDAR.td(CALENDAR.updated() , cls.predict_start).td if frame == 'predict' else cls.fit_start
 
     def load_blocks(self , start = None , end = None , secid : np.ndarray | None = None , **kwargs):
         """
@@ -202,7 +203,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         missing date span.  Does not touch the disk.
         """
         if start is None:
-            start = self.fit_start if self.type == 'fit' else self.predict_start
+            start = self.fit_start if self.frame == 'fit' else self.predict_start
         if end is None:
             end = self.load_end
         if start > end:
@@ -225,12 +226,14 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         """Load data for the given dates, disabling dump saving (query mode)."""
         return self.load_with_extension(dates_for_query = dates , secid = secid)
 
-    def load_dump(self , reconstruct : bool = False):
+    def load_dump(self , reconstruct : bool = False , rollback_date : int | None = None):
         """Load the preprocessed dump from disk; returns empty DataBlock if not found."""
         if not self.dump_exists() or reconstruct:
             return DataBlock()
         with self.logger.timer(f'{self.key} dumped loading' , vb = 2):
-            block = DataBlock.load_dump(category = 'preprocess' , preprocess_key = self.key , type = self.type)
+            block = DataBlock.load_dump(category = 'preprocess' , preprocess_key = self.key , frame = self.frame)
+            if rollback_date:
+                block = block.slice_date(None , rollback_date - 1)
         return block
 
     def save_dump(self , block : DataBlock):
@@ -238,20 +241,22 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         if not self.enable_saving:
             return
         with self.logger.timer(f'{self.key} blocks dumping' , vb = 3):
-            block.set_flags(category = 'preprocess' , preprocess_key = self.key , type = self.type).save_dump()
+            block.set_flags(category = 'preprocess' , preprocess_key = self.key , frame = self.frame).save_dump()
 
     def dump_exists(self) -> bool:
         """Return True if a preprocessed dump file already exists on disk."""
-        return DataBlock.path_preprocess(self.key , self.type).exists()
+        return DataBlock.path_preprocess(self.key , self.frame).exists()
 
     def save_norm(self , block : DataBlock):
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
-        if self.type != 'fit' or not self.enable_saving:
+        if self.frame != 'fit' or not self.enable_saving:
             return
         with self.logger.timer(f'{self.key} blocks norming' , vb = 3):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
-    def load_with_extension(self , dates_for_query : np.ndarray | list[int] | None = None, * , secid : np.ndarray | None = None , reconstruct : bool = False) -> DataBlock:
+    def load_with_extension(
+        self , dates_for_query : np.ndarray | list[int] | None = None, * , 
+        secid : np.ndarray | None = None , reconstruct : bool = False , rollback_date : int | None = None) -> DataBlock:
         """
         load data with extension , try dumped data first , then extend to the end date
         Args:
@@ -259,7 +264,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         Returns:
             tuple[DataBlock , bool]: the data block and a boolean indicating if the data is extended
         """
-        block = self.load_dump(reconstruct = reconstruct)
+        block = self.load_dump(reconstruct = reconstruct , rollback_date = rollback_date)
         
         block = block.align_secid(secid , inplace = True)
 
@@ -306,21 +311,27 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         return block
 
     def should_be_skipped(self , force_update : bool = False):
-        """Return True if the dump was already updated today and ``force_update`` is False."""
-        modified_time = DataBlock.last_preprocess_time(self.key , self.type)
+        """Return True if the dump was already updated and ``force_update`` is False."""
+        modified_time = DataBlock.last_preprocess_time(self.key , self.frame)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
             self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , add_prefix = False)
             return True
         return False
 
-    def update(self , force_update : bool = False , reconstruct : bool = False , confirm : bool = True):
+    def build(
+        self , * ,  
+        force_build : bool = False , 
+        reconstruct : bool = False , 
+        rollback_date : int | None = None ,
+        confirm : bool = True
+    ) -> Base.UpdateFlag:
         """
-        Run the full incremental update: extend dump, save dump, save norms.
+        Run the building process: extend dump, save dump, save norms.
 
-        Skips if the dump was already updated today (unless ``force_update=True``).
+        Skips if the dump was already updated (unless ``force_build=True``).
         Calls ``load_with_extension(dates_for_query=None)`` which triggers a full
-        date-range update from ``load_start`` to ``load_end``.
+        date-range building from ``load_start`` to ``load_end``.
         """
         if reconstruct:
             self.logger.critical('Reconstructing the preprocessed data...')
@@ -328,25 +339,32 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                 from src.proj.util.functional.ask import AskFor
                 flag = AskFor.Confirmation(title = 'Are you sure to reconstruct the preprocessed data?')
                 if not flag.yes:
-                    return
-            force_update = True
+                    return Base.UpdateFlag.FAILED
+            force_build = True
 
-        if self.should_be_skipped(force_update):
-            return
+        if self.should_be_skipped(force_build):
+            return Base.UpdateFlag.SKIPPED
 
         tt1 = datetime.now()
-        status = 'reconstruct' if reconstruct else 'update'
-        self.logger.stdout(f'{status.upper()} Preprocessed ({self.type}) of [{self.key.upper()}] start...' , vb = 2 , add_prefix = False)
-        data_block = self.load_with_extension(dates_for_query = None , reconstruct = reconstruct)
+        if reconstruct:
+            status = 'reconstruct'
+        elif rollback_date:
+            CALENDAR.check_rollback_date(rollback_date)
+            status = f'rollback from {rollback_date}'
+        else:
+            status = 'update'
+        self.logger.stdout(f'{status.upper()} Preprocessed ({self.frame}) of [{self.key.upper()}] start...' , vb = 2 , add_prefix = False)
+        data_block = self.load_with_extension(dates_for_query = None , reconstruct = reconstruct , rollback_date = rollback_date)
         
         self.save_dump(data_block)
         self.save_norm(data_block)
         
         # gc.collect()
         self.logger.success(
-            f'{status.upper()} Preprocessed ({self.type}) of [{self.key.upper()}] at '
+            f'{status.upper()} Preprocessed ({self.frame}) of [{self.key.upper()}] at '
             f'{Base.Dates(data_block.date)} finished! Cost {Base.Duration(since = tt1)}' , 
             add_prefix = False)
+        return Base.UpdateFlag.SUCCESS
     
 class FactorPreProcessor(PreProcessor):
     """
@@ -356,8 +374,8 @@ class FactorPreProcessor(PreProcessor):
     derived automatically from the class name.  No ``process`` or ``block_loaders``
     implementation is required.
     """
-    category0 = PreProcessorProperty('category0')
-    category1 = PreProcessorProperty('category1')
+    category0 = _FactorPPCategory0()
+    category1 = _FactorPPCategory1()
 
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         """Return a loader for all factors in ``category1`` using normalised values."""

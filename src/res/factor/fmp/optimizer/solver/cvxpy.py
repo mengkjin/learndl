@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 import cvxpy as cp
 
-from typing import Literal
+from src.proj import Base
 from ..interpreter import SolverInput , SolveCond , SolveVars
 
 _SOLVER_PARAM = {
@@ -12,11 +12,11 @@ _SOLVER_PARAM = {
 
 class Solver:
     def __init__(self , input : SolverInput , 
-                 prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'socp' ,
-                 cvxpy_solver : Literal['mosek','ecos','osqp','scs','clarabel'] = 'mosek' , **kwargs):
+                 prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.SOCP ,
+                 cvxpy_solver : Base.PortOptimCvxpySolver | str = Base.PortOptimCvxpySolver.MOSEK , **kwargs):
         self.input = input
-        self.prob_type : Literal['linprog' , 'quadprog' , 'socp'] = prob_type
-        self.solver_name = cvxpy_solver.upper()
+        self.prob_type = Base.PortOptimProblem(prob_type)
+        self.cvxpy_solver = Base.PortOptimCvxpySolver(cvxpy_solver)
 
     def parse_input(self):
         self.alpha    = self.input.alpha
@@ -114,7 +114,7 @@ class Solver:
                 objective = objective + self.short_con.cost * cp.sum(s)  
 
         prob = cp.Problem(cp.Minimize(objective), constraints)
-        prob.solve(solver = self.solver_name , **_SOLVER_PARAM.get(self.solver_name , {}))
+        prob.solve(solver = self.cvxpy_solver.upper() , **_SOLVER_PARAM.get(self.cvxpy_solver.upper() , {}))
         status = prob.status
         is_success = (status == 'optimal' or status == 'optimal_inaccurate')
         w = x.value

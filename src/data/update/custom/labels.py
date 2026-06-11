@@ -8,10 +8,8 @@ avoid execution-day look-ahead bias.
 Stored in the ``labels_ts`` database under keys like ``ret5``, ``ret10_lag``, etc.
 """
 from __future__ import annotations
-import pandas as pd
-
 import numpy as np
-from typing import Literal
+import pandas as pd
 
 from src.proj import CALENDAR , DB , Base
 from src.data.loader import TRADE , RISK
@@ -25,41 +23,43 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
     Computes labels for all combinations of ``DAYS × LAGS`` and stores them
     incrementally in ``labels_ts``.
     """
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , Base.UpdateType.ROLLBACK)
     START_DATE = 20050101
     DB_SRC = 'labels_ts'
 
     DAYS = [5 , 10 , 20]
     LAGS = [False , True]
 
-    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
-        """Iterate over all (days, lag) combinations and update any missing dates."""
-        if update_type == 'recalc':
-            self.logger.warning(f'Recalculate all classic labels is not supported yet for {self.__class__.__name__}')
-        for days in self.DAYS:
-            for lag1 in self.LAGS:
+    @classmethod
+    def proceed_update(cls , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs) -> Base.UpdateFlag:
+        """Update forward return labels for all combinations of ``DAYS × LAGS``."""
+        start = max(start or cls.START_DATE , cls.START_DATE)
+        end = end or CALENDAR.updated()
+        flags = Base.UpdateFlagList()
+        for days in cls.DAYS:
+            for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                if update_type == 'recalc':
-                    stored_dates = np.array([])
-                elif update_type == 'update':
-                    stored_dates = DB.dates(self.DB_SRC , label_name)
-                elif update_type == 'rollback':
-                    rollback_date = CALENDAR.td(self._rollback_date , - days - lag1 + 1)
-                    stored_dates = CALENDAR.slice(DB.dates(self.DB_SRC , label_name) , 0 , rollback_date - 1)
-                else:
-                    raise ValueError(f'Invalid update type: {update_type}')
-                end = CALENDAR.td(CALENDAR.updated() , - days - lag1)
-                update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
-                if len(update_dates) == 0:
-                    self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
+                sub_start = max(CALENDAR.td(start , - days - lag1 + 1) , cls.START_DATE)
+                sub_end = min(CALENDAR.td(CALENDAR.updated() , - days - lag1) , end or CALENDAR.updated())
+                stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , label_name)
+                target_dates = CALENDAR.diffs(sub_start , sub_end , stored_dates)
+
+                if len(target_dates) == 0:
+                    cls.logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
+                    flags += Base.UpdateFlag.SKIPPED
                     continue
-                for date in update_dates:
-                    self.update_one(date , days , lag1 , label_name)
 
-                self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
+                for date in target_dates:
+                    cls.update_one(date , days , lag1 , label_name)
 
-    def update_one(self , date : int , days : int , lag1 : bool , label_name : str):
+                cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Base.Dates(target_dates)}' , idt = 1 , vb = 1)
+                flags += Base.UpdateFlag.SUCCESS
+        return flags.summarize()
+
+    @classmethod
+    def update_one(cls , date : int , days : int , lag1 : bool , label_name : str):
         """Compute and save labels for a single ``date``."""
-        DB.save(calc_classic_labels(date , days , lag1) , self.DB_SRC , label_name , date , indent = self.indent + 2 , vb_level = self.vb_level + 2)
+        DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
 
 def calc_classic_labels(date : int , days : int , lag1 : bool) -> pd.DataFrame | None:
     """

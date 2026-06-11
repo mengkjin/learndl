@@ -47,7 +47,7 @@ def main(dry_run: bool = True, min_bytes: int = 1024, **kwargs):
         yield PATH.export.joinpath("factor_stats_weekly")
 
     def _try_read(path: Path) -> None:
-        if DB.DATAFRAME_SUFFIX == "feather":
+        if DB.DF_SUFFIX == "feather":
             pd.read_feather(path)
         else:
             pd.read_parquet(path)
@@ -65,8 +65,8 @@ def main(dry_run: bool = True, min_bytes: int = 1024, **kwargs):
         if not d.exists():
             Logger.skipping(f"Stats export dir not found: {d}")
             continue
-        paths = sorted(d.glob(f"*.{DB.DATAFRAME_SUFFIX}"))
-        Logger.note(f"Scanning {d} ({len(paths)} files, suffix=.{DB.DATAFRAME_SUFFIX})")
+        paths = sorted(d.glob(f"*.{DB.DF_SUFFIX}"))
+        Logger.note(f"Scanning {d} ({len(paths)} files, suffix=.{DB.DF_SUFFIX})")
         for p in paths:
             scanned += 1
             try:

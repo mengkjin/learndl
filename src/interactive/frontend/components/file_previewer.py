@@ -19,7 +19,7 @@ class FilePreviewer:
     Supported formats: ``.txt``, ``.csv``, ``.json``, ``.log``, ``.py`` (code blocks),
     ``.html`` (iframe), ``.pdf`` (base64 iframe), ``.xlsx`` / ``.xls`` (dataframe).
     """
-    def __init__(self , path : Base.types.strPath | None = None , height : int | None = 600) -> None:
+    def __init__(self , path : Base.strPath | None = None , height : int | None = 600) -> None:
         self.path = Path(path) if path is not None else None
         self.height = height or 600
 

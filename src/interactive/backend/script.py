@@ -26,11 +26,12 @@ from dataclasses import dataclass , asdict , field
 from src.proj import PATH , MACHINE , Base , Options # noqa
 from .task import TaskItem , TaskQueue , runs_page_url
 
+ReadyStatus = Literal[0, 1, 2, 3]
+
 def _format_path(script_key : str) -> str:
     """get human-readable breadcrumb path, e.g. ``'Data > Train Data'`` from script_key"""
     return ' > '.join(re.sub(r'^\d+ ', '', p).title()
                       for p in Path(script_key.replace('_', ' ')).with_suffix('').parts)
-
 @dataclass
 class PathItem:
     """A single file or directory entry rooted under the scripts folder.
@@ -75,7 +76,7 @@ class PathItem:
         return self.path.absolute()
 
     @classmethod
-    def iter_folder(cls, folder_path: Base.types.strPath = PATH.scpt, level: int = 0 ,
+    def iter_folder(cls, folder_path: Base.strPath = PATH.scpt, level: int = 0 ,
                     min_level: int = 0 , max_level: int = 2) -> list[PathItem]:
         """get all valid items from folder recursively"""
         items : list[PathItem] = []
@@ -163,7 +164,7 @@ class ScriptHeader:
     content: str = ''
     todo: str = ''
     email: bool = False
-    mode: Literal['shell', 'os'] = 'shell'
+    mode: Base.lit.RunScriptMode = 'shell'
     blacklist: dict[str, list[str]] = field(default_factory=dict)
     parameters: dict[str, Any] = field(default_factory=dict)
     file_editor: dict[str, Any] = field(default_factory=dict)
@@ -227,7 +228,7 @@ class ScriptHeader:
         return cls(**kwargs)
 
     @property
-    def ready(self) -> Literal[0, 1, 2 , 3]:
+    def ready(self) -> ReadyStatus:
         """
         check if the script is ready to run
         0: disabled or blacklisted
@@ -390,7 +391,12 @@ class ScriptRunner:
         return self.header.todo
 
     @property
-    def ready(self) -> Literal[0, 1, 2, 3]:
+    def blacklisted(self) -> bool:
+        """Blacklisted flag from the script header."""
+        return MACHINE.name in self.header.blacklist.get('machine', [])
+
+    @property
+    def ready(self) -> ReadyStatus:
         """Readiness status delegated to :attr:`ScriptHeader.ready`."""
         return self.header.ready
 
@@ -403,7 +409,7 @@ class ScriptRunner:
 """
         return infos
 
-    def build_task(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> TaskItem:
+    def build_task(self , queue : TaskQueue | None = None , mode: Base.lit.RunScriptMode = 'shell' , **kwargs) -> TaskItem:
         """Create and configure a :class:`TaskItem` ready to execute this script.
 
         Parameters
@@ -425,7 +431,7 @@ class ScriptRunner:
         item.set_script_cmd(self.script, params, mode)
         return item
 
-    def preview_cmd(self , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> str:
+    def preview_cmd(self , mode: Base.lit.RunScriptMode = 'shell' , **kwargs) -> str:
         """Return the command string that *would* be used to run the script, without executing it.
 
         Parameters

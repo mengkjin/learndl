@@ -5,29 +5,29 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import CALENDAR
+from src.proj import CALENDAR , Base
 from src.data import DATAVENDOR 
 
+from src.res.factor.util.classes import StockFactor
 from .basic import eval_stats , eval_ic_stats , eval_qtile_by_day
-from ..classes import StockFactor , Benchmark
 
-def calc_frontface(factor : StockFactor , benchmark : Benchmark | str | None = None , 
-                   nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                   ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+def calc_frontface(factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+                   nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+                   ret_type : Base.lit.ReturnType = 'close') -> pd.DataFrame:
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
     ic_stats = eval_ic_stats(ic_table , nday = nday)
     df = ic_stats.drop(columns=['sum']).rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'|IC|_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
     return df
 
-def calc_coverage(factor : StockFactor , benchmark : Benchmark | str | None = None) -> pd.DataFrame:
+def calc_coverage(factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None) -> pd.DataFrame:
     return factor.coverage(benchmark).reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='coverage')
 
 def calc_ic_curve(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag : int = 2 ,  ma_windows : int | list[int] = [10,20] ,
-    ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    ic_type  : Base.lit.ICType = 'spearman' ,
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type).reset_index().\
@@ -44,10 +44,10 @@ def calc_ic_curve(
     return ic_curve
 
 def calc_ic_decay(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
-    ic_type : Literal['pearson' , 'spearman'] = 'spearman' , 
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    ic_type : Base.lit.ICType = 'spearman' , 
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     """
     nday : days of future return
@@ -64,9 +64,9 @@ def calc_ic_decay(
     return decay_pnl_df
 
 def calc_ic_indus(  
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
-    nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+    nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark) 
     ic_indus = factor.eval_ic_indus(nday , lag , ic_type , ret_type)
@@ -78,9 +78,9 @@ def calc_ic_indus(
     return ic_stats
 
 def calc_ic_year(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
-    nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+    nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
@@ -93,9 +93,9 @@ def calc_ic_year(
     return rtn
 
 def calc_ic_benchmark(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
-    nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+    nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
@@ -103,8 +103,8 @@ def calc_ic_benchmark(
     return ic_stats
 
 def calc_ic_monotony(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
-    nday : int = 10 , lag_init : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+    nday : int = 10 , lag_init : int = 2 , ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag_init , 100 , True , ret_type).drop(columns=['start' , 'end'])
@@ -124,9 +124,9 @@ def calc_ic_monotony(
     return rtn
 
 def calc_pnl_curve(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-    ret_type : Literal['close' , 'vwap'] = 'close' , direction : Literal[1,0,-1] = 0 ,
+    ret_type : Base.lit.ReturnType = 'close' , direction : Literal[1,0,-1] = 0 ,
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     pnl = factor.eval_weighted_pnl(nday , lag , group_num , ret_type , direction)
@@ -136,7 +136,7 @@ def calc_pnl_curve(
     return pnl
 
 def calc_style_corr(
-    factor : StockFactor , benchmark : Benchmark | str | None = None
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     style = DATAVENDOR.risk_style_exp(factor.secid , factor.date).to_dataframe()
@@ -149,9 +149,9 @@ def calc_style_corr(
     return df
 
 def calc_group_return(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag : int = 2 , group_num : int = 10 , 
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type).drop(columns=['start' , 'end']).set_index(['factor_name','group'])
@@ -160,9 +160,9 @@ def calc_group_return(
     return grp
 
 def calc_group_curve(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , excess , ret_type).set_index(['factor_name','group'])
@@ -174,9 +174,9 @@ def calc_group_curve(
     return group_ret_df
 
 def calc_group_decay(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
-    lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close'
+    lag_num : int = 5 , ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
 
@@ -202,9 +202,9 @@ def calc_group_decay(
     return rtn.reset_index()
 
 def calc_group_year(
-    factor : StockFactor , benchmark : Benchmark | str | None = None ,
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None ,
     nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-    ret_type : Literal['close' , 'vwap'] = 'close'
+    ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type).drop(columns=['start' , 'end'])
@@ -238,7 +238,7 @@ def calc_group_year(
     return rtn
 
 def calc_distrib_curve(
-    factor : StockFactor , benchmark : Benchmark | str | None = None , 
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     sampling_date_num : int = 20 , hist_bins : int = 50 ,
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
@@ -258,7 +258,7 @@ def calc_distrib_curve(
     rtn = rtn.reset_index(drop=False).loc[:,['date' , 'factor_name', 'hist_cnts', 'hist_bins']]
     return rtn
 
-def calc_distrib_qtile(factor : StockFactor , benchmark : Benchmark | str | None = None , scaling : bool = True) -> pd.DataFrame:
+def calc_distrib_qtile(factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , scaling : bool = True) -> pd.DataFrame:
     factor = factor.within(benchmark)
     qtile = factor.frame().groupby(['date']).apply(eval_qtile_by_day , scaling = scaling , include_groups = False).reset_index()
     return qtile

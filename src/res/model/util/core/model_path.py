@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load
+from src.proj.bases import ModuleType
 
-from .func import parse_model_input , combine_full_name , TYPE_MODULE_TYPES , is_null_module_type
+from .basic import parse_model_input , combine_full_name , is_null_module_type
 from .model_file import ModelFile
 
 __all__ = ['ModelPath' , 'PredictorPath']
@@ -34,7 +35,7 @@ class ModelPath:
         index: optional, model index
     
     """
-    def __init__(self , model_input : Base.types.strPath | ModelPath | None | Any , **kwargs) -> None:
+    def __init__(self , model_input : Base.strPath | ModelPath | None | Any , **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.parse_input(model_input.base if isinstance(model_input , ModelPath) else model_input)
@@ -46,7 +47,7 @@ class ModelPath:
     def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
-    def parse_input(self , model_input : Base.types.strPath  | None):
+    def parse_input(self , model_input : Base.strPath  | None):
         parsed_model_input = parse_model_input(model_input)
         self.full_name : str = parsed_model_input.pop('full_name')
         self.full_name_kwargs : dict[str,Any] = parsed_model_input
@@ -61,8 +62,8 @@ class ModelPath:
     def is_null_model(self) -> bool:
         return bool(self) and is_null_module_type(self.module_type)
     @property
-    def module_type(self) -> TYPE_MODULE_TYPES:
-        return self.full_name_kwargs['module_type']
+    def module_type(self) -> ModuleType:
+        return ModuleType(self.full_name_kwargs['module_type'])
     @property
     def model_module(self) -> str:
         return self.full_name_kwargs['module_name']
@@ -123,12 +124,16 @@ class ModelPath:
         """model numbers"""
         return self.sub_dirs(self.archive() , as_int = True)
     @property
-    def model_dates(self):
+    def model_dates(self) -> np.ndarray:
         """model dates"""
+        if len(self.model_nums) == 0:
+            return np.array([])
         return self.sub_dirs(self.archive(self.model_nums[-1]) , as_int = True)
     @property
-    def model_submodels(self):
+    def model_submodels(self) -> np.ndarray:
         """model submodels"""
+        if len(self.model_nums) == 0 or len(self.model_dates) == 0:
+            return np.array([])
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
 
     def with_new_index(self , index : int):
@@ -148,6 +153,8 @@ class ModelPath:
     @staticmethod
     def sub_dirs(path : Path , as_int = False) -> np.ndarray:
         """sub directories"""
+        if not path.exists():
+            return np.array([])
         arr = [sub.name for sub in path.iterdir() if sub.is_dir()]
         if as_int: 
             arr = np.array([v for v in arr if v.isdigit()]).astype(int)
@@ -379,7 +386,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
 
     def __init__(
-        self, model_input : Base.types.strPath | None | Any , 
+        self, model_input : Base.strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any ,
         submodel : str = 'best' , pred_name : str | None = None , * , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
@@ -439,6 +446,8 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     @property
     def pred_target_dates(self) -> np.ndarray:
         """model pred target dates"""
+        if len(self.model_dates) == 0:
+            return np.array([])
         start = max(self.start , int(CALENDAR.td(min(self.model_dates) , 1)))
         end = None
         return CALENDAR.range(start , end , 'td' , updated = True)
@@ -517,7 +526,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
         return path
 
     @classmethod
-    def UnpackModelArchives(cls , path : Base.types.strPath | None = None , delete_tar = True , overwrite = False) -> None:
+    def UnpackModelArchives(cls , path : Base.strPath | None = None , delete_tar = True , overwrite = False) -> None:
         if path is None:
             paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
             paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]

@@ -8,12 +8,11 @@ from __future__ import annotations
 import subprocess
 from collections import defaultdict
 from datetime import datetime , timedelta
-from typing import Literal
 
-from src.proj import MACHINE , PATH , Logger
+from src.proj import MACHINE , PATH , Logger , Base
 
 # %% project code related operations
-def git_commit_sync(commit_message : str = 'auto commit' , verbose_level : Literal[0,1,2] = 1) -> None:
+def git_commit_sync(commit_message : str = 'auto commit' , verbose_level : Base.lit._0_3 = 1) -> None:
     """
     commit and sync the code
     Args:
@@ -29,7 +28,7 @@ def git_commit_sync(commit_message : str = 'auto commit' , verbose_level : Liter
     if verbose_level >= 2:
         Logger.stdout(f"Commit message: {prefixes}")
 
-def clear_git_pull(verbose_level : Literal[0,1,2] = 1) -> None:
+def clear_git_pull(verbose_level : Base.lit._0_3 = 1) -> None:
     """
     clear local changes and pull latest code
     Args:

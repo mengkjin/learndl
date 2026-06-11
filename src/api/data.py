@@ -90,7 +90,7 @@ class DataAPI:
           execution_time: medium
           memory_usage: high
         """
-        wrap_update(PreProcessorTask.update , 'prepare predict data' , predict = True)
+        wrap_update(PreProcessorTask.update , 'prepare predict data' , frame = 'predict')
 
     @classmethod
     def reconstruct_train_data(cls , confirm : int = 0): 
@@ -111,7 +111,7 @@ class DataAPI:
           execution_time: long
           memory_usage: high
         """
-        wrap_update(PreProcessorTask.update , 'reconstruct historical data' , predict = False , confirm = confirm)
+        wrap_update(PreProcessorTask.update , 'reconstruct historical data' , frame = 'fit' , confirm = confirm)
     
     @classmethod
     def is_updated(cls):

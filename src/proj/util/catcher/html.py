@@ -11,7 +11,7 @@ from src.proj.env import PATH , MACHINE , Proj
 from src.proj.core import Duration
 from src.proj.log import Logger
 
-from .basic import OutputCatcher , TimedOutput , DeflectorGroup , get_html_templates
+from .basic import OutputCatcher , TimedOutput , DeflectorGroup , _get_html_templates
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -234,7 +234,7 @@ class HtmlCatcher(OutputCatcher):
         infos_outputs = '<div class="add-infos add-title"> NUMBER OF OUTPUTS </div>' + \
             '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
                         for key, value in output_infos.items()])
-        head = get_html_templates('head').substitute(
+        head = _get_html_templates('head').substitute(
             title=title,
             key_width=key_width,
             infos_script=infos_script,
@@ -245,4 +245,4 @@ class HtmlCatcher(OutputCatcher):
     @classmethod
     def html_tail(cls) -> str:
         """Generate the html tail , including the end of the html file"""
-        return get_html_templates('tail').substitute() 
+        return _get_html_templates('tail').substitute() 

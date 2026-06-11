@@ -170,19 +170,16 @@ class TSBackUpDataTransform(Base.BoundLogger):
             transformer.transform(date)
 
     @classmethod
-    def clear(cls):
+    def clear(cls , rollback_date : int | None = None):
         """clear all backed date data"""
         transformer = cls()
-        for date in transformer.get_baked_dates():
-            transformer.clear_day(date)
-
-    @classmethod
-    def rollback(cls , rollback_date : int):
-        """rollback all backed date data"""
-        transformer = cls()
-        start = CALENDAR.td(rollback_date)
-        dates = CALENDAR.range(start , None , type = 'td' , updated = True)
-        dates = np.intersect1d(dates , transformer.get_baked_dates())
+        if rollback_date:
+            start = CALENDAR.td(rollback_date)
+            dates = CALENDAR.range(start , None , type = 'td' , updated = True)
+            dates = np.intersect1d(dates , transformer.get_baked_dates())
+        else:
+            dates = transformer.get_baked_dates()
         for date in dates:
             transformer.clear_day(date)
-            transformer.clear_backed(date)
+            if rollback_date:
+                transformer.clear_backed(date)

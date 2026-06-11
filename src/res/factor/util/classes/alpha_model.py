@@ -16,6 +16,8 @@ from .general_model import GeneralModel
 
 __all__ = ['AlphaModel' , 'Amodel' , 'AlphaComposite' , 'AlphaScreener']
 
+CombineWorstMethod = Literal['worst' , 'worst2']
+
 def _rank_pct(arr : np.ndarray , axis : int = -1) -> np.ndarray:
     with np.errstate(invalid='ignore'):
         ranks = rankdata(arr, method='average', axis=axis, nan_policy='omit')
@@ -191,7 +193,7 @@ class Amodel:
 
     @classmethod
     def combine_worst(
-        cls , alphas : list[Amodel] , method : Literal['worst' , 'worst2'] , 
+        cls , alphas : list[Amodel] , method : CombineWorstMethod , 
         date : int | None = None , name : str = 'combined_alpha' , normalize = False
     ):
         assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
@@ -498,16 +500,18 @@ class AlphaComposite(AlphaCombination):
         for d in date:
             alphas = [alpha.get(d , closest=True) for alpha in alpha_models]
             if not any(not alpha.empty for alpha in alphas):
-                raise ValueError(f'all alphas are empty at date {d}')
+                from src.proj.log import Logger
+                Logger.error(f'all alphas of {[alpha.name for alpha in alphas]} are empty at date {d}')
+                return AlphaModel('AllNan' , [])
             amodel = Amodel.combine_linear(alphas , self.weights[:len(alpha_models)] , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 
 class AlphaScreener(AlphaCombination):
     def __init__(self , alpha : ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None ,
-                 method : Literal['worst' , 'worst2'] = 'worst2' , ratio : float = 0.5):
+                 method : CombineWorstMethod = 'worst2' , ratio : float = 0.5):
         super().__init__(alpha , components)
-        self.method : Literal['worst' , 'worst2'] = method
+        self.method : CombineWorstMethod = method
         self.ratio = ratio
 
     def __repr__(self) -> str:

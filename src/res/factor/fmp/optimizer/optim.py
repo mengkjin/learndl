@@ -5,29 +5,30 @@ Optimized portfolio creator for factor portfolio optimization.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal , Any
+from typing import Any
 
-from src.proj import MACHINE , Logger
+from src.proj import MACHINE , Logger , Base
 from src.res.factor.util import PortCreator , PortCreateResult , Port
 
 from .interpreter import OptimizedPortfolioInput
 from .solver import MosekSolver , CvxpySolver
 
-PROB_TYPE = Literal['linprog' , 'quadprog' , 'socp']
-ENGINE_TYPE = Literal['mosek' , 'cvxopt' , 'cvxpy']
-CVXPY_SOLVER = Literal['mosek' , 'ecos' , 'osqp' , 'scs' , 'clarabel']
-
 @dataclass(slots = True)
 class OptimizedPortfolioCreatorConfig:
-    prob_type : PROB_TYPE = 'quadprog'
-    engine_type : ENGINE_TYPE = 'mosek'
-    cvxpy_solver : CVXPY_SOLVER = 'mosek'
+    prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.QUADPROG
+    engine_type : Base.PortOptimEngine | str = Base.PortOptimEngine.MOSEK
+    cvxpy_solver : Base.PortOptimCvxpySolver | str = Base.PortOptimCvxpySolver.MOSEK
     optim_config : str | None = None
     opt_relax : bool = True
     opt_turn  : bool = True
     opt_qobj  : bool = True
     opt_qcon  : bool = True
     opt_short : bool = True
+
+    def __post_init__(self):
+        self.prob_type = Base.PortOptimProblem(self.prob_type)
+        self.engine_type = Base.PortOptimEngine(self.engine_type)
+        self.cvxpy_solver = Base.PortOptimCvxpySolver(self.cvxpy_solver)
 
     @classmethod
     def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):

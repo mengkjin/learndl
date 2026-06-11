@@ -3,12 +3,13 @@ import pandas as pd
 
 from typing import Any ,Literal , Type
 
-from src.proj import Const
+from src.proj import Const , Base
+from src.proj.bases import TestType
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.util.plot.factor import Plotter
 from src.res.factor.util.stats import factor as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
 test_type = TestType.FACTOR
 plotter = Plotter(test_type.title())
@@ -18,24 +19,24 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     COMPULSORY_BENCHMARKS : Any = None
         
-    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None):
+    def calc(self , factor : StockFactor, benchmarks : Base.alias.MultipleBenchmark = None):
         with self.calc_manager():
             func = self.calculator()
             rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
             self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
         return self
     
-    def use_benchmarks(self , benchmarks : list[Benchmark|Any] | Any = None):
+    def use_benchmarks(self , benchmarks : Base.alias.MultipleBenchmark = None):
         if self.COMPULSORY_BENCHMARKS is None:
-            benchmarks = Benchmark.get_benchmarks(benchmarks if benchmarks is not None else self.DEFAULT_BENCHMARKS)
+            benchmarks = Benchmark.to_benchmarks([benchmarks if benchmarks is not None else self.DEFAULT_BENCHMARKS])
         else:
-            benchmarks = Benchmark.get_benchmarks(self.COMPULSORY_BENCHMARKS)
+            benchmarks = Benchmark.to_benchmarks(self.COMPULSORY_BENCHMARKS)
         return benchmarks
     
 class FrontFace(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
-    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type : Literal['pearson' , 'spearman'] = 'spearman' ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type : Base.lit.ICType = 'spearman' ,
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         super().__init__(params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type} , **kwargs)
     def calculator(self): return Stat.calc_frontface
     def plotter(self): return plotter.plot_frontface
@@ -50,8 +51,8 @@ class Coverage(FactorPerfCalc):
 class IC_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , ma_windows : int | list[int] = [10,20] ,
-                 ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ic_type  : Base.lit.ICType = 'spearman' ,
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {
             'nday' : nday , 'lag' : lag , 'ma_windows' : ma_windows , 
             'ic_type' : ic_type , 'ret_type' : ret_type}
@@ -62,8 +63,8 @@ class IC_Curve(FactorPerfCalc):
 class IC_Decay(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
-                 ic_type : Literal['pearson' , 'spearman'] = 'spearman' , 
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ic_type : Base.lit.ICType = 'spearman' , 
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {
             'nday' : nday , 'lag_init' : lag_init , 'lag_num' : lag_num , 
             'ic_type' : ic_type , 'ret_type' : ret_type}
@@ -74,8 +75,8 @@ class IC_Decay(FactorPerfCalc):
 class IC_Indus(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , nday : int = 10 , lag : int = 2 , 
-                 ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ic_type  : Base.lit.ICType = 'spearman' ,
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_ic_indus
@@ -83,8 +84,8 @@ class IC_Indus(FactorPerfCalc):
 
 class IC_Year(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
-    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_ic_year
@@ -92,8 +93,8 @@ class IC_Year(FactorPerfCalc):
 
 class IC_Benchmark(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
-    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_ic_benchmark
@@ -102,7 +103,7 @@ class IC_Benchmark(FactorPerfCalc):
 class IC_Monotony(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , nday : int = 10 , lag_init : int = 2 , 
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag_init' : lag_init , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_ic_monotony
@@ -111,7 +112,7 @@ class IC_Monotony(FactorPerfCalc):
 class PnL_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , direction : Literal[1,0,-1] = 0 , **kwargs) -> None:
+                 ret_type : Base.lit.ReturnType = 'close' , direction : Literal[1,0,-1] = 0 , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type ,
                   'direction' : direction}
         super().__init__(params = params , **kwargs)
@@ -135,7 +136,7 @@ class Style_Corr_Distrib(FactorPerfCalc):
 class Group_Return(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 20 ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_group_return
@@ -144,7 +145,7 @@ class Group_Return(FactorPerfCalc):
 class Group_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_group_curve
@@ -153,7 +154,7 @@ class Group_Curve(FactorPerfCalc):
 class Group_Decay(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
-                 lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 lag_num : int = 5 , ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag_init' : lag_init , 'group_num' : group_num , 
                   'lag_num' : lag_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
@@ -163,7 +164,7 @@ class Group_Decay(FactorPerfCalc):
 class Group_IR_Decay(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
-                 lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 lag_num : int = 5 , ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag_init' : lag_init , 'group_num' : group_num , 
                   'lag_num' : lag_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
@@ -173,7 +174,7 @@ class Group_IR_Decay(FactorPerfCalc):
 class Group_Year(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_group_year

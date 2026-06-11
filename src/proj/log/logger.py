@@ -9,36 +9,58 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH , Proj
-from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silence
+from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silence , StrEnum
 from .display import Display
 from .logfile import LogFile
 
-LOG_LEVEL_TYPE = Literal['remark' , 'highlight' , 'debug' , 'info' , 'warning' , 'error' , 'critical']
-LOG_LEVELS : list[LOG_LEVEL_TYPE] = ['remark' , 'highlight' , 'info' , 'debug' , 'warning' , 'error' , 'critical']
-STDERR_PALETTE : dict[LOG_LEVEL_TYPE, dict[str , Any]] = {
-    'remark' : {'color' : 'lightblue' , 'level_prefix' : {'level' : 'REMARK' , 'color' : 'white' , 'bg_color' : 'lightblue'} , 'bold' : True},
-    'debug' : {'color' : 'gray' , 'level_prefix' : {'level' : 'DEBUG' , 'color' : 'white' , 'bg_color' : 'gray'} , 'bold' : True},
-    'info' : {'color' : 'lightgreen' , 'level_prefix' : {'level' : 'INFO' , 'color' : 'black' , 'bg_color' : 'lightgreen'} , 'bold' : True},
-    'highlight' : {'color' : 'lightcyan' , 'level_prefix' : {'level' : 'HIGHLIGHT' , 'color' : 'black' , 'bg_color' : 'lightcyan'} , 'bold' : True},
-    'warning' : {'color' : 'yellow' , 'level_prefix' : {'level' : 'WARNING' , 'color' : 'black' , 'bg_color' : 'yellow'} , 'bold' : True},
-    'error' : {'color' : 'lightred' , 'level_prefix' : {'level' : 'ERROR' , 'color' : 'white' , 'bg_color' : 'lightred'} , 'bold' : True},
-    'critical' : {'color' : 'lightpurple' , 'level_prefix' : {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'lightpurple'} , 'bold' : True},
-}
-
-STDOUT_PALETTE : dict[str, dict[str, Any]] = {
-    'stdout'   : {'arg_prefix' : None , 'color' : None},
-    'note'     : {'arg_prefix' : None , 'color' : 'lightblue'},
-    'footnote' : {'arg_prefix' : '**' , 'color' : 'gray' , 'bold' : True , 'italic' : True , 'vb_level' : 3},
-    'caption'  : {'arg_prefix' : None , 'color' : 'white' , 'bg_color' : 'gray' , 'bold' : True},
-    'success'  : {'arg_prefix' : 'Success : ' , 'color' : 'lightgreen' , 'to_log_file' : True},
-    'skipping' : {'arg_prefix' : 'Skipping: ' , 'color' : 'gray'},
-    'alert1'   : {'arg_prefix' : 'Caution : ' , 'color' : 'yellow' , 'to_log_file' : True},
-    'alert2'   : {'arg_prefix' : 'RedAlert: ' , 'color' : 'lightred' , 'to_log_file' : True},
-    'alert3'   : {'arg_prefix' : 'Emergent: ' , 'color' : 'lightpurple' , 'to_log_file' : True}
-}
-
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 ENTRY_POINT = Path(sys.argv[0]).stem
+
+class StderrType(StrEnum):
+    REMARK = 'remark'
+    HIGHLIGHT = 'highlight'
+    DEBUG = 'debug'
+    INFO = 'info'
+    WARNING = 'warning'
+    ERROR = 'error'
+    CRITICAL = 'critical'
+
+    @property
+    def palette(self) -> dict[str , Any]:
+        return {
+            'remark' : {'color' : 'lightblue' , 'level_prefix' : {'level' : 'REMARK' , 'color' : 'white' , 'bg_color' : 'lightblue'} , 'bold' : True},
+            'debug' : {'color' : 'gray' , 'level_prefix' : {'level' : 'DEBUG' , 'color' : 'white' , 'bg_color' : 'gray'} , 'bold' : True},
+            'info' : {'color' : 'lightgreen' , 'level_prefix' : {'level' : 'INFO' , 'color' : 'black' , 'bg_color' : 'lightgreen'} , 'bold' : True},
+            'highlight' : {'color' : 'lightcyan' , 'level_prefix' : {'level' : 'HIGHLIGHT' , 'color' : 'black' , 'bg_color' : 'lightcyan'} , 'bold' : True},
+            'warning' : {'color' : 'yellow' , 'level_prefix' : {'level' : 'WARNING' , 'color' : 'black' , 'bg_color' : 'yellow'} , 'bold' : True},
+            'error' : {'color' : 'lightred' , 'level_prefix' : {'level' : 'ERROR' , 'color' : 'white' , 'bg_color' : 'lightred'} , 'bold' : True},
+            'critical' : {'color' : 'lightpurple' , 'level_prefix' : {'level' : 'CRITICAL' , 'color' : 'white' , 'bg_color' : 'lightpurple'} , 'bold' : True},
+        }[self.value]
+
+class StdoutType(StrEnum):
+    STDOUT = 'stdout'
+    NOTE = 'note'
+    FOOTNOTE = 'footnote'
+    CAPTION = 'caption'
+    SUCCESS = 'success'
+    SKIPPING = 'skipping'
+    ALERT1 = 'alert1'
+    ALERT2 = 'alert2'
+    ALERT3 = 'alert3'
+
+    @property
+    def palette(self) -> dict[str , Any]:
+        return {
+            'stdout'   : {'arg_prefix' : None , 'color' : None},
+            'note'     : {'arg_prefix' : None , 'color' : 'lightblue'},
+            'footnote' : {'arg_prefix' : '**' , 'color' : 'gray' , 'bold' : True , 'italic' : True , 'vb_level' : 3},
+            'caption'  : {'arg_prefix' : None , 'color' : 'white' , 'bg_color' : 'gray' , 'bold' : True},
+            'success'  : {'arg_prefix' : 'Success : ' , 'color' : 'lightgreen' , 'to_log_file' : True},
+            'skipping' : {'arg_prefix' : 'Skipping: ' , 'color' : 'gray'},
+            'alert1'   : {'arg_prefix' : 'Caution : ' , 'color' : 'yellow' , 'to_log_file' : True},
+            'alert2'   : {'arg_prefix' : 'RedAlert: ' , 'color' : 'lightred' , 'to_log_file' : True},
+            'alert3'   : {'arg_prefix' : 'Emergent: ' , 'color' : 'lightpurple' , 'to_log_file' : True}
+        }[self.value]
 
 def find_calling_module():
     """Find the calling module"""
@@ -144,7 +166,7 @@ class Logger:
             - Profiler: Profiler class for profiling the code, show the profile result in the best way
     """
     _instance : Logger | Any = None
-    _conclusions : dict[LOG_LEVEL_TYPE , list[str]] = {level : [] for level in LOG_LEVELS}
+    _conclusions : dict[StderrType , list[str]] = {level : [] for level in StderrType}
     _displayer = Display()
 
     def __new__(cls, *args , **kwargs):
@@ -250,25 +272,25 @@ class Logger:
     @classmethod
     def caption(cls , *args , **kwargs):
         """custom gray stdout message for caption (e.g. table / figure title)"""
-        kwargs = STDOUT_PALETTE['caption'] | kwargs
+        kwargs = StdoutType.CAPTION.palette | kwargs
         new_stdout(*args , **kwargs)
 
     @classmethod
     def footnote(cls , *args , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        kwargs = STDOUT_PALETTE['footnote'] | kwargs
+        kwargs = StdoutType.FOOTNOTE.palette | kwargs
         new_stdout(*args , **kwargs)
         
     @classmethod
     def success(cls , *args , **kwargs):
         """custom green stdout message for success"""
-        kwargs = STDOUT_PALETTE['success'] | kwargs
+        kwargs = StdoutType.SUCCESS.palette | kwargs
         new_stdout(*args , **kwargs)
     
     @classmethod
     def skipping(cls , *args , **kwargs):
         """custom skipping message"""
-        kwargs = STDOUT_PALETTE['skipping'] | kwargs
+        kwargs = StdoutType.SKIPPING.palette | kwargs
         new_stdout(*args , **kwargs)
 
     @classmethod
@@ -277,7 +299,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        kwargs = STDOUT_PALETTE['alert1'] | kwargs
+        kwargs = StdoutType.ALERT1.palette | kwargs
         new_stdout(*args , **kwargs)
 
     @classmethod
@@ -286,7 +308,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        kwargs = STDOUT_PALETTE['alert2'] | kwargs
+        kwargs = StdoutType.ALERT2.palette | kwargs
         new_stdout(*args , **kwargs)
 
     @classmethod
@@ -295,7 +317,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        kwargs = STDOUT_PALETTE['alert3'] | kwargs
+        kwargs = StdoutType.ALERT3.palette | kwargs
         new_stdout(*args , **kwargs)
 
     @classmethod
@@ -303,49 +325,49 @@ class Logger:
         """
         custom lightblue stdout message for remark
         """
-        kwargs = STDOUT_PALETTE['note'] | kwargs
+        kwargs = StdoutType.NOTE.palette | kwargs
         new_stdout(*args , **kwargs)
 
     @classmethod
     def remark(cls , *args , **kwargs):
         """custom lightblue stderr"""
-        kwargs = STDERR_PALETTE['remark'] | kwargs
+        kwargs = StderrType.REMARK.palette | kwargs
         new_stderr(*args , **kwargs)
 
     @classmethod
     def debug(cls , *args , **kwargs):
         """Debug level stderr"""
-        kwargs = STDERR_PALETTE['debug'] | kwargs
+        kwargs = StderrType.DEBUG.palette | kwargs
         new_stderr(*args , **kwargs)
 
     @classmethod
     def info(cls , *args , **kwargs):
         """Info level stderr"""
-        kwargs = STDERR_PALETTE['info'] | kwargs
+        kwargs = StderrType.INFO.palette | kwargs
         new_stderr(*args , **kwargs)
 
     @classmethod
     def highlight(cls , *args , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        kwargs = STDERR_PALETTE['highlight'] | kwargs
+        kwargs = StderrType.HIGHLIGHT.palette | kwargs
         new_stderr(*args , **kwargs)
 
     @classmethod
     def warning(cls , *args , **kwargs):
         """Warning level stderr"""
-        kwargs = STDERR_PALETTE['warning'] | kwargs
+        kwargs = StderrType.WARNING.palette | kwargs
         new_stderr(*args , **kwargs)
 
     @classmethod
     def error(cls , *args , **kwargs):
         """Error level stderr"""
-        kwargs = STDERR_PALETTE['error'] | kwargs | {'vb_level' : 0}
+        kwargs = StderrType.ERROR.palette | kwargs | {'vb_level' : 0}
         new_stderr(*args , **kwargs)
 
     @classmethod
     def critical(cls , *args , **kwargs):
         """Critical level stderr"""
-        kwargs = STDERR_PALETTE['critical'] | kwargs | {'vb_level' : 0}
+        kwargs = StderrType.CRITICAL.palette | kwargs | {'vb_level' : 0}
         new_stderr(*args , **kwargs)
 
     @classmethod
@@ -375,24 +397,24 @@ class Logger:
         new_stdout(msg , color = color , bold = bold , vb_level = vb_level)
 
     @classmethod
-    def conclude(cls , *args : str , level : LOG_LEVEL_TYPE = 'critical' , **kwargs):
+    def conclude(cls , *args : str , level : StderrType | str = StderrType.CRITICAL , **kwargs):
         """Add the message to the conclusions for later use"""
         msg = ' '.join([str(s) for s in args])
-        cls._conclusions[level].append(msg)
+        cls._conclusions[StderrType(level)].append(msg)
 
     @classmethod
     def draw_conclusions(cls , simplify_errors : bool = True , **kwargs) -> str:
         """wrap the conclusions: printout , merge into a single string and clear them"""
         conclusion_strs = []
-        num_conclusions = sum([len(cls._conclusions[level]) for level in LOG_LEVELS])
+        num_conclusions = sum([len(cls._conclusions[level]) for level in StderrType])
         if num_conclusions == 0:
             return ''
 
         with cls.Paragraph('Final Conclusions' , 3):
-            for level , palette in STDERR_PALETTE.items():
+            for level in StderrType:
                 if not cls._conclusions[level]:
                     continue
-                new_stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = palette['color'] , vb_level = 0)
+                new_stdout(f'There are {len(cls._conclusions[level])} {level.upper()} Conclusions:' , color = level.palette['color'] , vb_level = 0)
                 if simplify_errors and level == 'error':
                     new_stdout('Please refer to the error messages for details.' , indent = 1 , vb_level = 0)
                     conclusion_strs.append(f'{level.upper()}: Please refer to the error messages for details.')
@@ -404,9 +426,9 @@ class Logger:
         return '\n'.join(conclusion_strs)
 
     @classmethod
-    def get_conclusions(cls , type : LOG_LEVEL_TYPE , **kwargs) -> list[str]:
+    def get_conclusions(cls , type : StderrType | str , **kwargs) -> list[str]:
         """Get the conclusions"""
-        return cls._conclusions[type]
+        return cls._conclusions[StderrType(type)]
 
     @classmethod
     def print_exc(cls , e : Exception , color : str = 'lightred' , bold : bool = True , **kwargs):
@@ -436,11 +458,11 @@ class Logger:
                 cls.divider()
 
             with cls.Paragraph('ParagraphII' , 2):
-                for level in LOG_LEVELS:
+                for level in StderrType:
                     getattr(cls, level)(f'This is a {level} message')
 
             with cls.Paragraph('ParagraphIII' , 3):
-                for level in LOG_LEVELS:
+                for level in StderrType:
                     cls.conclude(f'This is a {level} conclusion' , level = level)
 
             with cls.Timer('Timer'):

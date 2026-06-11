@@ -1,14 +1,14 @@
 from __future__ import annotations
 import pandas as pd
-
+import numpy as np
 from itertools import combinations
 from pathlib import Path
-from typing import Generator , Iterator , Type , Literal , Any
-
-from .factor_calc import FactorCalculator
+from typing import Generator , Iterator , Type , Any
 
 from src.proj import PATH , MACHINE , Base
 from src.proj.util.functional.parallel import parallel
+
+from .factor_calc import FactorCalculator
 
 class StockFactorHierarchy(Base.BoundLogger):
     """hierarchy of factor classes"""
@@ -67,14 +67,16 @@ class StockFactorHierarchy(Base.BoundLogger):
         return PATH.local_share.joinpath('factor_list.csv')
     
     @classmethod
-    def export_factor_table(cls) -> Path:
+    def export_factor_table(cls) -> Base.UpdateFlag:
         """export factor list to csv"""
         if MACHINE.updatable:
             df = cls.full_factor_table()
             df.to_csv(cls.factor_table_path() , index = False)
             if PATH.share_folder is not None:
                 df.to_csv(PATH.share_folder.joinpath('factor_list.csv') , index = False)
-        return cls.factor_table_path()
+            return Base.UpdateFlag.SUCCESS
+        return Base.UpdateFlag.SKIPPED
+
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:
@@ -89,7 +91,7 @@ class StockFactorHierarchy(Base.BoundLogger):
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
+        meta_type : Base.lit.FactorMetaType | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         """
@@ -109,7 +111,7 @@ class StockFactorHierarchy(Base.BoundLogger):
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
+        meta_type : Base.lit.FactorMetaType | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         """
@@ -128,8 +130,15 @@ class StockFactorHierarchy(Base.BoundLogger):
         return pd.concat(dfs)
 
     @classmethod
-    def factor_mean_stats(cls , stats_df : pd.DataFrame , stats_type : Literal['daily' , 'weekly']) -> dict[str , float]:
+    def factor_mean_stats(cls , stats_df : pd.DataFrame , stats_type : Base.lit.FactorStatsPeriod) -> dict[str , float]:
         """return a DataFrame of all factors with given attributes"""
+        if stats_df.empty:
+            return {
+                f'{stats_type}_ic' : np.nan,
+                f'{stats_type}_rankic' : np.nan,
+                f'{stats_type}_long' : np.nan,
+                f'{stats_type}_short' : np.nan,
+            }
         ic = stats_df['ic'].mean()
         rankic = stats_df['rankic'].mean()
         gp = stats_df.filter(like='group@').sort_index(axis = 1 , key = lambda x: x.str.extract(r'group@(\d+)').astype(int)[0])
@@ -183,7 +192,7 @@ class StockFactorHierarchy(Base.BoundLogger):
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = 'stock'
+        meta_type : Base.lit.FactorMetaType | None = 'stock'
         category0 : str | None = None 
         category1 : str | None = None 
         """

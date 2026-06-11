@@ -9,22 +9,25 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from copy import deepcopy
 from datetime import datetime, timedelta, time
+from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal, Iterable , TYPE_CHECKING
+from typing import Any, Iterable , Union, TypeAlias , Self , overload , Sequence
 
-from src.proj.core import NoInstanceMeta
-from src.proj.env import PATH
+from src.proj.core import NoInstanceMeta , lit
+from src.proj.env import PATH , Const
 from src.proj.db import DB
 
 from .basic import BJ_TZ , BC
 from .trade_date import TradeDate
 
-__all__ = ['CALENDAR', 'Dates']
+__all__ = ['CALENDAR', 'Dates' , 'intDate' , 'intDateNone' , 'intDates']
 
-if TYPE_CHECKING:
-    from src.proj.bases.types import intDate , intDateNone , intDates
-
+intDate : TypeAlias = Union[int , TradeDate]
+intDateNone : TypeAlias = Union[int, TradeDate, None]
+intDates : TypeAlias = Union[intDate , Iterable[intDate] , np.ndarray , pd.Series]
+    
 def get_cd(date: intDate) -> int:
     """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
     return int(date.cd if isinstance(date, TradeDate) else date)
@@ -113,7 +116,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
     def clock(cls, date: int = 0, h=0, m=0, s=0):
         """
         Combine the date and time to form the 'YYYYMMDDHHMMSS'; 
-        - relative to today if 'date<=0'.
+        - relative to update_to if 'date<=0'.
         """
         if date <= 0:
             date_time = cls.now(bj_tz=False) + timedelta(days=date)
@@ -177,11 +180,34 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return modified_time >= shift_time
 
     @classmethod
-    def update_to(cls):
-        """The cached 'updated to' natural date; take today or yesterday based on whether the current time is after 19:59."""
+    def update_from(cls , key: lit.DataUpdateKey | None = None):
+        """update to date"""
+        return Const.Data.UPDATE.start(key)
+
+    @classmethod
+    def update_to(cls , offset: int = 0 , key: lit.DataUpdateKey | None = None):
+        """
+        The cached 'updated to' natural date; 
+        - take today or yesterday based on whether the current time is after 19:59.
+        if offset != 0, the update_to will be truncated to today + offset.
+        at platform coding, the update_to will be the latest date in the 'trade_ts/day' database table.
+        """
+
         if cls._update_to is None:
             cls._update_to = cls.today(-1 if cls.now(bj_tz=True).time() <= time(19, 59, 0) else 0)
-        return cls._update_to
+        update_to = min(cls._update_to, Const.Data.UPDATE.end(key))
+        update_to = cls.cd(update_to , offset)
+        return update_to
+
+    @classmethod
+    def update_schedule(cls, start: intDateNone = None, end: intDateNone = None , key: lit.DataUpdateKey | None = None) -> tuple[int, int]:
+        """trim the start and end date of the update schedule"""
+        start = 19000101 if start is None else get_cd(start)
+        start = max(start, cls.update_from(key))
+        
+        end = 99991231 if end is None else get_cd(end)
+        end = min(end, cls.update_to(key=key))
+        return start, end
 
     @staticmethod
     def updated(date: intDateNone = None):
@@ -283,23 +309,23 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def as_start_date(cls, date: intDateNone) -> int:
-        """clear the start date of input date (None -> 19900101, negative -> relative to today)"""
-        date_dt = 19900101 if date is None else get_cd(date)
-        #if date_dt < 0:
-        #    date_dt = cls.today(date_dt)
+        """clear the start date of input date (None -> 19000101, negative -> relative to update_to)"""
+        date_dt = 19000101 if date is None else get_cd(date)
+        if date_dt < 0:
+           date_dt = cls.update_to(date_dt)
         return date_dt
 
     @classmethod
     def as_end_date(cls, date: intDateNone) -> int:
-        """clear the end date of input date (None -> 99991231, negative -> relative to today)"""
+        """clear the end date of input date (None -> 99991231, negative -> relative to update_to)"""
         date = 99991231 if date is None else get_cd(date)
         if date < 0:
-            date = cls.today(date)
+            date = cls.update_to(date)
         return date
 
     @classmethod
     def range(
-        cls, start: intDateNone, end: intDateNone , type : Literal['td', 'cd'] = 'td' ,
+        cls, start: intDateNone, end: intDateNone , type : lit.intDateType = 'td' ,
         step: int = 1 , until_today=True, updated=False,
         slice: tuple[intDateNone, intDateNone] | None = None,
     ) -> np.ndarray[int, Any]:
@@ -307,7 +333,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         cal = BC._trade_calendar if type == 'td' else BC._cds
         dates = cls.slice(cal, start, end)
         if until_today:
-            dates = dates[dates <= cls.today()]
+            dates = dates[dates <= cls.update_to()]
         if updated:
             dates = dates[dates <= cls.updated()]
         dates = dates[::step]
@@ -316,7 +342,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return dates
 
     @classmethod
-    def range_segments(cls, start: intDateNone, end: intDateNone , type : Literal['td', 'cd'] = 'td' , 
+    def range_segments(cls, start: intDateNone, end: intDateNone , type : lit.intDateType = 'td' , 
                        step: int = 1 , until_today=True, updated=False,
                        slice: tuple[intDateNone, intDateNone] | None = None) -> list[tuple[int,int]]:
         """return the range of dates between start and end"""
@@ -334,7 +360,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         step: int = 1, until_today=True, updated=False,
         slice: tuple[intDateNone, intDateNone] | None = None,
     ) -> np.ndarray[int, Any]:
-        """All trading days within the interval; can be truncated to today, data update date, step and secondary 'slice'."""
+        """All trading days within the interval; can be truncated to update_to, data update date, step and secondary 'slice'."""
         return cls.range(start, end, 'td', step=step, until_today=until_today, updated=updated, slice=slice)
 
     @classmethod
@@ -343,11 +369,11 @@ class CALENDAR(metaclass=NoInstanceMeta):
         step: int = 1, until_today=True, updated=False,
         slice: tuple[intDateNone, intDateNone] | None = None,
     ) -> np.ndarray[int, Any]:
-        """All natural days within the interval; can be truncated to today, data update date, step."""
+        """All natural days within the interval; can be truncated to update_to, data update date, step."""
         return cls.range(start, end, 'cd', step=step, until_today=until_today, updated=updated, slice=slice)
 
     @classmethod
-    def diffs(cls, *args, type: Literal['td', 'cd'] = 'td'):
+    def diffs(cls, *args, type: lit.intDateType = 'td'):
         """
         Calculate the difference between two arrays of dates.
 
@@ -387,7 +413,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
     @classmethod
     def td_start_end(
         cls , reference_date : intDate,
-        period_num: int = 1, freq: Literal["d", "w", "m", "q", "y"] | str = "m", lag_num: int = 0,
+        period_num: int = 1, freq: lit.FreqPeriod | str = "m", lag_num: int = 0,
     ):
         """Calculate the start and end date of a trading date interval based on the approximate trading date length (d/w/m/q/y) from the reference date."""
         pdays = {"d": 1, "w": 7, "m": 21, "q": 63, "y": 252}[freq]
@@ -398,7 +424,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
     @classmethod
     def cd_start_end(
         cls, reference_date : intDate,
-        period_num: int = 1, freq: Literal["d", "w", "m", "q", "y"] | str = "m", lag_num: int = 0,
+        period_num: int = 1, freq: lit.FreqPeriod | str = "m", lag_num: int = 0,
     ):
         """Calculate the start and end date of a natural date interval based on the approximate natural date length (d/w/m/q/y) from the reference date."""
         if freq in ["d", "w"]:
@@ -540,6 +566,7 @@ class Dates(np.ndarray[int, Any]):
         1. only 1 input arg:
             - None : length 0 array
             - date : int / TradeDate / string of digits , length 1 array
+            - tuple : (start, end) or (start, end, step) , treat as 2 / 3 inputs
             - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
         2. exact 2 inputs: start , end
         3. exact 3 inputs: dates , start , end
@@ -547,11 +574,15 @@ class Dates(np.ndarray[int, Any]):
     """
 
     def __new__(cls, *args: Any, info=None):
+        if len(args) == 1 and isinstance(args[0], tuple):
+            args = args[0]
         if len(args) == 0:
             dates = []
         elif len(args) == 1:
             if args[0] is None:
                 dates = []
+            elif isinstance(args[0], Dates):
+                dates = args[0]
             elif isinstance(args[0], (int, TradeDate, str)):
                 dates = [int(args[0])]
             else:
@@ -595,3 +626,163 @@ class Dates(np.ndarray[int, Any]):
         if len(self) > 1:
             return f"{self.min()}~{self.max()}({len(self)}days)"
         return str(self[0])
+
+class Dates2(Sequence[int]):
+    """
+    An integer date array view.
+    inputs:
+        0. empty input:
+            - empty dates[]
+        1. only 1 input arg:
+            - None : length 0 array
+            - date : int / TradeDate / string of digits , length 1 array
+            - tuple : (start, end) or (start, end, step) , treat as 2 / 3 inputs
+            - dates : list / np.ndarray / pd.Series / Dates2 , directly converted to np.ndarray
+        2. exact 2 inputs: start , end
+        3. exact 3 inputs: dates , start , end
+            - will use start and end to slice the dates
+    """
+    @overload
+    def __init__(
+        self , start : intDate , end : intDateNone , / , * , 
+        type : lit.intDateType | None = None , **kwargs):
+        """input with a start and end date"""
+    @overload
+    def __init__(
+        self , dates : intDates | Dates2 | None , / , * ,
+        type : lit.intDateType | None = None , **kwargs):
+        """input with a single date or a sequence of dates"""
+    @overload
+    def __init__(
+        self , dates : intDates | Dates2 | None , 
+        start : intDate , end : intDateNone , / , * ,
+        type : lit.intDateType | None = None , **kwargs):
+        """input with a sequence of dates, start and end date"""
+    @overload
+    def __init__(self , / , * , type : lit.intDateType | None = None , **kwargs):
+        """input with no arguments"""
+    def __init__(self , *args , type : lit.intDateType | None = None , **kwargs):
+        """input with a single date or a sequence of dates"""
+        self._raw_dates = None
+        self._start , self._end = None , None
+        if len(args) == 0:
+            ...
+        elif len(args) == 1:
+            self._feed_raw_dates(args[0])
+        elif len(args) == 2:
+            self._start , self._end = args
+        elif len(args) == 3:
+            self._feed_raw_dates(args[0])
+            self._start , self._end = args[1:]
+        else:
+            raise ValueError(f"Invalid input: {args}")
+        self._type : lit.intDateType = type or getattr(self , '_type' , None) or 'td'
+
+    def _feed_raw_dates(self , raw_dates : intDates | Dates2 | None) -> Self:
+        if raw_dates is None:
+            self._raw_dates = None
+        elif isinstance(raw_dates , Dates2):
+            self._raw_dates = raw_dates._raw_dates
+            self._start = raw_dates._start
+            self._end = raw_dates._end
+            self._type = raw_dates._type
+        else:
+            self._raw_dates = np.atleast_1d(np.array(raw_dates, dtype=int))
+        return self
+
+    @cached_property
+    def dates(self) -> np.ndarray[int, Any]:
+        from src.proj.cal.cal import CALENDAR
+        if self._raw_dates is None:
+            if self._start is None and self._end is None:
+                dates = np.array([] , dtype = int)
+            else:
+                dates = CALENDAR.range(self._start , self._end , self._type)
+        else:
+            dates = np.atleast_1d(np.array(self._raw_dates , dtype = int))
+        dates = np.unique(CALENDAR.slice(dates , self._start , self._end))
+        return dates
+
+    def __len__(self):
+        return len(self.dates)
+
+    def __getitem__(self , item : int | slice):
+        return self.dates[item]
+
+    def __iter__(self):
+        return iter(self.dates)
+
+    def __array__(self , dtype = None):
+        return np.array(self.dates , dtype = dtype)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.format_str()})"
+
+    def __str__(self) -> str:
+        return self.format_str()
+
+    def __contains__(self , item : int) -> bool:
+        return item in self.dates
+
+    def __add__(self , other : intDates | Dates2 | None) -> Self:
+        return self.union(other , inplace = False)
+
+    def __sub__(self , other : intDates | Dates2 | None) -> Self:
+        return self.diff(other , inplace = False)
+
+    def with_info(self , info : Any) -> Self:
+        self.info = info
+        return self
+
+    @property
+    def size(self) -> int:
+        return len(self)
+
+    @property
+    def empty(self) -> bool:
+        """no dates in the array"""
+        return not bool(self)
+
+    @property
+    def min(self) -> int:
+        if self.empty:
+            return 99991231
+        return min(self)
+
+    @property
+    def max(self) -> int:
+        if self.empty:
+            return 19000101
+        return max(self)
+
+    def format_str(self) -> str:
+        """short text description of empty, single or multiple days."""
+        if self.empty:
+            return "Empty Dates"
+        if len(self) > 1:
+            return f"{self.min}~{self.max}({len(self)}days)"
+        return str(self[0])
+
+    def copy(self) -> Self:
+        return deepcopy(self)
+
+    def diff(self , other : intDates | Dates2 | None , inplace : bool = True) -> Self:
+        if not inplace:
+            self = self.copy()
+        if other is not None:
+            self.dates = np.setdiff1d(self.dates , Dates2(other).dates)
+        return self
+
+    def union(self , other : intDates | Dates2 | None , inplace : bool = True) -> Self:
+        if not inplace:
+            self = self.copy()
+        if other is not None:
+            self.dates = np.union1d(self.dates , Dates2(other).dates)
+        return self
+
+    def intersect(self , other : intDates | Dates2 | None , inplace : bool = True) -> Self:
+        if not inplace:
+            self = self.copy()
+        if other is not None:
+            self.dates = np.intersect1d(self.dates , Dates2(other).dates)
+        return self

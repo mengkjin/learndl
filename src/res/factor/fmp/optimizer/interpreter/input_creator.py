@@ -9,7 +9,6 @@ from src.res.factor.util import Benchmark , Port , RISK_MODEL
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
 
-
 stock_bound_list : list[StockBound] = []
 linear_bound_list : list[LinearConstraint] = []
 
@@ -58,7 +57,7 @@ def create_input_bnd_con(opt_input : Any):
     append_bound_range(opt_input)
     append_bound_pool(opt_input)
     bound = StockBound.intersect_bounds(stock_bound_list , clear_after=True)
-    assert not stock_bound_list , stock_bound_list
+    assert not stock_bound_list , f'{stock_bound_list} is not cleared'
 
     if opt_input.cfg_short['short_position'] is None or opt_input.cfg_short['short_position'] <= 0: 
         bound.update_lb(0)
@@ -80,7 +79,7 @@ def create_input_lin_con(opt_input : Any):
     append_linear_component(opt_input)
 
     lin_con = LinearConstraint.stack(linear_bound_list , clear_after=True)
-    assert not linear_bound_list , linear_bound_list
+    assert not linear_bound_list , f'{linear_bound_list} is not cleared'
 
     return lin_con
 

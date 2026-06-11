@@ -4,7 +4,7 @@ import polars as pl
 
 from abc import ABC , abstractmethod
 from datetime import datetime
-from typing import Any , Generator , Literal , TypedDict
+from typing import Any , Generator , TypedDict
 
 from src.proj import Base , Logger
 from src.proj.util.functional.parallel import parallel
@@ -17,7 +17,7 @@ __all__ = [
     'JobChunkPayload' , 'JobChunkReport' , 'run_job_chunk_payload',
 ]
 
-CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
+CATCH_ERRORS : tuple[type[Exception],...] = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
 class JobResultEntry(TypedDict):
     job_type: str
@@ -316,6 +316,9 @@ class UpdateJobDate(BaseUpdateJob):
         super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.date = date
 
+    def __repr__(self):
+        return f'{self.factor_name}({self.date})'
+
     def dates(self) -> np.ndarray:
         return np.array([self.date])
 
@@ -351,6 +354,9 @@ class UpdateJobAll(BaseUpdateJob):
         self.start = start
         self.end = end
 
+    def __repr__(self):
+        return f'{self.factor_name}({self.start}-{self.end})'
+
     def dates(self) -> np.ndarray:
         return self.target_dates
 
@@ -381,7 +387,7 @@ class UpdateJobAll(BaseUpdateJob):
 
 
 class UpdateJobStats(BaseUpdateJob):
-    def __init__(self , calc : FactorCalculator , stats_type : Literal['daily' , 'weekly'] ,
+    def __init__(self , calc : FactorCalculator , stats_type : Base.lit.FactorStatsPeriod ,
                  year : int , dates : np.ndarray , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
         super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.stats_type = stats_type
@@ -389,7 +395,7 @@ class UpdateJobStats(BaseUpdateJob):
         self.year_dates = dates[dates // 10000 == year]
 
     def __repr__(self):
-        return f'{self.factor_name}({self.stats_type})'
+        return f'{self.factor_name}({self.year}-{self.stats_type})'
 
     def dates(self) -> np.ndarray:
         return self.year_dates

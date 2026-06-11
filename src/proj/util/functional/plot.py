@@ -2,14 +2,12 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 
 from dataclasses import dataclass
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
-from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Literal
 
@@ -17,17 +15,25 @@ from src.proj.log import Logger
 
 __all__ = ['PlotMultipleData' , 'SubPlotData' , 'PlotFactorData' , 'plot_table' , 'get_twin_axes' , 'set_xaxis' , 'set_yaxis' , 'sns_lineplot' , 'sns_barplot']
 
-CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
-
-sns.set_theme(context='notebook', style='ticks', font='SimHei', rc={'axes.unicode_minus': False})
 plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
 # plt.rcParams['font.sans-serif'] = ['SimHei'] # for chinese
 plt.rcParams['axes.unicode_minus'] = False
+
+AxisFormatType = Literal['pct' , 'flt' , 'int' , 'default']
 
 def new_figure(size = (16 , 7)):
     """Create a figure with default research-friendly size."""
     return plt.figure(figsize=size)
 
+_seaborn_theme_set = False
+def set_seaborn_theme():
+    global _seaborn_theme_set
+    if not _seaborn_theme_set:
+        import seaborn
+        seaborn.set_theme(context='notebook', style='ticks', rc={'axes.unicode_minus': False})
+        # seaborn.set_theme may override font.family; restore project default (see module-level rcParams).
+        plt.rcParams['font.family'] = ['monospace']
+        _seaborn_theme_set = True
 
 class PlotMultipleData:
     """Iterate grouped slices of a DataFrame, each slice tied to a named figure in ``fig_dict``."""
@@ -210,7 +216,7 @@ def plot_table(df : pd.DataFrame , int_cols = None , pct_cols = None , flt_cols 
         rows[-1].set_facecolor('b') #'#82cafc'
     return tab
 
-def axis_formatter(format : Literal['pct' , 'flt' , 'int' , 'default'] = 'default' , digits = 1):
+def axis_formatter(format : AxisFormatType = 'default' , digits = 1):
     if format == 'pct': 
         return FuncFormatter(lambda x,p:f'{x:.{digits}%}')
     elif format == 'flt': 
@@ -226,7 +232,7 @@ def get_twin_axes(fig : Figure , pos = 111) -> tuple[Axes , Axes]:
     return ax1 , ax2
 
 def set_xaxis(ax : Axes , index : Any = None , labels = None , rotation : float | None = 45 , 
-              format : Literal['default' , 'pct' , 'flt' , 'int'] = 'default' , digits = 1 , 
+              format : AxisFormatType = 'default' , digits = 1 , 
               title = '' , title_color = None , 
               tick_pos : Literal['top', 'bottom', 'both', 'default', 'none'] = 'default', 
               tick_color = None , tick_size = None , tick_length = None ,
@@ -273,7 +279,7 @@ def set_xaxis(ax : Axes , index : Any = None , labels = None , rotation : float 
     if tick_args: 
         ax.xaxis.set_tick_params(**tick_args)
 
-def set_yaxis(ax : Axes , format : Literal['pct' , 'flt' , 'int'] = 'pct' , digits = 1 , 
+def set_yaxis(ax : Axes , format : AxisFormatType = 'pct' , digits = 1 , 
               title = '' , title_color = None , 
               tick_pos : Literal['left', 'right', 'both', 'default', 'none'] | None = 'default' , 
               tick_color = None , tick_size = None , tick_length = None , tick_lim = None):
@@ -305,24 +311,25 @@ def set_yaxis(ax : Axes , format : Literal['pct' , 'flt' , 'int'] = 'pct' , digi
         ax.set_ylim(*tick_lim)
 
 def sns_lineplot(df : pd.DataFrame , x : str , y : str , hue : str , legend : bool = True , legend_loc : str = 'upper left'):
+    import seaborn
+    set_seaborn_theme()
     if isinstance(df[hue].dtype , pd.CategoricalDtype):
         df[hue] = df[hue].cat.remove_unused_categories()
-    if CURRENT_SEABORN_VERSION:
-        n_hues : int | Any = df[hue].nunique()
-        ax = sns.lineplot(x=x, y=y, hue=hue, data=df , palette=sns.diverging_palette(140, 10, sep=10, n=n_hues))
-    else:
-        ax = sns.lineplot(x=x, y=y, hue=hue, data=df)
+
+    n_hues : int | Any = df[hue].nunique()
+    ax = seaborn.lineplot(x=x, y=y, hue=hue, data=df , palette=seaborn.diverging_palette(140, 10, sep=10, n=n_hues))
+
     handles, labels = ax.get_legend_handles_labels()
     if legend: 
         ax.legend(handles=handles[0:], labels=labels[0:], loc=legend_loc)
     return ax
 
 def sns_barplot(df : pd.DataFrame , x : str , y : str , hue : str , legend : str | None = 'upper left'):
-    if CURRENT_SEABORN_VERSION: 
-        n_hues : int | Any = df[hue].nunique()
-        ax = sns.barplot(x=x, y=y, hue=hue, data=df , palette=sns.diverging_palette(140, 10, sep=10, n=n_hues))
-    else: 
-        ax = sns.barplot(x=x, y=y, hue=hue, data=df)
+    import seaborn
+    set_seaborn_theme()
+    n_hues : int | Any = df[hue].nunique()
+    ax = seaborn.barplot(x=x, y=y, hue=hue, data=df , palette=seaborn.diverging_palette(140, 10, sep=10, n=n_hues))
+
     handles, labels = ax.get_legend_handles_labels()
     if legend: 
         ax.legend(handles=handles[0:], labels=labels[0:], loc=legend)

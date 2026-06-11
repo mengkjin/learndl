@@ -77,7 +77,7 @@ class IndexDaily(TimeSeriesFetcher):
     def target_dates(self):
         """get update dates for rolling fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
-        update_to = CALENDAR.update_to()
+        update_to = CALENDAR.update_to(key = 'tushare')
         update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         return [update_to] if update else []
 
@@ -108,6 +108,7 @@ class ZXIndexDaily(DayFetcher):
     """
     START_DATE = 20100101
     DB_KEY = 'zx_industry_index'
+    SKIP_ON_MACHINES = ('Mathews-Mac' ,)
     
     def get_data(self , date : int , end : int | None = None):
         if end is None:

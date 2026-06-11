@@ -30,7 +30,7 @@ class TradingPort(Base.BoundLogger):
     components  : list[str] | None = None
     weights     : list[float] | Literal['equal'] | None = None
     top_num     : int = 50
-    freq        : int | Literal['d' , 'w' , 'm'] = 1
+    freq        : int | Base.lit.FreqUpdate = 1
     init_value  : float = 1e6
     backtest    : bool = False
     test_start  : int = 20190101 # -1 for no backtest
@@ -196,7 +196,7 @@ class TradingPort(Base.BoundLogger):
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False , 
-                          trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale'):
+                          trade_engine : Base.lit.TradeEngine = 'yale'):
         self.load_portfolio(start , end)
         benchmark = Benchmark(self.benchmark)
         index = {
@@ -211,7 +211,7 @@ class TradingPort(Base.BoundLogger):
 
     def analyze(self , start : int | None = None , end : int | None = None , 
                 write_down = True , display_all = False , key_fig = 'perf_curve', 
-                trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
+                trade_engine : Base.lit.TradeEngine = 'yale' , **kwargs):
         start = start if start is not None else -1
         end = end if end is not None else 99991231
         port_dates = self.stored_dates(start , end)
@@ -371,6 +371,8 @@ class BacktestPort(TradingPort):
             return pd.DataFrame()
         self.logger.stdout(f'Loading alpha for {self.name} at {Base.Dates(date_list)}')
         alpha = self.Alpha.get(date_list)
+        if alpha.empty:
+            return pd.DataFrame()
         self.logger.stdout(f'Loading universe for {self.name} at {Base.Dates(date_list)}')
         univ_port = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])

@@ -11,7 +11,7 @@ import inspect
 import pkgutil
 from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Callable , Iterator , Literal
+from typing import Any , Callable , Iterator
 
 import yaml
 
@@ -84,11 +84,11 @@ class APIEndpoint:
         return self.schema.get("disable_platforms" , [])
 
     @property
-    def execution_time(self) -> Literal['immediate' , 'short' , 'medium' , 'long']:
+    def execution_time(self) -> str:
         return self.schema.get("execution_time" , "immediate")
 
     @property
-    def memory_usage(self) -> Literal['low' , 'medium' , 'high']:
+    def memory_usage(self) -> str:
         return self.schema.get("memory_usage" , "low")
 
     @property

@@ -1,0 +1,20 @@
+production: # no constraints on the update_from and update_to
+  update_from: 19000101
+  update_to: 99991231
+
+  start:
+  end:
+
+testing:
+  update_from: 20250416
+  update_to: 20250418
+  
+  start:
+  end:
+
+machine_schedules:
+  mengkjin-server: production
+  HST-jinmeng: production
+  Matthews-Mac: testing
+    
+

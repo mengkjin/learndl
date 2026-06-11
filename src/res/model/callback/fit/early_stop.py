@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Literal
 
+from src.proj.bases import FittingEventType
 from src.res.model.util.trainer.status import EpochRecord
 from src.res.model.util import BaseCallBack
 
@@ -54,7 +55,7 @@ class EarlyStoppage(BaseCallBack):
                 self.add_stop_event('Train Converged' , self.status[-self.converge_patience])
     def add_stop_event(self , reason : str , effect_epoch : EpochRecord):
         self.status.add_epoch_event(
-            'end_attempt' , reason.replace(' ' , '') , epoch = effect_epoch.epoch , 
+            FittingEventType.END_ATTEMPT , reason.replace(' ' , '') , epoch = effect_epoch.epoch , 
             message = f'Early stoppage due to {reason} at {effect_epoch.epoch_key}, recognized at {self.status.epoch_key}'
         )
 

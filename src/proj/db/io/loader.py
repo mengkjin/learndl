@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any , Iterable , Callable , Union , Literal , TYPE_CHECKING
+from typing import Any , Iterable , Callable , Union , TYPE_CHECKING
 
 from src.proj.core import strPath , strPaths
 from src.proj.db.basic import TAR_SUFFIXES
@@ -10,6 +10,7 @@ from src.proj.db.basic import TAR_SUFFIXES
 if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
+    from src.proj.db.io.dataframe import PandasAccelerator , PolarsAccelerator
     PD_MAPPER_TYPE = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]
     PL_MAPPER_TYPE = Union[Iterable[Callable[[pl.DataFrame], pl.DataFrame]] , Callable[[pl.DataFrame], pl.DataFrame] , None]
 
@@ -17,7 +18,7 @@ class Load:
     """Loader for database"""
     @classmethod
     def df(cls , path : strPath | strPaths , * , missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
-        accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+        accelerator : PandasAccelerator | None = 'thread' , 
         mapper : PD_MAPPER_TYPE = None) -> pd.DataFrame:
         """
         load dataframe from path or paths
@@ -29,7 +30,7 @@ class Load:
             if True, return empty dataframe for missing path(s)
         key_column : str | None
             key column name , if None, use date column
-        accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread']
+        accelerator : 'thread' | 'dask' | 'polars' | 'polars_thread' | None
             accelerating mode
         mapper : Callable[[pd.DataFrame], pd.DataFrame]
             mapper function to execute on each dataframe
@@ -50,7 +51,7 @@ class Load:
         missing_ok: bool = True,
         key_column: str | None = 'date',
         override_existing_key: bool = False,
-        accelerator: Literal['thread', 'dask', 'polars', 'polars_thread'] | None = 'thread',
+        accelerator: PandasAccelerator | None = 'thread',
         mapper: PD_MAPPER_TYPE = None,
     ) -> pd.DataFrame:
         """
@@ -65,7 +66,7 @@ class Load:
 
     @classmethod
     def polars(cls , path : strPath | strPaths , * , missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
-        accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
+        accelerator : PolarsAccelerator | None = 'thread' , 
         mapper : PL_MAPPER_TYPE = None) -> pl.DataFrame:
         """
         load polars dataframe from path or paths
@@ -75,7 +76,7 @@ class Load:
             path or paths to load , key is date
         missing_ok : bool
             if True, return empty dataframe for missing path(s)
-        accelerator : Literal['thread' , 'lazy'] | None
+        accelerator : 'thread' | 'lazy' | None
             accelerating mode
         mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
             mapper function to execute on each dataframe

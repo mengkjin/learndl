@@ -5,7 +5,7 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal
 
-from src.proj import Const
+from src.proj import Const , Base
 from src.data import DATAVENDOR
 
 class Port:
@@ -111,8 +111,8 @@ class Port:
         return rslt
     
     def fut_ret(self , new_date : int | None = None ,
-                price0 : Literal['close' , 'vwap' , 'open'] = 'close' ,
-                price1 : Literal['close' , 'vwap' , 'open'] = 'close') -> float:
+                price0 : Base.lit.TradePrice = 'close' ,
+                price1 : Base.lit.TradePrice = 'close') -> float:
         if not self: 
             return 0.
         old_date = DATAVENDOR.td(self.date)

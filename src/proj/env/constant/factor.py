@@ -1,10 +1,10 @@
 """Central factor/risk/benchmark/trade tuning knobs and stock factor taxonomy helpers."""
 from __future__ import annotations
 import numpy as np
-from typing import Any , Literal
+from typing import Any , get_args
 
-from src.proj.env import MACHINE
-from src.proj.core import SingletonMeta
+from src.proj.core import SingletonMeta , lit
+from src.proj.env.machine import MACHINE
 
 __all__ = ['FactorConstants']
 
@@ -189,24 +189,17 @@ class StockFactorDefinitionConfig(metaclass=SingletonMeta):
     - validate_categories: raise ``ValueError`` if ``category1`` is not allowed under ``category0``
     """
     @property
-    def meta_type(self) -> list[str]:
+    def meta_type(self) -> list[lit.FactorMetaType]:
         """meta type of stock factor"""
-        return [
-            'stock' , 'market' , 'affiliate' , 'pooling'
-        ]
+        return list(get_args(lit.FactorMetaType))
     
     @property
-    def category0(self) -> list[str]:
+    def category0(self) -> list[lit.FactorCategory0]:
         """category0 of stock factor"""
-        return [
-            'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' ,
-            'market' ,
-            'risk' , 'external' ,
-            'pooling' , 
-        ]
+        return list(get_args(lit.FactorCategory0))
 
     @property
-    def category1(self) -> dict[str , list[str] | None]:
+    def category1(self) -> dict[lit.FactorCategory0 , list[lit.FactorCategory1] | None]:
         """category1 of stock factor"""
         return {
             'external' : ['sellside'] ,
@@ -221,7 +214,7 @@ class StockFactorDefinitionConfig(metaclass=SingletonMeta):
             'market' : ['market_event']
         }
 
-    def cat0_to_meta(self , category0 : str) -> Literal['stock' , 'market' , 'affiliate' , 'pooling']:
+    def cat0_to_meta(self , category0 : str) -> lit.FactorMetaType:
         """Map a category0 label to coarse meta type (stock/market/affiliate/pooling)."""
         if category0 not in self.category0:
             raise ValueError(f'category0 is should be in {self.category0}, but got {category0}')
@@ -234,11 +227,11 @@ class StockFactorDefinitionConfig(metaclass=SingletonMeta):
         else:
             return 'stock'
             
-    def cat0_to_cat1(self , category0 : str) -> list[str] | None:
+    def cat0_to_cat1(self , category0 : lit.FactorCategory0) -> list[lit.FactorCategory1] | None:
         """Get the possible category1 of the category0 of stock factor"""
         return self.category1[category0]
 
-    def cat1_to_cat0(self , category1 : str) -> str:
+    def cat1_to_cat0(self , category1 : lit.FactorCategory1) -> lit.FactorCategory0:
         """Get the category0 given category1 of stock factor"""
         match category1:
             case 'quality' | 'growth' | 'value' | 'earning':
@@ -284,7 +277,6 @@ class FMPConfig(metaclass=SingletonMeta):
     def creator(self) -> dict[str , dict]:
         """default FMP config"""
         return MACHINE.preference('factor' , 'factor_model_portfolio/creator')
-
 
 class FactorConstants(metaclass=SingletonMeta):
     """Aggregate accessor for factor-related sub-configs (UPDATE, RISK, BENCH, ...):

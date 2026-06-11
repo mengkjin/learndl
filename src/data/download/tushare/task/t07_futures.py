@@ -39,6 +39,8 @@ class FuturesDailyQuote(DayFetcher):
     """futures daily quote"""
     START_DATE = 20180101 if MACHINE.updatable else 20241215
     DB_KEY = 'fut_day'
+    SKIP_ON_MACHINES = ('Mathews-Mac' ,)
+
     def get_data(self , date : int):
         date_str = str(date)
         

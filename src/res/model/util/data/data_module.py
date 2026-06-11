@@ -5,7 +5,7 @@ import pandas as pd
 import gc , torch
 
 from functools import cached_property
-from typing import Any , Literal , Callable
+from typing import Any , Callable
 
 from src.proj import CALENDAR , Const, MACHINE , Base , Proj
 from src.data import ModuleData
@@ -29,14 +29,14 @@ class DataModule(Base.BoundLogger):
    
     def __init__(
         self , config : ModelConfig | None = None , 
-        use_data : Literal['fit','predict','both'] = 'fit' , * , 
+        use_data : Base.lit.DataBlockTimeFrames = 'fit' , * , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
-        self._use_data : Literal['fit','predict','both'] = use_data
+        self._use_data : Base.lit.DataBlockTimeFrames = use_data
 
     @classmethod
-    def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit' , *args , **kwargs):
+    def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Base.lit.DataBlockTimeFrames = 'fit' , *args , **kwargs):
         if trainer_or_config is None:
             config = ModelConfig(stage=0)
             vb_level = kwargs.pop('vb_level' , 1)
@@ -123,7 +123,7 @@ class DataModule(Base.BoundLogger):
             else:
                 self.model_date_list = dates[::self.config.interval]
 
-    def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] , 
+    def setup(self, stage : Base.lit.StageAll , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , **kwargs) -> None:
         """
@@ -138,7 +138,7 @@ class DataModule(Base.BoundLogger):
             self.setup_loader_static()
 
     def setup_new_param(
-            self , stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] , 
+            self , stage : Base.lit.StageAll , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
             model_date : int = -1 , retro_start_date : int | None = None , retro_end_date : int | None = None
         ) -> bool:
@@ -258,9 +258,7 @@ class DataModule(Base.BoundLogger):
             torch.cuda.empty_cache()
 
     def display_loader_static_stats(self , x_full : dict[str,torch.Tensor] , eff_mask : torch.Tensor | None , stat_types : tuple[str,...] = ('min', 'mean' , 'max')) -> None:
-        if not Proj.verbose(self.vb_level + 1):
-            return
-        if hasattr(self , f'_display_loader_static_stats_{self.stage}_done'):
+        if not self.stage == 'fit' or not Proj.verbose(self.vb_level + 1) or getattr(self , f'_display_loader_static_stats_{self.stage}_done', False):
             return
         self.logger.stdout(f'Loader Parameters: stage={self.stage} , model_date={self.model_date} , seqlens={self.seq_lens}')
         self.logger.stdout(f'Sample Input Share: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
@@ -268,7 +266,7 @@ class DataModule(Base.BoundLogger):
 
         if eff_mask is not None:
             from src.data import DATAVENDOR
-            count_dates = self.y_date[self.step_idx]
+            count_dates = np.atleast_1d(self.y_date[self.step_idx])
             eff_counts = pd.DataFrame({
                 'date' : count_dates,
                 'Year' : count_dates // 10000,
@@ -426,11 +424,11 @@ class DataModule(Base.BoundLogger):
         return {}
 
     @property
-    def use_data(self) -> Literal['fit','predict','both']:
+    def use_data(self) -> Base.lit.DataBlockTimeFrames:
         return self._use_data if not hasattr(self , 'datas') else self.datas.use_data
 
     @property
-    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'retrospective']:
+    def stage(self) -> Base.lit.StageAll:
         return self.loader_param.stage
 
     @cached_property
@@ -508,7 +506,7 @@ class DataModule(Base.BoundLogger):
         return 99991231 if self.use_data == 'predict' else self.config.end_date
 
     @property
-    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+    def input_type(self): 
         return self.config.input_type
 
     @property

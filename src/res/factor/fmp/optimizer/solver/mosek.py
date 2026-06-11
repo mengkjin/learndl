@@ -2,7 +2,8 @@ from __future__ import annotations
 import numpy as np
 import mosek
 
-from typing import Any , Literal
+from typing import Any
+from src.proj import Base
 
 from ..interpreter import SolverInput , SolveCond , SolveVars
 
@@ -35,10 +36,10 @@ def enum(num : int , args : list[Any] , start = 0):
 
 class Solver:
     def __init__(self , input : SolverInput , 
-                 prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'socp' ,
+                 prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.SOCP ,
                  **kwargs):
         self.input = input
-        self.prob_type : Literal['linprog' , 'quadprog' , 'socp'] = prob_type
+        self.prob_type = Base.PortOptimProblem(prob_type)
 
     def parse_input(self):
         self.alpha    = self.input.alpha

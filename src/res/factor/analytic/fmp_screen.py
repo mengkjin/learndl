@@ -1,15 +1,16 @@
 from __future__ import annotations
 import pandas as pd
-from typing import Any , Type
+from typing import Type
 
+from src.proj import Base
 from src.res.factor.util import StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.top_pf import Plotter
 from src.res.factor.util.stats import top_pf as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
-test_type = TestType.SCREEN
+test_type = Base.TestType.SCREEN
 plotter = Plotter(test_type.title())
 
 class ScreenCalc(BaseFactorAnalyticCalculator):
@@ -62,13 +63,12 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
     """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
-        which : str | list[str] | Literal['all']
-            Which tasks to run. Can be any of the following:
-            'front_face' : Front Face
-            'perf_curve' : Performance Curve
-            'perf_excess' : Performance Excess
-            'perf_drawdown' : Performance Drawdown
-            'perf_year' : Performance Yearly Stats
+        Which tasks to run. Can be any of the following:
+        'front_face' : Front Face
+        'perf_curve' : Performance Curve
+        'perf_excess' : Performance Excess
+        'perf_drawdown' : Performance Drawdown
+        'perf_year' : Performance Yearly Stats
     """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[ScreenCalc]] = [
@@ -79,7 +79,7 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
         Perf_Year ,
     ]
 
-    def generate(self , factor: StockFactor , benchmark : Any = 'defaults'):
+    def generate(self , factor: StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults'):
         alpha_models = factor.alpha_models()
         benchmarks = [factor.universe(load = True).get('all').rename('univ')]
         self.update_kwargs()
@@ -89,8 +89,8 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
             start = self.start , end = self.end , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
-    def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , **kwargs):
-        self.generate(factor , benchmark)
+    def calc(self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , **kwargs):
+        self.generate(factor , benchmarks)
         if self.total_account.empty:
             self.logger.error(f'No accounts created for {self.test_name}!')
         else:

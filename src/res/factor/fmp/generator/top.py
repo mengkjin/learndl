@@ -2,9 +2,10 @@ from __future__ import annotations
 from typing import Any , Literal
 from src.proj import Const
 
-from .basic import BasicCreatorConfig , BasicPortfolioCreator
+from src.proj.bases import TestType
+from src.res.factor.fmp.generator.basic import BasicCreatorConfig , BasicPortfolioCreator
 
-builder_type = 'top'
+test_type = TestType.TOP
 
 class TopStocksPortfolioCreatorConfig(BasicCreatorConfig):
     """
@@ -15,7 +16,7 @@ class TopStocksPortfolioCreatorConfig(BasicCreatorConfig):
     slots = ['n_best' , 'screener' , 'screen_ratio' , 'turn_control' , 'buffer_zone' , 'no_zone' , 'indus_control']
     def __init__(
         self , 
-        n_best : int = Const.Factor.FMP.creator[builder_type]['n_best'] , 
+        n_best : int = Const.Factor.FMP.creator[test_type.value]['n_best'] , 
         sorter : Literal['self'] = 'self' ,
         **kwargs
     ):

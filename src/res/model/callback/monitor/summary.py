@@ -119,11 +119,10 @@ class SummaryWriter(BaseCallBack):
 
     def add_total_metric(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
-        for metric in self.metrics.MetricOptions:
-            data = {
-                'train':self.metrics.attempt_metrics.latest('train' , metric),
-                'valid':self.metrics.attempt_metrics.latest('valid' , metric),
-            }
+        def get_metric(ds , metric):
+            return self.metrics.attempt_metrics.latest(ds , metric)
+        for metric in ['accuracy' , 'loss' , 'rankic']:
+            data = {'train':get_metric('train' , metric), 'valid':get_metric('valid' , metric)}
             self.writer.add_scalars(f'{prefix}/Total{metric.title()}' , data , self.step_epoch)
 
     def add_epoch_events(self):

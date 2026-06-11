@@ -2,9 +2,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from typing import Any
+from typing import Any , Iterable
 
-from src.proj import DB , Const
+from src.proj import DB , Const , Base
 from src.data import DataBlock , DATAVENDOR
 
 from .portfolio import Port , Portfolio
@@ -158,17 +158,49 @@ class Benchmark(Portfolio):
             return port
         else:
             raise TypeError(bm)
+
+    @classmethod
+    def to_port(cls , benchmark : Base.alias.SingleBenchmark , date : int , evolve = True) -> Port:
+        if benchmark is None:
+            return Port.none_port(date)
+        elif isinstance(benchmark , str):
+            return cls(benchmark).get(date , closest = True)
+        elif isinstance(benchmark , Portfolio):
+            return benchmark.get(date , closest = True)
+        elif isinstance(benchmark , Port):
+            port = benchmark
+            return port.evolve_to_date(date) if evolve else port.copy()
+        elif hasattr(benchmark , 'benchmark') and isinstance(benchmark.benchmark , str):
+            return cls(benchmark.benchmark).get(date , closest = True)
+        else:
+            raise TypeError(benchmark)
+
+    @classmethod
+    def to_benchmark(cls , benchmark : Base.alias.SingleBenchmark) -> Portfolio:
+        if benchmark is None:
+            return cls(None)
+        elif isinstance(benchmark , str):
+            return cls(benchmark)
+        elif isinstance(benchmark , Portfolio):
+            return benchmark
+        elif isinstance(benchmark , Port):
+            return Portfolio.from_ports(benchmark)
+        elif hasattr(benchmark , 'benchmark') and isinstance(benchmark.benchmark , str):
+            return cls(benchmark.benchmark)
+        else:
+            raise TypeError(benchmark)
         
     @classmethod
-    def get_benchmarks(cls , benchmarks : Any):
+    def to_benchmarks(cls , benchmarks : Base.alias.MultipleBenchmark) -> list[Portfolio | Any]:
         if benchmarks == 'defaults': 
             return cls.defaults()
         elif not benchmarks or benchmarks == 'none': 
             return [cls(None)]
         else:
-            if not isinstance(benchmarks , list): 
+            if isinstance(benchmarks , str | Portfolio): 
                 benchmarks = [benchmarks]
             benches = []
+            assert isinstance(benchmarks , Iterable) , benchmarks
             for bm in benchmarks:
                 if bm is None or isinstance(bm , str): 
                     benches.append(cls(bm))
@@ -177,6 +209,19 @@ class Benchmark(Portfolio):
                 else: 
                     raise TypeError(bm)
         return benches
+
+    @classmethod
+    def get_benchmark_name(cls , benchmark : Base.alias.SingleBenchmark):
+        if benchmark is None:
+            return 'default'
+        elif isinstance(benchmark , (Portfolio , Benchmark , Port)):
+            return benchmark.name
+        elif isinstance(benchmark , str):
+            return benchmark
+        elif hasattr(benchmark , 'benchmark') and isinstance(benchmark.benchmark , str):
+            return benchmark.benchmark
+        else:
+            raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
     
     @classmethod
     def defaults(cls): return [cls(bm) for bm in cls.DEFAULTS]

@@ -13,7 +13,7 @@ from string import Template
 from typing import Any , Literal , Callable , TextIO,  TYPE_CHECKING
 
 from src.proj.env import PATH , Proj , MACHINE
-from src.proj.core import  str_to_html , dataframe_to_html , figure_to_html , strPath
+from src.proj.core import str_to_html , dataframe_to_html , figure_to_html , strPath
 from src.proj.log import Logger
 from src.proj.bases import BoundLogger
 
@@ -21,18 +21,14 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 __all__ = [
-    'OutputCatcher' , 'OutputDeflector' , 'get_html_templates' , 'TimedOutput'
+    'OutputCatcher' , 'OutputDeflector' , '_get_html_templates' , 'TimedOutput'
 ]
 
-type_of_std = Literal['stdout' , 'stderr']
-
 _HtmlTemplates : dict[str, Template] = {} 
-
-def get_html_templates(key : str):
+def _get_html_templates(key : str):
     if not _HtmlTemplates:
         _HtmlTemplates.update(PATH.load_templates('html' , 'html_catcher'))
     return _HtmlTemplates[key]
-
 
 class OutputDeflector(BoundLogger):
     """
@@ -46,7 +42,7 @@ class OutputDeflector(BoundLogger):
     """
     def __init__(
         self, 
-        type : type_of_std ,
+        type : Literal['stdout' , 'stderr'] ,
         catcher : OutputDeflector | OutputCatcher | None, 
         keep_original : bool = True,
         * , indent: int = 0 , vb_level: int = 1 , **kwargs
@@ -350,7 +346,7 @@ class TimedOutput:
         if text is None: 
             return None
         
-        template = Template(get_html_templates('row').safe_substitute(
+        template = Template(_get_html_templates('row').safe_substitute(
             type_fmt=self.type_fmt,
             type_str=self.type_str,
             vb_level_fmt=self.type_fmt,

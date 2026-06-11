@@ -6,6 +6,6 @@ Implementation uses ndarray indexes and ``pandas.Index.get_indexer`` instead of 
 """
 
 from .trade_date import TradeDate
-from .cal import CALENDAR, Dates, BJ_TZ
+from .cal import CALENDAR, Dates, Dates2, BJ_TZ
 
-__all__ = ["TradeDate", "CALENDAR", "Dates", "BJ_TZ"]
+__all__ = ["TradeDate", "CALENDAR", "Dates", "Dates2", "BJ_TZ"]

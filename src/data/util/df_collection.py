@@ -81,7 +81,7 @@ class _df_collection(ABC):
         """Number of dates currently cached."""
         return len(self.dates)
 
-    def __contains__(self , date : Base.types.intDate):
+    def __contains__(self , date : Base.alias.intDate):
         """Support ``date in collection`` membership test (reads ``dates`` under lock)."""
         with self._lock:
             return int(date) in self.dates
@@ -94,7 +94,7 @@ class _df_collection(ABC):
             df = self.get_one_day(self.last_added_date)
             return self.reform_df(df , rename_date_key = 'date')
 
-    def date_diffs(self , dates : list[Base.types.intDate] | np.ndarray , overwrite = False):
+    def date_diffs(self , dates : list[Base.alias.intDate] | np.ndarray , overwrite = False):
         """
         Return dates that are not yet cached.
 
@@ -112,7 +112,7 @@ class _df_collection(ABC):
 
     def ensure_dates(
         self ,
-        dates : list[Base.types.intDate] | np.ndarray ,
+        dates : list[Base.alias.intDate] | np.ndarray ,
         loader : Callable[[int], pd.DataFrame | None] ,
         overwrite : bool = False ,
     ) -> None:
@@ -137,7 +137,7 @@ class _df_collection(ABC):
                         self.last_added_date = date
                     self.add_one_day(date , df)
 
-    def get(self , date : Base.types.intDate , field = None , rename_date_key : str | None = 'date'):
+    def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date'):
         """get a DataFrame with given (1) date , fields and set_index"""
         with self._lock:
             date = int(date)
@@ -155,7 +155,7 @@ class _df_collection(ABC):
                 df = deepcopy(df)
         return df
 
-    def add(self , date : Base.types.intDate , df : pd.DataFrame | None):
+    def add(self , date : Base.alias.intDate , df : pd.DataFrame | None):
         with self._lock:
             if df is not None and date not in self.dates:
                 date = int(date)
@@ -254,7 +254,7 @@ class DFCollection(_df_collection):
         self.data_frames : dict[int , pd.DataFrame] = {}
         self.long_frame : pd.DataFrame = pd.DataFrame()
 
-    def get(self , date : Base.types.intDate , field = None , rename_date_key : str | None = 'date') -> pd.DataFrame | Any:
+    def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date') -> pd.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
     def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | Any:
@@ -266,7 +266,7 @@ class DFCollection(_df_collection):
             assign(**{self.date_key:date}).set_index(self.date_key).dropna(how = 'all')
         self.data_frames[date] = df
 
-    def get_one_day(self , date : Base.types.intDate) -> pd.DataFrame:
+    def get_one_day(self , date : Base.alias.intDate) -> pd.DataFrame:
         """get a DataFrame with given (1) date , fields and set_index"""
         if date not in self.dates:
             return pd.DataFrame()
@@ -278,6 +278,8 @@ class DFCollection(_df_collection):
 
     def get_multiple_days(self , dates : list[int] | np.ndarray):
         """get a DataFrame with given (many) dates , fields and set_index"""
+        if len(dates) == 0:
+            return pd.DataFrame(columns = self.columns())
         self.to_long_frame()
         df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
         return df
@@ -319,7 +321,7 @@ class PLDFCollection(_df_collection):
         super().__init__(max_len , date_key)
         self.data_frames : dict[int , pl.DataFrame] = {}
 
-    def get(self , date : Base.types.intDate , field = None , rename_date_key : str | None = 'date') -> pl.DataFrame | Any:
+    def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date') -> pl.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
     def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False) -> pl.DataFrame | Any:

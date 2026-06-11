@@ -9,6 +9,8 @@ from typing import Any , Literal , overload
 
 DIV_TOL = 1e-6
 
+IndexMergeMethod = Literal['union' , 'intersect' , 'check' , 'stack']
+
 def alert_message(message : str , color : str = 'yellow'):
     """Emit a one-line message to stderr, optionally with ANSI color."""
     if color == 'yellow':
@@ -427,8 +429,9 @@ def index_check(idxs , min_value = None , max_value = None) -> np.ndarray:
             raise ValueError(f'idx at {i} is {idx}, does not equal to idx at 0 {new_idx} , index_check inputs must be identical')
     return trim_index(new_idx , min_value , max_value)
 
-def index_merge(idxs , * , method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'intersect' , 
-               min_value = None , max_value = None) -> np.ndarray:
+def index_merge(
+    idxs , * , method : IndexMergeMethod = 'intersect' , 
+    min_value = None , max_value = None) -> np.ndarray:
     """Merge index lists via intersect, union, stack, or equality check.
 
     Args:

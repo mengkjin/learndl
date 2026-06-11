@@ -42,7 +42,7 @@ from typing import Any
 
 from src.proj import CALENDAR, Logger, Proj
 from src.proj.util.script import ScriptTool
-from src.res.factor.api import FactorCalculatorAPI
+from src.res.factor.api import FactorUpdaterAPI
 from src.res.factor.calculator.update_jobs import UpdateJobDate
 
 COMPARE_MODES = ('forloop', 'process', 'both')
@@ -60,7 +60,7 @@ def _pick_factors_for_date(date: int, n_factors: int , pick_pead : bool = False)
 
     Does not require ``target_dates`` to be non-empty (smoke test may force jobs).
     """
-    calcs = FactorCalculatorAPI.Stock.calculators(all=True, updatable=True)
+    calcs = FactorUpdaterAPI.Stock.calculators(all=True, updatable=True)
     names: list[str] = []
     for calc in calcs:
         if int(date) < int(calc.init_date):
@@ -105,7 +105,7 @@ def _collect_jobs_force(date: int, factors: list[str], overwrite: bool) -> int:
 
     Use only when calendar says the day is effective but the updater would skip jobs.
     """
-    stock = FactorCalculatorAPI.Stock
+    stock = FactorUpdaterAPI.Stock
     stock.jobs.clear()
     vb = Proj.vb(3)
     registry = {c.factor_name: c for c in stock.calculators(all=True, updatable=True)}
@@ -131,7 +131,7 @@ def _run_once(
     force_jobs: bool,
 ) -> dict[str, Any]:
     """Run ``StockFactorUpdater`` for one day; restore ``multi_thread`` afterward."""
-    stock = FactorCalculatorAPI.Stock
+    stock = FactorUpdaterAPI.Stock
     stock.jobs.clear()
     prev_mp = stock.groups_multiprocessing
     stock.groups_multiprocessing = use_process

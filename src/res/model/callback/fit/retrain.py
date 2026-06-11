@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Literal
 
+from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack
 
 class BadAttemptRetrain(BaseCallBack):
@@ -60,15 +61,15 @@ class BadAttemptRetrain(BaseCallBack):
                     
             self.remain_nan_redo -= 1
             message = f'Get nanloss for {self.texts.attempt_key}. Redo current attempt {self.status.attempt}'
-            self.trigger_retrain('redo_attempt' , 'nanloss' , message)
+            self.trigger_retrain(FittingEventType.REDO_ATTEMPT , 'nanloss' , message)
         elif self.is_early_exit:
             message = f'Exit too early for {self.texts.attempt_key}. Start new attempt {self.status.attempt+1} with lr multiplier {self.next_attempt_lr_multiplier}'
-            self.trigger_retrain('new_attempt' , 'early_exit' , message , self.next_attempt_lr_multiplier)
+            self.trigger_retrain(FittingEventType.NEW_ATTEMPT , 'early_exit' , message , self.next_attempt_lr_multiplier)
         elif self.is_low_ic:
             message = f'Get a very low RankIC for {self.texts.attempt_key}. Start new attempt {self.status.attempt+1} with lr multiplier {self.next_attempt_lr_multiplier}'
-            self.trigger_retrain('new_attempt' , 'low_ic' , message , self.next_attempt_lr_multiplier)
+            self.trigger_retrain(FittingEventType.NEW_ATTEMPT , 'low_ic' , message , self.next_attempt_lr_multiplier)
 
-    def trigger_retrain(self , event_type : Literal['new_attempt' , 'redo_attempt'] , reason : str , message : str = '' , new_lr_multiplier : float = 1.):
+    def trigger_retrain(self , event_type : Literal[FittingEventType.NEW_ATTEMPT , FittingEventType.REDO_ATTEMPT] , reason : str , message : str = '' , new_lr_multiplier : float = 1.):
         self.model.stack_model()
         self.status.add_epoch_event(event_type , reason , message = message)
         self.trainer.new_attempt('attempt' , lr_multiplier = new_lr_multiplier)

@@ -12,8 +12,9 @@ from curl_cffi import requests , CurlOpt
 
 from src.proj.log import Logger
 
-_SSLVerify = Union[str, ssl.SSLContext]
+SSLVerify = Union[str, ssl.SSLContext]
 T = TypeVar("T")
+RequestMethodType = Literal['get', 'post']
 
 CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -113,7 +114,7 @@ def timeout_expanding_sessions(session: requests.Session | requests.AsyncSession
             yield session
 
 def request_with_timeouterror(
-    session: requests.Session, request_method: Literal['get', 'post'], *args, 
+    session: requests.Session, request_method: RequestMethodType, *args, 
     expansion : float = 2. , max_retry_count: int = 2, title : str = '' , 
     indent : int = 0, vb_level: int = 1, **kwargs) -> requests.Response:
     """GET/POST with exponentially growing timeouts until success or retries exhausted."""
@@ -143,7 +144,7 @@ def request_with_timeouterror(
 
 async def request_with_timeouterror_async(
     session: requests.AsyncSession,
-    request_method: Literal['get', 'post'],
+    request_method: RequestMethodType,
     *args,
     expansion: float = 2.,
     max_retry_count: int = 2,
@@ -217,7 +218,7 @@ def http_client(
     kw.update(kwargs)
     return httpx.Client(**kw)
 
-def default_http_verify() -> _SSLVerify:
+def default_http_verify() -> SSLVerify:
     """CA bundle path or SSLContext for httpx ``verify=``.
     On macOS, ``truststore`` uses the system keychain (fixes python.org builds with
     broken ``ssl`` defaults and trusts enterprise roots installed there). Other

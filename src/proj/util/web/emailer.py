@@ -7,19 +7,22 @@ from src.proj.env import MACHINE , Proj
 from src.proj.core import strPath
 from src.proj.bases import BoundLogger , NoInstance
 
-EmailSettings : dict = {}
+__all__ = ['Email']
 
-def get_email_setting(name : str , server : Literal['netease'] = 'netease') -> Any:
-    if not EmailSettings:
+ServerType = Literal['netease']
+_EmailSettings : dict = {}
+
+def _get_email_setting(name : str , server : ServerType = 'netease') -> Any:
+    if not _EmailSettings:
         email_accounts = MACHINE.secret.get('accounts' , 'email')
         server_settings = email_accounts.get(server , {})
         machine_settings = email_accounts.get(server , {}).get(MACHINE.name.lower() , {})
         settings = server_settings | machine_settings
-        EmailSettings.update(settings)
+        _EmailSettings.update(settings)
     if name == 'smtp_port':
         return 25 if MACHINE.platform_server else 465
-    assert name in EmailSettings , f'{name} is not set in email settings'
-    return EmailSettings.get(name.lower() , None)
+    assert name in _EmailSettings , f'{name} is not set in email settings'
+    return _EmailSettings.get(name.lower() , None)
 
 class Email(BoundLogger, metaclass=NoInstance):
     """
@@ -29,10 +32,10 @@ class Email(BoundLogger, metaclass=NoInstance):
         Proj.States.email_attachments.append('path/to/attachment.txt')
         Email.send(title = 'Test Email' , body = 'This is a test email' , recipient = 'test@example.com' , send_attachments = True , additional_attachments = ['path/to/additional.txt'])
     """
-    smtp_server : str = get_email_setting('smtp_server')
-    smtp_port : int = get_email_setting('smtp_port')
-    sender : str = get_email_setting('sender')
-    password : str = get_email_setting('password')
+    smtp_server : str = _get_email_setting('smtp_server')
+    smtp_port : int = _get_email_setting('smtp_port')
+    sender : str = _get_email_setting('sender')
+    password : str = _get_email_setting('password')
 
     @classmethod
     def recipient(cls , recipient : str | None = None):
@@ -123,6 +126,6 @@ class Email(BoundLogger, metaclass=NoInstance):
         cls.send_with_smtplib(message , recipient , confirmation_message)
 
     @classmethod
-    def print_info(cls , server : Literal['netease'] = 'netease'):
+    def print_info(cls , server : ServerType = 'netease'):
         infos = {'server' : server , 'smtp_server' : cls.smtp_server , 'smtp_port' : cls.smtp_port , 'sender' : cls.sender , 'password' : cls.password}
         cls.logger.stdout_pairs(infos , title = 'Email Settings:')

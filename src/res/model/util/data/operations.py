@@ -16,11 +16,11 @@ import torch
 import numpy as np
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any , Literal
+from typing import Any
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
-from src.proj import Logger
+from src.proj import Logger , Base
 from src.func.tensor import nanmedian , standardize , rank_pct
 from src.data import DataBlockNorm
 from src.res.model.util.config import ModelConfig
@@ -119,7 +119,7 @@ class DataOperator:
         self.loader_param = loader_param
 
     @property
-    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'retrospective']:
+    def stage(self) -> Base.lit.StageAll:
         return self.loader_param.stage
 
     @property
@@ -149,7 +149,7 @@ class DataOperator:
         w = self.label_weighting(weight_scheme , y)
         return y, w
 
-    def label_weighting(self , weight_scheme : Literal['equal' , 'top' , 'polar'] , y : torch.Tensor) -> torch.Tensor | None:
+    def label_weighting(self , weight_scheme : Base.lit.ConfigWeightScheme , y : torch.Tensor) -> torch.Tensor | None:
         """weighting for label"""
         if weight_scheme == 'equal' or y.isnan().all().item(): 
             return None

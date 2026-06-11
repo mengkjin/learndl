@@ -15,6 +15,8 @@ from .boost.api import AVAILABLE_BOOSTS , OptunaBoostModel , GeneralBoostModel
 
 __all__ = ['AlgoModule' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 'OptunaBoostModel' , 'GeneralBoostModel']
 
+GetModuleType = Literal['nn' , 'boost' , 'all']
+
 class AlgoModule:
     """Unified registry and factory for all NN and boost models.
 
@@ -31,21 +33,21 @@ class AlgoModule:
     _availables = {'boost' : AVAILABLE_BOOSTS , 'nn' : AVAILABLE_NNS}
     
     @classmethod
-    def available_modules(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+    def available_modules(cls , module_type : GetModuleType = 'all'):
         if module_type == 'all':
             return {k:v for mod_type, mods in cls._availables.items() for k,v in mods.items()}
         else:
             return cls._availables[module_type]
         
     @classmethod
-    def available_modules_str(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+    def available_modules_str(cls , module_type : GetModuleType = 'all'):
         if module_type == 'all':
             return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('boost')])
         else:
             return '\n'.join([f'{module_type}/{module}' for module in cls._availables[module_type].keys()])
         
     @classmethod
-    def is_valid(cls , model_module : str , module_type : Literal['nn' , 'boost' , 'all'] = 'all'): 
+    def is_valid(cls , model_module : str , module_type : GetModuleType = 'all'): 
         if module_type == 'all': 
             return cls.is_valid(model_module , 'nn') or cls.is_valid(model_module , 'boost')
         else: 

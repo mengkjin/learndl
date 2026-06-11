@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 
 from functools import cached_property
-from typing import Literal , Callable , TypeVar
-from src.proj import CALENDAR , MACHINE
+from typing import Callable , TypeVar
+from src.proj import CALENDAR , MACHINE , Base
 from src.data.util import secid_adjust
 
 _server_down = False
@@ -78,9 +78,9 @@ class TushareUtils:
         return df
 
     @classmethod
-    def updatable(cls , last_date : int , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    def updatable(cls , last_date : int , freq : Base.lit.FreqUpdate , update_to : int | None = None):
         """check if the date is updatable given last date and frequency"""
-        update_to = update_to or CALENDAR.update_to()
+        update_to = update_to or CALENDAR.update_to(key = 'tushare')
         if freq == 'd':
             return update_to > last_date
         elif freq == 'w':
@@ -89,9 +89,9 @@ class TushareUtils:
             return ((update_to // 100) % 100) != ((last_date // 100) % 100)
     
     @classmethod
-    def dates_to_update(cls , last_date : int , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    def dates_to_update(cls , last_date : int , freq : Base.lit.FreqUpdate , update_to : int | None = None):
         """get dates to update given last date and frequency"""
-        update_to = update_to or CALENDAR.update_to()
+        update_to = update_to or CALENDAR.update_to(key = 'tushare')
         if last_date >= update_to: 
             return np.array([] , dtype=int)
         if freq == 'd':

@@ -26,7 +26,7 @@ class GeneralModel(ABC):
         self.models[model.date] = model
         return self
     def available_dates(self): 
-        return np.array(list(self.models.keys()))
+        return np.array(list(self.models.keys()), dtype=int)
     def closest_avail_date(self , date : int = 99991231):
         available_dates = self.available_dates()
         if date in available_dates: 

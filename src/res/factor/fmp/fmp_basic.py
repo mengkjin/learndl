@@ -2,18 +2,16 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from src.proj import Const
-
-from ..util import Portfolio , Benchmark , AlphaModel , Port
-
-BUILDER_TYPES = ['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce']
+from src.proj import Const , Base
+from src.proj.bases import TestType
+from src.res.factor.util import Benchmark , AlphaModel
 
 def parse_full_name(full_name : str):
     components = full_name.split('.')
     assert len(components) >= 5 , f'Full name must have at least 4 components: {full_name}'
     prefix = components[0]
     category = prefix.lower()
-    assert category in BUILDER_TYPES , f'Unknown category: {category}'
+    assert category in TestType.fmp_values() , f'Unknown FMP category: {category}'
     factor_name , benchmark , strategy = components[1:4]
     suffix = '.'.join(components[4:])
     lag = int(components[4].split('lag')[-1])
@@ -36,25 +34,6 @@ def get_prefix(category : str):
     
 def get_factor_name(alpha : AlphaModel | str):
     return alpha.name if isinstance(alpha , AlphaModel) else alpha
-
-def get_benchmark(benchmark : Portfolio | Benchmark | Port | str | None = None): 
-    if benchmark is None:
-        benchmark = Portfolio()
-    elif isinstance(benchmark , str):
-        benchmark = Benchmark(benchmark)
-    elif isinstance(benchmark , Port):
-        benchmark = Portfolio.from_ports(benchmark)
-    return benchmark
-
-def get_benchmark_name(benchmark : Portfolio | Benchmark | str | None):
-    if benchmark is None:
-        return 'default'
-    elif isinstance(benchmark , (Portfolio , Benchmark)):
-        return benchmark.name
-    elif isinstance(benchmark , str):
-        return benchmark
-    else:
-        raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
 
 def get_strategy_name(category : str , strategy : str = 'default' , kwargs : dict[str,Any] | None = None):
     kwargs = kwargs or {}   
@@ -79,13 +58,13 @@ def get_suffix(lag : int , suffixes : list[str] | str | None = None):
     return '.'.join([f'lag{lag}' , *suffixes])
 
 def get_full_name(category : str , alpha : AlphaModel | str , 
-                  benchmark : Portfolio | Benchmark | str | None = None , 
+                  benchmark : Base.alias.SingleBenchmark = None , 
                   strategy : str = 'default' , suffixes : list[str] | str | None = None , lag : int = 0 , **kwargs):
     suffixes = suffixes or []
     return '.'.join([
         get_prefix(category) , 
         get_factor_name(alpha) , 
-        get_benchmark_name(benchmark) , 
+        Benchmark.get_benchmark_name(benchmark) , 
         get_strategy_name(category , strategy , kwargs) , 
         get_suffix(lag , suffixes)
     ])

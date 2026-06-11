@@ -1,8 +1,9 @@
 """Trading and backtest portfolio lists from ``setting/trading_port``."""
 
 from __future__ import annotations
-from src.proj.env import MACHINE
+
 from src.proj.core import SingletonMeta
+from src.proj.env.machine import MACHINE
 
 __all__ = ['TradingPortConstants']
 

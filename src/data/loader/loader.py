@@ -16,10 +16,11 @@ FactorCategory1Loader
 from __future__ import annotations
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any
 
 from src.proj import PATH , DB , CALENDAR , Const , Base
 from src.data.util import DataBlock
+
 class BlockLoader(Base.BoundLogger):
     """
     Loader for block data of db_src , db_key
@@ -112,14 +113,14 @@ class FactorLoader(BlockLoader):
         self , 
         names : str | list[str] , 
         normalize = False , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' , * ,
+        fill_method : Base.lit.FactorFillNanMethod = 'drop' , * ,
         indent : int = 1 , vb_level : Any = 1 ,
         **kwargs
     ):
         super().__init__('factor' , indent = indent , vb_level = vb_level)
         self.names = names if isinstance(names , list) else [names]
         self.normalize = normalize
-        self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
+        self.fill_method : Base.lit.FactorFillNanMethod = fill_method
         self.kwargs = kwargs
         
     def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
@@ -151,15 +152,15 @@ class FactorCategory1Loader(BlockLoader):
     """
     def __init__(
         self , 
-        category1 : str , 
+        category1 : Base.lit.FactorCategory1 , 
         normalize = False , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         **kwargs
     ):
         super().__init__('factor' , **kwargs)
-        self.category1 = category1
+        self.category1 : Base.lit.FactorCategory1 = category1
         self.normalize = normalize
-        self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
+        self.fill_method : Base.lit.FactorFillNanMethod = fill_method
         self.kwargs = kwargs
         
     def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:

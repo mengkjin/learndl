@@ -4,7 +4,6 @@ from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import ForecastFactor
 
-
 __all__ = [
     'etop_est' , 'etop_est_pct3m' , 'etop_est_pct6m' , 
     'eps_est_pct3m' , 'eps_est_pct6m' , 
@@ -18,7 +17,10 @@ __all__ = [
     'price_potential'
 ]
 
-def val_cagr(date : int , val : Literal['sales' , 'np' , 'tp' , 'op'] , forward_years : Literal[1,2] = 1 , 
+ValType = Literal['sales' , 'np' , 'tp' , 'op']
+ValExpandedType = Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe']
+
+def val_cagr(date : int , val : ValType, forward_years : Literal[1,2] = 1 , 
              n_month : int = 12 , lag_month : int = 0):
     year = date // 10000
     month = date // 100 % 100
@@ -33,19 +35,19 @@ def val_cagr(date : int , val : Literal['sales' , 'np' , 'tp' , 'op'] , forward_
     cagr = (est_val - real_val) / real_val.abs() / forward_years
     return cagr
 
-def valtop_estimate(date : int , year : int , val : Literal['sales' , 'np' , 'tp' , 'op'] , n_month : int = 12 , lag_month : int = 0):
+def valtop_estimate(date : int , year : int , val : ValType, n_month : int = 12 , lag_month : int = 0):
     v = DATAVENDOR.ANALYST.get_val_est(date , year , val , n_month , lag_month) * 1e4
     td = DATAVENDOR.td(DATAVENDOR.CALENDAR.cd(date , -30 * lag_month))
     mv = DATAVENDOR.TRADE.get_val(td).set_index('secid')['total_mv']
     return v / mv
 
-def valtop_ftm(date : int , val : Literal['sales' , 'np' , 'tp' , 'op'] , n_month : int = 12 , lag_month : int = 0):
+def valtop_ftm(date : int , val : ValType, n_month : int = 12 , lag_month : int = 0):
     v = DATAVENDOR.ANALYST.get_val_ftm(date , val , n_month , lag_month)
     td = DATAVENDOR.td(DATAVENDOR.CALENDAR.cd(date , -30 * lag_month))
     mv = DATAVENDOR.TRADE.get_val(td).set_index('secid')['total_mv']
     return v / mv
 
-def val_pct(date : int , val : Literal['eps' , 'np' , 'op' , 'tp' , 'sales' , 'roe'] , pct_month : int , 
+def val_pct(date : int , val : ValExpandedType, pct_month : int , 
             ftm = False , n_month : int = 12):
     if ftm:
         v0 = DATAVENDOR.ANALYST.get_val_ftm(date , val , n_month)
@@ -55,7 +57,7 @@ def val_pct(date : int , val : Literal['eps' , 'np' , 'op' , 'tp' , 'sales' , 'r
         v1 = DATAVENDOR.ANALYST.get_val_est(date , date // 10000 , val , n_month , pct_month)
     return (v0 - v1) / v1.abs()
 
-def valtop_pct(date : int , val : Literal['sales' , 'np' , 'op' , 'tp'] , pct_month : int , 
+def valtop_pct(date : int , val : ValType, pct_month : int , 
                ftm = False , n_month : int = 12):
     if ftm:
         v0 = valtop_ftm(date , val , n_month)

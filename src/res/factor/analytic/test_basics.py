@@ -5,48 +5,21 @@ import pandas as pd
 import numpy as np
 
 from abc import ABC , abstractmethod
-from collections.abc import Iterable
-from enum import StrEnum
 from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , DB , Base , Save
+
 from src.data import DataBlock
-from ..util import Benchmark , StockFactor
+from src.proj.bases import TestType
+from src.res.factor.util import Benchmark , StockFactor
 
 def _camel_to_snake(name : str) -> str:
     """Convert CamelCase (or mixed) identifiers to lower_snake_case."""
     s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
-class TestType(StrEnum):
-    FACTOR = 'factor'
-    OPTIM = 'optim'
-    TOP = 'top'
-    T50 = 't50'
-    SCREEN = 'screen'
-    REVSCREEN = 'revscreen'
-    REINFORCE = 'reinforce'
-
-    @classmethod
-    def values(cls) -> list[TestType]:
-        return [m for m in cls]
-
-    @classmethod
-    def ensure_list(cls , x: TestType | Iterable[TestType] | Literal['all']) -> list[TestType]:
-        if x == 'all':
-            return list(cls)
-        if isinstance(x , TestType):
-            return [x]
-        else:
-            return [t for t in x]
-
-    def title(self) -> str:
-        if self == TestType.FACTOR:
-            return self.value.title()
-        else:
-            return f'{self.value.title()} Port'
-
+    
 class CalcWarningsManager(Base.BoundLogger):
     def __init__(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -115,7 +88,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
     TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
 
     def __init__(
-        self , test_path : Base.types.strPath | None = None , 
+        self , test_path : Base.strPath | None = None , 
         resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
         which : str | list[str] | Literal['all'] = 'all' , **kwargs
     ):
@@ -143,13 +116,13 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
         return f'{self.__class__.__name__}'
 
     @classmethod
-    def create(cls , test_path : Base.types.strPath | None = None , resume : bool = False , save_resumable : bool = False , 
+    def create(cls , test_path : Base.strPath | None = None , resume : bool = False , save_resumable : bool = False , 
                start : int = -1 , end : int = 99991231 , which = 'all' , **kwargs):
         testor = cls(test_path , resume , save_resumable , start , end , which , **kwargs)
         return testor
 
-    def proceed(self , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' , **kwargs):
-        self.calc(StockFactor(factor) , benchmark)
+    def proceed(self , factor : StockFactor | pd.DataFrame | DataBlock , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , **kwargs):
+        self.calc(StockFactor(factor) , benchmarks)
         self.plot(show = False)
         return self
 
@@ -183,7 +156,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             return rslt_dir.joinpath(self.test_name)
 
     @test_path.setter
-    def test_path(self , path : Base.types.strPath | None):
+    def test_path(self , path : Base.strPath | None):
         self._test_path = path if path is None else Path(path)
 
     @property
@@ -194,7 +167,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             return self._test_path.joinpath(_camel_to_snake(self.__class__.__name__))
 
     @classmethod
-    def last_portfolio_date(cls , test_path : Base.types.strPath | None = None):
+    def last_portfolio_date(cls , test_path : Base.strPath | None = None):
         if test_path is None:
             return 19000101
         else:
@@ -211,7 +184,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             return self.resume_path.joinpath(f'factor_stats')
 
     @classmethod
-    def factor_stats_saved_dates(cls , test_path : Base.types.strPath | None = None) -> np.ndarray:
+    def factor_stats_saved_dates(cls , test_path : Base.strPath | None = None) -> np.ndarray:
         if test_path is None:
             return np.array([] , dtype=int)
         else:
@@ -238,11 +211,11 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             prefix=f'{self.__class__.__name__} Analytic Plots' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return self
 
-    def save(self , path : Base.types.strPath):
+    def save(self , path : Base.strPath):
         """save intermediate data to path for future use"""
         ...
 
-    def load(self , path : Base.types.strPath):
+    def load(self , path : Base.strPath):
         """load intermediate data from path for future use"""
 
     @classmethod

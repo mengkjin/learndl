@@ -21,7 +21,7 @@ from .const import ExchangeType , BJTZ
 
 
 def range_dates(start: int, end: int , step: int = 1) -> list[tuple[int , int]]:
-    end = min(end, CALENDAR.update_to())
+    start, end = CALENDAR.update_schedule(start, end)
     d_start = start
     date_tuples: list[tuple[int , int]] = []
     while d_start <= end:
@@ -257,7 +257,7 @@ class AnnouncementExporter:
 
     def temp_attempt_path(self, task_key: str, attempt_id: str) -> Path:
         """Per-attempt temp path used by async race executor."""
-        sample = self.export_path(CALENDAR.update_to())
+        sample = self.export_path(CALENDAR.update_to(key = 'crawler_announcement'))
         temp_dir = sample.parent / "_temp_attempt"
         temp_dir.mkdir(parents=True, exist_ok=True)
         safe = hashlib.md5(attempt_id.encode("utf-8")).hexdigest()[:12]
@@ -295,7 +295,7 @@ class AnnouncementExporter:
         return Load.df(path)
 
     def cleanup_temp_attempts(self, task_key: str, keep_attempt_id: str | None = None) -> list[Path]:
-        sample = self.export_path(CALENDAR.update_to())
+        sample = self.export_path(CALENDAR.update_to(key = 'crawler_announcement'))
         temp_dir = sample.parent / "_temp_attempt"
         if not temp_dir.exists():
             return []
@@ -334,7 +334,7 @@ class AnnouncementExporter:
                 Save.df(df_date, path , empty_ok = True)
 
     def should_skip_download(self, start: int, end: int, *, redownload: bool = False,) -> bool:
-        """If file exists and date is earlier than 'today' (Shanghai), skip; 'redownload' is true never skip."""
+        """If file exists and date is earlier than 'update_to' (Shanghai), skip; 'redownload' is true never skip."""
         if redownload:
             return False
 
@@ -342,7 +342,7 @@ class AnnouncementExporter:
         if not all(path.exists() for path in paths):
             return False
 
-        if end >= CALENDAR.cd(CALENDAR.update_to() , -1) and not CALENDAR.is_updated_recently(paths , hours = 8.):
+        if end >= CALENDAR.cd(CALENDAR.update_to(key = 'crawler_announcement') , -1) and not CALENDAR.is_updated_recently(paths , hours = 8.):
             return False
         return True
 

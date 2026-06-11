@@ -9,11 +9,10 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Callable , Literal, Type , Generator
 
-from ..util import StockFactor
-
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
+from src.res.factor.util import StockFactor
 
 __all__ = [
     'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' , 'AffiliateFactorCalculator' ,
@@ -89,7 +88,7 @@ class _FactorPropertyBool(_FactorProperty):
 
 class _FactorMetaType:
     """meta class of factor"""
-    def __get__(self,instance,owner) -> Literal['market' , 'stock' , 'affiliate' , 'pooling']:
+    def __get__(self,instance,owner) -> Base.lit.FactorMetaType:
         return Const.Factor.STOCK.cat0_to_meta(owner.category0)
 
 class _FactorDBSrc:
@@ -248,9 +247,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
     init_date   : int = -1
     final_date  : int = 99991231
     update_step : int = Const.Factor.UPDATE.step
-    category1 : Literal['weighted' , 'nonlinear' , 'style' , 'market_event' , 'quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
-                        'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
-                        'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
+    category1 : Base.lit.FactorCategory1 | Any = None
     description : str = ''
     updatable = True
     preprocess = True
@@ -354,7 +351,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
             return False
         return done
 
-    def update_periodic_stats(self , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , 
+    def update_periodic_stats(self , stats_type : Base.lit.FactorStatsPeriod , dates : np.ndarray | list[int] | None , 
                               overwrite = False) -> None:
         """update factor daily or weekly stats"""
         if dates is None:
@@ -391,9 +388,11 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         """update factor weekly stats"""
         self.update_periodic_stats('weekly' , dates , overwrite)
 
-    def stock_factor(self , dates : np.ndarray | list[int] , normalize = True , 
-               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-               multi_thread = True , ignore_error = True) -> StockFactor:
+    def stock_factor(
+        self , dates : np.ndarray | list[int] , normalize = True , 
+        fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
+        multi_thread = True , ignore_error = True
+    ) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
             return StockFactor(factor_names = [self.factor_name])
@@ -466,7 +465,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
 
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
-              fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+              fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
         df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , vb_level = 'max')
@@ -499,7 +498,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
 
     @classmethod
     def Factor(cls , dates : np.ndarray | list[int] , normalize = True , 
-               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+               fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
                multi_thread = True , ignore_error = True , indent : int = 1 , vb_level : Any = 'max') -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         calc = cls(indent = indent , vb_level = vb_level)
@@ -559,7 +558,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
                 dates[stats_type] = df['date'].to_numpy(int)
         return dates
 
-    def stats_target_dates(self , start : int | None = None , end : int | None = None , overwrite = False) -> dict[Literal['daily' , 'weekly'] , np.ndarray]:
+    def stats_target_dates(self , start : int | None = None , end : int | None = None , overwrite = False) -> dict[Base.lit.FactorStatsPeriod , np.ndarray]:
         """return dates of factor stats"""
         factor_stored_dates = self.stored_dates(start , end)
         stats_stored_dates = self.stats_stored_dates()
@@ -586,7 +585,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
+        meta_type : Base.lit.FactorMetaType | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         updatable : bool | None = None
@@ -744,7 +743,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     def stock_factor(
         self , dates : np.ndarray | list[int] , normalize = True , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         *args , **kwargs) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if len(dates) == 0: 
@@ -757,7 +756,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def Loads(cls , dates : np.ndarray | list[int] , normalize = False , closest = False,
-              fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+              fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         if len(dates) == 0:
@@ -899,7 +898,7 @@ class MarketFactorCalculator(FactorCalculator):
     @classmethod
     def Loads(
         cls , start : int | None = None , end : int | None = None , closest = False , fillna = False , 
-        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median' 
+        fill_method : Base.lit.FactorFillNanMethod = 'indus_median' 
     ) -> pd.DataFrame:
         """load factor values of a given date range"""
         df = DB.load(cls.db_src , cls.db_key , vb_level = 'never')

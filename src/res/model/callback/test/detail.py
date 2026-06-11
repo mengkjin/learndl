@@ -6,8 +6,8 @@ from matplotlib.figure import Figure
 
 from src.proj import Proj , Const , Save
 
+from src.proj.bases import TestType
 from src.res.factor.util import StockFactor 
-from src.res.factor.analytic import TestType
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
 

@@ -5,10 +5,9 @@ from functools import cached_property
 from typing import Any, Callable,Literal, Sequence, TypeVar, Type
 
 from src.proj.env import Proj
-from src.proj.log import Logger , LOG_LEVEL_TYPE
+from src.proj.log import Logger , StderrType
 
 T = TypeVar('T')
-_MISSING = object()
 
 __all__ = ['BoundLogger']
 
@@ -155,9 +154,9 @@ class ModuleLogger:
         """wrap the conclusions: printout , merge into a single string and clear them"""
         return Logger.draw_conclusions(simplify_errors = simplify_errors)
 
-    def get_conclusions(self , type : LOG_LEVEL_TYPE) -> list[str]:
+    def get_conclusions(self , type : StderrType | str) -> list[str]:
         """Get the conclusions"""
-        return Logger.get_conclusions(type)
+        return Logger.get_conclusions(StderrType(type))
 
     def print_exc(self , e : Exception , color : str = 'lightred' , bold : bool = True):
         """Print the exception"""

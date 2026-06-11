@@ -14,7 +14,7 @@ from src.proj.env import MACHINE
 from src.proj.log import Logger
 from src.proj.core import strPath , strPaths
 
-from src.proj.db.basic import DATAFRAME_SUFFIX , path_date , dfHandler
+from src.proj.db.basic import DF_SUFFIX , path_date , dfHandler
 
 if TYPE_CHECKING:
     import polars as pl
@@ -26,6 +26,9 @@ __all__ = [
     'load_df' , 'load_dfs' , 'load_df_pl' , 'load_dfs_pl' , 
     'load_df_max_date' , 'load_df_min_date' , 'dfs_to_excel'
 ]
+
+PandasAccelerator = Literal['thread' , 'dask' , 'polars' , 'polars_thread']
+PolarsAccelerator = Literal['thread' , 'lazy']
 
 class dfIOHandler:
     """File IO operations handler"""
@@ -39,7 +42,7 @@ class dfIOHandler:
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
             return pd.DataFrame()
         try:
-            if DATAFRAME_SUFFIX == 'feather':
+            if DF_SUFFIX == 'feather':
                 df = pd.read_feather(path)
             else:
                 df = pd.read_parquet(path , engine='fastparquet')
@@ -55,7 +58,7 @@ class dfIOHandler:
         import polars as pl
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
             return pl.DataFrame()
-        if DATAFRAME_SUFFIX == 'feather':
+        if DF_SUFFIX == 'feather':
             df = pl.read_ipc(path , memory_map = False)
         else:
             df = pl.read_parquet(path , memory_map = False)
@@ -79,16 +82,16 @@ class dfIOHandler:
             )
         try:
             write_path = tmp_path if tmp_path is not None else path
-            if isinstance(df , pd.DataFrame) and DATAFRAME_SUFFIX == 'feather':
+            if isinstance(df , pd.DataFrame) and DF_SUFFIX == 'feather':
                 df.to_feather(write_path)
-            elif isinstance(df , pd.DataFrame) and DATAFRAME_SUFFIX == 'parquet':
+            elif isinstance(df , pd.DataFrame) and DF_SUFFIX == 'parquet':
                 df.to_parquet(write_path , engine='fastparquet')
-            elif isinstance(df , pl.DataFrame) and DATAFRAME_SUFFIX == 'feather':
+            elif isinstance(df , pl.DataFrame) and DF_SUFFIX == 'feather':
                 df.write_ipc(write_path)
-            elif isinstance(df , pl.DataFrame) and DATAFRAME_SUFFIX == 'parquet':
+            elif isinstance(df , pl.DataFrame) and DF_SUFFIX == 'parquet':
                 df.write_parquet(write_path)
             else:
-                raise ValueError(f'Unsupported dataframe type {type(df)} with suffix {DATAFRAME_SUFFIX}')
+                raise ValueError(f'Unsupported dataframe type {type(df)} with suffix {DF_SUFFIX}')
             if tmp_path is not None and target_path is not None:
                 os.replace(tmp_path, target_path)
         except Exception as e:
@@ -116,7 +119,7 @@ class dfIOHandler:
     @classmethod
     def load_pandas_multiple(
         cls , paths : strPaths , * ,
-        accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+        accelerator : PandasAccelerator | None = 'thread' , 
         mapper : PD_MAPPER_TYPE = None
     ) -> dict[int | Any, pd.DataFrame]:
         """load dataframe from multiple paths in accelerating mode"""
@@ -152,7 +155,7 @@ class dfIOHandler:
     @classmethod
     def load_polars_multiple(
         cls , paths : strPaths , * , 
-        accelerator : Literal['thread'] | None = 'thread' , 
+        accelerator : PolarsAccelerator | None = 'thread' , 
         mapper : PL_MAPPER_TYPE = None ,
     ) -> dict[int | Any, pl.DataFrame]:
         """
@@ -166,6 +169,9 @@ class dfIOHandler:
             return {}
         if accelerator is None:
             dfs = {d:loader(p) for d,p in paths.items()}
+        elif accelerator == 'lazy':
+            dfs = {d:pl.scan_ipc(p) for d,p in paths.items()}
+            dfs = {d:df.collect() for d,df in dfs.items()}
         elif accelerator == 'thread':
             from concurrent.futures import ThreadPoolExecutor, as_completed
             max_workers = min(MACHINE.max_workers , max(len(paths) // 5 , 1))
@@ -191,13 +197,13 @@ def save_df(
         path.parent.mkdir(parents=True , exist_ok=True)
         dfIOHandler.save_df(df , path)
         if footnote:
-            Logger.footnote(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
+            Logger.footnote(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         else:
-            Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+            Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
         status = 'File Exists '
-        Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
+        Logger.alert1(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
 def append_df(
@@ -218,14 +224,14 @@ def append_df(
             status += f'with unique ({",".join(drop_duplicate_cols)})'
         dfIOHandler.save_df(df , path)
         if footnote:
-            Logger.footnote(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
+            Logger.footnote(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level)
         else:
-            Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
+            Logger.stdout(f'{prefix} {status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
 
 def load_df(
     path : strPath | strPaths , * , 
     missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
-    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+    accelerator : PandasAccelerator | None = 'thread' , 
     mapper : PD_MAPPER_TYPE = None
 ):
     """
@@ -238,7 +244,7 @@ def load_df(
         if True, return empty dataframe for missing path(s)
     key_column : str | None
         key column name , if None, use date column
-    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread']
+    accelerator : 'thread' | 'dask' | 'polars' | 'polars_thread' | None
         accelerating mode
     mapper : Callable[[pd.DataFrame], pd.DataFrame]
         mapper function to execute on each dataframe
@@ -271,7 +277,7 @@ def load_df(
 
 def load_dfs(
     paths : strPath | strPaths , * ,  
-    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+    accelerator : PandasAccelerator | None = 'thread' , 
     mapper : PD_MAPPER_TYPE = None , **kwargs
 ) -> dict[int | Any, pd.DataFrame]:
     """
@@ -280,7 +286,7 @@ def load_dfs(
     ----------
     paths : dict[int, strPath] | Iterable[strPath]
         paths to load , key is date
-    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None
+    accelerator : 'thread' | 'dask' | 'polars' | 'polars_thread' | None
         accelerating mode
     mapper : Iterable[Callable[[pd.DataFrame], pd.DataFrame]] | Callable[[pd.DataFrame], pd.DataFrame] | None
         mapper function to execute on each dataframe
@@ -292,7 +298,7 @@ def load_dfs(
 def load_df_pl(
     path : strPath | strPaths , *, 
     missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
-    accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
+    accelerator : PolarsAccelerator | None = 'thread' , 
     mapper : PL_MAPPER_TYPE = None
 ) -> pl.DataFrame:
     """
@@ -303,7 +309,7 @@ def load_df_pl(
         path or paths to load , key is date
     missing_ok : bool
         if True, return empty dataframe for missing path(s)
-    accelerator : Literal['thread' , 'lazy'] | None
+    accelerator : 'thread' | 'lazy' | None
         accelerating mode
     mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
         mapper function to execute on each dataframe
@@ -334,7 +340,7 @@ def load_df_pl(
 
 def load_dfs_pl(
     paths : strPaths , * ,  
-    accelerator : Literal['thread'] | None = 'thread' , 
+    accelerator : PolarsAccelerator | None = 'thread' , 
     mapper : PL_MAPPER_TYPE = None
 ) -> dict[int | Any, pl.DataFrame]:
     """
@@ -345,7 +351,7 @@ def load_dfs_pl(
         paths to load , key is date
     key_column : str | None
         key column name , if None, use date column
-    accelerator : Literal['thread'] | None
+    accelerator : 'thread' | 'lazy' | None
         accelerating mode
     mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
         mapper function to execute on each dataframe

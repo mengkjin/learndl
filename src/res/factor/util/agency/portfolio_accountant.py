@@ -11,8 +11,8 @@ from typing import Literal , Any
 from src.proj import CALENDAR , DB , Const , Base , Save , Load
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
-from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
+from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 from src.res.factor.util.stats import eval_drawdown
 from src.res.factor.util.stats.aggregate import eval_period_ret
 
@@ -42,31 +42,6 @@ class AccountConfig:
     @property
     def bool(self):
         return bool(self.name)
-    
-    @staticmethod
-    def get_benchmark(benchmark : AccountConfig | Portfolio | Benchmark | str | None = None) -> Portfolio: 
-        if benchmark is None:
-            benchmark = Portfolio()
-        elif isinstance(benchmark , AccountConfig):
-            benchmark = Benchmark(benchmark.benchmark)
-        elif isinstance(benchmark , str):
-            benchmark = Benchmark(benchmark)
-        else:
-            assert isinstance(benchmark , Portfolio) , f'benchmark must be Portfolio or Benchmark or str'
-        return benchmark
-
-    @staticmethod
-    def get_benchmark_name(benchmark : AccountConfig | Portfolio | Benchmark | str | None = None) -> str:
-        if benchmark is None:
-            return 'default'
-        elif isinstance(benchmark , AccountConfig):
-            return benchmark.benchmark
-        elif isinstance(benchmark , (Portfolio , Benchmark)):
-            return benchmark.name
-        elif isinstance(benchmark , str):
-            return benchmark
-        else:
-            raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
 
     @property
     def price_type(self): 
@@ -259,7 +234,7 @@ class PortfolioAccount:
             account.loc[date , 'attribution'] = v #type:ignore
         return cls(account.reset_index(drop = False) , index = index)
 
-    def save(self , path : Base.types.strPath | None = None , vb_level : Any = 1 , indent : int = 0 , async_save = True):
+    def save(self , path : Base.strPath | None = None , vb_level : Any = 1 , indent : int = 0 , async_save = True):
         if path is None or self.empty:
             return self
         path = Path(path)
@@ -279,7 +254,7 @@ class PortfolioAccount:
         return self
 
     @classmethod
-    def load(cls , path : Base.types.strPath | None = None) -> PortfolioAccount:
+    def load(cls , path : Base.strPath | None = None) -> PortfolioAccount:
         """load portfolio account from a path (a tar file or a pickle (disabled now) file)"""
         if path is None:
             return cls()
@@ -296,7 +271,7 @@ class PortfolioAccount:
         return account
 
     @classmethod
-    def load_meta(cls , path : Base.types.strPath) -> dict[str, Any]:
+    def load_meta(cls , path : Base.strPath) -> dict[str, Any]:
         return Load.tar_meta(path)
 
     @property
@@ -409,24 +384,24 @@ class PortfolioAccountant(Base.BoundLogger):
         return self.portfolio.available_dates()
 
     @cached_property
-    def resume_path(self) -> Base.types.strPath | None:
+    def resume_path(self) -> Base.strPath | None:
         return None
 
     def accounting(
         self , 
         config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
         start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
-        trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
+        trade_engine : Base.lit.TradeEngine = 'default' , 
         daily = False , cache = False , with_index : dict[str,Any] | None = None ,
-        resume_path : Base.types.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+        resume_path : Base.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
     ):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
             config = config_or_benchmark
         else:
-            config = AccountConfig(self.portfolio.name , AccountConfig.get_benchmark_name(config_or_benchmark) , start , end , analytic , attribution , 
+            config = AccountConfig(self.portfolio.name , Benchmark.get_benchmark_name(config_or_benchmark) , start , end , analytic , attribution , 
                                    trade_engine = trade_engine , daily = daily , )
-        self.benchmark = AccountConfig.get_benchmark(config_or_benchmark)
+        self.benchmark = Benchmark.to_benchmark(config_or_benchmark)
         self.account.config = config
         self.resume_path = resume_path
 
@@ -551,7 +526,7 @@ class PortfolioAccountManager(Base.BoundLogger):
     """
     Manage portfolio accounts in a directory.
     """
-    def __init__(self , account_dir : Base.types.strPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , account_dir : Base.strPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.account_dir = Path(account_dir)
         self.account_dir.mkdir(exist_ok=True)
@@ -639,11 +614,14 @@ class PortfolioAccountManager(Base.BoundLogger):
             self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
     
-    def analyze(self , category : Literal['optim' , 'top'] ,
-                task_name : Literal['FrontFace', 'Perf_Curve', 'Perf_Drawdown', 'Perf_Year', 'Perf_Month',
-                                    'Perf_Excess','Perf_Lag','Exp_Style','Exp_Style','Exp_Indus',
-                                    'Attrib_Source','Attrib_Style'] | str , 
-                plot = True , display = True , **kwargs):
+    def analyze(
+        self , category : Literal['optim' , 'top'] ,
+        task_name : Literal[
+            'FrontFace', 'Perf_Curve', 'Perf_Drawdown', 'Perf_Year', 'Perf_Month',
+            'Perf_Excess','Perf_Lag','Exp_Style','Exp_Style','Exp_Indus',
+            'Attrib_Source','Attrib_Style'] | str , 
+        plot = True , display = True , **kwargs
+    ):
         dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}
         if not dfs: 
             self.logger.skipping(f'No {category} accounts to account!')

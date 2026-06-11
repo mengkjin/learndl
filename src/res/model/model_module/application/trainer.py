@@ -13,7 +13,7 @@ class ModelTrainer(BaseTrainer):
     def initialize(cls , base_path = None , * ,
                    module = None , schedule_name = None , override : dict | None = None , 
                    short_test = None , start = None , end = None ,
-                   use_data : Literal['fit','predict','both'] = 'fit' ,
+                   use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
                    stage = -1 , resume = -1 , selection = -1 , 
                    **kwargs):
         """
@@ -28,11 +28,11 @@ class ModelTrainer(BaseTrainer):
         return app
         
     @classmethod
-    def GO(cls , * , base_path : ModelPath | Base.types.strPath | None = None , title : str | None = None , 
+    def GO(cls , * , base_path : ModelPath | Base.strPath | None = None , title : str | None = None , 
            paragraph : bool = False , html_catcher : bool = True, 
            check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
            log_operation : Literal['update_models' , 'resume_testing'] | None = None , 
-           use_data : Literal['fit','predict','both'] = 'fit' ,
+           use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
            stage = -1 , resume = -1 , selection = -1 ,
            **kwargs):
         
@@ -154,8 +154,8 @@ class ModelTrainer(BaseTrainer):
 
         available_factors : list[ModelPath] = [
             ModelPath(f'factor@{factor}') for factor in factors
-            if len(StockFactorHierarchy.get_factor(factor).stored_dates(start, end)) > 0
-        ]
+            if len(StockFactorHierarchy.get_factor(factor).stored_dates(start, end)) > 20
+        ] # if less than 20 dates, it is not worth testing
         return available_factors
 
     @classmethod

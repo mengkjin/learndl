@@ -35,6 +35,9 @@ from src.proj.util.filesys.sqlite import DBConnHandler
 from src.proj.util.web.emailer import Email
 from src.proj.util.shell import process
 
+RunStatus = Literal['starting', 'running', 'complete', 'error' , 'killed']
+RunSource = Literal['script' , 'shell' , 'os'] | str
+
 def timestamp() -> float:
     """Return the current UTC time as a POSIX timestamp (seconds since epoch)."""
     return datetime.now().timestamp()
@@ -60,7 +63,7 @@ class TaskDatabase:
     task_queues
         Many-to-many mapping of queues to task IDs.
     """
-    def __init__(self , db_name: Base.types.strPath | None = None) -> None:
+    def __init__(self , db_name: Base.strPath | None = None) -> None:
         """Initialise the database connection and create tables if they don't exist.
 
         Parameters
@@ -152,7 +155,7 @@ class TaskDatabase:
             return cursor.fetchone() is None
         
     @classmethod
-    def backup_stats(cls , backup_path : Base.types.strPath):
+    def backup_stats(cls , backup_path : Base.strPath):
         """Get task count from backup database"""
         with DBConnHandler(backup_path) as (conn, cursor):
             cursor.execute('SELECT COUNT(*) FROM task_records')
@@ -297,7 +300,7 @@ class TaskDatabase:
                         new_kwargs[k] = f'{v} ({datetime.fromtimestamp(v).strftime('%Y-%m-%d %H:%M:%S')})' if v else 'None'
                 Logger.info(f"Task {task_id} status [{new_status.upper()}]")
 
-    def check_task_status(self, task_id: str) -> Literal['starting', 'running', 'complete', 'error' , 'killed']:
+    def check_task_status(self, task_id: str) -> RunStatus:
         """Check task status"""
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT status FROM task_records WHERE task_id = ?', (task_id,))
@@ -440,7 +443,7 @@ class TaskDatabase:
         """Return a list of all backup database file paths."""
         return self.conn_handler.all_backup_paths()
 
-    def restore_backup(self , backup_path : Base.types.strPath) -> None:
+    def restore_backup(self , backup_path : Base.strPath) -> None:
         """Clear the live database and restore from a backup file.
 
         Parameters
@@ -543,7 +546,7 @@ class TaskQueue:
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : Base.types.strPath | None , source : str | None = None) -> TaskItem:
+    def create_item(self , script : Base.strPath | None , source : str | None = None) -> TaskItem:
         """Create a new :class:`TaskItem`, persist it, and add it to this queue."""
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
@@ -583,7 +586,7 @@ class TaskQueue:
             self.queue.pop(key)
         self.task_db.clear_database()
 
-    def count(self, status : Literal['starting', 'running', 'complete', 'error' , 'killed']) -> int:
+    def count(self, status : RunStatus) -> int:
         """Return the number of tasks with the given *status*."""
         return [item.status for item in self.queue.values()].count(status)
 
@@ -739,8 +742,8 @@ class TaskItem:
     script : str
     cmd : str = ''
     create_time : float = field(default_factory=timestamp)
-    status : Literal['starting', 'running', 'complete', 'error' , 'killed'] = 'starting'
-    source : Literal['py', 'bash','app'] | str | Any = None
+    status : RunStatus = 'starting'
+    source : RunSource | Any = None
     pid : int | None = None
     start_time : float | None = None
     end_time : float | None = None
@@ -788,7 +791,7 @@ class TaskItem:
             self._queue = queue
         return self
     
-    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> TaskItem:
+    def set_script_cmd(self , script : Path , params : dict | None = None , mode: Base.lit.RunScriptMode = 'shell' , **kwargs) -> TaskItem:
         """Build and attach the :class:`ScriptCmd`, persisting the resulting ``cmd`` string. Returns self."""
         self.script_cmd = ScriptCmd(script, params, mode, **kwargs)
         self.update({'cmd': str(self.script_cmd)} , sync = True)
@@ -878,7 +881,7 @@ class TaskItem:
         return runs_page_url(self.script_key)
     
     @classmethod
-    def create(cls, script : Base.types.strPath | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None ,
+    def create(cls, script : Base.strPath | None , task_db : TaskDatabase | None = None , source : RunSource | None = None ,
                queue : TaskQueue | bool | None = None) -> TaskItem:
         """Factory: create and persist a new :class:`TaskItem`.
 
@@ -921,9 +924,9 @@ class TaskItem:
         return item
     
     @classmethod
-    def preview_cmd(cls , script : Base.types.strPath | None ,
-                    source : Literal['py', 'bash','app'] | str | None = None ,
-                    mode: Literal['shell', 'os'] = 'shell' ,
+    def preview_cmd(cls , script : Base.strPath | None ,
+                    source : RunSource | None = None ,
+                    mode: Base.lit.RunScriptMode = 'shell' ,
                     **kwargs) -> str:
         """Return the command string that would run *script* without actually executing it."""
         item = cls(str(script) , source = source)
@@ -1044,7 +1047,7 @@ class TaskItem:
             refresh_time += refresh_interval
         return True
 
-    def get_crash_protector(self) -> list[Base.types.strPath]:
+    def get_crash_protector(self) -> list[Base.strPath]:
         """Return paths of crash-protector marker files matching this task's ID."""
         if self.task_id is None:
             return []
@@ -1116,7 +1119,7 @@ class TaskItem:
         return True
 
     @classmethod
-    def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error' , 'killed'] , tag : bool = False) -> str:
+    def status_icon(cls , status : RunStatus , tag : bool = False) -> str:
         """Return a Material icon string for *status*, optionally wrapped in a colour badge."""
         if status in ['running', 'starting']:
             icon , color = ':material/arrow_forward_ios:' , 'blue'
@@ -1131,7 +1134,7 @@ class TaskItem:
         return f":{color}-badge[{icon}]" if tag else icon
     
     @property
-    def status_state(self) -> Literal['running', 'complete', 'error']:
+    def status_state(self):
         if self.is_running: 
             return 'running'
         elif self.is_complete:  

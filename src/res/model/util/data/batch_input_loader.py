@@ -2,9 +2,9 @@ from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 from tqdm import tqdm
-from typing import Any , Literal , Sequence
+from typing import Any , Sequence
 
-from src.proj import Proj
+from src.proj import Proj , Base
 from src.res.model.util.core import BatchInput
 
 __all__ = ['BatchInputLoader' , 'DataloaderParam']
@@ -12,7 +12,7 @@ __all__ = ['BatchInputLoader' , 'DataloaderParam']
 @dataclass
 class DataloaderParam:
     """parameters for data loader"""
-    stage : Literal['fit' , 'test' , 'predict' , 'retrospective'] = 'fit'
+    stage : Base.lit.StageAll = 'fit'
     model_date : int | Any = None
     seqlens : dict[str,int] | Any = None
     retro_start_date : int | Any = None

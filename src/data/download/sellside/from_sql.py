@@ -144,10 +144,11 @@ class Connection:
                 Logger.error(f'{key} connection test failed: {e}' , indent = 1 , vb_level = 2)
                 Logger.print_exc(e)
 
-class SellsideSQLDownloader(Base.BoundLogger):
+class SellsideSQLDownloader(Base.BasicUpdater):
     """a downloader for sellside sql data"""
     DB_SRC : str = 'sellside'
     MAX_WORKERS: int = min(1 , MAX_MAX_WORKERS)
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , )
 
     def __init__(
         self , factor_src : str , factor_set : str , date_col : str , 
@@ -164,8 +165,17 @@ class SellsideSQLDownloader(Base.BoundLogger):
         self.sub_factors = sub_factors
         self.connection_key = connection_key
         
-        assert 19900101 <= self.start_date <= self.end_date <= 99991231 , f'start_date {self.start_date} must be greater than 19900101 and less than end_date {self.end_date} and less than 99991231'
+        assert 19000101 <= self.start_date <= self.end_date <= 99991231 , \
+            f'start_date {self.start_date} must be greater than 19000101 and less than end_date {self.end_date} and less than 99991231'
         
+    @classmethod
+    def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
+        return super().parse_update_input(*args , key='sellside_sql' , **kwargs)
+        
+    @classmethod
+    def proceed_update(cls , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> Base.UpdateFlag:
+        return cls.update_since(trace = 0)
+
     def __repr__(self):
         return f'{self.__class__.__name__}(factor_src={self.factor_src},factor_set={self.factor_set})'
 
@@ -224,34 +234,40 @@ class SellsideSQLDownloader(Base.BoundLogger):
     def get_connection(self):
         return Connection.connection(self.use_connection_key)
     
-    def download(self , option : Literal['since' , 'dates' , 'all'] ,
-                 dates : Iterable[int] = () , trace = 1 , start = 20000101, end = 99991231):
-        if option == 'dates':
-            date_intervals = [(d,d) for d in dates]
-        else:
-            start = max(self.start_date , start)
-            end = min(self.end_date , end)
-            if option == 'since':
-                old_dates = DB.dates(self.DB_SRC , self.db_key)
-                if trace > 0 and len(old_dates) > trace: 
-                    old_dates = old_dates[:-trace]
-                if len(old_dates): 
-                    last1_dt = CALENDAR.cd(old_dates[-1],1)
-                    start = max(start , last1_dt)
-
-            end = CALENDAR.td(min(end , CALENDAR.update_to())).as_int()
+    def download(
+        self , option : Literal['since' , 'dates'] , overwrite : bool = False ,
+        dates : Iterable[int] = () , trace = 1 , 
+    ) -> Base.UpdateFlag:
+        assert overwrite is False , 'overwrite is not supported for sellside sql download'
+        stored_dates = DB.dates(self.DB_SRC , self.db_key)
+        if option == 'since':
+            if trace > 0 and len(stored_dates) > trace: 
+                stored_dates = stored_dates[:-trace]
+            if len(stored_dates): 
+                start = max(self.start_date , CALENDAR.td(stored_dates[-1],1).td)
+            else:
+                start = self.start_date
+            start = max(start , CALENDAR.update_from(key = 'sellside_sql'))
+            end = CALENDAR.update_to(key = 'sellside_sql')
             date_intervals = CALENDAR.range_segments(start , end , 'td' , 60)
+        else:
+            dates = CALENDAR.diffs(dates , stored_dates)
+            date_intervals = [(d,d) for d in dates]
+
         if not date_intervals: 
-            return 
+            return Base.UpdateFlag.SKIPPED
         
         start , end = date_intervals[0][0] , date_intervals[-1][1]
         self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Base.Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
         calls = [(self.download_period, inter) for inter in date_intervals]
-        parallel(calls, method = method, max_workers = self.MAX_WORKERS)
+        results = parallel(calls, method = method, max_workers = self.MAX_WORKERS)
+        if any(not result for result in results.values()):
+            return Base.UpdateFlag.FAILED
+        return Base.UpdateFlag.SUCCESS
  
-    def download_period(self , start : int , end : int):
+    def download_period(self , start : int , end : int) -> bool:
         with self.logger.subprocess(idt = 1):
             t0 = datetime.now()
             try:
@@ -398,43 +414,29 @@ class SellsideSQLDownloader(Base.BoundLogger):
         return cls.default_factors(keys)
         
     @classmethod
-    def update_since(cls , trace = 0 , keys = None):
+    def update_since(cls , trace = 0 , keys = None) -> Base.UpdateFlag:
+        flags = Base.UpdateFlagList()
         for key , downloader in cls.factors_downloaders(keys).items():  
-            downloader.download('since' , trace = trace)
+            flags += downloader.download('since' , trace = trace)
+        return flags.summarize()
 
     @classmethod
-    def update_dates(cls , start , end , keys = None):
-        dates = CALENDAR.range(start , end , 'td' , updated = True)
+    def update_dates(cls , start : int , end : int , overwrite : bool = False , keys = None) -> Base.UpdateFlag:
+        dates = CALENDAR.update_schedule(start , end , key='sellside_sql')
         if len(dates) == 0: 
-            return NotImplemented
+            return Base.UpdateFlag.SKIPPED
 
+        flags = Base.UpdateFlagList()
         for key , downloader in cls.factors_downloaders(keys).items():  
-            downloader.download('dates' , dates=dates)
-
-    @classmethod
-    def update_allaround(cls , keys = None , * , indent : int = 0 , vb_level : Any = 1):
-        cls.SetClassVB(vb_level, indent)
-
-        prompt = f'{cls.__name__} : Download allaround!'
-        assert (x := input(prompt + ', input "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        assert (x := input(prompt + ', input "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        cls.logger.note(prompt)
-
-        for key , downloader in cls.factors_downloaders(keys).items():  
-            downloader.download('all')
-
-    @classmethod
-    def update(cls , * , indent : int = 0 , vb_level : Any = 1):
-        cls.SetClassVB(vb_level, indent)
-        cls.logger.note(f'Download since last update!')
-        cls.update_since(trace = 0)
+            flags += downloader.download('dates' , dates=dates , overwrite = overwrite)
+        return flags.summarize()
         
 if __name__ == '__main__':
     from src.data.download.sellside.from_sql import SellsideSQLDownloader
 
     start = 20100901 
     end   = 20100915
-    dates = CALENDAR.range(start , end , 'td' , updated = True)
+    dates = CALENDAR.update_schedule(start , end , key = 'sellside_sql')
 
     downloader = SellsideSQLDownloader.factors_downloaders('dongfang.hfq_chars')['dongfang.hfq_chars']
     df = downloader.query_factor_values(start , end)

@@ -14,6 +14,7 @@ CustomDataUpdater
 """
 from __future__ import annotations
 
+from src.proj import Base
 from src.data.download import (
     TushareDataDownloader , OtherSourceDownloader , SellsideSQLDownloader , SellsideFTPDownloader
 )
@@ -24,39 +25,50 @@ __all__ = ['CoreDataUpdater' , 'SellsideDataUpdater' , 'JSDataUpdater' , 'Custom
 class CoreDataUpdater:
     """Orchestrate updates for core market data (Tushare + other sources)."""
     @classmethod
-    def update(cls):
+    def update(cls) -> Base.UpdateFlagList:
         """Run incremental updates for Tushare and other data sources."""
-        TushareDataDownloader.update()
-        OtherSourceDownloader.update()
+        flags = Base.UpdateFlagList()
+        flags += TushareDataDownloader.update()
+        flags += OtherSourceDownloader.update()
+        return flags
 
     @classmethod
-    def rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int) -> Base.UpdateFlagList:
         """Rollback Tushare data to ``rollback_date``."""
-        TushareDataDownloader.rollback(rollback_date)
+        flags = Base.UpdateFlagList()
+        flags += TushareDataDownloader.rollback(rollback_date)
+        return flags
 
 class SellsideDataUpdater:
     """Orchestrate updates for sell-side data (SQL and FTP sources)."""
     @classmethod
-    def update(cls):
+    def update(cls) -> Base.UpdateFlagList:
         """Run incremental updates for sell-side SQL and FTP data sources."""
-        SellsideSQLDownloader.update()
-        SellsideFTPDownloader.update()
+        flags = Base.UpdateFlagList()
+        flags += SellsideSQLDownloader.update()
+        flags += SellsideFTPDownloader.update()
+        return flags
 
     @classmethod
-    def rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int) -> Base.UpdateFlagList:
         """Rollback sell-side data (not yet implemented)."""
-        ...
+        flags = Base.UpdateFlagList()
+        return flags
 
 class CustomDataUpdater:
     """Orchestrate updates for all registered ``BasicCustomUpdater`` subclasses."""
     @classmethod
-    def update(cls):
+    def update(cls) -> Base.UpdateFlagList:
         """call ``update()`` on each updater"""
+        flags = Base.UpdateFlagList()
         for updater in BasicCustomUpdater.iter_updaters():
-            updater.update()
+            flags += updater.update(indent = 1 , vb_level = 2)
+        return flags
 
     @classmethod
-    def rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int) -> Base.UpdateFlagList:
         """call ``rollback()`` on each updater"""
+        flags = Base.UpdateFlagList()
         for updater in BasicCustomUpdater.iter_updaters():
-            updater.rollback(rollback_date)
+            flags += updater.rollback(rollback_date , indent = 1 , vb_level = 2)
+        return flags

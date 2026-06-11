@@ -20,13 +20,29 @@ import re
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any , Literal , get_args
 
 from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
 
-ANN_DATA_COLS : list[str] = ['f_ann_date' , 'ann_date']
+ANN_DATA_COLS : tuple[str,...] = ('f_ann_date' , 'ann_date')
+
+FSType = Literal['is' , 'cf' , 'indi' , 'bs'] 
+FsOper = Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq']
+FsCat  = Literal['latest' , 'hist']
+QtrMethod = Literal['diff' , 'exact']
+QoQMethod = Literal['qtr' , 'ttm' , 'acc']
+YoyMethod = Literal['qtr' , 'ttm' , 'acc']
+DiffMethod = Literal['pct' , 'diff']
+
+def _calc_diff(df : pd.DataFrame , shift : int = 1 , method : DiffMethod | None = 'pct'):
+    method = method or 'pct'
+    base = df.groupby('secid').shift(shift)
+    diff = df - base
+    if method == 'pct':
+        diff = diff / base.abs()
+    return diff
 
 class FDataAccess(DateDataAccess):
     """
@@ -64,10 +80,10 @@ class FDataAccess(DateDataAccess):
     }
     ANN_DATA_COL : str = 'ann_date'
     SINGLE_TYPE : str | Any = None
-    FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
-    DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
-    DEFAULT_QOQ_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'qtr'
-    DEFAULT_YOY_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'ttm'
+    FROZEN_QTR_METHOD  : QtrMethod | None = None
+    DEFAULT_QTR_METHOD : QtrMethod = 'diff'
+    DEFAULT_QOQ_METHOD : QoQMethod = 'qtr'
+    DEFAULT_YOY_METHOD : YoyMethod = 'ttm'
 
     def data_loader(self , date , data_type):
         """Load a single-date slice for ``data_type`` without NA column checking."""
@@ -141,7 +157,7 @@ class FDataAccess(DateDataAccess):
         return df.reindex(new_index.index)
 
     @staticmethod
-    def value_interpolate(df : pd.DataFrame , method : Literal['diff' , 'exact'] , year_only : bool = False):
+    def value_interpolate(df : pd.DataFrame , method : QtrMethod , year_only : bool = False):
         """
         Fill in missing intermediate quarters using proportional interpolation.
 
@@ -189,7 +205,7 @@ class FDataAccess(DateDataAccess):
             df = df.pivot_table(val , 'end_date' , 'secid').sort_index()
         return df
     
-    def _get_qtr_method(self , qtr_method : Literal['diff' , 'exact'] | None = None):
+    def _get_qtr_method(self , qtr_method : QtrMethod | None = None):
         """Resolve the quarter method: use FROZEN_QTR_METHOD if set, else fall back to arg or DEFAULT."""
         if self.FROZEN_QTR_METHOD: 
             qtr_method = self.FROZEN_QTR_METHOD
@@ -198,7 +214,7 @@ class FDataAccess(DateDataAccess):
         return qtr_method
 
     def _get_data_acc_hist(self , data_type : str , val : str , date : int , lastn = 1 ,
-                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None ,
+                           pivot = False , ffill = False , qtr_method : QtrMethod | None = None ,
                            year_only = False):
         """
         Load historical cumulative (YTD) values for ``val`` from ``data_type``.
@@ -226,7 +242,7 @@ class FDataAccess(DateDataAccess):
         return self._fin_hist_data_transform(df_acc , val , None , lastn , pivot , ffill)
     
     def _get_data_qtr_hist(self , data_type : str , val : str , date : int , lastn = 1 ,
-                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
+                           pivot = False , ffill = False , qtr_method : QtrMethod | None = None):
         """
         Compute single-quarter values by differencing consecutive cumulative quarters.
 
@@ -248,7 +264,7 @@ class FDataAccess(DateDataAccess):
         return self._fin_hist_data_transform(df_qtr , val , df_acc , lastn , pivot , ffill)
 
     def _get_data_ttm_hist(self , data_type : str , val : str , date : int , lastn = 1 ,
-                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
+                           pivot = False , ffill = False , qtr_method : QtrMethod | None = None):
         """
         Compute trailing-twelve-months values.
 
@@ -274,8 +290,9 @@ class FDataAccess(DateDataAccess):
     
     def _get_data_qoq_hist(self , data_type : str , val : str , date : int , lastn = 1 ,
                            pivot = False , ffill = False ,
-                           qtr_method : Literal['diff' , 'exact'] | None = None ,
-                           qoq_method : Literal['ttm' , 'acc' , 'qtr'] | None = None):
+                           qtr_method : QtrMethod | None = None ,
+                           qoq_method : QoQMethod | None = None , 
+                           diff_method : DiffMethod | None = None):
         """
         Compute quarter-on-quarter growth rate: ``(current - prev) / |prev|``.
 
@@ -284,6 +301,8 @@ class FDataAccess(DateDataAccess):
         """
         if qoq_method is None: 
             qoq_method = self.DEFAULT_QOQ_METHOD
+        if qoq_method == 'acc' and self.SINGLE_TYPE != 'balance':
+            raise ValueError(f'qoq_method={qoq_method} is not supported for {self.SINGLE_TYPE}')
         if qoq_method == 'qtr':
             df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 2 , pivot = False , 
                                              ffill = False , qtr_method = qtr_method)
@@ -293,14 +312,14 @@ class FDataAccess(DateDataAccess):
         full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
                                                  df_qtr.index.get_level_values('end_date').unique()])
         df_qoq = df_qtr.reindex(full_index)
-        df_qoq_base = df_qoq.groupby('secid').shift(1)
-        df_qoq = (df_qoq - df_qoq_base) / df_qoq_base.abs()
+        df_qoq = _calc_diff(df_qoq , shift = 1 , method = diff_method)
         return self._fin_hist_data_transform(df_qoq , val , df_qtr , lastn , pivot , ffill)
     
     def _get_data_yoy_hist(self , data_type : str , val : str , date : int , lastn = 1 ,
                            pivot = False , ffill = False ,
-                           qtr_method : Literal['diff' , 'exact'] | None = None ,
-                           yoy_method : Literal['ttm' , 'acc' , 'qtr'] | None = None):
+                           qtr_method : QtrMethod | None = None ,
+                           yoy_method : YoyMethod | None = None ,
+                           diff_method : DiffMethod | None = None):
         """
         Compute year-on-year growth rate: ``(current - prev_year) / |prev_year|``.
 
@@ -321,8 +340,7 @@ class FDataAccess(DateDataAccess):
         full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
                                                  df_qtr.index.get_level_values('end_date').unique()])
         df_yoy = df_qtr.reindex(full_index)
-        df_yoy_base = df_yoy.groupby('secid').shift(4)
-        df_yoy = (df_yoy - df_yoy_base) / df_yoy_base.abs()
+        df_yoy = _calc_diff(df_yoy , shift = 4 , method = diff_method)
         return self._fin_hist_data_transform(df_yoy , val , df_qtr , lastn , pivot , ffill)
     
     def _fin_latest_data_transform(self , df : pd.DataFrame , val : str):
@@ -335,28 +353,28 @@ class FDataAccess(DateDataAccess):
         return self._fin_latest_data_transform(df_acc , val)
 
     def _get_data_qtr_latest(self , data_type : str , val : str , date : int ,
-                             qtr_method : Literal['diff' , 'exact'] | None = None):
+                             qtr_method : QtrMethod | None = None):
         """Return the latest single-quarter value per secid as of ``date``."""
         df_qtr = self._get_data_qtr_hist(data_type , val , date , 3 , ffill = False , qtr_method = qtr_method)
         return self._fin_latest_data_transform(df_qtr , val)
 
     def _get_data_ttm_latest(self , data_type : str , val : str , date : int ,
-                             qtr_method : Literal['diff' , 'exact'] | None = None):
+                             qtr_method : QtrMethod | None = None):
         """Return the latest TTM value per secid as of ``date``."""
         df_ttm = self._get_data_ttm_hist(data_type , val , date , 3 , ffill = False , qtr_method = qtr_method)
         return self._fin_latest_data_transform(df_ttm , val)
 
     def _get_data_qoq_latest(self , data_type : str , val : str , date : int ,
-                             qtr_method : Literal['diff' , 'exact'] | None = None ,
-                             qoq_method : Literal['qtr' , 'ttm'] | None = None):
+                             qtr_method : QtrMethod | None = None ,
+                             qoq_method : QoQMethod | None = None):
         """Return the latest QoQ growth rate per secid as of ``date``."""
         df_qoq = self._get_data_qoq_hist(data_type , val , date , 3 ,
                                          qtr_method = qtr_method , qoq_method = qoq_method)
         return self._fin_latest_data_transform(df_qoq , val)
 
     def _get_data_yoy_latest(self , data_type : str , val : str , date : int ,
-                             qtr_method : Literal['diff' , 'exact'] | None = None ,
-                             yoy_method : Literal['ttm' , 'acc'] | None = None):
+                             qtr_method : QtrMethod | None = None ,
+                             yoy_method : YoyMethod | None = None):
         """Return the latest YoY growth rate per secid as of ``date``."""
         df_yoy = self._get_data_yoy_hist(data_type , val , date , 3 , qtr_method = qtr_method , yoy_method = yoy_method)
         return self._fin_latest_data_transform(df_yoy , val)
@@ -383,12 +401,12 @@ class FDataAccess(DateDataAccess):
         return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill)
 
     def qoq(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False ,
-            qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+            qtr_method : QtrMethod | None = None , qoq_method : QoQMethod | None = None):
         """Return historical quarter-on-quarter growth for ``val``."""
         return self._get_data_qoq_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , qoq_method)
 
     def yoy(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False ,
-            qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+            qtr_method : QtrMethod | None = None , yoy_method : YoyMethod | None = None):
         """Return historical year-on-year growth for ``val``."""
         return self._get_data_yoy_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , yoy_method)
 
@@ -404,11 +422,11 @@ class FDataAccess(DateDataAccess):
         """Return the latest TTM value per secid."""
         return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date)
 
-    def qoq_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+    def qoq_latest(self, val: str, date: int , qtr_method : QtrMethod | None = None , qoq_method : QoQMethod | None = None):
         """Return the latest QoQ growth rate per secid."""
         return self._get_data_qoq_latest(self.SINGLE_TYPE , val, date , qtr_method , qoq_method)
 
-    def yoy_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+    def yoy_latest(self, val: str, date: int , qtr_method : QtrMethod | None = None , yoy_method : YoyMethod | None = None):
         """Return the latest YoY growth rate per secid."""
         return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date , qtr_method , yoy_method)
     
@@ -418,38 +436,38 @@ class IndicatorDataAccess(FDataAccess):
     ``financial_ts/indicator``.  Exported as ``INDI``.
     """
     SINGLE_TYPE = 'indicator'
-    FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
-    DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
+    FROZEN_QTR_METHOD  : QtrMethod | None = None
+    DEFAULT_QTR_METHOD : QtrMethod = 'diff'
 
     def acc(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
-            qtr_method : Literal['diff' , 'exact'] | None = None , year_only = False):
+            qtr_method : QtrMethod | None = None , year_only = False):
         return self._get_data_acc_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , year_only)
     
-    def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
+    def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qtr_method : QtrMethod | None = None):
         return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method)
 
     def ttm(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
-            qtr_method : Literal['diff' , 'exact'] | None = None):
+            qtr_method : QtrMethod | None = None):
         return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method)
     
     def qoq(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
-            qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+            qtr_method : QtrMethod | None = None , qoq_method : QoQMethod | None = None):
         return self._get_data_qoq_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , qoq_method)
     
     def yoy(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
-            qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+            qtr_method : QtrMethod | None = None , yoy_method : YoyMethod | None = None):
         return self._get_data_yoy_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , yoy_method)
     
-    def qtr_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None):
+    def qtr_latest(self, val: str, date: int , qtr_method : QtrMethod | None = None):
         return self._get_data_qtr_latest(self.SINGLE_TYPE , val, date , qtr_method)
     
-    def ttm_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None):
+    def ttm_latest(self, val: str, date: int , qtr_method : QtrMethod | None = None):
         return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date , qtr_method)
     
-    def qoq_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+    def qoq_latest(self, val: str, date: int , qtr_method : QtrMethod | None = None , qoq_method : QoQMethod | None = None):
         return self._get_data_qoq_latest(self.SINGLE_TYPE , val, date , qtr_method , qoq_method)
     
-    def yoy_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+    def yoy_latest(self, val: str, date: int , qtr_method : QtrMethod | None = None , yoy_method : YoyMethod | None = None):
         return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date , qtr_method , yoy_method)
 
 class BalanceSheetAccess(FDataAccess):
@@ -459,9 +477,9 @@ class BalanceSheetAccess(FDataAccess):
     """
     SINGLE_TYPE = 'balance'
     FROZEN_QTR_METHOD = 'exact'
-    DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'exact'
-    DEFAULT_YOY_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
-    DEFAULT_QOQ_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
+    DEFAULT_QTR_METHOD : QtrMethod = 'exact'
+    DEFAULT_QOQ_METHOD : QoQMethod = 'acc'
+    DEFAULT_YOY_METHOD : YoyMethod = 'acc'
     ANN_DATA_COL : str = 'f_ann_date'
 
 class CashFlowAccess(FDataAccess):
@@ -471,7 +489,7 @@ class CashFlowAccess(FDataAccess):
     """
     SINGLE_TYPE = 'cashflow'
     FROZEN_QTR_METHOD = 'diff'
-    DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
+    DEFAULT_QTR_METHOD : QtrMethod = 'diff'
     ANN_DATA_COL : str = 'f_ann_date'
 
 class IncomeStatementAccess(FDataAccess):
@@ -481,7 +499,7 @@ class IncomeStatementAccess(FDataAccess):
     """
     SINGLE_TYPE = 'income'
     FROZEN_QTR_METHOD = 'diff'
-    DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
+    DEFAULT_QTR_METHOD : QtrMethod = 'diff'
     ANN_DATA_COL : str = 'f_ann_date'
   
 class FinancialDataAccess(FDataAccess):
@@ -585,7 +603,7 @@ class FinData:
                 kwargs['qtr_method'] = 'exact'
         return expr , kwargs
     
-    def parse_and_eval(self , date : int , category : Literal['latest' , 'hist'] , **kwargs):
+    def parse_and_eval(self , date : int , category : FsCat , **kwargs):
         """
         Parse the expression, evaluate each token via the financial singletons,
         and combine results using Python ``eval``.
@@ -603,8 +621,8 @@ class FinData:
             expr , kwgs = self.reserved_numerator(item , self.kwargs | kwargs)
             fstatement , fval , ftype = expr.split('@')
             reprs[item] = fval
-            assert fstatement in ['is' , 'cf' , 'indi' , 'bs'] , fstatement
-            assert ftype in ['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] , ftype
+            assert fstatement in get_args(FSType) , fstatement
+            assert ftype in get_args(FsOper) , ftype
             df = self._f_func(fstatement , ftype , category)(fval , date , **kwgs)
             if isinstance(df , pd.DataFrame) and df.shape[1] == 1 and isinstance(df.columns[0] , str): 
                 df = df.iloc[:,0]
@@ -623,25 +641,16 @@ class FinData:
         return result
     
     @classmethod
-    def _f_func(cls , fstatement : Literal['is' , 'cf' , 'indi' , 'bs'] | str ,
-                ftype : Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] | str ,
-                category : Literal['latest' , 'hist']):
+    def _f_func(cls , fstatement : FSType | str ,
+                ftype : FsOper | str ,
+                category : FsCat):
         """
         Resolve the callable method from the correct singleton.
 
         Maps ``(fstatement, ftype, category)`` to the appropriate
         ``<singleton>.<ftype>_latest`` or ``<singleton>.<ftype>`` method.
         """
-        if fstatement == 'is': 
-            f_source = IS
-        elif fstatement == 'cf': 
-            f_source = CF
-        elif fstatement == 'indi': 
-            f_source = INDI
-        elif fstatement == 'bs': 
-            f_source = BS
-        else: 
-            raise ValueError(f'invalid statement: {fstatement}')
+        f_source = {'is' : IS , 'cf' : CF , 'indi' : INDI , 'bs' : BS}[fstatement]
         if category == 'latest':
             return getattr(f_source , f'{ftype}_latest')
         elif category == 'hist':

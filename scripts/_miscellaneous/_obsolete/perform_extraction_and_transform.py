@@ -105,9 +105,9 @@ def add_sec_type(df : pd.DataFrame):
 def filter_sec(
     df : pd.DataFrame , 
     sec_type : Literal['sec' , 'etf' , 'cb'] | str,
-    sec_type_map : dict[str,str] = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
 ):
-    return df[df['sec_type'] == sec_type_map[sec_type]]
+    df_sec_type = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}[sec_type]
+    return df[df['sec_type'] == df_sec_type]
 
 def transform_sec(df : pd.DataFrame):
     

@@ -12,47 +12,43 @@ from __future__ import annotations
 
 import pandas as pd
 import numpy as np
-from typing import Any , Literal
+from typing import Any
 from src.proj import CALENDAR , DB , Base
-
 from src.data.update.custom.basic import BasicCustomUpdater
 
 class MultiKlineUpdater(BasicCustomUpdater):
     """Registered updater for 5/10/20-day aggregated OHLCV bars."""
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , Base.UpdateType.ROLLBACK)
     START_DATE = 20050101
     DB_SRC = 'trade_ts'
 
     DAYS = [5 , 10 , 20]
 
-    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
+    @classmethod
+    def proceed_update(cls , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs) -> Base.UpdateFlag:
         """Update multi-day OHLCV aggregations for all (n_day, missing_dates) combinations."""
-        if update_type == 'recalc':
-            self.logger.warning(f'Recalculate all nday klines is not supported yet for {self.__class__.__name__}')
-        
-        for n_day in self.DAYS:
+        start = max(start or cls.START_DATE , cls.START_DATE)
+        flags = Base.UpdateFlagList()
+        for n_day in cls.DAYS:
             label_name = f'{n_day}day'
-            if update_type == 'recalc':
-                stored_dates = np.array([])
-            elif update_type == 'update':
-                stored_dates = DB.dates(self.DB_SRC , label_name)
-            elif update_type == 'rollback':
-                rollback_date = CALENDAR.td(self._rollback_date , 1)
-                stored_dates = CALENDAR.slice(DB.dates(self.DB_SRC , label_name) , 0 , rollback_date - 1)
-            else:
-                raise ValueError(f'Invalid update type: {update_type}')
-            end = DB.dates(self.DB_SRC , 'day').max()
-            update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
-            if len(update_dates) == 0:
-                self.logger.skipping(f'{self.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
+            sub_end = DB.dates(cls.DB_SRC , 'day').max()
+            stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , label_name)
+            target_dates = CALENDAR.diffs(start , sub_end , stored_dates)
+            if len(target_dates) == 0:
+                cls.logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
+                flags += Base.UpdateFlag.SKIPPED
                 continue
 
-            for date in update_dates: 
-                self.update_one(date , n_day , label_name)
-            self.logger.success(f'Update {self.DB_SRC}/{label_name} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
+            for date in target_dates: 
+                cls.update_one(date , n_day , label_name)
+            cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Base.Dates(target_dates)}' , idt = 1 , vb = 1)
+            flags += Base.UpdateFlag.SUCCESS
+        return flags.summarize()
 
-    def update_one(self , date : int , n_day : int , label_name : str):
+    @classmethod
+    def update_one(cls , date : int , n_day : int , label_name : str):
         """Compute and save the n-day OHLCV bar for a single ``date``."""
-        DB.save(nday_kline(date , n_day) , self.DB_SRC , label_name , date , indent = self.indent + 2 , vb_level = self.vb_level + 2)
+        DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
 
 def nday_kline(date : int , n_day : int) -> pd.DataFrame:
     """

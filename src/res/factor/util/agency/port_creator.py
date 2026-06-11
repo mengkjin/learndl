@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any , Literal
 
 from src.proj import Base
-from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
+from src.res.factor.util.classes import Port , Benchmark , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
 class PortCreator(ABC , Base.BoundLogger):
     def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
@@ -15,18 +15,13 @@ class PortCreator(ABC , Base.BoundLogger):
         self.setup(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs)
     
     def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
-               benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , 
+               benchmark : Base.alias.SingleBenchmark = None , init_port : Port | Any = None , 
                detail_infos = False) -> PortCreateResult: 
         self.model_date = model_date
         self.alpha_model = alpha_model if alpha_model is not None else Amodel.create_random(model_date)
         self.init_port = Port.none_port(model_date , self.name) if init_port is None else init_port
         self.value = self.init_port.value
-        if benchmark is None:
-            self.bench_port = Port.none_port(model_date)
-        elif isinstance(benchmark , Port):
-            self.bench_port = benchmark
-        else:
-            self.bench_port = benchmark.get(model_date , closest = True)
+        self.bench_port = Benchmark.to_port(benchmark , model_date , evolve = False)
         self.detail_infos = detail_infos
 
         t0 = datetime.now()
@@ -65,7 +60,7 @@ class PortCreator(ABC , Base.BoundLogger):
         return self
 
     @classmethod
-    def select_creator(cls , category : Literal['optim' , 'top' , 'screen' , 'revscreen' , 'reinforce'] | Any) -> type[PortCreator]:
+    def select_creator(cls , category : Base.TestType | Any) -> type[PortCreator]:
         if category == 'optim':
             from src.res.factor.fmp.optimizer.optim import OptimizedPortfolioCreator
             return OptimizedPortfolioCreator

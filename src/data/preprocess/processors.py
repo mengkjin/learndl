@@ -25,9 +25,9 @@ import torch
 import numpy as np
 import polars as pl
 
-from typing import Any , Literal
+from typing import Any
 
-from src.proj import DB , CALENDAR , Const
+from src.proj import DB , CALENDAR , Const , Base
 from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
@@ -47,14 +47,14 @@ class PrePros:
         return [name for name in PreProcessor.registry.keys()]
 
     @classmethod
-    def start_date(cls , type : Literal['fit' , 'predict'] = 'predict') -> int:
-        """Return the start date used for the given ``type`` across all processors."""
-        return PreProcessor.start_date(type)
+    def start_date(cls , frame : Base.lit.DataBlockTimeFrame = 'predict') -> int:
+        """Return the start date used for the given ``frame`` across all processors."""
+        return PreProcessor.start_date(frame)
 
     @classmethod
-    def get_processor(cls , key : str , type : Literal['fit' , 'predict'] , indent : int = 0 , vb_level : Any = 'max') -> PreProcessor:
+    def get_processor(cls , key : str , frame : Base.lit.DataBlockTimeFrame , indent : int = 0 , vb_level : Any = 'max') -> PreProcessor:
         """Instantiate and return the preprocessor registered under ``key``."""
-        return PreProcessor.registry[key](type , indent = indent , vb_level = vb_level)
+        return PreProcessor.registry[key](frame , indent = indent , vb_level = vb_level)
 
 class PrePro_y(TradePreProcessor):
     """

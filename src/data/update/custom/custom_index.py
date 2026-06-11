@@ -15,8 +15,8 @@ import numpy as np
 
 from abc import ABCMeta , abstractmethod
 from functools import cached_property
-from typing import Literal , Type , Any
-from src.proj import CALENDAR , DB , Base , Load , Save
+from typing import Type , Any
+from src.proj import CALENDAR , DB , Load , Save , Base
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -25,7 +25,7 @@ DB_SRC = 'index_daily_custom'
 
 class CustomIndexMeta(ABCMeta):
     """Metaclass that auto-registers concrete ``CustomIndex`` subclasses."""
-    registry : dict[str , Type['CustomIndex'] | Any] = {}
+    registry : dict[str , Type[CustomIndex] | Any] = {}
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
         assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
@@ -36,7 +36,7 @@ class CustomIndexMeta(ABCMeta):
 
 class CustomIndexName:
     """Descriptor that returns the lowercased class name as the index identifier."""
-    def __get__(self , instance , owner):
+    def __get__(self , instance , owner) -> str:
         """Return ``owner.__name__.lower()`` as the index name."""
         return owner.__name__.lower()
 
@@ -131,17 +131,12 @@ class CustomIndex(metaclass=CustomIndexMeta):
             return np.array([])
         return old_df['trade_date'].to_numpy(int)
 
-    def target_dates(self , update_type : Literal['recalc' , 'update' , 'rollback'] , 
-                     rollback_date : int = 99991231 , start : int = START_DATE , **kwargs):
-        full_dates = CALENDAR.range(max(start , self.START_DATE) , None , 'td' , updated = True)
-        if update_type == 'recalc':
-            return full_dates
-        elif update_type == 'update':
-            return full_dates[~np.isin(full_dates , self.stored_dates())]
-        elif update_type == 'rollback':
-            return full_dates[full_dates >= rollback_date]
-        else:
-            raise ValueError(f'Invalid update type: {update_type}')
+    def target_dates(self , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs):
+        start = max(start or self.START_DATE , self.START_DATE)
+        end = end or CALENDAR.update_to()
+        stored_dates = np.array([]) if overwrite else self.stored_dates()
+        target_dates = CALENDAR.diffs(start , end , stored_dates)
+        return target_dates
 
     @classmethod
     def iter_custom_indices(cls):
@@ -151,23 +146,21 @@ class CustomIndex(metaclass=CustomIndexMeta):
 class CustomIndexUpdater(BasicCustomUpdater):
     START_DATE = START_DATE
 
-    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
-        if update_type == 'recalc':
-            self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
-
+    @classmethod
+    def proceed_update(cls , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs) -> Base.UpdateFlag:
         total_dates = []
         custom_indices = list(CustomIndex.iter_custom_indices())
         for custom_index in custom_indices:
-            target_dates = custom_index.target_dates(update_type , rollback_date = self._rollback_date , start = self.START_DATE)
+            target_dates = custom_index.target_dates(start = start , end = end , overwrite = overwrite)
             if len(target_dates) == 0:
-                self.logger.skipping(f'{custom_index.index_name} is up to date' , idt = 2 , vb = 1)
+                cls.logger.skipping(f'{custom_index.index_name} is up to date' , idt = 2 , vb = 1)
                 continue
-            custom_index.update_dates(target_dates , indent = self.indent + 2 , vb_level = self.vb_level + 2)
+            custom_index.update_dates(target_dates , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
             total_dates.extend(target_dates.tolist())
         if len(total_dates) == 0:
-            self.logger.skipping(f'All custom indices are up to date' , idt = 1)
+            return Base.UpdateFlag.SKIPPED
         else:
-            self.logger.success(f'{len(custom_indices)} custom indices updated at {Base.Dates(total_dates)}' , idt = 1 , vb = 1)
+            return Base.UpdateFlag.SUCCESS
 
     def update_one(self , date : int):
         for custom_index in CustomIndex.iter_custom_indices():

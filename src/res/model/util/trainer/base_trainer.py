@@ -8,6 +8,7 @@ from typing import Any , Literal , Sized , Callable , cast
 
 from src.proj import Const , Base
 
+from src.proj.bases import FittingEventType
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
 from src.res.model.util.config import ModelConfig
 from .pipeline import BasePipeline
@@ -66,7 +67,7 @@ class BaseTrainer(BasePipeline):
     def __init__(self , base_path = None , * , 
                  module : str | None = None , schedule_name = None , 
                  override : dict | None = None , 
-                 use_data : Literal['fit','predict','both'] = 'fit' , 
+                 use_data : Base.lit.DataBlockTimeFrames = 'fit' , 
                  indent : int = 0 , vb_level : Any = 1 , **kwargs):
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -80,9 +81,6 @@ class BaseTrainer(BasePipeline):
         }
         self._use_data = use_data
         self._kwargs = kwargs
-        # self._config = ModelConfig.initialize(base_path , module = module , schedule_name = schedule_name , override = override , **kwargs)
-        # self._use_data : Literal['fit','both'] = use_data
-        # self._kwargs = kwargs
 
     def __bool__(self): 
         return True
@@ -117,8 +115,8 @@ class BaseTrainer(BasePipeline):
     def base_path(self):
         return self.config.base_path if hasattr(self , '_config') else self._config_kwargs['base_path']
     @property
-    def use_data(self) -> Literal['fit','predict','both']:
-        return cast(Literal['fit','predict','both'], self._use_data)
+    def use_data(self) -> Base.lit.DataBlockTimeFrames:
+        return cast(Base.lit.DataBlockTimeFrames, self._use_data)
     @property
     def input_model_kwargs(self):
         return self._kwargs
@@ -465,7 +463,7 @@ class BaseTrainer(BasePipeline):
         
     def recall_ckpt(self , epoch : int , phase : int = 0 , message : str = '' , details : dict[str,Any] | None = None):
         assert epoch >= 0 and epoch <= self.status.epoch , f'epoch {epoch} is out of range(0,{self.status.epoch})'
-        self.status.add_epoch_event('new_phase_recall' , f'Recall {epoch_key(epoch , phase)}' , epoch , message , details)
+        self.status.add_epoch_event(FittingEventType.NEW_PHASE_RECALL , f'Recall {epoch_key(epoch , phase)}' , epoch , message , details)
         self.status.set_milestone_epoch(epoch + 1)
         if epoch != self.status.epoch:
             self.model.load_state_dict(self.checkpoint.load(epoch , phase))

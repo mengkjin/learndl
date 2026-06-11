@@ -5,7 +5,7 @@ import pandas as pd
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any
 
 from src.proj import CALENDAR , Base , Save , Load
 from src.data import DataBlock
@@ -33,17 +33,17 @@ class Portfolio:
     .get(date : int , closest = False) : return the port for the given date
     .from_dataframe(df : pd.DataFrame , name : str | Any = None) : create a portfolio from a dataframe
     .to_dataframe() : convert the portfolio to a dataframe
-    .load(path : Base.types.strPath) : load a portfolio from a path (dataframe)
-    .save(path : Base.types.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the portfolio to a path (dataframe)
+    .load(path : Base.strPath) : load a portfolio from a path (dataframe)
+    .save(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the portfolio to a path (dataframe)
     .filter_secid(secid : np.ndarray | Any | None = None , exclude = False , inplace = False) : filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid
     .filter_dates(dates : np.ndarray | Any | None = None , exclude = False , inplace = False) : filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates
     .replace(port : 'Port|Portfolio' , inplace = False) : replace the portfolio with the given port or portfolio
     .rename(new_name : str) : rename the portfolio
     .from_ports(*ports : Port , name : str | None = None) : create a portfolio from a list of ports
     .activate_accountant() : activate the accountant for the portfolio
-    .accounting(benchmark : 'Portfolio | str | Any' = None , start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * , start_port : Port | None = None , trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Any = 1) : account the portfolio
-    .save_account(path : Base.types.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the account to a path (a dir containing multiple dataframes)
-    .load_account(path : Base.types.strPath) : load the account from a path (a dir containing multiple dataframes)
+    .accounting(benchmark : Base.alias.SingleBenchmark = None , start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * , start_port : Port | None = None , trade_engine : Base.lit.TradeEngine = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Any = 1) : account the portfolio
+    .save_account(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the account to a path (a dir containing multiple dataframes)
+    .load_account(path : Base.strPath) : load the account from a path (a dir containing multiple dataframes)
     .account : return the account of the portfolio
     .cached_accounts : return the cached accounts of the portfolio
     .activate_conditioner(name : str) : activate the conditioner for the portfolio
@@ -139,7 +139,7 @@ class Portfolio:
     def has(self , date : int):
         """return True if the portfolio has the given date"""
         return date in self.ports
-    def get(self , date : int , closest = False): 
+    def get(self , date : int , closest = False , evolve = True): 
         """return the port for the given date"""
         port = self.ports.get(date , None)
         if port is None:
@@ -147,8 +147,7 @@ class Portfolio:
             port = self.ports.get(use_date , None)
         if port is None: 
             return Port.none_port(date , self.name)
-        else:
-            return port.evolve_to_date(date)
+        return port.evolve_to_date(date) if evolve else port
     def item(self):
         """return the only port of the portfolio"""
         assert len(self.ports) == 1 , f'expect 1 port , but got {len(self.ports)}'
@@ -209,7 +208,7 @@ class Portfolio:
             return df
 
     @classmethod
-    def load(cls , path : Base.types.strPath) -> Portfolio:
+    def load(cls , path : Base.strPath) -> Portfolio:
         """load a portfolio from a path (dataframe)"""
         path = Path(path)
         if path.exists():
@@ -217,7 +216,7 @@ class Portfolio:
         else:
             return cls(path.stem)
 
-    def save(self , path : Base.types.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2):
+    def save(self , path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2):
         """save the portfolio to a path (dataframe)"""
         if self.empty:
             return
@@ -291,12 +290,12 @@ class Portfolio:
     
     def accounting(
             self , 
-            benchmark : 'Portfolio | str | Any' = None ,
+            benchmark : Base.alias.SingleBenchmark = None ,
             start : int = -1 , end : int = 99991231 , 
             analytic = True , attribution = True , * ,
-            trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
+            trade_engine : Base.lit.TradeEngine = 'default' , 
             daily = False , cache = False , with_index = None ,
-            resume_path : Base.types.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+            resume_path : Base.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
             indent : int = 0 , vb_level : Any = 1
         ):
         """account the portfolio"""

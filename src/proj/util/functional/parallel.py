@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 __all__ = ['parallel' , 'is_main_process']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
+ParallelMethodType = Literal['forloop' , 'thread' , 'process']
 
 def is_main_process() -> bool:
     """True only in the process that launched the job (not a ``ProcessPoolExecutor`` worker)."""
@@ -27,7 +28,7 @@ def is_main_process() -> bool:
 
 def parallel(
     inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
-    method : int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
+    method : int | bool | ParallelMethodType = 'thread' , 
     max_workers = MAX_WORKERS , ignore_error = False , timeout : float = -1 , indent : int = 0 ,
     capture_mp_output : bool = False , keep_mp_output_on_error : bool = False , **kwargs
 ) -> dict[Any , T]:
@@ -85,7 +86,7 @@ def _process_pool_context():
     import multiprocessing as mp
     return mp.get_context('spawn' if MACHINE.is_windows else 'forkserver')
 
-def _get_method(method : int | bool | Literal['forloop' , 'thread' , 'process'] , max_workers : int = MAX_WORKERS) -> int:
+def _get_method(method : int | bool | ParallelMethodType , max_workers : int = MAX_WORKERS) -> int:
     """get parallel method index
     0 : forloop
     1 : thread

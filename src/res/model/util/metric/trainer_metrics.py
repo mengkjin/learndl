@@ -3,8 +3,9 @@ import numpy as np
 
 from functools import cached_property
 from torch import nn
-from typing import Any , Callable , Literal
+from typing import Any , Callable
 
+from src.proj import Base
 from src.res.model.util.core import BatchData
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.trainer import BaseTrainer , TrainerPipeline
@@ -16,8 +17,6 @@ from .stage_metrics import BatchMetrics , EpochMetrics , AttemptMetrics , ModelM
 
 __all__ = ['TrainerMetrics']
 
-MetricTypes = Literal['accuracy' , 'loss' , 'rankic']
-
 def _get_net(model : nn.Module | Any) -> nn.Module | None:
     if isinstance(model , nn.Module):
         return model
@@ -27,7 +26,6 @@ def _get_net(model : nn.Module | Any) -> nn.Module | None:
         return None
 class TrainerMetrics(TrainerPipeline):
     """calculator of batch output"""
-    MetricOptions : tuple[MetricTypes,...] = ('accuracy' , 'loss' , 'rankic')
     
     def __init__(self , trainer : BaseTrainer | ModelConfig , **kwargs) -> None:
         self.bound_with(trainer)
@@ -103,7 +101,7 @@ class TrainerMetrics(TrainerPipeline):
     @cached_property
     def ignore_accuracy(self) -> list[str]:
         return []
-    def calculate(self , dataset : Literal['train','valid','test','predict'] , batch_key : Any , batch_data : BatchData):
+    def calculate(self , dataset : Base.lit.DatasetAll , batch_key : Any , batch_data : BatchData):
         """Calculate loss(with gradient), penalty , accuracy"""
         if dataset not in ['train' , 'valid' , 'test']:
             dataset = 'test'

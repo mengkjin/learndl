@@ -1,15 +1,16 @@
 from __future__ import annotations
 import pandas as pd
-from typing import Any , Type
+from typing import Type
 
+from src.proj import Base
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.top_pf import Plotter
 from src.res.factor.util.stats import top_pf as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
-test_type = TestType.TOP
+test_type = Base.TestType.TOP
 plotter = Plotter(test_type.title())
 
 class TopCalc(BaseFactorAnalyticCalculator):
@@ -90,17 +91,16 @@ class TopFMPTest(BaseFactorAnalyticTest):
     """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
-        which : str | list[str] | Literal['all']
-            Which tasks to run. Can be any of the following:
-            'prefix' : Prefix
-            'perf_curve' : Performance Curve
-            'perf_drawdown' : Performance Drawdown
-            'perf_year' : Performance Yearly Stats
-            'perf_month' : Performance Monthly Stats
-            'exp_style' : Style Exposure
-            'exp_indus' : Industry Deviation
-            'attrib_source' : Attribution Source
-            'attrib_style' : Attribution Style
+        Which tasks to run. Can be any of the following:
+        'prefix' : Prefix
+        'perf_curve' : Performance Curve
+        'perf_drawdown' : Performance Drawdown
+        'perf_year' : Performance Yearly Stats
+        'perf_month' : Performance Monthly Stats
+        'exp_style' : Style Exposure
+        'exp_indus' : Industry Deviation
+        'attrib_source' : Attribution Source
+        'attrib_style' : Attribution Style
     """
     TEST_TYPE = test_type
     TASK_LIST : list[Type[TopCalc]] = [
@@ -116,19 +116,19 @@ class TopFMPTest(BaseFactorAnalyticTest):
         Attrib_Style ,
     ]
 
-    def generate(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
+    def generate(self , factor: StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
                  n_bests = [20,30,50,100]):
         alpha_models = factor.alpha_models()
-        benchmarks = Benchmark.get_benchmarks(benchmarks)
+        benchmarks = Benchmark.to_benchmarks(benchmarks)
         self.update_kwargs(n_bests = n_bests)
         self.portfolio_group = PortfolioGroupBuilder(
             'top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , 
             caller = self , start = self.start , end = self.end , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
-    def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+    def calc(self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
              n_bests = [20,30,50,100] , **kwargs):
-        self.generate(factor , benchmark , n_bests = n_bests)
+        self.generate(factor , benchmarks , n_bests = n_bests)
         if self.total_account.empty:
             self.logger.error(f'No accounts created for {self.test_name}!')
         else:

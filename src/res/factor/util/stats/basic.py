@@ -2,11 +2,12 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from typing import Any , Literal
+from typing import Any
 
+from src.proj import Base
 from src.data import DATAVENDOR
 
-def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Literal['exp' , 'lin'] = 'lin' , 
+def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
             groupby : str | list[str] | None = None):
     assert not isinstance(ret , np.ndarray) or groupby is None , 'groupby is not supported for numpy array'
     if isinstance(ret , np.ndarray): 
@@ -23,12 +24,12 @@ def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Literal['ex
         else:
             return (ret + 1).groupby(groupby , observed=True).cumprod() - 1
 
-def eval_cum_peak(ret : pd.Series | pd.DataFrame | np.ndarray , how : Literal['exp' , 'lin'] = 'lin' ,
+def eval_cum_peak(ret : pd.Series | pd.DataFrame | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' ,
                   groupby : str | list[str] | None = None):
     cum_ret = eval_cum_ret(ret , how , groupby)
     return cum_ret.cummax() if groupby is None else cum_ret.groupby(groupby , observed=True).cummax()
 
-def eval_drawdown(ret : pd.DataFrame | pd.Series | np.ndarray , how : Literal['exp' , 'lin'] = 'lin' , 
+def eval_drawdown(ret : pd.DataFrame | pd.Series | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
                   groupby : str | list[str] | None = None):
     cum_ret = eval_cum_ret(ret , how , groupby)
     cum_peak = cum_ret.cummax() if groupby is None else cum_ret.groupby(groupby , observed=True).cummax()
@@ -37,7 +38,7 @@ def eval_drawdown(ret : pd.DataFrame | pd.Series | np.ndarray , how : Literal['e
     else:
         return (cum_ret + 1) / (cum_peak + 1) - 1
 
-def eval_drawdown_start(ret : pd.DataFrame | pd.Series | np.ndarray , how : Literal['exp' , 'lin'] = 'lin' , 
+def eval_drawdown_start(ret : pd.DataFrame | pd.Series | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
                         groupby : str | list[str] | None = None):
     if groupby is None:
         cum = eval_cum_ret(ret , how , groupby)
@@ -46,7 +47,7 @@ def eval_drawdown_start(ret : pd.DataFrame | pd.Series | np.ndarray , how : Lite
         assert not isinstance(ret , np.ndarray) , 'groupby is not supported for numpy array'
         return ret.groupby(groupby , observed=True).apply(eval_drawdown_start , how = how)
 
-def eval_max_drawdown(ret : pd.Series | np.ndarray | pd.DataFrame , how : Literal['exp' , 'lin'] = 'lin'):
+def eval_max_drawdown(ret : pd.Series | np.ndarray | pd.DataFrame , how : Base.lit.TimeSeriesAccMethod = 'lin'):
     dd , st = eval_drawdown(ret , how) , eval_drawdown_start(ret , how)
     assert isinstance(dd , pd.Series) and isinstance(st , pd.Series) , 'dd and st must be pd.Series'
     mdd = -dd.min()

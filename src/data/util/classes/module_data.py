@@ -27,7 +27,7 @@ import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import partial, cached_property
-from typing import Any, Literal
+from typing import Any
 
 from src.proj import CALENDAR , Base , Logger
 
@@ -39,7 +39,7 @@ __all__ = ["ModuleData"]
 class ModuleDataConfig:
     data_type_list: tuple[str, ...]
     y_labels: list[str] | None
-    use_data: Literal["fit", "predict", "both"]
+    use_data: Base.lit.DataBlockTimeFrames
     factor_names: list[str] | None
     factor_start_dt: int | None
     factor_end_dt: int | None
@@ -111,7 +111,7 @@ class ModuleData(Base.BoundLogger):
     @classmethod
     def initialize(cls, data_type_list: list[str],
         y_labels: list[str] | None = None,
-        use_data: Literal["fit", "predict", "both"] = "fit",
+        use_data: Base.lit.DataBlockTimeFrames = "fit",
         *,
         factor_names: list[str] | None = None,
         factor_start_dt: int | None = None,
@@ -231,7 +231,7 @@ class ModuleData(Base.BoundLogger):
         """
         Compute the (start, end) date range to load data for.
 
-        - ``'predict'`` mode: loads the last 366 calendar days up to today.
+        - ``'predict'`` mode: loads the last 366 calendar days up to updated.
         - ``'fit'`` mode: loads from 20070101 up to the last available ``'y'`` dump date.
         """
         start = (

@@ -27,11 +27,11 @@ def reconstruct_preprocessed_data() -> None:
             if MACHINE.platform_coding and data_type != 'predict':
                 Logger.alert1('This is a coding machine, skip the fit data reconstruct.')
             elif data_type == 'fit':
-                PrePros.get_processor(flag_key.result, type = 'fit').update(reconstruct = True)
+                PrePros.get_processor(flag_key.result, frame = 'fit').build(reconstruct = True)
             elif data_type == 'predict':
-                PrePros.get_processor(flag_key.result, type = 'predict').update(reconstruct = True)
+                PrePros.get_processor(flag_key.result, frame = 'predict').build(reconstruct = True)
             elif data_type == 'both':
-                PrePros.get_processor(flag_key.result, type = 'fit').update(reconstruct = True)
-                PrePros.get_processor(flag_key.result, type = 'predict').update(reconstruct = True , confirm = False)
+                PrePros.get_processor(flag_key.result, frame = 'fit').build(reconstruct = True)
+                PrePros.get_processor(flag_key.result, frame = 'predict').build(reconstruct = True , confirm = False)
             else:
                 raise ValueError(f'Invalid data type: {data_type}')

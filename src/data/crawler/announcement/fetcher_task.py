@@ -37,7 +37,7 @@ class FetcherTask(Base.BoundLogger):
 
     @property
     def url(self) -> str:
-        return self.exchange.exchange_url()
+        return self.exchange.exchange_url
 
     @property
     def title(self) -> str:
@@ -147,7 +147,7 @@ class FetcherTask(Base.BoundLogger):
         tasks : list[FetcherTask] = []
         ranges = range_dates(start, end, step)
         for i , (s, e) in enumerate(ranges):
-            for exchange in ExchangeType.values():
+            for exchange in ExchangeType:
                 task = FetcherTask(exchange, s, e , redownload)
                 if not task.should_be_skipped or (i >= (len(ranges) - force_update)):
                     tasks.append(task)

@@ -6,16 +6,23 @@ from __future__ import annotations
 import rqdatac , re
 
 from rqdatac.share.errors import QuotaExceeded
-from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Base
 from src.proj.util.catcher import IOCatcher
 
-RC_PATH = PATH.miscel.joinpath('Rcquant')
-DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
-instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
+RQ_PATH = PATH.miscel.joinpath('Rcquant')
 
-class RcQuantInitializer:
+class MinDataType(Base.StrEnum):
+    SEC = 'sec'
+    ETF = 'etf'
+    FUT = 'fut'
+    CB = 'cb'
+    
+    @property
+    def instrument(self) -> str:
+        return {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}[self.value]
+
+class RQInitializer:
     @classmethod
     def init(cls) -> bool:
         if not rqdatac.initialized(): 

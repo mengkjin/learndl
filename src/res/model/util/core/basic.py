@@ -1,19 +1,18 @@
 from __future__ import annotations
 import re
-from typing import Any , Literal
+
 from pathlib import Path
+from typing import Any
 
 from src.proj import PATH , Base
+from src.proj.bases import ModuleType
 from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
 __all__ = [
-    'TYPE_MODULE_TYPES' , 'MODULE_TYPES' , 'epoch_key' , 'attempt_key' ,
+    'ModuleType' , 'epoch_key' , 'attempt_key' ,
     'parse_model_input' , 'combine_full_name' , 'split_full_name' , 
     'model_module_type' , 'check_null_module_type' , 'is_null_module_type' , 'search_existing_models']
-
-TYPE_MODULE_TYPES = Literal['nn' , 'boost' , 'factor' ,'']
-MODULE_TYPES : list[TYPE_MODULE_TYPES] = ['nn' , 'boost' , 'factor' , '']
 
 def epoch_key(epoch : int , phase : int = 0) -> str:
     return f'Ph{phase} Ep{epoch}'
@@ -21,7 +20,7 @@ def epoch_key(epoch : int , phase : int = 0) -> str:
 def attempt_key(attempt : int , redo : int = 0) -> str:
     return f'Trial{attempt}-{redo}'
 
-def parse_model_input(model_input : Base.types.strPath | None) -> dict[str,Any]:
+def parse_model_input(model_input : Base.strPath | None) -> dict[str,Any]:
     """return full model name and root path of a given model input"""
     if model_input is None or model_input == '' or model_input == Path(''):
         return {
@@ -90,7 +89,7 @@ def split_st_prefix(text : str) -> tuple[str,str]:
         return match.group(1), match.group(2)
     return '', text
 
-def split_module_type_prefix(text : str) -> tuple[TYPE_MODULE_TYPES,str]:
+def split_module_type_prefix(text : str) -> tuple[ModuleType,str]:
     """
     If the string starts with 'aa.' or 'bb.', returns (prefix, rest).
     Otherwise, returns ('', text).
@@ -107,14 +106,14 @@ def split_module_type_prefix(text : str) -> tuple[TYPE_MODULE_TYPES,str]:
             module_type , remain = search_existing_models(text)
         else:
             remain = text
-    return module_type, remain
+    return ModuleType(module_type), remain
 
-def split_full_name(text : str) -> tuple[str,TYPE_MODULE_TYPES,str,str,str]:
+def split_full_name(text : str) -> tuple[str,ModuleType,str,str,str]:
     """
     split a full model name into (st , module_type , module_name , model_name , index)
     """
     if not text:
-        return '' , '' , '' , '' , ''
+        return '' , ModuleType.INVALID , '' , '' , ''
     try:
         st , remain = split_st_prefix(text)
         module_type , remain = split_module_type_prefix(remain)
@@ -132,7 +131,7 @@ def split_full_name(text : str) -> tuple[str,TYPE_MODULE_TYPES,str,str,str]:
         raise ValueError(f'Failed to split full name [{text}] : {e}')
     return st , module_type , module_name , model_clean_name , model_name_index
 
-def model_module_type(module_name : str) -> TYPE_MODULE_TYPES:
+def model_module_type(module_name : str) -> ModuleType:
     f"""
     detect module type from various forms of module_name if it is a valid nn / boost / factor / db type
     if nn / nn@nn_module_name / nn_module_name , it is a valid nn type
@@ -141,37 +140,36 @@ def model_module_type(module_name : str) -> TYPE_MODULE_TYPES:
     if db / db@db_module_name / db_module_name , it is a valid db type
     if module_name is not a valid type, return ''
     """
-    if module_name in MODULE_TYPES:
-        return module_name
+    if module_name in ModuleType:
+        return ModuleType(module_name)
     elif '@' in module_name:
         match = re.match(r'^(nn|boost|db|factor)\@(.*)$', module_name)
         assert match , f'Invalid module type for [{module_name}]'
         module_type , module_name = match.group(1) , match.group(2)
-        assert module_type in MODULE_TYPES , f'Invalid module type [{module_type}]'
-        return module_type
+        return ModuleType(module_type)
     else:
         module_type = AlgoModule.module_type(module_name , raise_error = False)
         if module_type == '':
             module_type = check_null_module_type(module_name)
-        return module_type
+        return ModuleType(module_type)
 
-def check_null_module_type(module_name : str) -> TYPE_MODULE_TYPES:
+def check_null_module_type(module_name : str) -> ModuleType:
     """detect module type from module_name if it is not a valid nn / boost type. If one is both, return factor first"""
     if module_name == 'factor' or module_name.startswith('factor@') or module_name in FactorCalculator.all_factors():
-        return 'factor'
+        return ModuleType.FACTOR
     else:
-        return ''
+        return ModuleType.INVALID
 
 def is_null_module_type(module_type : str) -> bool:
     """check if module_name is a valid null module type"""
     return module_type in ['factor']
 
-def search_existing_models(model_name : str) -> tuple[TYPE_MODULE_TYPES,str]:
+def search_existing_models(model_name : str) -> tuple[ModuleType,str]:
     """search existing models in nn and boost directories to detect module type and model name"""
     for model in PATH.model_nn.glob(f'*{model_name}'):
         if model.is_dir() and not model.name.startswith('.'):
-            return 'nn' , model.name
+            return ModuleType.NN , model.name
     for model in PATH.model_boost.glob(f'*{model_name}'):
         if model.is_dir() and not model.name.startswith('.'):
-            return 'boost' , model.name
+            return ModuleType.BOOST , model.name
     raise ValueError(f'Cannot find existing model for [{model_name}]')

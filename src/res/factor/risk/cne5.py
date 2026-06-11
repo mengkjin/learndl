@@ -9,6 +9,8 @@ from src.proj.util.catcher import WarningCatcher
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
+ModelJobType = Literal['exposure' , 'risk']
+
 def parse_ts_input(
     ts : pd.DataFrame , 
     value_cols = ['value'] , 
@@ -82,8 +84,9 @@ class DateSeriesDict:
         else: 
             return None   
 
-class TuShareCNE5_Calculator(Base.BoundLogger):
+class TuShareCNE5_Calculator(Base.BasicUpdater):
     """calculator for CNE5 risk model"""
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE, Base.UpdateType.ROLLBACK, Base.UpdateType.RECALC)
     START_DATE = 20050101
     def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -463,14 +466,14 @@ class TuShareCNE5_Calculator(Base.BoundLogger):
         return sd
         
     @classmethod
-    def updatable_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
+    def updatable_dates(cls , job : ModelJobType) -> np.ndarray:
         """get updatable dates of a given job of 'exposure' or 'risk'"""
         end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.diffs(cls.START_DATE , end , cls.updated_dates(job))
         return dates
 
     @classmethod
-    def updated_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
+    def updated_dates(cls , job : ModelJobType) -> np.ndarray:
         """get updated dates of a given job of 'exposure' or 'risk'"""
         all_updated : np.ndarray | Any = None
         if job == 'exposure':
@@ -485,13 +488,15 @@ class TuShareCNE5_Calculator(Base.BoundLogger):
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
         return all_updated
         
-    def update_date(self , date : int , job : Literal['exposure' , 'risk']) -> None:
+    def update_date(self , date : int , job : ModelJobType) -> Base.UpdateFlag:
         """update a given date of a given job of 'exposure' or 'risk'"""
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
             DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , indent = 2 , vb_level = 3)
             DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , indent = 2 , vb_level = 3)
             DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , indent = 2 , vb_level = 3)
+            DB.path('models' , 'tushare_cne5_cov' , date).unlink(missing_ok=True)
+            DB.path('models' , 'tushare_cne5_spec' , date).unlink(missing_ok=True)
         elif job == 'risk':
             DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , indent = 2 , vb_level = 3)
             DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , indent = 2 , vb_level = 3)
@@ -499,29 +504,29 @@ class TuShareCNE5_Calculator(Base.BoundLogger):
             raise KeyError(job)
         
         self.logger.success(f'Update tushare_cne5.{job} at {date}' , idt = 1 , vb = 1)
+        return Base.UpdateFlag.SUCCESS
 
     @classmethod
-    def update(cls):
-        """update all updatable dates"""
-        task = cls()
-        task.logger.note('Update since last update!')
-        for date in task.updatable_dates('exposure'): 
-            task.update_date(date , 'exposure')
-        for date in task.updatable_dates('risk'): 
-            task.update_date(date , 'risk')
-        return task
-    
+    def parse_update_input(cls , update_type : Base.UpdateType , rollback_date : int | None = None , **kwargs) -> dict[str , Any]:
+        if update_type == Base.UpdateType.UPDATE:    
+            dates = cls.updatable_dates('exposure')
+        elif update_type == Base.UpdateType.ROLLBACK:
+            assert rollback_date is not None , 'rollback_date is required for rollback'
+            start = CALENDAR.td(rollback_date , 1)
+            end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
+            dates = CALENDAR.range(start , end , 'td')
+        else:
+            raise ValueError(f'Invalid update type: {update_type}')
+
+        return {'exposure_dates' : dates}
+
     @classmethod
-    def rollback(cls , rollback_date : int):
-        """update all updatable dates from a given rollback date"""
-        CALENDAR.check_rollback_date(rollback_date)
-        task = cls()
-        task.logger.note(f'Rollback from {rollback_date}!')
-        start = CALENDAR.td(rollback_date , 1)
-        end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
-        dates = CALENDAR.range(start , end , 'td')
-        for date in dates:
-            task.update_date(date , 'exposure')
-        for date in task.updatable_dates('risk'): 
-            task.update_date(date , 'risk')
-        return task
+    def proceed_update(cls , exposure_dates : list[int] | np.ndarray , **kwargs) -> Base.UpdateFlag:
+        """proceed the update"""
+        updater = cls()
+        flags = Base.UpdateFlagList()
+        for date in exposure_dates:
+            flags += updater.update_date(date , 'exposure')
+        for date in updater.updatable_dates('risk'): 
+            flags += updater.update_date(date , 'risk')
+        return flags.summarize()

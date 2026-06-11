@@ -13,8 +13,7 @@ from ftplib import FTP
 from typing import Any
 
 from src.proj import MACHINE , Base
-
-class SellsideFTPDownloader(Base.BoundLogger):
+class SellsideFTPDownloader(Base.BasicUpdater):
     """
     FTP client for downloading sell-side data delivered via file transfer.
 
@@ -22,6 +21,9 @@ class SellsideFTPDownloader(Base.BoundLogger):
     Provides ``dir()``, ``download_file()``, and ``open_file()`` for listing
     and downloading remote CSV files.
     """
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , )
+    START_DATE = 20991231
+
     def __init__(self, source='msjg' , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
         super().__init__(vb_level=vb_level, indent=indent, **kwargs)
         assert source in MACHINE.secret.get('accounts' , 'sellside') , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
@@ -31,7 +33,10 @@ class SellsideFTPDownloader(Base.BoundLogger):
         if type.endswith('.disabled'):
             self.logger.alert1(f'{source} is disabled')
         self.ftp = self.ftp_login(**self.ftp_param)
-        
+
+    @classmethod
+    def proceed_update(cls , *args , **kwargs) -> Base.UpdateFlag:
+        return Base.UpdateFlag.SUCCESS
 
     def ftp_login(self , host, user, password , **kwargs):
         ftp = FTP(host,  user, password)
@@ -54,11 +59,6 @@ class SellsideFTPDownloader(Base.BoundLogger):
             file.seek(0)
             df = pd.read_csv(file , sep=sep)
         return df
-
-    @classmethod
-    def update(cls):
-        return
-        cls.logger.note(f'Download since last update!')
 
     @classmethod
     def available_sources(cls) -> list[str]:

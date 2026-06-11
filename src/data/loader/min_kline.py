@@ -15,6 +15,8 @@ from src.data.util import INFO
 
 from .access import DateDataAccess
 
+MinKCorrVal = Literal['ret' , 'volume' , 'mkt' , 'vwap']
+
 class MinKLineAccess(DateDataAccess):
     """
     Singleton data access object for intraday minute-bar data.
@@ -84,8 +86,8 @@ class MinKLineAccess(DateDataAccess):
         return df
 
     def get_inday_corr(self , date : int ,
-                       val1 : Literal['ret' , 'volume' , 'mkt' , 'vwap'] | str ,
-                       val2 : Literal['ret' , 'volume' , 'mkt' , 'vwap'] | str ,
+                       val1 : MinKCorrVal | str ,
+                       val2 : MinKCorrVal | str ,
                        lag1 : int = 0 , lag2 : int = 0 ,
                        rename : str = 'value' , beta = False):
         """

@@ -8,27 +8,25 @@ import torch
 import numpy as np
 import pandas as pd
 import polars as pl
-import xarray as xr  
 
 from copy import deepcopy
 
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any , ClassVar , Literal , Iterable
+from typing import Any , ClassVar , Literal , Iterable , get_args
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB
-from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice
-
-from .nd import NdData
-from ..stock_info import INFO
+from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice , IndexMergeMethod
 
 __all__ = ['DataBlock' , 'DataBlockNorm']
 
-INDAY_MARK_COLUMNS = ('inday' , 'minute')
-FREQUENT_DBS  = ('trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp')
-FREQUENT_MIN_DATES = 500
-PREFERRED_DUMP_SUFFIXES = ('.mmap' , '.pt' , '.feather')
+INDAY_MARK_COLUMNS : tuple[str,...] = ('inday' , 'minute')
+FREQUENT_DBS : tuple[str,...] = ('trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp')
+FREQUENT_MIN_DATES : int = 500
+
+DumpSuffix = Literal['.mmap' , '.pt' , '.feather']
+PREFERRED_DUMP_SUFFIX : DumpSuffix = '.mmap'
 
 
 def data_type_abbr(key : str):
@@ -58,7 +56,7 @@ def data_type_alias(key : str) -> list[str]:
     assert alias[-1] == key , f'{alias[-1]} != {key}'
     return alias
 
-def save_dict(data : dict , file_path : Base.types.strPath):
+def save_dict(data : dict , file_path : Base.strPath):
     """
     Save a dictionary to disk.
 
@@ -75,7 +73,7 @@ def save_dict(data : dict , file_path : Base.types.strPath):
     else:
         raise Exception(file_path)
 
-def load_dict(file_path : Base.types.strPath , keys = None) -> dict[str,Any]:
+def load_dict(file_path : Base.strPath , keys = None) -> dict[str,Any]:
     """
     Load a dictionary from disk.
 
@@ -97,16 +95,11 @@ def load_dict(file_path : Base.types.strPath , keys = None) -> dict[str,Any]:
 
 def as_array(values : np.ndarray | torch.Tensor | list | tuple | str | int | float | Any) -> np.ndarray:
     """Convert various array-like inputs to a 1-D or N-D numpy array."""
-    if isinstance(values , np.ndarray):
-        return values
-    elif isinstance(values , torch.Tensor):
-        return values.cpu().numpy()
-    elif isinstance(values , (list , tuple)):
-        return np.asarray(values)
-    elif isinstance(values , (int , float , str)):
-        return np.asarray([values])
+    if isinstance(values , torch.Tensor):
+        array = values.cpu().numpy()
     else:
-        raise TypeError(f'Unsupported type: {type(values)}')
+        array = np.asarray(values)
+    return np.atleast_1d(array)
 
 @dataclass
 class DataBlock:
@@ -323,10 +316,10 @@ class DataBlock:
     
     @classmethod
     def merge(cls , block_list : Iterable[DataBlock] , * , inplace = False , 
-              secid_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'union' , 
-              date_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'union' , 
-              inday_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'check' , 
-              feature_method : Literal['intersect' , 'union' , 'stack' , 'check'] = 'stack'):
+              secid_method : IndexMergeMethod = 'union' , 
+              date_method : IndexMergeMethod = 'union' , 
+              inday_method : IndexMergeMethod = 'check' , 
+              feature_method : IndexMergeMethod = 'stack'):
         """merge multiple blocks into one block , if inplace is True, merge into the first block"""
         blocks = [*block_list]
         if inplace:
@@ -618,6 +611,8 @@ class DataBlock:
         if df is None or df.empty: 
             return cls()
         try:
+            import xarray as xr
+            from src.data.util.classes.nd import NdData
             df = df.reset_index().drop(columns = ['index'] , errors = 'ignore').set_index(['secid' , 'date'])
             inday_marks = [inday_mark for inday_mark in INDAY_MARK_COLUMNS if inday_mark in df.columns]
             assert len(inday_marks) <= 1 , f'{df.columns} must contain less than one of {INDAY_MARK_COLUMNS}'
@@ -686,25 +681,25 @@ class DataBlock:
         return data_type_alias(key)
 
     @classmethod
-    def last_preprocess_date(cls , key , type : Literal['fit' , 'predict']):
+    def last_preprocess_date(cls , key , frame : Base.lit.DataBlockTimeFrame):
         """
         Return the calendar date (yyyyMMdd int) when the preprocess dump was last written. 
         Use min instead of max to make sure the earliest one, on which skip update is limited.
         """
-        path = cls.path_preprocess(key , type)
+        path = cls.path_preprocess(key , frame)
         if path.suffix == '.mmap':
             dates = [PATH.file_modified_date(sub_path) for sub_path in path.rglob('*')] if path.exists() else []
             return min(dates) if dates else None
         else:
-            return PATH.file_modified_date(cls.path_preprocess(key , type))
+            return PATH.file_modified_date(cls.path_preprocess(key , frame))
     
     @classmethod
-    def last_preprocess_time(cls , key , type : Literal['fit' , 'predict']):
+    def last_preprocess_time(cls , key , frame : Base.lit.DataBlockTimeFrame):
         """
         Return the wall-clock timestamp (datetime) when the preprocess dump was last written.
         Use min instead of max to make sure the earliest one, on which skip update is limited.
         """
-        path = cls.path_preprocess(key , type)
+        path = cls.path_preprocess(key , frame)
         if path.suffix == '.mmap':
             times = [PATH.file_modified_time(sub_path) for sub_path in path.rglob('*')] if path.exists() else []
             return min(times) if times else None
@@ -712,10 +707,10 @@ class DataBlock:
             return PATH.file_modified_time(path)
 
     @classmethod
-    def min_data_date(cls , key : str , type : Literal['fit' , 'predict']) -> int | None:
+    def min_data_date(cls , key : str , frame : Base.lit.DataBlockTimeFrame) -> int | None:
         """Return the minimum date stored in the preprocess dump for ``key`` / ``type``."""
         try:
-            path = cls.path_preprocess(key , type)
+            path = cls.path_preprocess(key , frame)
             if path.suffix == '.mmap':
                 return min(Load.mmap(path , values=False , index=True)['index']['date'])
             elif path.suffix == '.pt':
@@ -725,14 +720,14 @@ class DataBlock:
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
-            Logger.error(f'min_data_date({key , type}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'min_data_date({key , frame}) error: ModuleNotFoundError: {e}')
             return None
 
     @classmethod
-    def max_data_date(cls , key : str , type : Literal['fit' , 'predict']) -> int | None:
+    def max_data_date(cls , key : str , frame : Base.lit.DataBlockTimeFrame) -> int | None:
         """Return the maximum date stored in the preprocess dump for ``key`` / ``type``."""
         try:
-            path = cls.path_preprocess(key , type)
+            path = cls.path_preprocess(key , frame)
             if not path.exists():
                 return None
             if path.suffix == '.mmap':
@@ -744,7 +739,7 @@ class DataBlock:
             else:
                 raise ValueError(f'Unsupported suffix: {path.suffix}')
         except ModuleNotFoundError as e:
-            Logger.error(f'max_data_date({key , type}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'max_data_date({key , frame}) error: ModuleNotFoundError: {e}')
             return None
 
     def ffill(self , if_fill : bool = True):
@@ -763,10 +758,12 @@ class DataBlock:
         return self
         
     @staticmethod
-    def guess_fillna(name : str , fillna : Literal['guess'] | bool | None = 'guess' ,
-                     excl : tuple[str,...] = ('y','day','15m','min','30m','60m','week')) -> bool:
+    def guess_fillna(
+        name : str , fillna : Literal['guess'] | bool | None = 'guess' ,
+        excl : tuple[str,...] = ('y','day','15m','min','30m','60m','week'
+    )) -> bool:
         """
-        Decide whether a given block type should be forward-filled.
+        Decide whether a given block should be forward-filled.
 
         When ``fillna='guess'``, returns True for any block whose key does
         *not* start with the excluded prefixes (i.e. factor blocks are
@@ -876,6 +873,7 @@ class DataBlock:
             return self
         mask_pos = torch.full_like(self.values , fill_value=False , dtype=torch.bool)
         if mask_list_dt := mask.get('list_dt'):
+            from src.data.util.stock_info import INFO
             desc = INFO.get_desc(set_index=False)
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
             if len(np.setdiff1d(self.secid , desc['secid'])) > 0:
@@ -927,20 +925,21 @@ class DataBlock:
         return self
 
     @classmethod
-    def path_preprocess(cls , key : str , type : Literal['fit' , 'predict'] , * ,
-                        dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True) -> Path:
+    def path_preprocess(
+        cls , key : str , frame : Base.lit.DataBlockTimeFrame , * ,
+        dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True) -> Path:
         """
         Return the filesystem path for the preprocessed dump of ``key`` / ``type``.
 
-        Falls back to the first existing suffix in ``PREFERRED_DUMP_SUFFIXES``
+        Falls back to the first existing suffix in ``DumpSuffix``
         when ``find_if_not_exists=True`` and the canonical path does not exist.
         """
         if key.lower() in ['y' , 'labels']: 
-            path = PATH.block.joinpath(type , f'Y{dump_suffix}')
+            path = PATH.block.joinpath(frame , f'Y{dump_suffix}')
         else:
             alias_list = data_type_alias(key)
             for new_key in alias_list:
-                path = PATH.block.joinpath(type , f'X_{new_key}{dump_suffix}')
+                path = PATH.block.joinpath(frame , f'X_{new_key}{dump_suffix}')
                 if path.exists(): 
                     break
         if find_if_not_exists:
@@ -948,12 +947,13 @@ class DataBlock:
         return path
         
     @staticmethod
-    def path_norm(key : str , type : Literal['fit'] = 'fit'):
-        """Return the path to the normalisation stats for ``key`` / ``type``."""
-        return DataBlockNorm.norm_path(key , type)
+    def path_norm(key : str , frame : Base.lit.DataBlockTimeFrame = 'fit'):
+        """Return the path to the normalisation stats for ``key`` / ``frame``."""
+        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
+        return DataBlockNorm.norm_path(key , frame)
 
     @classmethod
-    def path_raw(cls , src : str , key : str , * , dump_suffix : Literal['.mmap' , '.pt' , '.feather'] = '.mmap' , find_if_not_exists = True):
+    def path_raw(cls , src : str , key : str , * , dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True):
         """Return the path to the raw data for ``src`` / ``key``."""
         raw_path = PATH.block.joinpath('raw' , f'{src}.{key}{dump_suffix}')
         if find_if_not_exists:
@@ -965,17 +965,17 @@ class DataBlock:
         """Find the existing dump path for the raw data"""
         if raw_path.exists():
             return raw_path
-        for suffix in PREFERRED_DUMP_SUFFIXES:
+        for suffix in get_args(DumpSuffix):
             new_path = raw_path.with_suffix(suffix)
             if new_path.exists():
                 return new_path
         return raw_path
 
     @classmethod
-    def load_preprocess(cls , key : str , type : Literal['fit' , 'predict'] , **kwargs) -> DataBlock:
-        """Load a preprocessed block; for ``type='predict'`` extends the date range to today."""
-        block = cls.load_dump(category = 'preprocess' , type = type , preprocess_key = key)
-        if type == 'predict' and key == 'y' and not block.empty:
+    def load_preprocess(cls , key : str , frame : Base.lit.DataBlockTimeFrame , **kwargs) -> DataBlock:
+        """Load a preprocessed block; for ``frame='predict'`` extends the date range to update_to."""
+        block = cls.load_dump(category = 'preprocess' , frame = frame , preprocess_key = key)
+        if frame == 'predict' and key == 'y' and not block.empty:
             block = block.align_date(CALENDAR.range(min(block.date) , CALENDAR.updated() , 'td'))
         return block
 
@@ -1015,8 +1015,11 @@ class DataBlock:
         return blocks
 
     @classmethod
-    def blocks_ffill(cls , blocks : dict[str,DataBlock] , * ,
-                      fillna : Literal['guess'] | bool | None = 'guess' , exclude : Iterable[str] | None = None) -> dict[str,DataBlock]:
+    def blocks_ffill(
+        cls , blocks : dict[str,DataBlock] , * ,
+        fillna : Literal['guess'] | bool | None = 'guess' , 
+        exclude : Iterable[str] | None = None
+    ) -> dict[str,DataBlock]:
         """Apply forward-fill to each block in the dict, optionally excluding specific keys."""
         exclude = exclude or []
         fillnas = {key:cls.guess_fillna(key , fillna) for key in blocks}
@@ -1027,11 +1030,12 @@ class DataBlock:
         return blocks
 
     @classmethod
-    def load_preprocess_norms(cls , keys : list[str] | str , type : Literal['fit'] = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
+    def load_preprocess_norms(cls , keys : list[str] | str , frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
         """Load the normalisation stats for the data block"""
+        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         if isinstance(keys , str):
             keys = [keys]
-        return DataBlockNorm.load_keys(keys, type , dtype = dtype)
+        return DataBlockNorm.load_keys(keys, frame , dtype = dtype)
 
     @classmethod
     def load_from_db(cls , db_src : str , db_key : str , start = None , end = None , * , 
@@ -1114,12 +1118,12 @@ class DataBlock:
         """
         flags = kwargs
         if flags.get('category') == 'preprocess':
-            path = cls.path_preprocess(flags['preprocess_key'] , flags['type'])
+            path = cls.path_preprocess(flags['preprocess_key'] , flags.get('frame' , flags.get('type' , 'fit')))
         else:
             path = cls.path_raw(flags['db_src'] , flags['db_key'])
         
         if not path.exists():
-            for suffix in PREFERRED_DUMP_SUFFIXES:
+            for suffix in get_args(DumpSuffix):
                 path = path.with_suffix(suffix)
                 if path.exists():
                     break
@@ -1151,7 +1155,7 @@ class DataBlock:
             assert f'{flags["db_src"]}.{flags["db_key"]}' in FREQUENT_DBS , f'{flags["db_src"]}.{flags["db_key"]} is not a frequent db!'
             path = self.path_raw(flags['db_src'] , flags['db_key'])
         elif flags.get('category') == 'preprocess':
-            path = self.path_preprocess(flags['preprocess_key'] , flags['type'])
+            path = self.path_preprocess(flags['preprocess_key'] , flags.get('frame' , flags.get('type' , 'fit')))
         else:
             raise ValueError(f'Unsupported category: {flags.get("category")} , please set correct category before saving!')
         path.parent.mkdir(exist_ok=True)
@@ -1177,7 +1181,7 @@ class DataBlock:
     
         for path in category_path.iterdir():
             with Logger.Timer(f'{cls.__name__}.{category}.{path.name}.Change_dump_method'):
-                new_path = path.with_suffix(PREFERRED_DUMP_SUFFIXES[0])
+                new_path = path.with_suffix(PREFERRED_DUMP_SUFFIX)
                 db_src , db_key = path.name.split('.')[:2]
                 block = cls.load_from_db(db_src , db_key , 20070101 , 20241231)
                 block.save_dump()
@@ -1186,12 +1190,12 @@ class DataBlock:
 @dataclass(slots=True)
 class DataBlockNorm:
     """
-    Historical normalisation statistics for a single DataBlock data type.
+    Historical normalisation statistics for a single DataBlock data frame.
 
     Stores ``avg`` (mean) and ``std`` (standard deviation) tensors of shape
     ``(N_inday * maxday, N_feature)`` computed by :meth:`DataBlock.hist_norm`.
     During model training the block values are divided by the endpoint value
-    (for ``'day'``-type data) and then standardised using these statistics.
+    (for ``'day'``-frame data) and then standardised using these statistics.
 
     Class Attributes
     ----------------
@@ -1281,13 +1285,14 @@ class DataBlockNorm:
         save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
 
     @classmethod
-    def load_keys(cls , keys : str | list[str] , type : Literal['fit'] , dtype = None) -> dict[str,DataBlockNorm]:
+    def load_keys(cls , keys : str | list[str] , frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
         """Load normalisation stats for multiple keys from disk; skips missing keys silently."""
+        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         if not isinstance(keys , list): 
             keys = [keys]
         norms = {}
         for key in keys:
-            path = cls.norm_path(key , type)
+            path = cls.norm_path(key , frame)
             if not path.exists(): 
                 continue
             data = load_dict(path)
@@ -1295,13 +1300,14 @@ class DataBlockNorm:
         return norms
     
     @classmethod
-    def norm_path(cls , key : str , type : Literal['fit'] = 'fit'):
-        """Return the path to the normalisation stats for ``key`` / ``type``."""
+    def norm_path(cls , key : str , frame : Base.lit.DataBlockTimeFrame = 'fit'):
+        """Return the path to the normalisation stats for ``key`` / ``frame``."""
+        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         if key.lower() == 'y':
-            return PATH.norm.joinpath(type , 'Y.pt')
+            return PATH.norm.joinpath(frame , 'Y.pt')
         alias_list = data_type_alias(key)
         for new_key in alias_list:
-            path = PATH.norm.joinpath(type , f'X_{new_key}.pt')
+            path = PATH.norm.joinpath(frame , f'X_{new_key}.pt')
             if path.exists():
                 break
         return path

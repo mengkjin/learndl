@@ -8,11 +8,11 @@ To register a new updater, create a file anywhere under ``update/custom/`` that
 defines a subclass — ``import_updaters()`` will discover and import it automatically.
 """
 from __future__ import annotations
-from typing import Any , Type , Literal , Iterator
+from typing import Any , Type , Iterator
 from importlib import import_module
 from pathlib import Path
 
-from src.proj import PATH , CALENDAR , Base
+from src.proj import PATH , Base
 
 class BasicCustomUpdaterMeta(type):
     """
@@ -28,28 +28,24 @@ class BasicCustomUpdaterMeta(type):
         if name != 'BasicCustomUpdater':
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
-            assert 'update_all' in new_cls.__dict__  , \
-                f'{name} must implement update_all method'
+            assert 'proceed_update' in new_cls.__dict__  , \
+                f'{name} must implement proceed_update method'
             cls.registry[name] = new_cls
         return new_cls
 
-class BasicCustomUpdater(Base.BoundLogger , metaclass=BasicCustomUpdaterMeta):
+class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
     """
     base class of basic updater
-    must implement update_all method
-    def update(self):
-        pass
-    def rollback(self , rollback_date : int):
-        pass
+    must implement proceed_update method
     """
     _imported : bool = False
-    _rollback_date : int = 99991231
+    START_DATE : int = 20170101
 
     @classmethod
-    def iter_updaters(cls) -> Iterator[BasicCustomUpdater]:
+    def iter_updaters(cls) -> Iterator[Type[BasicCustomUpdater]]:
         cls.import_updaters()
         for name , updater in cls.registry.items():
-            yield updater()
+            yield updater
 
     @classmethod
     def import_updaters(cls):
@@ -68,33 +64,25 @@ class BasicCustomUpdater(Base.BoundLogger , metaclass=BasicCustomUpdaterMeta):
             import_module(module_name)
         cls._imported = True
 
-    def update(self):
-        """Log and call ``update_all('update')``."""
-        self.logger.note('Update since last update!')
-        self.update_all('update')
-
-    def rollback(self , rollback_date : int):
-        """Set the rollback date and call ``update_all('rollback')``."""
-        self.set_rollback_date(rollback_date)
-        self.logger.note(f'Rollback from {rollback_date}!')
-        self.update_all('rollback')
-
-    def recalculate_all(self):
-        """Log and call ``update_all('recalc')`` to force full recalculation."""
-        self.logger.note('Recalculate all!')
-        self.update_all('recalc')
+    @classmethod
+    def parse_update_input(cls , update_type : Base.UpdateType , rollback_date : int | None = None , 
+        start : int | None = None , end : int | None = None , **kwargs) -> dict[str , Any]:
+        if update_type == Base.UpdateType.UPDATE:
+            start , end , overwrite = cls.START_DATE , None , False
+        elif update_type == Base.UpdateType.ROLLBACK:
+            assert rollback_date is not None , 'rollback_date is required for rollback'
+            start , end , overwrite = rollback_date , None , True
+        elif update_type == Base.UpdateType.RECALC:
+            cls.logger.warning(f'Recalculate all {cls.__name__} is supported , but beware of the performance for {cls.__class__.__name__}!')
+            assert start is not None and end is not None , 'start and end are required for recalculate'
+            start , end , overwrite = max(start , cls.START_DATE) , end , True
+        return {
+            'start' : start , 
+            'end' : end , 
+            'overwrite' : overwrite , 
+        }
 
     @classmethod
-    def set_rollback_date(cls , rollback_date : int):
-        """Validate and store the rollback date on the class."""
-        CALENDAR.check_rollback_date(rollback_date)
-        cls._rollback_date = rollback_date
-
-    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
-        """
-        Abstract method to be implemented by each concrete subclass.
-
-        Called by ``update()``, ``rollback()``, and ``recalculate_all()``
-        with the appropriate ``update_type`` string.
-        """
-        raise NotImplementedError(f'{self.__class__.__name__} must implement update_all method')
+    def proceed_update(cls , start : int = START_DATE , end : int | None = None , overwrite : bool = False , **kwargs) -> Base.UpdateFlag:
+        """proceed the update , input parameters are secured to be start , end , overwrite"""
+        raise NotImplementedError(f'proceed_update is not implemented for {cls.__name__}')

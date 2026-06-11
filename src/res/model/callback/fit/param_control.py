@@ -1,6 +1,7 @@
 from __future__ import annotations
 from copy import deepcopy
 
+from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack , Optimizer
 
 class LearnRateReset(BaseCallBack):
@@ -40,4 +41,4 @@ class LearnRateReset(BaseCallBack):
         info = f'Reset learn rate and scheduler at {self.status.epoch_key} , effective at next epoch'
         if self.speedup2x: 
             info += ', and will speedup2x'
-        self.status.add_epoch_event('logging' , 'reset_learn_rate' , message = info)
+        self.status.add_epoch_event(FittingEventType.LOGGING , 'reset_learn_rate' , message = info)

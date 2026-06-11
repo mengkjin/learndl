@@ -19,7 +19,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from typing import Any , Literal , Callable
+from typing import Any , Callable
 from src.proj import CALENDAR , DB , Base
 
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -30,33 +30,25 @@ class DailyRiskUpdater(BasicCustomUpdater):
     DB_SRC = 'exposure'
     DB_KEY = 'daily_risk'
 
-    def update_all(self , update_type : Literal['recalc' , 'update' , 'rollback']):
-        """Update daily risk features for all missing dates up to today."""
-        if update_type == 'recalc':
-            self.logger.warning(f'Recalculate all custom index is supported , but beware of the performance for {self.__class__.__name__}!')
-            stored_dates = np.array([])
-        elif update_type == 'update':
-            stored_dates = DB.dates(self.DB_SRC , self.DB_KEY)
-        elif update_type == 'rollback':
-            rollback_date = CALENDAR.td(self._rollback_date)
-            stored_dates = CALENDAR.slice(DB.dates(self.DB_SRC , self.DB_KEY) , 0 , rollback_date - 1)
-        else:
-            raise ValueError(f'Invalid update type: {update_type}')
-            
-        end = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
-        update_dates = CALENDAR.diffs(self.START_DATE , end , stored_dates)
-        if len(update_dates) == 0:
-            self.logger.skipping(f'{self.DB_SRC}/{self.DB_KEY} is up to date' , idt = 1 , vb = 1)
-            return
+    @classmethod
+    def proceed_update(cls , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs) -> Base.UpdateFlag:
+        """Update daily risk features for all missing dates up to update_to."""
+        start = max(start or cls.START_DATE , cls.START_DATE)
+        end = end or min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
+        stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , cls.DB_KEY)
+        target_dates = CALENDAR.diffs(start , end , stored_dates)
+        
+        if len(target_dates) == 0:
+            return Base.UpdateFlag.SKIPPED
 
-        for date in update_dates:
-            self.update_one(date)
+        for date in target_dates:
+            cls.update_one(date)
+        return Base.UpdateFlag.SUCCESS
 
-        self.logger.success(f'Update {self.DB_SRC}/{self.DB_KEY} at {Base.Dates(update_dates)}' , idt = 1 , vb = 1)
-
-    def update_one(self , date : int):
+    @classmethod
+    def update_one(cls , date : int):
         """Compute and save daily risk features for a single ``date``."""
-        DB.save(calc_daily_risk(date) , self.DB_SRC , self.DB_KEY , date , indent = self.indent + 2 , vb_level = self.vb_level + 2)
+        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
 
 def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     """Replace non-finite values (NaN, Inf) in a Series with ``fill_value``."""

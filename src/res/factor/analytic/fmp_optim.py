@@ -3,12 +3,14 @@ import pandas as pd
 
 from typing import Any , Literal , Type
 
+from src.proj import Base
+from src.proj.bases import TestType
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.fmp import PortfolioGroupBuilder
 from src.res.factor.util.plot.optim_pf import Plotter
 from src.res.factor.util.stats import optim_pf as Stat
 
-from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest , TestType
+from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
 test_type = TestType.OPTIM
 plotter = Plotter(test_type.title())
@@ -91,18 +93,17 @@ class OptimFMPTest(BaseFactorAnalyticTest):
     """
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
-        which : str | list[str] | Literal['all']
-            Which tasks to run. Can be any of the following:
-            'prefix' : Prefix
-            'perf_curve' : Performance Curve
-            'perf_drawdown' : Performance Drawdown
-            'perf_year' : Performance Yearly Stats
-            'perf_month' : Performance Monthly Stats
-            'perf_lag' : Performance Lag Curve
-            'exp_style' : Style Exposure
-            'exp_indus' : Industry Deviation
-            'attrib_source' : Attribution Source
-            'attrib_style' : Attribution Style
+        Which tasks to run. Can be any of the following:
+        'prefix' : Prefix
+        'perf_curve' : Performance Curve
+        'perf_drawdown' : Performance Drawdown
+        'perf_year' : Performance Yearly Stats
+        'perf_month' : Performance Monthly Stats
+        'perf_lag' : Performance Lag Curve
+        'exp_style' : Style Exposure
+        'exp_indus' : Industry Deviation
+        'attrib_source' : Attribution Source
+        'attrib_style' : Attribution Style
     """
     TEST_TYPE = TestType.OPTIM
     TASK_LIST : list[Type[OptimCalc]] = [
@@ -122,7 +123,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
     def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
               add_lag = 1 , optim_config = None):
         alpha_models = factor.alpha_models()
-        benchmarks = Benchmark.get_benchmarks(benchmarks)
+        benchmarks = Benchmark.to_benchmarks(benchmarks)
         self.update_kwargs(add_lag = add_lag , optim_config = optim_config)
         self.portfolio_group = PortfolioGroupBuilder(
             'optim' , alpha_models , benchmarks , resume = self.resume , 
@@ -130,10 +131,10 @@ class OptimFMPTest(BaseFactorAnalyticTest):
             start = self.start , end = self.end , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
-    def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+    def calc(self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , 
              **kwargs):
-        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config)
+        self.optim(factor , benchmarks , add_lag = add_lag ,optim_config = optim_config)
         if self.total_account.empty:
             self.logger.error(f'No accounts created for {self.test_name}!')
         else:

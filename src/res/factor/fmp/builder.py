@@ -5,28 +5,33 @@ import numpy as np
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any
 
 from src.proj import Proj , Base
 
-from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccount , PortCreator
-from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
-                        get_full_name , get_benchmark , get_benchmark_name , parse_full_name , category_title)
+from src.res.factor.util import (
+    Portfolio , Benchmark , AlphaModel , RISK_MODEL , 
+    PortCreateResult , PortfolioAccount , PortCreator
+)
+from src.res.factor.fmp.fmp_basic import (
+    get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
+    get_full_name , parse_full_name , category_title
+)
 
 class PortfolioBuilder(Base.BoundLogger):
     """
     category : str but in BUILDER_TYPES
     alpha : AlphaModel
-    benchmark : Benchmark | Portfolio | Port | str
+    benchmark : Base.alias.SingleBenchmark
     lag : int , lag periods (not days)
     strategy : str
     suffixes : list[str] | str
     build_on : Portfolio | None
 
     optim accepted kwargs:
-        prob_type : PROB_TYPE = 'quadprog'
-        engine_type : ENGINE_TYPE = 'mosek'
-        cvxpy_solver : CVXPY_SOLVER = 'mosek'
+        prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.QUADPROG
+        engine_type : Base.PortOptimEngine | str = Base.PortOptimEngine.MOSEK
+        cvxpy_solver : Base.PortOptimCvxpySolver | str = Base.PortOptimCvxpySolver.MOSEK
         config_path : str | None = None
         opt_relax : bool = True
         opt_turn  : bool = True
@@ -68,16 +73,16 @@ class PortfolioBuilder(Base.BoundLogger):
         indus_control : float = 0.1
     """
     def __init__(self , category : str | Any , 
-                 alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
+                 alpha : AlphaModel , benchmark : Base.alias.SingleBenchmark = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
-                 resume_path : Base.types.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+                 resume_path : Base.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.category     = category
         self.alpha        = alpha
-        self.benchmark    = get_benchmark(benchmark)
+        self.benchmark    = Benchmark.to_benchmark(benchmark)
         self.kwargs       = kwargs
         self.lag          = lag
         self.build_on     = build_on 
@@ -86,7 +91,7 @@ class PortfolioBuilder(Base.BoundLogger):
         
         self.prefix         = get_prefix(category)
         self.factor_name    = get_factor_name(alpha)
-        self.benchmark_name = get_benchmark_name(benchmark)
+        self.benchmark_name = Benchmark.get_benchmark_name(benchmark)
         self.strategy       = get_strategy_name(category , strategy , kwargs)
         self.suffix         = get_suffix(lag , suffixes)
 
@@ -175,7 +180,7 @@ class PortfolioBuilder(Base.BoundLogger):
     
     def accounting(self , start : int = -1 , end : int = 99991231 ,
                    analytic = True , attribution = True , * ,
-                   trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
+                   trade_engine : Base.lit.TradeEngine = 'default' ,
                    daily = False):
         """Accounting portfolio through date, require at least portfolio"""
         self.portfolio.accounting(self.benchmark , start , end , 
@@ -194,7 +199,7 @@ class PortfolioBuilder(Base.BoundLogger):
     
     @staticmethod
     def get_full_name(category : str , alpha : AlphaModel | str , 
-                      benchmark : Portfolio | Benchmark | str | None = None , 
+                      benchmark : Base.alias.SingleBenchmark = None , 
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
@@ -204,9 +209,9 @@ class PortfolioGroupBuilder(Base.BoundLogger):
         can have list of builder_kwargs' components, but cannot overlap with builder_kwargs
     builder_kwargs:
         optim accepted kwargs:
-            prob_type : PROB_TYPE = 'quadprog'
-            engine_type : ENGINE_TYPE = 'mosek'
-            cvxpy_solver : CVXPY_SOLVER = 'mosek'
+            prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.QUADPROG
+            engine_type : Base.PortOptimEngine | str = Base.PortOptimEngine.MOSEK
+            cvxpy_solver : Base.PortOptimCvxpySolver | str = Base.PortOptimCvxpySolver.MOSEK
             config_path : str | None = None
             opt_relax : bool = True
             opt_turn  : bool = True
@@ -236,15 +241,15 @@ class PortfolioGroupBuilder(Base.BoundLogger):
         self , 
         category : str ,
         alpha_models : AlphaModel | list[AlphaModel] , 
-        benchmarks : str | None | list = None , 
+        benchmarks : Base.alias.MultipleBenchmark = None , 
         add_lag : int = 0 , 
         param_groups : dict[Any,dict[str,Any]] = {} ,
         daily : bool = False ,
         analytic : bool = True ,
         attribution : bool = True ,
-        trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
+        trade_engine : Base.lit.TradeEngine = 'default' ,
         resume : bool = False ,
-        resume_path : Base.types.strPath | None = None ,
+        resume_path : Base.strPath | None = None ,
         start : int = -1 ,
         end : int = 99991231 ,
         caller = None ,
@@ -256,7 +261,7 @@ class PortfolioGroupBuilder(Base.BoundLogger):
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
         self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([] , dtype=int))
         self.relevant_dates = self.relevant_dates[(self.relevant_dates >= start) & (self.relevant_dates <= end)]
-        self.benchmarks = Benchmark.get_benchmarks(benchmarks)
+        self.benchmarks = Benchmark.to_benchmarks(benchmarks)
 
         assert add_lag >= 0 , add_lag
         self.lags = [0 , add_lag] if add_lag > 0 else [0]

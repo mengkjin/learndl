@@ -197,7 +197,7 @@ class DataCache:
             return cls._try_save_metadata(metadata[key] , cls._get_meta_file(key))
 
     @classmethod
-    def _try_save_metadata(cls , metadata : dict[str, Any] , path : Base.types.strPath) -> bool:
+    def _try_save_metadata(cls , metadata : dict[str, Any] , path : Base.strPath) -> bool:
         """Remove the metadata for a specific key"""
         try:
             _ = json.dumps(metadata)

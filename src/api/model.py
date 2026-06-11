@@ -167,7 +167,7 @@ class ModelAPI:
           execution_time: short
           memory_usage: medium
         """
-        PreProcessorTask.update(predict=True , confirm = False)
+        PreProcessorTask.update(frame='predict' , confirm = False)
 
     @classmethod
     def prepare_fit_data(cls): 
@@ -184,7 +184,7 @@ class ModelAPI:
           execution_time: short
           memory_usage: medium
         """
-        PreProcessorTask.update(predict=False , confirm = False)
+        PreProcessorTask.update(frame='fit' , confirm = False)
 
     @classmethod
     def reconstruct_train_data(cls , confirm : bool = True): 
@@ -204,7 +204,7 @@ class ModelAPI:
           execution_time: long
           memory_usage: high
         """
-        PreProcessorTask.reconstruct(predict=False , confirm=confirm)
+        PreProcessorTask.reconstruct(frame='fit' , confirm=confirm)
 
     @classmethod
     def train_model(cls , module : str | None = None , short_test : bool | None = None , 

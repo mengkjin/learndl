@@ -2,9 +2,9 @@ from __future__ import annotations
 import torch
 
 from torch import nn , Tensor
-from typing import Any , Literal
+from typing import Any
 
-from src.proj import Logger
+from src.proj import Logger , Base
 from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 from src.res.model.util.core import BatchData
 from .components import MetricComponent , LossComponent , AccuracyComponent
@@ -93,7 +93,7 @@ class LossFunction(MetricFunction):
             self.components[criterion] = LossComponent(calculator , lamb = lamb , multilosses = multilosses , **kwargs)
 
     def losses(self , data : BatchData , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None ,
-               prefix : str | tuple[str,...] | None = ('penalty_' , 'loss_') , dataset : Literal['train','valid'] | Any = 'train') -> dict[str,Tensor]:
+               prefix : str | tuple[str,...] | None = ('penalty_' , 'loss_') , dataset : Base.lit.DatasetAll = 'train') -> dict[str,Tensor]:
         if dataset not in ['train','valid']:
             return {}
         losses = self(data, which_output = which_output , which_label = which_label , require_grad = dataset == 'train')
@@ -129,7 +129,7 @@ class AccuracyFunction(MetricFunction):
             self.components[criterion] = AccuracyComponent(calculator , lamb = lamb , **kwargs)
 
     def accuracies(self , data : BatchData , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None , 
-                   dataset : Literal['train','valid'] | Any = 'train') -> dict[str,float]:
+                   dataset : Base.lit.DatasetAll = 'train') -> dict[str,float]:
         if dataset not in ['train','valid']:
             return {}
         accuracies = self(data, which_output = which_output , which_label = which_label , require_grad = False)

@@ -32,12 +32,12 @@ class ArchivedPredictorModel(Base.BoundLogger):
     def __init__(self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1):
         """Initialize from a PredictorPath object"""
     @overload
-    def __init__(self , model_input : Base.types.strPath | None | Any , 
+    def __init__(self , model_input : Base.strPath | None | Any , 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1):
         """Initialize from a model input, and convert to PredictorPath object"""
-    def __init__(self , model_input : Base.types.strPath | None | Any | PredictorPath, 
+    def __init__(self , model_input : Base.strPath | None | Any | PredictorPath, 
         model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
         submodel : str | None = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs):
@@ -125,7 +125,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         updated = CALENDAR.updated()
         min_date = min_date or 20170101
         max_date = max_date or min_date + 20000 # 2 years
-        if min_date > CALENDAR.today(-100):
+        if min_date > CALENDAR.update_to(-100):
             use_data = 'predict'
         elif max_date < updated:
             use_data = 'fit'

@@ -5,7 +5,6 @@ from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import TradingFactor
 
-
 __all__ = [
     'bsact_neg_1m' , 'bsact_pos_1m' , 'flow_small' , 'flow_medium' , 'flow_large' , 'flow_exlarge' ,
     'flow_elsm' , 'flow_corr_elsm' , 'flow_corr_smlag'

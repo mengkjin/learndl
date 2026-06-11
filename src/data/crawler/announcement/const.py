@@ -1,38 +1,24 @@
 from __future__ import annotations
-from enum import StrEnum
+
 from typing import Any
 from zoneinfo import ZoneInfo
-
-class ExchangeType(StrEnum):
+from src.proj import Base
+class ExchangeType(Base.StrEnum):
     SSE = "sse"
     SZSE = "szse"
     BSE = "bse"
 
     @classmethod
-    def values(cls) -> tuple[ExchangeType,...]:
-        return tuple(cls)
-
-    @classmethod
     def all_urls(cls) -> tuple[str,...]:
-        return (
-            ExchangeType.SSE.exchange_url(),
-            ExchangeType.SZSE.exchange_url(),
-            ExchangeType.BSE.exchange_url(),
-        )
+        return tuple(exchange.exchange_url for exchange in cls)
 
-    @classmethod
-    def str_values(cls) -> tuple[str,...]:
-        return tuple(cls.value for cls in cls)
-
+    @property
     def exchange_url(self) -> str:
-        if self == ExchangeType.SSE:
-            return "https://www.sse.com.cn"
-        elif self == ExchangeType.SZSE:
-            return "https://www.szse.cn"
-        elif self == ExchangeType.BSE:
-            return "https://www.bse.cn"
-        else:
-            raise ValueError(f"Invalid exchange type: {self}")
+        return {
+            ExchangeType.SSE: "https://www.sse.com.cn",
+            ExchangeType.SZSE: "https://www.szse.cn",
+            ExchangeType.BSE: "https://www.bse.cn",
+        }[self]
 
 BJTZ = ZoneInfo("Asia/Shanghai")
 

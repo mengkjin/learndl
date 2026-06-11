@@ -13,18 +13,14 @@ import rqdatac
 import pandas as pd
 import numpy as np
 
-from typing import Literal
+from typing import Any , Literal
 
-from src.proj import PATH , MACHINE , CALENDAR , DB , Base , Save , Load
+from src.proj import MACHINE , CALENDAR , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
 
-from .initializer import RcQuantInitializer
+from .initializer import RQInitializer , MinDataType , RQ_PATH
 
-RC_PATH = PATH.miscel.joinpath('Rcquant')
-DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
-instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
-
-def src_start_date(data_type : DATA_TYPES):
+def src_start_date(data_type : MinDataType):
     never = 20401231
     if data_type == 'sec':
         return never if MACHINE.belong_to_hfm else 20241101
@@ -34,7 +30,7 @@ def src_start_date(data_type : DATA_TYPES):
         assert data_type in ['etf' , 'fut' , 'cb'] , f'unsupported data type: {data_type}'
         return 20230601
 
-def src_key(data_type : DATA_TYPES , x_min : int = 1):
+def src_key(data_type : MinDataType , x_min : int = 1):
     if data_type == 'sec':
         prefix = ''
     else:
@@ -44,63 +40,63 @@ def src_key(data_type : DATA_TYPES , x_min : int = 1):
     else:
         return f'{prefix}{x_min}min'
 
-def load_list(date : int , data_type : DATA_TYPES):
-    path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
+def load_list(date : int , data_type : MinDataType):
+    path = RQ_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     if path.exists(): 
         return Load.df(path)
     return None
 
-def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
-    path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
+def write_list(df : pd.DataFrame , date : int , data_type : MinDataType):
+    path = RQ_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
     Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} list {date}')
 
-def load_min(date : int , data_type : DATA_TYPES):
-    path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
+def load_min(date : int , data_type : MinDataType):
+    path = RQ_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     if path.exists(): 
         return Load.df(path)
     return None
 
-def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
-    path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
+def write_min(df : pd.DataFrame , date : int , data_type : MinDataType):
+    path = RQ_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
     Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} min {date}')
 
-def rcquant_past_dates(data_type : DATA_TYPES , file_type : Literal['secdf' , 'min']):
-    path = RC_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RC_PATH.joinpath(f'{data_type}df')
+def rcquant_past_dates(data_type : MinDataType , file_type : Literal['secdf' , 'min']):
+    path = RQ_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RQ_PATH.joinpath(f'{data_type}df')
     past_files = [p for p in path.iterdir()]
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def stored_dates(data_type : DATA_TYPES , x_min : int = 1):
+def stored_dates(data_type : MinDataType , x_min : int = 1):
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
     return DB.dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
 
-def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
+def last_date(data_type : MinDataType , offset : int = 0 , x_min : int = 1):
     dates = stored_dates(data_type , x_min)
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def target_dates(data_type : DATA_TYPES , date : int | None = None):
-    start = src_start_date(data_type)
-    dates = CALENDAR.range(start , date , type = 'td' , updated = True)
+def target_dates(data_type : MinDataType , start : int , end : int | None = None):
+    start = max(start , src_start_date(data_type))
+    dates = CALENDAR.update_schedule(start , end , key = 'rcquant_min')
     return Base.Dates(CALENDAR.diffs(dates , stored_dates(data_type , 1)))
 
-def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> Base.Dates:
+def x_mins_target_dates(data_type : MinDataType , start : int , end : int | None = None) -> Base.Dates:
     if data_type != 'sec': 
         return Base.Dates()
     dates : list[np.ndarray] = []
-    end = CALENDAR.update_to() if date is None else date
+    end = CALENDAR.update_to(key = 'rcquant_min') if end is None else end
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , src_key(data_type , 1))
         stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
-        target_dates = CALENDAR.diffs(source_dates , stored_dates)
+        target_dates = CALENDAR.slice(CALENDAR.diffs(source_dates , stored_dates) , start , end)
         dates.append(target_dates[(target_dates >= src_start_date(data_type)) & (target_dates <= end)])
     return Base.Dates(np.unique(np.concatenate(dates)))
 
-def x_mins_to_update(date , data_type : DATA_TYPES):
+def x_mins_to_update(date , data_type : MinDataType):
     if data_type != 'sec': 
         return []
     x_mins : list[int]= []
@@ -110,13 +106,13 @@ def x_mins_to_update(date , data_type : DATA_TYPES):
             x_mins.append(x_min)
     return x_mins
 
-def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
+def rcquant_instrument_list(date : int , data_type : MinDataType):
     secdf = load_list(date , data_type)
     if secdf is not None: 
         return secdf
-    if not RcQuantInitializer.init(): 
+    if not RQInitializer.init(): 
         return pd.DataFrame()
-    secdf = rqdatac.all_instruments(type=instrument_types[data_type], date=str(date))
+    secdf = rqdatac.all_instruments(type=data_type.instrument, date=str(date))
     secdf = secdf.rename(columns = {'order_book_id':'code'})
     if 'status' in secdf.columns:
         secdf['is_active'] = secdf['status'] == 'Active'
@@ -126,28 +122,43 @@ def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     return secdf
 
 def rcquant_trading_dates(start, end):
-    if not RcQuantInitializer.init(): 
+    if not RQInitializer.init(): 
         return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start, end, market='cn')]
 
-class RcquantMinBarDownloader(Base.BoundLogger):
-    def proceed(self , date : int | None = None , first_n : int = -1):
-        data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
-        for data_type in data_types:
+class RcquantMinBarDownloader(Base.BasicUpdater):
+    UPDATE_ALIAS = 'download'
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE, )
+
+    @classmethod
+    def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
+        return super().parse_update_input(*args , key='rcquant_min' , **kwargs)
+
+    @classmethod
+    def proceed_update(
+        cls , start : int , end : int , * , first_n : int = -1 , **kwargs
+    ) -> Base.UpdateFlag:
+        updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
+        return updater.download_since_last_data(start = start , end = end , first_n = first_n)
+
+    def download_since_last_data(self , start : int , end : int , first_n : int = -1) -> Base.UpdateFlag:
+        flags = Base.UpdateFlagList()
+        for data_type in MinDataType:
             try:
-                self.download(date , data_type , first_n)
+                flags += self.download(start , end , data_type , first_n)
             except Exception as e:
                 self.logger.error(f'RcQuant {data_type} minbar failed: {e}')
-                return False
-        
-        return True
+                flags += Base.UpdateFlag.FAILED
+                continue
+        return flags.summarize()
 
-    def download(self , date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
+    def download(self , start : int , end : int , data_type : MinDataType | None = None ,  first_n : int = -1) -> Base.UpdateFlag:
         assert data_type is not None , f'data_type is required'
-        dates = target_dates(data_type , date)
+
+        dates = target_dates(data_type , start , end)
         if dates.empty: 
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
-            return True
+            return Base.UpdateFlag.SKIPPED
         
         if dates.empty: 
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
@@ -158,7 +169,7 @@ class RcquantMinBarDownloader(Base.BoundLogger):
                     self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
             self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
 
-        dates = x_mins_target_dates(data_type , date)
+        dates = x_mins_target_dates(data_type , start , end)
         if dates.empty: 
             ...
         else:
@@ -169,9 +180,9 @@ class RcquantMinBarDownloader(Base.BoundLogger):
                     x_min_df = trade_min_reform(min_df , x_min , 1)
                     DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
-        return True
+        return Base.UpdateFlag.SUCCESS
 
-    def rcquant_bar_min(self ,date : int , data_type : DATA_TYPES , first_n : int = -1):    
+    def rcquant_bar_min(self ,date : int , data_type : MinDataType , first_n : int = -1):    
         def code_map(x : str):
             if data_type != 'sec': 
                 return x
@@ -189,7 +200,7 @@ class RcquantMinBarDownloader(Base.BoundLogger):
             DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
             return True
 
-        if not RcQuantInitializer.init(): 
+        if not RQInitializer.init(): 
             return False
 
         instrument_list = rcquant_instrument_list(date , data_type = data_type)
@@ -212,7 +223,7 @@ class RcquantMinBarDownloader(Base.BoundLogger):
         else:
             return False
 
-    def rcquant_min_to_normal_min(self , df : pd.DataFrame , data_type : DATA_TYPES):
+    def rcquant_min_to_normal_min(self , df : pd.DataFrame , data_type : MinDataType):
         if data_type != 'sec': 
             return df
         df = df.copy()
@@ -224,9 +235,3 @@ class RcquantMinBarDownloader(Base.BoundLogger):
         df['vwap'] = df['vwap'].where(df['vwap'].notna() , df['open'])
         df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
         return df
-
-    @classmethod
-    def update(cls , * , indent: int = 0, vb_level: int = 1):
-        cls.SetClassVB(vb_level, indent)
-        cls.logger.note('Download since last update!')
-        cls(indent=indent + 1, vb_level=vb_level + 1).proceed()

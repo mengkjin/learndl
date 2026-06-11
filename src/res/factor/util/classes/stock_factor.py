@@ -61,7 +61,7 @@ def append_ffmv(df : pd.DataFrame) -> pd.DataFrame:
     df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
-def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_type : Base.lit.ReturnType = 'close') -> pd.DataFrame:
     """
     append future return to factor dataframe
     example:
@@ -131,7 +131,7 @@ def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs) -> pd.DataFrame:
     return df
 
 def fillna(df : pd.DataFrame | Any , 
-           fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'zero' ,
+           fill_method : Base.lit.FactorFillNanMethod = 'zero' ,
            pivot = True , **kwargs) -> pd.DataFrame:
     """
     fill NA values of factors by date / factor_name
@@ -208,7 +208,7 @@ def eval_grp_avg(
     return rtn
 
 
-def normalize_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+def normalize_df(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
                  weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
     """
     normalize the dataframe factor data by fill method , weighted whiten , and winsorize
@@ -426,7 +426,7 @@ class CacheFactorStats:
         return common_elements(dates)
 
     @classmethod
-    def saved_dates(cls , path : Base.types.strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
+    def saved_dates(cls , path : Base.strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
                     exclude_csi2000 : bool = True) -> np.ndarray:
         path = Path(path)
         if not path.exists():
@@ -481,7 +481,7 @@ class StockFactor:
 
     def __init__(self , factor : pd.DataFrame | pd.Series | DataBlock | StockFactor | dict[int,pd.Series] | None = None , * ,
                  normalized : bool | None = None , 
-                 benchmark : Benchmark | str | None = None , 
+                 benchmark : Base.alias.SingleBenchmark = None , 
                  cache_factor_stats : CacheFactorStats | None = None ,
                  pseudo_date : np.ndarray | None = None ,
                  factor_names : np.ndarray | list[str] | str | None = None):
@@ -525,7 +525,7 @@ class StockFactor:
         return Base.empty(self.prior_input)
 
     def update(self , factor : pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]|None = None , 
-               normalized : bool | None = None , benchmark : Benchmark | str | None = None ,
+               normalized : bool | None = None , benchmark : Base.alias.SingleBenchmark = None ,
                cache_factor_stats : CacheFactorStats | None = None , 
                pseudo_date : np.ndarray | None = None):
         """
@@ -565,7 +565,7 @@ class StockFactor:
             self.normalized = normalized
 
         if benchmark is not None:
-            self.benchmark = benchmark.name if isinstance(benchmark , Benchmark) else benchmark
+            self.benchmark = Benchmark.get_benchmark_name(benchmark)
 
         if cache_factor_stats is not None:
             assert isinstance(cache_factor_stats , CacheFactorStats) , f'cache_factor_stats must be a CacheFactorStats , but got {type(cache_factor_stats)} : {cache_factor_stats}'
@@ -597,7 +597,7 @@ class StockFactor:
     def twin(self , 
              factor : pd.DataFrame | pd.Series | DataBlock | StockFactor | dict[int,pd.Series] | None = None , 
              normalized : bool | None = None , 
-             benchmark : Benchmark | str | None = None , 
+             benchmark : Base.alias.SingleBenchmark = None , 
              cache_factor_stats : CacheFactorStats | None = None , 
              pseudo_date : np.ndarray | None = None ,
              ):
@@ -831,19 +831,19 @@ class StockFactor:
         else:
             return self.twin(factor = prior_input.align(secid , date , factor_name))
 
-    def within(self , benchmark : Benchmark | str | None , use_cache = True) -> StockFactor:
+    def within(self , benchmark : Base.alias.SingleBenchmark , use_cache = True) -> StockFactor:
         """
         use benchmark to mask factor , only keep the factors that are in the benchmark
         """
-        if isinstance(benchmark , str): 
-            benchmark = Benchmark(benchmark)
-        if not benchmark: 
+        bench = Benchmark.to_benchmark(benchmark)
+        if not bench: 
             return self
-        if benchmark.name not in self.cache_benchmark_subsets or not use_cache:
-            factor_input = benchmark(self.prior_input) if benchmark else self.prior_input
-            subset = self.twin(factor = factor_input , benchmark = benchmark.name)
-            self.cache_benchmark_subsets[benchmark.name] = subset
-        return self.cache_benchmark_subsets[benchmark.name]
+        assert isinstance(bench , Benchmark) , bench
+        if bench.name not in self.cache_benchmark_subsets or not use_cache:
+            factor_input = bench(self.prior_input) if bench else self.prior_input
+            subset = self.twin(factor = factor_input , benchmark = bench.name)
+            self.cache_benchmark_subsets[bench.name] = subset
+        return self.cache_benchmark_subsets[bench.name]
 
     def alpha_model(self , normalize : bool = False , new_name : str | None = None , direction : int = 1) -> AlphaModel:
         """
@@ -922,7 +922,7 @@ class StockFactor:
         return AlphaModel.from_dataframe(df[~df.index.duplicated(keep='first')][name] , name)
 
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
-                        nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close' ,
+                        nday : int = 10 , lag : int = 2 , ret_type : Base.lit.ReturnType = 'close' ,
                         valid_fut_ret = True , dates : np.ndarray | None = None) -> pd.DataFrame:
         """
         return the factor data with additional columns
@@ -942,8 +942,8 @@ class StockFactor:
             df = append_ffmv(df)
         return df   
 
-    def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                ret_type : Literal['close' , 'vwap'] = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
+    def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+                ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the IC of the factor
         """
@@ -962,8 +962,8 @@ class StockFactor:
         stat = self.cache_factor_stats.ic.get_stat(params)
         return stat if all_dates else stat.query('date in @self.date')
     
-    def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
-                      ret_type : Literal['close' , 'vwap'] = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
+    def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+                      ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the IC of the factor by industry
         """
@@ -993,7 +993,7 @@ class StockFactor:
         return df
 
     def eval_group_perf(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
-                        ret_type : Literal['close' , 'vwap'] = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
+                        ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the group performance of the factor
         """
@@ -1009,7 +1009,7 @@ class StockFactor:
         return stat if all_dates else stat.query('date in @self.date')
     
     def eval_weighted_pnl(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                          ret_type : Literal['close' , 'vwap'] = 'close' , direction : Literal[1,0,-1] = 0 ,
+                          ret_type : Base.lit.ReturnType = 'close' , direction : Literal[1,0,-1] = 0 ,
                           use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the weighted pnl of the factor
@@ -1032,17 +1032,17 @@ class StockFactor:
         stat = self.cache_factor_stats.weighted_pnl.get_stat(params)
         return stat if all_dates else stat.query('date in @self.date')
 
-    def coverage(self , benchmark : Benchmark | str | None = None , use_cache = True , all_dates = False) -> pd.DataFrame:
+    def coverage(self , benchmark : Base.alias.SingleBenchmark = None , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
         evaluate the coverage of the factor by benchmark
         """
-        params = {'bm' : str(benchmark) if isinstance(benchmark,Benchmark) else str(benchmark)}
+        bench = Benchmark.to_benchmark(benchmark)
+        assert isinstance(bench , Benchmark) , bench
+        params = {'bm' : bench.name}
         calc_dates = self.cache_factor_stats.coverage.dates_not_in_stat(params , self.date) if use_cache else self.date
         if len(calc_dates) > 0:
-            if isinstance(benchmark , str) or benchmark is None: 
-                benchmark = Benchmark(benchmark)
-            factor = self.within(benchmark)
-            benchmark_size = pd.Series(benchmark.sec_num(calc_dates) , index = calc_dates)
+            factor = self.within(bench)
+            benchmark_size = pd.Series(bench.sec_num(calc_dates) , index = calc_dates)
             coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
             for factor_name in coverage:
                 coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(0 , 1)
@@ -1078,8 +1078,8 @@ class StockFactor:
         """
         return self.time_series_stats(5, 1)
     
-    def normalize(self , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-                  weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
+    def normalize(self , fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
+                  weighted_whiten = False , order : tuple[str,...] = ('fillna' , 'winsor' , 'whiten') , inplace = False):
         """
         normalize the factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
@@ -1107,13 +1107,14 @@ class StockFactor:
             self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
 
-    def analyze(self , 
-                task_name : Literal['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
-                                    'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
-                                    'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
-                                    'Group_Year','Distrib_Curve'] | str , 
-                nday : int = 5 ,
-                plot = True , display = True , **kwargs):
+    def analyze(
+        self , task_name : Literal[
+            'FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
+            'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
+            'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
+            'Group_Year','Distrib_Curve'] | str , 
+        nday : int = 5 , plot = True , display = True , **kwargs
+    ):
         """
         analyze the factor by task name (only one task is supported)
         access by self.analytic_tasks[task_name]
@@ -1152,14 +1153,14 @@ class StockFactor:
         return self
 
     @staticmethod
-    def fillna(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop') -> pd.DataFrame:
+    def fillna(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod = 'drop') -> pd.DataFrame:
         """
         fill na values of the factor data
         """
         return fillna(df , fill_method = fill_method)
 
     @staticmethod
-    def normalize_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+    def normalize_df(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
                     weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
         """
         normalize the dataframe factor data by fill method , weighted whiten , and winsorize

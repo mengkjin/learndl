@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from src.proj import Logger , Options  # noqa
 from src.interactive.backend import ScriptRunner , ScriptParamInput , TaskItem
 
+CacheType = Literal['option' , 'value' , 'valid']
+
 class NoCachedValue:
     """Sentinel type returned when a cache lookup finds no stored value."""
     ...
@@ -44,15 +46,15 @@ class ParamCache:
         """Return True."""
         return True
 
-    def has(self, key: str , cache_type : Literal['option', 'value', 'valid'] , name : str) -> bool:
+    def has(self, key: str , cache_type : CacheType , name : str) -> bool:
         """Return True if a value is stored for the given ``(script_key, cache_type, name)``."""
         return name in self.cache.get(key, {}).get(cache_type, {})
 
-    def get(self, key: str , cache_type : Literal['option', 'value', 'valid'] , name : str) -> Any:
+    def get(self, key: str , cache_type : CacheType , name : str) -> Any:
         """Retrieve a cached value; raises ``KeyError`` if not present (use :meth:`has` first)."""
         return self.cache.get(key, {}).get(cache_type, {})[name]
 
-    def set(self, value : Any, key: str, cache_type : Literal['option', 'value', 'valid'] , name : str) -> None:
+    def set(self, value : Any, key: str, cache_type : CacheType , name : str) -> None:
         """Store *value* under the given ``(script_key, cache_type, name)`` triple."""
         if key not in self.cache:
             self.cache[key] = {}
@@ -74,7 +76,7 @@ class ParamCache:
             self.cache[key].clear()
         self.init_cache(key)
 
-    def update_cache(self, key: str, cache_type: Literal['option', 'value', 'valid'], dict_values: dict[str, Any]) -> None:
+    def update_cache(self, key: str, cache_type: CacheType, dict_values: dict[str, Any]) -> None:
         """Bulk-set multiple values for the given *script_key* and *cache_type*."""
         self.init_cache(key)
         for name, value in dict_values.items():

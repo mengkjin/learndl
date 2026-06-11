@@ -7,10 +7,10 @@ from __future__ import annotations
 import platform
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Optional , Any , Literal
+from typing import Optional , Any
 
 from src.proj.core import strPath
-from .util import process , compose_with_done_action , format_python_command , to_shell_string , guess_command_title
+from .util import process , compose_with_done_action , format_python_command , to_shell_string , guess_command_title , DoneActionType
 from .preference import DONE_ACTION
 from .macos import open_in_macos
 from .windows import open_for_windows
@@ -65,7 +65,7 @@ class Shell:
         cls,
         cmd: str | Sequence[str],
         *,
-        done_action: Literal['pause' , 'close' , 'keep'] | Any = DONE_ACTION ,
+        done_action: DoneActionType | Any = DONE_ACTION ,
         cwd: Optional[strPath] = None ,
         option: Any | None = None ,
         title: str | None = None ,
@@ -122,7 +122,7 @@ class Shell:
     def open_py(
         cls, py_script: strPath, * ,
         py_path: str | None = None, args: Sequence[str] | None = None, kwargs : dict | None = None,
-        done_action: Literal['pause' , 'close' , 'keep'] | Any = DONE_ACTION ,
+        done_action: DoneActionType | Any = DONE_ACTION ,
         cwd: Optional[strPath] = None ,
         option: Any | None = None ,
         title: str | None = None,

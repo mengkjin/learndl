@@ -13,6 +13,8 @@ from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus
 
+gpStateType = Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params']
+
 class gpRecorder(Base.BoundLogger):
     """process recorder for genetic programming"""
     _instance = None
@@ -22,7 +24,7 @@ class gpRecorder(Base.BoundLogger):
         return cls._instance
 
     def __init__(
-        self , job_dir : Base.types.strPath | None = None , status : gpStatus | None = None , *args ,
+        self , job_dir : Base.strPath | None = None , status : gpStatus | None = None , *args ,
         indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(job_dir , status , *args , **kwargs)
@@ -31,7 +33,7 @@ class gpRecorder(Base.BoundLogger):
     def initiated(self) -> bool:
         return hasattr(self , 'job_dir')
 
-    def initiate(self , job_dir : Base.types.strPath | None = None , status : gpStatus | None = None) -> None:
+    def initiate(self , job_dir : Base.strPath | None = None , status : gpStatus | None = None) -> None:
         if self.initiated:
             return
 
@@ -130,7 +132,7 @@ class gpRecorder(Base.BoundLogger):
             with open(output_path, 'w', encoding='utf-8') as file1:
                 file1.write(f'{syntax}\n start_time {start_time_sku}')
 
-    def state_data_path(self , key : Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params'] , 
+    def state_data_path(self , key : gpStateType , 
                         i_iter : int | None = None , **kwargs) -> Path:
         match key:
             case 'res' | 'neu' | 'elt':
@@ -150,7 +152,7 @@ class gpRecorder(Base.BoundLogger):
             case _:
                 raise Exception(key)
     
-    def load_state(self , key : Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params'] , 
+    def load_state(self , key : gpStateType , 
                    i_iter : int | None = None , device : torch.device | None = None) -> Any:
         path = self.state_data_path(key , i_iter = i_iter)
         match key:
@@ -171,7 +173,7 @@ class gpRecorder(Base.BoundLogger):
             case _:
                 raise Exception(key)
 
-    def save_state(self , key : Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params'] , 
+    def save_state(self , key : gpStateType , 
                    data : Any , i_iter : int | None = None, **kwargs):
         if not self.status.train:
             return
@@ -198,5 +200,5 @@ class gpRecorder(Base.BoundLogger):
     def load_states(self, keys , **kwargs):
         return [self.load_state(key , **kwargs) for key in keys]
     
-    def save_states(self, datas : dict[Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params'] , Any], **kwargs):
+    def save_states(self, datas : dict[gpStateType , Any], **kwargs):
         return [self.save_state(key , data , **kwargs) for key , data in datas.items()]

@@ -13,7 +13,7 @@ import numpy as np
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal, Type
+from typing import Any, Literal, Type, cast
 
 from src.proj import PATH, MACHINE, Const, Proj , Base
 from src.proj.util.functional.device import Device
@@ -102,7 +102,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
 
     def __init__(
-        self, base_path: ModelPath | Base.types.strPath | None, *,
+        self, base_path: ModelPath | Base.strPath | None, *,
         module: str | None = None, schedule_name: str | None = None, override=None, 
         indent: int = 1 , vb_level: Any = 2, **kwargs,
     ):
@@ -641,7 +641,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 class AlgoConfig(Base.BoundLogger , Base.CacheProps):
     def __init__(
         self,
-        base_path: ModelPath | Base.types.strPath | None,
+        base_path: ModelPath | Base.strPath | None,
         start_with_none: bool ,
         *,
         override: dict[str, Any] | None = None,
@@ -809,7 +809,7 @@ class ModelConfigOptions:
 class ModelConfig(BaseModelConfig):
     def __init__(
         self,
-        base_path: ModelPath | Base.types.strPath | None = None, *,
+        base_path: ModelPath | Base.strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None,
         start: int | None = None, end: int | None = None, stage=-1, resume=-1, selection=-1,
         indent: int = 1 , vb_level: Any = 2,
@@ -847,7 +847,7 @@ class ModelConfig(BaseModelConfig):
         return self.algo_config.boost_head_config
 
     @classmethod
-    def initialize(cls, base_path: ModelPath | Base.types.strPath | None, **kwargs):
+    def initialize(cls, base_path: ModelPath | Base.strPath | None, **kwargs):
         config = cls(base_path, **kwargs).start_model()
         return config
 
@@ -976,7 +976,7 @@ class ModelConfig(BaseModelConfig):
         return 19000101
 
     @cached_property
-    def queue_of_stages(self) -> list[Literal["data", "fit", "test"]]:
+    def queue_of_stages(self) -> list[Base.lit.StageAll]:
         """stage queue for training"""
         return []
 
@@ -1005,13 +1005,13 @@ class ModelConfig(BaseModelConfig):
         if self.module_type == "nn" and x_data:
             self.algo_config.update_data_param(x_data, self)
 
-    def weight_scheme(self, stage: str, no_weight=False) -> Literal['equal' , 'top' , 'polar']:
+    def weight_scheme(self, stage: str, no_weight=False) -> Base.lit.ConfigWeightScheme:
         if no_weight:
             return "equal"
         stage = "fit" if stage == "fit" else "test"
-        weight_scheme = self.model_config.Param[f"train.criterion.weight"].get(stage, "equal")
+        weight_scheme = str(self.model_config.Param[f"train.criterion.weight"].get(stage, "equal"))
         assert weight_scheme in ["equal" , "top" , "polar"] , weight_scheme
-        return weight_scheme
+        return cast(Base.lit.ConfigWeightScheme, weight_scheme)
 
     @staticmethod
     def set_random_seed(seed=None):
@@ -1040,7 +1040,7 @@ class ModelConfig(BaseModelConfig):
             2: test only
         """
         assert value in [-1, 0, 1, 2], f"stage must be -1, 0, 1, or 2, got {value}"
-        queue_of_stages: list[Literal["data", "fit", "test"]] = ["data", "fit", "test"]
+        queue_of_stages: list[Base.lit.StageAll] = ["data", "fit", "test"]
 
         if value == -1:
             if not self.base_path.is_null_model:

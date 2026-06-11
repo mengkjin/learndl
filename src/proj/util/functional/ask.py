@@ -12,12 +12,15 @@ __all__ = ['AskFor']
 def _print_title(title : str):
     if title:
         Logger.stdout(f'{title}' , color = 'lightpurple')
+
+
+AskFlagType = Literal['yes' , 'no' , 'abort']
 class AskFlag:
     """
     Ask for confirmation, selections, or retry.
     
     Args:
-        flag : Literal['yes' , 'no' , 'abort']
+        flag : AskFlagType
         result : Any = None
         
     Returns:
@@ -30,9 +33,10 @@ class AskFlag:
     """
     def __init__(
         self , 
-        flag : Literal['yes' , 'no' , 'abort'] ,
-        result : Any = None):
-        self.flag : Literal['yes' , 'no' , 'abort'] = flag
+        flag : AskFlagType ,
+        result : Any = None
+    ):
+        self.flag : AskFlagType = flag
         self.result : Any = result
 
     def __repr__(self) -> str:

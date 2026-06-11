@@ -1,14 +1,15 @@
 from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
-from typing import Literal
+
+from src.proj import Base
 from src.data import DATAVENDOR
 
 @dataclass
 class TradeSuggestion:
     secid : int
     secname : str
-    direction : Literal['buy' , 'sell']
+    direction : Base.lit.TradeDirection
     price : float
     pct : float
 
@@ -16,8 +17,8 @@ class TradeSuggestion:
         return f' >> Suggest {self.direction.title():>4s} {self.secid:06d} [{self.secname:^4s}] at {self.price:04.2f} ({self.pct:+02.2%})'
 
     @classmethod
-    def generate(cls , secid : np.ndarray | list[int] , d : int , direction : Literal['buy' , 'sell']):
-        secid = np.array(secid) if isinstance(secid , list) else secid
+    def generate(cls , secid : np.ndarray | list[int] , d : int , direction : Base.lit.TradeDirection):
+        secid = np.atleast_1d(secid)
         secname = DATAVENDOR.INFO.secname(secid).tolist()
         st_secid = DATAVENDOR.INFO.get_st(d)['secid'].to_numpy()
         

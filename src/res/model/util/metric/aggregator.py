@@ -17,8 +17,9 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import torch
-from typing import Callable , Any , Literal , Iterable
+from typing import Callable , Any , Iterable
 
+from src.proj import Base
 from .metric_result import EpochMetricResult
 
 __all__ = ['AggregatorType' , 'AccuracyAggregator' , 'LossAggregator' , 'MetricAggregator']
@@ -87,7 +88,7 @@ class MetricAggregator:
     def loss_weights(self , losses : dict[str , Any]) -> dict[str,float]:
         return self.loss_aggregators[-1].loss_weights(losses)
 
-    def inject(self , metric_type : Literal['accuracy','loss'] , aggregator :  AggregatorType | None = None):
+    def inject(self , metric_type : Base.lit.MetricType , aggregator :  AggregatorType | None = None):
         if aggregator is None:
             aggregator = {}
         if metric_type == 'accuracy':
@@ -128,7 +129,7 @@ class MetricAggregator:
     def argbest(
         self , 
         metrics : pd.DataFrame | Iterable[EpochMetricResult | None] , 
-        metric_type : Literal['accuracy','loss'] = 'accuracy' , 
+        metric_type : Base.lit.MetricType = 'accuracy' , 
         aggregator : AggregatorType | None = None
     ) -> int:
         """compare accuracies, return the index of the best one"""
@@ -150,7 +151,7 @@ class MetricAggregator:
 
     def larger(
             self , metric0 : dict[str|Any,float] | float | EpochMetricResult , metric1 : dict[str|Any,float] | float | EpochMetricResult , 
-            metric_type : Literal['accuracy','loss'] = 'accuracy' , aggregator : AggregatorType | None = None
+            metric_type : Base.lit.MetricType = 'accuracy' , aggregator : AggregatorType | None = None
         ) -> bool:
         if isinstance(metric0 , float):
             assert isinstance(metric1 , float) , f'metric1 should be a float, but got {type(metric1)}'
@@ -170,6 +171,6 @@ class MetricAggregator:
         else:
             raise ValueError(f'Invalid metric: {metric_type}')
 
-    def compile_results(self , metrics : Iterable[EpochMetricResult] , metric_type : Literal['accuracy','loss'] = 'accuracy' , aggregator : AggregatorType | None = None) -> np.ndarray:
+    def compile_results(self , metrics : Iterable[EpochMetricResult] , metric_type : Base.lit.MetricType = 'accuracy' , aggregator : AggregatorType | None = None) -> np.ndarray:
         return np.array([self.total_accuracy(metric.metrics('valid' , metric_type) , aggregator) for metric in metrics])
 
