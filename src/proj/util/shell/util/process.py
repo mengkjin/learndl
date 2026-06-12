@@ -19,7 +19,7 @@ __all__ = [
 Cmd = Union[str, Sequence[str]]
 
 def popen_detached(
-    args: list[str],
+    args: Cmd,
     *,
     env: Optional[dict[str, str]] = None,
     windows_detached_process: bool = True,
@@ -28,16 +28,23 @@ def popen_detached(
     """
     Launch ``args`` in the background.
 
+    Pass a **string** to run via the platform shell (``cmd.exe`` on Windows); pass a **argv
+    sequence** for direct execution without shell parsing.
+
     On Windows, ``DETACHED_PROCESS`` (default) avoids tying the child to the parent's console,
     but it can prevent ``wezterm start`` from attaching to an already-running GUI; pass
     ``windows_detached_process=False`` (and often ``windows_create_no_window=False``) for that.
     """
     kwargs: dict = {
-        "args": args,
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,
         "stderr": subprocess.DEVNULL,
     }
+    if isinstance(args, str):
+        kwargs["args"] = args
+        kwargs["shell"] = True
+    else:
+        kwargs["args"] = [str(x) for x in args]
     if sys.platform == "win32":
         flags = 0
         if windows_create_no_window:

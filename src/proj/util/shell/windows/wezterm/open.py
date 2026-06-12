@@ -192,6 +192,20 @@ def activate_wezterm() -> bool:
         return False
 
 
+def _wezterm_shell_cmdline(head: list[str], inner: str, *, cwd: str | None) -> str:
+    """
+    Build a single ``cmd.exe`` command line for ``shell=True`` launch.
+
+    Matches typing ``wezterm … -- cmd.exe /k …`` in a Windows terminal: ``list2cmdline`` quotes
+    the ``/k`` payload so ``&`` inside ``inner`` is not split by the parent shell.
+    """
+    argv: list[str] = list(head)
+    if cwd:
+        argv.extend(["--cwd", cwd])
+    argv.extend(["--", "cmd.exe", "/k", inner])
+    return subprocess.list2cmdline(argv)
+
+
 def bring_wezterm_to_foreground_soon(*, delay_s: float = 0.25) -> None:
     """After spawning a tab, briefly wait then focus a WezTerm window (non-blocking)."""
     def _run() -> None:
@@ -230,7 +244,6 @@ class WezTermOpener(BasicOpener):
         inner = command.replace("'", '"')
         if title is not None:
             inner = f"wezterm cli set-tab-title {_win_cmd_quote(title)} & {inner}"
-        tail = ["--", "cmd.exe", "/k", inner]
         spawn_env: dict[str, str] | None = None
 
         match new_on:
@@ -241,31 +254,25 @@ class WezTermOpener(BasicOpener):
                 in_pane = bool(os.environ.get("WEZTERM_PANE"))
                 sock = None if in_pane else discover_wezterm_gui_socket()
                 if in_pane or sock:
-                    args = ["wezterm", "cli", "spawn"]
-                    if cwd:
-                        args.extend(["--cwd", cwd])
-                    args.extend(tail)
+                    head = ["wezterm", "cli", "spawn"]
                     if sock:
                         spawn_env = {**os.environ, "WEZTERM_UNIX_SOCKET": sock}
                 else:
-                    args = ["wezterm", "start"]
-                    if cwd:
-                        args.extend(["--cwd", cwd])
-                    args.extend(tail)
-                print(args)
+                    head = ["wezterm", "start"]
+                cmdline = _wezterm_shell_cmdline(head, inner, cwd=cwd)
+                print(cmdline)
                 process.popen_detached(
-                    args,
+                    cmdline,
                     env=spawn_env,
                     windows_detached_process=False,
                     windows_create_no_window=False,
                 )
                 bring_wezterm_to_foreground_soon()
             case "window" | "workspace":
-                args = ['wezterm', "start", "--always-new-process"]
-                if cwd:
-                    args.extend(["--cwd", cwd])
-                args.extend(tail)
-                process.popen_detached(args)
+                cmdline = _wezterm_shell_cmdline(
+                    ["wezterm", "start", "--always-new-process"], inner, cwd=cwd
+                )
+                process.popen_detached(cmdline)
                 bring_wezterm_to_foreground_soon()
             case _:
                 raise ValueError(f"Invalid new_on: {new_on}")
