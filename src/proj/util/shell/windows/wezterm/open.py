@@ -14,7 +14,7 @@ from pathlib import Path
 from ...preference import WINDOWS_WEZTERM_NEW
 from ...util.basic import BasicOpener
 from ...util import process
-from ...util.commands import _win_cmd_quote
+from ...util.commands import _win_cmd_quote, _win_cmd_token
 from .verify import WezTermVerifier
 
 __all__ = ['WezTermOpener' , 'activate_wezterm']
@@ -194,16 +194,17 @@ def activate_wezterm() -> bool:
 
 def _wezterm_shell_cmdline(head: list[str], inner: str, *, cwd: str | None) -> str:
     """
-    Build a single ``cmd.exe`` command line for ``shell=True`` launch.
+    Build a single command line for ``shell=True`` launch.
 
-    Matches typing ``wezterm … -- cmd.exe /k …`` in a Windows terminal: ``list2cmdline`` quotes
-    the ``/k`` payload so ``&`` inside ``inner`` is not split by the parent shell.
+    Matches typing ``wezterm cli spawn --cwd E:\\… -- cmd.exe /k <inner>`` in a Windows
+    terminal: the ``/k`` payload is appended verbatim (only per-token ``"`` quoting inside
+    ``inner``), not wrapped as one ``list2cmdline`` argument.
     """
-    argv: list[str] = list(head)
+    parts: list[str] = [" ".join(head)]
     if cwd:
-        argv.extend(["--cwd", cwd])
-    argv.extend(["--", "cmd.exe", "/k", inner])
-    return subprocess.list2cmdline(argv)
+        parts.append(f"--cwd {_win_cmd_token(cwd)}")
+    parts.append(f"-- cmd.exe /k {inner}")
+    return " ".join(parts)
 
 
 def bring_wezterm_to_foreground_soon(*, delay_s: float = 0.25) -> None:
