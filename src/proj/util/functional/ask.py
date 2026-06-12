@@ -55,6 +55,29 @@ class AskFlag:
     def __bool__(self) -> bool:
         return self.yes
 
+class LoopFlag:
+    """
+    Loop flag for the loop until exit.
+    """
+    def __init__(self , round : int = 0 , flag : AskFlagType = 'yes'):
+        self.round : int = round
+        self._flag : AskFlag = AskFlag(flag = flag)
+
+    def __repr__(self) -> str:
+        return f'LoopFlag({self.round},{self._flag})'
+    def __str__(self) -> str:
+        return f'Round {self.round} , Flag: {self._flag}'
+
+    def __bool__(self) -> bool:
+        return self._flag.yes
+
+    def set_flag(self , flag : AskFlag) -> LoopFlag:
+        self._flag = flag
+        return self
+
+    @property
+    def flag(self) -> AskFlag:
+        return self._flag
 class AskFor:
     """
     Ask for confirmation, selections, or retry.
@@ -131,6 +154,9 @@ class AskFor:
             selection = input(f'Choose from {min} to {max}, q to quit: ')
             if selection.lower() == 'q':
                 return AskFlag('no')
+            if not selection.isdigit():
+                Logger.error(f'Invalid input: {selection} , please choose from {min} to {max} or q to quit')
+                return AskFlag('abort')
             choices = int(selection)
             if choices < start or choices > options + start - 1:
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
@@ -183,15 +209,18 @@ class AskFor:
     def LoopTillExit(
         cls , ask = True , message : str = 'Do you want to try again?', * , 
         max_trials : int = 20
-    ) -> Generator[int, None, None]:
+    ) -> Generator[LoopFlag, None, None]:
         """Loop until the user exits."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return!')
             return
         for trial in range(max_trials):
-            yield trial
+            loop_flag = LoopFlag(round = trial)
+            yield loop_flag
+            if loop_flag.flag.no:
+                return
             if not ask:
                 continue
-            flag = AskFor.Retry(message)
-            if flag.no:
+            retry_flag = AskFor.Retry(message)
+            if retry_flag.no:
                 return

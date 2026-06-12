@@ -19,14 +19,14 @@ def reconstruct_preprocessed_data() -> None:
         return
 
     with Proj.vb.temporary_vb('max'):
-        for _ in AskFor.LoopTillExit(message = f'Do you want to reconstruct more data?'):
+        for loop_flag in AskFor.LoopTillExit(message = f'Do you want to reconstruct more data?'):
             flag_key = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to reconstruct?')
-            if not flag_key.yes:
+            if not loop_flag.set_flag(flag_key):
                 continue
             
             Logger.note(f'Select [{flag_key.result}] data to reconstruct...')
             flag_type = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
-            if not flag_type.yes:
+            if not loop_flag.set_flag(flag_type):
                 continue
 
             data_type = flag_type.result

@@ -74,25 +74,19 @@ def run_ruff_pyright_check():
     """Run ruff pyright check on the project code."""
     Logger.note(f"Running ruff check on the project code...")
     ret = subprocess.run(['ruff' , 'check' , 'src' , 'scripts'] , capture_output=True, text=True, check=False)
-    if ret.returncode == 0:
-        Logger.success(f"Ruff check passed: ")
-    else:
-        Logger.alert2(f"Ruff check failed: ")
-    if ret.stdout:
-        Logger.stdout(ret.stdout)
-    if ret.stderr:
-        Logger.stderr(ret.stderr)
+    Logger.success(f"Ruff check passed.") if ret.returncode == 0 else Logger.alert2(f"Ruff check failed: ")
+    if ret.stdout.strip():
+        Logger.stdout(ret.stdout.strip())
+    if ret.stderr.strip():
+        Logger.stderr(ret.stderr.strip())
     
     Logger.note(f"Running pyright check on the project code...")
     ret = subprocess.run(['pyright' , 'src' , 'scripts'] , capture_output=True, text=True, check=False)
-    if ret.returncode == 0:
-        Logger.success(f"Pyright check passed: ")
-    else:
-        Logger.alert2(f"Pyright check failed: ")
-    if ret.stdout:
-        Logger.stdout(ret.stdout)
-    if ret.stderr:
-        Logger.stderr(ret.stderr)
+    Logger.success(f"Pyright check passed.") if ret.returncode == 0 else Logger.alert2(f"Pyright check failed: ")
+    if ret.stdout.strip():
+        Logger.stdout(ret.stdout.strip())
+    if ret.stderr.strip():
+        Logger.stderr(ret.stderr.strip())
 
 def check_code_issues():
     """Check if the future annotations are used in the project code."""
@@ -134,23 +128,30 @@ def check_code_issues():
         'lacking __all__' : _check_py_file_has___all___,
         'py file has no module docstring' : _check_py_file_has_no_module_docstring,
     }
-    for _ in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
-        options = ['run ruff pyright check' , *list(file_check_list.keys())]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
-        if not flag.yes:
-            continue
-        if flag.result == options[0]:
-            run_ruff_pyright_check()
-            continue
-        predicate = file_check_list[flag.result]
-        Logger.note(f"Code issue {flag.result} found in path:")
+    def _run_check(check_name : str) -> None:
+        check_func = file_check_list[check_name]
+        Logger.note(f"Checking {check_name}...")
         files = list(PATH.main.joinpath('src').rglob('*.py'))
-        files = [file for file in files if predicate(file)]
+        files = [file for file in files if check_func(file)]
         if not files:
-            Logger.success(f'No files found with the issue {flag.result}.')
+            Logger.success(f'No files found with the issue {check_name}.')
         else:
             [Logger.stdout(file , indent = 1) for file in files]
-
+    for loop_flag in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
+        options = ['All checks in one' , 'Run ruff pyright check' , *list(file_check_list.keys())]
+        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
+        if not loop_flag.set_flag(flag):
+            continue
+        selection = options.index(flag.result)
+        if selection == 0:
+            for check_name in file_check_list.keys():
+                _run_check(check_name)
+            run_ruff_pyright_check()
+        elif selection == 1:
+            run_ruff_pyright_check()
+        else:
+            _run_check(flag.result)
+            
 # %% model files related operations ------------------------------------------------------------
 
 def archive_current_model() -> None:
@@ -160,7 +161,7 @@ def archive_current_model() -> None:
     from src.proj.util.functional.ask import AskFor
     roots = [PATH.model_nn , PATH.model_boost , PATH.model_st , PATH.model_factor]
 
-    for _ in AskFor.LoopTillExit(message = f'Do you want to archive more models?'):
+    for loop_flag in AskFor.LoopTillExit(message = f'Do you want to archive more models?'):
         model_paths = [(root.name , path) for root in roots for path in root.iterdir() if path.is_dir()]
         if not model_paths:
             Logger.note('No models found in the model directory.')
@@ -173,10 +174,9 @@ def archive_current_model() -> None:
                 last_root = root_name
             Logger.note(f'{i+1:02d}. {model_path.relative_to(PATH.model)}' , indent = 1)
         flag = AskFor.Selections(len(model_paths) , multiple=True , title = f'Which model to archive?')
-        if not flag.yes:
+        if not loop_flag.set_flag(flag):
             continue
-        for i in flag.result:
-            ModelPath(model_paths[i - 1][1]).move_to_archive()
+        [ModelPath(model_paths[i - 1][1]).move_to_archive() for i in flag.result]
         
 
 def resume_archived_model() -> None:
@@ -184,17 +184,15 @@ def resume_archived_model() -> None:
     from src.res.model.util import ModelPath
     from src.proj.util.functional.ask import AskFor
     
-    for _ in AskFor.LoopTillExit(message = f'Do you want to resume more models?'):
+    for loop_flag in AskFor.LoopTillExit(message = f'Do you want to resume more models?'):
         archive_paths = [path for path in PATH.model_archive.iterdir() if path.is_dir()]
         if not archive_paths:
             Logger.note('No models found in the archive directory.')
             return
         flag = AskFor.Options(archive_paths , confirm = False , multiple=True , title = f'Which model to resume from archive?')
-        if  not flag.yes:
+        if not loop_flag.set_flag(flag):
             continue
-        for path in flag.result:
-            ModelPath.resume_from_archive(path.name)
-
+        [ModelPath.resume_from_archive(path.name) for path in flag.result]
 
 # %% log files related operations ------------------------------------------------------------
 def clear_outdated_catcher_logs(days_ago : int = 30): 
