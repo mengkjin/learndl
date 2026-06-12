@@ -14,23 +14,9 @@ from pathlib import Path
 from ...preference import WINDOWS_WEZTERM_NEW
 from ...util.basic import BasicOpener
 from ...util import process
-from ...util.commands import prepare_cmd_k_line
 from .verify import WezTermVerifier
 
 __all__ = ['WezTermOpener' , 'activate_wezterm']
-
-
-def _cmd_escape_title(title: str) -> str:
-    """Escape ``cmd.exe`` metacharacters for the ``title`` builtin (rest-of-line argument)."""
-    return (
-        title.replace("^", "^^")
-        .replace("&", "^&")
-        .replace("|", "^|")
-        .replace("<", "^<")
-        .replace(">", "^>")
-        .replace("%", "%%")
-    )
-
 
 # Optional: focus an existing WezTerm GUI window (e.g. after ``start``).
 _PS_FOCUS = r"""
@@ -241,8 +227,10 @@ class WezTermOpener(BasicOpener):
             new_on = WINDOWS_WEZTERM_NEW
         inner = command
         if title is not None:
-            inner = f"title {_cmd_escape_title(title)} & {inner}"
-        inner = prepare_cmd_k_line(inner)
+            title = title.replace('"', "'")
+            if ' ' in title:
+                title = f"'{title}'"
+            inner = f"wezterm cli set-tab-title {title} & {inner}"
         tail = ["--", "cmd.exe", "/k", inner]
         spawn_env: dict[str, str] | None = None
 
