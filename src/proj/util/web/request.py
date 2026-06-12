@@ -30,6 +30,13 @@ CHROME_UA = (
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
+def _use_windows_selector_event_loop_policy() -> None:
+    """curl_cffi async requires SelectorEventLoop on Windows (default is Proactor)."""
+    if sys.platform != "win32":
+        return
+    if not isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 def http_session(
     *,
     proxy: str | None = None,
@@ -78,6 +85,7 @@ def async_http_session(
     **kwargs,
 ) -> requests.AsyncSession:
     """Create a reusable ``curl_cffi.requests.AsyncSession``."""
+    _use_windows_selector_event_loop_policy()
     curl_opts = {
         CurlOpt.LOW_SPEED_LIMIT: low_speed_limit,
         CurlOpt.LOW_SPEED_TIME: low_speed_time,

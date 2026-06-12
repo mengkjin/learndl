@@ -11,7 +11,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import CALENDAR , DB , Const , Base , Save , Load , Dates
+from src.proj import CALENDAR , DB , Const , Base , Save , Load , Dates , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
@@ -77,8 +77,10 @@ class PortfolioAccount:
         cls._account = instance 
         return instance
 
-    def __init__(self , input : Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None = None , 
-                 config : AccountConfig | None = None , index : dict[Any,Any] | None = None):
+    def __init__(
+        self , input : Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None = None , 
+        config : AccountConfig | None = None , index : dict[Any,Any] | None = None
+    ):
         if isinstance(input , Portfolio):
             config = input.account.config
             index = input.account.index
@@ -265,8 +267,14 @@ class PortfolioAccount:
         if not path.exists():
             return cls()
         if path.suffix == '.pkl':
-            raise ValueError(f'{path} suffix .pkl is not supported now, use .tar instead')
-            # account = cls(pd.read_pickle(path))
+            Logger.warning(f'{path} suffix .pkl is not supported now, use .tar instead')
+            fix_path = path.with_suffix('.tar')
+            if fix_path.exists():
+                account = cls.load(fix_path)
+            else:
+                account = cls(pd.read_pickle(path))
+                account.save(fix_path)
+            path.unlink()
         elif path.name.endswith(DB.TAR_SUFFIXES):
             account = cls.from_dfs(Load.dfs(path))
         else:
@@ -577,6 +585,9 @@ class PortfolioAccountManager(Base.BoundLogger):
     def load_dir(self):
         if self.dir_loaded:
             return self
+        for path in list(self.account_dir.iterdir()):
+            if path.suffix == '.pkl' and path.with_suffix('.tar').exists():
+                path.unlink()
         func_calls = {path:(PortfolioAccount.load , (path ,)) for path in self.account_dir.iterdir()}
         dfs : dict[Path , PortfolioAccount] = parallel(func_calls)
         for path , account in dfs.items():
