@@ -14,7 +14,7 @@ from pathlib import Path
 from ...preference import WINDOWS_WEZTERM_NEW
 from ...util.basic import BasicOpener
 from ...util import process
-from ...util.commands import wrap_cmd_exe_line
+from ...util.commands import prepare_cmd_k_line
 from .verify import WezTermVerifier
 
 __all__ = ['WezTermOpener' , 'activate_wezterm']
@@ -242,7 +242,7 @@ class WezTermOpener(BasicOpener):
         inner = command
         if title is not None:
             inner = f"title {_cmd_escape_title(title)} & {inner}"
-        inner = wrap_cmd_exe_line(inner)
+        inner = prepare_cmd_k_line(inner)
         tail = ["--", "cmd.exe", "/k", inner]
         spawn_env: dict[str, str] | None = None
 
