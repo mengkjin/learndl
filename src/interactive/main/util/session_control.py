@@ -28,6 +28,33 @@ def get_cached_task_db() -> TaskDatabase:
     """get cached task database manager"""
     return TaskDatabase()
 
+_poll_fragment_cache: dict[tuple[int, float], Callable[[], None]] = {}
+
+
+def _task_queue_poll_fragment(interval: float, epoch: int) -> Callable[[], None]:
+    """Return a ``run_every`` fragment for backend queue polling (epoch-scoped).
+
+    A new fragment function is created per *epoch* so git pull can retire the
+    previous auto-rerun schedule without leaving a permanently active timer.
+    """
+    cache_key = (epoch, interval)
+    if cache_key not in _poll_fragment_cache:
+        _poll_fragment_cache.clear()
+
+        @st.fragment(run_every=interval)
+        def _poll() -> None:
+            if st.session_state.get('backend_refresh_epoch', 0) != epoch:
+                return
+            sc = SessionControl._instance
+            if sc is None or sc.task_queue is None:
+                return
+            if sc.task_queue.refresh(backend_only=True):
+                st.rerun()
+
+        _poll_fragment_cache[cache_key] = _poll
+    return _poll_fragment_cache[cache_key]
+
+
 def queue_refresh_trigger(func : Callable) -> Callable:
     """Decorator: trigger task queue refresh after every UI callback.
 
@@ -125,6 +152,17 @@ class SessionControl:
             st.session_state.session_control = self
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
 
+    def bump_backend_refresh_epoch(self) -> None:
+        """Invalidate periodic backend-refresh timers after disruptive reloads (e.g. git pull)."""
+        st.session_state['backend_refresh_epoch'] = st.session_state.get('backend_refresh_epoch', 0) + 1
+
+    def _should_poll_task_queue_backend(self) -> bool:
+        if self.task_queue is None:
+            return False
+        if self.task_queue.count('running') > 0:
+            return True
+        return bool(self.task_db.get_backend_updated_tasks())
+
     def wrap_page(self , page_name : str) -> Callable:
         """wrap page"""
         def wrapper(func : Callable):
@@ -135,6 +173,10 @@ class SessionControl:
                     return
                 func(*args , **kwargs)
                 self.task_queue_backend_refresh()
+                interval = Const.Pref.interactive.get('task_queue_backend_refresh_interval', 5)
+                if interval > 0 and self._should_poll_task_queue_backend():
+                    epoch = st.session_state.get('backend_refresh_epoch', 0)
+                    _task_queue_poll_fragment(interval, epoch)()
             return inner_func
         return wrapper
 
@@ -158,6 +200,18 @@ class SessionControl:
             from src.interactive.main.util.page import get_page
             return get_page(page_name)
 
+    def consume_pending_pull_and_run(self) -> None:
+        """Run a script queued by :class:`ControlGitClearPullRunButton` after git pull.
+
+        Git pull may reload the Streamlit app mid-callback; the pending payload
+        in ``st.session_state`` survives that reload.
+        """
+        pending = st.session_state.pop('pending_pull_and_run', None)
+        if pending is None:
+            return
+        runner = self.get_script_runner(pending['script_key'])
+        self.click_script_runner_run(runner, pending.get('params'))
+
     @queue_refresh_trigger
     def page_header(self , page_name : str , type : Literal['intro' , 'script'] = 'intro'):
         """Register the active page and render the shared header and control panel.
@@ -174,6 +228,7 @@ class SessionControl:
             The page metadata dict, or ``None`` if the page is not found.
         """
         """Store ``key`` as the active page name in Streamlit session state."""
+        self.consume_pending_pull_and_run()
         st.session_state["current_page"] = page_name
         self.current_page_name = page_name
         self.current_script = None if page_name in self.intro_pages else page_name
@@ -500,9 +555,8 @@ class SessionControl:
         """wait for complete"""
         return item.wait_until_completion(starting_timeout)
 
-    @st.fragment(run_every=Const.Pref.interactive.get('task_queue_backend_refresh_interval' , 5))
     def task_queue_backend_refresh(self) -> None:
-        """refresh task queue backend automatically"""
+        """Sync task status from the database; rerun the page when anything changed."""
         changed = self.task_queue.refresh(backend_only=True)
         if changed:
             st.success(f"Task Queue Backend Refreshed: {changed}")

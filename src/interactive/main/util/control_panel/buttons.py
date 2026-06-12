@@ -157,6 +157,7 @@ class ControlRefreshInteractiveButton(ControlPanelButton):
     def run(self) -> None:
         with st.spinner("Refreshing...") , Proj.silence:
             Options.update()
+        SC.bump_backend_refresh_epoch()
         SC.rerun()
         st.rerun()
 
@@ -178,9 +179,10 @@ class ControlGitClearPullButton(ControlPanelButton):
     def run(self) -> None:
         if MACHINE.platform_coding:
             raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
-        else:
-            from src.call.files import clear_git_pull
-            clear_git_pull(verbose_level = 1)
+        SC.bump_backend_refresh_epoch()
+        from src.call.files import clear_git_pull
+        clear_git_pull(verbose_level=1)
+        st.rerun()
 
 class ControlGitClearPullRunButton(ControlPanelButton):
     """Button that resets local changes and pulls the latest code from remote.
@@ -220,7 +222,19 @@ class ControlGitClearPullRunButton(ControlPanelButton):
     def run(self) -> None:
         if MACHINE.platform_coding:
             raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
-        else:
+        script_key = self.script_key
+        runner = self.runner
+        if script_key is None or runner is None:
+            return
+        st.session_state['pending_pull_and_run'] = {
+            'script_key': script_key,
+            'params': self.get('params'),
+        }
+        SC.bump_backend_refresh_epoch()
+        try:
             from src.call.files import clear_git_pull
-            clear_git_pull(verbose_level = 1)
-        SC.click_script_runner_run(self.runner , self.get('params'))
+            clear_git_pull(verbose_level=1)
+        except Exception:
+            st.session_state.pop('pending_pull_and_run', None)
+            raise
+        st.rerun()
