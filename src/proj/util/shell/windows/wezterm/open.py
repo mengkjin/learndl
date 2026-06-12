@@ -14,6 +14,7 @@ from pathlib import Path
 from ...preference import WINDOWS_WEZTERM_NEW
 from ...util.basic import BasicOpener
 from ...util import process
+from ...util.commands import _win_cmd_quote
 from .verify import WezTermVerifier
 
 __all__ = ['WezTermOpener' , 'activate_wezterm']
@@ -225,12 +226,10 @@ class WezTermOpener(BasicOpener):
         assert self._available, f"{self.__class__.__name__} is not available"
         if new_on is None:
             new_on = WINDOWS_WEZTERM_NEW
+        # ``cmd.exe`` only treats double quotes as string delimiters (not ``'`` like bash).
         inner = command.replace("'", '"')
         if title is not None:
-            title = title.replace('"', "'")
-            if ' ' in title:
-                title = f"'{title}'"
-            inner = f"wezterm cli set-tab-title {title} & {inner}"
+            inner = f"wezterm cli set-tab-title {_win_cmd_quote(title)} & {inner}"
         tail = ["--", "cmd.exe", "/k", inner]
         spawn_env: dict[str, str] | None = None
 
