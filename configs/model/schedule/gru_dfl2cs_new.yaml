@@ -10,11 +10,18 @@ model:
   labels: 
     - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
+  special:
+    global2top: true
+
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
   data.types: dfl2cs # ['day+30m' , 30m , day , ...] , use if input_type is data
   sequence.lens: {dfl2cs: 30}
   sequence.steps: {dfl2cs: 1}
+
+train:
+  criterion.weight:
+    fit:    'polar'
 
 algo:
   gru:

@@ -8,11 +8,11 @@
 # mode: shell
 
 from src.proj.util.script import ScriptTool
-from src.call.files import check_all_config_files
+from src.call.files import CheckAllConfigFiles
 
 @ScriptTool('config_modifier')
 def main(**kwargs):     
-    check_all_config_files()
+    CheckAllConfigFiles.go()
 
 if __name__ == '__main__':
     main()

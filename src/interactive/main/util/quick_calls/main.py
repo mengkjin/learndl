@@ -11,8 +11,16 @@ PAGE_NAME = 'home'
 def show_quick_calls(ncol : int = 5) -> None:
     """Show the quick call buttons."""
     with subheader_expander('Quick Call Buttons' , ':material/widgets:' , True , key = 'home-quick-call-buttons'):
-        with st.container(key = 'home-quick-call-buttons-container'):
-            for i , button in enumerate(QuickCallButton.get_buttons()):
+        with st.container(key = 'home-quick-call-buttons-container-nonresearch'):
+            st.success('Non-research Actions')
+            for i , button in enumerate(QuickCallButton.get_non_research_buttons()):
+                if i % ncol == 0:
+                    cols = st.container().columns(ncol , gap = 'small' , vertical_alignment = 'top')
+                with cols[i % ncol]:
+                    button.show()
+        with st.container(key = 'home-quick-call-buttons-container-research'):
+            st.success('Research Actions')
+            for i , button in enumerate(QuickCallButton.get_research_buttons()):
                 if i % ncol == 0:
                     cols = st.container().columns(ncol , gap = 'small' , vertical_alignment = 'top')
                 with cols[i % ncol]:

@@ -180,8 +180,8 @@ class ControlGitClearPullButton(ControlPanelButton):
         if MACHINE.platform_coding:
             raise ValueError(f"Git Pull is not available on coding platform {MACHINE.name}")
         SC.bump_backend_refresh_epoch()
-        from src.call.files import clear_git_pull
-        clear_git_pull(verbose_level=1)
+        from src.call.files import GitClearPull
+        GitClearPull.go(verbose_level=1)
         st.rerun()
 
 class ControlGitClearPullRunButton(ControlPanelButton):
@@ -232,8 +232,8 @@ class ControlGitClearPullRunButton(ControlPanelButton):
         }
         SC.bump_backend_refresh_epoch()
         try:
-            from src.call.files import clear_git_pull
-            clear_git_pull(verbose_level=1)
+            from src.call.files import GitClearPull
+            GitClearPull.go(verbose_level=1)
         except Exception:
             st.session_state.pop('pending_pull_and_run', None)
             raise

@@ -5,11 +5,17 @@ from __future__ import annotations
 import streamlit as st
 
 from abc import abstractmethod , ABCMeta
-from typing import Literal , Any
+from typing import Literal , Any , get_args
 
+from src.proj.util.shell.util import DoneActionType
 from src.interactive.main.util.components.operations import ButtonOperation
 
 __all__ = ['QuickCallButton']
+
+EncodedColor = Literal[
+    'red' , 'green' , 'blue' , 'orange' , 'purple' , 
+    'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'
+]
 
 class QuickCallButtonMeta(ABCMeta):
     """Meta class for QuickCallButton."""
@@ -17,6 +23,10 @@ class QuickCallButtonMeta(ABCMeta):
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
         if name != 'QuickCallButton':
+            assert getattr(new_cls, 'done_action') in get_args(DoneActionType) , \
+                f'Invalid done action: {getattr(new_cls, 'done_action')}, valid done actions are {get_args(DoneActionType)}'
+            assert getattr(new_cls, 'color') in get_args(EncodedColor) , \
+                f'Invalid color: {getattr(new_cls, 'color')}, valid colors are {get_args(EncodedColor)}'
             cls.registry[name] = new_cls
         return new_cls
 
@@ -25,16 +35,25 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
 
     Subclasses define :attr:`key`, :attr:`icon`, and :attr:`title` as class
     variables and implement :meth:`button` to render the Streamlit widget.
+
+    Encoded colors:
+    - purple
+    - red
+    - green
+    - blue
+    - orange
+    - gray
+    - yellow
+    - pink
+    - gold
+    - cyan
     """
     default_help : str = ''
-    done_action : Literal['pause' , 'close' , 'keep'] = 'pause'
-    color : Literal['red' , 'green' , 'blue' , 'orange' , 'purple' , 'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any = 'green'
+    done_action : DoneActionType = 'pause'
+    color : EncodedColor = 'green'
+    research : bool = False
 
-    def __init__(
-        self , color : Literal[
-            'red' , 'green' , 'blue' , 'orange' , 'purple' , 
-            'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'] | Any = 'green' , 
-        **kwargs):
+    def __init__(self , **kwargs):
         super().__init__(**kwargs)
         self.update(help = self.default_help)
 
@@ -71,9 +90,17 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
             self.render_title(font_size = 11 , uppercase = False)
 
     @classmethod
-    def get_buttons(cls) -> list[QuickCallButton]:
+    def get_non_research_buttons(cls) -> list[QuickCallButton]:
         """Get the buttons dictionary."""
         from importlib import import_module
         import_module('src.interactive.main.util.quick_calls.buttons')
-        buttons = [qcb() for qcb in cls.registry.values()]
+        buttons = [qcb() for qcb in cls.registry.values() if not qcb.research]
+        return buttons
+
+    @classmethod
+    def get_research_buttons(cls) -> list[QuickCallButton]:
+        """Get the research buttons dictionary."""
+        from importlib import import_module
+        import_module('src.interactive.main.util.quick_calls.buttons')
+        buttons = [qcb() for qcb in cls.registry.values() if qcb.research]
         return buttons

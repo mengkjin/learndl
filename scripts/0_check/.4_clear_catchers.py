@@ -13,11 +13,11 @@
 #       default : 30
 
 from src.proj.util.script import ScriptTool
-from src.call.files import clear_outdated_catcher_logs
+from src.call.files import ClearOutdatedCatcherLogs
 
 @ScriptTool('clear_catchers')
 def main(days_ago : int = 30 , **kwargs): 
-    clear_outdated_catcher_logs(days_ago)
+    ClearOutdatedCatcherLogs.go(days_ago=days_ago)
     
 if __name__ == '__main__':
     main()

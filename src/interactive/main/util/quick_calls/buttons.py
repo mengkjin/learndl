@@ -2,12 +2,15 @@
 Quick call buttons for the interactive app, can be directly used in any page.
 """
 from __future__ import annotations
+import os
 from src.interactive.main.util.quick_calls.basic import QuickCallButton
 
 __all__ = [
     'Reboot' , 'TestLogger' , 'CheckCodeIssues' , 'CheckConfigFiles' , 
-    'RebuildPreprocessedData' , 'Tensorboard' , 'OptunaDashboard' , 'ClearCatcherLogs' , 
-    'ArchiveModel' , 'ResumeModel' , 'ReplaceWeztermConfig'
+    'ClearCatcherLogs' , 'ReplaceWeztermConfig' ,
+    'CarryOutSchedules' , 'RebuildPreprocessedData' ,  
+    'ArchiveCurrentModel' , 'ResumeArchivedModel' , 
+    'Tensorboard' , 'OptunaDashboard' , 
 ]
 
 class Reboot(QuickCallButton):
@@ -18,12 +21,17 @@ class Reboot(QuickCallButton):
     color = 'purple'
     done_action = 'close'
 
+    def __init__(self , **kwargs):
+        super().__init__(**kwargs)
+        # dynamic help string based on the current pid and calling process
+        from src.call.app import KillAndRebootApp
+        self.current_pid = os.getpid()
+        self.update(help = KillAndRebootApp.get_description(running_pid=self.current_pid))
+
     def script_string(self) -> str:
-        import os
-        current_pid = os.getpid()
         return f"""
-            from src.call.app import kill_and_reboot_app
-            kill_and_reboot_app({current_pid})
+            from src.call.app import KillAndRebootApp
+            KillAndRebootApp.go(running_pid={self.current_pid})
         """
 
 class TestLogger(QuickCallButton):
@@ -48,8 +56,8 @@ class CheckCodeIssues(QuickCallButton):
     
     def script_string(self) -> str:
         return """
-            from src.call.files import check_code_issues
-            check_code_issues()
+            from src.call.files import CheckCodeIssues
+            CheckCodeIssues.go()
         """
 
 class CheckConfigFiles(QuickCallButton):
@@ -61,8 +69,51 @@ class CheckConfigFiles(QuickCallButton):
 
     def script_string(self) -> str:
         return """
-            from src.call.files import check_all_config_files
-            check_all_config_files()
+            from src.call.files import CheckAllConfigFiles
+            CheckAllConfigFiles.go()
+        """
+class ClearCatcherLogs(QuickCallButton):
+    """Button that clears the catcher logs."""
+    key = "clear-catcher-logs"
+    icon = ":material/auto_delete:"
+    default_help = 'Clear outdated catcher logs , default is 30 days.'
+    color = 'red'
+    
+    def script_string(self) -> str:
+        return """
+            from src.call.files import ClearOutdatedCatcherLogs
+            ClearOutdatedCatcherLogs.go()
+        """
+class ReplaceWeztermConfig(QuickCallButton):
+    """Button that replaces the wezterm config."""
+    key = "replace-wezterm-config"
+    icon = ":material/component_exchange:"
+    default_help = 'Resume models from model archive directory, you can choose which model to resume.'
+    color = 'blue'
+    
+    def script_string(self) -> str:
+        return """
+            from src.call.files import ReplaceWeztermConfig
+            ReplaceWeztermConfig.go()
+        """
+
+class CarryOutSchedules(QuickCallButton):
+    """Button that carries out the schedule model list."""
+    key = "carry-out-schedules"
+    icon = ":material/order_play:"
+    default_help = 'Carry out the schedule model list.'
+    color = 'purple'
+    research = True
+
+    def __init__(self , **kwargs):
+        super().__init__(**kwargs)
+        from src.call.research import CarryOutScheduleModelList
+        self.update(help = CarryOutScheduleModelList.get_description())
+    
+    def script_string(self) -> str:
+        return """
+            from src.call.research import CarryOutScheduleModelList
+            CarryOutScheduleModelList.go()
         """
 
 class RebuildPreprocessedData(QuickCallButton):
@@ -70,12 +121,41 @@ class RebuildPreprocessedData(QuickCallButton):
     key = "rebuild-preprocess"
     icon = ":material/calculate:"
     default_help = 'Rebuild the preprocessed data, you can choose which data and which type to rebuild.'
-    color = 'gold'
+    color = 'purple'
+    research = True
     
     def script_string(self) -> str:
         return """
-            from src.call.data import reconstruct_preprocessed_data
-            reconstruct_preprocessed_data()
+            from src.call.data import ReconstructPreprocessedData
+            ReconstructPreprocessedData.go()
+        """
+
+class ArchiveCurrentModel(QuickCallButton):
+    """Button that archives the model."""
+    key = "archive-current-model"
+    icon = ":material/archive:"
+    default_help = 'Archive models from model directory to model archive directory, you can choose which model to archive.'
+    color = 'pink'
+    research = True
+
+    def script_string(self) -> str:
+        return """
+            from src.call.files import ArchiveCurrentModel
+            ArchiveCurrentModel.go()
+        """
+
+class ResumeArchivedModel(QuickCallButton):
+    """Button that resumes the model."""
+    key = "resume-archived-model"
+    icon = ":material/unarchive:"
+    default_help = 'Resume models from model archive directory, you can choose which model to resume.'
+    color = 'green'
+    research = True
+    
+    def script_string(self) -> str:
+        return """
+            from src.call.files import ResumeArchivedModel
+            ResumeArchivedModel.go()
         """
 
 class Tensorboard(QuickCallButton):
@@ -84,6 +164,7 @@ class Tensorboard(QuickCallButton):
     icon = ":material/network_intel_node:"
     default_help = 'Launch Tensorboard. You can choose which option to launch.'
     color = 'gold'
+    research = True
 
     def script_string(self) -> str:
         return """
@@ -97,59 +178,10 @@ class OptunaDashboard(QuickCallButton):
     icon = ":material/target:"
     default_help = 'Launch Optuna Dashboard. You can choose which option to launch.'
     color = 'gold'
+    research = True
 
     def script_string(self) -> str:
         return """
             from src.api import DashboardAPI
             DashboardAPI.optuna_dashboard()
-        """
-
-class ClearCatcherLogs(QuickCallButton):
-    """Button that clears the catcher logs."""
-    key = "clear-catcher-logs"
-    icon = ":material/auto_delete:"
-    default_help = 'Clear outdated catcher logs , default is 30 days.'
-    color = 'red'
-    
-    def script_string(self) -> str:
-        return """
-            from src.call.files import clear_outdated_catcher_logs
-            clear_outdated_catcher_logs()
-        """
-class ArchiveModel(QuickCallButton):
-    """Button that archives the model."""
-    key = "archive-model"
-    icon = ":material/archive:"
-    default_help = 'Archive models from model directory to model archive directory, you can choose which model to archive.'
-    color = 'pink'
-    
-    def script_string(self) -> str:
-        return """
-            from src.call.files import archive_current_model
-            archive_current_model()
-        """
-
-class ResumeModel(QuickCallButton):
-    """Button that resumes the model."""
-    key = "resume-model"
-    icon = ":material/unarchive:"
-    default_help = 'Resume models from model archive directory, you can choose which model to resume.'
-    color = 'green'
-    
-    def script_string(self) -> str:
-        return """
-            from src.call.files import resume_archived_model
-            resume_archived_model()
-        """
-class ReplaceWeztermConfig(QuickCallButton):
-    """Button that replaces the wezterm config."""
-    key = "replace-wezterm-config"
-    icon = ":material/component_exchange:"
-    default_help = 'Resume models from model archive directory, you can choose which model to resume.'
-    color = 'blue'
-    
-    def script_string(self) -> str:
-        return """
-            from src.call.files import replace_wezterm_config
-            replace_wezterm_config()
         """
