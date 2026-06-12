@@ -1,7 +1,11 @@
+"""
+Toolbox for genetic programming
+"""
 from __future__ import annotations
+
+import operator
 from typing import Callable
 from deap import base , creator , tools , gp
-import operator
 
 from src.res.gp.param import gpParameters
 from .status import gpStatus
@@ -9,6 +13,8 @@ from .syntax import BaseIndividual
 from .primative import Primative
 from .fitness import FitnessObjectMin
 from .evaluator import gpEvaluator
+
+__all__ = ['BaseToolbox']
 
 class BaseToolbox(base.Toolbox):
     """

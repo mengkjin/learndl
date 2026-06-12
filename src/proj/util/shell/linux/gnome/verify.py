@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 
-
+__all__ = ['GnomeTerminalVerifier']
 class GnomeTerminalVerifier:
     """Check whether ``gnome-terminal`` is reachable on PATH."""
 

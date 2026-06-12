@@ -3,6 +3,11 @@ from __future__ import annotations
 
 from src.proj.core.types import StrEnum
 
+__all__ = [
+    'ModuleType' , 'TestType' , 'FmpType' , 
+    'FittingEventType' , 'PortOptimProblem' , 'PortOptimEngine' , 
+    'PortOptimCvxpySolver']
+
 class ModuleType(StrEnum):
     NN = 'nn'
     BOOST = 'boost'
@@ -35,8 +40,6 @@ class FmpType(StrEnum):
     REVSCREEN = 'revscreen'
     REINFORCE = 'reinforce'
     OPTIM = 'optim'
-    
-
 
 class FittingEventType(StrEnum):
     NEW_ATTEMPT = 'new_attempt'

@@ -1,3 +1,6 @@
+"""
+Momentum UMR raw factors for stock level1
+"""
 from __future__ import annotations
 import pandas as pd
 from src.proj import DB

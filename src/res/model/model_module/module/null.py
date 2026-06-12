@@ -1,8 +1,13 @@
+"""
+Null predictor module for factor / other null module (just pass through the data)
+"""
 from __future__ import annotations
 import torch
 from typing import Any
 
 from src.res.model.util import PredictorModel , BatchInput
+
+__all__ = ['NullPredictor']
 
 class NullPredictor(PredictorModel):
     """null predictor for factor / db module (just pass through the data)"""

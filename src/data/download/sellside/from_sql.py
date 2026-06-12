@@ -11,11 +11,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from sqlalchemy import create_engine , exc
-from typing import Any , ClassVar , Literal , Iterable
+from typing import Any , ClassVar , Literal
 
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
+
+__all__ = ['SellsideSQLDownloader']
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     'dongfang.hfq_chars' : (('dongfang' , 'hfq_chars'  , 'tradingdate' , 20050101 , 99991231 , '%Y%m%d') , {}) ,
@@ -236,7 +238,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
     
     def download(
         self , option : Literal['since' , 'dates'] , overwrite : bool = False ,
-        dates : Iterable[int] = () , trace = 1 , 
+        dates : Base.alias.intDates | None = None , trace = 1 , 
     ) -> Base.UpdateFlag:
         assert overwrite is False , 'overwrite is not supported for sellside sql download'
         stored_dates = DB.dates(self.DB_SRC , self.db_key)
@@ -251,7 +253,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             end = CALENDAR.update_to(key = 'sellside_sql')
             date_intervals = CALENDAR.range_segments(start , end , 'td' , 60)
         else:
-            dates = CALENDAR.diffs(dates , stored_dates)
+            dates = Dates(dates).diff(stored_dates)
             date_intervals = [(d,d) for d in dates]
 
         if not date_intervals: 

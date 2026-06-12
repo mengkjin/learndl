@@ -1,3 +1,7 @@
+"""
+API for model operations of this project.
+"""
+
 from __future__ import annotations
 from src.res.model.util import ModelPath
 from src.res.model.model_module.application import (
@@ -8,7 +12,9 @@ from src.data import PreProcessorTask
 
 from .util import wrap_update
 
+__all__ = ['ModelAPI']
 class ModelAPI:
+    """API for model operations of this project."""
     @classmethod
     def update(cls):
         """

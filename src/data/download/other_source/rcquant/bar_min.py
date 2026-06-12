@@ -20,6 +20,8 @@ from src.data.util import secid_adjust , trade_min_reform
 
 from .initializer import RQInitializer , MinDataType , RQ_PATH
 
+__all__ = ['RcquantMinBarDownloader']
+
 def src_start_date(data_type : MinDataType) -> int:
     never = 20401231
     if data_type == 'sec':
@@ -72,7 +74,7 @@ def stored_dates(data_type : MinDataType , x_min : int = 1) -> Dates:
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-    return Dates(DB.dates('trade_ts' , src_key(data_type , x_min) , use_alt = False))
+    return DB.dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
 
 def last_date(data_type : MinDataType , offset : int = 0 , x_min : int = 1) -> int:
     dates = stored_dates(data_type , x_min)
@@ -90,9 +92,9 @@ def x_mins_target_dates(data_type : MinDataType , start : int , end : int | None
         return dates
     end = CALENDAR.update_to(key = 'rcquant_min') if end is None else end
     for x_min in [5 , 10 , 15 , 30 , 60]:
-        source_dates = Dates(DB.dates('trade_ts' , src_key(data_type , 1)))
+        source_dates = DB.dates('trade_ts' , src_key(data_type , 1))
         stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
-        target_dates = source_dates.diff(stored_dates).truncate(start , end).truncate(src_start_date(data_type))
+        target_dates = source_dates.diff(stored_dates).slice(min(start , src_start_date(data_type)) , end)
         dates += target_dates
     return dates
 

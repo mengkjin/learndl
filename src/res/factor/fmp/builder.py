@@ -1,3 +1,7 @@
+"""
+Portfolio builder for Factor Model Portfolio
+"""
+
 from __future__ import annotations
 import itertools
 import numpy as np
@@ -17,6 +21,8 @@ from src.res.factor.fmp.fmp_basic import (
     get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
     get_full_name , parse_full_name , category_title
 )
+
+__all__ = ['PortfolioBuilder' , 'PortfolioGroupBuilder']
 
 class PortfolioBuilder(Base.BoundLogger):
     """
@@ -106,7 +112,7 @@ class PortfolioBuilder(Base.BoundLogger):
     @property
     def min_alpha_date(self) -> int:
         dates = self.alpha.available_dates()
-        return dates.min() if len(dates) > 0 else 99991231
+        return dates.min if dates else 99991231
 
     @cached_property
     def resumed_portfolio_end_date(self) -> int:

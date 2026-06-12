@@ -1,6 +1,11 @@
+"""
+Callback specifically for VAE module
+"""
 from __future__ import annotations
 import torch
 from src.res.model.util import BaseCallBack
+
+__all__ = ['SpecificCB_VAE']
 
 class SpecificCB_VAE(BaseCallBack):
     """In [VAE], Fill [y] [alpha_noise] [factor_noise] in batch_input.kwargs"""

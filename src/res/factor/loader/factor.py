@@ -1,7 +1,13 @@
+"""
+Factor loader for Factor Model Portfolio
+"""
+
 from __future__ import annotations
 from typing import Any
 from src.proj import Base
 from src.data import DATAVENDOR
+
+__all__ = ['random' , 'real']
 
 def random(start = 20240101 , end = 20240531 , step = 5 , nfactor = 2):
     return DATAVENDOR.random_factor(start , end , step , nfactor).to_dataframe()

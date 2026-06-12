@@ -19,7 +19,11 @@ from src.res.factor.util.stats import eval_cum_ret , eval_drawdown , eval_uncove
 
 from .portfolio_accountant import PortfolioAccount
 
-def select_conditioner(name : str):
+__all__ = [
+    'BaseConditioner' 
+]
+
+def _select_conditioner(name : str):
     """
     select the conditioner based on the name
     """
@@ -188,7 +192,7 @@ class BaseConditioner(ABC):
     
     @staticmethod
     def select_conditioner(name : str):
-        return select_conditioner(name)
+        return _select_conditioner(name)
         
     @property
     def account(self):

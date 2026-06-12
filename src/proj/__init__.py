@@ -1,4 +1,5 @@
 """Root package for project infrastructure: environment, paths, DB, calendar, logging, and ``Proj`` facade."""
+from __future__ import annotations
 
 from .env import MACHINE , PATH , Const , Proj , Options
 from .log import Logger

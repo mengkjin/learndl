@@ -13,6 +13,8 @@ from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silenc
 from .display import Display
 from .logfile import LogFile
 
+__all__ = ['Logger' , 'StderrType' , 'StdoutType' , 'LOG_FILE' , 'ENTRY_POINT']
+
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 ENTRY_POINT = Path(sys.argv[0]).stem
 
@@ -62,7 +64,7 @@ class StdoutType(StrEnum):
             'alert3'   : {'arg_prefix' : 'Emergent: ' , 'color' : 'lightpurple' , 'to_log_file' : True}
         }[self.value]
 
-def find_calling_module():
+def find_calling_module() -> str:
     """Find the calling module"""
     ignore_modules = ['inspect' , 'src.proj.log.logger']
     stack = inspect.stack()
@@ -79,7 +81,8 @@ def add_to_log_file(message : str):
 def new_stdout(
     *args , indent : int = 0 , vb_level : Any = 1 , 
     arg_prefix : str | None = None , prefixes : list[str] | None = None , 
-    to_log_file : bool = False , **kwargs):
+    to_log_file : bool = False , **kwargs
+) -> FormatStr:
     """
     custom stdout message
     kwargs:
@@ -106,7 +109,8 @@ def new_stdout(
 
 def new_stderr(
     *args , indent : int = 0 , vb_level : Any = 0 , 
-    arg_prefix : str | None = None , prefixes : list[str] | None = None , **kwargs):
+    arg_prefix : str | None = None , prefixes : list[str] | None = None , **kwargs
+) -> FormatStr:
     """
     Like ``new_stdout`` but to stderr; always appends unformatted text to ``LOG_FILE``.
     Use ``vb_level`` to control the verbosity of the message.

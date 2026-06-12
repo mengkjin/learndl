@@ -1,6 +1,5 @@
 """
-Interaction with computer related to this project.
-1. power profile management
+Direct calls related to computer operations of this project.
 """
 from __future__ import annotations
 
@@ -9,6 +8,8 @@ from datetime import datetime
 from typing import Literal
 
 from src.proj import MACHINE , Logger , PATH
+
+__all__ = ['suspend_this_machine' , 'change_power_mode' , 'print_disk_space_info']
 
 def suspend_this_machine():
     """Suspend the machine if not windows and no running python scripts"""

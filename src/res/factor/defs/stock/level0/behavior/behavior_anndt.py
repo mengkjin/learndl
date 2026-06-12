@@ -1,6 +1,10 @@
+"""
+Anndt factors for the project
+"""
 from __future__ import annotations
 import pandas as pd
 
+from src.proj import CALENDAR
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
@@ -30,7 +34,7 @@ class mom_aog(MomentumFactor):
     
     def calc_factor(self, date: int):
         ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365)
-        ann_dt['date'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 1)
+        ann_dt['date'] = CALENDAR.offset(ann_dt['td_backward'] , 1 , 'td')
         start , end = date_min_max(ann_dt['date'])
         
         quotes = DATAVENDOR.RISK.get_exret(start , end , pivot = False)
@@ -44,9 +48,9 @@ class mom_aaa(MomentumFactor):
     
     def calc_factor(self, date: int):
         ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365)
-        ann_dt['d0'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 1)
-        ann_dt['d1'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 2)
-        ann_dt['d2'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 3)
+        ann_dt['d0'] = CALENDAR.offset(ann_dt['td_backward'] , 1 , 'td')
+        ann_dt['d1'] = CALENDAR.offset(ann_dt['td_backward'] , 2 , 'td')
+        ann_dt['d2'] = CALENDAR.offset(ann_dt['td_backward'] , 3 , 'td')
 
         start , end = ann_dt['d0'].min() , ann_dt['d2'].max()
 

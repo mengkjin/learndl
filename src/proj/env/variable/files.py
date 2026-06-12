@@ -6,6 +6,8 @@ from pathlib import Path
 
 from src.proj.core import stderr , strPath
 
+__all__ = ['LogWriterFile' , 'UniqueFileList']
+
 class LogWriterFile:
     """Descriptor storing the optional main project log stream (``TextIOWrapper``)."""
 

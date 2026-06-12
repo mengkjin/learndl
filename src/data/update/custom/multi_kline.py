@@ -16,6 +16,8 @@ from typing import Any
 from src.proj import CALENDAR , DB , Base , Dates
 from src.data.update.custom.basic import BasicCustomUpdater
 
+__all__ = ['MultiKlineUpdater']
+
 class MultiKlineUpdater(BasicCustomUpdater):
     """Registered updater for 5/10/20-day aggregated OHLCV bars."""
     ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , Base.UpdateType.ROLLBACK)
@@ -31,17 +33,18 @@ class MultiKlineUpdater(BasicCustomUpdater):
         flags = Base.UpdateFlagList()
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
-            sub_end = DB.dates(cls.DB_SRC , 'day').max()
-            stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , label_name)
-            target_dates = CALENDAR.diffs(start , sub_end , stored_dates)
-            if len(target_dates) == 0:
+            sub_end = DB.dates(cls.DB_SRC , 'day').max
+            stored_dates = Dates() if overwrite else DB.dates(cls.DB_SRC , label_name)
+            target_dates = Dates(start , sub_end).diff(stored_dates)
+
+            if target_dates.empty:
                 cls.logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
                 flags += Base.UpdateFlag.SKIPPED
                 continue
 
             for date in target_dates: 
                 cls.update_one(date , n_day , label_name)
-            cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(target_dates)}' , idt = 1 , vb = 1)
+            cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {target_dates}' , idt = 1 , vb = 1)
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
 
@@ -60,7 +63,7 @@ def nday_kline(date : int , n_day : int) -> pd.DataFrame:
     """
     # read calendar
     assert n_day in [5 , 10 , 20] , f'n_day should be in [5 , 10 , 20]'
-    trailing_dates = CALENDAR.td_trailing(date , n_day)
+    trailing_dates = CALENDAR.trailing(date , n_day , 'td')
     assert trailing_dates[-1] == date , (trailing_dates[-1] , date)
 
     price_feat  = ['open','close','high','low','vwap']

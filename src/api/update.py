@@ -1,3 +1,7 @@
+"""
+API for periodic update operations of this project.
+"""
+
 from __future__ import annotations
 from src.proj import Logger , MACHINE , CALENDAR , Proj
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
@@ -11,6 +15,8 @@ from .summary import SummaryAPI
 from .notification import NotificationAPI
 
 from .util import wrap_update , print_update_records
+
+__all__ = ['UpdateAPI']
 
 class UpdateAPI:
     @classmethod

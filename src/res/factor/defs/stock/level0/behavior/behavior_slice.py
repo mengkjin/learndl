@@ -1,3 +1,6 @@
+"""
+Behavior slice factors for stock level0
+"""
 from __future__ import annotations
 import numpy as np
 
@@ -6,6 +9,11 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
 from src.func.transform import lm_resid
+
+__all__ = [
+    'mom_ltampl_v1' , 'mom_ltampl_v2' , 
+    'mom_slicevol1m' , 'corr_slicevol1m' , 'beta_slicevol1m' , 'skew_slicevol1m' , 'ampl_slicecp1m'
+]
 
 def get_amplitudes(start , end , pivot = True):
     quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['high' , 'low' , 'preclose'] , adj_price = False)

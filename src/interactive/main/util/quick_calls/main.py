@@ -4,6 +4,8 @@ import streamlit as st
 from src.interactive.frontend import subheader_expander
 from .basic import QuickCallButton
 
+__all__ = ['show_quick_calls']
+
 PAGE_NAME = 'home'
    
 def show_quick_calls(ncol : int = 5) -> None:

@@ -1,3 +1,6 @@
+"""
+Solver input class for Factor Model Portfolio
+"""
 from __future__ import annotations
 import numpy as np
 

@@ -1,3 +1,4 @@
+"""basic enums for the project's purposes"""
 from __future__ import annotations
 
 from src.proj.core.types.enums import StrEnum

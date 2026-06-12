@@ -1,7 +1,11 @@
+"""
+Momentum PHIGH factors for stock level0
+"""
 from __future__ import annotations
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
+__all__ = ['mom_phigh1m']
 
 def phigh(date , n_months : int , lag_months : int = 0):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

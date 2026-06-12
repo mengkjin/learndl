@@ -15,8 +15,10 @@ import pandas as pd
 
 from functools import cached_property
 from typing import Callable , TypeVar
-from src.proj import CALENDAR , MACHINE , Base
+from src.proj import CALENDAR , MACHINE , Base , Dates
 from src.data.util import secid_adjust
+
+__all__ = ['TushareUtils' , 'TS']
 
 _server_down = False
 T = TypeVar('T')
@@ -89,11 +91,11 @@ class TushareUtils:
             return ((update_to // 100) % 100) != ((last_date // 100) % 100)
     
     @classmethod
-    def dates_to_update(cls , last_date : int , freq : Base.lit.FreqUpdate , update_to : int | None = None):
+    def dates_to_update(cls , last_date : int , freq : Base.lit.FreqUpdate , update_to : int | None = None) -> Dates:
         """get dates to update given last date and frequency"""
         update_to = update_to or CALENDAR.update_to(key = 'tushare')
         if last_date >= update_to: 
-            return np.array([] , dtype=int)
+            return Dates()
         if freq == 'd':
             date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').to_numpy(int)[1:]
         elif freq == 'w':
@@ -102,7 +104,7 @@ class TushareUtils:
             date_list = pd.date_range(str(last_date) , str(update_to) , freq='ME').strftime('%Y%m%d').to_numpy(int)
             if last_date in date_list: 
                 date_list = date_list[1:]
-        return np.sort(date_list)
+        return Dates(date_list)
 
     @classmethod
     def adjust_precision(cls , df : pd.DataFrame , tol : float = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):

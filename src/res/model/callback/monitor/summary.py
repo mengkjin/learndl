@@ -1,3 +1,7 @@
+"""
+Callback to summarize information of trainer
+- SummaryWriter : write summary to tensorboard and json file
+"""
 from __future__ import annotations
 import torch
 import shutil
@@ -11,6 +15,8 @@ from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 
 from src.proj import Proj , PATH , Save , Base
 from src.res.model.util import BaseCallBack
+
+__all__ = ['SummaryWriter']
 
 def _hidden_correlation_to_chw(hcorr : torch.Tensor) -> torch.Tensor:
     hcorr = hcorr.clamp(-1,1)

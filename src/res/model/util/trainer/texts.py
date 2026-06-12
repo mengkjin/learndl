@@ -1,7 +1,12 @@
+"""
+Texts for trainer
+"""
 from __future__ import annotations
 
 from datetime import datetime
 from .pipeline import TrainerPipeline
+
+__all__ = ['TrainerTexts']
 
 class TrainerTexts(TrainerPipeline):
     """Status texts class, used to generate the texts of the status"""

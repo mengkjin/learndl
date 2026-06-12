@@ -20,11 +20,14 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal
 
-from src.proj import PATH , MACHINE , CALENDAR , DB , Base , Logger
+from src.proj import PATH , MACHINE , DB , Base , Logger , Dates
 from src.data.util import (
     secid_adjust , col_reform , row_filter , adjust_precision , 
     trade_min_reform , trade_min_fillna
 )
+
+__all__ = ['FailedData' , 'JSFetcher' , 'JSDownloader']
+
 @dataclass
 class FailedData:
     """Container for a failed fetch operation, holding the type and optional date."""
@@ -98,7 +101,7 @@ class JSFetcher:
     def target_path(self , date = None):
         return DB.path(self.db_src , self.db_key , date)
     
-    def source_dates(self):
+    def source_dates(self) -> Dates:
         assert DB.DBPath.ByDate(self.db_src) , f'{self.db_src} is not by date'
         return self.R_source_dates(self.db_src , self.db_key)
 
@@ -128,9 +131,9 @@ class JSFetcher:
         }[source_key]
 
         source_dates = cls.R_dir_dates(date_source)
-        return np.array(sorted(source_dates) , dtype=int)
+        return Dates(source_dates)
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         return DB.dates(self.db_src , self.db_key)
     
     def get_update_dates(self , start = None , end = None , trace = 0 , incremental = True , force = False):
@@ -139,14 +142,13 @@ class JSFetcher:
         if force:
             if start is None or end is None:
                 raise ValueError(f'start and end must not be None with force update!')
-            target_dates = []
+            target_dates = Dates()
         if incremental: 
-            if len(target_dates):
-                source_dates = source_dates[source_dates >= min(target_dates)]
-        if trace > 0 and len(target_dates) > 0: 
+            if target_dates:
+                source_dates = source_dates.slice(start = target_dates.min)
+        if trace > 0 and target_dates: 
             target_dates = target_dates[:-trace]
-        new_dates = CALENDAR.slice(CALENDAR.diffs(source_dates , target_dates) , start , end)
-
+        new_dates = Dates(source_dates).diff(target_dates).slice(start , end)
         return new_dates   
 
     @classmethod
@@ -495,14 +497,14 @@ class JSDownloader(Base.BoundLogger):
         download_path = PATH.miscel.joinpath('JSMinute')
 
         os.makedirs(download_path , exist_ok=True)
-        target_dates = CALENDAR.range(20241201 , None , 'td' , updated = True)
+        target_dates = Dates(20241201 , None , updated = True)
         stored_dates = [int(x.name.split('.')[-2]) for x in download_path.iterdir() if x.is_file() and x.name.endswith('.zip')]
-        dates = np.setdiff1d(target_dates , stored_dates)
+        dates = target_dates - stored_dates
 
         paths : list[Path] = []
         if len(dates) == 0: 
             return paths
-        start , end = dates.min() , dates.max()
+        start , end = dates.min , dates.max
 
         def filedate(x):
             return int(re.findall(r'(\d{8})', x.key)[-1])

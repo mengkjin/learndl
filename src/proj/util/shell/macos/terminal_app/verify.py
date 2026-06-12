@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 
-
+__all__ = ['TerminalAppVerifier']
 class TerminalAppVerifier:
     """Check whether Terminal.app automation is available via ``osascript``."""
 

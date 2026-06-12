@@ -1,3 +1,6 @@
+"""
+Utility functions for argparse, including parsing unknown arguments and converting to a flat dict.
+"""
 from __future__ import annotations
 import argparse
 

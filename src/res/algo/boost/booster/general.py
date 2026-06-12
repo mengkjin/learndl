@@ -14,6 +14,8 @@ from typing import Any , Literal
 from . import ada , catboost , lgbm , xgboost
 from ..util import BasicBoostModel , BoostInput
 
+__all__ = ['GeneralBoostModel' , 'AVAILABLE_BOOSTS']
+
 AVAILABLE_BOOSTS = {
     'lgbm' : lgbm.Lgbm,
     'ada' : ada.AdaBoost,

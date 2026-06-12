@@ -11,7 +11,8 @@ import torch
 import numpy as np
 from typing import Any
 
-from .data_block import DataBlock , CALENDAR
+from src.proj import Base , Dates
+from .data_block import DataBlock
 
 __all__ = ['SpecialDataSet']
 
@@ -26,7 +27,12 @@ class SpecialDataSet:
     candidates : tuple[str,] = ('dfl2' ,)
 
     @classmethod
-    def load(cls , key : str , * , dates : np.ndarray | list[int] | None = None , secid : np.ndarray | None = None , start : int | None = None , end : int | None = None , dtype : str | Any = torch.float , vb_level : Any = 2) -> DataBlock:
+    def load(
+        cls , key : str , * , 
+        dates : Base.alias.intDates | None = None , secid : np.ndarray | None = None , 
+        start : int | None = None , end : int | None = None ,
+        dtype : torch.dtype = torch.float , vb_level : Any = 2
+    ) -> DataBlock:
         """
         Load a special dataset as a DataBlock.
 
@@ -52,7 +58,11 @@ class SpecialDataSet:
             raise ValueError(f'SpecialModelDataSet {key} is not supported')
 
     @classmethod
-    def load_dfl2(cls , dates : np.ndarray | list[int] | None = None , secid : np.ndarray | None = None , start : int | None = None , end : int | None = None , dtype : str | Any = torch.float , vb_level : Any = 2) -> DataBlock:
+    def load_dfl2(
+        cls , dates : Base.alias.intDates | None = None , secid : np.ndarray | None = None , 
+        start : int | None = None , end : int | None = None , 
+        dtype : torch.dtype = torch.float , vb_level : Any = 2
+    ) -> DataBlock:
         """
         Load Dongfang L2 characteristics (``sellside/dongfang.l2_chars``) as a DataBlock.
 
@@ -60,9 +70,7 @@ class SpecialDataSet:
         The block is cast to ``dtype`` (default ``torch.float``) and optionally
         re-indexed to ``secid`` via :meth:`DataBlock.align_secid`.
         """
-        if dates is None:
-            assert start is not None or end is not None , 'dates or start or end must be provided'
-            dates = CALENDAR.range(start , end , 'td')
+        dates = Dates(dates , start , end)
         block = DataBlock.load_raw('sellside', 'dongfang.l2_chars', dates = dates).to(dtype)
         if secid is not None:
             block = block.align_secid(secid , inplace = True)

@@ -1,12 +1,14 @@
+"""
+Base callback class for trainer
+"""
 from __future__ import annotations
 
 from functools import cached_property
 from inspect import currentframe
 
-from src.proj import Proj
 from .pipeline import TrainerPipeline
 
-vb_level_callback = Proj.vb.get('callback')
+__all__ = ['BaseCallBack']
 
 class BaseCallBack(TrainerPipeline):
     CB_ORDER : int = 0

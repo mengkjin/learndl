@@ -1,3 +1,6 @@
+"""
+Bound class for Factor Model Portfolio
+"""
 from __future__ import annotations
 import numpy as np
 from copy import deepcopy
@@ -5,6 +8,10 @@ from dataclasses import dataclass
 from typing import Any , ClassVar , Literal
 
 from src.proj import Logger
+
+__all__ = [
+    'StockBound' , 'StockPool' , 'IndustryPool' , 'GeneralBound' , 
+    'ValidRange' , 'STOCK_UB' , 'STOCK_LB']
 
 STOCK_LB , STOCK_UB = -1. , +1.
 

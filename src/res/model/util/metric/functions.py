@@ -1,3 +1,6 @@
+"""
+Metric functions for the project
+"""
 from __future__ import annotations
 import torch
 
@@ -41,8 +44,8 @@ class MetricFunction:
 
     def __call__(
         self , data : BatchData , 
-        which_output : int | list[int] | None = None , 
-        which_label : int | list[int] | None = None , 
+        which_output : Base.alias.intNums | None = None , 
+        which_label : Base.alias.intNums | None = None , 
         require_grad : bool = True
     ) -> dict[str,Tensor]:
         with _Grads(require_grad):
@@ -92,7 +95,7 @@ class LossFunction(MetricFunction):
                 multilosses = None
             self.components[criterion] = LossComponent(calculator , lamb = lamb , multilosses = multilosses , **kwargs)
 
-    def losses(self , data : BatchData , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None ,
+    def losses(self , data : BatchData , which_output : Base.alias.intNums | None = None , which_label : Base.alias.intNums | None = None ,
                prefix : str | tuple[str,...] | None = ('penalty_' , 'loss_') , dataset : Base.lit.DatasetAll = 'train') -> dict[str,Tensor]:
         if dataset not in ['train','valid']:
             return {}
@@ -128,7 +131,7 @@ class AccuracyFunction(MetricFunction):
             calculator = Accuracy.get(criterion , **kwargs)
             self.components[criterion] = AccuracyComponent(calculator , lamb = lamb , **kwargs)
 
-    def accuracies(self , data : BatchData , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None , 
+    def accuracies(self , data : BatchData , which_output : Base.alias.intNums | None = None , which_label : Base.alias.intNums | None = None , 
                    dataset : Base.lit.DatasetAll = 'train') -> dict[str,float]:
         if dataset not in ['train','valid']:
             return {}
@@ -150,8 +153,8 @@ class RankICFunction:
 
     def __call__(
         self , data : BatchData , 
-        which_output : int | list[int] | None = None , 
-        which_label : int | list[int] | None = None , 
+        which_output : Base.alias.intNums | None = None , 
+        which_label : Base.alias.intNums | None = None , 
         **kwargs
     ) -> Tensor:
         with _Grads(False):

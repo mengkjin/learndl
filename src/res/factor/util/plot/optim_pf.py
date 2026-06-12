@@ -1,3 +1,6 @@
+"""
+Plotter for Optim Portfolio
+"""
 from __future__ import annotations
 import pandas as pd
 
@@ -9,6 +12,8 @@ from src.proj.util.functional.plot import (
 )
 from .plot_basic import PlotDfFigIterator
 
+__all__ = ['Plotter']
+
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']   
 
@@ -17,7 +22,7 @@ def _strategy_name(keys : list[str]):
         return '.'.join(x[col] for col in keys)
     return wrapper
 
-def df_strategy(df : pd.DataFrame) -> pd.Series:
+def _df_strategy(df : pd.DataFrame) -> pd.Series:
     keys = [i for i in MAJOR_KEYS if i in df.columns or i in df.index.names]
     names = df.apply(_strategy_name(keys) , axis=1)
     assert isinstance(names , pd.Series) , f'names must be a pandas series, but got {type(names)}'
@@ -34,7 +39,7 @@ class Plotter:
         self.plot_iter.set_args(data , show , title_prefix , 'Front Face' , ['factor_name'] , drop_keys = False , drop_cols = [] , num_groups_per_iter = num_per_page , num_pages = num_pages)
         for df , fig in self.plot_iter.iter():
             df = df.reset_index([i for i in df.index.names if i])
-            df['strategy'] = df_strategy(df)
+            df['strategy'] = _df_strategy(df)
             plot_table(df.set_index('strategy') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] ,

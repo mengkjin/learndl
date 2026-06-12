@@ -14,6 +14,8 @@ from .verify import CmuxVerifier
 from ...util import process , BasicOpener
 from ... import preference
 
+__all__ = ['CmuxTree' , 'CmuxWindow' , 'CmuxWorkspace' , 'CmuxSurface']
+
 class CmuxTree:
     """
     In-memory snapshot of the running cmux GUI tree (windows → workspaces → surfaces).

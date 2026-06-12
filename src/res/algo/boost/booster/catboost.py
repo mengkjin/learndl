@@ -13,6 +13,8 @@ from typing import Any
 
 from ..util import BasicBoostModel , BoostInput
 
+__all__ = ['CatBoost']
+
 PLOT_PATH : Path | None = None
 
 class CatBoost(BasicBoostModel):

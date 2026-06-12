@@ -15,6 +15,8 @@ from src.proj.core import strPath
 
 from ..preference import DISCOVER_WAIT_TIMEOUT , DISCOVER_WAIT_INTERVAL
 
+__all__ = ['ProcessDiscovery']
+
 class ProcessDiscovery:
     """
     Find running Python processes by script path or task id (requires ``psutil``).

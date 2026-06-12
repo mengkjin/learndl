@@ -34,6 +34,11 @@ from src.proj import MACHINE , PATH , CALENDAR , Dates , DB , Base , Save , Load
 from src.proj.util.functional.handler import retry_call
 from .core import TS
 
+__all__ = [
+    'TushareFetcher' , 'InfoFetcher' , 'TimeSeriesFetcher' , 
+    'TradeDataFetcher' , 'DayFetcher' , 'WeekFetcher' , 'MonthFetcher' , 
+    'FinaFetcher' , 'RollingFetcher']
+
 T = TypeVar('T')
 
 class TushareFetcherMeta(ABCMeta):
@@ -253,27 +258,27 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         """get required dataframe on given date""" 
 
     @abstractmethod
-    def target_dates(self) -> list[int] | np.ndarray: 
+    def target_dates(self) -> Dates: 
         """get update dates"""
 
-    def _info_fetcher_update_date(self) -> list[int] | np.ndarray:
+    def _info_fetcher_update_date(self) -> Dates:
         """update date for info fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to(key = 'tushare')
-        return [update_to] if self.updatable(self.last_date() , self.UPDATE_FREQ , update_to) else []
+        return Dates(update_to) if self.updatable(self.last_date() , self.UPDATE_FREQ , update_to) else Dates()
 
-    def _date_fetcher_update_dates(self) -> list[int] | np.ndarray:
+    def _date_fetcher_update_dates(self) -> Dates:
         """update dates for date fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         return TS.dates_to_update(self.last_date() , self.UPDATE_FREQ) 
     
-    def _fina_fetcher_update_dates(self , data_freq : Base.lit.FreqFinData = 'q' , consider_future : bool = False) -> list[int] | np.ndarray:
+    def _fina_fetcher_update_dates(self , data_freq : Base.lit.FreqFinData = 'q' , consider_future : bool = False) -> Dates:
         """update dates for fina fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to(key = 'tushare')
         update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         if not update: 
-            return []
+            return Dates()
 
         dates = CALENDAR.qe_trailing(update_to , n_past = 3 , n_future = 4 if consider_future else 0 , another_date = self.last_date())
         if data_freq == 'y': 
@@ -281,7 +286,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         elif data_freq == 'h': 
             dates = [date for date in dates if date % 10000 in [630,1231]]
 
-        return dates
+        return Dates(dates)
 
     @property
     def api(self):
@@ -301,7 +306,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             assert date is not None , f'{self.__class__.__name__} use date type but date is None'
         return DB.path(self.DB_SRC , self.DB_KEY , date)
 
-    def set_rollback_date(self , rollback_date : int | None = None):
+    def set_rollback_date(self , rollback_date : int | None = None) -> None:
         """set rollback date to the fetcher for update rollback"""
         CALENDAR.check_rollback_date(rollback_date)
         assert not hasattr(self , '_rollback_date') , f'{self.__class__.__name__} rollback_date has been set'
@@ -324,7 +329,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         return ldate
 
     @staticmethod
-    def updatable(last_date : int , freq : Base.lit.FreqUpdate , update_to : int | None = None):
+    def updatable(last_date : int , freq : Base.lit.FreqUpdate , update_to : int | None = None) -> bool:
         """check if the date is updatable given last date and frequency"""
         return TS.updatable(last_date , freq , update_to)
     
@@ -366,12 +371,11 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             return True
         return False
 
-    def update_dates(self , dates , **kwargs) -> np.ndarray:
+    def update_dates(self , dates : Base.alias.intDates , **kwargs) -> Dates:
         """update the fetcher given dates"""
+        dates = Dates(dates)
         if self.check_server_down(): 
-            return np.array([], dtype = int)
-        if not self.db_by_name:
-            assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
+            return dates
         for date in dates: 
             DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
         return dates
@@ -380,7 +384,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         """update the fetcher with retries"""
         dates = self.target_dates()
 
-        if len(dates) == 0: 
+        if dates.empty: 
             self.logger.skipping(f'Already fetched up to {CALENDAR.update_to(key = 'tushare')}!')
             return Base.UpdateFlag.SKIPPED
 
@@ -424,11 +428,11 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         iterate_fetcher = TushareIterateFetcher(self.__class__.__name__ , tushare_api , limit , max_fetch_times = max_fetch_times , breakpoint = breakpoint , **kwargs)
         return iterate_fetcher.fetch()
         
-    def missing_dates(self , **kwargs):
+    def missing_dates(self , **kwargs) -> Dates:
         """get missing dates"""
-        return np.array([] , dtype = int)
+        return Dates()
 
-    def stored_dates(self):
+    def stored_dates(self) -> Dates:
         """get stored dates"""
         return DB.dates(self.DB_SRC , self.DB_KEY)
 
@@ -437,7 +441,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         """update missing dates"""
         fetcher = cls()
         missing_dates = fetcher.missing_dates()
-        if len(missing_dates) == 0:
+        if missing_dates.empty:
             return Base.UpdateFlag.SKIPPED
         fetcher.update_dates(missing_dates , step = 1)
         return Base.UpdateFlag.SUCCESS
@@ -448,7 +452,7 @@ class InfoFetcher(TushareFetcher):
     UPDATE_FREQ = 'd'
     DB_SRC = 'information_ts'
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         return self._info_fetcher_update_date()
 
 class TimeSeriesFetcher(TushareFetcher):
@@ -456,7 +460,7 @@ class TimeSeriesFetcher(TushareFetcher):
     DB_TYPE = 'time_series'
     UPDATE_FREQ = 'd'
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         return self._info_fetcher_update_date()
 
 class TradeDataFetcher(TushareFetcher):
@@ -464,21 +468,22 @@ class TradeDataFetcher(TushareFetcher):
     DB_TYPE = 'date'
     DB_SRC = 'trade_ts'
 
-    def target_dates(self): 
+    def target_dates(self) -> Dates: 
         return self._date_fetcher_update_dates()
 
 class DayFetcher(TradeDataFetcher):
     """base class of day fetcher , implement get_data for real use"""
     UPDATE_FREQ = 'd'
 
-    def missing_dates(self , updated = True , **kwargs):
+    def missing_dates(self , updated = True , **kwargs) -> Dates:
         """get missing dates"""
         dates = CALENDAR.update_schedule(self.START_DATE , None , key = 'tushare')
-        return np.setdiff1d(dates , self.stored_dates())
+        dates = Dates(dates[0] , dates[1]).diff(self.stored_dates())
+        return dates.diff(self.stored_dates())
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         """get target dates"""
-        return np.intersect1d(self._date_fetcher_update_dates() , self.missing_dates())
+        return self._date_fetcher_update_dates().intersect(self.missing_dates())
 
 class WeekFetcher(TradeDataFetcher):
     """base class of week fetcher , implement get_data for real use"""
@@ -496,7 +501,7 @@ class FinaFetcher(TushareFetcher):
     DATA_FREQ : Base.lit.FreqFinData = 'q'
     CONSIDER_FUTURE = False
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         return self._fina_fetcher_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
 
 class RollingFetcher(TushareFetcher):
@@ -514,13 +519,13 @@ class RollingFetcher(TushareFetcher):
         assert self.ROLLING_BACK_DAYS > 0 , f'{self.__class__.__name__} ROLLING_BACK_DAYS must be positive'
         assert self.ROLLING_SEP_DAYS > 0 , f'{self.__class__.__name__} ROLLING_BACK_DAYS must be positive'
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         """get update dates for rolling fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to(key = 'tushare')
         update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         if not update: 
-            return []
+            return Dates()
 
         rolling_last_date = max(self.START_DATE , CALENDAR.cd(self.last_date() , -self.ROLLING_BACK_DAYS))
         update_dates = TS.dates_to_update(rolling_last_date , self.UPDATE_FREQ , update_to)
@@ -530,9 +535,9 @@ class RollingFetcher(TushareFetcher):
             dates.append(min(d , update_to))
             if d >= update_to: 
                 break
-        return dates
+        return Dates(dates)
 
-    def update_dates(self , dates) -> np.ndarray:
+    def update_dates(self , dates : Dates) -> Dates:
         """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
         assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
         updated_dates = []
@@ -548,4 +553,4 @@ class RollingFetcher(TushareFetcher):
                     subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
                 DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 updated_dates.append(date)
-        return np.array(updated_dates , dtype = int)
+        return Dates(updated_dates)

@@ -1,3 +1,6 @@
+"""
+Growth YOY Z-score factors for stock level0
+"""
 from __future__ import annotations
 from src.data import DATAVENDOR
 from src.res.factor.calculator import GrowthFactor

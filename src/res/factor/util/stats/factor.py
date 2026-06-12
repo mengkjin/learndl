@@ -1,3 +1,6 @@
+"""
+Statistical functions for StockFactor
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -10,6 +13,13 @@ from src.data import DATAVENDOR
 
 from src.res.factor.util.classes import StockFactor
 from .basic import eval_stats , eval_ic_stats , eval_qtile_by_day
+
+__all__ = [
+    'calc_frontface' , 'calc_coverage' , 'calc_ic_curve' , 'calc_ic_decay' , 
+    'calc_ic_indus' , 'calc_ic_year' , 'calc_ic_benchmark' , 'calc_ic_monotony' ,
+    'calc_pnl_curve' , 'calc_style_corr' , 'calc_group_return' , 'calc_group_curve' , 
+    'calc_group_decay' , 'calc_group_year' , 'calc_distrib_curve' , 'calc_distrib_qtile'
+]
 
 def calc_frontface(factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
                    nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
@@ -132,7 +142,7 @@ def calc_pnl_curve(
     pnl = factor.eval_weighted_pnl(nday , lag , group_num , ret_type , direction)
     pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
     pnl = pd.concat([pnl.groupby(['factor_name' , 'weight_type'])['date'].min().reset_index().assign(cum_ret = 0.) , pnl])
-    pnl['date'] = CALENDAR.td_array(pnl['date'] , lag + nday - 1)
+    pnl['date'] = CALENDAR.offset(pnl['date'] , lag + nday - 1 , 'td')
     return pnl
 
 def calc_style_corr(

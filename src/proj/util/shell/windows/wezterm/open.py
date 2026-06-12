@@ -16,6 +16,8 @@ from ...util.basic import BasicOpener
 from ...util import process
 from .verify import WezTermVerifier
 
+__all__ = ['WezTermOpener' , 'activate_wezterm']
+
 # Optional: focus an existing WezTerm GUI window (e.g. after ``start``).
 _PS_FOCUS = r"""
 $proc = $null

@@ -1,3 +1,6 @@
+"""
+Basic string enum class for the project
+"""
 from __future__ import annotations
 import enum
 from typing import Any , Iterable , Self

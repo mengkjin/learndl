@@ -1,3 +1,6 @@
+"""
+Base Predictor model class for trainer
+"""
 from __future__ import annotations
 
 import torch
@@ -11,6 +14,8 @@ from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , Batch
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
+
+__all__ = ['PredictorModel']
 
 class PredictorModel(TrainerPipeline):
     """a group of ensemble models , of same net structure"""
@@ -119,6 +124,10 @@ class PredictorModel(TrainerPipeline):
     @abstractmethod
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         """call when testing new model"""
+        return self
+    @abstractmethod
+    def init_model(self , *args , **kwargs):
+        """initialize model"""
         return self
     @abstractmethod
     def ckpt_state_dict(self) -> dict[str , Any]:

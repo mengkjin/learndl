@@ -1,9 +1,14 @@
+"""
+CVXPY solver for Factor Model Portfolio
+"""
 from __future__ import annotations
 import numpy as np
 import cvxpy as cp
 
 from src.proj import Base
 from ..interpreter import SolverInput , SolveCond , SolveVars
+
+__all__ = ['Solver']
 
 _SOLVER_PARAM = {
     'ECOS': {'max_iters': 200},

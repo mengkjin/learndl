@@ -1,3 +1,6 @@
+"""
+Calculator for model , which can calculate the model output for a given date
+"""
 from __future__ import annotations
 from functools import cached_property
 from typing import Any
@@ -5,6 +8,8 @@ from typing import Any
 from src.proj import Proj , CALENDAR , Base
 from src.res.model.util import ModelPath , BatchData , DataModule
 from src.res.model.model_module.module import get_predictor_module
+
+__all__ = ['ModelCalculator']
 
 class ModelCalculator(Base.BoundLogger):
     """for a model_name/model_path to get batch_data easily"""

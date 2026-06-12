@@ -1,3 +1,6 @@
+"""
+Valuation augment factors for stock level1
+"""
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -8,6 +11,10 @@ from src.func.transform import winsorize , standard_normal
 from src.res.factor.calculator import ValueFactor
 from src.res.factor.defs.stock.level0.fundamental.valuation_static import (btop , btop_rank3y , etop , etop_rank3y , cfev , cfev_rank3y)
 from src.res.factor.defs.stock.level0.fundamental.valuation_dynamic import btop_stability , etop_stability , cfev_stability
+
+__all__ = [
+    'btop_augment' , 'etop_augment' , 'cfev_augment' , 'valuation_augment'
+]
 
 def btop_augment_range(date : int):
     bp_raw = btop.EvalSeries(date)

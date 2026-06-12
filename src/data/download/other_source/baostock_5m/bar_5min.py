@@ -18,6 +18,8 @@ from typing import Any , Literal
 from src.proj import PATH , CALENDAR , Dates , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
 
+__all__ = ['Baostock5minBarDownloader']
+
 START_DATE = 20401231
 BAO_PATH = PATH.miscel.joinpath('Baostock')
 
@@ -58,7 +60,7 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     
 def updated_dates(x_min : int = 5) -> Dates:
     assert x_min in [5 , 10 , 15 , 30 , 60] , f'{x_min} is not in [5 , 10 , 15 , 30 , 60]'
-    return Dates(DB.dates('trade_ts' , f'{x_min}min'))
+    return DB.dates('trade_ts' , f'{x_min}min')
 
 def updatable(date , last_date):
     return (updated_dates().empty) or (date > 0 and date > CALENDAR.cd(last_date , 6))

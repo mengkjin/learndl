@@ -12,6 +12,8 @@ import torch
 from torch import nn , Tensor
 from copy import deepcopy
 
+__all__ = ['Pass' , 'Transpose' , 'MeanPool' , 'Parallel']
+
 class Pass(nn.Module):
     """Identity layer; passes input through unchanged.
 

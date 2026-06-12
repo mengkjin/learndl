@@ -5,6 +5,8 @@ from pathlib import Path
 
 from src.proj.env import PATH
 
+__all__ = ['SharedSync']
+
 class SharedSync:
     """Shared folder sync manager, used to sync the shared folder to the local folder and vice versa"""
     SYNC_DIRS = ['schedule_model']

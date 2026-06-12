@@ -5,6 +5,8 @@ Supported string keys: 'relu', 'gelu', 'leaky' (LeakyReLU), 'softplus'.
 from __future__ import annotations
 from torch import nn
 
+__all__ = ['get_activation_fn']
+
 # Mapping from lower-case string key to nn.Module constructor.
 # Supported keys: 'relu', 'gelu', 'leaky' (LeakyReLU), 'softplus'.
 _ACT = {

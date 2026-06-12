@@ -6,6 +6,8 @@ from curl_cffi.requests import exceptions
 from typing import Callable , Literal , TypeVar , Generic , Any , Type , Union , Tuple
 from src.proj.log import Logger
 
+__all__ = ['retry_call' , 'ErrorHandler']
+
 T = TypeVar("T")
 TInside = TypeVar('TInside')
 
@@ -17,8 +19,10 @@ def get_exception_name(e: Exception) -> str:
     exc_type = type(e)
     return f"{exc_type.__module__}.{exc_type.__qualname__}"
 
-def retry_on_exceptions(func: Callable[..., T], error_handler: Callable[[Exception], str | Exception] , * , label: str, 
-                        attempts: int = 1, base_delay: float = 1.5) -> Callable[..., T | Exception]:
+def retry_on_exceptions(
+    func: Callable[..., T], error_handler: Callable[[Exception], str | Exception] , * , label: str, 
+    attempts: int = 1, base_delay: float = 1.5
+) -> Callable[..., T | Exception]:
     """
     Retry on exceptions with a given error handler
     """

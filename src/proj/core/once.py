@@ -4,6 +4,8 @@ import os
 import functools
 from typing import Any, Callable , Iterable , Literal
 
+__all__ = ['Once']
+
 class Once:
     """
     Control the execution of a function / method to only once for the same object and key

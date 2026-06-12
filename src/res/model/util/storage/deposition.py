@@ -1,3 +1,6 @@
+"""
+Deposition for trainer , which can save and load models
+"""
 from __future__ import annotations
 
 import shutil
@@ -7,6 +10,8 @@ from typing import TypeVar, Any
 from src.res.model.util.core import ModelDict, ModelPath
 
 T = TypeVar('T')
+
+__all__ = ['Deposition']
 
 class Deposition:
     """model saver"""

@@ -1,8 +1,13 @@
+"""
+Volatility ATR factors for stock level0
+"""
 from __future__ import annotations
 import pandas as pd
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import VolatilityFactor
+
+__all__ = ['atr_1m']
 
 def atr_classic(date , n_months : int , lag_months : int = 0):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

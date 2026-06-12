@@ -15,6 +15,12 @@ from .Attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
 from .CNN import mod_resnet_1d , mod_tcn
 from ..loss import MultiHeadLosses
 
+__all__ = [
+    'get_rnn_mod' , 'simple_lstm' , 'mod_lstm' , 'mod_gru' ,
+    'gru' , 'lstm' , 'resnet_lstm' , 'resnet_gru' , 'transformer' , 
+    'tcn' , 'rnn_ntask' , 'rnn_general' , 'gru_dsize'
+]
+
 def get_rnn_mod(rnn_type):
     """Return the RNN sub-module constructor for a given type string.
 

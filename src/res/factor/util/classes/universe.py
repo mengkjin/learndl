@@ -1,13 +1,18 @@
+"""
+Universe class for Factor Model Portfolio
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
 
 from typing import Literal
 
-from src.data import DATAVENDOR , DataBlock
-from src.proj import DB , CALENDAR , Save , Load
+from src.data import DATAVENDOR , DataBlock 
+from src.proj import DB , CALENDAR , Save , Load , Base , Dates
 from .portfolio import Portfolio
 from .benchmark import Benchmark
+
+__all__ = ['Universe']
 
 class Universe:
     """
@@ -34,7 +39,10 @@ class Universe:
         return f'Universe({self.name})'
 
     @classmethod
-    def _combine_caches_with_exclusion(cls , dfs : list[pd.DataFrame] , exclusions : str = 'st_lowprice_bse_loser_warnst') -> pd.DataFrame:
+    def _combine_caches_with_exclusion(
+        cls , dfs : list[pd.DataFrame] , 
+        exclusions : str = 'st_lowprice_bse_loser_warnst'
+    ) -> pd.DataFrame:
         dfs = [df for df in dfs if df is not None and not df.empty]
         if not dfs:
             return pd.DataFrame(columns = ['date' , 'secid' , 'weight'])
@@ -50,7 +58,10 @@ class Universe:
         return df
 
     @classmethod
-    def _get_cache_portfolio(cls , name : str , exclusions : str = 'st_lowprice_bse_loser_warnst') -> Portfolio:
+    def _get_cache_portfolio(
+        cls , name : str , 
+        exclusions : str = 'st_lowprice_bse_loser_warnst'
+    ) -> Portfolio:
         if name in cls._cache_universes:
             dfs = [df.assign(date = date) for date , df in cls._cache_universes[name].items()]
             df = cls._combine_caches_with_exclusion(dfs , exclusions = exclusions)
@@ -86,15 +97,17 @@ class Universe:
             Save.df(df_new , path)
         return df
     
-    def get(self , date : Literal['all'] | int | list[int] | np.ndarray | None = None , exclusions : str = 'st_lowprice_bse_loser_warnst') -> Portfolio:
-        if date is None:
-            date = []
-        elif isinstance(date , str) and date == 'all':
-            date = list(self._cache_universes[self.name].keys())
-        elif not isinstance(date , (list , np.ndarray , pd.Series , pd.Index)):
-            date = [date]
-        dfs = []
-        for d in date:
+    def get(
+        self , dates : Literal['all'] | Base.alias.intDates | None = None , 
+        exclusions : str = 'st_lowprice_bse_loser_warnst'
+    ) -> Portfolio:
+        if isinstance(dates , str) and dates == 'all':
+            dates = Dates(list(self._cache_universes[self.name].keys()))
+        else:
+            dates = Dates(dates)
+
+        dfs : list[pd.DataFrame] = []
+        for d in dates:
             if self.name in self._cache_universes:
                 if d not in self._cache_universes[self.name]:
                     self._cache_universes[self.name][d] = self.get_universe_df(d)
@@ -109,18 +122,18 @@ class UniverseExclusions:
     """
     Exclusions for universe
     """
-    _possible_exclusions: list[str] = ['bse' , 'st' , 'lowprice' , 'loser' , 'warnst']
+    _possible_exclusions: tuple[str, ...] = ('bse' , 'st' , 'lowprice' , 'loser' , 'warnst')
     _cache_exclusions: dict[str , dict[int , np.ndarray]] = {}
     _block_cache: dict[str , DataBlock] = {}
     @classmethod
-    def get_possible_exclusions(cls):
+    def get_possible_exclusions(cls) -> list[str]:
         """
         Get the possible exclusions
         """
-        return cls._possible_exclusions
+        return list(cls._possible_exclusions)
 
     @classmethod
-    def append_exclusions(cls , df : pd.DataFrame , date : int):
+    def append_exclusions(cls , df : pd.DataFrame , date : int) -> pd.DataFrame:
         """
         Get the exclusion list for the given exclusion and date
         """
@@ -131,7 +144,7 @@ class UniverseExclusions:
         return df
 
     @classmethod
-    def get_exclusion_list(cls , exclusion : str , date : int):
+    def get_exclusion_list(cls , exclusion : str , date : int) -> np.ndarray:
         """
         Get the exclusion list for the given exclusion and date
         """
@@ -153,7 +166,7 @@ class UniverseExclusions:
         return cls._cache_exclusions[exclusion][date]
 
     @classmethod
-    def get_bse(cls , date : int):
+    def get_bse(cls , date : int) -> np.ndarray:
         """
         Beijing Stock Exchange
         """
@@ -162,7 +175,7 @@ class UniverseExclusions:
             return np.array([]) 
         return desc.reset_index().query('exchange_name == "BSE"')['secid'].to_numpy()
     @classmethod
-    def get_st(cls , date : int):
+    def get_st(cls , date : int) -> np.ndarray:
         """
         Suspended or ST stocks
         """
@@ -171,7 +184,7 @@ class UniverseExclusions:
             return np.array([])
         return st['secid'].to_numpy()
     @classmethod
-    def get_lowprice(cls , date : int):
+    def get_lowprice(cls , date : int) -> np.ndarray:
         """
         Low price stocks (less than 2.0)
         """
@@ -180,22 +193,22 @@ class UniverseExclusions:
             return np.array([])
         return val.query('close < 2.0')['secid'].to_numpy()
     @classmethod
-    def get_loser(cls , end : int):
+    def get_loser(cls , end : int) -> np.ndarray:
         """
         Loser stocks (in the last 50 weeks, never top 5% but at least twice bottom 5%)
         """
         df = DB.load('exposure' , 'week_rank_loser' , end)
         if df.empty:
             return np.array([])
-        return df.query('loser')['secid'].to_numpy()
+        return df.query('loser')['secid'].to_numpy(int)
     @classmethod
-    def get_warnst(cls , date : int , window: int = 90):
+    def get_warnst(cls , date : int , window: int = 90) -> np.ndarray:
         """
         Warnst stocks
         """
         if DB.path('exposure' , f'warns_st_and_delist_{window}' , date).exists():
             df = DB.load('exposure' , f'warns_st_and_delist_{window}' , date)
-            return df['secid'].unique()
+            return df['secid'].astype(int).unique()
         start_date = CALENDAR.cd(date , -window + 1)
         
         dates = CALENDAR.range(start_date , date , 'cd')
@@ -207,6 +220,6 @@ class UniverseExclusions:
         cond = pd.concat([df["title"].str.contains(pat, regex=True, na=False) for pat in pats] , axis = 1).any(axis = 1)
         df = df.loc[cond].loc[:,['sec_name','secid','title','date']].sort_values(by = 'secid')
         Save.df(df , DB.path('exposure' , f'warns_st_and_delist_{window}' , date))
-        return df['secid'].unique()
+        return df['secid'].astype(int).unique()
 
 

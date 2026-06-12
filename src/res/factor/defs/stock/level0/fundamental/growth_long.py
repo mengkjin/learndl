@@ -1,9 +1,11 @@
+"""
+Long term growth factors for stock level0
+"""
 from __future__ import annotations
 import pandas as pd
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import GrowthFactor
-
 
 __all__ = [
     'ta_gro5y' , 'equ_gro5y' , 'liab_gro5y' , 'sales_gro5y' , 'npro_gro5y' , 'cfo_gro5y'

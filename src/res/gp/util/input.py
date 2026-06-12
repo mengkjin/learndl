@@ -1,3 +1,6 @@
+"""
+Input for genetic programming
+"""
 from __future__ import annotations
 import copy
 import numpy as np
@@ -17,8 +20,10 @@ from src.res.gp.func import factor_func as FF
 from .recorder import gpRecorder
 from .status import gpStatus
 
+__all__ = ['gpInput']
+
 @dataclass
-class InputElement:
+class _InputElement:
     name: str
     db_src: str
     db_key: str
@@ -39,10 +44,10 @@ class InputElement:
         return self.name.isupper()
 
     def fac_input(self):
-        return InputElement(self.name.upper() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
+        return _InputElement(self.name.upper() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
 
     def raw_input(self):
-        return InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
+        return _InputElement(self.name.lower() , self.db_src , self.db_key , self.feature , self.scale , self.inverse)
 
     def get_datablock(self , start : int = 20100101 , end : int = 20241231) -> DataBlock:
         block = BlockLoader(self.db_src , self.db_key , feature = [self.feature] , vb_level = 'never').load(start , end)
@@ -67,23 +72,23 @@ class InputElement:
         block.values[...,i] = values
         return block
 
-INPUT_MAPPING = {
-    'cp': InputElement('cp' , 'trade_ts' , 'day' , 'close'), 
-    'turn': InputElement('turn' , 'trade_ts' , 'day' , 'turn_fl'), 
-    'vol': InputElement('vol' , 'trade_ts' , 'day' , 'volume' , 1e-6), 
-    'amt': InputElement('amt' , 'trade_ts' , 'day' , 'amount' , 1e-6), 
-    'op': InputElement('op' , 'trade_ts' , 'day' , 'open'), 
-    'hp': InputElement('hp' , 'trade_ts' , 'day' , 'high'), 
-    'lp': InputElement('lp' , 'trade_ts' , 'day' , 'low'), 
-    'vp': InputElement('vp' , 'trade_ts' , 'day' , 'vwap'), 
-    'bp': InputElement('bp' , 'trade_ts' , 'day_val' , 'pb' , inverse = True), 
-    'ep': InputElement('ep' , 'trade_ts' , 'day_val' , 'pe' , inverse = True), 
-    'dp': InputElement('dp' , 'trade_ts' , 'day_val' , 'dv_ratio'), 
-    'rtn': InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01),
+_INPUT_MAPPING = {
+    'cp': _InputElement('cp' , 'trade_ts' , 'day' , 'close'), 
+    'turn': _InputElement('turn' , 'trade_ts' , 'day' , 'turn_fl'), 
+    'vol': _InputElement('vol' , 'trade_ts' , 'day' , 'volume' , 1e-6), 
+    'amt': _InputElement('amt' , 'trade_ts' , 'day' , 'amount' , 1e-6), 
+    'op': _InputElement('op' , 'trade_ts' , 'day' , 'open'), 
+    'hp': _InputElement('hp' , 'trade_ts' , 'day' , 'high'), 
+    'lp': _InputElement('lp' , 'trade_ts' , 'day' , 'low'), 
+    'vp': _InputElement('vp' , 'trade_ts' , 'day' , 'vwap'), 
+    'bp': _InputElement('bp' , 'trade_ts' , 'day_val' , 'pb' , inverse = True), 
+    'ep': _InputElement('ep' , 'trade_ts' , 'day_val' , 'pe' , inverse = True), 
+    'dp': _InputElement('dp' , 'trade_ts' , 'day_val' , 'dv_ratio'), 
+    'rtn': _InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01),
 }
-INPUT_MAPPING.update({k.upper():v.fac_input() for k,v in INPUT_MAPPING.items()})
+_INPUT_MAPPING.update({k.upper():v.fac_input() for k,v in _INPUT_MAPPING.items()})
 
-def get_features_block(src : str , key : str , features : list[str] | None , start : int = 20100101 , end : int = 20241231) -> DataBlock:
+def _get_features_block(src : str , key : str , features : list[str] | None , start : int = 20100101 , end : int = 20241231) -> DataBlock:
     """
     获取特征
     input:
@@ -99,7 +104,7 @@ def get_features_block(src : str , key : str , features : list[str] | None , sta
         align_secid_date(secid , dates , inplace = True)
     return block
 
-def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 20241231 , cp_block : DataBlock | None = None) -> DataBlock:
+def _load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 20241231 , cp_block : DataBlock | None = None) -> DataBlock:
     """
     读取输入因子并转化成DataBlock,额外返回secid和date的ndarray
     input:
@@ -111,18 +116,18 @@ def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 202412
         block:       DataBlock        
     """
 
-    input_elements = [INPUT_MAPPING[input] for input in inputs]
+    input_elements = [_INPUT_MAPPING[input] for input in inputs]
     load_tuples = list(set([element.load_tuple() for element in input_elements]))
     assert load_tuples , f'load_tuples is empty'
     
     if cp_block is None:
-        cp_block = get_cp_block(start , end)
+        cp_block = _get_cp_block(start , end)
     blocks : list[DataBlock] = []
     
     for tup in load_tuples:
         sub_elements = [element for element in input_elements if element.load_tuple() == tup]
         load_features = list(set([element.feature for element in sub_elements]))
-        block = get_features_block(tup[0] , tup[1] , load_features , start , end)
+        block = _get_features_block(tup[0] , tup[1] , load_features , start , end)
         raw_features = {element.feature : element for element in sub_elements if element.is_raw}
         if raw_features:
             raw_block = block.align_feature(list(raw_features.keys()) , inplace = False)
@@ -138,7 +143,7 @@ def load_inputs(inputs : list[str] , start : int = 20100101 , end : int = 202412
         block = DataBlock.merge(blocks , inplace = True).align_feature(inputs , inplace = True)
     return block
 
-def get_cp_block(start : int = 20100101 , end : int = 20241231) -> DataBlock:
+def _get_cp_block(start : int = 20100101 , end : int = 20241231) -> DataBlock:
     """
     获取收盘价
     input:
@@ -147,9 +152,9 @@ def get_cp_block(start : int = 20100101 , end : int = 20241231) -> DataBlock:
     output:
         cp_block:          close price tensor
     """
-    return get_features_block('trade_ts' , 'day' , ['close'] , start , end)
+    return _get_features_block('trade_ts' , 'day' , ['close'] , start , end)
 
-def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int = 10 , delay : int = 1) -> DataBlock:
+def _get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int = 10 , delay : int = 1) -> DataBlock:
     """
     获取收益率
     input:
@@ -159,7 +164,7 @@ def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int 
     output:
         return_block:      return tensor
     """
-    element = InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01)
+    element = _InputElement('rtn' , 'trade_ts' , 'day' , 'pctchange' , 0.01)
     secid = DATAVENDOR.secid(end)
     dates = CALENDAR.range(start , end , 'td')
     new_end_dt = CALENDAR.td(end , 20).td
@@ -168,7 +173,7 @@ def get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int 
     block = block.align_secid_date(secid , dates , inplace = True)
     return block
 
-def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device : torch.device | str | None = None) -> torch.Tensor:
+def _init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device : torch.device | str | None = None) -> torch.Tensor:
     """
     获取中性化使用的行业因子和市值因子
     input:
@@ -184,7 +189,7 @@ def init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device 
     values = block.loc(feature = Const.Factor.RISK.indus + ['size']).squeeze().to(device)
     return values
 
-def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
+def _init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
                     device : torch.device | str | None = None) -> torch.Tensor:
     """
     生成原始预测标签,中性化后的10日收益
@@ -198,7 +203,7 @@ def init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_
         labels_raw:     
     """
     
-    rtn = get_return_block(start , end , nday , delay).values.squeeze().to(device)
+    rtn = _get_return_block(start , end , nday , delay).values.squeeze().to(device)
     if neutral_exp is not None:
         neutral_exp = neutral_exp.to(rtn)
     labels_raw = neutralize_2d(rtn , neutral_exp , method = 'torch' , inplace = True)  # 市值行业中性化
@@ -342,13 +347,13 @@ class gpInput(Base.BoundLogger):
         self.logger.stdout(f'Load from DB')
         nrowchar = 0
 
-        cp_block = get_cp_block(self.start , self.end)
+        cp_block = _get_cp_block(self.start , self.end)
 
-        self.tensors['neutral_exp'] = init_neutral_exp(self.start , self.end).to(self.device)
+        self.tensors['neutral_exp'] = _init_neutral_exp(self.start , self.end).to(self.device)
         self.tensors['universe']   = ~cp_block.values.squeeze().isnan().to(self.device)
-        self.tensors['labels_raw'] = init_labels_raw(self.start , self.end  , neutral_exp = self.neutral_exp).to(self.device)
+        self.tensors['labels_raw'] = _init_labels_raw(self.start , self.end  , neutral_exp = self.neutral_exp).to(self.device)
         
-        input_block = load_inputs(self.argnames , self.start , self.end , cp_block)
+        input_block = _load_inputs(self.argnames , self.start , self.end , cp_block)
         self.records['date'] = input_block.date
         self.records['secid'] = input_block.secid
 

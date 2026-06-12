@@ -15,6 +15,8 @@ from typing import Any
 
 from src.proj import MACHINE , CALENDAR , DB , Base
 
+__all__ = ['INFO']
+
 class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
     """
     Date-aware interface to static Chinese A-share stock reference data.
@@ -116,17 +118,17 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         self.ensure_initiation()
         desc = self.get_desc(date)
         if offset != 0: 
-            desc['list_dt'] = CALENDAR.td_array(desc['list_dt'] , offset)
+            desc['list_dt'] = CALENDAR.offset(desc['list_dt'] , offset , 'td')
         return desc.loc[:,keep_columns].reset_index().drop_duplicates(subset='secid').set_index('secid')
 
-    def list_num_by_date(self , dates : np.ndarray | list[int] , reference_date : Base.alias.intDate | None = None):
+    def list_num_by_date(self , dates : Base.alias.intDates , reference_date : Base.alias.intDate | None = None):
         """
         Return the number of listed stocks on a date.
         """
         self.ensure_initiation()
         list_delist_dt = self.get_list_dt(date = reference_date , offset = 30 , keep_columns = ['list_dt' , 'delist_dt'])
         x = list_delist_dt.to_numpy()[:,None]
-        y = np.array(dates)[None,:,None]
+        y = CALENDAR.offset(dates , 0 , 'cd')[None,:,None]
         listed = np.all((y - x) * np.array([[[1,-1]]]) > 0 , axis = -1)
         return listed.sum(0)
 

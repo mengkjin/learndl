@@ -10,6 +10,8 @@ import streamlit as st
 
 from .basic import unique_st_key
 
+__all__ = ['colored_container']
+
 def colored_container(color : Literal['blue' , 'green' , 'red' , 'orange' , 'purple' , 'gray'] = 'gray' , key : str | None = None , **kwargs) -> Any:
     """Render a custom container with a colored background.
 

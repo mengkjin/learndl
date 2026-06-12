@@ -8,11 +8,9 @@ from src.proj.log import Logger
 
 __all__ = ['AskFor']
 
-
 def _print_title(title : str):
     if title:
         Logger.stdout(f'{title}' , color = 'lightpurple')
-
 
 AskFlagType = Literal['yes' , 'no' , 'abort']
 class AskFlag:
@@ -70,7 +68,7 @@ class AskFor:
     not_interactive = not sys.stdin.isatty()
 
     @classmethod
-    def Confirmation(cls , timeout = -1 , ask_times = 1 , title = ''):
+    def Confirmation(cls , timeout = -1 , ask_times = 1 , title = '') -> AskFlag:
         """Prompt up to ``recurrent`` times with optional per-prompt timeout.
 
         Returns:
@@ -106,8 +104,11 @@ class AskFor:
         return AskFlag('yes')
 
     @classmethod
-    def Selections(cls ,options : int , start : int = 1 , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
-        """Parse the selections."""
+    def Selections(
+        cls , options : int , start : int = 1 , confirm : bool = True , 
+        multiple : bool = False , title : str = ''
+    ) -> AskFlag:
+        """Ask for selections out of a number of options starting from a given index."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
@@ -158,8 +159,11 @@ class AskFor:
                 Logger.error(f'Invalid input: {value} , please choose yes or no or quit (y/n/q)')
 
     @classmethod
-    def Options(cls , options : list[Any] , confirm : bool = True , multiple : bool = False , title : str = '') -> AskFlag:
-        """Ask for options."""
+    def Options(
+        cls , options : list[Any] , confirm : bool = True , 
+        multiple : bool = False , title : str = ''
+    ) -> AskFlag:
+        """Ask for options from a list of options."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
@@ -176,13 +180,18 @@ class AskFor:
         return flag
 
     @classmethod
-    def LoopTillExit(cls , message : str = 'Do you want to try again?', * , max_trials : int = 20) -> Generator[int, None, None]:
+    def LoopTillExit(
+        cls , ask = True , message : str = 'Do you want to try again?', * , 
+        max_trials : int = 20
+    ) -> Generator[int, None, None]:
         """Loop until the user exits."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return!')
             return
         for trial in range(max_trials):
             yield trial
+            if not ask:
+                continue
             flag = AskFor.Retry(message)
             if flag.no:
                 return

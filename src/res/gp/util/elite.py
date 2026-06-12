@@ -1,3 +1,6 @@
+"""
+Elite group for genetic programming
+"""
 from __future__ import annotations
 import gc
 import pandas as pd
@@ -9,6 +12,8 @@ from src.proj import Base
 from src.func.tensor import corrwith , concat_factors_2d
 from src.res.gp.func import factor_func as FF
 from .memory import MemoryManager
+
+__all__ = ['EliteGroup' , 'EliteBlock']
 
 class EliteGroup(Base.BoundLogger):
     def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:

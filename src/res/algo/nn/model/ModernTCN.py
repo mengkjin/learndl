@@ -11,6 +11,8 @@ from torch import nn , Tensor
 from src.proj import Logger
 from .. import layer as Layer
 
+__all__ = ['ModernTCN'  , 'modern_tcn']
+
 class ModernTCN(nn.Module):
     """Modern Temporal Convolutional Network.
 

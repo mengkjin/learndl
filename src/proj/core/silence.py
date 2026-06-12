@@ -1,5 +1,8 @@
 """Nested context manager to suppress most stdout-style output when enabled."""
 from __future__ import annotations
+
+__all__ = ['Silence']
+
 class _SilenceSilent:
     """Silent silencer, used to silence most of the project's output , nested usage is supported"""
     def __get__(self , instance, owner):

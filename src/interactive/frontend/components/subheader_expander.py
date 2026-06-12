@@ -11,6 +11,8 @@ import streamlit as st
 
 from .basic import unique_st_key
 
+__all__ = ['subheader_expander']
+
 
 def subheader_expander(label : str , icon : str | None = None , expanded : bool = False ,
                        height : int | Literal['content' , 'stretch'] = 'content' , help : str | None = None , status : bool = False , 

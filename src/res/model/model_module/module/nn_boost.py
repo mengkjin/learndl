@@ -13,6 +13,7 @@ from src.res.model.util import PredictorModel , BatchInput , BatchOutput , Optim
 from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
+__all__ = ['NNBoost']
 class NNBoost(PredictorModel):
     """A Very restricted type of nn, direcly use nn as feature extractor, and use boost as prediction head"""    
     @property

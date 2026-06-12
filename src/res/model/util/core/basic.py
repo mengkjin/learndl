@@ -1,3 +1,6 @@
+"""
+Basic functions for the project
+"""
 from __future__ import annotations
 import re
 
@@ -12,7 +15,10 @@ from src.res.algo import AlgoModule
 __all__ = [
     'ModuleType' , 'epoch_key' , 'attempt_key' ,
     'parse_model_input' , 'combine_full_name' , 'split_full_name' , 
-    'model_module_type' , 'check_null_module_type' , 'is_null_module_type' , 'search_existing_models']
+    'split_digits_suffix' , 'split_st_prefix' , 'split_module_type_prefix' ,
+    'model_module_type' , 'check_null_module_type' , 'is_null_module_type' , 
+    'search_existing_models'
+]
 
 def epoch_key(epoch : int , phase : int = 0) -> str:
     return f'Ph{phase} Ep{epoch}'

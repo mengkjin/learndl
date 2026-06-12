@@ -1,3 +1,6 @@
+"""
+Intro components for the project
+"""
 from __future__ import annotations
 import streamlit as st
 import platform

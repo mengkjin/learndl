@@ -1,9 +1,16 @@
+"""
+Volatility exret factors for stock level0
+"""
 from __future__ import annotations
 import numpy as np
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import VolatilityFactor
 
+
+__all__ = [
+    'exret_std1m' , 'exret_std2m' , 'exret_std3m' , 'exret_std6m' , 'exret_std12m'
+]
 
 def exret_std(date , n_months : int , lag_months : int = 0):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

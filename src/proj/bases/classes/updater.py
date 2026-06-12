@@ -9,6 +9,8 @@ from src.proj.bases.enums import UpdateType , UpdateFlag
 
 from .bound_logger import BoundLogger
 
+__all__ = ['BasicUpdater']
+
 class BasicUpdater(BoundLogger):
     """
     Basic updater class for the project.

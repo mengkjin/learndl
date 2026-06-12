@@ -1,3 +1,6 @@
+"""
+Base factor updater class for the project
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -115,8 +118,8 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
             elif self.update_type == 'stats':
                 target_dates = calc.stats_target_dates(start , end , overwrite)
                 for stats_type , dates in target_dates.items():
-                    for year in np.unique(dates // 10000):
-                        self.jobs.append(UpdateJobStats(calc , stats_type , year , dates , overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 4))
+                    for year in np.unique(dates.dates // 10000):
+                        self.jobs.append(UpdateJobStats(calc , stats_type , year , dates.dates , overwrite , indent = self.indent + 2 , vb_level = self.vb_level + 4))
             else:
                 raise ValueError(f'Invalid update type: {self.update_type}')
         self.jobs.sort_jobs()

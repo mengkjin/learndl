@@ -1,5 +1,10 @@
+"""
+Sellside factors for affiliate level0
+"""
 from __future__ import annotations
 from src.res.factor.calculator.factor_calc import SellsideFactor
+
+__all__ = ['df_scores_v0' , 'df_scores_v2' , 'df_scores_v3' , 'ht_master_combined']
 
 class df_scores_v0(SellsideFactor):
     init_date = 20180101

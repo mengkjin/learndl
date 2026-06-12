@@ -1,3 +1,6 @@
+"""
+Fama-French 3-Factor Model factors for stock level0
+"""
 from __future__ import annotations
 import pandas as pd
 
@@ -10,6 +13,15 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
 from src.func.transform import time_weight , apply_ols
+
+__all__ = [
+    'ff_mom_1m' , 'ff_mom_2m' , 'ff_mom_3m' , 'ff_mom_6m' , 'ff_mom_12m' , 
+    'ff_r2_1m' , 'ff_r2_2m' , 'ff_r2_3m' , 'ff_r2_6m' , 'ff_r2_12m' , 
+    'ff_alpha_1m' , 'ff_alpha_2m' , 'ff_alpha_3m' , 'ff_alpha_6m' , 'ff_alpha_12m' , 
+    'ff_resvol_1m' , 'ff_resvol_2m' , 'ff_resvol_3m' , 'ff_resvol_6m' , 'ff_resvol_12m' , 
+    'ff_resskew_1m' , 'ff_resskew_2m' , 'ff_resskew_3m' , 'ff_resskew_6m' , 'ff_resskew_12m' , 
+    'ff_reskurt_1m' , 'ff_reskurt_2m' , 'ff_reskurt_3m' , 'ff_reskurt_6m' , 'ff_reskurt_12m'
+]
 
 # Guard creation of per-(n_months, date) locks so two threads never get different
 # Lock instances for the same cache key (defaultdict is not thread-safe alone).

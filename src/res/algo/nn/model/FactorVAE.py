@@ -12,6 +12,8 @@ from torch.distributions import Normal , kl_divergence
 from src.proj import Logger
 from ..layer.MLP import MLP
 
+__all__ = ['FactorVAE']
+
 class FactorVAE(nn.Module):
     """FactorVAE: VAE-based factor model for stock return prediction.
 

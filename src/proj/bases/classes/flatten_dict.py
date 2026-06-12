@@ -1,8 +1,12 @@
+"""flatten_dict class for the project"""
+
 from __future__ import annotations
 from typing import Any , Callable
 from pathlib import Path
 from copy import deepcopy
 from src.proj import Logger , PATH
+
+__all__ = ['FlattenDict']
 
 class FlattenDict:
     """Dot-key flattened view over nested dicts with optional selective nesting."""

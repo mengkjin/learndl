@@ -167,7 +167,7 @@ class _FuncCall:
         except Exception as e:
             Logger.error(f'{key} >> {func}({args} , {kwargs}) generate an exception: {e}')
             Logger.print_exc(e)
-            from src.proj.cal.trade_date import BC
+            from src.proj.cal.basic import BC
             Logger.info('BC._cd_pd_index.is_unique:' , BC._cd_pd_index.is_unique)
             Logger.info('BC._cd_pd_index.duplicated:' , BC._cd_pd_index[BC._cd_pd_index.duplicated()])
             raise

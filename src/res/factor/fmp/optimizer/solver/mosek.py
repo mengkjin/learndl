@@ -1,3 +1,6 @@
+"""
+MOSEK solver for Factor Model Portfolio
+"""
 from __future__ import annotations
 import numpy as np
 import mosek
@@ -6,6 +9,8 @@ from typing import Any
 from src.proj import Base
 
 from ..interpreter import SolverInput , SolveCond , SolveVars
+
+__all__ = ['Solver']
 
 INF = 0.0
 

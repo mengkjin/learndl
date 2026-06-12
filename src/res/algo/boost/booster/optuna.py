@@ -15,6 +15,8 @@ from typing import Any , Literal
 from src.proj import PATH , MACHINE , Proj
 from .general import GeneralBoostModel
 
+__all__ = ['OptunaBoostModel']
+
 class OptunaSilent:
     """Context manager that sets Optuna log level to ERROR on entry and restores it on exit."""
     def __init__(self , silent : bool = True):

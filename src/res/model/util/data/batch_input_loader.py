@@ -1,10 +1,13 @@
+"""
+Batch input loader for the project
+"""
 from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 from tqdm import tqdm
 from typing import Any , Sequence
 
-from src.proj import Proj , Base
+from src.proj import Proj , Base , Dates
 from src.res.model.util.core import BatchInput
 
 __all__ = ['BatchInputLoader' , 'DataloaderParam']
@@ -106,8 +109,8 @@ class BatchInputLoader:
         return self
 
     @property
-    def batch_dates(self) -> list[int]:
-        return [batch_input.date0 for batch_input in self.loader]
+    def batch_dates(self) -> Dates:
+        return Dates([batch_input.date0 for batch_input in self.loader])
 
     def of_date(self , date : int):
         assert self.data_module.config.sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.sample_method , self.data_module.stage)

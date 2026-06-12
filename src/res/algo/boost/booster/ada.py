@@ -18,6 +18,8 @@ from typing import Any
 from src.proj import Logger
 from src.res.algo.boost.util import BasicBoostModel , BoostInput , load_xingye_data
 
+__all__ = ['AdaBoost']
+
 class AdaBoost(BasicBoostModel):
     """AdaBoost wrapper using rank-binned decision stumps.
 

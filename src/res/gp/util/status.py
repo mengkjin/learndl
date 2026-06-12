@@ -1,6 +1,12 @@
+"""
+Status for genetic programming
+"""
 from __future__ import annotations
 from functools import cached_property
 from .syntax import SyntaxRecord
+
+__all__ = ['gpStatus']
+
 class gpStatus:
     def __init__(self , n_iter : int , n_gen : int , start_iter : int = 0 , start_gen : int = 0 , train : bool = True , **kwargs) -> None:
         self.n_iter      = n_iter

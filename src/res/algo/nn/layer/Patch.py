@@ -6,6 +6,8 @@ import torch
 from torch import nn , Tensor
 import torch.nn.functional as F
 
+__all__ = ['LinearPatch' , 'ConvolutionalPatch']
+
 class LinearPatch(nn.Module):
     """
     Linear patch layer.

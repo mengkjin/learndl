@@ -1,13 +1,13 @@
 """Load, save, and path helpers for versioned tables under ``PATH.data`` (feather/parquet, tar, parallel IO)."""
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from typing import Any , Literal , Iterable , Callable , Union , TYPE_CHECKING
 
 from src.proj.db.basic import dfHandler
 from src.proj.db.io.dataframe import dfIOHandler , save_df , load_df , load_df_pl
+from src.proj.cal import intDates
 from .db_path import DBPath
 
 if TYPE_CHECKING:
@@ -82,7 +82,7 @@ def load_pl(db_src : str , db_key : str , date : int | None = None , *,
     df = dfHandler.load_process_polars(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
-def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
+def loads(db_src : str , db_key : str , dates : intDates | None = None , start : int | None = None , end : int | None = None , *,
           key_column = 'date' , override_existing_key = False , use_alt = False , closest = False ,
           accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
           fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> pd.DataFrame:
@@ -99,7 +99,7 @@ def loads(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = 
         DATAVENDOR.db_loads_callback(df , db_src , db_key)
     return df
 
-def loads_pl(db_src : str , db_key : str , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , *,
+def loads_pl(db_src : str , db_key : str , dates : intDates | None = None , start : int | None = None , end : int | None = None , *,
              key_column : str | None = 'date' , override_existing_key = False , use_alt = False , closest = False ,
              accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
              fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> pl.DataFrame:

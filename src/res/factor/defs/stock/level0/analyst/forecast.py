@@ -1,3 +1,6 @@
+"""
+Forecast factors for the project
+"""
 from __future__ import annotations
 from typing import Literal
 

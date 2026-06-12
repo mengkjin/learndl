@@ -1,3 +1,6 @@
+"""
+Predictor for model , which can predict the model output for a given date
+"""
 from __future__ import annotations
 import torch
 import numpy as np
@@ -5,12 +8,14 @@ import pandas as pd
 import polars as pl
 
 from functools import cached_property
-from typing import Any , ClassVar , Literal , overload
+from typing import Any , ClassVar , Literal , Self , overload
 
-from src.proj import MACHINE , Proj , CALENDAR , Base , Save , Load
+from src.proj import MACHINE , Proj , CALENDAR , Base , Save , Load , Dates
 from src.data.util import DataBlock
-from src.res.model.util import PredictorPath , ModelConfig , DataModule
+from src.res.model.util import PredictorPath , ModelConfig , DataModule , PredictorModel
 from src.res.model.model_module.module import get_predictor_module
+
+__all__ = ['ArchivedPredictorModel']
 
 class _Grads:
     def __init__(self , require_grad : bool = True):
@@ -29,18 +34,24 @@ class ArchivedPredictorModel(Base.BoundLogger):
     DATE_COLS  : ClassVar[str] = 'date'
 
     @overload
-    def __init__(self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1):
+    def __init__(
+        self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1
+    ) -> None:
         """Initialize from a PredictorPath object"""
     @overload
-    def __init__(self , model_input : Base.strPath | None | Any , 
-        model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
+    def __init__(
+        self , model_input : Base.strPath | None | Any , 
+        model_num : Base.alias.intNums | Literal['all'] | Any | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , / , 
-        indent : int = 0 , vb_level : Any = 1):
+        indent : int = 0 , vb_level : Any = 1
+    ) -> None:
         """Initialize from a model input, and convert to PredictorPath object"""
-    def __init__(self , model_input : Base.strPath | None | Any | PredictorPath, 
-        model_num : int | list[int] | range | Literal['all'] | Any | None = None ,
+    def __init__(
+        self , model_input : Base.strPath | None | Any | PredictorPath, 
+        model_num : Base.alias.intNums | Literal['all'] | Any | None = None ,
         submodel : str | None = 'best' , pred_name : str | None = None , / , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        indent : int = 0 , vb_level : Any = 1 , **kwargs
+    ) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         if isinstance(model_input , PredictorPath):
             self.path = model_input
@@ -106,7 +117,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
             return ModelConfig(self.model_name , stage=2 , resume=1).start_model()
 
     @cached_property
-    def model(self):
+    def model(self) -> PredictorModel:
         return get_predictor_module(self.config)
 
     @cached_property
@@ -138,11 +149,10 @@ class ArchivedPredictorModel(Base.BoundLogger):
             self.data = DataModule(self.config , 'both').load_data() 
         return self
     
-    def update_preds(self , update = True , overwrite = False , start = None , end = None):
+    def update_preds(self , update = True , overwrite = False , start = None , end = None) -> Base.UpdateFlag:
         """get update dates and predict these dates"""
         assert update != overwrite , 'update and overwrite must be different here'
-        
-        dates = CALENDAR.slice(CALENDAR.diffs(self.path.pred_target_dates , self.path.pred_dates if update else []) , start , end)
+        dates = self.path.pred_target_dates.diff(self.path.pred_dates if update else [] , inplace = False).slice(start , end)
         with Proj.silence:
             self.predict_dates(dates)
         self.save_preds()
@@ -151,10 +161,13 @@ class ArchivedPredictorModel(Base.BoundLogger):
             self.logger.success(f'Update model prediction for {self.pred_name} , len={len(self.current_update_dates)}')
         else:
             self.logger.skipping(f'Model prediction for {self.pred_name} is up to date')
+
         if self.deploy_required and self.current_deploy_dates:
             self.logger.success(f'Deploy model prediction for {self.pred_name} , len={len(self.current_deploy_dates)}')
         elif self.deploy_required:
             self.logger.skipping(f'Model prediction for {self.pred_name} is up to date')
+        
+        return Base.UpdateFlag.SUCCESS if self.current_update_dates else Base.UpdateFlag.SKIPPED
 
     def _get_model_num_and_submodel(self , model_num : int | None = None , submodel : str | None = None):
         if model_num is None:
@@ -203,22 +216,27 @@ class ArchivedPredictorModel(Base.BoundLogger):
             batch_input = self.dataloader.of_date(date)
             return model.get_batch_data(batch_input)
 
-    def _get_dates(self , dates : np.ndarray | list[int] , start : int | None = None , end : int | None = None , step : int = 1):
+    def _get_dates(
+        self , dates : Base.alias.intDates | None = None , 
+        start : int | None = None , end : int | None = None , step : int = 1
+    ) -> Dates:
         if start is not None or end is not None:
             assert start is not None and end is not None , 'start and end must be provided together'
             assert start < end , f'start {start} must be less than end {end}'
             assert step > 0 , f'step {step} must be greater than 0'
-            dates = CALENDAR.range(start , end , step = step)
-        return np.array(dates)
+        dates = Dates(dates , start , end).slice(step = step)
+        return dates
 
     def iter_batch_data(
-        self , dates : np.ndarray | list[int] , model_date : int , 
-        * , start : int | None = None , end : int | None = None , step : int = 1 , model_num : int | None = None , submodel : str | None = None , 
-        require_grad = False , silent = True):
+        self , dates : Base.alias.intDates | None , model_date : int , * , 
+        start : int | None = None , end : int | None = None , step : int = 1 , 
+        model_num : int | None = None , submodel : str | None = None , 
+        require_grad = False , silent = True
+    ):
         """
         Iterate batch data of a given model number, model date, start date, and end date
         Args:
-            dates : np.ndarray | list[int], the dates to iterate
+            dates : Base.alias.intDates | None , the dates to iterate
             model_date : int, the model date of the archived model
             start : int | None = None, the start date, if given, iterate dates from start to end with step
             end : int | None = None, the end date, if given, iterate dates from start to end with step
@@ -232,9 +250,9 @@ class ArchivedPredictorModel(Base.BoundLogger):
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
         assert model_date in self.model_dates , f'model_date {model_date} not in {self.model_dates}'
         dates = self._get_dates(dates , start , end , step)
-        if len(dates) == 0:
+        if dates.empty:
             return iter([])
-        start_date , end_date = min(dates) , max(dates)
+        start_date , end_date = dates.min , dates.max
         model_param = self.config.model_param[model_num]
         with Proj.silence(silent):
             self.load_data(start_date , end_date)
@@ -253,7 +271,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     def hidden_block(
         self , 
-        dates : np.ndarray | list[int] , model_date : int , * , 
+        dates : Base.alias.intDates | None , model_date : int , * , 
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
         align_secid : np.ndarray | None = None , align_date : np.ndarray | None = None ,
@@ -262,7 +280,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         """
         Iterate hidden block of a given model number, model date, start date, and end date
         Args:
-            dates : np.ndarray | list[int], the dates to iterate
+            dates : Base.alias.intDates | None , the dates to iterate
             model_date : int, the model date of the archived model
             start : int | None = None, the start date, if given, iterate dates from start to end with step
             end : int | None = None, the end date, if given, iterate dates from start to end with step
@@ -277,19 +295,19 @@ class ArchivedPredictorModel(Base.BoundLogger):
         """
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
         dates = self._get_dates(dates , start , end , step)
-        if len(dates) == 0:
+        if dates.empty:
             return DataBlock()
 
         hidden_path = self.hidden_values_path(model_num , model_date , submodel)
         hidden_dfs : list[pl.DataFrame] = []
-        existing_dates = []
+
         saved_hidden_df = Load.polars(hidden_path)
         if not load_first and saved_hidden_df.height > 0:
             saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates))
         if saved_hidden_df.height > 0:
             hidden_dfs.append(saved_hidden_df)
         existing_dates = saved_hidden_df['date'].unique()
-        dates = np.setdiff1d(dates , existing_dates)
+        dates = dates.diff(existing_dates , inplace = False)
             
         batch_data_iterator = self.iter_batch_data(
             dates , model_date , model_num = model_num , 
@@ -300,10 +318,11 @@ class ArchivedPredictorModel(Base.BoundLogger):
             assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
             hidden_dfs.append(batch_data.hidden_df_pl())
         df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
-        if df.height > 0 and len(dates) > 0:
+        if df.height > 0 and dates:
             Save.df(
                 df , hidden_path , async_save = True , overwrite = True , 
-                prefix = f'{self.pred_name} Hidden Values' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+                prefix = f'{self.pred_name} Hidden Values' , 
+                indent = self.indent + 1 , vb_level = self.vb_level + 1)
             
         if align_secid is not None:
             df = df.filter(pl.col('secid').is_in(align_secid))
@@ -321,16 +340,16 @@ class ArchivedPredictorModel(Base.BoundLogger):
     def hidden_values_path(self , model_num : int , model_date : int , submodel : str):
         return self.path.snapshot('hidden_values' , f'{model_num}.{model_date}.{submodel}.feather')
 
-    def predict_dates(self , dates : np.ndarray | list[int]):
+    def predict_dates(self , dates : Base.alias.intDates | None) -> Self:
         """predict recent days"""
-        if len(dates) == 0: 
+        dates = Dates(dates)
+        if dates.empty: 
             return self
-        dates = np.array(dates)
-        self.load_data(dates.min() , dates.max())
-        pred_dates = dates[dates <= max(self.data.test_full_dates)]
-        if pred_dates.size == 0: 
+        self.load_data(dates.min , dates.max)
+        pred_dates = dates.slice(end = max(self.data.test_full_dates))
+        if pred_dates.empty: 
             return self
-        assert any(self.path.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
+        assert any(self.path.model_dates < pred_dates.min) , f'no model date before {pred_dates}'
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
                                 'model_date' : [max(self.path.model_dates[self.path.model_dates < d]) for d in pred_dates] , 
                                 'calculated' : 0})
@@ -357,7 +376,10 @@ class ArchivedPredictorModel(Base.BoundLogger):
             self.cached_df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
         return self
 
-    def save_preds(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
+    def save_preds(
+        self , df : pd.DataFrame | None = None , 
+        overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS
+    ) -> Self:
         if df is None:
             df = self.cached_df
         if df.empty: 
@@ -376,7 +398,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
     def deploy_required(self) -> bool:
         return MACHINE.hfm_factor_dir is not None
 
-    def deploy(self , overwrite = False):
+    def deploy(self , overwrite = False) -> Self:
         """deploy df by day to class.destination"""
         if MACHINE.hfm_factor_dir is None: 
             return self
@@ -398,7 +420,10 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
         return self
     
-    def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
+    def df_corr(
+        self , df = None , window = 30 , 
+        secid_col = SECID_COLS , date_col = DATE_COLS
+    ) -> pd.DataFrame:
         """prediction correlation of ecent days"""
         if df is None: 
             df = self.cached_df
@@ -411,12 +436,15 @@ class ArchivedPredictorModel(Base.BoundLogger):
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
 
     @classmethod
-    def get_model(cls , model_name : str):
+    def get_model(cls , model_name : str) -> Self:
         model = PredictorPath.SelectModels(model_name)[0]
         return cls(model)
 
     @classmethod
-    def update(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
+    def update(
+        cls , model_name : str | None = None , 
+        start = None , end = None , indent : int = 0 , vb_level : Any = 1
+    ) -> Base.UpdateFlag:
         """Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' """
         cls.SetClassVB(vb_level , indent)
         cls.logger.note('Update since last update!')
@@ -425,14 +453,18 @@ class ArchivedPredictorModel(Base.BoundLogger):
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
             cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , idt = 1)
+        flags = Base.UpdateFlagList()
         for model in models:
             md = cls(model , indent = indent , vb_level = vb_level)
             with md.logger.subprocess(idt = 1 , vb = 1):
-                md.update_preds(update = True , overwrite = False , start = start , end = end)
-        return md
+                flags += md.update_preds(update = True , overwrite = False , start = start , end = end)
+        return flags.summarize()
 
     @classmethod
-    def recalculate(cls , model_name : str | None = None , start = None , end = None , indent : int = 0 , vb_level : Any = 1):
+    def recalculate(
+        cls , model_name : str | None = None , 
+        start = None , end = None , indent : int = 0 , vb_level : Any = 1
+    ) -> Base.UpdateFlag:
         """Recalculate all model predictions"""
         cls.SetClassVB(vb_level , indent)
         cls.logger.note('Recalculate All!')
@@ -441,8 +473,9 @@ class ArchivedPredictorModel(Base.BoundLogger):
         models = PredictorPath.SelectModels(model_name)
         if model_name is None: 
             cls.logger.stdout(f'model_name is None, update all prediction models (len={len(models)})' , idt = 1)
+        flags = Base.UpdateFlagList()
         for model in models:
             md = cls(model)
             with md.logger.subprocess(idt = 1 , vb = 1):
-                md.update_preds(update = False , overwrite = True , start = start , end = end)
-        return md
+                flags += md.update_preds(update = False , overwrite = True , start = start , end = end)
+        return flags.summarize()

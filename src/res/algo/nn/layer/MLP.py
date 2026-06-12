@@ -3,6 +3,8 @@ from __future__ import annotations
 from torch import nn
 from .Act import get_activation_fn
 
+__all__ = ['MLP']
+
 class MLP(nn.Module):
     """Multi-layer perceptron with configurable hidden layers.
 

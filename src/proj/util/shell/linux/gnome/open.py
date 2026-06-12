@@ -10,6 +10,7 @@ from ...util import process
 
 import subprocess
 
+__all__ = ['GnomeTerminalOpener']
 def raise_recent_terminal() -> bool:
     """
     Bring the most recently used GNOME Terminal window to the foreground via ``wmctrl``.

@@ -1,3 +1,13 @@
+"""
+Genetic Programming class for genetic programming
+it includes the whole process of genetic programming:
+- data loading, 
+- parameter initialization, 
+- population generation, 
+- evaluation, 
+- selection, and 
+- variation
+"""
 from __future__ import annotations
 import numpy as np
 
@@ -15,6 +25,8 @@ from .timer import gpTimer
 from .input import gpInput
 from .status import gpStatus
 from .evaluator import gpEvaluator
+
+__all__ = ['GeneticProgramming']
 
 class GeneticProgramming(Base.BoundLogger):
     """遗传规划空间,包括参数、输入、输出、文件管理、内存管理、计时器、评价器、数据列"""

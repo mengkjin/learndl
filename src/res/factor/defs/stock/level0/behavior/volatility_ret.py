@@ -1,8 +1,15 @@
+"""
+Volatility return factors for stock level0
+"""
 from __future__ import annotations
 import numpy as np
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import VolatilityFactor
+
+__all__ = [
+    'ret_std1m' , 'ret_std2m' , 'ret_std3m' , 'ret_std6m' , 'ret_std12m'
+]
 
 def ret_std_classic(date , n_months : int , lag_months : int = 0):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

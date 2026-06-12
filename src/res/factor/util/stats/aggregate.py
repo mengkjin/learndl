@@ -1,8 +1,18 @@
+"""
+Aggregate statistical functions for Factor Model Portfolio
+"""
+
 from __future__ import annotations
 import pandas as pd
 import numpy as np
 
 from src.proj import CALENDAR
+
+__all__ = [
+    'eval_ret_stats' , 'eval_year_ret' , 'eval_recent_ret' , 'eval_period_ret' ,
+    'eval_ic_stats' , 'eval_year_ic' , 'eval_recent_ic' , 'eval_period_ic' ,
+    'eval_period_ret_multi' , 'eval_period_ic_multi'
+]
 
 def _get_ret_df(*input : pd.DataFrame | pd.Series | np.ndarray):
     """
@@ -43,7 +53,7 @@ def eval_ret_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
         return pd.Series()
     start = ret['date'].min()
     end = ret['date'].max()
-    total_days = CALENDAR.cd_diff(start , end) + 1
+    total_days = CALENDAR.diff_days(start , end , 'cd') + 1
     total_return = _period_ret(ret['ret'])
     annualized_return = (1 + total_return) ** (365 / total_days) - 1
     datas = [

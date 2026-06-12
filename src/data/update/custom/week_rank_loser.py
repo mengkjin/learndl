@@ -12,14 +12,15 @@ for the proposed windowed optimisation).
 """
 from __future__ import annotations
 import pandas as pd
-import numpy as np
 import torch
 from torch.nn.functional import pad
 
-from src.proj import CALENDAR , DB , Base
+from src.proj import CALENDAR , DB , Base , Dates
 from src.func.tensor import rank_pct
 from src.data.loader import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
+
+__all__ = ['WeekRankLoserUpdater']
 
 class WeekRankLoserUpdater(BasicCustomUpdater):
     """Registered updater for the weekly-rank loser stock screener."""
@@ -33,9 +34,9 @@ class WeekRankLoserUpdater(BasicCustomUpdater):
 
         start = max(start or cls.START_DATE , cls.START_DATE)
         end = end or CALENDAR.updated()
-        stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , cls.DB_KEY)
-        target_dates = CALENDAR.diffs(start , end , stored_dates)
-        if len(target_dates) == 0:
+        stored_dates = Dates() if overwrite else DB.dates(cls.DB_SRC , cls.DB_KEY)
+        target_dates = Dates(start , end).diff(stored_dates)
+        if target_dates.empty:
             cls.logger.skipping(f'{cls.DB_SRC}/{cls.DB_KEY} is up to date' , idt = 1 , vb = 1)
             return Base.UpdateFlag.SKIPPED
 

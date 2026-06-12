@@ -5,6 +5,8 @@ from __future__ import annotations
 import pandas as pd
 from collections import defaultdict
 
+__all__ = ['TypedContainer']
+
 class TypedContainer:
     """Container for trainer intermediate results"""
     def __init__(self):

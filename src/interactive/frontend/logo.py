@@ -16,6 +16,8 @@ import numpy as np
 
 from src.proj import Logger , PATH
 
+__all__ = ['get_font' , 'get_logo']
+
 PATH_ICON = PATH.template.joinpath("img" , "icon.png")
 PATH_BANNER = PATH.template.joinpath("img" , "banner.png")
 PATH_LOGO = PATH.template.joinpath("img" , "logo.png")

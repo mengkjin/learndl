@@ -7,6 +7,8 @@ from abc import abstractmethod , ABC
 from src.interactive.main.util.session_control import SC
 
 
+__all__ = ['ControlPanelPopover']
+
 class ControlPanelPopover(ABC):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
 

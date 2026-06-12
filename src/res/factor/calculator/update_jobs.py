@@ -1,3 +1,6 @@
+"""
+Update jobs for the project's factor calculator
+"""
 from __future__ import annotations
 import numpy as np
 import polars as pl
@@ -6,7 +9,7 @@ from abc import ABC , abstractmethod
 from datetime import datetime
 from typing import Any , Generator , TypedDict
 
-from src.proj import Base , Logger
+from src.proj import Base , Logger , Dates
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 
@@ -357,7 +360,7 @@ class UpdateJobAll(BaseUpdateJob):
     def __repr__(self):
         return f'{self.factor_name}({self.start}-{self.end})'
 
-    def dates(self) -> np.ndarray:
+    def dates(self) -> Dates:
         return self.target_dates
 
     def sort_key(self) -> Any:

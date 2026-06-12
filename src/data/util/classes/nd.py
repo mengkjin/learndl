@@ -12,6 +12,9 @@ import pandas as pd
 import xarray as xr
 
 from dataclasses import dataclass
+
+__all__ = ['NdData']
+
 @dataclass(slots=True)
 class NdData:
     """

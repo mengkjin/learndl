@@ -6,6 +6,7 @@ from ...util.process import popen_detached_shell_windows
 from ...util.basic import BasicOpener
 from .verify import CmdTerminalVerifier
 
+__all__ = ['CmdTerminalOpener']
 
 def _cmd_quoted(s: str) -> str:
     """Double-quote for 'cmd.exe' metasyntax (internal '"' → '""')."""

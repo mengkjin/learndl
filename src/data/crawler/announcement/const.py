@@ -1,8 +1,18 @@
+"""
+Constants for the announcement crawler
+"""
+
 from __future__ import annotations
 
 from typing import Any
 from zoneinfo import ZoneInfo
 from src.proj import Base
+
+__all__ = [
+    'ExchangeType' , 'BJTZ' , 'SSE_REFERER' , 
+    'SSE_JSONP_URL' , 'SSE_FETCH_KWARGS' , 'SZSE_REFERER' , 
+    'SZSE_ANN_LIST' , 'BSE_REFERER' , 'BSE_ANNOUNCE_URL']
+
 class ExchangeType(Base.StrEnum):
     SSE = "sse"
     SZSE = "szse"

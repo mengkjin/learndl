@@ -4,8 +4,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.proj import MACHINE
+from src.proj import MACHINE , Dates
 from src.data.download.tushare.basic import TS , InfoFetcher , TushareFetcher , DayFetcher
+
+__all__ = ['FundInfo' , 'FundPortfolioFetcher' , 'ETFDailyQuote']
 
 class FundInfo(InfoFetcher):
     """mutual fund info"""
@@ -35,10 +37,10 @@ class FundPortfolioFetcher(TushareFetcher):
     CONSIDER_FUTURE = False
     SKIP_ON_MACHINES = ('Mathews-Mac' ,)
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         dates = self._fina_fetcher_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
-        if len(dates) <= 2: 
-            dates = [] # if a lot of dates are missing, ignore update state to update
+        if dates.size <= 2: 
+            dates = Dates() # if a lot of dates are missing, ignore update state to update
         return dates
     
     def get_data(self , date):

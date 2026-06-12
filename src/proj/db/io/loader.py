@@ -7,6 +7,8 @@ from typing import Any , Iterable , Callable , Union , TYPE_CHECKING
 from src.proj.core import strPath , strPaths
 from src.proj.db.basic import TAR_SUFFIXES
 
+__all__ = ['Load']
+
 if TYPE_CHECKING:
     import pandas as pd
     import polars as pl

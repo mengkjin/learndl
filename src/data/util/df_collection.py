@@ -27,7 +27,9 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-from src.proj import Base
+from src.proj import Base , Dates
+
+__all__ = ['DFCollection' , 'PLDFCollection']
 
 class _df_collection(ABC):
     """
@@ -65,7 +67,7 @@ class _df_collection(ABC):
         """get a DataFrame with given (1) date , fields and set_index"""
 
     @abstractmethod
-    def get_multiple_days(self , dates : list[int] | np.ndarray , field = None ,
+    def get_multiple_days(self , dates : Base.alias.intDates , field = None ,
                           rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | pl.DataFrame:
         """get a DataFrame with given (many) dates , fields and set_index"""
 
@@ -94,7 +96,7 @@ class _df_collection(ABC):
             df = self.get_one_day(self.last_added_date)
             return self.reform_df(df , rename_date_key = 'date')
 
-    def date_diffs(self , dates : list[Base.alias.intDate] | np.ndarray , overwrite = False):
+    def date_diffs(self , dates : Base.alias.intDates | None , overwrite = False):
         """
         Return dates that are not yet cached.
 
@@ -105,14 +107,14 @@ class _df_collection(ABC):
         overwrite : bool
             If True, return ``dates`` unchanged (treat all as missing).
         """
-        dates = np.array([int(d) for d in dates])
+        dates = Dates(dates)
         # Snapshot ``dates`` under lock so concurrent add/truncate cannot skew the diff.
         with self._lock:
-            return dates if overwrite else np.setdiff1d(dates , self.dates)
+            return dates if overwrite else dates.diff(self.dates)
 
     def ensure_dates(
         self ,
-        dates : list[Base.alias.intDate] | np.ndarray ,
+        dates : Base.alias.intDates | None ,
         loader : Callable[[int], pd.DataFrame | None] ,
         overwrite : bool = False ,
     ) -> None:
@@ -122,8 +124,8 @@ class _df_collection(ABC):
         DB I/O runs outside the lock; only cache insertion is serialized. Another
         thread may load the same date first — the second insert is skipped.
         """
-        for date in np.asarray(dates, dtype=np.int64):
-            date = int(date)
+        dates = Dates(dates)
+        for date in dates:
             with self._lock:
                 if not overwrite and date in self.dates:
                     continue
@@ -145,10 +147,13 @@ class _df_collection(ABC):
             df = self.reform_df(df , field , rename_date_key = rename_date_key)
             return df
 
-    def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False):
+    def gets(self , dates : Base.alias.intDates | None , field = None , rename_date_key : str | None = 'date' , copy = False):
         """get a DataFrame with given (many) dates , fields and set_index"""
+        dates = Dates(dates)
+        if dates.empty:
+            return pd.DataFrame(columns = self.columns())
         with self._lock:
-            assert self.max_len <= -1 or len(dates) <= self.max_len , f'No more than {self.max_len} dates , got {len(dates)}'
+            assert self.max_len <= -1 or dates.size <= self.max_len , f'No more than {self.max_len} dates , got {dates.size}'
             df = self.get_multiple_days(dates)
             df = self.reform_df(df , field , rename_date_key = rename_date_key)
             if copy:
@@ -257,7 +262,10 @@ class DFCollection(_df_collection):
     def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date') -> pd.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
-    def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | Any:
+    def gets(self , dates : Base.alias.intDates | None , field = None , rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | Any:
+        dates = Dates(dates)
+        if dates.empty:
+            return pd.DataFrame()
         return super().gets(dates , field , rename_date_key , copy)
 
     def add_one_day(self , date : int , df : pd.DataFrame):
@@ -276,12 +284,13 @@ class DFCollection(_df_collection):
             df = self.long_frame.loc[date:date]
         return df
 
-    def get_multiple_days(self , dates : list[int] | np.ndarray):
+    def get_multiple_days(self , dates : Base.alias.intDates):
         """get a DataFrame with given (many) dates , fields and set_index"""
-        if len(dates) == 0:
+        dates = Dates(dates)
+        if dates.empty:
             return pd.DataFrame(columns = self.columns())
         self.to_long_frame()
-        df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
+        df = self.long_frame.loc[dates.min:dates.max,:] # .reset_index(drop = False)
         return df
 
     def to_long_frame(self):
@@ -324,7 +333,10 @@ class PLDFCollection(_df_collection):
     def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date') -> pl.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
-    def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False) -> pl.DataFrame | Any:
+    def gets(self , dates : Base.alias.intDates | None , field = None , rename_date_key : str | None = 'date' , copy = False) -> pl.DataFrame | Any:
+        dates = Dates(dates)
+        if dates.empty:
+            return pl.DataFrame()
         return super().gets(dates , field , rename_date_key , copy)
 
     def get_one_day(self , date : int) -> pl.DataFrame:
@@ -334,8 +346,11 @@ class PLDFCollection(_df_collection):
         pldf = self.data_frames[date]
         return pldf
 
-    def get_multiple_days(self , dates : list[int] | np.ndarray):
+    def get_multiple_days(self , dates : Base.alias.intDates):
         """get a DataFrame with given (many) dates , fields and set_index"""
+        dates = Dates(dates)
+        if dates.empty:
+            return pl.DataFrame()
         pldf = pl.concat([self.data_frames[date] for date in dates] , how = 'vertical')
         return pldf
 

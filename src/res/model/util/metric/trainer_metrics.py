@@ -1,3 +1,8 @@
+"""
+Trainer metrics for the project , includes:
+- calculate batch metrics
+- collect batch / epoch / attempt / model metrics
+"""
 from __future__ import annotations
 import numpy as np
 
@@ -87,10 +92,10 @@ class TrainerMetrics(TrainerPipeline):
     def multilosses_kwargs(self): 
         return self.config.criterion_multilosses | {'num_head':self.model_param.get('num_output' , 1)}
     @property
-    def which_output(self) -> int | list[int] | None: 
+    def which_output(self) -> Base.alias.intNums | None: 
         return self.model_param.get('which_output' , None)
     @property
-    def which_label(self) -> int | list[int] | None: 
+    def which_label(self) -> Base.alias.intNums | None: 
         return self.model_param.get('which_label' , None)
     @cached_property
     def ignore_loss(self) -> list[str]:

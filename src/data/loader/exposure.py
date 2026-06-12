@@ -14,6 +14,8 @@ from src.proj import DB , Base
 from src.data.util import INFO
 
 from .access import DateDataAccess
+
+__all__ = ['EXPO']
 class ExposureAccess(DateDataAccess):
     """
     Singleton data access object for custom daily microstructure risk exposures.

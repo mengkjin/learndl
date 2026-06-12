@@ -26,6 +26,10 @@ from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
 
+__all__ = [
+    'INDI' , 'BS' , 'CF' , 'IS' , 'FINA' , 'FinData' , 'DiffMethod'
+]
+
 ANN_DATA_COLS : tuple[str,...] = ('f_ann_date' , 'ann_date')
 
 FSType = Literal['is' , 'cf' , 'indi' , 'bs'] 
@@ -104,8 +108,8 @@ class FDataAccess(DateDataAccess):
             astype({'end_date':int , 'ann_date':int}).sort_values(['end_date' , 'ann_date']).drop_duplicates(['secid' , 'end_date'])
         #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
-        ann_dt['td_backward'] = CALENDAR.td_array(ann_dt['ann_date'] , backward = True)
-        ann_dt['td_forward']  = CALENDAR.td_array(ann_dt['ann_date'] , backward = False)
+        ann_dt['td_backward'] = CALENDAR.tds(ann_dt['ann_date'] , backward = True)
+        ann_dt['td_forward']  = CALENDAR.tds(ann_dt['ann_date'] , backward = False)
         ann_dt = ann_dt.loc[ann_dt['td_forward'] <= date , :]
         if within_days > 0:
             ann_dt = ann_dt[ann_dt['td_backward'] >= CALENDAR.cd(date , -within_days)]
@@ -126,7 +130,7 @@ class FDataAccess(DateDataAccess):
         ``anndt``, useful for building event-study style datasets.
         """
         assert after_days > 0 , f'after_days must be greater than 0 , got {after_days}'
-        dates = CALENDAR.cd_trailing(date , within_days)
+        dates = CALENDAR.trailing(date , within_days , 'cd')
         ann_dt = self.get_ann_dt(date , 0 , within_days).reset_index('end_date' , drop=True).assign(count = 1)
         v = ann_dt.pivot_table(index = 'ann_date' , columns = 'secid' , values = 'count').reindex(dates).fillna(0)
 

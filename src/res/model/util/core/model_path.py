@@ -11,7 +11,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load
+from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load , Dates
+from src.proj.core import as_int_array
 from src.proj.bases import ModuleType
 
 from .basic import parse_model_input , combine_full_name , is_null_module_type
@@ -20,7 +21,7 @@ from .model_file import ModelFile
 __all__ = ['ModelPath' , 'PredictorPath']
 
 class ModelPath:
-    f"""
+    """
     model path
     access stored model in learndl/models
     example:
@@ -387,9 +388,10 @@ class PredictorPath(ModelPath , Base.BoundLogger):
 
     def __init__(
         self, model_input : Base.strPath | None | Any , 
-        model_num : int | list[int] | range | Literal['all'] | Any ,
+        model_num : Base.alias.intNums | Literal['all'] | Any | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , * , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        indent : int = 0 , vb_level : Any = 1 , **kwargs
+    ) -> None:
         super().__init__(model_input = model_input , indent=indent, vb_level=vb_level, **kwargs)
         self._model_num = model_num
         self._submodel = submodel
@@ -405,7 +407,11 @@ class PredictorPath(ModelPath , Base.BoundLogger):
         )
 
     def __eq__(self , other : PredictorPath):
-        return self.full_name == other.full_name and self._model_num == other._model_num and self._submodel == other._submodel
+        return (
+            self.full_name == other.full_name and 
+            np.array_equal(self.use_model_nums , other.use_model_nums) and 
+            self._submodel == other._submodel
+        )
 
     def to_model(self):
         from src.res.model.model_module.application import ArchivedPredictorModel
@@ -429,36 +435,34 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     def use_model_nums(self) -> np.ndarray:
         if self._model_num == 'all':
             return self.model_nums
-        elif isinstance(self._model_num , (int , str)):
-            return np.array([int(self._model_num)])
         else:
-            return np.array(self._model_num)
+            return as_int_array(self._model_num)
 
     @property
     def use_submodel(self) -> str:
         return self._submodel
             
     @property
-    def pred_dates(self) -> np.ndarray:
+    def pred_dates(self) -> Dates:
         """model pred dates"""
         return DB.dates('pred' , self.pred_name)
     
     @property
-    def pred_target_dates(self) -> np.ndarray:
+    def pred_target_dates(self) -> Dates:
         """model pred target dates"""
         if len(self.model_dates) == 0:
-            return np.array([])
+            return Dates()
         start = max(self.start , int(CALENDAR.td(min(self.model_dates) , 1)))
         end = None
-        return CALENDAR.range(start , end , 'td' , updated = True)
+        return Dates(start , end , updated = True)
     
     @property
-    def fmp_dates(self) -> np.ndarray:
+    def fmp_dates(self) -> Dates:
         """model factor portfolio dates"""
         return DB.dir_dates(PATH.fmp.joinpath(self.pred_name))
     
     @property
-    def fmp_target_dates(self) -> np.ndarray:
+    def fmp_target_dates(self) -> Dates:
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     

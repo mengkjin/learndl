@@ -1,3 +1,7 @@
+"""
+Factor performance calculator for StockFactor
+"""
+
 from __future__ import annotations
 import pandas as pd
 
@@ -13,6 +17,14 @@ from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
 test_type = TestType.FACTOR
 plotter = Plotter(test_type.title())
+
+__all__ = [
+    'FactorPerfCalc' ,
+    'FrontFace' , 'Coverage' , 'IC_Curve' , 'IC_Decay' , 'IC_Indus' , 'IC_Year' , 'IC_Benchmark' , 'IC_Monotony' ,
+    'PnL_Curve' , 'Style_Corr' , 'Style_Corr_Distrib' , 'Group_Return' , 'Group_Curve' , 'Group_Decay' , 'Group_IR_Decay' ,
+    'Group_Year' , 'Distrib_Curve' , 'Distrib_Qtile' ,
+    'FactorPerfTest'
+]
 
 class FactorPerfCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type

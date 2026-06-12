@@ -1,3 +1,6 @@
+"""
+Parameters for genetic programming
+"""
 from __future__ import annotations
 import torch
 import shutil
@@ -5,6 +8,8 @@ from typing import Literal , Any
 
 from src.proj import PATH , Base
 from .default import gpDefaults
+
+__all__ = ['gpParameters']
 
 class gpParameters(Base.BoundLogger):
     """

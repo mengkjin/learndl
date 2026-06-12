@@ -12,6 +12,8 @@ import math
 
 from src.proj import Logger , Const
 
+__all__ = ['TemporalFusionTransformer']
+
 class GatedResidualNetwork(nn.Module):
     """Gated Residual Network (GRN) building block for TFT.
 

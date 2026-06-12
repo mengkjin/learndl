@@ -1,3 +1,6 @@
+"""
+Basic portfolio utilities for Factor Model Portfolio
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -11,6 +14,8 @@ from src.res.factor.util import (
     Port , AlphaModel , AlphaScreener , 
     Amodel , AlphaComposite , PortCreator , PortCreateResult
 )
+
+__all__ = ['BasicCreatorConfig' , 'BasicPortfolioCreator']
 
 class BasicCreatorConfig:
     """
@@ -83,7 +88,7 @@ class BasicCreatorConfig:
         alpha_secid = alpha_model.get(model_date).secid
         universe = bench_port.secid if (bench_port and not bench_port.emtpy) else alpha_secid
         candidates = alpha_secid if universe is None else np.intersect1d(alpha_secid , universe)
-        all_screened = self.alpha_screener.screened_pool(model_date , universe , other_models = alpha_model if 'self' in self.screener else None)
+        all_screened = self.alpha_screener.screened_pool(model_date , universe.astype(int) , other_models = alpha_model if 'self' in self.screener else None)
         screened = np.intersect1d(all_screened , candidates)
         secid = np.setdiff1d(candidates , screened)
         

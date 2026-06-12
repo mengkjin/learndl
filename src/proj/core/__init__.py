@@ -1,6 +1,7 @@
 """Low-level utils: timing, silence, colored terminal I/O, singletons, HTML helpers, ``Once``."""
+from .func import as_int_array
 from .types import strPath , strPaths , StrEnum , lit
-from .timer import Duration
+from .duration import Duration
 from .silence import Silence
 from .output import stdout , stderr , FormatStr
 from .singleton import SingletonMeta , SingletonABCMeta , NoInstanceMeta

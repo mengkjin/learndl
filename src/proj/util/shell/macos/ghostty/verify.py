@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
+__all__ = ['GhosttyVerifier']
 class GhosttyVerifier:
     """Check whether Ghostty.app is installed (searches standard app directories and Spotlight)."""
 

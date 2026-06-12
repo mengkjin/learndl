@@ -8,6 +8,8 @@ from __future__ import annotations
 import uuid
 import streamlit as st
 
+__all__ = ['unique_st_key']
+
 def unique_st_key(key : str | None = None, custom_type : str | None = None):
     """Generate a unique Streamlit key based on the current session and the provided root key."""
     key = key.replace(" " , "-").lower() if key else 'custom'

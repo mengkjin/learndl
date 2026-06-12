@@ -1,3 +1,7 @@
+"""
+Tracking portfolio manager class for the project.
+"""
+
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -10,9 +14,17 @@ from src.res.trading.util.trade_suggestion import TradeSuggestion
 
 from .trading_port import TrackingPort
 
+__all__ = ['TrackingPortfolioManager']
+
 class TrackingPortfolioManager(Base.BoundLogger):
+    """
+    Tracking portfolio manager class for the project.
+    """
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
+        """
+        Update the tracking portfolios.
+        """
         cls.SetClassVB(vb_level , indent)
         cls.logger.note(f'Update since last update!')
         reset_ports = reset_ports or []
@@ -63,12 +75,18 @@ class TrackingPortfolioManager(Base.BoundLogger):
                     
     @classmethod
     def attachment_path(cls , date : int) -> Path:
+        """
+        Attachment path for the tracking portfolios.
+        """
         path = PATH.rslt_trade.joinpath('trading_ports' , f'trading_ports.{date}.csv')
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
     @classmethod
     def analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs): 
+        """
+        Analyze a tracking port.
+        """
         tp = TrackingPort.load(port_name)
         tp.analyze(start = start , end = end , **kwargs)
         return tp

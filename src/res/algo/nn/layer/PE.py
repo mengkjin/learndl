@@ -4,6 +4,8 @@ import math , torch
 
 from torch import nn , Tensor
 
+__all__ = ['positional_encoding' , 'PositionalEncoding']
+
 def positional_encoding(pe, learn_pe, q_len, d_model) -> Tensor:
     """Build a positional encoding tensor and wrap it as ``nn.Parameter``.
 

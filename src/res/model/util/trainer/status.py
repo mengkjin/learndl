@@ -1,3 +1,6 @@
+"""
+Status class for the trainer
+"""
 from __future__ import annotations
 
 from collections import defaultdict

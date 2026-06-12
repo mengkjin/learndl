@@ -7,6 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
+__all__ = ['WezTermVerifier']
 
 def _windows_wezterm_exe() -> str | None:
     """Search common Windows install directories (Program Files, LOCALAPPDATA) for ``wezterm.exe``."""

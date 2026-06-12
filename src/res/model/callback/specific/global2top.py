@@ -1,3 +1,6 @@
+"""
+Callback specifically for Global2Top module
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -6,6 +9,8 @@ from typing import Literal , Callable
 from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack
 from src.res.model.util.core import epoch_key
+
+__all__ = ['SpecificCB_Global2Top']
 
 def arr_plateau(arr , n : int , eps = 0.) -> bool:
     """Last n element of arr are all smaller than the previous one"""

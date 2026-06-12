@@ -18,6 +18,8 @@ import numpy as np
 
 from src.proj import Base
 
+__all__ = ['MultiHeadLosses']
+
 class MultiHeadLosses(Base.BoundLogger):
     """Orchestrator for multi-task / multi-head loss combination.
 

@@ -1,3 +1,6 @@
+"""
+Statistical functions for Top Portfolio
+"""
 from __future__ import annotations
 import pandas as pd
 
@@ -6,6 +9,11 @@ from typing import Any , Literal
 from src.res.factor.util.agency import BaseConditioner
 from .basic import eval_pf_stats , eval_cum_ret , eval_drawdown
 
+__all__ = [
+    'calc_frontface' , 'calc_perf_curve' , 'calc_perf_excess' , 'calc_perf_drawdown' , 
+    'calc_perf_excess_drawdown' , 'calc_perf_period' , 'calc_perf_year' , 'calc_perf_month' , 
+    'calc_exp_style' , 'calc_exp_indus' , 'calc_attrib_source' , 'calc_attrib_style'
+]
 
 def _filter_account(acc : pd.DataFrame , lag0 = True , pos_model_date = False):
     """drop lag if exists , and select lag0"""

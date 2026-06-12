@@ -1,8 +1,14 @@
+"""
+Direct calls related to application operations of this project.
+"""
+
 from __future__ import annotations
 import os
 import psutil
 
 from src.proj import MACHINE
+
+__all__ = ['launch_app' , 'kill_and_reboot_app']
 
 def launch_app():
     from src.proj.util.shell import Shell

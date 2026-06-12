@@ -1,3 +1,7 @@
+"""
+API for notification operations of this project.
+"""
+
 from __future__ import annotations
 import pandas as pd
 import torch , os
@@ -7,6 +11,8 @@ from src.proj.util.web.emailer import Email
 from src.proj.util.script import TaskRecorder
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
 from .util import wrap_update
+
+__all__ = ['NotificationAPI']
 
 class TempFile:
     """Context manager that deletes a filesystem path on exit."""
@@ -134,7 +140,7 @@ class NotificationAPI:
             return
         
         pred_dates = DB.dates('pred' , 'gru_day_V1')
-        use_date = pred_dates[pred_dates <= today].max()
+        use_date = pred_dates.slice(end = today).max
 
         title = f'{today} 因子数据更新'
         body = '因子数据更新完成'

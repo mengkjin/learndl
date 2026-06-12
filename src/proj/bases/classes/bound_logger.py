@@ -1,3 +1,14 @@
+"""
+Bound logger for the module, include most methods of Logger, and can set base indent and vb_level
+Both class and instance can set vb_level and indent, and the instance will inherit the class's vb_level and indent.
+For example
+    class A(BoundLogger):
+        ...
+    a = A()
+
+    A.SetClassVB(vb_level = 1)
+    A.logger.info('hello')
+"""
 from __future__ import annotations
 
 from contextlib import contextmanager

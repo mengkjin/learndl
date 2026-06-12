@@ -1,3 +1,6 @@
+"""
+High frequency momentum factors for stock level0
+"""
 from __future__ import annotations
 import pandas as pd
 import polars as pl
@@ -31,7 +34,7 @@ class inday_amap_orig(HfMomentumFactor):
     description = 'APM原始值,上下午价格行为差异'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         mom20 = DATAVENDOR.TRADE.get_returns(min(dates) , date , return_type = 'close' , pivot = False , mask = False)
         mom20 = (mom20 + 1).groupby('secid')['pctchange'].prod() - 1
 
@@ -72,7 +75,7 @@ class inday_conf_persist(HfMomentumFactor):
     description = '过度自信因子'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
 
         def conf_persist(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
@@ -107,7 +110,7 @@ class inday_regain_conf_persist(HfMomentumFactor):
     description = '重拾自信因子'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
 
         def conf_persist(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
@@ -144,7 +147,7 @@ class inday_high_time(HfMomentumFactor):
     description = '日内高点位置'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         def high_time(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
@@ -166,7 +169,7 @@ class inday_incvol_mom(HfMomentumFactor):
     description = '量升累计收益'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         def incvol_ret(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
@@ -186,7 +189,7 @@ class inday_trend_avg(HfMomentumFactor):
     description = '日内价格变化路径'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         mom20 = DATAVENDOR.TRADE.get_returns(min(dates) , date , return_type = 'close' , pivot = False , mask = False)
         mom20 = (mom20 + 1).groupby('secid')['pctchange'].prod() - 1
         def price_trend(date : int):
@@ -207,7 +210,7 @@ class inday_trend_std(HfMomentumFactor):
     description = '日内价格变化路径'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         mom20 = DATAVENDOR.TRADE.get_returns(min(dates) , date , return_type = 'close' , pivot = False , mask = False)
         mom20 = mom20.groupby('secid')['pctchange'].std()
         assert isinstance(mom20 , pd.Series) , f'mom20 must be a pandas series, but got {type(mom20)}'
@@ -230,7 +233,7 @@ class inday_vwap_diff_hlvol(HfMomentumFactor):
     description = '日内高低成交量vwap差'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         def high_vol(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
@@ -259,7 +262,7 @@ class mom_high_volcv(HfMomentumFactor):
     description = '分钟成交量波动最大区间的动量因子'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         def vol_z(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date)
             df = df.group_by('secid').agg(
@@ -283,7 +286,7 @@ class mom_high_pstd(HfMomentumFactor):
     description = '日内高波动累计动量'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         def vol_z(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.group_by('secid').agg(

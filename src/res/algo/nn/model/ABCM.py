@@ -17,6 +17,8 @@ from src.res.algo.nn import layer as Layer
 
 from .RNN import mod_gru
 
+__all__ = ['Astgnn']
+
 class Astgnn(nn.Module):
     """Alpha-Beta Co-Mining GRU model (ABCM).  Registry key: ``'abcm'``
 

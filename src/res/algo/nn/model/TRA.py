@@ -10,6 +10,8 @@ from torch import nn , Tensor
 from src.proj import Logger
 from .RNN import get_rnn_mod
 
+__all__ = ['block_tra' , 'tra']
+
 class block_tra(nn.Module):
     """Temporal Routing Adaptor (TRA) mapping head.
 

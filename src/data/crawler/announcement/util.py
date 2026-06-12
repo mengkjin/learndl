@@ -19,6 +19,26 @@ from datetime import datetime
 from src.proj import CALENDAR , DB , Proj , Base , Save , Load
 from .const import ExchangeType , BJTZ
 
+__all__ = [
+    'range_dates' , 'parse_jsonp' , '_now_iso' , 
+    'CrawlerLogger' , 'Announcement' , 'AnnouncementExporter' , 
+    'sse_parse_groups' , 'bse_query_body'
+]
+
+def _now_iso() -> str:
+    return datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
+
+class _PathLock:
+    locks_guard = threading.Lock()
+    locks: dict[str, threading.Lock] = {}
+
+    @classmethod
+    def get(cls, path: Path) -> threading.Lock:
+        key = str(path.resolve())
+        with cls.locks_guard:
+            if key not in cls.locks:
+                cls.locks[key] = threading.Lock()
+            return cls.locks[key]
 
 def range_dates(start: int, end: int , step: int = 1) -> list[tuple[int , int]]:
     start, end = CALENDAR.update_schedule(start, end)
@@ -37,9 +57,6 @@ def parse_jsonp(text: str) -> object:
         CrawlerLogger.error(f"Response is not JSONP format: {text}")
         raise ValueError("Response is not JSONP format")
     return json.loads(m.group(1))
-
-def now_iso() -> str:
-    return datetime.now(tz=BJTZ).replace(microsecond=0).isoformat()
 
 class CrawlerLogger(Base.BoundLogger):
     _class_vb_level = Proj.vb.get('crawler')
@@ -84,7 +101,7 @@ class Announcement:
  
     @classmethod
     def from_sse(cls , raw : dict[str, Any]) -> Announcement:
-        crawled_iso = now_iso()
+        crawled_iso = _now_iso()
         pdf_base_url = "https://static.sse.com.cn/disclosure"
         rel_path = str(raw.get("URL") or "").strip()
         code = str(raw.get("SECURITY_CODE") or "").strip()
@@ -109,7 +126,7 @@ class Announcement:
 
     @classmethod
     def from_szse(cls, raw: dict[str, Any]) -> Announcement:
-        crawled_iso = now_iso()
+        crawled_iso = _now_iso()
         pdf_base_url = "https://disc.static.szse.cn/download"
         codes = raw.get("secCode") or []
         names = raw.get("secName") or []
@@ -135,7 +152,7 @@ class Announcement:
 
     @classmethod
     def from_bse(cls, raw: dict[str, Any]) -> Announcement:
-        crawled_iso = now_iso()
+        crawled_iso = _now_iso()
         pdf_base_url = "https://www.bse.cn"
         title = (str(raw.get("disclosureTitle") or "") + str(raw.get("disclosurePostTitle") or "")).strip()
         m = re.match(r"^\[([^\]]+)\]", title)
@@ -220,18 +237,6 @@ class Announcement:
             "date": self.date,
         }
 
-class PathLock:
-    locks_guard = threading.Lock()
-    locks: dict[str, threading.Lock] = {}
-
-    @classmethod
-    def get(cls, path: Path) -> threading.Lock:
-        key = str(path.resolve())
-        with cls.locks_guard:
-            if key not in cls.locks:
-                cls.locks[key] = threading.Lock()
-            return cls.locks[key]
-
 class AnnouncementExporter:
     DEDUPE_SUBSET = ["exchange", "source_id", "announce_date", "title"]
     _instances : dict[str, AnnouncementExporter] = {}
@@ -283,7 +288,7 @@ class AnnouncementExporter:
         df["_attempt_id"] = attempt_id
         df["_attempt_error"] = ""
         path = self.temp_attempt_path(task_key, attempt_id)
-        with PathLock.get(path):
+        with _PathLock.get(path):
             Save.df(df, path, empty_ok=True , vb_level= 'never')
             CrawlerLogger.stdout(f"Saved temp attempt to {path}")
         return path
@@ -325,7 +330,7 @@ class AnnouncementExporter:
         for date in CALENDAR.range(start, end , 'cd'):
             df_date = df.query("date == @date").reset_index(drop=True)
             path = self.export_path(date)
-            with PathLock.get(path):
+            with _PathLock.get(path):
                 old = Load.df(path)
                 if not old.empty:
                     df_date = pd.concat([old, df_date], ignore_index=True).drop_duplicates(

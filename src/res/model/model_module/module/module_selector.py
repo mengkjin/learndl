@@ -3,9 +3,11 @@ select the appropriate predictor module based on input module name or ModelConfi
 """
 
 from __future__ import annotations
-from src.res.model.util import ModelConfig , is_null_module_type
+from src.res.model.util import ModelConfig , is_null_module_type , PredictorModel
 
-def get_predictor_module(module : str | ModelConfig , *args , **kwargs):
+__all__ = ['get_predictor_module']
+
+def get_predictor_module(module : str | ModelConfig , *args , **kwargs) -> PredictorModel:
     if isinstance(module , str):
         module = ModelConfig(module = module)
     module_type = module.module_type

@@ -17,6 +17,8 @@ import streamlit_autorefresh as st_autorefresh
 from src.proj import Proj , Const
 from src.interactive.main.util.navigation import page_setup
 
+__all__ = ['main']
+
 file_path = str(pathlib.Path(__file__).absolute())
 path = file_path.removesuffix(file_path.split('learndl' , 1)[-1]).lower()
 

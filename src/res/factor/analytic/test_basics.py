@@ -1,10 +1,14 @@
+"""
+Basic classes for factor analytic tests
+"""
+
 from __future__ import annotations
 import warnings , re
-from datetime import datetime
 import pandas as pd
 import numpy as np
 
 from abc import ABC , abstractmethod
+from datetime import datetime
 from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
@@ -14,6 +18,10 @@ from src.proj import PATH , DB , Base , Save
 from src.data import DataBlock
 from src.proj.bases import TestType
 from src.res.factor.util import Benchmark , StockFactor
+
+__all__ = [
+    'BaseFactorAnalyticCalculator' , 'BaseFactorAnalyticTest' , 'TestType' ,
+]
 
 def _camel_to_snake(name : str) -> str:
     """Convert CamelCase (or mixed) identifiers to lower_snake_case."""
@@ -34,6 +42,9 @@ class CalcWarningsManager(Base.BoundLogger):
         self.timer.__exit__(*args)
 
 class BaseFactorAnalyticCalculator(ABC, Base.BoundLogger):
+    """
+    Base class for factor analytic calculators
+    """
     TEST_TYPE : TestType
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
 
@@ -84,6 +95,9 @@ class BaseFactorAnalyticCalculator(ABC, Base.BoundLogger):
         return self.TEST_TYPE.title()
         
 class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
+    """
+    Base class for factor analytic tests
+    """
     TEST_TYPE : TestType
     TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
 

@@ -1,3 +1,7 @@
+"""
+Optimized portfolio calculator for Factor Model Portfolio
+"""
+
 from __future__ import annotations
 import pandas as pd
 
@@ -14,6 +18,13 @@ from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
 test_type = TestType.OPTIM
 plotter = Plotter(test_type.title())
+
+__all__ = [
+    'OptimCalc' ,
+    'FrontFace' , 'Perf_Curve' , 'Drawdown' , 'Excess_Drawdown' , 'Perf_Year' , 'Perf_Month' , 'Perf_Lag' ,
+    'Exp_Style' , 'Exp_Indus' , 'Attrib_Source' , 'Attrib_Style' ,
+    'OptimFMPTest'
+]
 
 class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type

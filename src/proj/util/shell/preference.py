@@ -2,6 +2,23 @@
 from __future__ import annotations
 from src.proj.env import Const
 
+__all__ = [
+    'DONE_ACTION' , 
+    'DISCOVER_WAIT_TIMEOUT' , 'DISCOVER_WAIT_INTERVAL' , 
+    
+    'MACOS_OPTIONS' , 
+    'MACOS_TERMINAL_PROFILE_NAME' , 
+    'MACOS_CMUX_NEW' , 'MACOS_CMUX_COLD_START_DEADLINE' , 'MACOS_CMUX_PING_INTERVAL' , 'MACOS_CMUX_CMD_TIMEOUT' , 'MACOS_WEZTERM_NEW' , 
+
+    'LINUX_OPTIONS' , 
+    'LINUX_WEZTERM_NEW' , 
+    'LINUX_GNOME_NEW' , 
+
+    'WINDOWS_OPTIONS' , 
+    'WINDOWS_CMD_NEW' , 
+    'WINDOWS_WEZTERM_NEW'
+]
+
 _pref = Const.Pref.shell
 
 DONE_ACTION = _pref.get("done_action" , 'pause')

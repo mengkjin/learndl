@@ -1,5 +1,10 @@
+"""
+Fitness for genetic programming
+"""
 from __future__ import annotations
 from deap import base
+
+__all__ = ['gpFitness']
 
 class gpFitness:
     _instance = None

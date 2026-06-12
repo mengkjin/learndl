@@ -12,6 +12,8 @@ from src.proj import Base
 
 from .core import Proxy , ProxySet
 
+__all__ = ['VerifyRecord' , 'VerificationRecords' , 'ProxyVerifier']
+
 @dataclass
 class VerifyRecord:
     """Timing and outcome record for one proxy-vs-target-URL verification attempt."""

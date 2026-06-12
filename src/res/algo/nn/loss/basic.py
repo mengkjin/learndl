@@ -2,6 +2,8 @@
 from __future__ import annotations
 import torch
 
+__all__ = ['mask_topx' , 'first_output']
+
 def mask_topx(tensor : torch.Tensor , x_percent : float , dim : int = 0 , ascending : bool = True , fill_nan : bool = False):
     """
     mask the top x% of the tensor in the specified dimension, ignoring NaN.

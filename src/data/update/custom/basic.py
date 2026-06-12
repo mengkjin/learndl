@@ -14,6 +14,8 @@ from pathlib import Path
 
 from src.proj import PATH , Base
 
+__all__ = ['BasicCustomUpdater']
+
 class BasicCustomUpdaterMeta(type):
     """
     Metaclass that auto-registers all ``BasicCustomUpdater`` subclasses.

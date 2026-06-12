@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import shutil
 
+__all__ = ['CmdTerminalVerifier']
+
 class CmdTerminalVerifier:
     """Check whether ``cmd.exe`` is available (always true on a standard Windows install)."""
 

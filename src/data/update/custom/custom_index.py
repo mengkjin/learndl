@@ -16,9 +16,11 @@ import numpy as np
 from abc import ABCMeta , abstractmethod
 from functools import cached_property
 from typing import Type , Any
-from src.proj import CALENDAR , DB , Load , Save , Base
+from src.proj import CALENDAR , DB , Load , Save , Base , Dates
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
+
+__all__ = ['CustomIndex' , 'CustomIndexUpdater' , 'MicroCap_400']
 
 START_DATE = 20100101
 DB_SRC = 'index_daily_custom'
@@ -55,7 +57,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
     index_name = CustomIndexName()
 
     @abstractmethod
-    def rebalance_dates(self) -> np.ndarray:
+    def rebalance_dates(self) -> Dates:
         """get rebalance dates"""
 
     @abstractmethod
@@ -63,7 +65,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
         """get index portfolio"""
 
     @cached_property
-    def reb_dates(self) -> np.ndarray:
+    def reb_dates(self) -> Dates:
         """Cached rebalance date array (computed on first access)."""
         return self.rebalance_dates()
 
@@ -91,7 +93,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
         if self.current_portfolio is not None and self.current_portfolio.date == date:
             return self.current_portfolio
         reb_dates = self.reb_dates
-        prev_reb_date = 99991231 if (len(reb_dates) == 0 or min(reb_dates) > date) else max(reb_dates[reb_dates <= date])
+        prev_reb_date = 99991231 if (reb_dates or reb_dates.min > date) else reb_dates.slice(end = date).max
         if prev_reb_date > date:
             port = Port(pd.DataFrame() , date , self.index_name)
         elif prev_reb_date == date:
@@ -112,30 +114,31 @@ class CustomIndex(metaclass=CustomIndexMeta):
             return 0.
         return prev_port.fut_ret(date)
 
-    def update_dates(self , dates : np.ndarray | list[int] , indent : int = 1 , vb_level : Any = 1):
+    def update_dates(self , dates : Base.alias.intDates | None , indent : int = 1 , vb_level : Any = 1) -> None:
         """update index return for given dates"""
-        if len(dates) == 0:
+        dates = Dates(dates)
+        if dates.empty:
             return
-        dates = np.sort(CALENDAR.slice(dates , self.START_DATE , CALENDAR.updated()))
+        dates = dates.slice(self.START_DATE , CALENDAR.updated())
         pct_chg = np.array([self.index_return(date) for date in dates]) * 100
-        df = pd.DataFrame({'trade_date' : dates , 'pct_chg' : pct_chg})
+        df = pd.DataFrame({'trade_date' : dates.dates , 'pct_chg' : pct_chg})
         old_df = Load.df(self.target_path)
         if not old_df.empty:
             df = pd.concat([old_df.query('trade_date not in @df.trade_date') , df]).sort_values('trade_date').reset_index(drop=True)
         Save.df(df , self.target_path , indent = indent , vb_level = vb_level)
 
-    def stored_dates(self) -> np.ndarray:
+    def stored_dates(self) -> Dates:
         """get stored dates"""
         old_df = Load.df(self.target_path)
         if old_df.empty:
-            return np.array([])
-        return old_df['trade_date'].to_numpy(int)
+            return Dates()
+        return Dates(old_df['trade_date'].to_numpy(int))
 
-    def target_dates(self , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs):
+    def target_dates(self , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs) -> Dates:
         start = max(start or self.START_DATE , self.START_DATE)
         end = end or CALENDAR.update_to()
-        stored_dates = np.array([]) if overwrite else self.stored_dates()
-        target_dates = CALENDAR.diffs(start , end , stored_dates)
+        stored_dates = Dates() if overwrite else self.stored_dates()
+        target_dates = Dates(start , end).diff(stored_dates)
         return target_dates
 
     @classmethod
@@ -156,7 +159,7 @@ class CustomIndexUpdater(BasicCustomUpdater):
                 cls.logger.skipping(f'{custom_index.index_name} is up to date' , idt = 2 , vb = 1)
                 continue
             custom_index.update_dates(target_dates , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
-            total_dates.extend(target_dates.tolist())
+            total_dates.extend(target_dates.dates.tolist())
         if len(total_dates) == 0:
             return Base.UpdateFlag.SKIPPED
         else:
@@ -167,8 +170,8 @@ class CustomIndexUpdater(BasicCustomUpdater):
             custom_index.update_dates([date] , indent = self.indent + 2 , vb_level = self.vb_level + 2)
 
 class MicroCap_400(CustomIndex):
-    def rebalance_dates(self) -> np.ndarray:
-        return CALENDAR.range(self.START_DATE , None , 'td' , updated = True)
+    def rebalance_dates(self) -> Dates:
+        return Dates(self.START_DATE , CALENDAR.updated())
 
     def rebalance_portfolio(self , date : int) -> pd.DataFrame:
         prev_date = CALENDAR.td(date , -1)

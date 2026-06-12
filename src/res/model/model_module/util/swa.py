@@ -1,3 +1,6 @@
+"""
+SWA ensembler for trainer
+"""
 from __future__ import annotations
 import numpy as np
 
@@ -10,6 +13,8 @@ from typing import Any , Literal
 from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
 
 SWAEnsemblerType = Literal['best' , 'swabest' , 'swalast']
+
+__all__ = ['choose_swa_method' , 'SWAEnsembler' , 'SWAModel' , 'EnsembleBestOne' , 'EnsembleSWABest' , 'EnsembleSWALast']
 
 def choose_swa_method(submodel : SWAEnsemblerType | Any):
     """get a subclass of _BaseEnsembler"""

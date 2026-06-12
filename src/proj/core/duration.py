@@ -1,6 +1,10 @@
-"""Positive elapsed time from a fixed length or from a past timestamp."""
+"""
+Positive elapsed time from a fixed length or from a past timestamp.
+"""
 from __future__ import annotations
 from datetime import datetime , timedelta
+
+__all__ = ['Duration']
 
 class Duration:
     """Non-negative elapsed seconds from either ``duration`` or time since ``since``."""

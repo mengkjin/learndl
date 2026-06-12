@@ -9,6 +9,8 @@ from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool, ProxyStats
 from .fetcher_task import FetcherTask
 from .util import Announcement, CrawlerLogger
 
+__all__ = ['AsyncProxyRaceExecutor']
+
 class AsyncProxyRaceExecutor:
     """Async scheduler for normal mode + race mode over a shared proxy pool."""
     def __init__(

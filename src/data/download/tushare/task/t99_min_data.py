@@ -5,6 +5,8 @@ import tushare as ts
 
 from src.data.download.tushare.basic import TS
 
+__all__ = []
+
 if __name__ == '__main__':
     with TS.lock:
         df = ts.pro_bar(ts_code='600000.SH', api = TS.api , freq='1min', 

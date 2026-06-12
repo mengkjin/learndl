@@ -20,6 +20,8 @@ from .sync_fetcher import AnnoucementFetcher
 from .async_fetcher import AsyncAnnoucementFetcher
 from .util import Announcement , range_dates , AnnouncementExporter , CrawlerLogger
 
+__all__ = ['FetcherTask']
+
 class FetcherTask(Base.BoundLogger):
     def __init__(self, exchange: ExchangeType, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
         super().__init__(vb_level=vb_level, indent=indent, **kwargs)

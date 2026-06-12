@@ -5,6 +5,8 @@ from datetime import datetime
 from src.proj.core import strPath
 from src.proj.env import PATH
 
+__all__ = ['TaskRecorder']
+
 class TaskRecorder:
     """Persist and query task execution records in ``task_record.db``."""
 

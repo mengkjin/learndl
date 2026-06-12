@@ -1,3 +1,6 @@
+"""
+Generator for genetic programming , which can generate factor values from factor expressions directly based on trained GP model
+"""
 from __future__ import annotations
 import torch
 import pandas as pd
@@ -8,6 +11,8 @@ from src.proj import Proj , Base
 
 from src.res.gp.func import factor_func as FF
 from src.res.gp.util import EliteGroup , GeneticProgramming
+
+__all__ = ['gpGenerator']
 
 class gpGenerator(Base.BoundLogger):
     """

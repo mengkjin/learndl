@@ -1,8 +1,14 @@
+"""
+Default parameters for genetic programming
+"""
+
 from __future__ import annotations
 import platform , os
 import torch
 from src.proj import PATH
 from src.proj.util.functional.device import Device
+
+__all__ = ['gpDefaults']
 
 class gpDefaults:
     plat = platform.system().lower() # Windows or Linux

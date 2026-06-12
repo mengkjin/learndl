@@ -1,7 +1,11 @@
+"""
+Momentum WEIVOL factors for stock level0
+"""
 from __future__ import annotations
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
+__all__ = ['price_weivol1m']
 
 def price_weivol(date , n_months : int , lag_months : int = 0):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

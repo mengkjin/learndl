@@ -16,7 +16,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any , ClassVar , Literal , Iterable , get_args
 
-from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB
+from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
 from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice , IndexMergeMethod
 
 __all__ = ['DataBlock' , 'DataBlockNorm']
@@ -28,8 +28,7 @@ FREQUENT_MIN_DATES : int = 500
 DumpSuffix = Literal['.mmap' , '.pt' , '.feather']
 PREFERRED_DUMP_SUFFIX : DumpSuffix = '.mmap'
 
-
-def data_type_abbr(key : str):
+def data_type_abbr(key : str) -> str:
     """
     Normalise a data-type key to its canonical short form.
 
@@ -56,7 +55,7 @@ def data_type_alias(key : str) -> list[str]:
     assert alias[-1] == key , f'{alias[-1]} != {key}'
     return alias
 
-def save_dict(data : dict , file_path : Base.strPath):
+def save_dict(data : dict , file_path : Base.strPath) -> None:
     """
     Save a dictionary to disk.
 
@@ -315,11 +314,13 @@ class DataBlock:
         return date[::interval]
     
     @classmethod
-    def merge(cls , block_list : Iterable[DataBlock] , * , inplace = False , 
-              secid_method : IndexMergeMethod = 'union' , 
-              date_method : IndexMergeMethod = 'union' , 
-              inday_method : IndexMergeMethod = 'check' , 
-              feature_method : IndexMergeMethod = 'stack'):
+    def merge(
+        cls , block_list : Iterable[DataBlock] , * , inplace = False , 
+        secid_method : IndexMergeMethod = 'union' , 
+        date_method : IndexMergeMethod = 'union' , 
+        inday_method : IndexMergeMethod = 'check' , 
+        feature_method : IndexMergeMethod = 'stack'
+    ):
         """merge multiple blocks into one block , if inplace is True, merge into the first block"""
         blocks = [*block_list]
         if inplace:
@@ -369,7 +370,10 @@ class DataBlock:
         """Return a deep copy of this block."""
         return deepcopy(self)
 
-    def align(self , secid = None , date = None , feature = None , inplace = False):
+    def align(
+        self , secid : np.ndarray | None = None , date : np.ndarray | None = None , 
+        feature : list[str] | np.ndarray | None = None , inplace = False
+    ) -> DataBlock:
         """Convenience wrapper: align secid+date then feature in one call."""
         if not self.initiated:
             return self
@@ -377,7 +381,11 @@ class DataBlock:
         blk = blk.align_feature(feature , inplace = True)
         return blk
 
-    def subset(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
+    def subset(
+        self , secid : np.ndarray | None = None , date : np.ndarray | None = None , 
+        feature : list[str] | np.ndarray | None = None , inday : np.ndarray | None = None , 
+        fillna : Any = None
+    ) -> DataBlock:
         """
         Return a new DataBlock containing only the requested index slices.
 
@@ -392,7 +400,7 @@ class DataBlock:
         feature = self.feature if feature is None else feature
         return self.__class__(values , secid , date , feature)
 
-    def align_secid(self , secid , inplace = False):
+    def align_secid(self , secid : np.ndarray | None = None , inplace = False) -> DataBlock:
         """
         Re-index the security axis to ``secid``.
 
@@ -414,7 +422,7 @@ class DataBlock:
         values[tar_pos] = self.values[src_pos]
         return self.update(values = values , secid = secid)
        
-    def align_date(self , date , inplace = False):
+    def align_date(self , date : np.ndarray | None = None , inplace = False) -> DataBlock:
         """
         Re-index the date axis to ``date``.
 
@@ -446,7 +454,10 @@ class DataBlock:
         else:
             return self
     
-    def align_secid_date(self , secid = None , date = None , inplace = False):
+    def align_secid_date(
+        self , secid : np.ndarray | None = None , date : np.ndarray | None = None , 
+        inplace = False
+    ) -> DataBlock:
         """
         Jointly re-index both secid and date axes in a single tensor allocation.
 
@@ -475,7 +486,9 @@ class DataBlock:
             
             return self.update(values = values , secid = secid , date = date)
     
-    def align_feature(self , feature , inplace = False):
+    def align_feature(
+        self , feature : list[str] | np.ndarray | None = None , inplace = False
+    ) -> DataBlock:
         """
         Re-index the feature axis to ``feature``.
 
@@ -499,7 +512,7 @@ class DataBlock:
         self.on_change_feature()
         return self
         
-    def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
+    def add_feature(self , new_feature : str , new_value : np.ndarray | torch.Tensor) -> DataBlock:
         """Append a new feature column (and its values) to the block in-place."""
         if not self.initiated:
             return self
@@ -510,7 +523,7 @@ class DataBlock:
         self.on_change_feature()
         return self
     
-    def rename_feature(self , rename_dict : dict):
+    def rename_feature(self , rename_dict : dict) -> DataBlock:
         """Rename features according to ``rename_dict`` (old_name → new_name)."""
         if not self.initiated or len(rename_dict) == 0: 
             return self
@@ -521,7 +534,10 @@ class DataBlock:
         self.on_change_feature()
         return self
     
-    def loc(self , secid : Any | None = None , date : Any | None = None , feature : Any | None = None , inday : Any | None = None , fillna : Any = None):
+    def loc(
+        self , secid : Any | None = None , date : Any | None = None , 
+        feature : Any | None = None , inday : Any | None = None , fillna : Any = None
+    ) -> torch.Tensor | Any:
         """
         Extract a sub-tensor by positional index matching (not alignment).
 
@@ -550,7 +566,7 @@ class DataBlock:
         return values
 
     @classmethod
-    def concat_feature(cls , block_list):
+    def concat_feature(cls , block_list : list[DataBlock]) -> DataBlock:
         """
         Concatenate blocks along the feature axis.
 
@@ -570,7 +586,7 @@ class DataBlock:
         return new_blk
 
     @classmethod
-    def from_polars(cls , df : pl.DataFrame | None):
+    def from_polars(cls , df : pl.DataFrame | None) -> DataBlock:
         """convert polars dataframe to DataBlock"""
         if df is None or df.is_empty(): 
             return cls()
@@ -606,7 +622,7 @@ class DataBlock:
 
     
     @classmethod
-    def from_pandas(cls , df : pd.DataFrame | None):
+    def from_pandas(cls , df : pd.DataFrame | None) -> DataBlock:
         """convert pandas dataframe to DataBlock"""
         if df is None or df.empty: 
             return cls()
@@ -633,7 +649,9 @@ class DataBlock:
             raise
         return block
 
-    def to_dataframe(self , drop_inday = True , start : int | None = None , end : int | None = None):
+    def to_dataframe(
+        self , drop_inday = True , start : int | None = None , end : int | None = None
+    ) -> pd.DataFrame:
         """
         Convert the block to a long-format pandas DataFrame.
 
@@ -661,27 +679,27 @@ class DataBlock:
 
 
     @cached_property
-    def price_adjusted(self): 
+    def price_adjusted(self) -> bool: 
         """Return flag of if the price is adjusted by adjfactor"""
         return False
 
     @cached_property
-    def volume_adjusted(self): 
+    def volume_adjusted(self) -> bool: 
         """Return flag of if the volume is adjusted by adjfactor"""
         return False
 
     @staticmethod
-    def data_type_abbr(key : str): 
+    def data_type_abbr(key : str) -> str: 
         """Return the abbreviation of the data type"""
         return data_type_abbr(key)
 
     @staticmethod
-    def data_type_alias(key : str): 
+    def data_type_alias(key : str) -> list[str]: 
         """Return the alias of the data type"""
         return data_type_alias(key)
 
     @classmethod
-    def last_preprocess_date(cls , key , frame : Base.lit.DataBlockTimeFrame):
+    def last_preprocess_date(cls , key , frame : Base.lit.DataBlockTimeFrame) -> int | None:
         """
         Return the calendar date (yyyyMMdd int) when the preprocess dump was last written. 
         Use min instead of max to make sure the earliest one, on which skip update is limited.
@@ -694,7 +712,7 @@ class DataBlock:
             return PATH.file_modified_date(cls.path_preprocess(key , frame))
     
     @classmethod
-    def last_preprocess_time(cls , key , frame : Base.lit.DataBlockTimeFrame):
+    def last_preprocess_time(cls , key , frame : Base.lit.DataBlockTimeFrame) -> int | None:
         """
         Return the wall-clock timestamp (datetime) when the preprocess dump was last written.
         Use min instead of max to make sure the earliest one, on which skip update is limited.
@@ -742,7 +760,7 @@ class DataBlock:
             Logger.error(f'max_data_date({key , frame}) error: ModuleNotFoundError: {e}')
             return None
 
-    def ffill(self , if_fill : bool = True):
+    def ffill(self , if_fill : bool = True) -> DataBlock:
         """Forward-fill NaN values along the date axis (axis=1). No-op when ``if_fill=False``."""
         if self.empty:
             return self
@@ -750,7 +768,7 @@ class DataBlock:
             self.values = forward_fillna(self.values , axis = 1)
         return self
 
-    def fillna(self , value : Any = 0):
+    def fillna(self , value : Any = 0) -> DataBlock:
         """Replace all NaN values in ``values`` with the given scalar."""
         if self.empty:
             return self
@@ -774,7 +792,7 @@ class DataBlock:
         else:
             return bool(fillna)
 
-    def on_change_feature(self):
+    def on_change_feature(self) -> DataBlock:
         """
         Hook called whenever the feature axis is modified.
 
@@ -785,8 +803,10 @@ class DataBlock:
             self.flags.clear()
         return self
 
-    def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 ,
-                     price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] , ffill = False):
+    def adjust_price(
+        self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 ,
+        price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] , ffill = False
+    ) -> DataBlock:
         """
         Apply price adjustment factors to OHLCV price columns.
 
@@ -832,8 +852,10 @@ class DataBlock:
         self.price_adjusted = True
         return self
     
-    def adjust_volume(self , multiply = None , divide = None ,
-                      vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr'] , ffill = False):
+    def adjust_volume(
+        self , multiply = None , divide = None ,
+        vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr'] , ffill = False
+    ) -> DataBlock:
         """
         Scale volume/amount/turnover columns by optional multiply/divide factors.
 
@@ -861,7 +883,7 @@ class DataBlock:
         self.volume_adjusted = True
         return self
     
-    def mask_values(self , mask : dict , **kwargs):
+    def mask_values(self , mask : dict , **kwargs) -> DataBlock:
         """
         Zero out (set to NaN) values according to mask rules.
 
@@ -887,7 +909,7 @@ class DataBlock:
             
             list_dt = np.array(desc.loc[secid , 'list_dt'])
             list_dt[list_dt < 0] = 21991231
-            list_dt = CALENDAR.cd_array(list_dt , mask_list_dt).astype(int)
+            list_dt = CALENDAR.offset(list_dt , offset = mask_list_dt , type = 'cd')
 
             delist_dt = np.array(desc.loc[secid , 'delist_dt'])
             delist_dt[delist_dt < 0] = 21991231
@@ -899,14 +921,18 @@ class DataBlock:
         self.values[mask_pos] = torch.nan
         return self
     
-    def hist_norm(self , key : str , 
-                  start : int | None = None , end : int | None  = 20161231 , 
-                  step_day = 5 , **kwargs):
+    def hist_norm(
+        self , key : str , 
+        start : int | None = None , end : int | None  = 20161231 , 
+        step_day = 5 , **kwargs
+    ) -> DataBlockNorm | None:
         """Calculate the historical normalisation stats for the data block"""
         return DataBlockNorm.calculate(self , key , start , end , step_day , **kwargs)
 
-    def extend_to(self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * ,
-                  dates = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'):
+    def extend_to(
+        self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * ,
+        dates : Base.alias.intDates | None = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'
+    ) -> DataBlock:
         """
         Extend this block by loading missing dates from the database.
 
@@ -914,9 +940,8 @@ class DataBlock:
         ``self.date`` are fetched.  Price/volume adjustment flags are forwarded
         to the newly loaded block before merging.
         """
-        if dates is None:
-            dates = CALENDAR.range(start , end , 'td')
-        block = self.load_raw(db_src , db_key , dates = CALENDAR.diffs(dates , self.date) , feature = feature , use_alt = use_alt , vb_level = vb_level)
+        dates = Dates(dates , start , end)
+        block = self.load_raw(db_src , db_key , dates = dates - self.date , feature = feature , use_alt = use_alt , vb_level = vb_level)
         if self.price_adjusted:
             block = block.adjust_price()
         if self.volume_adjusted:
@@ -927,7 +952,8 @@ class DataBlock:
     @classmethod
     def path_preprocess(
         cls , key : str , frame : Base.lit.DataBlockTimeFrame , * ,
-        dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True) -> Path:
+        dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True
+    ) -> Path:
         """
         Return the filesystem path for the preprocessed dump of ``key`` / ``type``.
 
@@ -947,13 +973,16 @@ class DataBlock:
         return path
         
     @staticmethod
-    def path_norm(key : str , frame : Base.lit.DataBlockTimeFrame = 'fit'):
+    def path_norm(key : str , frame : Base.lit.DataBlockTimeFrame = 'fit') -> Path:
         """Return the path to the normalisation stats for ``key`` / ``frame``."""
         assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         return DataBlockNorm.norm_path(key , frame)
 
     @classmethod
-    def path_raw(cls , src : str , key : str , * , dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True):
+    def path_raw(
+        cls , src : str , key : str , * , 
+        dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True
+    ) -> Path:
         """Return the path to the raw data for ``src`` / ``key``."""
         raw_path = PATH.block.joinpath('raw' , f'{src}.{key}{dump_suffix}')
         if find_if_not_exists:
@@ -980,8 +1009,11 @@ class DataBlock:
         return block
 
     @classmethod
-    def blocks_align(cls , blocks : dict[str,DataBlock] , * , secid = None , date = None , start = None , end = None ,
-                     intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2) -> dict[str,DataBlock]:
+    def blocks_align(
+        cls , blocks : dict[str,DataBlock] , * , 
+        secid = None , date = None , start = None , end = None ,
+        intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2
+    ) -> dict[str,DataBlock]:
         """
         Align a dict of blocks to a common (secid, date) grid.
 
@@ -1030,7 +1062,10 @@ class DataBlock:
         return blocks
 
     @classmethod
-    def load_preprocess_norms(cls , keys : list[str] | str , frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
+    def load_preprocess_norms(
+        cls , keys : list[str] | str , 
+        frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None
+    ) -> dict[str,DataBlockNorm]:
         """Load the normalisation stats for the data block"""
         assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         if isinstance(keys , str):
@@ -1038,20 +1073,20 @@ class DataBlock:
         return DataBlockNorm.load_keys(keys, frame , dtype = dtype)
 
     @classmethod
-    def load_from_db(cls , db_src : str , db_key : str , start = None , end = None , * , 
-                     dates = None , feature = None , use_alt = True , vb_level : Any = 'max') -> DataBlock:
+    def load_from_db(
+        cls , db_src : str , db_key : str , start = None , end = None , * , 
+        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+    ) -> DataBlock:
         """Load the data block from the database"""
         return cls.load_from_db_polars(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
 
     @classmethod
     def load_from_db_pandas(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates = None , feature = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
     ) -> DataBlock:
         """Load the data block from the database using pandas dataframe , usually slower than polars"""
-        if dates is None:
-            dates = CALENDAR.range(start , end , 'td')
-
+        dates = Dates(dates , start , end)
         df = DB.loads(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
         block = cls.from_pandas(df) if len(df) > 0 else cls()
         if feature is None:
@@ -1061,11 +1096,10 @@ class DataBlock:
     @classmethod
     def load_from_db_polars(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates = None , feature = None , use_alt = True , vb_level : Any = 'max'
-    ):
+        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+    ) -> DataBlock:
         """Load the data block from the database using polars dataframe , usually faster than pandas"""
-        if dates is None:
-            dates = CALENDAR.range(start , end , 'td')
+        dates = Dates(dates , start , end)
         df = DB.loads_pl(db_src , db_key , dates = dates , use_alt=use_alt , fill_datavendor=True , vb_level=vb_level)
         block = cls.from_polars(df) if df.height > 0 else cls()
         if feature is None:
@@ -1073,8 +1107,10 @@ class DataBlock:
         return block
         
     @classmethod
-    def load_raw(cls , db_src : str , db_key : str , start = None , end = None , * ,
-                 dates = None , feature = None , use_alt = True , vb_level : Any = 'max'):
+    def load_raw(
+        cls , db_src : str , db_key : str , start = None , end = None , * ,
+        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+    ) -> DataBlock:
         """
         Load a block from the database, with smart caching for frequent DB keys.
 
@@ -1082,24 +1118,22 @@ class DataBlock:
         maintained and only missing dates are fetched from the database.
         All other keys are loaded directly on each call.
         """
-        if dates is None:
-            dates = CALENDAR.range(start , end , 'td')
-
+        dates = Dates(dates , start , end)
         if f'{db_src}.{db_key}' in FREQUENT_DBS:
-            if len(dates) >= FREQUENT_MIN_DATES:
+            if dates.size >= FREQUENT_MIN_DATES:
                 block = cls.load_dump(category = 'raw' , db_src = db_src , db_key = db_key)
                 loaded = True
             else:
                 block = cls()
                 loaded = False
             saved_dates = block.date if block.date is not None else np.array([])
-            update_dates = CALENDAR.diffs(dates , saved_dates)
-            if len(update_dates) > 0:
+            update_dates = dates.diff(saved_dates , inplace = False)
+            if update_dates:
                 new_block = cls.load_from_db(db_src , db_key , dates = update_dates , use_alt = use_alt , vb_level = vb_level) # no feature selection here
                 block = block.merge_others(new_block , inplace = True)
-            if (len(update_dates) > 0 and loaded) or not cls.path_raw(db_src , db_key).exists():
+            if (update_dates and loaded) or not cls.path_raw(db_src , db_key).exists():
                 block.save_dump()
-            block = block.align(date = dates , feature = feature , inplace = True)
+            block = block.align(date = dates.dates , feature = feature , inplace = True)
         else:
             block = cls.load_from_db(db_src , db_key , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
         return block
@@ -1143,7 +1177,7 @@ class DataBlock:
             block = cls()
         return block.set_flags(**flags)
 
-    def save_dump(self):
+    def save_dump(self) -> None:
         """
         save the block to PATH.block
         """
@@ -1174,7 +1208,7 @@ class DataBlock:
             raise ValueError(f'Unsupported suffix: {path.suffix}')
 
     @classmethod
-    def fix_dumps(cls):
+    def fix_dumps(cls) -> None:
         """Fix the dump of the data block to the preferred dump suffix"""
         category_path = PATH.block.joinpath('raw')
         category = 'raw'
@@ -1218,9 +1252,11 @@ class DataBlockNorm:
         self.std = self.std.to(self.dtype)
 
     @classmethod
-    def calculate(cls , block : DataBlock , key : str ,
-                  start : int | None = None , end : int | None  = 20161231 ,
-                  step_day = 5 , **kwargs):
+    def calculate(
+        cls , block : DataBlock , key : str ,
+        start : int | None = None , end : int | None  = 20161231 ,
+        step_day = 5 , **kwargs
+    ) -> DataBlockNorm | None:
         """
         Compute and persist historical normalisation statistics for a DataBlock.
 
@@ -1278,7 +1314,7 @@ class DataBlockNorm:
         data.save(key)
         return data
 
-    def save(self , key):
+    def save(self , key : str) -> None:
         """Save avg and std tensors to the norm path for ``key``."""
         path = self.norm_path(key)
         path.parent.mkdir(exist_ok=True)
@@ -1300,7 +1336,7 @@ class DataBlockNorm:
         return norms
     
     @classmethod
-    def norm_path(cls , key : str , frame : Base.lit.DataBlockTimeFrame = 'fit'):
+    def norm_path(cls , key : str , frame : Base.lit.DataBlockTimeFrame = 'fit') -> Path:
         """Return the path to the normalisation stats for ``key`` / ``frame``."""
         assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         if key.lower() == 'y':

@@ -20,6 +20,8 @@ from src.proj import Base
 from src.func.basic import match_values
 from ..util import BasicBoostModel , BoostInput
 
+__all__ = ['Lgbm' , 'LgbmPlot']
+
 PLOT_PATH : Path | None = None
 
 class Lgbm(BasicBoostModel):

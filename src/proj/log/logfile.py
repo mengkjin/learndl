@@ -9,6 +9,8 @@ from pathlib import Path
 from src.proj.core import strPath
 from src.proj.env import PATH
 
+__all__ = ['LogEntry' , 'LogFile']
+
 @dataclass
 class LogEntry:
     """One titled log block with optional multi-line body and timestamp."""

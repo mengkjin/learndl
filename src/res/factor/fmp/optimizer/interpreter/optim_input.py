@@ -1,3 +1,7 @@
+"""
+Optimized portfolio input class for Factor Model Portfolio
+"""
+
 from __future__ import annotations
 import numpy as np
 
@@ -20,6 +24,8 @@ from .input_creator import (
     create_input_bnd_con , create_input_lin_con , create_input_turn_con ,
     create_input_cov_con ,  create_input_short_con
 )
+
+__all__ = ['OptimizedPortfolioInput']
 
 class OptimizedPortfolioInput:
     def __init__(

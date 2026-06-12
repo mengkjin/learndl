@@ -1,6 +1,10 @@
+"""main function for the gp module"""
+
 from __future__ import annotations
 from src.proj import Logger
 from src.res.gp.util import GeneticProgramming
+
+__all__ = ['main']
 
 def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , timer = True , **kwargs):
     """

@@ -1,3 +1,6 @@
+"""
+Portfolio accountant for the project
+"""
 from __future__ import annotations
 
 import pandas as pd
@@ -380,8 +383,8 @@ class PortfolioAccountant(Base.BoundLogger):
         return self
 
     @property
-    def port_dates(self):
-        return self.portfolio.available_dates()
+    def port_dates(self) -> np.ndarray:
+        return self.portfolio.port_date
 
     @cached_property
     def resume_path(self) -> Base.strPath | None:
@@ -450,11 +453,11 @@ class PortfolioAccountant(Base.BoundLogger):
             return self
             
         if self.config.daily:
-            period_st = CALENDAR.td_array(model_dates , 1)
+            period_st = CALENDAR.offset(model_dates , 1 , 'td')
             period_ed = period_st
         else:
             model_dates = np.intersect1d(model_dates , self.port_dates)
-            period_st = CALENDAR.td_array(model_dates , 1)
+            period_st = CALENDAR.offset(model_dates , 1 , 'td')
             period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1)]])
 
         assert np.all(model_dates < period_st) , (model_dates , period_st)

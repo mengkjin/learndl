@@ -1,3 +1,6 @@
+"""
+Callback to early stop if valid peaked or converged
+"""
 from __future__ import annotations
 import numpy as np
 from typing import Literal
@@ -5,6 +8,8 @@ from typing import Literal
 from src.proj.bases import FittingEventType
 from src.res.model.util.trainer.status import EpochRecord
 from src.res.model.util import BaseCallBack
+
+__all__ = ['EarlyStoppage']
 
 def arr_plateau(arr , n : int , eps = 0.) -> bool:
     """Last n element of arr are all smaller than the previous one"""

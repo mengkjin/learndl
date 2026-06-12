@@ -1,3 +1,6 @@
+"""
+Optimizer class for the trainer
+"""
 from __future__ import annotations
 import math , torch
 

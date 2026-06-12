@@ -21,6 +21,8 @@ from src.proj import PATH , Const , Logger
 from src.interactive.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.interactive.frontend import YAMLFileEditorState , action_confirmation , ParamCache
 
+__all__ = ['SC' , 'SessionControl']
+
 @st.cache_resource
 def get_cached_task_db() -> TaskDatabase:
     """get cached task database manager"""

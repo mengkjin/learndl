@@ -12,6 +12,8 @@ from src.interactive.main.util.components.operations import ButtonOperation
 if TYPE_CHECKING:
     from src.interactive.backend import TaskItem , ScriptRunner
 
+__all__ = ['ControlPanelButton']
+
 class ControlPanelButton(ButtonOperation):
     """Abstract base for a single button in the :class:`ControlPanel` action bar.
 

@@ -8,7 +8,6 @@ import numpy as np
 from typing import Any , Literal , overload
 
 DIV_TOL = 1e-6
-
 IndexMergeMethod = Literal['union' , 'intersect' , 'check' , 'stack']
 
 def alert_message(message : str , color : str = 'yellow'):
@@ -56,7 +55,7 @@ def average_params(params_list : tuple[dict] | list[dict]):
                 new_params[k] += v / n
     return new_params
 
-def to_numpy(values):
+def as_array(values):
     """Convert list, scalar, tensor, or array-like to a NumPy array (tensor moved to CPU)."""
     if not isinstance(values , np.ndarray): 
         if isinstance(values , torch.Tensor): 
@@ -65,7 +64,7 @@ def to_numpy(values):
             values = np.asarray(values)
         else: 
             values = np.asarray(values).reshape(-1)
-    return values
+    return np.atleast_1d(values)
 
 def match_values(values , src_arr , ambiguous = 0):
     """Map each element of ``values`` to a sorted index in ``src_arr``.
@@ -79,8 +78,8 @@ def match_values(values , src_arr , ambiguous = 0):
     Returns:
         Integer array of the same shape as ``values`` with positions or sentinel ``len(src_arr)``.
     """
-    values = to_numpy(values)
-    src_arr = to_numpy(src_arr)
+    values = as_array(values)
+    src_arr = as_array(src_arr)
     sorter = np.argsort(src_arr)
     index = np.tile(len(src_arr) , values.shape)
     if ambiguous == 0:
@@ -110,7 +109,7 @@ def convert_to_slice(index : np.ndarray | list) -> slice | np.ndarray:
         if np.array_equal(index , np.arange(start,end,step)):
             return slice(start,end,step)
         else:
-            return to_numpy(index)
+            return as_array(index)
 
 def match_slice(values , src_arr , ambiguous = 0) -> slice | np.ndarray:
     """``match_values`` followed by ``convert_to_slice``.
@@ -124,8 +123,8 @@ def match_slice(values , src_arr , ambiguous = 0) -> slice | np.ndarray:
         ``slice(0,0,1)`` if ``values`` is empty; ``slice(None)`` if ``values`` equals ``src_arr``;
         otherwise ``convert_to_slice(match_values(...))``.
     """
-    values = to_numpy(values)
-    src_arr = to_numpy(src_arr)
+    values = as_array(values)
+    src_arr = as_array(src_arr)
     if len(values) == 0:
         return slice(0,0,1)
     elif np.array_equal(values , src_arr):

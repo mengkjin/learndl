@@ -13,6 +13,8 @@ from src.proj import Const
 from . import buttons
 from . import popovers
 
+__all__ = ['ControlPanel']
+
 
 class ControlPanel:
     """Horizontal action bar rendered at the top of every app page.

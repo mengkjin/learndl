@@ -14,6 +14,8 @@ from typing import Generator , Type , Any
 from src.proj import Base
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
 
+__all__ = ['TushareDataDownloader']
+
 class TushareDataDownloader(Base.BasicUpdater):
     """Orchestrate incremental updates for all registered Tushare fetchers."""
     UPDATE_ALIAS = 'download'

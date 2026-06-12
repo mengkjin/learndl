@@ -1,12 +1,21 @@
+"""
+Primitive types for genetic programming
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable , Sequence
 import itertools
 import torch
-from deap import gp
 import numpy as np
+
+from dataclasses import dataclass
+from deap import gp
+
+from typing import Callable , Sequence
+
 from src.res.gp.func import primas
+
+__all__ = ['Fac' , 'Raw' , 'int1' , 'int2' , 'int3' , 'float1' , 'Primative']
+
 class Fac(torch.Tensor): 
     pass
 class Raw(torch.Tensor): 

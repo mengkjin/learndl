@@ -13,6 +13,8 @@ from src.proj.cal import CALENDAR
 from src.proj.bases import BoundLogger
 from src.proj.db import Save
 
+__all__ = ['AutoRunTask']
+
 class TaskName:
     def __init__(self):
         self._name = None

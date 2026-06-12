@@ -1,8 +1,15 @@
+"""
+API for test operations of this project.
+"""
+
 from __future__ import annotations
 from src.proj import Logger , Base
 from typing import Any
 
+__all__ = ['TestAPI']
+
 class TestAPI:
+    """API for test operations of this project."""
     @classmethod
     def test(
         cls , names : str = '' , factor_type : Base.lit.FactorType = 'factor' , 

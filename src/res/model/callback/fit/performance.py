@@ -1,7 +1,13 @@
+"""
+Callback to optimize performance of trainer
+- MemoryOptimization : empty cuda cache every few batches
+"""
 from __future__ import annotations
 import torch
 
 from src.res.model.util import BaseCallBack
+
+__all__ = ['MemoryOptimization']
 
 MemoryOptimizationOption: dict[str, bool] = {
     'cuda' : False,

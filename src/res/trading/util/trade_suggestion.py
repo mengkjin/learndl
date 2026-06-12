@@ -1,9 +1,14 @@
+"""
+Trade suggestion class and generator
+"""
 from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 
 from src.proj import Base
 from src.data import DATAVENDOR
+
+__all__ = ['TradeSuggestion']
 
 @dataclass
 class TradeSuggestion:
@@ -17,7 +22,7 @@ class TradeSuggestion:
         return f' >> Suggest {self.direction.title():>4s} {self.secid:06d} [{self.secname:^4s}] at {self.price:04.2f} ({self.pct:+02.2%})'
 
     @classmethod
-    def generate(cls , secid : np.ndarray | list[int] , d : int , direction : Base.lit.TradeDirection):
+    def generate(cls , secid : Base.alias.intNums , d : int , direction : Base.lit.TradeDirection):
         secid = np.atleast_1d(secid)
         secname = DATAVENDOR.INFO.secname(secid).tolist()
         st_secid = DATAVENDOR.INFO.get_st(d)['secid'].to_numpy()

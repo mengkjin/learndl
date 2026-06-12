@@ -1,22 +1,40 @@
+"""
+Backtest portfolio manager class for the project.
+"""
+
 from __future__ import annotations
 from typing import Any
 
 from src.proj import CALENDAR , Base , Dates
 from .trading_port import BacktestPort
 
+__all__ = ['BacktestPortfolioManager']
+
 class BacktestPortfolioManager(Base.BoundLogger):
+    """
+    Backtest portfolio manager class for the project.
+    """
     @classmethod
     def available_ports(cls) -> list[str]:
+        """
+        List available backtest ports.
+        """
         return list(BacktestPort.candidate_ports.keys())
 
     @classmethod
     def analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs): 
+        """
+        Analyze a backtest port.
+        """
         tp = BacktestPort.load(port_name)
         date = end if end is not None else CALENDAR.updated()
         return tp.build(date).analyze(start = start , end = end , **kwargs)
 
     @classmethod
     def rebuild(cls , port_name : str , date : int | None = None , export = True , analyze = True , indent : int = 1 , vb_level : Any = 2):
+        """
+        Rebuild a backtest port.
+        """
         tp = BacktestPort.load(port_name , indent = indent , vb_level = vb_level)
         date = date if date is not None else CALENDAR.updated()
         tp.rebuild(date , export = export)
@@ -26,6 +44,9 @@ class BacktestPortfolioManager(Base.BoundLogger):
 
     @classmethod
     def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
+        """
+        Update all or specific backtest ports.
+        """
         cls.SetClassVB(vb_level , indent)
         cls.logger.note(f'{cls.__name__} : Update since last update!')
         reset_ports = reset_ports or []

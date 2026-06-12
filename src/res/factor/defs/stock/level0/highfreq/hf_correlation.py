@@ -1,3 +1,6 @@
+"""
+High frequency correlation factors for stock level0
+"""
 from __future__ import annotations
 import polars as pl
 
@@ -33,14 +36,14 @@ def eval_corr_expression(expression : str):
             'beta' : beta}
 
 def inday_corr_avg(date : int , n_day : int , expression : str):
-    dates = DATAVENDOR.CALENDAR.td_trailing(date , n_day)
+    dates = DATAVENDOR.CALENDAR.trailing(date , n_day , 'td')
     dfs = [DATAVENDOR.MKLINE.get_inday_corr(date , **eval_corr_expression(expression)) for date in dates]
     df = pl.concat(dfs).group_by('secid').agg(pl.col('value').mean().alias('value')).\
         to_pandas().set_index('secid')['value'].sort_index()
     return df
 
 def inday_corr_std(date : int , n_day : int , expression : str):
-    dates = DATAVENDOR.CALENDAR.td_trailing(date , n_day)
+    dates = DATAVENDOR.CALENDAR.trailing(date , n_day , 'td')
     dfs = [DATAVENDOR.MKLINE.get_inday_corr(date , **eval_corr_expression(expression)) for date in dates]
     df = pl.concat(dfs).group_by('secid').agg(pl.col('value').std().alias('value')).\
         to_pandas().set_index('secid')['value'].sort_index()

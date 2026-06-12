@@ -10,6 +10,7 @@ from ...util.basic import BasicOpener
 from ...util import process
 from .verify import WezTermVerifier
 
+__all__ = ['WezTermOpener' , 'activate_wezterm']
 
 def activate_wezterm() -> bool:
     """

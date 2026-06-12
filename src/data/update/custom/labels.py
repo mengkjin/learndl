@@ -8,13 +8,15 @@ avoid execution-day look-ahead bias.
 Stored in the ``labels_ts`` database under keys like ``ret5``, ``ret10_lag``, etc.
 """
 from __future__ import annotations
-import numpy as np
+
 import pandas as pd
 
 from src.proj import CALENDAR , DB , Base , Dates
 from src.data.loader import TRADE , RISK
 
 from src.data.update.custom.basic import BasicCustomUpdater
+
+__all__ = ['ClassicLabelsUpdater']
 
 class ClassicLabelsUpdater(BasicCustomUpdater):
     """
@@ -41,10 +43,10 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
                 sub_start = max(CALENDAR.td(start , - days - lag1 + 1) , cls.START_DATE)
                 sub_end = min(CALENDAR.td(CALENDAR.updated() , - days - lag1) , end or CALENDAR.updated())
-                stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , label_name)
-                target_dates = CALENDAR.diffs(sub_start , sub_end , stored_dates)
+                stored_dates = Dates() if overwrite else DB.dates(cls.DB_SRC , label_name)
+                target_dates = Dates(sub_start , sub_end).diff(stored_dates)
 
-                if len(target_dates) == 0:
+                if target_dates.empty:
                     cls.logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)
                     flags += Base.UpdateFlag.SKIPPED
                     continue

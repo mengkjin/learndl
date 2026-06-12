@@ -1,3 +1,7 @@
+"""
+Hierarchy of factor classes, use to get all factor classes or a specific factor class
+"""
+
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -9,6 +13,8 @@ from src.proj import PATH , MACHINE , Base
 from src.proj.util.functional.parallel import parallel
 
 from .factor_calc import FactorCalculator
+
+__all__ = ['StockFactorHierarchy']
 
 class StockFactorHierarchy(Base.BoundLogger):
     """hierarchy of factor classes"""

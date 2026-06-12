@@ -21,8 +21,10 @@ import pandas as pd
 from abc import abstractmethod
 from typing import Any
 
-from src.proj import CALENDAR , Base
+from src.proj import CALENDAR , Base , Dates
 from src.data.util import INFO , DFCollection , PLDFCollection
+
+__all__ = ['DateDataAccess']
 
 class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
     """
@@ -84,12 +86,8 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
             if data_type in self.pl_collections: 
                 self.pl_collections[data_type].truncate()
 
-    def loads(self , dates: list[Base.alias.intDate] | np.ndarray | int | None , data_type : str , rename_date_key = None):
+    def loads(self , dates: Base.alias.intDates | None , data_type : str , rename_date_key = None):
         """Bulk-load ``data_type`` for all dates that are not yet cached."""
-        if dates is None:
-            return pd.DataFrame()
-        if isinstance(dates , int):
-            dates = [dates]
         # overwrite=True: reload every requested date (double-checked in ``ensure_dates``).
         self.collections[data_type].ensure_dates(
             dates , lambda d: self.data_loader(d , data_type) , overwrite = True)
@@ -98,37 +96,33 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         """Return the cached DataFrame for a single ``date``, loading from DB if missing."""
         collection = self.collections[data_type]
         if overwrite or int(date) not in collection:
-            collection.ensure_dates(
-                [date] , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+            collection.ensure_dates(date , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.get(date , field , rename_date_key = rename_date_key)
 
-    def gets(self , dates: list[Base.alias.intDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets(self , dates: Base.alias.intDates , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return a multi-date DataFrame for ``data_type``, loading any missing dates from DB."""
-        dates = np.array([int(d) for d in dates])
         collection = self.collections[data_type]
-        collection.ensure_dates(
-            dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+        collection.ensure_dates(dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
     
     def get_pl(self , date: Base.alias.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``get`` — returns a ``pl.DataFrame`` from ``PLDFCollection``."""
         collection = self.pl_collections[data_type]
         if overwrite or int(date) not in collection:
-            collection.ensure_dates(
-                [date] , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+            collection.ensure_dates(date , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.get(date , field , rename_date_key = rename_date_key)
 
-    def gets_pl(self , dates: list[Base.alias.intDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets_pl(self , dates: Base.alias.intDates , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``gets`` — returns a multi-date ``pl.DataFrame``."""
-        dates = np.array([int(d) for d in dates])
         collection = self.pl_collections[data_type]
-        collection.ensure_dates(
-            dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
+        collection.ensure_dates(dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
     
-    def get_specific_data(self , start : Base.alias.intDate , end : Base.alias.intDate ,
-                          data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True ,
-                          date_step = 1):
+    def get_specific_data(
+        self , start : Base.alias.intDate , end : Base.alias.intDate ,
+        data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True ,
+        date_step = 1
+    ) -> pd.DataFrame:
         """
         High-level accessor that handles the standard point-in-time query pattern.
 
@@ -154,7 +148,7 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         date_step : int
             Stride for the trading-day range (1 = every day).
         """
-        dates = CALENDAR.td_array(CALENDAR.range(start , end , 'td' , step = date_step) , -1 if prev else 0)
+        dates = Dates(start , end).slice(step = date_step).offset(-1 if prev else 0 , type = 'td')
         if field is not None:
             remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
         else:
@@ -163,7 +157,7 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         df = self.gets(dates , data_type , remain_field , rename_date_key = 'date')
         if prev: 
             df = df.reset_index(drop = False)
-            df['date'] = CALENDAR.td_array(df['date'] , 1)
+            df['date'] = CALENDAR.offset(df['date'] , 1 , 'td')
             df = df.set_index('date')
         df = df.set_index('secid' , append = True).sort_index()
 

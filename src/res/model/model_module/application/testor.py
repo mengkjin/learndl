@@ -1,9 +1,14 @@
+"""
+Testor for model , which can test the model forward and metrics
+"""
 from __future__ import annotations
 import torch
 
 from src.proj import Base
 from src.res.model.util import ModelConfig , BatchData , TrainerMetrics , DataModule , get_realistic_batch_data
 from src.res.model.model_module.module import get_predictor_module
+
+__all__ = ['ModelTestor']
 
 class ModelTestor(Base.BoundLogger):
     """

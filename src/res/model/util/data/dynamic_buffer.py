@@ -1,6 +1,11 @@
+"""
+Dynamic buffer space for some module to use (trainer, predictor, etc.), can be updated at each batch / epoch 
+"""
 from __future__ import annotations
 
 from typing import Any , Literal , Callable
+
+__all__ = ['DynamicDataBuffer']
 
 class DynamicDataBuffer:
     """dynamic buffer space for some module to use (tra), can be updated at each batch / epoch """

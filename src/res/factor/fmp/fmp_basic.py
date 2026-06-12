@@ -1,3 +1,7 @@
+"""
+Basic functions for FMP
+"""
+
 from __future__ import annotations
 import os
 from typing import Any
@@ -5,6 +9,10 @@ from typing import Any
 from src.proj import Const , Base
 from src.proj.bases import TestType
 from src.res.factor.util import Benchmark , AlphaModel
+
+__all__ = [
+    'parse_full_name' , 'get_prefix' , 'get_factor_name' , 'get_strategy_name' , 
+    'get_suffix' , 'get_full_name' , 'get_port_index' , 'category_title']
 
 def parse_full_name(full_name : str):
     components = full_name.split('.')

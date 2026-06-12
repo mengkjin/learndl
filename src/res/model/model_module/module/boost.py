@@ -1,9 +1,14 @@
+"""
+Boost predictor module for trainer
+"""
 from __future__ import annotations
 import torch
 
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
+
+__all__ = ['BoostPredictor']
 
 class BoostPredictor(PredictorModel):
     """a group of ensemble models , of same net structure"""

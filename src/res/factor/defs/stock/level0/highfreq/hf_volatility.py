@@ -1,3 +1,7 @@
+"""
+High frequency volatility factors for stock level0
+"""
+
 from __future__ import annotations
 import polars as pl
 
@@ -17,7 +21,7 @@ __all__ = [
 ]
 
 def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' , 'std' , 'cv' , 'max'] , window : int = 20):
-    dates = DATAVENDOR.CALENDAR.td_trailing(date , window)
+    dates = DATAVENDOR.CALENDAR.trailing(date , window , 'td')
     df = pl.concat([func(date) for date in dates])
     grp = df.group_by('secid')
     if agg == 'avg':

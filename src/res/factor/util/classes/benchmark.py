@@ -1,10 +1,13 @@
+"""
+Benchmark class for the project
+"""
 from __future__ import annotations
 import numpy as np
 import pandas as pd
 
 from typing import Any , Iterable
 
-from src.proj import DB , Const , Base
+from src.proj import DB , Const , Base , Dates
 from src.data import DataBlock , DATAVENDOR
 
 from .portfolio import Port , Portfolio
@@ -39,10 +42,10 @@ class Benchmark(Portfolio):
             return # avoid double initialization
         super().__init__(name)
         if name in self.NONE:
-            self.benchmark_available_dates = []
+            self.benchmark_available_dates = Dates()
         else:
             self.benchmark_available_dates = DB.dates('benchmark_ts' , self.name , use_alt = True)
-        self.benchmark_attempted_dates = []
+        self.benchmark_attempted_dates : list[int] = []
 
     def __call__(self, input : Any):
         if isinstance(input , (DataBlock , pd.DataFrame)):
@@ -53,12 +56,12 @@ class Benchmark(Portfolio):
     def __bool__(self): 
         return self.name not in self.NONE
 
-    def available_dates(self): 
+    def available_dates(self) -> Dates: 
         return self.benchmark_available_dates
 
     def clear(self):
         self.ports = {}
-        self.benchmark_attempted_dates = []
+        self.benchmark_attempted_dates.clear()
         return self
 
     def get(self , date : int , closest = True):
@@ -89,8 +92,9 @@ class Benchmark(Portfolio):
         self.append(port)
         return port
     
-    def get_dates(self , dates : np.ndarray | list):
-        for d in DATAVENDOR.CALENDAR.diffs(dates , self.benchmark_attempted_dates): 
+    def get_dates(self , dates : Base.alias.intDates):
+        dates = Dates(dates).diff(self.benchmark_attempted_dates)
+        for d in dates: 
             self.get(d , closest = True)
 
     def sec_num(self , date : np.ndarray | list):

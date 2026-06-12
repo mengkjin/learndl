@@ -1,8 +1,14 @@
+"""
+Metric result for trainer
+"""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from src.proj import Base
 from src.res.model.util.core import epoch_key
+
+__all__ = ['EpochMetricResult']
 
 @dataclass
 class EpochMetricResult:

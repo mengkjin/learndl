@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.proj import Base
 
+__all__ = ['ProxyCaller' , 'ProxyCallerList' , 'ProxyCallerInput' , 'ProxyDepletionException']
+
 ProxyCallerInput = Union[Callable[..., bool | Exception] , tuple[str, Callable[..., bool | Exception]] , tuple[Callable[..., bool | Exception], str] , 'ProxyCaller']
 
 class ProxyDepletionException(Exception):

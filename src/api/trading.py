@@ -1,10 +1,17 @@
+"""
+API for trading operations of this project.
+"""
+
 from __future__ import annotations
 from src.res.trading import TrackingPortfolioManager , BacktestPortfolioManager
 
 from src.proj import Logger , Const
 from .util import wrap_update
 
+__all__ = ['TradingAPI']
+
 class TradingAPI:
+    """API for trading operations of this project."""
     @classmethod
     def available_ports(cls , backtest : bool | None = None) -> list[str]:
         """

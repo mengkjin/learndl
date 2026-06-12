@@ -11,6 +11,8 @@ from typing import Any
 
 from src.proj import PATH
 
+__all__ = ['CustomCSS' , 'style']
+
 class CustomCSS:
     """Loads and applies a set of CSS templates to the active Streamlit page.
 

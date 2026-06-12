@@ -1,7 +1,8 @@
+"""trading port class for the project"""
+
 from __future__ import annotations
 
 import pandas as pd
-import numpy as np
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,9 +10,11 @@ from typing import Literal , Type , ClassVar , Any
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.data import DATAVENDOR
-from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port
+from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port , PortfolioAccount
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
+
+__all__ = ['TradingPort' , 'TrackingPort' , 'BacktestPort']
 
 TASK_LIST : list[Type[TopCalc]] = [
     FrontFace , 
@@ -23,6 +26,9 @@ TASK_LIST : list[Type[TopCalc]] = [
 
 @dataclass
 class TradingPort(Base.BoundLogger):
+    """
+    Trading port class for the project.
+    """
     name        : str 
     alpha       : str | list[str]
     universe    : str = 'top-500'
@@ -79,6 +85,9 @@ class TradingPort(Base.BoundLogger):
     
     @classmethod
     def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> TradingPort:
+        """
+        Load a trading port from given name.
+        """
         if name in TrackingPort.candidate_ports and name in BacktestPort.candidate_ports:
             raise ValueError(f'{name} is both tracking and backtest port, please use distinct name for tracking and backtest ports')
         elif name in TrackingPort.candidate_ports:
@@ -90,60 +99,104 @@ class TradingPort(Base.BoundLogger):
 
     @property
     def result_dir(self) -> Path:
+        """
+        Result directory for the trading port.
+        """
         raise NotImplementedError(f'{self.__class__.__name__} must implement result_dir in subclass')
 
     @property
     def portfolio_dir(self) -> Path:
+        """
+        Portfolio directory for the trading port.
+        """
         raise NotImplementedError(f'{self.__class__.__name__} must implement portfolio_dir in subclass')
 
     def build(self , date : int | None = None , reset = False , export = True) -> TradingPort:
+        """
+        Build the trading port for a given date.
+        """
         raise NotImplementedError(f'{self.__class__.__name__} must implement build in subclass')
 
     def rebuild(self , date : int | None = None , export = True) -> TradingPort:
+        """
+        Rebuild the trading port for a given date.
+        """
         raise NotImplementedError(f'{self.__class__.__name__} must implement rebuild in subclass')
         
     def export_path(self , date : int) -> Path:
+        """
+        Export path for the trading port.
+        """
         return self.portfolio_dir.joinpath(f'{self.name}.{date}.feather')
 
     @property
     def result_path_account(self) -> Path:
+        """
+        Result path for the trading port account.
+        """
         return self.result_dir.joinpath('account.tar')
 
     @property
     def result_path_data(self) -> Path:
+        """
+        Result path for the trading port analytic data.
+        """
         return self.result_dir.joinpath(f'{self.name}_analytic_data.xlsx')
 
     @property
     def result_path_plot(self) -> Path:
+        """
+        Result path for the trading port analytic plot.
+        """
         return self.result_dir.joinpath(f'{self.name}_analytic_plot.pdf')
 
     @property
     def trading_portfolio_type(self) -> Literal['tracking' , 'backtest']:
+        """
+        Trading portfolio type for the trading port (tracking or backtest).
+        """
         if self.backtest:
             return 'backtest'
         else:
             return 'tracking'
     
-    def stored_dates(self , start : int | None = None , end : int | None = None) -> np.ndarray:
-        dates = DB.dir_dates(self.portfolio_dir , start = start , end = end)
-        return dates
+    def stored_dates(self , start : int | None = None , end : int | None = None) -> Dates:
+        """
+        Stored dates for the trading port.
+        """
+        return DB.dir_dates(self.portfolio_dir , start = start , end = end)
     
     def is_first_date(self , date : int) -> bool:
+        """
+        Check if the given date is the first date of the trading port.
+        """
         return self.last_date(date) <= 0
 
     def last_date(self , date : int) -> int:
+        """
+        Last date for the trading port before the given date.
+        """
         dates = self.stored_dates(end = date - 1)
-        return dates.max() if len(dates) > 0 else -1
+        return dates.max if len(dates) > 0 else -1
         
     def start_date(self) -> int:
+        """
+        Start date for the trading port's saved portfolios.
+        """
         dates = self.stored_dates()
-        return dates.min() if len(dates) > 0 else -1
+        return dates.min if len(dates) > 0 else -1
     
     def end_date(self) -> int:
+        """
+        End date for the trading port's saved portfolios.
+        """
         dates = self.stored_dates()
-        return dates.max() if len(dates) > 0 else -1
+        return dates.max if len(dates) > 0 else -1
     
     def updatable(self , date : int , force = False) -> bool:
+        """
+        if the given date is updatable.
+        """
         if force: 
             return True
         if self.backtest:
@@ -158,6 +211,9 @@ class TradingPort(Base.BoundLogger):
             return CALENDAR.td(last_date , self.step) <= date
     
     def load_port(self , date : int) -> pd.DataFrame:
+        """
+        Load the portfolio for the given date.
+        """
         path = self.export_path(date)
         if path.exists():
             return Load.df(path).assign(date = date , name = self.name)
@@ -165,6 +221,9 @@ class TradingPort(Base.BoundLogger):
             return pd.DataFrame()
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
+        """
+        Get the last portfolio for the given date.
+        """
         if reset_port:
             self.logger.alert1(f'Reset port for new build! {self.name}')
             port = self.empty_pre_portfolio(date)
@@ -182,21 +241,36 @@ class TradingPort(Base.BoundLogger):
         return port
 
     def empty_pre_portfolio(self , date : int) -> Portfolio:
+        """
+        Get an empty portfolio for the given date.
+        """
         return Portfolio.from_ports(Port.none_port(CALENDAR.td(date , -1).td , self.name , self.init_value))
  
     def save_port(self , pf : pd.DataFrame , date : int):
+        """
+        Save the portfolio for the given date.
+        """
         path = self.export_path(date)
         path.parent.mkdir(parents=True, exist_ok=True)
         Save.df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = self.indent + 1 , vb_level = self.vb_level + 2)
     
     def load_portfolio(self , start : int | None = None , end : int | None = None):
+        """
+        Load the portfolio for the given start and end dates.
+        """
         dates = self.stored_dates(start , end)
         df = Load.df({date:self.export_path(date) for date in dates}).assign(name = self.name)
         self.portfolio = Portfolio.from_dataframe(df , name = self.name)
     
-    def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
-                          analytic = False , attribution = False , 
-                          trade_engine : Base.lit.TradeEngine = 'yale'):
+    def portfolio_account(
+        self , 
+        start : int = -1 , end : int = 99991231 ,
+        analytic = False , attribution = False , 
+        trade_engine : Base.lit.TradeEngine = 'yale'
+    ) -> PortfolioAccount:
+        """
+        Calculate the portfolio account for the given start and end dates.
+        """
         self.load_portfolio(start , end)
         benchmark = Benchmark(self.benchmark)
         index = {
@@ -209,9 +283,14 @@ class TradingPort(Base.BoundLogger):
                                   save_after = True , indent = self.indent + 1 , vb_level = self.vb_level + 2)
         return self.portfolio.account
 
-    def analyze(self , start : int | None = None , end : int | None = None , 
-                write_down = True , display_all = False , key_fig = 'perf_curve', 
-                trade_engine : Base.lit.TradeEngine = 'yale' , **kwargs):
+    def analyze(
+        self , start : int | None = None , end : int | None = None , 
+        write_down = True , display_all = False , key_fig = 'perf_curve', 
+        trade_engine : Base.lit.TradeEngine = 'yale' , **kwargs
+    ) -> TradingPort:
+        """
+        Analyze the portfolio for the given start and end dates.
+        """
         start = start if start is not None else -1
         end = end if end is not None else 99991231
         port_dates = self.stored_dates(start , end)
@@ -254,9 +333,15 @@ class TradingPort(Base.BoundLogger):
         return self
 
 class TrackingPort(TradingPort):
+    """
+    Tracking port class for the project. It is a live portfolio tracked in production (daily rebalance suggestions).
+    """
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.tracking_ports
     @classmethod
     def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> TrackingPort:
+        """
+        Load a tracking port from given name.
+        """
         if name in cls.candidate_ports:
             kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
             instance = cls(**kwargs)
@@ -282,8 +367,13 @@ class TrackingPort(TradingPort):
     def rebuild(self , date : int , export = True):
         raise TypeError(f'tracking port cannot rebuild. if you truely want to rebuild a tracking port, manually delete the portfolio folder and run build(end_date) again.')
     
-    def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
-                        alpha_details = False) -> pd.DataFrame:
+    def build_portfolio(
+        self , date : int , reset_port = False , export = True , last_port = None ,
+        alpha_details = False
+    ) -> pd.DataFrame:
+        """
+        Build the tracking portfolio for the given date.
+        """
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
@@ -320,6 +410,9 @@ class TrackingPort(TradingPort):
         return pf.assign(name = self.name , date = date)
     
 class BacktestPort(TradingPort):
+    """
+    Backtest port class for the project. It is a portfolio built from historical data (daily rebalance suggestions).
+    """
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.backtest_ports
     @classmethod
     def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> BacktestPort:
@@ -353,6 +446,10 @@ class BacktestPort(TradingPort):
         return self
     
     def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:
+        """
+        Build the backtest portfolio up to the given date from the start date.
+        """
+        
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
         

@@ -4,6 +4,8 @@ from __future__ import annotations
 from src.proj import MACHINE
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher
 
+__all__ = ['ConvertibleBasic' , 'ConvertibleDailyQuote']
+
 class ConvertibleBasic(InfoFetcher):
     """convertible basic infomation"""
     DB_KEY = 'cb_basic'

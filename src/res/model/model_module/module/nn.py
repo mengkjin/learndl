@@ -1,3 +1,6 @@
+"""
+NN predictor module for trainer
+"""
 from __future__ import annotations
 import torch
 from torch import set_grad_enabled
@@ -7,6 +10,7 @@ from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput , Optimizer
 from src.res.model.model_module.util.swa import choose_swa_method
 
+__all__ = ['NNPredictor']
 class NNPredictor(PredictorModel):
     def init_model(self , 
                    model_module : str | None = None , 

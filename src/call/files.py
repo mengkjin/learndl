@@ -70,13 +70,56 @@ def clear_git_pull(verbose_level : Base.lit._0_3 = 1) -> None:
     if verbose_level >= 1:
         Logger.success(f"Removed {len(empty_folders)} empty folders done")
 
+def run_ruff_pyright_check():
+    """Run ruff pyright check on the project code."""
+    Logger.note(f"Running ruff check on the project code...")
+    ret = subprocess.run(['ruff' , 'check' , 'src' , 'scripts'] , capture_output=True, text=True, check=False)
+    if ret.returncode == 0:
+        Logger.success(f"Ruff check passed: ")
+    else:
+        Logger.alert2(f"Ruff check failed: ")
+    if ret.stdout:
+        Logger.stdout(ret.stdout)
+    if ret.stderr:
+        Logger.stderr(ret.stderr)
+    
+    Logger.note(f"Running pyright check on the project code...")
+    ret = subprocess.run(['pyright' , 'src' , 'scripts'] , capture_output=True, text=True, check=False)
+    if ret.returncode == 0:
+        Logger.success(f"Pyright check passed: ")
+    else:
+        Logger.alert2(f"Pyright check failed: ")
+    if ret.stdout:
+        Logger.stdout(ret.stdout)
+    if ret.stderr:
+        Logger.stderr(ret.stderr)
+
 def check_code_issues():
     """Check if the future annotations are used in the project code."""
     from src.proj.util.functional.ask import AskFor
     from typing import Callable
-    def _check_lacking_future_annotations(context : str) -> bool:
-        return 'from __future__ import annotations' not in context
-    def _check_py_file_has_no_module_docstring(context : str) -> bool:
+    from pathlib import Path
+    def _check_lacking_future_annotations(path : Path) -> bool:
+        exempt_paths = []
+        exempt_names = ['__init__.py' , '__version__.py']
+        if not path.is_file() or path.name in exempt_names or any(path.is_relative_to(exempt_path) for exempt_path in exempt_paths):
+            return False
+        return 'from __future__ import annotations' not in path.read_text()
+    def _check_py_file_has___all___(path : Path) -> bool:
+        exempt_paths = [
+            PATH.main.joinpath('src' , 'func') ,
+            PATH.main.joinpath('src' , 'proj' , 'core' , 'types') ,
+        ]
+        exempt_names = ['__init__.py' , '__version__.py']
+        if not path.is_file() or path.name in exempt_names or any(path.is_relative_to(exempt_path) for exempt_path in exempt_paths):
+            return False
+        return '__all__' not in path.read_text()
+    def _check_py_file_has_no_module_docstring(path : Path) -> bool:
+        exempt_paths = []
+        exempt_names = ['__init__.py' , '__version__.py']
+        if not path.is_file() or path.name in exempt_names or any(path.is_relative_to(exempt_path) for exempt_path in exempt_paths):
+            return False
+        context = path.read_text()
         lines = context.split('\n')
         for line in lines:
             line = line.strip()
@@ -86,19 +129,27 @@ def check_code_issues():
                 return False
             return True
         return True
-    check_list : dict[str , Callable[[str], bool]] = {
+    file_check_list : dict[str , Callable[[Path], bool]] = {
         'lacking future annotations' : _check_lacking_future_annotations,
+        'lacking __all__' : _check_py_file_has___all___,
         'py file has no module docstring' : _check_py_file_has_no_module_docstring,
     }
-    for _ in AskFor.LoopTillExit(message = f'Do you want to check more code issues?'):
-        flag = AskFor.Options(list(check_list.keys()) , confirm = False , multiple = False , title = f'What code issues to check?')
+    for _ in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
+        options = ['run ruff pyright check' , *list(file_check_list.keys())]
+        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
         if not flag.yes:
             continue
-        predicate = check_list[flag.result]
+        if flag.result == options[0]:
+            run_ruff_pyright_check()
+            continue
+        predicate = file_check_list[flag.result]
         Logger.note(f"Code issue {flag.result} found in path:")
-        for file in PATH.main.joinpath('src').glob('**/*.py'):
-            if not file.name.startswith('__') and predicate(file.read_text()):
-                Logger.stdout(file , indent = 1)
+        files = list(PATH.main.joinpath('src').rglob('*.py'))
+        files = [file for file in files if predicate(file)]
+        if not files:
+            Logger.success(f'No files found with the issue {flag.result}.')
+        else:
+            [Logger.stdout(file , indent = 1) for file in files]
 
 # %% model files related operations ------------------------------------------------------------
 

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from src.proj.core import strPath
 
+__all__ = ['DBConnHandler']
+
 # custom datetime adapter and converter to solve Python 3.12 deprecation warning
 def adapt_datetime(dt):
     """Convert datetime to ISO format string for SQLite storage"""

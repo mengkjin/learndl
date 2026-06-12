@@ -11,6 +11,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Optional, Union
 
+__all__ = [
+    'Cmd' , 'popen_detached' , 'popen_detached_shell_windows' , 
+    'spawn_native' , 'check_status' , 'kill'
+]
+
 Cmd = Union[str, Sequence[str]]
 
 def popen_detached(

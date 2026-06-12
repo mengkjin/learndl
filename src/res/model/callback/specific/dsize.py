@@ -1,6 +1,11 @@
+"""
+Callback specifically for DSize module
+"""
 from __future__ import annotations
 from src.data import BlockLoader
 from src.res.model.util import BaseCallBack
+
+__all__ = ['SpecificCB_DSize']
 
 class SpecificCB_DSize(BaseCallBack):
     """In [_dsize], Fill [size] in batch_input.kwargs"""

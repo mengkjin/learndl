@@ -12,6 +12,8 @@ from src.proj.core import strPath
 
 from .machine import MACHINE
 
+__all__ = ['PATH']
+
 class PATH:
     """
     Path structure for the project

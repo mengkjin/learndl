@@ -1,3 +1,6 @@
+"""
+Analyst recognition factors for stock level1
+"""
 from __future__ import annotations
 import pandas as pd
 
@@ -7,6 +10,8 @@ from src.res.factor.calculator import CoverageFactor
 from src.res.factor.defs.stock.level0.analyst.coverage import (
     cov_inst_3m , cov_inst_12m , cov_report_3m , cov_report_12m
 )
+
+__all__ = ['analyst_recognition']
 
 class analyst_recognition(CoverageFactor):
     init_date = 20110101

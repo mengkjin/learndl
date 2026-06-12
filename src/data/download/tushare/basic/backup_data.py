@@ -16,6 +16,8 @@ import numpy as np
 from src.proj import PATH , CALENDAR , DB , Base , Dates
 from .core import TS
 
+__all__ = ['TSBackUpDataTransform']
+
 path_bak_data   = PATH.resource.joinpath('backup' , 'tushare' , 'data')
 path_bak_record = PATH.resource.joinpath('backup' , 'tushare' , 'record')
 

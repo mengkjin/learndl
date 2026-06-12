@@ -9,6 +9,8 @@ from __future__ import annotations
 from src.proj import DB , Base
 from .access import DateDataAccess
 
+__all__ = ['RISK']
+
 class RiskModelAccess(DateDataAccess):
     """
     Singleton data access object for the Tushare CNE5 risk model outputs.

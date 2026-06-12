@@ -9,16 +9,21 @@ from functools import cached_property
 from typing import Any, TypeAlias, Union, Iterable
 from zoneinfo import ZoneInfo
 
-from src.proj.core import SingletonMeta
-from src.proj.env import MACHINE
-from src.proj.db import DB
+from src.proj.core import SingletonMeta , lit , as_int_array
+from src.proj.env import MACHINE , PATH
 
 __all__ = ['BJ_TZ', 'LOCAL_TZ', 'BasicCalendar', 'intDate', 'intDateNone', 'intDates']
 
-
-#: Shanghai time zone, used by CALENDAR , TradeDate etc.
 BJ_TZ = ZoneInfo("Asia/Shanghai")
 LOCAL_TZ = MACHINE.timezone
+
+def get_cd(date: intDate) -> int:
+    """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
+    return int(date.cd if isinstance(date, TradeDate) else date)
+
+def get_td(date: intDate) -> int:
+    """Trading-aligned day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.td``."""
+    return int(date.td if isinstance(date, TradeDate) else date)
 
 class BasicCalendar(metaclass=SingletonMeta):
     """The full calendar built from information_ts/calendar and configuration; keep 'full'/'cal'/'trd' DataFrame for reference."""
@@ -30,7 +35,7 @@ class BasicCalendar(metaclass=SingletonMeta):
     def ensure_data(self) -> None:
         if self._loaded:
             return
-        calendar = DB.load("information_ts", "calendar", missing_ok=False).loc[:, ["calendar", "trade"]]
+        calendar = pd.read_feather(PATH.data.joinpath("DataBase" , "DB_information_ts" , "calendar.feather")).loc[:, ["calendar", "trade"]]
         reserved = pd.DataFrame(MACHINE.config.get('constant/data/calendar'))
         if not reserved.empty:
             calendar = pd.concat([calendar, reserved.loc[:, ["calendar", "trade"]]])
@@ -171,23 +176,66 @@ class BasicCalendar(metaclass=SingletonMeta):
         i = max(0, min(i, self.n_cal - 1))
         return int(self._cds[i])
 
-    def td_trailing_np(self, date: int, n: int) -> np.ndarray:
-        """The last 'n' trading days before 'date' (sorted slice; 'CALENDAR.td_trailing' will still 'np.sort' to align with the old interface)."""
-        t = self._trade_calendar
-        last = int(np.searchsorted(t, date, side="right")) - 1
+    def trailing_np(self, date: intDate, n: int, type: lit.intDateType = 'td') -> np.ndarray:
+        """The last 'n' trading days before 'date' (sorted slice)."""
+        date = get_td(date)
+        cal = self._trade_calendar if type == 'td' else self._cds
+        last = int(np.searchsorted(cal, date, side="right")) - 1
         if last < 0:
             return np.array([], dtype=np.int64)
         start = max(0, last - n + 1)
-        return t[start : last + 1].astype(np.int64, copy=False)
+        return cal[start : last + 1].astype(np.int64, copy=False)
 
-    def cd_trailing_np(self, date: int, n: int) -> np.ndarray:
-        """The last 'n' natural days before 'date' (sorted slice)."""
-        c = self._cds
-        last = int(np.searchsorted(c, date, side="right")) - 1
-        if last < 0:
-            return np.array([], dtype=np.int64)
-        start = max(0, last - n + 1)
-        return c[start : last + 1].astype(np.int64, copy=False)
+    def offset_np(self, dates: intDates, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray:
+        """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
+        dates = as_int_array(dates)
+        if len(dates) == 0:
+            return dates
+        if type == 'td':
+            pos = BC.pos_cd_array(dates)
+            td_arr = (BC._td_col if backward else BC._td_forward)[pos]
+            td_arr = np.asarray(td_arr)
+            if offset != 0:
+                pos_td = BC.pos_cd_array(td_arr)
+                d_index = BC._td_index[pos_td] + offset
+                d_index = np.maximum(np.minimum(d_index, BC.n_td - 1), 0)
+                td_arr = BC.trade_calendar_by_td_index(d_index)
+                td_arr = np.asarray(td_arr)
+            return td_arr.astype(np.int64, copy=False)
+        else:
+            cd_arr = as_int_array(dates)
+            if offset != 0:
+                cd_arr = np.minimum(cd_arr, BC.max_date)
+                d_index = BC._cd_index[BC.pos_cd_array(cd_arr)] + offset
+                d_index = np.maximum(np.minimum(d_index, BC.n_cal - 1), 0)
+                cd_arr = np.asarray(BC.calendar_by_cd_index(d_index))
+            return cd_arr.astype(np.int64, copy=False)
+
+    def diff_days(self, date1 : intDate, date2 : intDate , type : lit.intDateType = 'td') -> int | Any:
+        """The difference in days between two dates."""
+        try:
+            i1 = self.pos_cd(get_cd(date1))
+            i2 = self.pos_cd(get_cd(date2))
+            if type == 'td':
+                diff = int(self._td_index[i2] - self._td_index[i1])
+            elif type == 'cd':
+                diff = int(self._cd_index[i2] - self._cd_index[i1])
+            else:
+                raise ValueError(f"Invalid date type: {type}")
+        except KeyError as e:
+            raise ValueError(f"{date1} and {date2} are not in {type} calendar {e!s}")
+        return diff
+
+    def diff_days_array(self, date1_arr : intDates, date2_arr : intDates , type : lit.intDateType = 'td') -> int | Any:
+        """The difference of two arrays of dates."""
+        p1 = self.pos_cd_array(as_int_array(date1_arr))
+        p2 = self.pos_cd_array(as_int_array(date2_arr))
+        if type == 'td':
+            return self._td_index[p1] - self._td_index[p2]
+        elif type == 'cd':
+            return self._cd_index[p1] - self._cd_index[p2]
+        else:
+            raise ValueError(f"Invalid date type: {type}")
 
 class TradeDate:
     """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""

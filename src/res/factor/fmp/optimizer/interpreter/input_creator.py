@@ -1,3 +1,6 @@
+"""
+Input creator for Factor Model Portfolio
+"""
 from __future__ import annotations
 import numpy as np
 from typing import Any
@@ -9,8 +12,18 @@ from src.res.factor.util import Benchmark , Port , RISK_MODEL
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
 
-stock_bound_list : list[StockBound] = []
-linear_bound_list : list[LinearConstraint] = []
+__all__ = [
+    'create_input_eq' , 'create_input_benchmark' , 'create_input_initial' ,
+    'create_input_bnd_con' , 'create_input_lin_con' , 'create_input_turn_con' ,
+    'create_input_cov_con' , 'create_input_short_con' , 'append_bound_weight' ,
+    'append_bound_pool' , 'append_bound_induspool' , 'append_bound_limit' ,
+    'append_bound_range' , 'append_linear_equity' , 'append_linear_induspool' ,
+    'append_linear_board' , 'append_linear_industry' , 'append_linear_style' ,
+    'append_linear_component'
+]
+
+_stock_bound_list : list[StockBound] = []
+_linear_bound_list : list[LinearConstraint] = []
 
 def create_input_eq(opt_input : Any) -> float | Any:
     config = opt_input.cfg_equity
@@ -56,8 +69,8 @@ def create_input_bnd_con(opt_input : Any):
     append_bound_induspool(opt_input)
     append_bound_range(opt_input)
     append_bound_pool(opt_input)
-    bound = StockBound.intersect_bounds(stock_bound_list , clear_after=True)
-    assert not stock_bound_list , f'{stock_bound_list} is not cleared'
+    bound = StockBound.intersect_bounds(_stock_bound_list , clear_after=True)
+    assert not _stock_bound_list , f'{_stock_bound_list} is not cleared'
 
     if opt_input.cfg_short['short_position'] is None or opt_input.cfg_short['short_position'] <= 0: 
         bound.update_lb(0)
@@ -78,8 +91,8 @@ def create_input_lin_con(opt_input : Any):
     append_linear_style(opt_input) 
     append_linear_component(opt_input)
 
-    lin_con = LinearConstraint.stack(linear_bound_list , clear_after=True)
-    assert not linear_bound_list , f'{linear_bound_list} is not cleared'
+    lin_con = LinearConstraint.stack(_linear_bound_list , clear_after=True)
+    assert not _linear_bound_list , f'{_linear_bound_list} is not cleared'
 
     return lin_con
 
@@ -88,18 +101,18 @@ def create_input_short_con(opt_input : Any):
 
 def append_bound_weight(opt_input : Any):
     bound_weight = StockBound.intersect_bounds([bnd.export(opt_input.wb) for bnd in opt_input.cfg_bound.values()])
-    stock_bound_list.append(bound_weight)
+    _stock_bound_list.append(bound_weight)
     #return bound_weight
 
 def append_bound_pool(opt_input : Any):
     pool : StockPool = opt_input.cfg_pool
     bound_pool = pool.export(opt_input.secid , opt_input.wb , opt_input.w0)
-    stock_bound_list.append(bound_pool)
+    _stock_bound_list.append(bound_pool)
 
 def append_bound_induspool(opt_input : Any):
     induspool : IndustryPool = opt_input.cfg_induspool
     bound_induspool = induspool.export(opt_input.w0 , RISK_MODEL.get(opt_input.model_date).industry(opt_input.secid))
-    stock_bound_list.append(bound_induspool)
+    _stock_bound_list.append(bound_induspool)
 
 def append_bound_limit(opt_input : Any):
     w0 = 0 if opt_input.w0 is None else opt_input.w0
@@ -126,7 +139,7 @@ def append_bound_limit(opt_input : Any):
         pool = secid[(secid >= 688000) & (secid <= 689999)]
         bound_limit.intersect(StockPool.bnd_lb(secid , pool , w0))
 
-    stock_bound_list.append(bound_limit)
+    _stock_bound_list.append(bound_limit)
 
 def append_bound_range(opt_input : Any):
     secid : np.ndarray = opt_input.secid
@@ -148,12 +161,12 @@ def append_bound_range(opt_input : Any):
         assert isinstance(value , np.ndarray) , value
         bound_range.intersect(valid_range.export(value))
 
-    stock_bound_list.append(bound_range)
+    _stock_bound_list.append(bound_range)
 
 def append_linear_equity(opt_input : Any):
     eq = np.array([opt_input.eq])
     eq_lin = LinearConstraint(np.ones((1,len(opt_input.secid))) , np.array(['fx']) , eq , eq)
-    linear_bound_list.append(eq_lin)
+    _linear_bound_list.append(eq_lin)
 
 def append_linear_induspool(opt_input : Any):
     induspool : IndustryPool = opt_input.cfg_induspool
@@ -166,12 +179,12 @@ def append_linear_induspool(opt_input : Any):
     if induspool.no_net_buy:
         K = len(induspool.no_net_buy)
         A = np.stack([industry == ind for ind in induspool.no_net_buy] , axis=0)
-        linear_bound_list.append(LinearConstraint(A , np.full(K , 'up') , np.full(K , -1.) , A.dot(w0)))
+        _linear_bound_list.append(LinearConstraint(A , np.full(K , 'up') , np.full(K , -1.) , A.dot(w0)))
 
     if induspool.no_net_sell:
         K = len(induspool.no_net_sell)
         A = np.stack([industry == ind for ind in induspool.no_net_sell], axis=0)
-        linear_bound_list.append(LinearConstraint(A , np.full(K , 'lo') , A.dot(w0) , np.full(K , 1.)))
+        _linear_bound_list.append(LinearConstraint(A , np.full(K , 'lo') , A.dot(w0) , np.full(K , 1.)))
 
 def append_linear_board(opt_input : Any):
     board_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_board
@@ -198,7 +211,7 @@ def append_linear_board(opt_input : Any):
         else:
             raise KeyError(board_name)
         A , lin_type , lb , ub = gen_bounds[0].export_lin(1. * where , opt_input.wb , gen_bounds[1:])
-        linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
+        _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
 def append_linear_industry(opt_input : Any):
     indus_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_industry
@@ -210,7 +223,7 @@ def append_linear_industry(opt_input : Any):
             continue
         where = (industry == indus_name)
         A , lin_type , lb , ub = gen_bounds[0].export_lin(1. * where , opt_input.wb , gen_bounds[1:])
-        linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
+        _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
 def append_linear_style(opt_input : Any):
     style_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_style
@@ -222,7 +235,7 @@ def append_linear_style(opt_input : Any):
             continue
         value = df.loc[:,style_name].to_numpy()
         A , lin_type , lb , ub = gen_bounds[0].export_lin(value , opt_input.wb , gen_bounds[1:])
-        linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
+        _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
 def append_linear_component(opt_input : Any):
     comp_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_component
@@ -249,4 +262,4 @@ def append_linear_component(opt_input : Any):
         else:
             raise KeyError(comp_name)
         A , lin_type , lb , ub = gen_bounds[0].export_lin(value , opt_input.wb , gen_bounds[1:])
-        linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
+        _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))

@@ -1,3 +1,6 @@
+"""
+Callback to perform basic test of RankIC
+"""
 from __future__ import annotations
 import warnings
 import pandas as pd
@@ -8,6 +11,7 @@ from src.proj import Save , Load
 
 from src.res.model.util import BaseCallBack
 
+__all__ = ['BasicTestResult']
 class BasicTestResult(BaseCallBack):
     """Basic Test of RankIC"""
 

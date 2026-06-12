@@ -1,3 +1,6 @@
+"""
+Recorder for genetic programming
+"""
 from __future__ import annotations
 import joblib
 import pandas as pd
@@ -12,6 +15,8 @@ from src.proj import PATH , Base , Load
 from src.res.gp.param import gpDefaults
 from .syntax import SyntaxRecord
 from .status import gpStatus
+
+__all__ = ['gpRecorder']
 
 gpStateType = Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params']
 

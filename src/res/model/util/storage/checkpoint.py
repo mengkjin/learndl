@@ -1,3 +1,6 @@
+"""
+Checkpoint for trainer , which can stack model parameters at each epoch
+"""
 from __future__ import annotations
 
 import gc
@@ -10,6 +13,8 @@ from typing import Any
 from src.proj import PATH , Save , Load
 from src.proj.util.functional.device import Device
 from src.res.model.util.core import epoch_key
+
+__all__ = ['Checkpoint' , 'CkptEpochRecord']
 
 @dataclass
 class CkptEpochRecord:

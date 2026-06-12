@@ -20,9 +20,11 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Callable
-from src.proj import CALENDAR , DB , Base
+from src.proj import CALENDAR , DB , Base , Dates
 
 from src.data.update.custom.basic import BasicCustomUpdater
+
+__all__ = ['DailyRiskUpdater']
 
 class DailyRiskUpdater(BasicCustomUpdater):
     """Registered updater for per-stock daily microstructure risk features."""
@@ -35,10 +37,10 @@ class DailyRiskUpdater(BasicCustomUpdater):
         """Update daily risk features for all missing dates up to update_to."""
         start = max(start or cls.START_DATE , cls.START_DATE)
         end = end or min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
-        stored_dates = np.array([]) if overwrite else DB.dates(cls.DB_SRC , cls.DB_KEY)
-        target_dates = CALENDAR.diffs(start , end , stored_dates)
+        stored_dates = Dates() if overwrite else DB.dates(cls.DB_SRC , cls.DB_KEY)
+        target_dates = Dates(start , end).diff(stored_dates)
         
-        if len(target_dates) == 0:
+        if target_dates.empty:
             return Base.UpdateFlag.SKIPPED
 
         for date in target_dates:

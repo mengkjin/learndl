@@ -18,6 +18,8 @@ from src.proj.util.shell.util import argparse_dict
 from src.proj.util.functional.parallel import is_main_process
 from .task import TaskItem , TaskDatabase
 
+__all__ = ['BackendTaskRecorder']
+
 class BackendTaskRecorder:
     """
     convert script main function to one that can be used as a task in streamlit project

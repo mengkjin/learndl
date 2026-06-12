@@ -1,7 +1,13 @@
+"""
+Volatility skew factors for stock level0
+"""
 from __future__ import annotations
 from src.data import DATAVENDOR
 from src.res.factor.calculator import VolatilityFactor
 
+__all__ = [
+    'price_weiskew1m' , 'price_weiskew2m' , 'price_weiskew3m' , 'price_weiskew6m' , 'price_weiskew12m'
+]
 
 def skewness_volwei(date , n_months : int , lag_months : int = 0):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

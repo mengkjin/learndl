@@ -1,3 +1,6 @@
+"""
+Primitive functions for genetic programming
+"""
 from __future__ import annotations
 import torch
 from functools import wraps
@@ -5,6 +8,13 @@ from typing import Literal , Callable
 
 from src.func.basic import allna , exact
 import src.func.tensor as T
+
+__all__ = [
+    'PrimTool' , 'all_prim_names'
+]
+
+def all_prim_names():
+    return list(PrimTool.registry.keys())
 
 class PrimTool:
     registry : dict[str, Callable] = {}
@@ -301,6 +311,3 @@ def ts_top_x(x, d, n):
 def ts_dif_x(x, d, n):
     """rolling difference of x for d days, n is the number of elements to select"""
     return T.ts_dif_x(x, d, n)
-
-def all_prim_names():
-    return list(PrimTool.registry.keys())

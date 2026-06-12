@@ -16,6 +16,7 @@ from ...util import process
 from ...util.basic import BasicOpener
 from .verify import WezTermVerifier
 
+__all__ = ['WezTermOpener' , 'activate_wezterm' , 'bring_wezterm_to_foreground_soon']
 
 def _debug_wezterm_socket(msg: str) -> None:
     """Write socket-discovery debug messages to stdout when ``SHELL_OPENER_DEBUG_WEZTERM`` is set."""

@@ -1,3 +1,6 @@
+"""
+function to transform data for trainer
+"""
 from __future__ import annotations
 import torch
 import torch.nn as nn
@@ -7,6 +10,10 @@ from typing import Iterable
 
 from src.res.algo.boost import BoostInput
 from src.res.model.util import BatchInput , BatchOutput
+
+__all__ = [
+    'tensor_refiller' , 'batch_data_flatten_x' , 'batch_data_to_boost_input' , 'batch_x' ,
+    'batch_loader_concat' , 'batch_loader_to_boost_input']
 
 def tensor_refiller(values : torch.Tensor | None , target_i0 , target_i1 , target_shape : tuple):
     if values is None: 

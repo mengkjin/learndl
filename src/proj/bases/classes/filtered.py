@@ -1,3 +1,6 @@
+"""
+Filtered iterable class that yields only items passing a callable or parallel boolean stream.
+"""
 from __future__ import annotations
 from typing import Callable , Iterable
 

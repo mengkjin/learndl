@@ -1,3 +1,7 @@
+"""
+API for data operations of this project.
+"""
+
 from __future__ import annotations
 from src.proj import Logger , CALENDAR
 from src.data import CoreDataUpdater , SellsideDataUpdater , CustomDataUpdater , PreProcessorTask
@@ -7,7 +11,10 @@ from src.res.factor.api import RiskModelUpdater
 
 from .util import wrap_update
 
+__all__ = ['DataAPI']
+
 class DataAPI:
+    """API for data operations of this project."""
     @classmethod
     def update(cls , sellside : bool = True , risk : bool = True , affiliated : bool = True): 
         """

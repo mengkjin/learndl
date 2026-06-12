@@ -1,3 +1,6 @@
+"""
+Alpha model class for the project
+"""
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -5,10 +8,10 @@ import pandas as pd
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
-from scipy.stats import rankdata
-from typing import Any , Literal , Callable , Union , Sequence
+from typing import Any , Literal , Callable , Sequence , Union
 
-from src.proj import Const , DB
+from src.proj import Const , DB , Base , Dates 
+from src.proj.core import as_int_array
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , standard_normal
 
@@ -17,18 +20,6 @@ from .general_model import GeneralModel
 __all__ = ['AlphaModel' , 'Amodel' , 'AlphaComposite' , 'AlphaScreener']
 
 CombineWorstMethod = Literal['worst' , 'worst2']
-
-def _rank_pct(arr : np.ndarray , axis : int = -1) -> np.ndarray:
-    with np.errstate(invalid='ignore'):
-        ranks = rankdata(arr, method='average', axis=axis, nan_policy='omit')
-        n_valid = np.count_nonzero(~np.isnan(arr), axis=axis, keepdims=True)
-        rank_pct = np.where(np.isnan(arr) , np.nan , np.where(n_valid > 1, (ranks - 1) / (n_valid - 1), 0.5))
-    return rank_pct
-
-def _to_dates(date : int | list[int] | np.ndarray) -> np.ndarray:
-    if not isinstance(date , (list , np.ndarray)):
-        date = [date]
-    return np.array(date)
 
 @dataclass
 class Amodel:
@@ -59,7 +50,7 @@ class Amodel:
         if scale != 1 and '.rescaled' not in new_name:
             new_name = f'{new_name}.rescaled'
         return Amodel(self.date , self.alpha * other , self.secid , new_name)
-    def reverse(self):
+    def reverse(self) -> Amodel:
         """inplace version of -Amodel"""
         self.alpha = -self.alpha
         self.name = self.name.removeprefix('-') if self.name.startswith('-') else f'-{self.name}'
@@ -67,11 +58,11 @@ class Amodel:
     @property
     def empty(self) -> bool:
         return len(self) == 0
-    def get_model(self , *args , **kwargs): 
+    def get_model(self , *args , **kwargs) -> Amodel: 
         return self
-    def copy(self): 
+    def copy(self) -> Amodel: 
         return deepcopy(self)
-    def align(self , secid : np.ndarray | Any = None , inplace = False , nan = np.nan):
+    def align(self , secid : np.ndarray | Any = None , inplace = False , nan = np.nan) -> Amodel:
         new_alpha = self if inplace else self.copy()
         if secid is None: 
             return self
@@ -86,17 +77,17 @@ class Amodel:
         new_alpha.alpha = value
         new_alpha.secid = secid
         return new_alpha
-    def assign(self , date : int | None = None , name : str | None = None):
+    def assign(self , date : int | None = None , name : str | None = None) -> Amodel:
         if date is not None: 
             self.date = date
         if name is not None: 
             self.name = name
         return self
-    def zscore(self , inplace = False):
+    def zscore(self , inplace = False) -> Amodel:
         new = self if inplace else self.copy()
         new.alpha = standard_normal(new.alpha)
         return new
-    def pre_process(self , pre_fill = None , after_fill = 0 , inplace = False):
+    def pre_process(self , pre_fill = None , after_fill = 0 , inplace = False) -> Amodel:
         # nan_as_num for pre_fill , winsor , normal , nan_as_num for after_fill
         new = self if inplace else self.copy()
         alpha = new.alpha
@@ -106,6 +97,7 @@ class Amodel:
         alpha = fill_na_as_const(alpha , after_fill)
         new.alpha = alpha
         return new
+
     def alpha_of(self , secid : np.ndarray | Any = None , nan : float = np.nan , rank = False) -> np.ndarray:
         if self.empty:
             return self.alpha if secid is None else np.full(len(secid) , nan , dtype=float)
@@ -117,7 +109,7 @@ class Amodel:
         new_value[p0s] = value[p1s]
         return new_value
 
-    def to_dataframe(self , indus = False , na_indus_as : Any = None):
+    def to_dataframe(self , indus = False , na_indus_as : Any = None) -> pd.DataFrame:
         df = pd.DataFrame({'secid' : self.secid , 'alpha' : self.alpha})
         if indus: 
             df = DATAVENDOR.INFO.add_indus(df , self.date , na_indus_as)
@@ -127,20 +119,24 @@ class Amodel:
         return AlphaModel(self.name , self)
 
     @classmethod
-    def create_random(cls , date : int , secid : np.ndarray | list[int] | Any = [1,2,600001]):
+    def create_random(cls , date : int , secid : Base.alias.intNums = [1,2,600001]) -> Amodel:
         assert secid is not None , 'When create random Amodel, secid must be submitted too!'
-        if isinstance(secid , list): 
-            secid = np.array(secid)
+        secid = as_int_array(secid)
         return cls(date , np.random.randn(len(secid)) , secid , 'random_alpha')
 
     @classmethod
-    def from_array(cls , date : int , data : np.ndarray , secid : np.ndarray , name : str = 'given_alpha'):
+    def from_array(
+        cls , date : int , data : np.ndarray , 
+        secid : np.ndarray , name : str = 'given_alpha'
+    ) -> Amodel:
         assert len(data) == len(data) , f'alpha must match secid, but get <{len(data)}> and <{len(data)}>'
         return cls(date , data , secid , name)
 
     @classmethod
-    def from_dataframe(cls , date : int | Any , data : pd.DataFrame , 
-                       secid : np.ndarray | Any = None , name : str | Any = None , filter_date = False):
+    def from_dataframe(
+        cls , date : int | Any , data : pd.DataFrame , 
+        secid : np.ndarray | Any = None , name : str | Any = None , filter_date = False
+    ) -> Amodel:
         """data must include ['date' , 'secid' , name_of_alpha] 3 columns"""
         value_col = np.setdiff1d(data.columns.values , ['date' , 'secid'])
         assert len(value_col) == 1 , f'When submit alpha as pd.DataFrame, there must be only one possible column :{data.columns} but got {value_col}'
@@ -154,7 +150,10 @@ class Amodel:
         return cls(date , data.to_numpy().squeeze() , data.index.values , name or value_col[0])
 
     @classmethod
-    def create(cls , date : int , data: np.ndarray | pd.DataFrame | pd.Series | Literal['random'] , secid : np.ndarray | Any = None):
+    def create(
+        cls , date : int , data: np.ndarray | pd.DataFrame | pd.Series | Literal['random'] , 
+        secid : np.ndarray | Any = None
+    ) -> Amodel:
         if isinstance(data , str) and data == 'random':
             return cls.create_random(date , secid)
         elif isinstance(data , np.ndarray):
@@ -169,15 +168,16 @@ class Amodel:
     def combine_linear(
         cls , alphas : list[Amodel] , weights : list[float] | np.ndarray | None = None , 
         date : int | None = None , name : str = 'combined_alpha' , * , normalize = True
-    ):
-        assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
+    ) -> Amodel:
+        assert any(not alpha.empty for alpha in alphas) , \
+            f'alphas must have at least one non-empty alpha: {alphas}'
         if len(alphas) == 1:
             return alphas[0].zscore(inplace=False) if normalize else alphas[0]
 
         if weights is None:
             weights = np.ones(len(alphas))
-        elif isinstance(weights , list):
-            weights = np.array(weights)
+        else:
+            weights = np.atleast_1d(np.asarray(weights))
         assert len(alphas) == len(weights) , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
 
         if date is None:
@@ -195,8 +195,9 @@ class Amodel:
     def combine_worst(
         cls , alphas : list[Amodel] , method : CombineWorstMethod , 
         date : int | None = None , name : str = 'combined_alpha' , normalize = False
-    ):
-        assert any(not alpha.empty for alpha in alphas) , 'alphas must have at least one non-empty alpha'
+    ) -> Amodel:
+        assert any(not alpha.empty for alpha in alphas) , \
+            f'alphas must have at least one non-empty alpha: {alphas}'
         if len(alphas) == 1:
             return alphas[0].zscore(inplace=False) if normalize else alphas[0]
 
@@ -235,7 +236,7 @@ class AlphaModel(GeneralModel):
         self.name = name
         self.models : dict[int,Amodel] = {}
         self.append(models)
-    def rename(self , name : str):
+    def rename(self , name : str) -> AlphaModel:
         self.name = name
         for model in self.models.values():
             model.name = name
@@ -274,7 +275,7 @@ class AlphaModel(GeneralModel):
         self.name = self.name.removeprefix('-') if self.name.startswith('-') else f'-{self.name}'
         return self
     @classmethod
-    def from_dataframe(cls , data: pd.DataFrame | pd.Series , name : str | Any = None):
+    def from_dataframe(cls , data: pd.DataFrame | pd.Series , name : str | Any = None) -> AlphaModel:
         if isinstance(data , pd.Series): 
             data = data.to_frame()
         if not isinstance(data.index , pd.RangeIndex): 
@@ -286,7 +287,10 @@ class AlphaModel(GeneralModel):
             name = models[0].name
         return cls(name , models)
 
-    def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] | AlphaModel | None , override = True):
+    def append(
+        self , model : Amodel | list[Amodel] | dict[int,Amodel] | AlphaModel | None , 
+        override = True
+    ) -> AlphaModel:
         if model is None:
             ...
         elif isinstance(model , Amodel):
@@ -306,12 +310,11 @@ class AlphaModel(GeneralModel):
             raise ValueError(f'model must be a Amodel, list of Amodel, dict of Amodel, or AlphaModel: {type(model)}')
         return self
     
-    def subset(self , date : int | list[int] | np.ndarray , closest = False):
-        if not isinstance(date , (list , np.ndarray)):
-            date = [date]
+    def subset(self , dates : Base.alias.intDates , closest = False) -> AlphaModel:
+        dates = Dates(dates)
         if closest:
-            date = list(set([self.closest_avail_date(d) for d in date]))
-        models = {d : self.models.get(d) for d in date if d in self.models}
+            dates = Dates([self.closest_avail_date(d) for d in dates])
+        models = {d : self.models.get(d) for d in dates if d in self.models}
         return self.__class__(name = self.name , models = models)
 
     def get(self , date : int , closest = True , lag : int = 0) -> Amodel:
@@ -326,7 +329,7 @@ class AlphaModel(GeneralModel):
             model = Amodel.empty_model(date , name = self.name)
         return model
     
-    def lag_all_models(self , lag_period : int = 0 , inplace = False , rename = True):
+    def lag_all_models(self , lag_period : int = 0 , inplace = False , rename = True) -> AlphaModel:
         new = self if inplace else self.copy()
         if rename: 
             new.name = f'{new.name}.lag{lag_period}'
@@ -377,24 +380,23 @@ class AlphaComponent:
     def __repr__(self) -> str:
         return self.name
 
-    def get_alpha_model(self , date : int | list[int] | np.ndarray) -> AlphaModel:
+    def get_alpha_model(self , dates : Base.alias.intDates) -> AlphaModel:
         if isinstance(self.input , AlphaModel):
             return self.input
         elif isinstance(self.input , Amodel):
             return self.input.to_alpha_model()
 
-        date = _to_dates(date)
+        dates = Dates(dates)
         cached_alpha_model = self.get_cache(self.name , normalize = self.normalize)
         cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
-        new_dates = np.setdiff1d(date , cached_dates)
-        
-        if len(new_dates) == 0:
-            return cached_alpha_model.subset(date , closest = True)
+        new_dates = dates.diff(cached_dates , inplace = False)
+        if new_dates.empty:
+            return cached_alpha_model.subset(dates , closest = True)
             
         alpha_model = self.loads(new_dates)
         new_alpha_model = cached_alpha_model.append(alpha_model)
         self.set_cache(new_alpha_model , self.name , normalize = self.normalize)
-        return new_alpha_model.subset(date , closest = True)
+        return new_alpha_model.subset(dates , closest = True)
 
     @classmethod
     def get_cache(cls , name : str , normalize : bool = True) -> AlphaModel:
@@ -407,7 +409,7 @@ class AlphaComponent:
         return alpha_model
 
     @classmethod
-    def set_cache(cls , alpha_model : AlphaModel , name : str , normalize : bool = True):
+    def set_cache(cls , alpha_model : AlphaModel , name : str , normalize : bool = True) -> None:
         if normalize:
             cls._cache_normalized[name] = alpha_model
         else:
@@ -415,27 +417,29 @@ class AlphaComponent:
 
     
     @classmethod
-    def db_loads(cls , alpha : tuple[str,str,str | None] , name : str = 'alpha0' , 
-                 normalize : bool = True , closest = True , direction : int = 1) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+    def db_loads(
+        cls , alpha : tuple[str,str,str | None] , name : str = 'alpha0' , 
+        normalize : bool = True , closest = True , direction : int = 1
+    ) -> Callable[[Base.alias.intDates], AlphaModel]:
         from src.res.factor.util import StockFactor
-        def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
-            date = _to_dates(date)
+        def wrapper(dates : Base.alias.intDates) -> AlphaModel:
             src , key , col = alpha
             col = col if col else key
-            df = DB.loads(src , key , date , override_existing_key = True , closest = closest , vb_level = 'never')
-            assert df.empty or (col in df.columns.to_list()) , f'{col} not in {df.columns} at date {date}'
+            df = DB.loads(src , key , dates , override_existing_key = True , closest = closest , vb_level = 'never')
+            assert df.empty or (col in df.columns.to_list()) , f'{col} not in {df.columns} at date {dates}'
             df = pd.DataFrame(columns=['secid' , 'date' , col]) if df.empty else df.loc[:,['secid' , 'date' , col]]
             return StockFactor(df).alpha_model(normalize , name , direction)
         return wrapper
 
     @classmethod
-    def factor_loads(cls , factor_name : str , name : str = 'alpha0' , 
-                     normalize : bool = True , closest = True , direction : int = 1) -> Callable[[int | list[int] | np.ndarray], AlphaModel]:
+    def factor_loads(
+        cls , factor_name : str , name : str = 'alpha0' , 
+        normalize : bool = True , closest = True , direction : int = 1
+    ) -> Callable[[Base.alias.intDates], AlphaModel]:
         from src.res.factor.calculator import StockFactorHierarchy
         from src.res.factor.util import StockFactor
-        def wrapper(date : int | list[int] | np.ndarray) -> AlphaModel:
-            date = _to_dates(date)
-            df = StockFactorHierarchy.get_factor(factor_name).Loads(date , closest = closest)
+        def wrapper(dates : Base.alias.intDates) -> AlphaModel:
+            df = StockFactorHierarchy.get_factor(factor_name).Loads(dates , closest = closest)
             return StockFactor(df).alpha_model(normalize , name , direction)
         return wrapper
 
@@ -464,20 +468,24 @@ class AlphaCombination:
     def __len__(self) -> int:
         return len(self.components)
 
-    def get_alpha_models(self , date : int | list[int] | np.ndarray , 
-                         other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> list[AlphaModel]:
-        date = _to_dates(date)
-        alpha_models = [comp.get_alpha_model(date) for comp in self.alpha_components]
+    def get_alpha_models(
+        self , dates : Base.alias.intDates , 
+        other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None
+    ) -> list[AlphaModel]:
+        alpha_models = [comp.get_alpha_model(dates) for comp in self.alpha_components]
 
         if other_models:
             other_combination = AlphaCombination(other_models)
-            alpha_models.extend([comp.get_alpha_model(date) for comp in other_combination.alpha_components])
+            alpha_models.extend([comp.get_alpha_model(dates) for comp in other_combination.alpha_components])
 
         return alpha_models
 
 class AlphaComposite(AlphaCombination):
-    def __init__(self , alpha : ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None , 
-                 weights : list[float] | Literal['equal'] | None = None):
+    def __init__(
+        self , alpha : ComponentInputType | Sequence[ComponentInputType] , 
+        components : list[str] | None = None , 
+        weights : list[float] | Literal['equal'] | None = None
+    ) -> None:
         super().__init__(alpha , components)
         
         if isinstance(weights , list):
@@ -491,13 +499,16 @@ class AlphaComposite(AlphaCombination):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},weights={self.weights})'
 
-    def get(self , date : int | list[int] | np.ndarray , other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> AlphaModel:
-        date = _to_dates(date)
-        alpha_models = self.get_alpha_models(date , other_models)
+    def get(
+        self , dates : Base.alias.intDates , 
+        other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None
+    ) -> AlphaModel:
+        dates = Dates(dates)
+        alpha_models = self.get_alpha_models(dates , other_models)
         assert alpha_models , f'no alpha models created, if AlphaComposite is empty, please submit a final alpha or components'
 
         models : list[Amodel] = []
-        for d in date:
+        for d in dates:
             alphas = [alpha.get(d , closest=True) for alpha in alpha_models]
             if not any(not alpha.empty for alpha in alphas):
                 from src.proj.log import Logger
@@ -508,8 +519,10 @@ class AlphaComposite(AlphaCombination):
         return AlphaModel(self.name , models)
 
 class AlphaScreener(AlphaCombination):
-    def __init__(self , alpha : ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None ,
-                 method : CombineWorstMethod = 'worst2' , ratio : float = 0.5):
+    def __init__(
+        self , alpha : ComponentInputType | Sequence[ComponentInputType] , components : list[str] | None = None ,
+        method : CombineWorstMethod = 'worst2' , ratio : float = 0.5
+    ) -> None:
         super().__init__(alpha , components)
         self.method : CombineWorstMethod = method
         self.ratio = ratio
@@ -517,20 +530,26 @@ class AlphaScreener(AlphaCombination):
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},components={self.components},method={self.method})'
 
-    def get(self , date : int | list[int] | np.ndarray , other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> AlphaModel | None:
-        date = _to_dates(date)
-        alpha_models = self.get_alpha_models(date , other_models)
+    def get(
+        self , dates : Base.alias.intDates , 
+        other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None
+    ) -> AlphaModel | None:
+        dates = Dates(dates)
+        alpha_models = self.get_alpha_models(dates , other_models)
         if not alpha_models:
             return None
 
         models : list[Amodel] = []
-        for d in date:
+        for d in dates:
             amodel = Amodel.combine_worst([alpha.get(d , closest=True) for alpha in alpha_models] , self.method , date = d)
             models.append(amodel)
         return AlphaModel(self.name , models)
 
-    def screened_pool(self , date : int , secid : np.ndarray | list[int] | Any = None , ratio : float | None = None , 
-                      other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None) -> np.ndarray:
+    def screened_pool(
+        self , date : int , secid : Base.alias.intNums | None = None , 
+        ratio : float | None = None , 
+        other_models : str | ComponentInputType | Sequence[ComponentInputType] | None = None
+    ) -> np.ndarray:
         alpha = self.get(date , other_models)
         if alpha is None or alpha.empty:
             return np.array([] , dtype = int)
@@ -539,8 +558,10 @@ class AlphaScreener(AlphaCombination):
         if alpha.empty:
             return np.array([] , dtype = int)
         
-        if secid is not None and len(secid) > 0: 
-            alpha = alpha.query('secid in @secid').copy()
+        if secid is not None:
+            secid = as_int_array(secid)
+            if len(secid) > 0: 
+                alpha = alpha.query('secid in @secid').copy()
         alpha.loc[:, 'rankpct'] = alpha['alpha'].rank(pct = True , method = 'first' , ascending = True)
         ratio = ratio if ratio is not None else self.ratio
         return alpha.query('rankpct < @ratio')['secid'].to_numpy()

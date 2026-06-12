@@ -1,7 +1,13 @@
+"""
+API for launching dashboard of this project.
+"""
+
 from __future__ import annotations
 import os , shutil , subprocess , webbrowser , time , socket
 from pathlib import Path
 from src.proj import PATH , Logger , Base
+
+__all__ = ['DashboardAPI' , 'OptunaDBAPI' , 'TSBoardAPI']
 
 def get_free_port(start_port=8080):
     """Finds an available TCP port starting from start_port."""
@@ -20,6 +26,7 @@ def open_url(host : str , port: int):
     webbrowser.open(f"http://{host}:{port}/")
 
 class DashboardAPI:
+    """API for launching dashboard of this project."""
     @classmethod
     def optuna_dashboard(cls):
         """
@@ -61,6 +68,7 @@ class DashboardAPI:
         TSBoardAPI.launch(open_browser = True)
 
 class OptunaDBAPI:
+    """API for launching Optuna Dashboard."""
     @classmethod
     def call_optuna_dashboard(cls , db_path : Base.strPath , * , open_browser : bool = False):
         """
@@ -135,6 +143,7 @@ class OptunaDBAPI:
 
 
 class TSBoardAPI:
+    """API for launching TensorBoard."""
     @classmethod
     def call_tensorboard(cls , log_dir : Base.strPath , * , open_browser : bool = False):
         """

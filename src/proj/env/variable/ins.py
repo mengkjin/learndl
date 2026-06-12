@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from src.proj.core import SingletonMeta
 
+__all__ = ['InstanceCollection']
+
 class _Trainer:
     """Descriptor returning ``BaseTrainer._instance``."""
     def __get__(self , instance, owner):

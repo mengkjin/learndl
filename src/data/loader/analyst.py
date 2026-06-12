@@ -15,6 +15,8 @@ from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
 
+__all__ = ['ANALYST']
+
 AnalystVals = Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe']
 
 class AnalystDataAccess(DateDataAccess):
@@ -79,7 +81,7 @@ class AnalystDataAccess(DateDataAccess):
         Weights decay with a half-life of ``half_life`` calendar days relative
         to the reference date ``end``.
         """
-        df = df.assign(_w = np.exp(-np.log(2) * CALENDAR.cd_diff_array(end , df['report_date']) / half_life))
+        df = df.assign(_w = np.exp(-np.log(2) * CALENDAR.diff_days_array(end , df['report_date'] , 'cd') / half_life))
         return df.groupby('secid').apply(lambda x,**kwg:(x[col] * x['_w']).sum() / x['_w'].sum() , include_groups = False)
 
     @staticmethod

@@ -13,6 +13,8 @@ from typing import Any
 
 from ..util import BasicBoostModel , BoostInput
 
+__all__ = ['XgBoost']
+
 PLOT_PATH : Path | None = None
 
 class XgBoost(BasicBoostModel):

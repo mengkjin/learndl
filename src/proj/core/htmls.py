@@ -9,6 +9,8 @@ from typing import Any , TYPE_CHECKING
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
+__all__ = ['str_to_html' , 'dataframe_to_html' , 'figure_to_base64' , 'figure_to_html']
+
 _palette : dict[int , str] = {
     30: 'black',
     31: 'red',

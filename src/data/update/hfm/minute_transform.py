@@ -16,7 +16,13 @@ import pandas as pd
 from typing import Literal
 
 from src.data.util import trade_min_fillna
-from src.proj import PATH , DB
+from src.proj import PATH , DB , Dates
+
+__all__ = [
+    'get_js_min' , 'add_sec_type' , 'filter_sec' , 
+    'transform_sec' , 'process_sec_min_files' , 'process_fut_min_files' ,
+    'main'
+]
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')
@@ -140,15 +146,12 @@ def transform_sec(df : pd.DataFrame):
 def process_sec_min_files():
     # if not MACHINE.server: return
 
-    target_dates = np.array([int(p.name.split('.')[-2][-8:]) for p in sec_min_path.iterdir() if not p.is_dir()])
+    target_dates = Dates([int(p.name.split('.')[-2][-8:]) for p in sec_min_path.iterdir() if not p.is_dir()])
     stored_dates_sec = DB.dates('trade_js' , 'min')
     stored_dates_etf = DB.dates('trade_js' , 'etf_min')
     stored_dates_cb  = DB.dates('trade_js' , 'cb_min')
-    dates = target_dates[~np.isin(target_dates , stored_dates_sec) | 
-                         ~np.isin(target_dates , stored_dates_etf) | 
-                         ~np.isin(target_dates , stored_dates_cb)]
-    
-    dates.sort()
+    full_dates = stored_dates_sec.intersect(stored_dates_etf).intersect(stored_dates_cb)
+    dates = target_dates.diff(full_dates , inplace = False)
     for date in dates:
         df = get_js_min(date)
         for sec_type in ['sec' , 'etf' , 'cb']:

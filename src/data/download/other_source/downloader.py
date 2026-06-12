@@ -1,7 +1,12 @@
+"""
+Other source downloader , including RiceQuant and Baostock to download minute bars
+"""
 from __future__ import annotations
 from src.proj import Base
 from .rcquant import RcquantMinBarDownloader
 from .baostock_5m import Baostock5minBarDownloader
+
+__all__ = ['OtherSourceDownloader']
 
 class OtherSourceDownloader:
     @classmethod

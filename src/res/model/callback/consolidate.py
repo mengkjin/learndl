@@ -1,3 +1,6 @@
+"""
+Consolidate all callbacks into one
+"""
 from __future__ import annotations
 import inspect , itertools
 from typing import Any , Type , Callable
@@ -8,6 +11,8 @@ from . import monitor, fit, test, specific
 
 VbLevelCallback = Proj.vb.get('callback')
 CallbackModules = frozenset([fit , monitor , test])
+
+__all__ = ['ConsolidateCallBack']
 
 class ConsolidateCallBack(BaseCallBack):
     """consolidate all callbacks into one"""

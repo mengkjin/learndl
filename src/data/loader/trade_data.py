@@ -6,13 +6,14 @@ Provides adjusted OHLCV, valuation, moneyflow, and limit data from the
 """
 from __future__ import annotations
 import pandas as pd
-import numpy as np
 from typing import Any , Literal
 
-from src.proj import CALENDAR , DB , Base
+from src.proj import CALENDAR , DB , Base , Dates
 from src.data.util import INFO
 
 from .access import DateDataAccess
+
+__all__ = ['TRADE']
 
 class TradeDataAccess(DateDataAccess):
     """
@@ -38,9 +39,8 @@ class TradeDataAccess(DateDataAccess):
     def closest_date(self , data_type : str , date : int | None = None) -> int:
         """Return the most recent date available in the DB for ``data_type``, optionally capped at ``date``."""
         dates = DB.dates(self.DB_SRC , self.DB_KEYS[data_type])
-        if date: 
-            dates = dates[dates <= date]
-        return dates.max() if len(dates) else -1
+        dates = dates.slice(end = date)
+        return dates.max if dates else -1
 
     def db_loads_callback(self , df : pd.DataFrame , db_src : str , db_key : str):
         """when DB.loads is called with fill_datavendor=True , this function will be called to add the data to the collection"""
@@ -50,9 +50,9 @@ class TradeDataAccess(DateDataAccess):
             if data_key == db_key:
                 self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 
-    def loads(self , dates: list[Base.alias.intDate] | np.ndarray | int | None , data_type : str):
-        dates = CALENDAR.td_array(dates)
-        if len(dates) == 0:
+    def loads(self , dates: Base.alias.intDates | None , data_type : str):
+        dates = Dates(dates).to_td()
+        if dates.empty:
             return
         df = DB.loads(self.DB_SRC , self.DB_KEYS[data_type] , dates , vb_level = 'never')
         self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))

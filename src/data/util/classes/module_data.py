@@ -118,9 +118,8 @@ class ModuleData(Base.BoundLogger):
         factor_end_dt: int | None = None,
         filter_secid: str | None = None,
         filter_date: str | None = None,
-        indent: int = 1,
-        vb_level: Any = 2,
-        dtype=torch.float) -> ModuleData:
+        indent: int = 1, vb_level: Any = 2, dtype=torch.float
+    ) -> ModuleData:
         config = ModuleDataConfig(
             data_type_list=tuple(sorted([cls.abbr(data_type) for data_type in data_type_list])),
             y_labels=y_labels,
@@ -135,23 +134,23 @@ class ModuleData(Base.BoundLogger):
         return cls(config = config, indent = indent, vb_level = vb_level)
 
     @property
-    def data_type_list(self):
+    def data_type_list(self) -> list[str]:
         return list(self.config.data_type_list)
 
     @property
-    def y_labels(self):
+    def y_labels(self) -> list[str] | None:
         return self.config.y_labels
 
     @property
-    def use_data(self):
+    def use_data(self) -> Base.lit.DataBlockTimeFrames:
         return self.config.use_data
 
     @property
-    def factor_names(self):
+    def factor_names(self) -> list[str] | None:
         return self.config.factor_names
 
     @property
-    def load_keys(self):
+    def load_keys(self) -> list[str]:
         """All block keys to be loaded: ``['y', *data_type_list]``."""
         return ["y", *self.data_type_list]
 
@@ -164,11 +163,11 @@ class ModuleData(Base.BoundLogger):
         return {}
 
     @cached_property
-    def secid_filter(self):
+    def secid_filter(self) -> SecidFilter:
         return SecidFilter(self.config.filter_secid if self.use_data == "fit" else None , indent = self.indent , vb_level = self.vb_level)
     
     @cached_property
-    def date_filter(self):
+    def date_filter(self) -> DateFilter:
         return DateFilter(self.config.filter_date if self.use_data == "fit" else None , indent = self.indent , vb_level = self.vb_level)
 
     @cached_property
@@ -182,7 +181,7 @@ class ModuleData(Base.BoundLogger):
         return self.blocks["y"].align_feature(self.y_labels)
 
     @property
-    def empty_x(self):
+    def empty_x(self) -> bool:
         """True if no feature blocks are loaded or all are empty."""
         return len(self.x) == 0 or all([x.empty for x in self.x.values()])
 
@@ -192,22 +191,22 @@ class ModuleData(Base.BoundLogger):
         return Base.shape(self, ["x", "y", "secid", "date"])
 
     @property
-    def secid(self):
+    def secid(self) -> np.ndarray:
         """Security universe from the ``'y'`` block."""
         return self.blocks["y"].secid
 
     @property
-    def date(self):
+    def date(self) -> np.ndarray:
         """Date range from the ``'y'`` block."""
         return self.blocks["y"].date
 
     @cached_property
-    def loaded(self):
+    def loaded(self) -> bool:
         """True after ``load()`` has been called successfully."""
         return False
 
     @property
-    def block_title(self):
+    def block_title(self) -> str:
         """Human-readable summary of the block set for log messages."""
         return (
             f"{len(self.load_keys)} DataBlocks"
@@ -219,15 +218,15 @@ class ModuleData(Base.BoundLogger):
         """True when at least one non-empty feature block is loaded."""
         return not self.empty_x
 
-    def copy(self):
+    def copy(self) -> ModuleData:
         """Return a deep copy of this ModuleData instance."""
         return deepcopy(self)
 
-    def date_within(self, start: int, end: int, interval=1) -> np.ndarray:
+    def date_within(self, start: int, end: int, step=1) -> np.ndarray:
         """Return the loaded date array sliced to [start, end] with optional stride."""
-        return CALENDAR.slice(self.date, start, end)[::interval]
+        return self.date[(self.date >= start) & (self.date <= end)][::step]
 
-    def target_start_end(self):
+    def target_start_end(self) -> tuple[int, int]:
         """
         Compute the (start, end) date range to load data for.
 
@@ -247,7 +246,7 @@ class ModuleData(Base.BoundLogger):
         end = end or CALENDAR.updated()
         return start, end
 
-    def load(self):
+    def load(self) -> ModuleData:
         """
         load all relevant data of this module data, should be called before any other operations
         blocks: ['y' , *data_type_list] DataBlocks
@@ -265,14 +264,14 @@ class ModuleData(Base.BoundLogger):
         self.loaded = True
         return self
 
-    def _init_data(self):
+    def _init_data(self) -> ModuleData:
         self.__dict__.pop("x", None)
         self.__dict__.pop("y", None)
         self.blocks.clear()
         self.norms.clear()
         return self
 
-    def _load_blocks(self):
+    def _load_blocks(self) -> ModuleData:
         """
         load all blocks including y and data_type_list blocks.
 
@@ -287,7 +286,7 @@ class ModuleData(Base.BoundLogger):
             self.blocks[key] = self.load_one(key, dates = date)
         return self
 
-    def _align_blocks(self):
+    def _align_blocks(self) -> ModuleData:
         """Align all loaded blocks to a common (secid, date) grid via ``DataBlock.blocks_align``."""
         if not self.blocks:
             return self
@@ -304,7 +303,7 @@ class ModuleData(Base.BoundLogger):
 
     def load_one(
         self, key: str, *, dates: np.ndarray, secid: np.ndarray | None = None, **kwargs
-    ):
+    ) -> DataBlock:
         """
         Load a single block for the given key and date array.
 
@@ -328,7 +327,7 @@ class ModuleData(Base.BoundLogger):
 
     def load_preprocess_block(
         self, key: str, *, dates: np.ndarray, secid: np.ndarray | None = None, **kwargs
-    ):
+    ) -> DataBlock:
         """Load a block via the registered ``PreProcessor`` for ``key``."""
         from src.data.preprocess import PrePros
         type = "predict" if self.use_data == "predict" else "fit"
@@ -337,14 +336,14 @@ class ModuleData(Base.BoundLogger):
 
     def load_special_block(
         self, key: str, *, dates: np.ndarray, secid: np.ndarray | None = None, **kwargs
-    ):
+    ) -> DataBlock:
         """Load a block via ``SpecialDataSet`` for non-standard dataset keys."""
         block = SpecialDataSet.load(
             key, dates=dates, secid=secid, dtype=self.config.dtype, vb_level=self.vb_level + 2
         )
         return block
 
-    def _load_norms(self):
+    def _load_norms(self) -> None:
         """Load ``DataBlockNorm`` objects for all X block types from disk (no-op if already loaded)."""
         if self.norms:
             return
@@ -352,7 +351,7 @@ class ModuleData(Base.BoundLogger):
             DataBlock.load_preprocess_norms(self.data_type_list, dtype=self.config.dtype)
         )
 
-    def _load_factor(self):
+    def _load_factor(self) -> ModuleData:
         """load factor data"""
         if not self.factor_names:
             return self
@@ -370,7 +369,7 @@ class ModuleData(Base.BoundLogger):
         return self
 
     @staticmethod
-    def abbr(data_type: str):
+    def abbr(data_type: str) -> str:
         """Normalise a data-type key via ``data_type_abbr``."""
         return data_type_abbr(data_type)
 
@@ -391,10 +390,8 @@ class ModuleData(Base.BoundLogger):
         if factor_names:
             for factor_name in factor_names:
                 dates.append(StockFactorHierarchy.get_factor(factor_name).min_date)
-        if len(dates) == 0:
-            return None
-        else:
-            return CALENDAR.td_array([max(dates)], backward=False)[0]
+
+        return CALENDAR.td(max(dates), backward=False).as_int()
 
     @classmethod
     def max_data_date(
@@ -413,10 +410,8 @@ class ModuleData(Base.BoundLogger):
         if factor_names:
             for factor_name in factor_names:
                 dates.append(StockFactorHierarchy.get_factor(factor_name).max_date)
-        if len(dates) == 0:
-            return None
-        else:
-            return CALENDAR.td_array([max(dates)], backward=True)[0]
+
+        return CALENDAR.td(max(dates), backward=True).as_int()
 
 
 class SecidFilter:
@@ -564,4 +559,8 @@ class DateFilter:
         date: np.ndarray, start: int | None = None, end: int | None = None
     ) -> np.ndarray:
         """Return ``date`` restricted to ``[start, end]`` via ``CALENDAR.slice``."""
-        return CALENDAR.slice(date, start, end)
+        if start is not None:
+            date = date[date >= start]
+        if end is not None:
+            date = date[date <= end]
+        return date

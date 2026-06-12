@@ -1,3 +1,7 @@
+"""
+API for summary operations of this project.
+"""
+
 from __future__ import annotations
 import pandas as pd
 from pathlib import Path
@@ -7,6 +11,8 @@ from src.res.factor.util.stats.aggregate import eval_period_ic_multi
 from src.proj import Logger , PATH , Const , Load
 
 from .util import wrap_update
+
+__all__ = ['SummaryAPI']
 
 def display_account_summary(accounts : dict[str , dict[str , Path]] , account_type : str , by_max_columns : int = 12):
     """
@@ -165,6 +171,7 @@ def concat_dfs(accounts : dict[str,pd.DataFrame]) -> pd.DataFrame:
     longest_index = max(accounts.values(), key=len).index
     return pd.concat(accounts , axis = 1).reindex(index = longest_index).rename_axis(index = '')
 class SummaryAPI:
+    """API for summary operations of this project."""
     @classmethod
     def update(cls):
         """

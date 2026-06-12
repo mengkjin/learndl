@@ -1,3 +1,6 @@
+"""
+Adjustment factors for the project
+"""
 from __future__ import annotations
 import numpy as np
 

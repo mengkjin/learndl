@@ -13,6 +13,9 @@ from ftplib import FTP
 from typing import Any
 
 from src.proj import MACHINE , Base
+
+__all__ = ['SellsideFTPDownloader']
+
 class SellsideFTPDownloader(Base.BasicUpdater):
     """
     FTP client for downloading sell-side data delivered via file transfer.

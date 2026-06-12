@@ -10,6 +10,7 @@ from src.proj.cal import BJ_TZ
 from .core import Proxy , ProxySet
 
 _default_time = datetime.strptime('1900-01-01 00:00:00', "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ_TZ)
+__all__ = ['CachedProxies' , 'ProxyCache']
 
 @dataclass
 class CachedProxies:

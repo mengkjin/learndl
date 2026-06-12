@@ -7,6 +7,8 @@ import pandas as pd
 from src.proj import MACHINE
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher
 
+__all__ = ['FuturesCalendar' , 'FuturesBasic' , 'FuturesDailyQuote']
+
 class FuturesCalendar(InfoFetcher):
     """futures calendar"""
     DB_KEY = 'futures_calendar'

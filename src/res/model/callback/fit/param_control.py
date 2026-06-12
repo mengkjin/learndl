@@ -1,8 +1,14 @@
+"""
+Callback to control parameters of trainer
+- LearnRateReset : learn rate scheduler and reset
+"""
 from __future__ import annotations
 from copy import deepcopy
 
 from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack , Optimizer
+
+__all__ = ['LearnRateReset']
 
 class LearnRateReset(BaseCallBack):
     """Learn Rate Scheduler of Periodic Reset"""

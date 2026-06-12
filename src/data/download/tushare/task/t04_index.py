@@ -5,8 +5,12 @@ import pandas as pd
 import numpy as np
 
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , TS
-from src.proj import DB , CALENDAR , PATH , Load
+from src.proj import DB , CALENDAR , PATH , Load , Dates , Base
 from typing import Any
+
+__all__ = [
+    'IndexBasic' , 'IndexDaily' , 'ZXIndexDaily' , 'THSConcept' , 
+    'CSI300Weight' , 'CSI500Weight' , 'CSI800Weight' , 'CSI1000Weight' , 'CSI2000Weight']
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start , end , limit = 4000):
     """get index weight data by iterate fetch"""
@@ -74,18 +78,19 @@ class IndexDaily(TimeSeriesFetcher):
         df = self.iterate_fetch(self.api.index_daily , limit = 5000 , ts_code = index , start_date = str(start) , end_date = str(end))
         return df
 
-    def target_dates(self):
+    def target_dates(self) -> Dates:
         """get update dates for rolling fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to(key = 'tushare')
         update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
-        return [update_to] if update else []
+        return Dates(update_to) if update else Dates()
 
-    def update_dates(self , dates) -> np.ndarray:
+    def update_dates(self , dates : Base.alias.intDates) -> Dates:
         """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
-        if not dates:
-            return np.array([] , dtype = int)
-        end = max(dates)
+        dates = Dates(dates)
+        if dates.empty:
+            return dates
+        end = dates.max
         updated_dates = []
         for index in self.TARGET_INDEX:
             path = DB.path(self.DB_SRC , index)
@@ -100,7 +105,7 @@ class IndexDaily(TimeSeriesFetcher):
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).astype({'trade_date':int}).sort_values('trade_date')
             DB.save(df , self.DB_SRC , index , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             updated_dates.extend(df['trade_date'].unique())
-        return np.unique(np.array(updated_dates , dtype = int))
+        return Dates(updated_dates)
 
 class ZXIndexDaily(DayFetcher):
     """
@@ -131,17 +136,16 @@ class ZXIndexDaily(DayFetcher):
             index_dfs[index] = df
         return date_dfs , index_dfs
 
-    def update_dates(self , dates , step = 25 , **kwargs) -> np.ndarray:
+    def update_dates(self , dates : Base.alias.intDates , step = 25 , **kwargs) -> Dates:
         """update the fetcher given dates"""
+        dates = Dates(dates)
         if self.check_server_down(): 
-            return np.array([] , dtype = int)
-        if not self.db_by_name:
-            assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
+            return dates
         assert step > 0 , f'step must be larger than 0 , got {step}'
-        si = dates[np.arange(len(dates))[::step]]
-        ei = dates[np.arange(len(dates))[step-1::step]]
+        si = dates.dates[np.arange(dates.size)[::step]]
+        ei = dates.dates[np.arange(dates.size)[step-1::step]]
         if len(si) != len(ei):
-            ei = np.concatenate([ei , dates[-1:]])
+            ei = np.concatenate([ei , dates.dates[-1:]])
 
         updated_dates = []
 
@@ -152,7 +156,7 @@ class ZXIndexDaily(DayFetcher):
                 updated_dates.append(date)
             for index , df in index_dfs.items():
                 self.update_index_daily_file(index , df)
-        return np.unique(np.array(updated_dates , dtype = int))
+        return Dates(updated_dates)
     
     def update_index_daily_file(self , index : str , df : pd.DataFrame):
         df_old = DB.load('index_daily_ts' , index , vb_level = 'never')

@@ -1,3 +1,6 @@
+"""
+Portfolio class for Factor Model Portfolio
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -7,9 +10,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from src.proj import CALENDAR , Base , Save , Load
+from src.proj import CALENDAR , Base , Save , Load , Dates
 from src.data import DataBlock
 from .port import Port
+
+__all__ = ['Portfolio']
 
 class Portfolio:
     """
@@ -60,7 +65,7 @@ class Portfolio:
         
     def __len__(self): 
         """return the number of dates"""
-        return len(self.available_dates())
+        return len(self.port_date)
     def __bool__(self): 
         """return True if the portfolio is not empty"""
         return len(self) > 0
@@ -92,7 +97,7 @@ class Portfolio:
         return self._name.lower()
 
     @property
-    def port_date(self): 
+    def port_date(self) -> np.ndarray: 
         """return the dates of the ports"""
         return np.array(list(self.ports.keys()) , dtype=int)
     @property
@@ -125,16 +130,16 @@ class Portfolio:
         self.weight_block_completed = False
         self._last_port = port
         
-    def available_dates(self): 
+    def available_dates(self) -> Dates: 
         """return the available dates of the portfolio"""
-        return self.port_date
+        return Dates(self.port_date)
 
     def closest_avail_date(self , date : int = 99991231):
         """return the closest available date of the portfolio before the given date"""
         available_dates = self.available_dates()
         if date in available_dates: 
             return date
-        tar_dates = available_dates[available_dates < date]
+        tar_dates = available_dates.dates[available_dates.dates < date]
         return max(tar_dates) if len(tar_dates) else -1
     def has(self , date : int):
         """return True if the portfolio has the given date"""

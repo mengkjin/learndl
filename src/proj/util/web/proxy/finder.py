@@ -13,6 +13,8 @@ from src.proj.env import MACHINE
 from src.proj.bases import BoundLogger
 from .core import ProxySet
 
+__all__ = ['FreeProxyFinder']
+
 ProxyLevelType = Literal['any' , 'anonymous']
 ProtocolType = Literal["any" , "socks4" , "socks5" , "http", "https"] | str
 class ProxiesCache:

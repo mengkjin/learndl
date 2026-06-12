@@ -23,6 +23,8 @@ from src.proj import PATH , MACHINE , DB , Base , Save
 from .jsfetcher import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform
 
+__all__ = ['JSDataUpdater']
+
 class JSDataUpdater(Base.BoundLogger):
     """
     in JS environment, update js source data from jinmeng's terminal

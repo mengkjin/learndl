@@ -1,3 +1,6 @@
+"""
+Event momentum pooling for level0 weighted pooling
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -5,11 +8,12 @@ import numpy as np
 from functools import cached_property
 from typing import Literal , Any
 
-from src.proj import CALENDAR
+from src.proj import CALENDAR , Base , Dates
 from src.res.factor.util import StockFactor
 from src.res.factor.calculator import WeightedPoolingCalculator , StockFactorHierarchy
 from src.data.loader.data_vendor import DATAVENDOR
 
+__all__ = ['event_factor_momentum_test' , 'event_factor_momentum']
 
 class EventSignal:
     """
@@ -22,7 +26,7 @@ class EventSignal:
         self.loaded = False
 
     def eval(self):
-        event_dfs = []
+        event_dfs : list[pd.DataFrame] = []
         for event in self.events:
             if event == 'selloff_rebound':
                 df = self._selloff_rebound()
@@ -43,20 +47,20 @@ class EventSignal:
         return self
 
     @property
-    def event_dates(self):
-        return self.df['event_date'].sort_values().unique()
+    def event_dates(self) -> Dates:
+        return Dates(self.df['event_date'].sort_values().unique())
 
     @property
-    def factor_dates(self):
-        return self.df['date'].sort_values().unique()
+    def factor_dates(self) -> Dates:
+        return Dates(self.df['date'].sort_values().unique())
 
-    def relative_dates(self , start : int , end : int , trailing : int = 35) -> np.ndarray:
+    def relative_dates(self , start : int , end : int , trailing : int = 35) -> Dates:
         """
         get relative dates between event dates and factor dates
         give a trailing window > 10 (event lookback window) + 20 (weight proliferation window)
         """
-        dates = np.unique(np.concatenate([self.event_dates , self.factor_dates]))
-        return CALENDAR.slice(dates , CALENDAR.td(start , -trailing) , end)
+        dates = self.event_dates + self.factor_dates
+        return dates.slice(start = CALENDAR.td(start , -trailing) , end = end)
 
     @classmethod
     def _raw_event_df(cls , event : str) -> pd.DataFrame:
@@ -75,7 +79,7 @@ class EventSignal:
         event_df = cls._raw_event_df('selloff_rebound')
         event_df['event_date'] = event_df['date']
         event_df = event_df.rename(columns = {'rebound_start' : 'start' , 'date' : 'end'})
-        event_df['date'] = CALENDAR.td_array(event_df['start'] , -1)
+        event_df['date'] = CALENDAR.offset(event_df['start'] , -1 , 'td')
         return event_df
 
     @classmethod
@@ -86,7 +90,7 @@ class EventSignal:
         event_df['event_date'] = event_df['date']
         event_df['start'] = event_df['date']
         event_df['end'] = event_df['date']
-        event_df['date'] = CALENDAR.td_array(event_df['date'] , -1)
+        event_df['date'] = CALENDAR.offset(event_df['date'] , -1 , 'td')
         return event_df
 
     @classmethod
@@ -96,7 +100,7 @@ class EventSignal:
         event_df['event_date'] = event_df['date']
         event_df['start'] = event_df['date']
         event_df['end'] = event_df['date']
-        event_df['date'] = CALENDAR.td_array(event_df['date'] , -1)
+        event_df['date'] = CALENDAR.offset(event_df['date'] , -1 , 'td')
         return event_df
 
 class SignedFactor:
@@ -111,22 +115,21 @@ class SignedFactor:
 
         self.loaded = False
 
-    def eval(self , dates : np.ndarray | list[int] | int , indent : int = 3 , vb_level : Any = 2):
-        if isinstance(dates , int):
-            dates = [dates]
+    def eval(self , dates : Base.alias.intDates , indent : int = 3 , vb_level : Any = 2):
         self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , indent = indent , vb_level = vb_level)
         self.loaded = True
         return self
 
     @property
-    def date(self):
+    def date(self) -> np.ndarray:
         if not self.loaded:
             raise ValueError('factor not loaded')
         return self.factor.date
 
-    def eval_grp_perf(self , dates : np.ndarray , event_signal : EventSignal , excess : bool = True):
+    def eval_grp_perf(self , dates : Base.alias.intDates , event_signal : EventSignal , excess : bool = True):
         # get sub fac df and append miscel ret from rebound_start to event_date
-        if not self.loaded or not np.isin(dates , self.date).all():
+        dates = Dates(dates)
+        if not self.loaded or not np.isin(dates.dates , self.date).all():
             self.eval(dates)
         facdf = self.factor.frame().query('date in @event_signal.factor_dates').reset_index()
         if facdf.empty:
@@ -141,7 +144,7 @@ class SignedFactor:
             self.grp_perf = grp_perf.merge(event_signal.df , on = 'date' , how = 'left')
         return self
 
-    def frame(self , date_weights : pd.Series | pd.DataFrame | None = None):
+    def frame(self , date_weights : pd.Series | pd.DataFrame | None = None) -> pd.DataFrame:
         """
         calculate factor frame , with optional date weights
         """
@@ -172,12 +175,12 @@ class EventFactorWeight:
     momentum_time_decay : bool = True
     ignore_negative_weight : bool = True
 
-    def __init__(self , event_perf : pd.DataFrame , full_dates : np.ndarray , factor_names : list[str]):
+    def __init__(self , event_perf : pd.DataFrame , full_dates : Base.alias.intDates , factor_names : list[str]):
         self.event_perf = event_perf
-        self.full_dates = full_dates
+        self.full_dates = Dates(full_dates)
         self.factor_names = factor_names
 
-    def eval(self):
+    def eval(self) -> EventFactorWeight:
         if self.event_perf.empty:
             self.weights = pd.DataFrame(
                 index = pd.Index([] , name = 'date') , 
@@ -206,8 +209,9 @@ class EventFactorWeight:
 
         weight_table = weights.pivot_table(index = 'date' , columns = 'factor_name' , values = 'weight').fillna(0)
         self.weights = weight_table.loc[:,self.factor_names]
-        trailing_full_dates = np.concatenate([CALENDAR.td_trailing(self.full_dates[0] , 21)[:-1] , self.full_dates])
-        self.full_weights = weight_table.reindex(trailing_full_dates).ffill(limit = 20).fillna(1 / weight_table.shape[1]).reindex(self.full_dates)
+        trailing_full_dates = np.concatenate([CALENDAR.trailing(self.full_dates[0] , 21 , 'td')[:-1] , self.full_dates])
+        self.full_weights = weight_table.reindex(trailing_full_dates).ffill(limit = 20).\
+            fillna(1 / weight_table.shape[1]).reindex(self.full_dates.dates)
 
         return self
 
@@ -240,7 +244,7 @@ class EventFactorWeight:
 
     @staticmethod
     def prev_events_weight(event_date_weight : pd.DataFrame , event_date : int , n_window : int = 10 , half_life : int = 5) -> pd.DataFrame:
-        prev_dates = pd.DataFrame({'n' : range(n_window)} , index = CALENDAR.td_trailing(event_date , n_window))
+        prev_dates = pd.DataFrame({'n' : range(n_window)} , index = CALENDAR.trailing(event_date , n_window , 'td'))
         prev_wgt = event_date_weight.query('event_date in @prev_dates.index').copy()
         n_days = (prev_dates.loc[prev_wgt['event_date'] , 'n'] - n_window + 1).to_numpy(dtype = float)
         prev_wgt['weight'] *= 2**(n_days / half_life)
@@ -259,28 +263,28 @@ class MarketEventMomentumFactorWeight:
         self.factors : dict[str , SignedFactor] = {factor : SignedFactor(factor) for factor in factor_names}
         
     @property
-    def event_df(self):
+    def event_df(self) -> pd.DataFrame:
         return self.event_signal.df
 
     @property
-    def factor_weight(self):
+    def factor_weight(self) -> pd.DataFrame:
         return self.event_factor_weight.weights
 
     @property
-    def factor_weight_full(self):
+    def factor_weight_full(self) -> pd.DataFrame:
         return self.event_factor_weight.full_weights
 
     @cached_property
-    def event_signal(self):
+    def event_signal(self) -> EventSignal:
         return EventSignal().eval()
         
-    def eval_event_perf(self , start : int , end : int):
+    def eval_event_perf(self , start : int , end : int) -> MarketEventMomentumFactorWeight:
         relative_dates = self.event_signal.relative_dates(start , end)
         dfs = [sfactor.eval_grp_perf(relative_dates , self.event_signal , excess = True).grp_perf for sfactor in self.factors.values()]
         self.event_perf = pd.concat(dfs).reset_index(drop = True)
         return self
 
-    def eval_factor_weights(self , start : int , end : int):
+    def eval_factor_weights(self , start : int , end : int) -> MarketEventMomentumFactorWeight:
         """evaluate factor weights for a given date range"""
         if not hasattr(self , 'event_perf'):
             self.eval_event_perf(start , end)
@@ -288,11 +292,12 @@ class MarketEventMomentumFactorWeight:
         self.event_factor_weight = EventFactorWeight(self.event_perf , full_dates , self.factor_names).eval()
         return self
 
-    def weighted_factor(self , dates : np.ndarray , name : str = 'weighted_factor') -> StockFactor:
-        if len(dates) == 0:
+    def weighted_factor(self , dates : Base.alias.intDates , name : str = 'weighted_factor') -> StockFactor:
+        dates = Dates(dates)
+        if dates.empty:
             return StockFactor(factor_names = [name])
         self.eval_factor_weights(min(dates) , max(dates))
-        factor_weights = self.factor_weight_full.loc[dates]
+        factor_weights = self.factor_weight_full.loc[dates.dates]
         factor_dfs = [sfactor.frame(factor_weights) for sfactor in self.factors.values()]
         factor_df = pd.concat(factor_dfs , axis = 1).sum(axis = 1).rename(name).to_frame()
         return StockFactor(factor_df)
@@ -321,13 +326,12 @@ class event_factor_momentum_test(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : Base.alias.intDates | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
-        if dates is None:
-            dates = CALENDAR.slice(CALENDAR.range(start , end , 'td') , self.init_date , CALENDAR.updated())
+        dates = Dates(dates , self.init_date , CALENDAR.updated()).slice(start , end)
         factor_weight = MarketEventMomentumFactorWeight(self.sub_factors)
-        factor_weight.eval_factor_weights(min(dates) , max(dates))
-        df = factor_weight.factor_weight_full.loc[dates].reset_index(['date'] ,drop = False).rename_axis(None , axis = 1)
+        factor_weight.eval_factor_weights(dates.min , dates.max)
+        df = factor_weight.factor_weight_full.loc[dates.dates].reset_index(['date'] ,drop = False).rename_axis(None , axis = 1)
         return df
 
 class event_factor_momentum(WeightedPoolingCalculator):
@@ -364,11 +368,14 @@ class event_factor_momentum(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
+    def calc_pooling_weight(
+        self , start : int | None = None , end : int | None = None , 
+        dates : Base.alias.intDates | None = None , overwrite = False , 
+        indent : int = 1 , vb_level : Any = 1
+    ) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
-        if dates is None:
-            dates = CALENDAR.slice(CALENDAR.range(start , end , 'td') , self.init_date , CALENDAR.updated())
+        dates = Dates(dates , self.init_date , CALENDAR.updated()).slice(start , end)
         factor_weight = MarketEventMomentumFactorWeight(self.sub_factors)
-        factor_weight.eval_factor_weights(min(dates) , max(dates))
-        df = factor_weight.factor_weight_full.loc[dates].reset_index(['date'] ,drop = False).rename_axis(None , axis = 1)
+        factor_weight.eval_factor_weights(dates.min , dates.max)
+        df = factor_weight.factor_weight_full.loc[dates.dates].reset_index(['date'] ,drop = False).rename_axis(None , axis = 1)
         return df

@@ -1,3 +1,6 @@
+"""
+Data module for the project
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -115,7 +118,7 @@ class DataModule(Base.BoundLogger):
         if self.config.is_null_model:
             # previos month end (use calendar date)
             self.test_full_dates = dates
-            self.model_date_list = CALENDAR.td_array(CALENDAR.cd_array(np.unique(dates // 100) * 100 + 1 , -1))
+            self.model_date_list = CALENDAR.tds(CALENDAR.offset(dates // 100 * 100 + 1 , offset = -1 , type = 'cd'))
         else:
             self.test_full_dates = dates[1:]
             if self.use_data == 'predict':
@@ -327,7 +330,10 @@ class DataModule(Base.BoundLogger):
         late_dates = self.model_date_list[self.model_date_list > model_date]
         return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
 
-    def y_label(self , dates : np.ndarray | list[int]) -> pd.DataFrame:
+    def y_label(self , dates : Base.alias.intDates | None) -> pd.DataFrame:
+        dates = Dates(dates)
+        if dates.empty:
+            return pd.DataFrame()
         labels : list[pd.DataFrame] = []
         for date in dates:
             label = self.label_of_date(date)

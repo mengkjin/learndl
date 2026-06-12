@@ -13,6 +13,9 @@ import pandas as pd
 
 from src.proj import Base
 
+
+__all__ = ['FilePreviewer']
+
 class FilePreviewer:
     """Multi-format file viewer that renders file content inside a Streamlit container.
 

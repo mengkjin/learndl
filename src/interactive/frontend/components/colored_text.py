@@ -6,6 +6,8 @@ ColoredText
 """
 from __future__ import annotations
 
+__all__ = ['ColoredText']
+
 class ColoredText(str):
     """String subclass that wraps text in a Streamlit colour badge based on log-level prefix.
 

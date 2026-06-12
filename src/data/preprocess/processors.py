@@ -34,6 +34,10 @@ from src.data.loader import BlockLoader
 
 from .core import PreProcessor , FactorPreProcessor , TradePreProcessor , MicellaneousPreProcessor
 
+__all__ = [
+    'PrePros'
+]
+
 class PrePros:
     """
     Thin registry facade over ``PreProcessorMeta.registry``.
@@ -101,8 +105,9 @@ class PrePro_y(TradePreProcessor):
 class PrePro_day(TradePreProcessor):
     """Daily adjusted OHLCV preprocessor (key: ``'day'``).  Applies adjfactor to price columns."""
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
-        return {
-            'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.final_feat()], **kwargs)}
+        final_feat = self.final_feat() or []
+        day = BlockLoader('trade_ts', 'day', ['adjfactor', *final_feat], **kwargs)
+        return {'day':day}
 
     def process(self , blocks):
         """Apply price adjustment and return the result."""
@@ -179,8 +184,9 @@ class PrePro_week(TradePreProcessor):
     WEEKDAYS = 5
 
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
-        return {
-            'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.final_feat()], **kwargs)}
+        final_feat = self.final_feat() or []
+        day = BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *final_feat], **kwargs)
+        return {'day':day}
     
     def load_blocks(self , start = None , end = None , secid = None , **kwargs):
         if start is not None and start < 0: 

@@ -4,6 +4,12 @@ Quick call buttons for the interactive app, can be directly used in any page.
 from __future__ import annotations
 from src.interactive.main.util.quick_calls.basic import QuickCallButton
 
+__all__ = [
+    'Reboot' , 'TestLogger' , 'CheckCodeIssues' , 'CheckConfigFiles' , 
+    'RebuildPreprocessedData' , 'Tensorboard' , 'OptunaDashboard' , 'ClearCatcherLogs' , 
+    'ArchiveModel' , 'ResumeModel' , 'ReplaceWeztermConfig'
+]
+
 class Reboot(QuickCallButton):
     """Button that reboots the streamlit server."""
     key = "reboot"

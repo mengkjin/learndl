@@ -8,7 +8,7 @@ from ...util.process import popen_detached
 from ...util.basic import BasicOpener
 from .verify import GhosttyVerifier
 
-
+__all__ = ['GhosttyOpener']
 class GhosttyOpener(BasicOpener):
     """Open commands in a new Ghostty window on macOS via ``open -na Ghostty.app``."""
 

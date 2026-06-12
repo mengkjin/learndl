@@ -29,6 +29,10 @@ from .model_data import RISK
 from .trade_data import TRADE
 from .exposure import EXPO
 
+__all__ = [
+    'DataVendor' , 'DATAVENDOR'
+]
+
 class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
     """
     Singleton aggregation facade for factor analysis and portfolio construction.
@@ -83,7 +87,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         """get all the stocks"""
         return self.INFO.get_desc(set_index=False , listed = True , exchange = ['SZSE', 'SSE', 'BSE'])
 
-    def clear_all(self):
+    def clear_all(self) -> None:
         """clear all the data in the collection"""
         self.INFO.clear_all()
         self.TRADE.clear_all()
@@ -106,7 +110,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
 
         self.initiated = False
 
-    def data_storage_control(self):
+    def data_storage_control(self) -> None:
         """Truncate all underlying singleton caches to free memory (call before each parallel job group)."""
         self.TRADE.truncate()
         self.RISK.truncate()
@@ -126,7 +130,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
                 self.day_secids[date] = self.INFO.get_secid(date)
             return self.day_secids[date]
 
-    def db_loads_callback(self , df : pd.DataFrame | pl.DataFrame , db_src : str , db_key : str):
+    def db_loads_callback(self , df : pd.DataFrame | pl.DataFrame , db_src : str , db_key : str) -> None:
         """Receive bulk-loaded trade_ts data from ``DB.loads`` and forward it to ``TRADE``'s cache."""
         if not db_src == 'trade_ts' or len(df) == 0:
             return
@@ -137,7 +141,9 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
                 self.TRADE.collections[data_type].add_long_frame(df.reset_index().drop(columns = ['index'] , errors = 'ignore').set_index(self.TRADE.DATE_KEY))
         
     @classmethod
-    def td_within(cls , start : int | None = None , end : int | None = None , step : int = 1 , updated = False , extend = 0):
+    def td_within(
+        cls , start : int | None = None , end : int | None = None , step : int = 1 , 
+        updated : bool = False , extend : int = 0) -> np.ndarray:
         """Return a trading-day date array for [start, end] with optional step and extension."""
         if extend > 0:
             if end is not None:
@@ -148,16 +154,17 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return dates
     
     @staticmethod
-    def td(date , offset : int = 0): 
+    def td(date , offset : int = 0) -> int:
         return CALENDAR.td(date , offset).as_int()
 
     @staticmethod
-    def cd(date , offset : int = 0): 
+    def cd(date , offset : int = 0) -> int:
         return CALENDAR.cd(date , offset)
 
     @classmethod
-    def real_factor(cls , factor_type : Base.lit.FactorType , names : str | list[str] | np.ndarray ,
-                    start = 20240101 , end = 20240531 , step = 5):
+    def real_factor(
+        cls , factor_type : Base.lit.FactorType , names : str | list[str] | np.ndarray ,
+        start : int = 20240101 , end : int = 20240531 , step : int = 5) -> DataBlock:
         """Load named factor or model prediction DataBlocks from the DB and merge them."""
         if isinstance(names , str): 
             names = [names]
@@ -174,16 +181,21 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return DataBlock()
 
     @classmethod
-    def stock_factor(cls , factor_names : str | list[str] | np.ndarray , start = 20240101 , end = 20240531 , step = 5):
+    def stock_factor(
+        cls , factor_names : str | list[str] | np.ndarray , 
+        start : int = 20240101 , end : int = 20240531 , step : int = 5) -> DataBlock:
         """Load named stock factors from the ``factor`` DB into a DataBlock."""
         return cls.real_factor('factor' , factor_names , start , end , step)
 
     @classmethod
-    def model_preds(cls , model_names : str | list[str] | np.ndarray , start = 20240101 , end = 20240531 , step = 5):
+    def model_preds(
+        cls , model_names : str | list[str] | np.ndarray , 
+        start : int = 20240101 , end : int = 20240531 , step : int = 5) -> DataBlock:
         """Load named model predictions from the ``pred`` DB into a DataBlock."""
         return cls.real_factor('pred' , model_names , start , end , step)
 
-    def random_factor(self , start = 20240101 , end = 20240531 , step = 5 , nfactor = 2):
+    def random_factor(
+        self , start : int = 20240101 , end : int = 20240531 , step : int = 5 , nfactor : int = 2) -> DataBlock:
         """Generate a random-value DataBlock (for testing)."""
         date  = self.td_within(start , end , step)
         secid = self.secid()
@@ -195,9 +207,9 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         data_key: Literal["daily_quotes", "risk_exp"],
         db_src: str,
         db_key: str,
-        dates: np.ndarray | list[int] | int | None = None,
+        dates: Base.alias.intDates | None = None,
         extend=0,
-    ):
+    ) -> None:
         """
         Lazily extend an internal DataBlock attribute to cover the requested dates.
 
@@ -206,17 +218,13 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         new target range is wider than the currently loaded range.
         For ``daily_quotes``, applies price adjustment after extension.
         """
+        dates = Dates(dates)
+        if dates.empty:
+            return
         if dates is None or (not isinstance(dates , int) and len(dates) == 0):
             return
-        if isinstance(dates , int):
-            target_start , target_end = dates , dates
-        elif isinstance(dates , np.ndarray):
-            target_start , target_end = dates.min() , dates.max()
-        elif isinstance(dates , list):
-            target_start , target_end = min(dates) , max(dates)
-        else:
-            raise ValueError(f'Unknown dates type: {type(dates)}')
-        target_start , target_end = self.cd(target_start , -extend) , self.cd(target_end , extend)
+        
+        target_start , target_end = self.cd(dates.min , -extend) , self.cd(dates.max , extend)
         target_start , target_end = min(target_start , CALENDAR.update_to()) , min(target_end , CALENDAR.update_to())
 
         with self._lock:
@@ -231,7 +239,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             self.logger.success(f'DATAVENDOR.{data_key} expand from {Dates(loaded_start,loaded_end)} to {Dates(target_start,target_end)}')
             self.blocks_cache[data_key] = block0
 
-    def update_return_block(self , start : int , end : int):
+    def update_return_block(self , start : int , end : int) -> None:
         """Compute and cache the daily return DataBlock for [start, end] if not already loaded."""
         td_within = self.td_within(start , end , updated = True)
         with self._lock:
@@ -248,37 +256,37 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         with self._lock:
             self.blocks_cache['daily_ret'] = blk
 
-    def get_quotes_block(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
+    def get_quotes_block(self , dates : Base.alias.intDates | None = None , * , extend = 0) -> DataBlock:
         """Return a price-adjusted OHLCV DataBlock covering ``dates`` (lazy-loaded and cached)."""
         with Proj.silence:
             self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend = extend)
         return self.blocks_cache.get('daily_quotes' , DataBlock())
 
-    def get_risk_exp(self , dates : np.ndarray | list[int] | int | None = None , * , extend = 0) -> DataBlock:
+    def get_risk_exp(self , dates : Base.alias.intDates | None = None , * , extend = 0) -> DataBlock:
         """Return the CNE5 risk model exposure DataBlock covering ``dates``."""
         with Proj.silence:
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend = extend)
         return self.blocks_cache.get('risk_exp' , DataBlock())
 
-    def get_returns_block(self , start : int , end : int):
+    def get_returns_block(self , start : int , end : int) -> DataBlock:
         """Return the daily close/vwap return DataBlock for [start, end] (lazy-loaded)."""
         with Proj.silence:
             self.update_return_block(start , end)
         return self.blocks_cache.get('daily_ret' , DataBlock())
     
-    def day_quote(self , date : int | Any , price : Base.lit.TradePrice = 'close'):
+    def day_quote(self , date : int | Any , price : Base.lit.TradePrice = 'close') -> pd.DataFrame:
         """Return a ``(secid, price)`` DataFrame for a single date, with adjfactor applied."""
-        df = self.TRADE.get_trd(date , ['secid' , 'adjfactor' , price])
+        df = self.TRADE.get_trd(int(date) , ['secid' , 'adjfactor' , price])
         if not df.empty:
             df['price'] = df[price] * df['adjfactor'].fillna(1)
             return df.loc[:,['secid' , 'price']]
         else:
             return pd.DataFrame(columns = ['secid' , 'price'])
     
-    def get_quote_ret(self , date0 , date1 , 
-                      price0 : Base.lit.TradePrice = 'close' ,
-                      price1 : Base.lit.TradePrice = 'close' ,
-                      secid : np.ndarray | pd.Series | Any | None = None):
+    def get_quote_ret(
+        self , date0 : int | Any , date1 : int | Any , 
+        price0 : Base.lit.TradePrice = 'close' , price1 : Base.lit.TradePrice = 'close' ,
+        secid : np.ndarray | pd.Series | Any | None = None) -> pd.DataFrame:
         """
         get ret of single date0 and date1
         using DataFrame method is much faster than DataBlock method
@@ -295,10 +303,12 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             q = q.reindex(secid).fillna(0)
         return q
 
-    def get_quote_ret_new(self , date0 , date1 , 
-                      price0 : Base.lit.TradePrice = 'close' ,
-                      price1 : Base.lit.TradePrice = 'close' ,
-                      secid : np.ndarray | pd.Series | Any | None = None):
+    def get_quote_ret_new(
+        self , date0 : int | Any , date1 : int | Any , 
+        price0 : Base.lit.TradePrice = 'close' ,
+        price1 : Base.lit.TradePrice = 'close' ,
+        secid : np.ndarray | pd.Series | Any | None = None
+    ) -> pd.DataFrame:
         blk = self.get_quotes_block([date0 , date1])
         p0 = blk.loc(date = date0 , feature = price0).flatten()
         p1 = blk.loc(date = date1 , feature = price1).flatten()
@@ -309,7 +319,9 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             q = q.reindex(secid).fillna(0)
         return q
 
-    def get_miscel_ret(self , df : pd.DataFrame , ret_type : Base.lit.ReturnType = 'close') -> pd.DataFrame:
+    def get_miscel_ret(
+        self , df : pd.DataFrame , ret_type : Base.lit.ReturnType = 'close'
+    ) -> pd.DataFrame:
         """Return per-row returns for arbitrary (secid, start, end) combinations.
 
         ``df`` must contain ``'secid'``, ``'start'``, and ``'end'`` columns.
@@ -318,7 +330,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         """get ret of miscel secids and dates, df must contain 'secid' , 'start' , 'end' columns"""
         assert 'secid' in df.columns and 'start' in df.columns and 'end' in df.columns , \
             f'df must contain "secid" , "start" , "end" columns : {df.columns}'
-        df['prev'] = CALENDAR.td_array(df['start'] , -1)
+        df['prev'] = CALENDAR.offset(df['start'] , -1 , 'td')
         dates = np.unique(np.concatenate([df['prev'].to_numpy() , df['end'].to_numpy()]))
         quotes = DB.loads('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type , 'adjfactor'])
         quotes[ret_type] = quotes[ret_type] * quotes['adjfactor']
@@ -330,8 +342,10 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         df.drop(columns = ['prev'] , inplace = True)
         return df
 
-    def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 ,
-                     ret_type : Base.lit.ReturnType = 'close'):
+    def nday_fut_ret(
+        self , secid : np.ndarray , date : Base.alias.intDates , nday : int = 10 , lag : int = 2 ,
+        ret_type : Base.lit.ReturnType = 'close'
+    ) -> DataBlock:
         """
         Compute n-day compounded forward returns for each (secid, date).
 
@@ -340,47 +354,49 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         window after each date.  ``lag`` must be >= 1 to avoid look-ahead bias.
         """
         assert lag > 0 , f'lag must be positive : {lag}. If you want to use next day\'s return, set lag = 1'
-        date_min = self.td(date.min() , -10)
-        date_max = self.td(int(date.max()) , nday + lag + 10)
+        dates = Dates(date)
+        date_min = self.td(dates.min , -10)
+        date_max = self.td(dates.max , nday + lag + 10)
         full_date = self.td_within(date_min , date_max)
-        blk = self.get_returns_block(date_min , date_max).align(secid , full_date , ret_type)
+        blk = self.get_returns_block(date_min , date_max).align(secid , full_date , [ret_type])
         values = torch.nn.functional.pad(blk.values[:,lag:] , (0,0,0,0,0,lag) , value = torch.nan).unfold(1 , nday , 1).exp().prod(dim = -1) - 1
-        blk.update(values = values , date = full_date[:values.shape[1]] , feature = ['ret']).align_date(date , inplace = True)
+        blk.update(values = values , date = full_date[:values.shape[1]] , feature = ['ret']).align_date(dates.dates , inplace = True)
         return blk
     
-    def ffmv(self , secid : np.ndarray , date : np.ndarray , prev = True):
+    def ffmv(self , secid : np.ndarray , date : Base.alias.intDates , prev = True) -> DataBlock:
         """
         Return float market cap (``weight`` feature) aligned to (secid, date).
 
         When ``prev=True`` (default) loads from the previous trading day and
         relabels dates forward to maintain point-in-time correctness.
         """
+        dates = Dates(date)
         if prev :
-            date = CALENDAR.td_array(date , -1)
-        blk = self.get_risk_exp(date).align(secid , date , ['weight'])
+            dates = dates.offset(-1 , 'td')
+        blk = self.get_risk_exp(dates).align(secid , dates.dates , ['weight'])
         if prev :
-            blk.date = CALENDAR.td_array(blk.date , 1)
+            blk.date = CALENDAR.offset(blk.date , 1 , 'td')
         return blk
 
-    def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
+    def risk_style_exp(self , secid : np.ndarray , date : np.ndarray) -> DataBlock:
         """Return CNE5 style factor exposures aligned to (secid, date)."""
         blk = self.get_risk_exp(date).align(secid , date , Const.Factor.RISK.style)
         return blk
 
-    def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
+    def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray) -> DataBlock:
         """Return CNE5 industry factor exposures aligned to (secid, date)."""
         blk = self.get_risk_exp(date).align(secid , date , Const.Factor.RISK.indus)
         return blk
 
-    def get_ffmv(self , secid : np.ndarray , d : int):
+    def get_ffmv(self , secid : np.ndarray , d : int) -> np.ndarray | None:
         """Return float market cap weights as a 1-D numpy array for the given (secid, date)."""
         if not CALENDAR.is_trade_date(d):
             return None
         blk = self.get_risk_exp(d)
         value = blk.loc(secid = secid , date = d , feature = 'weight').flatten()
-        return value
+        return value.cpu().numpy()
 
-    def get_cp(self , secid : np.ndarray | list[int] , d : int):
+    def get_cp(self , secid : np.ndarray , d : int) -> np.ndarray:
         """Return closing prices for the given secids on trading day ``d``."""
         return self.TRADE.get_trd(self.td(d) , ['secid' , 'close']).set_index('secid').reindex(secid)['close'].to_numpy()
 

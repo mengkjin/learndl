@@ -1,3 +1,6 @@
+"""
+High frequency liquidity factors for stock level0
+"""
 from __future__ import annotations
 import pandas as pd
 import polars as pl
@@ -18,7 +21,7 @@ __all__ = [
 ]
 
 def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' , 'std' , 'cv' , 'max'] , window : int = 20):
-    dates = DATAVENDOR.CALENDAR.td_trailing(date , window)
+    dates = DATAVENDOR.CALENDAR.trailing(date , window , 'td')
     df = pl.concat([func(date) for date in dates])
     grp = df.group_by('secid')
     if agg == 'avg':
@@ -176,7 +179,7 @@ class vol_high_std(HfLiquidityFactor):
     description = '高波动交易日成交量占比'
 
     def calc_factor(self, date: int):
-        dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
+        dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
         def ret_std(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date ,  with_ret = True)
             df = df.group_by('secid').agg(

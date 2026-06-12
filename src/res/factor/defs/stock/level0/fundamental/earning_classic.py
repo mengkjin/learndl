@@ -1,3 +1,7 @@
+"""
+Classic earning factors for stock level0
+"""
+
 from __future__ import annotations
 import polars as pl
 

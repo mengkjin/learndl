@@ -1002,8 +1002,8 @@ class StockFactor:
         if len(calc_dates) > 0:
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
             df = self._eval_group_perf(df , self.factor_names , group_num , excess)
-            df['start'] = CALENDAR.td_array(df['date'] , lag)
-            df['end']   = CALENDAR.td_array(df['date'] , lag + nday - 1)
+            df['start'] = CALENDAR.offset(df['date'] , lag , 'td')
+            df['end']   = CALENDAR.offset(df['date'] , lag + nday - 1 , 'td')
             self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name' , 'group'])
         stat = self.cache_factor_stats.group_perf.get_stat(params)
         return stat if all_dates else stat.query('date in @self.date')

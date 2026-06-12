@@ -1,3 +1,6 @@
+"""
+Callback to perform detailed factor and portfolio level analysis
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -10,6 +13,8 @@ from src.proj.bases import TestType
 from src.res.factor.util import StockFactor 
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
+
+__all__ = ['DetailedAlphaAnalysis']
 
 class DetailedAlphaAnalysis(BaseCallBack):
     """Detailed Factor and Portfolio Level Analysis"""

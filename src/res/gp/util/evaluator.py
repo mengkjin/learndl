@@ -1,3 +1,6 @@
+"""
+Evaluator for genetic programming
+"""
 from __future__ import annotations
 import torch
 import numpy as np
@@ -17,7 +20,9 @@ from .timer import gpTimer
 from .recorder import gpRecorder
 from .fitness import gpFitness
 
-def except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
+__all__ = ['gpEvaluator']
+
+def _except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
     def wrapper(*args , print_str = '' , **kwargs):
         try:
             value = func(*args , **kwargs)
@@ -29,7 +34,7 @@ def except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
         return value
     return wrapper
 
-def compiler(syntax : BaseIndividual | str | SyntaxRecord) -> Callable[..., torch.Tensor]:
+def _compiler(syntax : BaseIndividual | str | SyntaxRecord) -> Callable[..., torch.Tensor]:
     if isinstance(syntax , str):
         ind = BaseIndividual.get_class().from_syntax(syntax)
     elif isinstance(syntax , SyntaxRecord):
@@ -38,7 +43,7 @@ def compiler(syntax : BaseIndividual | str | SyntaxRecord) -> Callable[..., torc
         ind = syntax
     return gp.compile(ind , ind.pset)
 
-def raw_neutralize(y : torch.Tensor | None , x : torch.Tensor | None , * , insample : torch.Tensor | None = None , neutral_type : Literal[0,1,2] = 0) -> torch.Tensor | None:
+def _raw_neutralize(y : torch.Tensor | None , x : torch.Tensor | None , * , insample : torch.Tensor | None = None , neutral_type : Literal[0,1,2] = 0) -> torch.Tensor | None:
     assert neutral_type in [0,1,2] , neutral_type
     if y is None or neutral_type == 0 or x is None:
         pass
@@ -52,8 +57,8 @@ def raw_neutralize(y : torch.Tensor | None , x : torch.Tensor | None , * , insam
         y = neutralize_2d(y , x.to(y))
     return y
 
-processor = except_MemoryError(FF.process_factor)
-neutralizer = except_MemoryError(raw_neutralize)
+_processor = _except_MemoryError(FF.process_factor)
+_neutralizer = _except_MemoryError(_raw_neutralize)
 
 class gpEvaluator(Base.BoundLogger):
     def __init__(self , param : gpParameters , input : gpInput , status : gpStatus ,  
@@ -82,16 +87,16 @@ class gpEvaluator(Base.BoundLogger):
         self.logger.footnote(f'Evaluating {ind_name}' , vb_level = 'max')
 
         with self.timer.timer('process' , 'Compile'):
-            calculator = except_MemoryError(compiler(individual))
+            calculator = _except_MemoryError(_compiler(individual))
             
         with self.timer.timer('process' , 'Evaluate'):
             factor_value = calculator(*self.input.inputs , print_str=f'calculating {ind_name}')
 
         with self.timer.timer('process' , 'Process'):
-            factor_value = processor(factor_value , process_key , dim = 1 , print_str=f'processing {ind_name}')
+            factor_value = _processor(factor_value , process_key , dim = 1 , print_str=f'processing {ind_name}')
 
         with self.timer.timer('process' , 'Neutralize'):
-            factor_value = neutralizer(factor_value , self.input.neutra , insample = self.input.insample , neutral_type = neutral_type , print_str=f'neutralizing {ind_name}')
+            factor_value = _neutralizer(factor_value , self.input.neutra , insample = self.input.insample , neutral_type = neutral_type , print_str=f'neutralizing {ind_name}')
 
         return FF.FactorValue(factor_value , ind_name , process_key)
 

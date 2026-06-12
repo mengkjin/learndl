@@ -1,3 +1,6 @@
+"""
+Risk model class for the project
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -7,7 +10,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal
 
-from src.proj import DB , Const , Proj
+from src.proj import DB , Const , Proj , Dates
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 
 from .general_model import GeneralModel
@@ -172,7 +175,8 @@ class RiskModel(GeneralModel):
 
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
-    def available_dates(self): return DB.dates('models' , 'tushare_cne5_exp')
+    def available_dates(self) -> Dates: 
+        return DB.dates('models' , 'tushare_cne5_exp')
     def get(self , date : int , closest = True) -> Rmodel:
         model = super().get(date , closest)
         assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'

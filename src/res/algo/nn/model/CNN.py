@@ -10,6 +10,7 @@ from torch.nn.utils.parametrizations import weight_norm
 from src.proj import Logger
 from .. import layer as Layer
 
+__all__ = ['mod_tcn' , 'mod_resnet_1d' , 'mod_resnet_2d']
 # 1-d conv resnet
 class _tcn_block(nn.Module):
     """Single dilated causal convolution residual block for TCN.

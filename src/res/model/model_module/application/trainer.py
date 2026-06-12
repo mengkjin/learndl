@@ -1,3 +1,6 @@
+"""
+Trainer for model , which can train the model
+"""
 from __future__ import annotations
 from contextlib import nullcontext
 from typing import Literal
@@ -6,6 +9,8 @@ from src.proj import MACHINE , Proj , PATH , Base , Save
 from src.proj.util.catcher import HtmlCatcher
 from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
+
+__all__ = ['ModelTrainer']
 
 class ModelTrainer(BaseTrainer):
     """run through the whole process of training"""

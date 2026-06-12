@@ -4,6 +4,8 @@ from src.interactive.main.util.session_control import SC
 from src.interactive.main.util.components import show_pending_features # show_tutorial  , show_system_info
 from src.interactive.main.util.quick_calls.main import show_quick_calls
 
+__all__ = ['main']
+
 PAGE_NAME = 'home'
    
 @SC.wrap_page(PAGE_NAME)

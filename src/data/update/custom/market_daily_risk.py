@@ -13,8 +13,10 @@ import pandas as pd
 import numpy as np
 
 from typing import Any
-from src.proj import CALENDAR , DB , Load , Base
+from src.proj import CALENDAR , DB , Load , Base , Dates
 from src.data.update.custom.basic import BasicCustomUpdater
+
+__all__ = ['MarketDailyRiskUpdater']
 
 class MarketDailyRiskUpdater(BasicCustomUpdater):
     """Registered updater for cap-weighted market-level daily risk features."""
@@ -28,13 +30,13 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
         start = max(start or cls.START_DATE , cls.START_DATE)
         end = end or min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
         if overwrite:
-            stored_dates = np.array([])
+            stored_dates = Dates()
         else:
             stored_df = Load.df(DB.path(cls.DB_SRC , cls.DB_KEY))
-            stored_dates = np.array([], dtype = int) if stored_df.empty else stored_df.reset_index()['date'].to_numpy(int)
-        target_dates = CALENDAR.diffs(start , end , stored_dates)
+            stored_dates = Dates() if stored_df.empty else Dates(stored_df.reset_index()['date'].to_numpy(int))
+        target_dates = Dates(start , end).diff(stored_dates)
         
-        if len(target_dates) == 0:
+        if target_dates.empty:
             return Base.UpdateFlag.SKIPPED
 
         new_dfs : list[pd.DataFrame] = []

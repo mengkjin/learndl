@@ -1,4 +1,10 @@
+"""
+Setup solvers for Factor Model Portfolio
+"""
 from __future__ import annotations
+
+__all__ = ['setup_solvers' , 'setup_mosek_lic']
+
 def setup_mosek_lic():
     import shutil
     from src.proj import MACHINE , PATH , Logger

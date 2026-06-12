@@ -1,3 +1,6 @@
+"""
+Factor API for the project
+"""
 from __future__ import annotations
 from typing import Any
 

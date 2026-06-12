@@ -25,6 +25,8 @@ from src.proj import CALENDAR , Const , Base , Dates
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 
+__all__ = ['PreProcessor' , 'FactorPreProcessor' , 'TradePreProcessor' , 'MicellaneousPreProcessor']
+
 TRADE_FEAT : tuple[str,...] = ('open','close','high','low','vwap','turn_fl')
 
 class PreProcessorMeta(ABCMeta):
@@ -38,7 +40,7 @@ class PreProcessorMeta(ABCMeta):
     The registration key is derived from the class name by stripping the
     ``'PrePro_'`` prefix and lowercasing (via ``PreProcessorProperty('key')``).
     """
-    registry : dict[str,Type['PreProcessor'] | Any] = {}
+    registry : dict[str,Type[PreProcessor] | Any] = {}
     def __new__(cls , name , bases , dct):
         """Create the class and register it if it satisfies the PrePro_ conditions."""
         new_cls = super().__new__(cls , name , bases , dct)
@@ -125,8 +127,10 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     hist_start    = fit_start
     hist_end      = 20161231
 
-    def __init__(self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
-                 mask : dict[str,Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs):
+    def __init__(
+        self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
+        mask : dict[str,Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs
+    ) -> None:
         """
         Parameters
         ----------
@@ -152,18 +156,21 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         return True
 
     @abstractmethod
-    def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
+    def process(self, blocks : dict[str,DataBlock]) -> DataBlock: 
+        ...
     @abstractmethod
-    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]: ...
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]: 
+        ...
     @abstractmethod
-    def final_feat(self) -> list[str] | None: ...
+    def final_feat(self) -> list[str] | None: 
+        ...
 
     @classmethod
     def start_date(cls , frame : Base.lit.DataBlockTimeFrame = 'predict') -> int:
         """Return the absolute start date (yyyyMMdd int) for the given ``frame``."""
         return CALENDAR.td(CALENDAR.updated() , cls.predict_start).td if frame == 'predict' else cls.fit_start
 
-    def load_blocks(self , start = None , end = None , secid : np.ndarray | None = None , **kwargs):
+    def load_blocks(self , start = None , end = None , secid : np.ndarray | None = None , **kwargs) -> dict[str,DataBlock]:
         """
         Load raw DataBlocks from all registered ``block_loaders``.
 
@@ -180,7 +187,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             secid = blocks[src_key].secid
         return blocks
     
-    def process_blocks(self, blocks : dict[str,DataBlock]):
+    def process_blocks(self, blocks : dict[str,DataBlock]) -> DataBlock:
         """
         Call ``process(blocks)`` with numpy error suppression and apply final feature alignment.
 
@@ -194,8 +201,10 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         np.seterr(invalid = 'warn' , divide = 'warn')
         return data_block
 
-    def pre_process(self , start : int | None = None , end : int | None = None , * , 
-                    secid : np.ndarray | None = None , **kwargs) -> DataBlock:
+    def pre_process(
+        self , start : int | None = None , end : int | None = None , * , 
+        secid : np.ndarray | None = None , **kwargs
+    ) -> DataBlock:
         """
         Load raw blocks, apply the transformation, slice to [start, end], and apply masking.
 
@@ -222,11 +231,11 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             
         return block
 
-    def load(self , dates : np.ndarray | list[int], * , secid : np.ndarray | None = None) -> DataBlock:
+    def load(self , dates : Base.alias.intDates, * , secid : np.ndarray | None = None) -> DataBlock:
         """Load data for the given dates, disabling dump saving (query mode)."""
         return self.load_with_extension(dates_for_query = dates , secid = secid)
 
-    def load_dump(self , reconstruct : bool = False , rollback_date : int | None = None):
+    def load_dump(self , reconstruct : bool = False , rollback_date : int | None = None) -> DataBlock:
         """Load the preprocessed dump from disk; returns empty DataBlock if not found."""
         if not self.dump_exists() or reconstruct:
             return DataBlock()
@@ -236,7 +245,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                 block = block.slice_date(None , rollback_date - 1)
         return block
 
-    def save_dump(self , block : DataBlock):
+    def save_dump(self , block : DataBlock) -> None:
         """Save the block as a preprocessed dump if ``enable_saving`` is True."""
         if not self.enable_saving:
             return
@@ -247,7 +256,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         """Return True if a preprocessed dump file already exists on disk."""
         return DataBlock.path_preprocess(self.key , self.frame).exists()
 
-    def save_norm(self , block : DataBlock):
+    def save_norm(self , block : DataBlock) -> None:
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.frame != 'fit' or not self.enable_saving:
             return
@@ -255,8 +264,9 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(
-        self , dates_for_query : np.ndarray | list[int] | None = None, * , 
-        secid : np.ndarray | None = None , reconstruct : bool = False , rollback_date : int | None = None) -> DataBlock:
+        self , dates_for_query : Base.alias.intDates | None = None, * , 
+        secid : np.ndarray | None = None , reconstruct : bool = False , rollback_date : int | None = None
+    ) -> DataBlock:
         """
         load data with extension , try dumped data first , then extend to the end date
         Args:
@@ -268,11 +278,11 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         
         block = block.align_secid(secid , inplace = True)
 
-        if dates_for_query is None:
-            dates_for_query = [self.load_start , self.load_end]
+        dates_for_query = Dates(dates_for_query)
+        if dates_for_query.empty:
             start , end = self.load_start , self.load_end
         else:
-            start , end = min(dates_for_query) , max(dates_for_query)
+            start , end = dates_for_query.min , dates_for_query.max
             self.enable_saving = False
         block = block.slice_date(start , end)
 
@@ -290,7 +300,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
 
         if block.empty:
             span_tuples.append((start , end))
-        elif len(dates_for_query) > 0:
+        elif dates_for_query:
             if start < block_start:
                 span_tuples.append((start , CALENDAR.td(block_start , -1).td))
             if end > block_end:
@@ -310,7 +320,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
 
         return block
 
-    def should_be_skipped(self , force_update : bool = False):
+    def should_be_skipped(self , force_update : bool = False) -> bool:
         """Return True if the dump was already updated and ``force_update`` is False."""
         modified_time = DataBlock.last_preprocess_time(self.key , self.frame)
         if not force_update and CALENDAR.is_updated_today(modified_time):
@@ -382,11 +392,11 @@ class FactorPreProcessor(PreProcessor):
         return {
             'factor' : FactorCategory1Loader(self.category1 , normalize = True , fill_method = 'drop' , notice_empty = False, **kwargs)}
 
-    def final_feat(self):
+    def final_feat(self) -> list[str] | None:
         """No feature filtering — return all factors from the loader."""
         return None
 
-    def process(self , blocks):
+    def process(self , blocks : dict[str,DataBlock]) -> DataBlock:
         """Pass the factor block through unchanged."""
         return blocks['factor']
 
@@ -397,7 +407,7 @@ class TradePreProcessor(PreProcessor):
     Restricts output features to ``TRADE_FEAT`` (open/close/high/low/vwap/turn_fl).
     Subclasses must implement ``process`` and ``block_loaders``.
     """
-    def final_feat(self) -> list[str]:
+    def final_feat(self) -> list[str] | None:
         """Return the standard OHLCV feature list."""
         return [*TRADE_FEAT]
 
@@ -405,10 +415,16 @@ class MicellaneousPreProcessor(PreProcessor):
     """
     Miscellaneous preprocessor for data that does not fit into general workflow.
     """
-    def process(self, blocks : dict[str,DataBlock]): return DataBlock()
-    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]: return {}
-    def final_feat(self) -> list[str] | None: return None
+    def process(self, blocks : dict[str,DataBlock]): 
+        return DataBlock()
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]: 
+        return {}
+    def final_feat(self) -> list[str] | None: 
+        return None
 
     @abstractmethod
-    def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , **kwargs) -> DataBlock:
+    def pre_process(
+        self , start : int | None = None , end : int | None = None , * , 
+        secid : np.ndarray | None = None , **kwargs
+    ) -> DataBlock:
         raise NotImplementedError(f'{self.__class__.__name__} does not implement pre_process')

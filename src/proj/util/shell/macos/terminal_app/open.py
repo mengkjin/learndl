@@ -8,6 +8,8 @@ from ...util.process import popen_detached
 from ...util.basic import BasicOpener
 from .verify import TerminalAppVerifier
 
+__all__ = ['TerminalAppOpener']
+
 def _applescript_escape(s: str) -> str:
     """Escape backslashes and double-quotes for embedding in an AppleScript string literal."""
     return s.replace("\\", "\\\\").replace('"', '\\"')

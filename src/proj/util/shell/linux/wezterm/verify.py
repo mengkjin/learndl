@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 
-
+__all__ = ['WezTermVerifier']
 class WezTermVerifier:
     """Check whether the ``wezterm`` binary is reachable on PATH (Linux)."""
 

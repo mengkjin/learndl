@@ -1,3 +1,6 @@
+"""
+Predictor recorder for trainer
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -5,11 +8,12 @@ import pandas as pd
 from functools import cached_property
 from pathlib import Path
 
-from src.proj import PATH , Const , CALENDAR , Save , Load
+from src.proj import PATH , Const , CALENDAR , Save , Load , Base , Dates
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
 from .base_trainer import BaseTrainer
 
+__all__ = ['PredRecorder']
 class PredRecorder(TrainerPipeline):
     """Trainer predictor recorder class, used to record the predictor results"""
     PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
@@ -67,7 +71,10 @@ class PredRecorder(TrainerPipeline):
         """maximum test date , considering the data and config"""
         return max(self.data.max_test_date , self.config.end_date)
 
-    def save_preds(self , df : pd.DataFrame , model_date : int , model_num : int , append = False , async_save : bool = False):
+    def save_preds(
+        self , df : pd.DataFrame , model_date : int , model_num : int , 
+        append : bool = False , async_save : bool = False
+    ) -> None:
         if df.empty:
             return
         
@@ -84,7 +91,7 @@ class PredRecorder(TrainerPipeline):
             Path(old_path[0]).unlink()
         Save.df(df , path , async_save = async_save , overwrite = True , future_group = 'pred_recorder' , vb_level = 'max')
 
-    def save_avg_preds(self , model_date : int , async_save : bool = False):
+    def save_avg_preds(self , model_date : int , async_save : bool = False) -> None:
         Save.async_wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
         pred_paths = [path for path in self.folder_preds.glob('*.feather') if path.name.split('.')[1] == str(model_date)]
         df = Load.df(pred_paths , key_column = None)
@@ -95,7 +102,7 @@ class PredRecorder(TrainerPipeline):
         path = self.folder_avg_preds.joinpath(f'{model_date}.{min_pred_date}.{max_pred_date}.feather')
         Save.df(df , path , async_save = async_save , overwrite = True , future_group = 'pred_recorder' , vb_level = 'max')
 
-    def update_avg_preds(self , pred_df : pd.DataFrame):
+    def update_avg_preds(self , pred_df : pd.DataFrame) -> pd.DataFrame:
         if pred_df.empty:
             return pred_df.drop(columns = ['model_num'] , errors='ignore')
         avg_df = pred_df.groupby(['model_date' , 'submodel' , 'secid' , 'date'])[['pred' , 'label']].mean().reset_index()
@@ -122,7 +129,7 @@ class PredRecorder(TrainerPipeline):
         self.logger.note(f'Updated avg preds for pred dates {pred_df["date"].unique()}')
         return avg_df
 
-    def archive_model_records(self):
+    def archive_model_records(self) -> pd.DataFrame:
         records : list[tuple[int,int]] = []
         for model_num , model_date , _ , _ in self.config.base_path.iter_model_archives():
             records.append((model_num , model_date))
@@ -131,34 +138,34 @@ class PredRecorder(TrainerPipeline):
         df['next_model_date'] = df.groupby('model_num')['model_date'].shift(-1)
         return df
 
-    def pred_records(self): 
+    def pred_records(self) -> pd.DataFrame: 
         """model_date/model_num of saved predictions"""
         return pd.DataFrame([[path , *path.name.split('.')[:4]] for path in self.folder_preds.glob('*.feather')], columns = ['path' , 'model_num' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
             astype({'model_num' : int , 'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
 
-    def avg_pred_records(self):
+    def avg_pred_records(self) -> pd.DataFrame:
         return pd.DataFrame([[path , *path.name.split('.')[:3]] for path in self.folder_avg_preds.glob('*.feather')], columns = ['path' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
             astype({'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
 
-    def update_missing_pred_dates(self , required_dates : np.ndarray | list[int] , existing_dates : np.ndarray | list[int] | None = None):
+    def update_missing_pred_dates(self , required_dates : Base.alias.intDates, existing_dates : Base.alias.intDates | None = None):
         """log missing prediction dates in records folder"""
         existing_missing_dates = self.get_missing_pred_dates()
-        missing_dates = np.union1d(required_dates , existing_missing_dates)
+        missing_dates = existing_missing_dates.union(required_dates , inplace = False)
         if existing_dates is not None:
-            missing_dates = np.setdiff1d(missing_dates , existing_dates)
+            missing_dates = missing_dates.diff(existing_dates)
 
-        PATH.dump_json({'missing_dates' : missing_dates.tolist()} , 
+        PATH.dump_json({'missing_dates' : missing_dates.dates.tolist()} , 
                        self.folder_records.joinpath('missing_pred_dates.json') , overwrite = True)
 
-    def get_missing_pred_dates(self) -> np.ndarray:
+    def get_missing_pred_dates(self) -> Dates:
         """get missing prediction dates from records folder"""
         try:
             path = self.folder_records.joinpath('missing_pred_dates.json')
             if not path.exists():
-                return np.array([] , dtype=int)
-            return np.array(PATH.read_json(path)['missing_dates'])
+                return Dates()
+            return Dates(PATH.read_json(path)['missing_dates'])
         except Exception:
-            return np.array([] , dtype=int)
+            return Dates()
 
     @cached_property
     def retrained_models(self) -> list[tuple[int,int]]:
@@ -170,7 +177,7 @@ class PredRecorder(TrainerPipeline):
         """empty predictions dataframe"""
         return pd.DataFrame(columns = cls.PRED_KEYS + cls.PRED_IDXS + cls.PRED_COLS)
 
-    def append_retrained_model(self):
+    def append_retrained_model(self) -> None:
         """
         append retrained model to retrained_models list
         """
@@ -180,7 +187,7 @@ class PredRecorder(TrainerPipeline):
     def has_purged_preds(self) -> bool:
         return False
 
-    def purge_retrained_model_preds(self):
+    def purge_retrained_model_preds(self) -> None:
         """purge past predictions when trained new models"""
         if not self.retrained_models:
             self.logger.stdout(f'No retrained models, no purge needed')
@@ -206,7 +213,7 @@ class PredRecorder(TrainerPipeline):
             purge_info = f'Total {len(self.retrained_models)} models retrained, but no pred need to be purged'
         self.logger.stdout(purge_info)
 
-    def purge_outdated_model_preds(self):
+    def purge_outdated_model_preds(self) -> None:
         archive_records = self.archive_model_records()
         pred_records = self.pred_records()
         new_pred_records = archive_records.merge(pred_records , on=['model_num' , 'model_date'] , how='outer')
@@ -224,7 +231,7 @@ class PredRecorder(TrainerPipeline):
             self.save_preds(df , model_date , model_num)
         self.has_purged_preds = True
 
-    def purge_duplicated_model_preds(self):
+    def purge_duplicated_model_preds(self) -> None:
         """purge duplicated model predictions"""
         Save.async_wait_all(future_group = 'pred_recorder' , caller_name = self.__class__.__name__)
         pred_records = self.pred_records()
@@ -249,7 +256,7 @@ class PredRecorder(TrainerPipeline):
         self.logger.stdout(purge_info)
         self.has_purged_preds = True
 
-    def setup_resuming_status(self):
+    def setup_resuming_status(self) -> None:
         """
         setup resuming status for previous saved predictions
         notes:
@@ -273,10 +280,10 @@ class PredRecorder(TrainerPipeline):
             self.config.resumed_max_pred_date = 19000101
             return
  
-        missing_dates = CALENDAR.slice(self.get_missing_pred_dates() , self.min_test_date , self.max_test_date)
+        missing_dates = self.get_missing_pred_dates().slice(self.min_test_date , self.max_test_date)
         max_pred_date = min([
             pred_records.groupby('model_num')['max_pred_date'].max().min(),
-            CALENDAR.td(missing_dates.min() , -1).td if len(missing_dates) > 0 else self.max_test_date,
+            CALENDAR.td(missing_dates.min , -1).td if missing_dates else self.max_test_date,
             self.max_test_date
         ])
         
@@ -293,7 +300,7 @@ class PredRecorder(TrainerPipeline):
             self.config.resumed_max_pred_date = max_pred_date
             self.resume_info = f', recognize past saved preds before prediction date {self.config.resumed_max_pred_date}'
     
-    def append_batch_preds(self):
+    def append_batch_preds(self) -> None:
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
             return
         df = self.batch_data.pred_df().dropna(how = 'all').query('date in @self.data.test_full_dates')
@@ -307,27 +314,28 @@ class PredRecorder(TrainerPipeline):
         df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
         self.pred_dict[self.pred_idx] = df
 
-    def collect_model_preds(self):
+    def collect_model_preds(self) -> None:
         if not self.pred_dict:
-            return self.empty_preds()
+            return
         new_preds = pd.concat(self.pred_dict.values())
         self.save_preds(new_preds , self.model_date , self.model_num , append = True , async_save = True)
         self.pred_dict.clear()
 
-    def collect_avg_preds(self):
+    def collect_avg_preds(self) -> None:
         self.save_avg_preds(self.model_date , async_save = True)
         
-    def get_preds(self , pred_dates : np.ndarray , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
+    def get_preds(self , pred_dates : Base.alias.intDates , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
-        if len(pred_dates) == 0:
+        pred_dates = Dates(pred_dates)
+        if pred_dates.empty:
             return self.empty_preds()
-        pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max() & max_pred_date >= @pred_dates.min()')
+        pred_records = self.pred_records().query('min_pred_date <= @pred_dates.max & max_pred_date >= @pred_dates.min')
         if model_num is not None:
             pred_records = pred_records.query('model_num == @model_num')
         if pred_records.empty:
             self.logger.error(f'No pred records found for test dates {pred_dates}')
             if closest:
-                pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min()')
+                pred_records = self.pred_records().query('max_pred_date <= @pred_dates.min')
                 closest_pred_date = pred_records['max_pred_date'].max() # noqa: F841
                 pred_records = pred_records.query('max_pred_date == @closest_pred_date')
                 df = Load.df({path:path for path in pred_records['path']} , key_column = 'path')
@@ -337,7 +345,7 @@ class PredRecorder(TrainerPipeline):
             df = Load.df({path:path for path in pred_records['path']} , key_column = 'path')
             self.update_missing_pred_dates(pred_dates , df['date'].unique())
         df = self.try_fill_na_label(df , try_rewrite = True).drop(columns = ['path'] , errors = 'ignore')
-        df = df.query('date in @pred_dates').reset_index(drop = True)
+        df = df.query('date in @pred_dates.dates').reset_index(drop = True)
         return df
 
     def get_avg_preds(self , pred_dates : np.ndarray , closest : bool = False) -> pd.DataFrame:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 from src.data.download.tushare.basic import RollingFetcher , TS
 
+__all__ = ['AnalystReport']
+
 class AnalystReport(RollingFetcher):
     """analyst report infomation"""
     DB_SRC = 'analyst_ts'

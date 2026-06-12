@@ -7,6 +7,8 @@ from __future__ import annotations
 import torch
 from torch import nn , Tensor
 
+__all__ = ['RevIN']
+
 class RevIN(nn.Module):
     """Reversible Instance Normalization.
 

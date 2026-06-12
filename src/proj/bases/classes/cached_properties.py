@@ -1,3 +1,7 @@
+"""
+Grouped cached properties for the module
+Base class that provides grouped cached properties for the module
+"""
 from __future__ import annotations
 
 from collections import defaultdict

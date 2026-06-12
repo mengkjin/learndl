@@ -4,10 +4,11 @@ from __future__ import annotations
 import numpy as np
 
 from pathlib import Path
-from typing import Any , Generator , Iterable
+from typing import Any , Generator 
 
 from src.proj.env import PATH
 from src.proj.log import Logger
+from src.proj.cal import Dates , intDates
 
 from src.proj.db.basic import (
     DF_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE ,
@@ -94,37 +95,27 @@ class DBPath:
         """whether the database is by date"""
         return self.ByDate(self.src)
 
-    def syntax(self , date : int | list[int] | np.ndarray[int, Any] | None = None) -> str:
+    def syntax(self , date : intDates | None = None) -> str:
         """get syntax of database"""
         if self.by_name:
             return f'{self.src}.{self.key}'
         else:
-            if date is None:
-                date = []
-            elif not isinstance(date , Iterable):
-                date = [date]
-            if len(date) == 0:
-                date_str = 'nodate'
-            elif len(date) == 1:
-                date_str = str(date[0])
-            else:
-                date_str = f'{min(date)}-{max(date)}'
-            return f'{self.src}.{self.key}.{date_str}'
+            return f'{self.src}.{self.key}.{Dates(date)}'
 
     def years(self) -> list[int]:
         """get years from database"""
         directory = self.parent
         return [int(y.stem) for y in directory.iterdir() if y.is_dir() and any(y.iterdir())] if directory.exists() else []
 
-    def dates(self , start = None , end = None , year = None , * , use_alt = False) -> np.ndarray[int, Any]:
+    def dates(self , start = None , end = None , year = None , * , use_alt = False) -> Dates:
         """get dates from any database data"""
         if use_alt:
             candidates = [self] + self.alternatives()
-            dates = np.unique(np.concatenate([db_path.dates(start , end , year , use_alt = False) for db_path in candidates]))
+            dates = sum((db_path.dates(start , end , year , use_alt = False) for db_path in candidates) , Dates())
         else:
             directory = self.parent.joinpath(str(year)) if year else self.parent
-            dates = dir_dates(directory , start , end)
-        return np.array(dates, dtype=int)
+            dates = Dates(dir_dates(directory , start , end))
+        return dates
     
     def min_date(self , * , use_alt = False) -> int:
         """get minimum date from any database data"""
@@ -167,12 +158,14 @@ class DBPath:
                 return max(dates)
         return None
 
-    def get_paths(self , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , year = None , 
+    def get_paths(self , dates : intDates | None = None , start : int | None = None , end : int | None = None , year = None , 
                   use_alt = False , closest = False) -> dict[int, Path]:
         """get paths from database"""
         if dates is None:
             assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
             dates = self.dates(start , end , use_alt = use_alt)
+        else:
+            dates = Dates(dates)
         paths = {date:self.path(date , use_alt = use_alt) for date in dates}
         paths = {date:path for date,path in paths.items() if path.exists()}
         if closest and len(dates) > 0 and min(dates) not in paths:
@@ -268,12 +261,11 @@ def path(db_src : str , db_key : str , date : int | None = None , * , use_alt = 
     """
     return DBPath(db_src , db_key).path(date , use_alt = use_alt)
 
-def dates(db_src : str , db_key : str , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> np.ndarray[int, Any]:
+def dates(db_src : str , db_key : str , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> Dates:
     """get dates from any database data"""
-    db_path = DBPath(db_src , db_key)
-    return db_path.dates(start , end , year , use_alt = use_alt)
+    return DBPath(db_src , db_key).dates(start , end , year , use_alt = use_alt)
 
-def paths(db_src : str , db_key : str , * , dates : np.ndarray | list[int] | None = None , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> list[Path]:
+def paths(db_src : str , db_key : str , * , dates : intDates | None = None , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> list[Path]:
     """get paths from any database data"""
     db_path = DBPath(db_src , db_key)
     if db_path.by_name:
@@ -283,7 +275,7 @@ def paths(db_src : str , db_key : str , * , dates : np.ndarray | list[int] | Non
             assert start is not None or end is not None , f'start or end must be provided if dates is not provided'
             dates = db_path.dates(start , end , use_alt = use_alt)
         else:
-            dates = np.array(dates , dtype = int)
+            dates = Dates(dates)
         paths = [db_path.path(date , use_alt = use_alt) for date in dates]
         paths = [path for path in paths if path.exists()]
     return paths

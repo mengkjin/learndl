@@ -1,3 +1,6 @@
+"""
+Plotter for Factor Model Portfolio
+"""
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -9,6 +12,8 @@ from src.proj.util.functional.plot import (
 )
 
 from .plot_basic import PlotDfFigIterator
+
+__all__ = ['Plotter']
 
 class Plotter:
     def __init__(self , title_prefix = 'Factor'):

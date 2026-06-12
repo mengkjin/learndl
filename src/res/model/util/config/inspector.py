@@ -1,3 +1,6 @@
+"""
+Model configs inspector for the project, use it to check if the config files are correct
+"""
 from __future__ import annotations
 from src.proj import PATH , Base
 from typing import Any

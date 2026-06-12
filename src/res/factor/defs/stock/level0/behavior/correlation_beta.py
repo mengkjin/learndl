@@ -1,3 +1,6 @@
+"""
+Correlation beta factors for stock level0
+"""
 from __future__ import annotations
 import numpy as np
 import pandas as pd
@@ -5,6 +8,10 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import CorrelationFactor
 
 from src.func.transform import time_weight , apply_ols
+
+__all__ = [
+    'beta_1m' , 'beta_2m' , 'beta_3m' , 'beta_6m' , 'beta_12m'
+]
 
 def calc_beta(date , n_months : int , lag_months : int = 0 , half_life = 0 , min_finite_ratio = 0.25):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

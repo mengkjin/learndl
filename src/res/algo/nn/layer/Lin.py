@@ -2,6 +2,8 @@
 from __future__ import annotations
 from torch import linalg , nn , Tensor
 
+__all__ = ['HardLinearRegression']
+
 class HardLinearRegression(nn.Module):
     """Closed-form OLS residualization via ``torch.linalg.lstsq``.
 

@@ -1,11 +1,20 @@
+"""
+Basic statistical functions for Factor Model Portfolio
+"""
 from __future__ import annotations
 import pandas as pd
 import numpy as np
 
 from typing import Any
 
-from src.proj import Base
-from src.data import DATAVENDOR
+from src.proj import Base , CALENDAR
+
+__all__ = [
+    'eval_cum_ret' , 'eval_cum_peak' , 'eval_drawdown' , 
+    'eval_drawdown_start' , 'eval_max_drawdown' , 'eval_pf_stats' , 
+    'eval_uncovered_max_drawdown' , 'eval_detailed_drawdown' , 
+    'eval_stats' , 'eval_ic_stats' , 'eval_qtile_by_day'
+]
 
 def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
             groupby : str | list[str] | None = None):
@@ -57,7 +66,7 @@ def eval_max_drawdown(ret : pd.Series | np.ndarray | pd.DataFrame , how : Base.l
     return mdd , idx_st , idx_ed
 
 def eval_pf_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
-    period_len = abs(DATAVENDOR.CALENDAR.cd_diff(grp['start'].min() , grp['end'].max())) + 1
+    period_len = abs(CALENDAR.diff_days(grp['start'].min() , grp['end'].max() , 'cd')) + 1
     period_n   = len(grp)
 
     with np.errstate(divide = 'ignore' , invalid = 'ignore'):

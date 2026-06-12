@@ -1,3 +1,7 @@
+"""
+Momentum PEAD factors for stock level0
+"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -12,6 +16,12 @@ from src.res.factor.calculator import MomentumFactor
 # instances for the same cache key (defaultdict is not thread-safe alone).
 _pead_lock_keeper : Lock = Lock()
 _pead_locks : dict[int , Lock] = defaultdict(Lock)
+
+__all__ = [
+    'pead_aog' , 'pead_alg' , 'pead_aog_rank' , 'pead_alg_rank' , 
+    'pead_aog_rank_demax' , 'pead_alg_rank_demax' , 'pead_aog_rank_quantile' , 
+    'pead_alg_rank_quantile'
+]
 
 def get_profit_ann_dt(date : int):
     ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , 180)
@@ -57,7 +67,7 @@ class PeadCalculator(Base.BoundLogger):
         end = dates.max()
         ann_cal['0'] = dates
         for i in range(self.running_days):
-            dates = CALENDAR.td_array(dates , -1)
+            dates = CALENDAR.offset(dates , offset = -1 , type = 'td')
             ann_cal[f'-{i+1}'] = dates
         start = CALENDAR.td(dates.min() , -20)
         ann_cal = ann_cal.reset_index('date' , drop = True).\

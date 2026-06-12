@@ -805,17 +805,6 @@ def zscore(x : Tensor , * , dim : int | None = 0 , index : int | None = None):
     z = x_xmean / (x_stddev + 1e-4 * x_stddev.nanmean())
     return z
 
-def abs(x):
-    """Elementwise ``torch.abs``.
-
-    Args:
-        x: Input tensor.
-
-    Returns:
-        Absolute values.
-    """
-    return torch.abs(x)
-
 def zscore_inplace(x : Tensor , * , dim : int | None = 0):
     """In-place z-score: subtract nan-mean, divide by nanstd with epsilon (mutates ``x``).
 
@@ -830,6 +819,17 @@ def zscore_inplace(x : Tensor , * , dim : int | None = 0):
     x_stddev = nanstd(x , dim = dim , keepdim = True)
     x /= (x_stddev + 1e-4 * x_stddev.abs().nanmean())
     return x
+
+def abs(x):
+    """Elementwise ``torch.abs``.
+
+    Args:
+        x: Input tensor.
+
+    Returns:
+        Absolute values.
+    """
+    return torch.abs(x)
 
 def add(x : Tensor , y : Tensor):
     """Elementwise sum ``x + y``.
@@ -891,29 +891,16 @@ def add_int(x : Tensor , d : int):
     """
     return x + d
 
-def sub_int1(x : Tensor , d : int):
-    """Subtract scalar ``d`` from ``x`` (variant 1).
+def sub_int(x : Tensor , d : int):
+    """Subtract scalar ``d`` from ``x``.
 
     Args:
         x: Tensor.
-        d: Integer subtrahend.
+        d: Integer offset.
 
     Returns:
         ``x - d``.
     """
-    return x - d
-
-def sub_int2(x : Tensor , d : int):
-    """Subtract scalar ``d`` from ``x`` (variant 2, same as ``sub_int1``).
-
-    Args:
-        x: Tensor.
-        d: Integer subtrahend.
-
-    Returns:
-        ``x - d``.
-    """
-    return x - d
 
 def mul_int(x : Tensor , d : int):
     """Multiply ``x`` by integer ``d``.
@@ -927,20 +914,8 @@ def mul_int(x : Tensor , d : int):
     """
     return x * d
 
-def div_int1(x : Tensor , d : int):
-    """Divide ``x`` by integer ``d`` (variant 1).
-
-    Args:
-        x: Tensor.
-        d: Integer divisor.
-
-    Returns:
-        ``x / d``.
-    """
-    return x / d
-
-def div_int2(x : Tensor , d : int):
-    """Divide ``x`` by integer ``d`` (variant 2).
+def div_int(x : Tensor , d : int):
+    """Divide ``x`` by integer ``d``.
 
     Args:
         x: Tensor.

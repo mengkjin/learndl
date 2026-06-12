@@ -1,3 +1,6 @@
+"""
+Top portfolio creator for Factor Model Portfolio
+"""
 from __future__ import annotations
 from typing import Any , Literal
 from src.proj import Const
@@ -6,6 +9,8 @@ from src.proj.bases import TestType
 from src.res.factor.fmp.generator.basic import BasicCreatorConfig , BasicPortfolioCreator
 
 test_type = TestType.TOP
+
+__all__ = ['TopStocksPortfolioCreatorConfig' , 'TopStocksPortfolioCreator']
 
 class TopStocksPortfolioCreatorConfig(BasicCreatorConfig):
     """

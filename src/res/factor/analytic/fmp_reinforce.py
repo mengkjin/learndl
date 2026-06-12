@@ -1,3 +1,6 @@
+"""
+Reinforce calculator for Factor Model Portfolio
+"""
 from __future__ import annotations
 import pandas as pd
 from typing import Type
@@ -13,6 +16,12 @@ from .test_basics import BaseFactorAnalyticCalculator , BaseFactorAnalyticTest
 
 test_type = TestType.REINFORCE
 plotter = Plotter(test_type.title())
+
+__all__ = [
+    'ReinforceCalc' , 
+    'FrontFace' , 'Perf_Curve' , 'Perf_Excess' , 'Drawdown' , 'Excess_Drawdown' , 'Perf_Year' ,
+    'ReinforceFMPTest'
+]
 
 class ReinforceCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type

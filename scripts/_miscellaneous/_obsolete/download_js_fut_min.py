@@ -1,4 +1,4 @@
-from src.proj import DB , CALENDAR
+from src.proj import DB , Dates
 import argparse
 import jsdata # type: ignore 
 import pandas as pd
@@ -8,7 +8,7 @@ from typing import Any
 
 def download_jsdata(date : int , limit = 5000 , api : Any = None):
     offset = 0
-    dfs = []
+    dfs : list[pd.DataFrame] = []
     while True:
         df = api.future_min(**{
         "freq": "1min",
@@ -30,9 +30,9 @@ if __name__ == '__main__':
     parser.add_argument('--start' , type=int , default=20190101)
     parser.add_argument('--end' , type=int , default=20191231)
     args = parser.parse_args()
-    target_dates = CALENDAR.cd_within(args.start , args.end)
+    target_dates = Dates(args.start , args.end)
     stored_dates = DB.dates('trade_js' , 'fut_min')
-    dates = CALENDAR.diffs(target_dates , stored_dates)
+    dates = target_dates.diff(stored_dates)
     api = jsdata.get_api()
     for date in dates:
         df = download_jsdata(date , api = api)

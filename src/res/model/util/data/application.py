@@ -1,3 +1,7 @@
+"""
+Application functions for the data module , includes:
+- get a sample of realistic / random batch_input
+"""
 from __future__ import annotations
 from src.res.model.util import ModelConfig , BatchInput
 from .data_module import DataModule

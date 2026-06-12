@@ -5,7 +5,7 @@ short_test:
   train.max_epoch:  3
   input.filter.secid: random.200
   input.filter.date: 20230101-20250331
-  callbacks.DetailedAlphaAnalysis:  {tasks: ['factor']}
-  callbacks.BadAttemptRetrain:  {max_attempt: 2}
+  callbacks.DetailedAlphaAnalysis.tasks:  ['factor']
+  callbacks.BadAttemptRetrain.max_attempt: 2
 transformer:
   callbacks.LearnRateReset:  {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }

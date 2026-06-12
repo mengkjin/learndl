@@ -1,8 +1,13 @@
+"""
+Callback to retrain if nan loss, exit too early, or get a very low RankIC
+"""
 from __future__ import annotations
 from typing import Literal
 
 from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack
+
+__all__ = ['BadAttemptRetrain']
 
 class BadAttemptRetrain(BaseCallBack):
     """Retrain if nan loss, exit too early, or get a very low RankIC"""

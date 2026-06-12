@@ -1,8 +1,13 @@
+"""
+Metric components for the project
+"""
 from __future__ import annotations
 
 from torch import Tensor
 from typing import Callable
 
+from src.proj import Base
+from src.proj.core import as_int_array
 from src.res.algo.nn.loss import MultiHeadLosses
 
 __all__ = ['MetricComponent' , 'LossComponent' , 'AccuracyComponent']
@@ -53,8 +58,8 @@ class MetricComponent:
         self , 
         calculator : Callable[...,Tensor | dict[str,Tensor]] , 
         lamb : float = 1. , 
-        which_output : int | list[int] | None = None ,
-        which_label : int | list[int] | None = None ,
+        which_output : Base.alias.intNums | None = None ,
+        which_label : Base.alias.intNums | None = None ,
         **kwargs
     ):
         self.calculator = calculator
@@ -77,18 +82,18 @@ class MetricComponent:
         else:
             return self.lamb * output
 
-    def filter_inputs(self , which_output : int | list[int] | None = None , which_label : int | list[int] | None = None , **kwargs):
+    def filter_inputs(self , which_output : Base.alias.intNums | None = None , which_label : Base.alias.intNums | None = None , **kwargs):
         label , pred , weight = kwargs.get('label' , None) , kwargs.get('pred' , None) , kwargs.get('weight' , None)
-        which_output = which_output or self.which_output
-        which_label = which_label or self.which_label
+        which_output = self.which_output if which_output is None else which_output
+        which_label = self.which_label if which_label is None else which_label
         if which_output is not None:
             if pred is not None:
-                pred = pred[...,which_output]
+                pred = pred[...,as_int_array(which_output)]
             if weight is not None:
-                weight = weight[...,which_output]
+                weight = weight[...,as_int_array(which_output)]
         if which_label is not None:
             if label is not None:
-                label = label[...,which_label]
+                label = label[...,as_int_array(which_label)]
         if pred is not None and pred.ndim == 1:
             pred = pred[:,None]
         if label is not None and label.ndim == 1:
@@ -105,8 +110,8 @@ class LossComponent(MetricComponent):
         self , 
         calculator : Callable[...,Tensor | dict[str,Tensor]] , 
         lamb : float = 1. , 
-        which_output : int | list[int] | None = None ,
-        which_label : int | list[int] | None = None ,
+        which_output : Base.alias.intNums | None = None ,
+        which_label : Base.alias.intNums | None = None ,
         multilosses : MultiHeadLosses | None = None ,
         **kwargs
     ):

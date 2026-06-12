@@ -1,3 +1,6 @@
+"""
+Syntax for genetic programming
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -9,6 +12,8 @@ from deap import gp , creator , tools , base
 from deap.algorithms import varAnd
 from typing import Any , Literal , Sequence , Callable
 from .fitness import FitnessObjectMin
+
+__all__ = ['BaseIndividual' , 'SyntaxRecord' , 'Population']
 
 class BaseIndividual(gp.PrimitiveTree):
     """

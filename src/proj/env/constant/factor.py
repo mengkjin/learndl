@@ -1,6 +1,6 @@
 """Central factor/risk/benchmark/trade tuning knobs and stock factor taxonomy helpers."""
 from __future__ import annotations
-import numpy as np
+
 from typing import Any , get_args
 
 from src.proj.core import SingletonMeta , lit
@@ -35,10 +35,10 @@ class FactorUpdateConfig(metaclass=SingletonMeta):
         """uniforminit date of factor update"""
         return MACHINE.preference('factor' , 'update/init_date')
     @property
-    def target_dates(self) -> np.ndarray:
+    def target_dates(self):
         """target dates of factor update"""
-        from src.proj import CALENDAR
-        return CALENDAR.slice(CALENDAR.range(self.init_date , None , 'td' , step = self.step) , self.start , self.end)
+        from src.proj.cal import Dates
+        return Dates(self.init_date , None).slice(step = self.step).slice(self.start , self.end)
     
     def get(self , key) -> Any:
         return MACHINE.preference('factor' , f'update/{key}')

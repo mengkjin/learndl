@@ -16,6 +16,8 @@ from .macos import open_in_macos
 from .windows import open_for_windows
 from .linux import open_in_linux
 
+__all__ = ['Shell']
+
 class Shell:
     """
     Cross-platform terminal launcher.

@@ -9,6 +9,8 @@ from src.proj.log import Logger
 INVALID_THRESHOLD = 3
 PROXY_MAX_CONCURRENT = 2
 
+__all__ = ['Proxy' , 'ProxySet' , 'ProxyStats' , 'ProxyStatsSet' , 'INVALID_THRESHOLD' , 'PROXY_MAX_CONCURRENT']
+
 class Proxy:
     """Single proxy address (``protocol://host:port``) with source tracking and verification history."""
     def __new__(cls, url: str | Proxy, source: str = 'unknown'):
