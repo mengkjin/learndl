@@ -18,6 +18,19 @@ from .verify import WezTermVerifier
 
 __all__ = ['WezTermOpener' , 'activate_wezterm']
 
+
+def _cmd_escape_title(title: str) -> str:
+    """Escape ``cmd.exe`` metacharacters for the ``title`` builtin (rest-of-line argument)."""
+    return (
+        title.replace("^", "^^")
+        .replace("&", "^&")
+        .replace("|", "^|")
+        .replace("<", "^<")
+        .replace(">", "^>")
+        .replace("%", "%%")
+    )
+
+
 # Optional: focus an existing WezTerm GUI window (e.g. after ``start``).
 _PS_FOCUS = r"""
 $proc = $null
@@ -227,10 +240,9 @@ class WezTermOpener(BasicOpener):
             new_on = WINDOWS_WEZTERM_NEW
         inner = command
         if title is not None:
-            title = title.replace('"', "'")
-            if ' ' in title:
-                title = f"'{title}'"
-            inner = f"wezterm cli set-tab-title {title} & {inner}"
+            # ``cmd.exe`` does not treat single quotes as string delimiters; use the
+            # built-in ``title`` command (WezTerm picks up the console title for the tab).
+            inner = f"title {_cmd_escape_title(title)} & {inner}"
         tail = ["--", "cmd.exe", "/k", inner]
         spawn_env: dict[str, str] | None = None
 
