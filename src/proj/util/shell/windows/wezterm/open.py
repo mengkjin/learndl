@@ -253,6 +253,7 @@ class WezTermOpener(BasicOpener):
                     if cwd:
                         args.extend(["--cwd", cwd])
                     args.extend(tail)
+                print(args)
                 process.popen_detached(
                     args,
                     env=spawn_env,
