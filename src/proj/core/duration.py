@@ -8,9 +8,12 @@ __all__ = ['Duration']
 
 class Duration:
     """Non-negative elapsed seconds from either ``duration`` or time since ``since``."""
-
-    def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None ,
-                 high_precision : bool = False):
+    def __init__(
+        self , 
+        duration : int | float | timedelta | None = None , 
+        since : float | datetime | None = None ,
+        high_precision : bool = False
+    ) -> None:
         """
         Args:
             duration: Length of time; ``timedelta`` is converted to seconds.

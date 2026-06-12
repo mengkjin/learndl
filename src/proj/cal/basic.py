@@ -237,20 +237,28 @@ class BasicCalendar(metaclass=SingletonMeta):
         else:
             raise ValueError(f"Invalid date type: {type}")
 
+    def range(
+        self , start: intDateNone, end: intDateNone , 
+        type : lit.intDateType = 'td' , step: int = 1
+    ) -> np.ndarray[int, Any]:
+        """return the range of dates between start and end"""
+        dates = as_int_array(self._trade_calendar if type == 'td' else self._cds)
+        dates = dates[(dates >= int(start or 0)) & (dates <= int(end or 99991231))]
+        dates = dates[::step]
+        return dates
+
 class TradeDate:
     """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""
-    def __new__(cls, date: int | Any, *args, **kwargs):
-        if isinstance(date, TradeDate):
-            return date
-        return super().__new__(cls)
-
-    def __init__(self, date: int | Any, force_trade_date=False):
+    def __init__(self, date: int | TradeDate | Any, force_trade_date=False):
         """
         Args:
             date: natural date or already a 'TradeDate' (the latter will not be re-initialized).
             force_trade_date: if True, skip the calendar mapping, 'td = cd'.
         """
-        if not isinstance(date, TradeDate):
+        if isinstance(date, TradeDate):
+            self.cd = date.cd
+            self.td = date.td
+        else:
             self.cd = int(date)
             if force_trade_date or self.cd < BC.min_date or self.cd > BC.max_date:
                 self.td: int = self.cd

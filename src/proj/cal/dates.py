@@ -193,7 +193,7 @@ class Dates(Sequence[int]):
         """
         return deepcopy(self)
 
-    def diff(self , other : intDates | Dates | None , inplace : bool = True) -> Self:
+    def diff(self , other : intDates | Dates | None , inplace : bool = False) -> Self:
         """
         Calculate the difference between two arrays of dates.
         """
@@ -203,7 +203,7 @@ class Dates(Sequence[int]):
             self.dates = np.setdiff1d(self.dates , Dates(other).dates)
         return self
 
-    def union(self , other : intDates | Dates | None , inplace : bool = True) -> Self:
+    def union(self , other : intDates | Dates | None , inplace : bool = False) -> Self:
         """
         Calculate the union of two arrays of dates.
         """
@@ -213,7 +213,7 @@ class Dates(Sequence[int]):
             self.dates = np.union1d(self.dates , Dates(other).dates)
         return self
 
-    def intersect(self , other : intDates | Dates | None , inplace : bool = True) -> Self:
+    def intersect(self , other : intDates | Dates | None , inplace : bool = False) -> Self:
         """
         Calculate the intersection of two arrays of dates.
         """
@@ -223,7 +223,7 @@ class Dates(Sequence[int]):
             self.dates = np.intersect1d(self.dates , Dates(other).dates)
         return self
 
-    def slice(self , start : intDateNone = None , end : intDateNone = None , step : int = 1 , inplace : bool = True) -> Self:
+    def slice(self , start : intDateNone = None , end : intDateNone = None , step : int = 1 , inplace : bool = False) -> Self:
         """
         Slice the dates within a given range.
         """
@@ -257,3 +257,28 @@ class Dates(Sequence[int]):
     def to_td(self , backward=True , inplace: bool = True) -> Dates:
         """Convert the dates to trading dates."""
         return self.offset(offset = 0, type = 'td', backward = backward, inplace = inplace)
+
+    def segments(
+        self, max_segment_len : int = 60 , require_consecutive : lit.intDateType | None = None , 
+    ) -> list[Dates]:
+        """
+        return the segments of dates within the max_segment_len 
+        if require_consecutive is not None, the segments must be consecutive,
+        so breaking dates will the seperated into different segments
+        """
+        segs = []
+        if self.empty:
+            return segs
+        if require_consecutive is None:
+            starts = np.arange(0 , len(self.dates) , max_segment_len)
+            ends = np.concatenate([starts[1:] , [len(self.dates)]])
+            for start , end in zip(starts, ends):
+                segs.append(Dates(self.dates[start:end]))
+        else:
+            full_dates = BC.range(self.min , self.max , require_consecutive)
+            pos = np.sum(self.dates[:,None] - full_dates[None,:] > 0 , axis=1)
+            ends = np.concatenate([np.arange(len(pos))[np.diff(pos , prepend = pos[0]) > 1] , [len(pos)]])
+            starts = np.concatenate([[0],ends[:-1]])
+            for start , end in zip(starts, ends):
+                segs.extend(Dates(self.dates[start:end]).segments(max_segment_len , require_consecutive = None))
+        return segs

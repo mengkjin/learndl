@@ -184,7 +184,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         
         end = 99991231 if end is None else get_cd(end)
         end = min(end, cls.update_to(key=key))
-        return start, end
+        return start , end
 
     @staticmethod
     def updated(date: intDateNone = None) -> int:
@@ -266,27 +266,13 @@ class CALENDAR(metaclass=NoInstanceMeta):
         step: int = 1 , until_today=True, updated=False,
     ) -> np.ndarray[int, Any]:
         """return the range of dates between start and end"""
-        dates = as_int_array(BC._trade_calendar if type == 'td' else BC._cds)
-        dates = dates[(dates >= int(start or 0)) & (dates <= int(end or 99991231))]
+        dates = BC.range(start, end, type)
         if until_today:
             dates = dates[dates <= cls.update_to()]
         if updated:
             dates = dates[dates <= cls.updated()]
         dates = dates[::step]
         return dates
-
-    @classmethod
-    def range_segments(
-        cls, start: intDateNone, end: intDateNone , type : lit.intDateType = 'td' , 
-        step: int = 1 , until_today=True, updated=False) -> list[tuple[int,int]]:
-        """return the range of dates between start and end"""
-        dates = cls.range(start, end, type, step=step , until_today=until_today, updated=updated)
-        if len(dates) == 0:
-            return []
-        dt_starts = dates[::step]
-        dt_ends = np.full_like(dt_starts , dates[-1])
-        dt_ends[:-1] = dates[step-1::step]
-        return [(s,e) for s,e in zip(dt_starts , dt_ends)]
 
     @staticmethod
     def calendar_start():

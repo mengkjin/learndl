@@ -2,7 +2,6 @@
 # do not use relative import in this file because it will be running in top-level directory
 from __future__ import annotations
 import pandas as pd
-import numpy as np
 
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , TS
 from src.proj import DB , CALENDAR , PATH , Load , Dates , Base
@@ -142,15 +141,24 @@ class ZXIndexDaily(DayFetcher):
         if self.check_server_down(): 
             return dates
         assert step > 0 , f'step must be larger than 0 , got {step}'
-        si = dates.dates[np.arange(dates.size)[::step]]
-        ei = dates.dates[np.arange(dates.size)[step-1::step]]
-        if len(si) != len(ei):
-            ei = np.concatenate([ei , dates.dates[-1:]])
+        # si = dates.dates[np.arange(dates.size)[::step]]
+        # ei = dates.dates[np.arange(dates.size)[step-1::step]]
+        # if len(si) != len(ei):
+        #     ei = np.concatenate([ei , dates.dates[-1:]])
 
+        # updated_dates = []
+
+        # for start , end in zip(si , ei): 
+        #     date_dfs , index_dfs = self.get_zx_index_quotes(start , end)
+        #     for date , df in date_dfs.items():
+        #         DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        #         updated_dates.append(date)
+        #     for index , df in index_dfs.items():
+        #         self.update_index_daily_file(index , df)
+        segments = dates.segments(step , require_consecutive = 'td')
         updated_dates = []
-
-        for start , end in zip(si , ei): 
-            date_dfs , index_dfs = self.get_zx_index_quotes(start , end)
+        for segment in segments: 
+            date_dfs , index_dfs = self.get_zx_index_quotes(segment.min , segment.max)
             for date , df in date_dfs.items():
                 DB.save(df , self.DB_SRC , self.DB_KEY , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
                 updated_dates.append(date)

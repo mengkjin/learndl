@@ -41,10 +41,10 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                sub_start = max(CALENDAR.td(start , - days - lag1 + 1) , cls.START_DATE)
-                sub_end = min(CALENDAR.td(CALENDAR.updated() , - days - lag1) , end or CALENDAR.updated())
+                sub_start = CALENDAR.td(start , - days - lag1 + 1).as_int()
+                sub_end = CALENDAR.td(CALENDAR.updated() , - days - lag1).as_int()
                 stored_dates = Dates() if overwrite else DB.dates(cls.DB_SRC , label_name)
-                target_dates = Dates(sub_start , sub_end).diff(stored_dates)
+                target_dates = Dates(sub_start , sub_end).slice(cls.START_DATE , end).diff(stored_dates)
 
                 if target_dates.empty:
                     cls.logger.skipping(f'{cls.DB_SRC}/{label_name} is up to date' , idt = 1 , vb = 1)

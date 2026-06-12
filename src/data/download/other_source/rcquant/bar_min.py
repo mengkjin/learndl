@@ -83,8 +83,9 @@ def last_date(data_type : MinDataType , offset : int = 0 , x_min : int = 1) -> i
 
 def target_dates(data_type : MinDataType , start : int , end : int | None = None) -> Dates:
     start = max(start , src_start_date(data_type))
-    dates = Dates(CALENDAR.update_schedule(start , end , key = 'rcquant_min'))
-    return dates.diff(stored_dates(data_type , 1))
+    start , end = CALENDAR.update_schedule(start , end , key = 'rcquant_min')
+    dates = Dates(start , end).diff(stored_dates(data_type , 1))
+    return dates
 
 def x_mins_target_dates(data_type : MinDataType , start : int , end : int | None = None) -> Dates:
     dates = Dates()
@@ -156,23 +157,28 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
 
     def download(self , start : int , end : int , data_type : MinDataType | None = None ,  first_n : int = -1) -> Base.UpdateFlag:
         assert data_type is not None , f'data_type is required'
-
+        flags = Base.UpdateFlagList()
         dates = target_dates(data_type , start , end)
         if dates.empty: 
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
-            return Base.UpdateFlag.SKIPPED
-        
-        if dates.empty: 
-            self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
+            flags += Base.UpdateFlag.SKIPPED
         else:
+            marks : list[bool] = []
             for dt in dates:
                 mark = self.rcquant_bar_min(dt , data_type , first_n)
                 if not mark: 
                     self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
-            self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
+                marks.append(mark)
+            if all(marks):
+                self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
+                flags += Base.UpdateFlag.SUCCESS
+            else:
+                flags += Base.UpdateFlag.FAILED
 
         dates = x_mins_target_dates(data_type , start , end)
-        if not dates.empty: 
+        if dates.empty: 
+            flags += Base.UpdateFlag.SKIPPED
+        else:
             for dt in dates:
                 for x_min in x_mins_to_update(dt , data_type = data_type):
                     min_df = DB.load('trade_ts' , src_key(data_type) , dt)
@@ -180,7 +186,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                     x_min_df = trade_min_reform(min_df , x_min , 1)
                     DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
-        return Base.UpdateFlag.SUCCESS
+            flags += Base.UpdateFlag.SUCCESS
+        return flags.summarize()
 
     def rcquant_bar_min(self ,date : int , data_type : MinDataType , first_n : int = -1) -> bool:    
         def code_map(x : str):

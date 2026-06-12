@@ -133,8 +133,9 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
         pending_dt = pending_date()
         prev_dates = updated_dates(5)
         start = max(start , CALENDAR.td(max(prev_dates) , 1).td)
-        target_dates = CALENDAR.update_schedule(start , end , key = 'baostock_5min')
-        if len(target_dates) == 0:
+        start , end = CALENDAR.update_schedule(start , end , key = 'baostock_5min')
+        target_dates = Dates(start , end).diff(prev_dates)
+        if target_dates.empty:
             self.logger.skipping(f'Other source 5min {start} - {end} already updated')
             return Base.UpdateFlag.SKIPPED
 

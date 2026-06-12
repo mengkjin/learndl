@@ -477,8 +477,8 @@ class DayFetcher(TradeDataFetcher):
 
     def missing_dates(self , updated = True , **kwargs) -> Dates:
         """get missing dates"""
-        dates = CALENDAR.update_schedule(self.START_DATE , None , key = 'tushare')
-        dates = Dates(dates[0] , dates[1]).diff(self.stored_dates())
+        start , end = CALENDAR.update_schedule(self.START_DATE , None , key = 'tushare')
+        dates = Dates(start , end).diff(self.stored_dates())
         return dates.diff(self.stored_dates())
 
     def target_dates(self) -> Dates:

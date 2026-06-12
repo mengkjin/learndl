@@ -33,13 +33,16 @@ class BasicUpdater(BoundLogger):
         rollback_date : int | None = None , start : int | None = None , end : int | None = None , **kwargs) -> dict[str , Any]:
         """parse the update parameters"""
         if update_type == UpdateType.UPDATE:
-            start , end , overwrite = *CALENDAR.update_schedule(cls.START_DATE , key=key) , False
+            start , end = CALENDAR.update_schedule(cls.START_DATE , key=key)
+            overwrite = False
         elif update_type == UpdateType.ROLLBACK:
             assert rollback_date is not None , 'rollback_date is required for rollback'
-            start , end , overwrite = *CALENDAR.update_schedule(rollback_date , key=key) , True
+            start , end = CALENDAR.update_schedule(rollback_date , key=key)
+            overwrite = True
         elif update_type == UpdateType.RECALC:
             assert start is not None and end is not None , 'start and end are required for recalculate'
-            start , end , overwrite = *CALENDAR.update_schedule(max(start , cls.START_DATE) , end , key=key) , True
+            start , end = CALENDAR.update_schedule(max(start , cls.START_DATE) , end , key=key)
+            overwrite = True
         else:
             raise ValueError(f'Invalid update type: {update_type}')
         return {'start' : start, 'end' : end, 'overwrite' : overwrite}

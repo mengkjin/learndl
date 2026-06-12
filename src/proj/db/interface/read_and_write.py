@@ -39,6 +39,7 @@ def save(df : pd.DataFrame | pl.DataFrame | None , db_src : str , db_key : str ,
         df , db_path.path_exact(date) , overwrite = overwrite , 
         prefix = f'{db_src.title()} {reason}' if reason else db_key , 
         indent = indent , vb_level = vb_level)
+    db_path.update_date_cache(date)
     return mark
 
 def load(db_src : str , db_key : str , date : int | None = None , *, 

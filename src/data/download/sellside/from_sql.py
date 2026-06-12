@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from sqlalchemy import create_engine , exc
-from typing import Any , ClassVar , Literal
+from typing import Any , ClassVar , Literal , overload
 
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
@@ -249,40 +249,70 @@ class SellsideSQLDownloader(Base.BasicUpdater):
                 start = max(self.start_date , CALENDAR.td(stored_dates[-1],1).td)
             else:
                 start = self.start_date
-            start = max(start , CALENDAR.update_from(key = 'sellside_sql'))
-            end = CALENDAR.update_to(key = 'sellside_sql')
-            date_intervals = CALENDAR.range_segments(start , end , 'td' , 60)
+            start , end = CALENDAR.update_schedule(start , None , key = 'sellside_sql')
+            dates = Dates(start , end)
         else:
             dates = Dates(dates).diff(stored_dates)
-            date_intervals = [(d,d) for d in dates]
+        segments = dates.segments(60 , require_consecutive = 'td')
 
-        if not date_intervals: 
-            return Base.UpdateFlag.SKIPPED
-        
-        start , end = date_intervals[0][0] , date_intervals[-1][1]
-        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {len(date_intervals)} periods' , idt = 1 , vb = 2)
+        if not segments: 
+           return Base.UpdateFlag.SKIPPED
+        self.logger.stdout(f'Download: {self.DB_SRC}/{self.db_key} at {dates}, total {len(segments)} periods' , idt = 1 , vb = 2)
 
         method = 'forloop' if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang' else 'thread'
-        calls = [(self.download_period, inter) for inter in date_intervals]
+        calls = [(self.download_segment, (segment ,)) for segment in segments]
         results = parallel(calls, method = method, max_workers = self.MAX_WORKERS)
         if any(not result for result in results.values()):
             return Base.UpdateFlag.FAILED
         return Base.UpdateFlag.SUCCESS
- 
-    def download_period(self , start : int , end : int) -> bool:
+
+    def download_segment(self , segment : Dates) -> bool:
+        if segment.empty:
+            return True
         with self.logger.subprocess(idt = 1):
             t0 = datetime.now()
             try:
-                df = self.query_factor_values(start , end)
+                df = self.query_factor_values(segment.min , segment.max)
             except Exception as e:
-                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {Dates(start , end)}: {e}')
+                self.logger.error(f'Error in download_segment of {self.DB_SRC}/{self.db_key} at {segment}: {e}')
                 self.logger.print_exc(e)
                 return False
             num_dates = self.save_data(df)
             if num_dates > 0:
-                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {Dates(start , end)}, total {num_dates} dates, time cost {Base.Duration(since = t0)}')
+                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {segment}, total {num_dates} dates, time cost {Base.Duration(since = t0)}')
             else:
-                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {Dates(start , end)}')
+                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {segment}')
+            return True
+
+    @overload
+    def download_period(self , dates : Dates , /) -> bool:
+        """download the data for a given dates"""
+    @overload
+    def download_period(self , start : int , end : int , /) -> bool:
+        """download the data for a given start and end date"""
+    def download_period(self , start : int | Dates , end : int | None = None) -> bool:
+        with self.logger.subprocess(idt = 1):
+            t0 = datetime.now()
+            try:
+                if isinstance(start , Dates):
+                    assert end is None , 'end must be None when dates is a Dates object'
+                    dates = start
+                else:
+                    assert end is not None , 'end must be provided when start is not a Dates object'
+                    dates = Dates(start , end)
+                df = self.query_factor_values(dates.min , dates.max)
+            except Exception as e:
+                self.logger.error(f'Error in download_period of {self.DB_SRC}/{self.db_key} at {dates}: {e}')
+                self.logger.print_exc(e)
+                return False
+            num_dates = self.save_data(df)
+            if num_dates > 0:
+                self.logger.success(
+                    f'Download {self.DB_SRC}/{self.db_key} at {dates}, '
+                    f'total {num_dates} dates, time cost {Base.Duration(since = t0)}'
+                )
+            else:
+                self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {dates}')
             return True
 
     def query_start_dt(self):
@@ -424,8 +454,9 @@ class SellsideSQLDownloader(Base.BasicUpdater):
 
     @classmethod
     def update_dates(cls , start : int , end : int , overwrite : bool = False , keys = None) -> Base.UpdateFlag:
-        dates = CALENDAR.update_schedule(start , end , key='sellside_sql')
-        if len(dates) == 0: 
+        start , end = CALENDAR.update_schedule(start , end , key='sellside_sql')
+        dates = Dates(start , end)
+        if dates.empty: 
             return Base.UpdateFlag.SKIPPED
 
         flags = Base.UpdateFlagList()
@@ -436,9 +467,8 @@ class SellsideSQLDownloader(Base.BasicUpdater):
 if __name__ == '__main__':
     from src.data.download.sellside.from_sql import SellsideSQLDownloader
 
-    start = 20100901 
-    end   = 20100915
-    dates = CALENDAR.update_schedule(start , end , key = 'sellside_sql')
+    start , end = CALENDAR.update_schedule(20100901 , 20100915 , key = 'sellside_sql')
+    dates = Dates(start , end)
 
     downloader = SellsideSQLDownloader.factors_downloaders('dongfang.hfq_chars')['dongfang.hfq_chars']
     df = downloader.query_factor_values(start , end)
