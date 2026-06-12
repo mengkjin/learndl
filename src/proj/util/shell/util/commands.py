@@ -11,7 +11,7 @@ from typing import Sequence, Any
 
 from src.proj.core import strPath
 
-__all__ = ["format_python_command" , "to_shell_string" , "guess_command_title"]
+__all__ = ["format_python_command" , "to_shell_string" , "guess_command_title" , "wrap_cmd_exe_line"]
 
 def _win_cmd_quote(s: str) -> str:
     """Quote a token for 'cmd.exe' (double quotes; internal '\"\"')."""
@@ -36,6 +36,18 @@ def _win_cmd_token(s: str) -> str:
     if any(ch in s for ch in _WIN_CMD_NEED_QUOTE):
         return _win_cmd_quote(s)
     return s
+
+def wrap_cmd_exe_line(command: str) -> str:
+    """
+    Wrap a full ``cmd.exe`` line in outer quotes with internal ``"`` doubled.
+
+    Needed for ``cmd /c`` and ``cmd /k`` when the line contains nested quotes
+    (e.g. ``python -c "from …"``). Without this, ``cmd`` splits ``-c`` at spaces
+    and Python receives an unterminated string such as ``"from``.
+    """
+    escaped = command.replace('"', '""')
+    return f'"{escaped}"'
+
 
 def to_shell_string(cmd_list : Sequence[Any] | str) -> str:
     """Convert an argv sequence to a properly-quoted shell string, or pass a string through unchanged."""
