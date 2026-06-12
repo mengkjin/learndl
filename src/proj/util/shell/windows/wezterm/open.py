@@ -225,7 +225,7 @@ class WezTermOpener(BasicOpener):
         assert self._available, f"{self.__class__.__name__} is not available"
         if new_on is None:
             new_on = WINDOWS_WEZTERM_NEW
-        inner = command.replace("'", "\"")
+        inner = command.replace("'", '"')
         if title is not None:
             title = title.replace('"', "'")
             if ' ' in title:
