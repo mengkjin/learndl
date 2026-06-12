@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from collections import defaultdict
 from pathlib import Path
 from typing import Any , Generator 
 
@@ -17,11 +16,11 @@ from src.proj.db.basic import (
 )
 
 __all__ = [
-    'DBPath' , 'rename' , 'path' , 'dates' , 'paths' , 'min_date' , 'max_date' , 
-    'MIN_DATE_CACHE' , 'MAX_DATE_CACHE']
+    'DBPath' , 'rename' , 'path' , 'dates' , 'paths' , 'min_date' , 'max_date'
+]
 
-MIN_DATE_CACHE : dict[str , int] = defaultdict(lambda : 99991231)
-MAX_DATE_CACHE : dict[str , int] = defaultdict(lambda : 0)
+_MIN_DATE_CACHE : dict[str , int] = {}
+_MAX_DATE_CACHE : dict[str , int] = {}
 
 class DBPath:
     """DB Path structure of db_src and db_key"""
@@ -129,8 +128,8 @@ class DBPath:
             candidates = [self] + self.alternatives()
             return min(db_path.min_date(use_alt = False , cache = cache) for db_path in candidates)
         else:
-            if cache and f'{self.src}/{self.key}' in MIN_DATE_CACHE:
-                return MIN_DATE_CACHE[f'{self.src}/{self.key}']
+            if cache and f'{self.src}/{self.key}' in _MIN_DATE_CACHE:
+                return _MIN_DATE_CACHE[f'{self.src}/{self.key}']
             directory = self.parent
             years = self.years()
             if years: 
@@ -138,16 +137,17 @@ class DBPath:
                 mdate = dates.min if len(dates) else 99991231
             else:
                 mdate = 99991231
+            _MIN_DATE_CACHE[f'{self.src}/{self.key}'] = mdate
             return mdate
 
     def max_date(self , * , use_alt = False , cache = True) -> int:
         """get maximum date from any database data"""
         if use_alt:
             candidates = [self] + self.alternatives()
-            return max(db_path.max_date(use_alt = False) for db_path in candidates)
+            return max(db_path.max_date(use_alt = False , cache = cache) for db_path in candidates)
         else:
-            if cache and f'{self.src}/{self.key}' in MAX_DATE_CACHE:
-                return MAX_DATE_CACHE[f'{self.src}/{self.key}']
+            if cache and f'{self.src}/{self.key}' in _MAX_DATE_CACHE:
+                return _MAX_DATE_CACHE[f'{self.src}/{self.key}']
             directory = self.parent
             years = self.years()
             if years: 
@@ -155,6 +155,7 @@ class DBPath:
                 mdate = max(dates) if len(dates) else 0
             else:
                 mdate = 0
+            _MAX_DATE_CACHE[f'{self.src}/{self.key}'] = mdate
             return mdate
 
     def date_closest(self , date : int | None , * , within_years : int = 1) -> int | None:
@@ -253,19 +254,10 @@ class DBPath:
             [d.rmdir() for d in self.parent.iterdir() if d.is_dir()]
             self.parent.rmdir()
 
-    def update_date_cache(self , date : int | None = None) -> None:
-        """update date cache"""
-        if date is None:
-            return
-        key = f'{self.src}/{self.key}'
-        if key not in MIN_DATE_CACHE:
-            MIN_DATE_CACHE[key] = self.min_date(cache = False)
-        elif MIN_DATE_CACHE[key] > date:
-            MIN_DATE_CACHE[key] = date
-        if key not in MAX_DATE_CACHE:
-            MAX_DATE_CACHE[key] = self.max_date(cache = False)
-        elif MAX_DATE_CACHE[key] < date:
-            MAX_DATE_CACHE[key] = date
+    def clear_date_cache(self) -> None:
+        """clear date cache due to writing data"""
+        _MIN_DATE_CACHE.pop(f'{self.src}/{self.key}', None)
+        _MAX_DATE_CACHE.pop(f'{self.src}/{self.key}', None)
 
 def rename(db_src : str , db_key : str , new_db_key : str) -> None:
     """rename database from db_key to new_db_key"""
@@ -286,7 +278,8 @@ def path(db_src : str , db_key : str , date : int | None = None , * , use_alt = 
 
 def dates(db_src : str , db_key : str , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> Dates:
     """get dates from any database data"""
-    return DBPath(db_src , db_key).dates(start , end , year , use_alt = use_alt)
+    dates = DBPath(db_src , db_key).dates(start , end , year , use_alt = use_alt)
+    return dates
 
 def paths(db_src : str , db_key : str , * , dates : intDates | None = None , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> list[Path]:
     """get paths from any database data"""
@@ -307,14 +300,14 @@ def min_date(db_src : str , db_key : str , *, use_alt = False) -> int:
     """get minimum date from any database data"""
     db_path = DBPath(db_src , db_key)
     date = db_path.min_date(use_alt = use_alt)
-    if f'{db_src}/{db_key}' not in MIN_DATE_CACHE:
-        MIN_DATE_CACHE[f'{db_src}/{db_key}'] = date
+    if f'{db_src}/{db_key}' not in _MIN_DATE_CACHE:
+        _MIN_DATE_CACHE[f'{db_src}/{db_key}'] = date
     return date
 
 def max_date(db_src : str , db_key : str , *, use_alt = False) -> int:
     """get maximum date from any database data"""
     db_path = DBPath(db_src , db_key)
     date = db_path.max_date(use_alt = use_alt)
-    if f'{db_src}/{db_key}' not in MAX_DATE_CACHE:
-        MAX_DATE_CACHE[f'{db_src}/{db_key}'] = date
+    if f'{db_src}/{db_key}' not in _MAX_DATE_CACHE:
+        _MAX_DATE_CACHE[f'{db_src}/{db_key}'] = date
     return date

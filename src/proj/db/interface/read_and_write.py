@@ -17,8 +17,10 @@ if TYPE_CHECKING:
 
 __all__ = ['dfIOHandler' , 'save' , 'load' , 'loads' , 'load_pl' , 'loads_pl']
 
-def save(df : pd.DataFrame | pl.DataFrame | None , db_src : str , db_key : str , date = None , *, 
-         overwrite = True , indent = 1 , vb_level : Any = 1 , reason : str = ''):
+def save(
+    df : pd.DataFrame | pl.DataFrame | None , db_src : str , db_key : str , date = None , *, 
+    overwrite = True , indent = 1 , vb_level : Any = 1 , reason : str = ''
+) -> bool:
     """
     Save data to database
     Parameters  
@@ -39,12 +41,14 @@ def save(df : pd.DataFrame | pl.DataFrame | None , db_src : str , db_key : str ,
         df , db_path.path_exact(date) , overwrite = overwrite , 
         prefix = f'{db_src.title()} {reason}' if reason else db_key , 
         indent = indent , vb_level = vb_level)
-    db_path.update_date_cache(date)
+    db_path.clear_date_cache()
     return mark
 
-def load(db_src : str , db_key : str , date : int | None = None , *, 
-         key_column = None , use_alt = False , closest = False , 
-         missing_ok = True , indent = 1 , vb_level : Any = 1 , **kwargs) -> pd.DataFrame: 
+def load(
+    db_src : str , db_key : str , date : int | None = None , *, 
+    key_column = None , use_alt = False , closest = False , 
+    missing_ok = True , indent = 1 , vb_level : Any = 1 , **kwargs
+) -> pd.DataFrame: 
     """
     Load data from database
     Parameters
@@ -83,10 +87,13 @@ def load_pl(db_src : str , db_key : str , date : int | None = None , *,
     df = dfHandler.load_process_polars(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
-def loads(db_src : str , db_key : str , dates : intDates | None = None , start : int | None = None , end : int | None = None , *,
-          key_column = 'date' , override_existing_key = False , use_alt = False , closest = False ,
-          accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
-          fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> pd.DataFrame:
+def loads(
+    db_src : str , db_key : str , dates : intDates | None = None , 
+    start : int | None = None , end : int | None = None , *,
+    key_column = 'date' , override_existing_key = False , use_alt = False , closest = False ,
+    accelerator : Literal['thread' , 'dask' , 'polars' , 'polars_thread'] | None = 'thread' , 
+    fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs
+) -> pd.DataFrame:
     """load multiple dates from database"""
     assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load instead'
     db_path = DBPath(db_src , db_key)
@@ -100,10 +107,13 @@ def loads(db_src : str , db_key : str , dates : intDates | None = None , start :
         DATAVENDOR.db_loads_callback(df , db_src , db_key)
     return df
 
-def loads_pl(db_src : str , db_key : str , dates : intDates | None = None , start : int | None = None , end : int | None = None , *,
-             key_column : str | None = 'date' , override_existing_key = False , use_alt = False , closest = False ,
-             accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
-             fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> pl.DataFrame:
+def loads_pl(
+    db_src : str , db_key : str , dates : intDates | None = None , 
+    start : int | None = None , end : int | None = None , *,
+    key_column : str | None = 'date' , override_existing_key = False , use_alt = False , closest = False ,
+    accelerator : Literal['thread' , 'lazy'] | None = 'thread' , 
+    fill_datavendor = False , indent = 1 , vb_level : Any = 1 , **kwargs
+) -> pl.DataFrame:
     """load multiple dates from database but use polars to load"""
     assert DBPath.ByDate(db_src) , f'{db_src}.{db_key} is a name database, use load_pl instead'
     import polars as pl
