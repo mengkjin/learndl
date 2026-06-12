@@ -196,14 +196,13 @@ def _wezterm_shell_cmdline(head: list[str], inner: str, *, cwd: str | None) -> s
     """
     Build a single command line for ``shell=True`` launch.
 
-    Matches typing ``wezterm cli spawn --cwd E:\\… -- cmd.exe /k <inner>`` in a Windows
-    terminal: the ``/k`` payload is appended verbatim (only per-token ``"`` quoting inside
-    ``inner``), not wrapped as one ``list2cmdline`` argument.
+    Wrap the full ``/k`` payload in one pair of outer ``"`` so the parent ``cmd.exe`` does not
+    split on ``&``; inner per-token quotes (title, ``python -c``, …) stay unescaped inside.
     """
     parts: list[str] = [" ".join(head)]
     if cwd:
         parts.append(f"--cwd {_win_cmd_token(cwd)}")
-    parts.append(f"-- cmd.exe /k {inner}")
+    parts.append(f'-- cmd.exe /k "{inner}"')
     return " ".join(parts)
 
 
