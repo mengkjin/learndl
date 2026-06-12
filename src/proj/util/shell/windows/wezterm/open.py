@@ -240,7 +240,7 @@ class WezTermOpener(BasicOpener):
         assert self._available, f"{self.__class__.__name__} is not available"
         if new_on is None:
             new_on = WINDOWS_WEZTERM_NEW
-        # ``cmd.exe`` only treats double quotes as string delimiters (not ``'`` like bash).
+
         inner = command.replace("'", '"')
         if title is not None:
             inner = f"wezterm cli set-tab-title {_win_cmd_quote(title)} & {inner}"
@@ -260,7 +260,6 @@ class WezTermOpener(BasicOpener):
                 else:
                     head = ["wezterm", "start"]
                 cmdline = _wezterm_shell_cmdline(head, inner, cwd=cwd)
-                print(cmdline)
                 process.popen_detached(
                     cmdline,
                     env=spawn_env,

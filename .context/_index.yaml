@@ -17,6 +17,10 @@
     - src/proj/
     - src/func/
 
+- doc: context/modules/shell_opener.md
+  sources:
+    - src/proj/util/shell/
+
 - doc: context/modules/data_pipeline.md
   sources:
     - src/data/

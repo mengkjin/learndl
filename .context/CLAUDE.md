@@ -8,6 +8,7 @@ This folder is the living documentation vault for the `learndl` project. It is a
 |-----|--------|
 | [[overview]] | Full architecture diagram, layer table, design patterns |
 | [[modules/project_infra]] | `src/proj/` + `src/func/`: MACHINE, PATH, CALENDAR, DB I/O, singletons, tensor utilities |
+| [[modules/shell_opener]] | `src/proj/util/shell/`: Shell facade, WezTerm/cmd openers, Windows `cmd.exe` quoting pitfalls |
 | [[modules/data_pipeline]] | `src/data/`: DataBlock, DateDataAccess singletons, PreProcessor, DataAPI |
 | [[modules/factor_engine]] | `src/factor/`: FactorCalculator, FactorAPI, factor test framework |
 | [[modules/nn_models]] | `src/res/algo/nn/`: ModelConfig, DataModule, training lifecycle, SWA, ModelAPI |

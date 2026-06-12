@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 __all__ = [
-    'Cmd' , 'popen_detached' , 'popen_detached_shell_windows' , 
+    'Cmd' , 'popen_detached' , 
     'spawn_native' , 'check_status' , 'kill'
 ]
 
@@ -61,10 +61,14 @@ def popen_detached(
     return subprocess.Popen(**kwargs)
 
 
-def popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]] = None) -> subprocess.Popen:
+def _popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]] = None) -> subprocess.Popen:
     """
     Windows: ``Popen(cmd_line, shell=True, …)`` like example.py — used for
     ``start cmd /c "…"`` so ``start`` opens a real console (not a bare ``CREATE_NEW_CONSOLE`` child).
+
+    CLEANUP: overlaps with ``popen_detached(cmd_line, windows_detached_process=True,
+    windows_create_no_window=True)``; ``CmdTerminalOpener`` could switch to the latter and
+    this wrapper could be removed.
     """
     kwargs: dict = {
         "args": cmd_line,

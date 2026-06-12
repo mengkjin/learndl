@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...util.process import popen_detached_shell_windows
+from ...util.process import popen_detached
 from ...util.basic import BasicOpener
 from .verify import CmdTerminalVerifier
 
@@ -39,4 +39,4 @@ class CmdTerminalOpener(BasicOpener):
             command = f"cd /d {_cmd_quoted(cwd)} & {command}"
         escaped = command.replace('"', '""')
         shell_cmd = f'start cmd /c "{escaped}"'
-        popen_detached_shell_windows(shell_cmd)
+        popen_detached(shell_cmd)
