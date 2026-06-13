@@ -186,18 +186,18 @@ class ArchiveCurrentModel(DirectCall):
         from src.proj.util.functional.ask import AskFor
         roots = [PATH.model_nn , PATH.model_boost , PATH.model_factor]
         for loop_flag in AskFor.LoopTillExit(message = f'Do you want to archive more models?'):
-            paths = [(root.name , path) for root in roots for path in root.iterdir() if path.is_dir()]
+            paths = [(root.name , path , PATH.relative(path)) for root in roots for path in root.iterdir() if path.is_dir()]
             if not paths:
                 Logger.note('No models found in the model directory.')
                 return
             Logger.note(f'There are {len(paths)} models currently in the model directory...')
             last_root = None
-            for i , (root_name , path) in enumerate(paths):
+            for i , (root_name , path , rel_path) in enumerate(paths):
                 if last_root is None or last_root != root_name:
                     Logger.note(f'{root_name.upper()} models:')
                     last_root = root_name
-                Logger.note(f'{i+1:02d}. {PATH.relative(path)}' , indent = 1)
-            flag = AskFor.Selections(len(paths) , multiple=True , title = f'Which model to archive?')
+                Logger.note(f'{i+1:02d}. {PATH.relative(rel_path)}' , indent = 1)
+            flag = AskFor.Selections([rel_path for _, _, rel_path in paths] , multiple=True , title = f'Which model to archive?')
             if not loop_flag.set_flag(flag):
                 continue
             for i in flag.result:
