@@ -56,9 +56,9 @@ class PATH:
     sched_shared   = lc_share.joinpath('schedule_model')
 
     # production paths (in the production environment, i.e. the base path of the project)
-    data        = main.joinpath('data')
-    result      = main.joinpath('results')
-    model       = main.joinpath('models')
+    data        = production.joinpath('data')
+    result      = production.joinpath('results')
+    model       = production.joinpath('models')
 
     db          = data.joinpath('DataBase')
     export      = data.joinpath('Export')

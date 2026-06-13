@@ -35,7 +35,7 @@ class BasicCalendar(metaclass=SingletonMeta):
     def ensure_data(self) -> None:
         if self._loaded:
             return
-        calendar = pd.read_feather(PATH.data.joinpath("DataBase" , "DB_information_ts" , "calendar.feather")).loc[:, ["calendar", "trade"]]
+        calendar = pd.read_feather(PATH.db.joinpath("DB_information_ts" , "calendar.feather")).loc[:, ["calendar", "trade"]]
         reserved = pd.DataFrame(MACHINE.config.get('constant/data/calendar'))
         if not reserved.empty:
             calendar = pd.concat([calendar, reserved.loc[:, ["calendar", "trade"]]])
