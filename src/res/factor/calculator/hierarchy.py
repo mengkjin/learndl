@@ -60,7 +60,7 @@ class StockFactorHierarchy(Base.BoundLogger):
     def load_factor_table(cls) -> pd.DataFrame:
         """export factor stats to csv"""
         if MACHINE.updatable:
-            df = pd.read_csv(PATH.local_share.joinpath('factor_list.csv'))
+            df = pd.read_csv(PATH.lc_share.joinpath('factor_list.csv'))
         elif PATH.share_folder is not None:
             df = pd.read_csv(PATH.share_folder.joinpath('factor_list.csv'))
         else:
@@ -70,7 +70,7 @@ class StockFactorHierarchy(Base.BoundLogger):
     @classmethod
     def factor_table_path(cls) -> Path:
         """return the factor table cache"""
-        return PATH.local_share.joinpath('factor_list.csv')
+        return PATH.lc_share.joinpath('factor_list.csv')
     
     @classmethod
     def export_factor_table(cls) -> Base.UpdateFlag:

@@ -64,7 +64,7 @@ class DBPath:
     def Parent(cls , db_src : str , db_key : str | None = None) -> Path:
         """get database parent _db_path"""
         if db_src in cls.db_by_name + cls.db_by_date:
-            parent = PATH.database.joinpath(f'DB_{db_src}')
+            parent = PATH.db.joinpath(f'DB_{db_src}')
         elif db_src in ['pred' , 'factor']:
             parent = getattr(PATH , db_src)
         elif db_src in cls.export_by_name + cls.export_by_date:

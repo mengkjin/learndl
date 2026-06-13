@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any , Literal
 from tzlocal import get_localzone
 
+from src.proj.core import stderr
+
 __all__ = ['MACHINE']
 
 def get_project_root() -> Path:
@@ -53,7 +55,11 @@ class _MachineSettings:
     def __post_init__(self):
         if not self.nickname:
             self.nickname = self.name
-        assert Path(self.main_path) == MAIN_PATH , f'main_path {self.main_path} is not the same as {MAIN_PATH}'
+        if Path(self.main_path) != MAIN_PATH: 
+            if self.main_path in str(MAIN_PATH):
+                stderr(f'MAIN_PATH {MAIN_PATH} is a auxiliary path of {self.main_path}' , color = 'lightyellow' , bold = True)
+            else:
+                raise Exception(f'MAIN_PATH {MAIN_PATH} is not the same as set main_path {self.main_path}')
 
     @property
     def belong_to_hfm(self) -> bool:
@@ -236,8 +242,9 @@ class MACHINE:
     main_path = MAIN_PATH
     secret = ConfFileLazyLoader('Secret' , SECRET_PATH)
     config = ConfFileLazyLoader('Config' , CONFIG_PATH)
-
     setting = _MachineSettings(**secret.get('machines' , name))
+    production_path = Path(setting.main_path)
+
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
     
     cuda_server = setting.cuda_server

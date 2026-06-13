@@ -459,7 +459,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     @property
     def fmp_dates(self) -> Dates:
         """model factor portfolio dates"""
-        return DB.dir_dates(PATH.fmp.joinpath(self.pred_name))
+        return DB.dir_dates(PATH.fmp_port.joinpath(self.pred_name))
     
     @property
     def fmp_target_dates(self) -> Dates:
@@ -483,12 +483,12 @@ class PredictorPath(ModelPath , Base.BoundLogger):
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
         """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
-        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
+        path = PATH.fmp_port.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         Save.df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     def load_fmp(self , date : int , **kwargs) -> pd.DataFrame:
         """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""
-        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
+        path = PATH.fmp_port.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             Logger.alert1(f'{path} does not exist')
         return Load.df(path)
@@ -496,7 +496,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     @property
     def account_dir(self) -> Path:
         """model factor portfolio account directory"""
-        return PATH.fmp_account.joinpath(self.pred_name)
+        return PATH.fmp_acc.joinpath(self.pred_name)
 
     @classmethod
     def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictorPath]:

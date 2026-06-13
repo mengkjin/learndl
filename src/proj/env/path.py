@@ -23,72 +23,69 @@ class PATH:
         PATH.fac_def
         PATH.conf
     """
+
+    # major paths
     main            = MACHINE.main_path
     share_folder    = MACHINE.share_folder
+    production      = MACHINE.production_path
 
+    # main paths (in the environment)
     scpt        = main.joinpath('scripts')
-    fac_def     = main.joinpath('src' , 'res' , 'factor' , 'defs')
+    srcs        = main.joinpath('src')
+    runs        = main.joinpath('runs')
+    conf        = main.joinpath('configs') # configs folder and subfolders
+    template    = main.joinpath('templates') # templates folder and subfolders
+    resource    = main.joinpath('.resources') # resouces folder (for update)
+    logs        = main.joinpath('.logs') # logs folder and subfolders
+    local       = main.joinpath('.local_resources')
 
-    # data folder and subfolders
+    # subpaths
+    fac_def     = srcs.joinpath('res' , 'factor' , 'defs')
+    
+    lc_share    = local.joinpath('shared')
+    lc_machine  = local.joinpath(MACHINE.name)
+    
+    app_db      = lc_machine.joinpath('app_db')
+    runtime     = lc_machine.joinpath('runtime')
+    cache       = lc_machine.joinpath('cache')
+    optuna      = lc_machine.joinpath('optuna')
+    tsboard     = lc_machine.joinpath('tensorboard')
+
+    sched          = conf.joinpath('model' , 'schedule')
+    sched_archive  = conf.joinpath('model' , 'schedule' , 'archive')
+    sched_shared   = lc_share.joinpath('schedule_model')
+
+    # production paths (in the production environment, i.e. the base path of the project)
     data        = main.joinpath('data')
-    database    = data.joinpath('DataBase')
+    result      = main.joinpath('results')
+    model       = main.joinpath('models')
+
+    db          = data.joinpath('DataBase')
     export      = data.joinpath('Export')
     interim     = data.joinpath('Interim')
     miscel      = data.joinpath('Miscellaneous')
     updater     = data.joinpath('Updater')
 
-    block       = interim.joinpath('DataBlock')
-    batch       = interim.joinpath('MiniBatch')
+    datablock   = interim.joinpath('DataBlock')
+    minibatch   = interim.joinpath('MiniBatch')
     checkpoint  = interim.joinpath('Checkpoint')
     datacache   = interim.joinpath('DataCache')
-    norm        = interim.joinpath('HistNorm')
+    histnorm    = interim.joinpath('HistNorm')
 
-    hidden      = export.joinpath('hidden_feature')
-    factor      = export.joinpath('stock_factor')
-    pred        = export.joinpath('model_prediction')
-    fmp         = export.joinpath('factor_model_port')
-    fmp_account = export.joinpath('factor_model_account')
+    factor      = export.joinpath('stock_factor') # must not change name
+    pred        = export.joinpath('model_prediction') # must not change name
+    fmp_port    = export.joinpath('factor_model_port')
+    fmp_acc     = export.joinpath('factor_model_account')
     trade_port  = export.joinpath('trading_portfolio')
 
-    # results folder and subfolders
-    result      = main.joinpath('results')
     rslt_factor = result.joinpath('factor')
     rslt_trade  = result.joinpath('trade')
 
-    # models folder and subfolders
-    model         = main.joinpath('models')
     model_nn      = model.joinpath('nn')
     model_boost   = model.joinpath('boost')
     model_factor  = model.joinpath('factor')
     model_st      = model.joinpath('st')
     model_archive = model.joinpath('archive')
-    
-    # configs folder and subfolders
-    conf        = main.joinpath('configs')
-    
-    # templates folder and subfolders
-    template    = main.joinpath('templates')
-
-    # logs folder and subfolders
-    logs        = main.joinpath('.logs')
-
-    # resouces folder (for update)
-    resource      = main.joinpath('.resources')
-    
-    # local_resources folder
-    local_resources = main.joinpath('.local_resources')
-    local_share     = local_resources.joinpath('shared')
-    local_machine   = local_resources.joinpath(MACHINE.name)
-    
-    app_db          = local_machine.joinpath('app_db')
-    runtime         = local_machine.joinpath('runtime')
-    cache           = local_machine.joinpath('cache')
-    optuna          = local_machine.joinpath('optuna')
-    tensorboard     = local_machine.joinpath('tensorboard')
-
-    sched          = conf.joinpath('model' , 'schedule')
-    sched_archive  = conf.joinpath('model' , 'schedule' , 'archive')
-    sched_shared   = local_share.joinpath('schedule_model')
 
     @classmethod
     def path_at_machine(cls , path : strPath , machine_name : str) -> strPath:

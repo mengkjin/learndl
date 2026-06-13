@@ -93,8 +93,8 @@ class FrameLoader(Base.BoundLogger):
         self.reserved_src = reserved_src
         self.use_alt = use_alt
 
-        assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
-            f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
+        assert PATH.db.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
+            f'{PATH.db}/{self.db_src}/{self.db_key} not exists'
 
     def __repr__(self):
         return f'{self.__class__.__name__}(db_src={self.db_src},db_key={self.db_key},reserved_src={self.reserved_src},use_alt={self.use_alt})'

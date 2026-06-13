@@ -193,12 +193,12 @@ class SummaryWriter(BaseCallBack):
         ts_folder = self.config.base_path.snapshot('tensorboard')
         if not ts_folder.exists() or not any(ts_folder.iterdir()):
             return
-        run_folder = PATH.tensorboard.joinpath('run')
+        run_folder = PATH.tsboard.joinpath('run')
         shutil.rmtree(run_folder , ignore_errors=True)
         shutil.copytree(ts_folder, run_folder)
 
         # pack run folder to tar file
-        tar_filename = PATH.tensorboard.joinpath(f'{self.base_path.full_name}_{self.init_time.strftime("%Y%m%d%H%m")}.tar')
+        tar_filename = PATH.tsboard.joinpath(f'{self.base_path.full_name}_{self.init_time.strftime("%Y%m%d%H%m")}.tar')
         Save.pack(
             ts_folder, tar_filename , overwrite = True , async_save = True ,
             prefix = f'{self.__class__.__name__} Tensorboard Dir' , 

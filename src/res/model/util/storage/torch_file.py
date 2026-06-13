@@ -32,7 +32,7 @@ class TorchFileStorage:
         return self.is_mem
 
     def real_path(self , key : str): 
-        return PATH.batch.joinpath(f'{key}.pt')
+        return PATH.minibatch.joinpath(f'{key}.pt')
     
     def exists(self , key : str):
         if self.is_mem:

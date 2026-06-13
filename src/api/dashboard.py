@@ -173,7 +173,7 @@ class TSBoardAPI:
         """
         Start TensorBoard pointing at ``PATH.tensorboard/run`` if logs exist.
         """
-        log_dir = PATH.tensorboard.joinpath('run')
+        log_dir = PATH.tsboard.joinpath('run')
         if not log_dir.exists():
             Logger.alert1("No local Tensorboard logs found in run folder")
             return
@@ -184,7 +184,7 @@ class TSBoardAPI:
         """
         Interactively pick a packed ``.tar`` of TensorBoard logs, unpack to temp, and launch.
         """
-        packed_tars = list(PATH.tensorboard.glob('*.tar'))
+        packed_tars = list(PATH.tsboard.glob('*.tar'))
         if len(packed_tars) == 0:
             Logger.alert1("No packed Tensorboard logs found in tar folder")
             return
@@ -194,7 +194,7 @@ class TSBoardAPI:
         index = int(input("Enter the number of the packed Tensorboard tar to launch: "))
         assert index >= 1 and index <= len(packed_tars) , f"Invalid index: {index} , must be between 1 and {len(packed_tars)}"
         packed_tar = packed_tars[index - 1]
-        log_dir = PATH.tensorboard.joinpath('temp_run')
+        log_dir = PATH.tsboard.joinpath('temp_run')
         if log_dir.exists():
             shutil.rmtree(log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)

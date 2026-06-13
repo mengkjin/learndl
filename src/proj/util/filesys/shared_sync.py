@@ -28,7 +28,7 @@ class SharedSync:
         """get the files to sync"""
         files = []
         for sync_dir in cls.SYNC_DIRS:
-            for file in PATH.local_share.joinpath(sync_dir).rglob('*'):
+            for file in PATH.lc_share.joinpath(sync_dir).rglob('*'):
                 if file.is_file() and not file.name.startswith('.'):
                     files.append(file)
         return files
@@ -38,14 +38,14 @@ class SharedSync:
         """get the target path of the shared folder"""
         if PATH.share_folder is None:
             return None
-        return PATH.local_share.joinpath(path.relative_to(PATH.share_folder))
+        return PATH.lc_share.joinpath(path.relative_to(PATH.share_folder))
 
     @classmethod
     def local_to_shared(cls , path : Path) -> Path | None:
         """get the target path of the shared folder"""
         if PATH.share_folder is None:
             return None
-        return PATH.share_folder.joinpath(path.relative_to(PATH.local_share))
+        return PATH.share_folder.joinpath(path.relative_to(PATH.lc_share))
 
     @classmethod 
     def sync(cls):

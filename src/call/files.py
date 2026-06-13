@@ -184,23 +184,24 @@ class ArchiveCurrentModel(DirectCall):
     def run(self) -> None:
         from src.res.model.util import ModelPath
         from src.proj.util.functional.ask import AskFor
-        roots = [PATH.model_nn , PATH.model_boost , PATH.model_st , PATH.model_factor]
+        roots = [PATH.model_nn , PATH.model_boost , PATH.model_factor]
         for loop_flag in AskFor.LoopTillExit(message = f'Do you want to archive more models?'):
-            model_paths = [(root.name , path) for root in roots for path in root.iterdir() if path.is_dir()]
-            if not model_paths:
+            paths = [(root.name , path) for root in roots for path in root.iterdir() if path.is_dir()]
+            if not paths:
                 Logger.note('No models found in the model directory.')
                 return
-            Logger.note(f'There are {len(model_paths)} models currently in the model directory...')
+            Logger.note(f'There are {len(paths)} models currently in the model directory...')
             last_root = None
-            for i , (root_name , model_path) in enumerate(model_paths):
+            for i , (root_name , path) in enumerate(paths):
                 if last_root is None or last_root != root_name:
                     Logger.note(f'{root_name.upper()} models:')
                     last_root = root_name
-            Logger.note(f'{i+1:02d}. {model_path.relative_to(PATH.model)}' , indent = 1)
-            flag = AskFor.Selections(len(model_paths) , multiple=True , title = f'Which model to archive?')
+                Logger.note(f'{i+1:02d}. {path.relative_to(PATH.model)}' , indent = 1)
+            flag = AskFor.Selections(len(paths) , multiple=True , title = f'Which model to archive?')
             if not loop_flag.set_flag(flag):
                 continue
-            [ModelPath(model_paths[i - 1][1]).move_to_archive() for i in flag.result]
+            for i in flag.result:
+                ModelPath(paths[i - 1][1]).move_to_archive()
 
 class ResumeArchivedModel(DirectCall):
     """Resume archived model(s) from the archive directory."""

@@ -961,11 +961,11 @@ class DataBlock:
         when ``find_if_not_exists=True`` and the canonical path does not exist.
         """
         if key.lower() in ['y' , 'labels']: 
-            path = PATH.block.joinpath(frame , f'Y{dump_suffix}')
+            path = PATH.datablock.joinpath(frame , f'Y{dump_suffix}')
         else:
             alias_list = data_type_alias(key)
             for new_key in alias_list:
-                path = PATH.block.joinpath(frame , f'X_{new_key}{dump_suffix}')
+                path = PATH.datablock.joinpath(frame , f'X_{new_key}{dump_suffix}')
                 if path.exists(): 
                     break
         if find_if_not_exists:
@@ -984,7 +984,7 @@ class DataBlock:
         dump_suffix : DumpSuffix = PREFERRED_DUMP_SUFFIX , find_if_not_exists = True
     ) -> Path:
         """Return the path to the raw data for ``src`` / ``key``."""
-        raw_path = PATH.block.joinpath('raw' , f'{src}.{key}{dump_suffix}')
+        raw_path = PATH.datablock.joinpath('raw' , f'{src}.{key}{dump_suffix}')
         if find_if_not_exists:
             return cls.find_existing_dump_path(raw_path)
         return raw_path
@@ -1210,7 +1210,7 @@ class DataBlock:
     @classmethod
     def fix_dumps(cls) -> None:
         """Fix the dump of the data block to the preferred dump suffix"""
-        category_path = PATH.block.joinpath('raw')
+        category_path = PATH.datablock.joinpath('raw')
         category = 'raw'
     
         for path in category_path.iterdir():
@@ -1340,10 +1340,10 @@ class DataBlockNorm:
         """Return the path to the normalisation stats for ``key`` / ``frame``."""
         assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
         if key.lower() == 'y':
-            return PATH.norm.joinpath(frame , 'Y.pt')
+            return PATH.histnorm.joinpath(frame , 'Y.pt')
         alias_list = data_type_alias(key)
         for new_key in alias_list:
-            path = PATH.norm.joinpath(frame , f'X_{new_key}.pt')
+            path = PATH.histnorm.joinpath(frame , f'X_{new_key}.pt')
             if path.exists():
                 break
         return path
