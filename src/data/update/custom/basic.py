@@ -62,7 +62,7 @@ class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
         paths = sorted([path for path in Path(__file__).parent.rglob('*.py')
                         if not path.name.startswith('_') and path != Path(__file__)])
         for path in paths:
-            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
+            module_name = '.'.join(PATH.relative(path).with_suffix('').parts)
             import_module(module_name)
         cls._imported = True
 

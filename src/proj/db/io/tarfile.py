@@ -149,7 +149,7 @@ def pack_files_to_tar(files : strPaths , path : strPath , *, overwrite = True , 
             files = list(files.values())
         with tarfile.open(path, 'a') as tar:  
             for file in files:
-                tar.add(file , arcname = Path(file).relative_to(PATH.main))
+                tar.add(file , arcname = PATH.relative(file))
         Logger.footnote(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:
@@ -170,7 +170,7 @@ def pack_dir_to_tar(
         path.unlink(missing_ok=True)
         with tarfile.open(path, 'w:gz') as tar:
             for file in source_path.rglob('*'):
-                tar.add(file, arcname=file.relative_to(source_path))
+                tar.add(file, arcname=PATH.relative(file))
         Logger.footnote(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True
     else:

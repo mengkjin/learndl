@@ -196,7 +196,7 @@ class ArchiveCurrentModel(DirectCall):
                 if last_root is None or last_root != root_name:
                     Logger.note(f'{root_name.upper()} models:')
                     last_root = root_name
-                Logger.note(f'{i+1:02d}. {path.relative_to(PATH.model)}' , indent = 1)
+                Logger.note(f'{i+1:02d}. {PATH.relative(path)}' , indent = 1)
             flag = AskFor.Selections(len(paths) , multiple=True , title = f'Which model to archive?')
             if not loop_flag.set_flag(flag):
                 continue
@@ -244,7 +244,7 @@ class ClearOutdatedCatcherLogs(DirectCall):
             assert sub_catcher.is_dir() , f'{sub_catcher} is not a directory'
             for log_file in sub_catcher.rglob('*'):
                 if log_file.is_file() and log_file.stat().st_mtime < (datetime.now() - timedelta(days=self.days_ago)).timestamp():
-                    cleared_counts[str(log_file.parent.relative_to(root))] += 1
+                    cleared_counts[str(PATH.relative(log_file.parent))] += 1
                     log_file.unlink()
                 if log_file.is_dir() and not list(log_file.glob('*')):
                     log_file.rmdir()

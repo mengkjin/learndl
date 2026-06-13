@@ -233,7 +233,7 @@ class _FactorCalculatorMeta(Base.SingletonABC):
         if cls.definition_imported:
             return
         for path in sorted(PATH.fac_def.rglob('*.py')):
-            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
+            module_name = '.'.join(PATH.relative(path).with_suffix('').parts)
             import_module(module_name)
         cls.definition_imported = True
         

@@ -79,7 +79,7 @@ class OptunaDBAPI:
         """
         if isinstance(db_path , str):
             db_path = Path(db_path)
-        db_path = f'sqlite:///{str(db_path.relative_to(PATH.main)).lstrip('/')}'
+        db_path = f'sqlite:///{str(PATH.relative(db_path)).lstrip('/')}'
         try:
             port = get_free_port(8080)
             Logger.stdout(f"Optuna Dashboard will be launched on http://127.0.0.1:{port}/")

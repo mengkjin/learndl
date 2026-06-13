@@ -350,7 +350,7 @@ class ModelPath:
         target = PATH.model_archive.joinpath(f'{self.full_name}.{datetime.now().strftime("%Y%m%d%H%M%S")}')
         assert not target.exists() , f'{target} already exists'
         shutil.move(source , target)
-        Logger.success(f'{source.relative_to(PATH.main)} has been moved to archive {target.relative_to(PATH.main)}')
+        Logger.success(f'{PATH.relative(source)} has been moved to archive {PATH.relative(target)}')
 
     @classmethod
     def resume_from_archive(cls , start_with : str):
@@ -367,13 +367,13 @@ class ModelPath:
         else:
             Logger.alert1(f'Multiple ({len(candidates)}) candidates found for {start_with}, please choose one by yourself:')
             for i , candidate in enumerate(candidates):
-                Logger.note(f'{i+1:02d}. {candidate.relative_to(PATH.main)}')
+                Logger.note(f'{i+1:02d}. {PATH.relative(candidate)}')
             source = candidates[int(input(f'Which one to choose? (1-{len(candidates)}): ').strip()) - 1]
         model_path = cls(source.name.split('.')[0])
         model_path = model_path.with_new_index(model_path.find_new_index(folder_not_exist = True))
         target = model_path.base
         shutil.move(source , target)
-        Logger.success(f'{source.relative_to(PATH.main)} has been reverted from archive {target.relative_to(PATH.main)}')
+        Logger.success(f'{PATH.relative(source)} has been reverted from archive {PATH.relative(target)}')
         model_path.log_operation('resume_from_archive')
         return model_path
 

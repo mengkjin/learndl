@@ -88,6 +88,17 @@ class PATH:
     model_archive = model.joinpath('archive')
 
     @classmethod
+    def relative(cls , path : strPath) -> Path:
+        """Return a path relative to the production path"""
+        path = Path(path)
+        if path.is_relative_to(cls.production):
+            return path.relative_to(cls.production)
+        elif path.is_relative_to(cls.main):
+            return path.relative_to(cls.main)
+        else:
+            return path
+
+    @classmethod
     def path_at_machine(cls , path : strPath , machine_name : str) -> strPath:
         """Return a path under the selected machine (maybe another machine).
 
@@ -102,8 +113,8 @@ class PATH:
             path = Path(path)
             return str(cls.path_at_machine(Path(path) , machine_name))
         else:
-            if path.is_relative_to(MACHINE.main_path):
-                return MACHINE.machine_main_path(machine_name).joinpath(path.relative_to(MACHINE.main_path))
+            if path.is_relative_to(MACHINE.main_path) or path.is_relative_to(cls.production):
+                return MACHINE.machine_main_path(machine_name).joinpath(cls.relative(path))
             else:
                 return path
         

@@ -44,7 +44,7 @@ class OptunaBoostModel(GeneralBoostModel):
     """
     DEFAULT_N_TRIALS = 50 if MACHINE.platform_server else 20
     DEFAULT_SAVE_STUDIES = True
-    DEFAULT_STORAGE = f'sqlite:///{PATH.optuna.relative_to(PATH.main)}/boost_{datetime.now().strftime("%Y%m") }.sqlite3'
+    DEFAULT_STORAGE = f'sqlite:///{PATH.relative(PATH.optuna)}/boost_{datetime.now().strftime("%Y%m") }.sqlite3'
 
     @property
     def best_params(self):

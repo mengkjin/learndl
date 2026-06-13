@@ -15,10 +15,10 @@ class ModelConfigsInspector(Base.BoundLogger):
 
     def iter_configs(self):
         for self.current_path in self.model_root.rglob('*.yaml'):
-            self.current_path_str = str(self.current_path.relative_to(PATH.main))
+            self.current_path_str = str(PATH.relative(self.current_path))
             yield self.current_path
         for self.current_path in self.config_root.rglob('*.yaml'):
-            self.current_path_str = str(self.current_path.relative_to(PATH.main))
+            self.current_path_str = str(PATH.relative(self.current_path))
             yield self.current_path
 
     def inspect_key_values(self , warning_list : list[str] | dict[str , bool] | None = None):

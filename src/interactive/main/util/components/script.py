@@ -368,7 +368,7 @@ def show_report_main(runner : ScriptRunner | str | None):
                 with st.expander(f":material/preview: **Exit Files**", expanded=True):
                     for i, file in enumerate(item.exit_files):
                         path = Path(file).absolute()
-                        col0, col2 = st.columns([9.5 , 0.5] , vertical_alignment = "center")
+                        col0, col1 = st.columns([9.5 , 0.5] , vertical_alignment = "center")
                         with col0:
                             if st.button(path.name, key= f"exit-file-open-{path}", 
                                          icon = ":material/open_in_new:" , width = "stretch",
@@ -376,10 +376,7 @@ def show_report_main(runner : ScriptRunner | str | None):
                                          disabled = not path.exists()):
                                 directly_open_file(path)
 
-                        #with col1:
-                        #    st.caption(f":material/file_present: /{path.relative_to(PATH.main)}")
-
-                        with col2:
+                        with col1:
                             preview_key = f"exit-file-preview-{i}" if path != SC.running_report_file_previewer else f"exit-file-preview-select-{i}"
                             st.button(":material/preview:", key=preview_key ,
                                       help = f":blue[**Preview**]: {path}" or f":red[**Preview**]: {path} (File Not Found)", 

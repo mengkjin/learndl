@@ -250,7 +250,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
     def load_tasks(cls):
         task_path = Path(__file__).parent.with_name('task')
         for path in sorted(task_path.rglob('*.py')):
-            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
+            module_name = '.'.join(PATH.relative(path).with_suffix('').parts)
             import_module(module_name)
 
     @abstractmethod

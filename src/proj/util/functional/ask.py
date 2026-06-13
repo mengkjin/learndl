@@ -128,14 +128,20 @@ class AskFor:
 
     @classmethod
     def Selections(
-        cls , options : int , start : int = 1 , confirm : bool = True , 
+        cls , options : int | list[Any] , start : int = 1 , confirm : bool = True , 
         multiple : bool = False , title : str = ''
     ) -> AskFlag:
         """Ask for selections out of a number of options starting from a given index."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
-        min , max = start , options + start - 1
+        if isinstance(options , int):
+            num = options
+            option_strs = [f'#{i+start:02d}' for i in range(num)]
+        else:
+            num = len(options)
+            option_strs = [f'{i+start}.{option}' for i, option in enumerate(options)]
+        min , max = start , num + start - 1
         _print_title(title)
         if multiple:
             selection = input(f'Choose from {min} to {max}, seperated by comma , q to quit: ')
@@ -147,7 +153,7 @@ class AskFor:
                 return AskFlag('abort')
 
             choices = [int(i) for i in choices]
-            if any(s < start or s > options + start - 1 for s in choices):
+            if any(s < start or s > num + start - 1 for s in choices):
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
                 return AskFlag('abort')
         else:
@@ -158,12 +164,12 @@ class AskFor:
                 Logger.error(f'Invalid input: {selection} , please choose from {min} to {max} or q to quit')
                 return AskFlag('abort')
             choices = int(selection)
-            if choices < start or choices > options + start - 1:
+            if choices < start or choices > num + start - 1:
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
                 return AskFlag('abort')
 
         if confirm:
-            flag = cls.Confirmation(title = f'Are you sure to select {choices}?')
+            flag = cls.Confirmation(title = f'Are you sure to select {option_strs[choices - start] if isinstance(choices , int) else choices}?')
             return AskFlag('yes' , result = choices) if flag.yes else AskFlag('abort')
         else:
             return AskFlag('yes' , result = choices)
