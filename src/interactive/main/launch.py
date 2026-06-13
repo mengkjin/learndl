@@ -20,10 +20,6 @@ from src.interactive.main.util.navigation import page_setup
 __all__ = ['main']
 
 file_path = str(pathlib.Path(__file__).absolute())
-path = file_path.removesuffix(file_path.split('learndl' , 1)[-1]).lower()
-
-assert os.getcwd().lower() == path , \
-    f'current working directory {os.getcwd()} is not {path} , do not know where to find src file'
 
 st.set_option('client.showSidebarNavigation', False)
 
