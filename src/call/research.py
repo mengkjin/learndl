@@ -24,12 +24,12 @@ class CarryOutScheduleModelList(DirectCall):
     def get_schedules(cls) -> list[str]:
         ret = list(cls.schedules)
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
-    @property
-    def schedule_names(self) -> str:
-        return ', '.join(self.get_schedules())
+    @classmethod
+    def schedule_names(cls) -> str:
+        return ', '.join(cls.get_schedules())
     @classmethod
     def get_description(cls , **kwargs) -> str:
-        return f'Carry out training of a predefined schedule model list: {cls.schedule_names}'
+        return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
     @classmethod
     def _ensure_main_script_file(cls) -> None:
         """Let BackendTaskRecorder resolve script when launched via ``python -c``."""
@@ -49,7 +49,7 @@ class CarryOutScheduleModelList(DirectCall):
         raise FileNotFoundError(f'Schedule model script not found: {cls.SCHEDULE_SCRIPT}')
     def run(self) -> None:
         self._ensure_main_script_file()
-        Logger.critical(f'Training schedule model list {self.schedule_names} started')
+        Logger.critical(f'Training schedule model list {self.schedule_names()} started')
         try:
             for schedule_name in self.get_schedules():
                 Logger.note(f'Training schedule model: {schedule_name}')

@@ -430,7 +430,10 @@ class BaseTrainer(BasePipeline):
         self.data.setup('test' , self.model_param , self.model_date)
         
     def on_test_submodel_start(self):
-        self.model.load_model(submodel=self.model_submodel)
+        try:
+            self.model.load_model(submodel=self.model_submodel)
+        except FileNotFoundError:
+            self.status.deposition_loading_status = False
 
     def on_test_batch_start(self):
         self.assert_date_equity()

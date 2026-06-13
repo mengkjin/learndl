@@ -111,7 +111,8 @@ class PredictorModel(TrainerPipeline):
             self._model_submodel = submodel
         else: 
             submodel = self.model_submodel
-        assert self.deposition.exists(model_num , model_date , submodel) , (model_num , model_date , submodel)
+        if not self.deposition.exists(model_num , model_date , submodel):
+            raise FileNotFoundError(f'model {model_num}@{model_date}@{submodel} not found in deposition')
         return self.deposition.load_model(model_num , model_date , submodel)
     
     @abstractmethod
@@ -175,6 +176,9 @@ class PredictorModel(TrainerPipeline):
         if self.data.no_date_to_test:
             return
         for _ in self.trainer.iter_model_submodels():
+            # if load desposition model failed (not exists), continue to skip batch_forwards
+            if not self.status.deposition_loading_status:
+                continue
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
 

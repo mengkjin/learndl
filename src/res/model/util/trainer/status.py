@@ -332,8 +332,6 @@ class TrainerStatus(BasePipeline):
         self.dataset = 'train'
     def on_validation_epoch_start(self): 
         self.dataset = 'valid'
-    def on_test_model_start(self): 
-        self.dataset = 'test'
     def on_fit_model_start(self):
         if not self.first_iteration_printed:
             self.logger.stdout(f'In Stage [{self.stage}], First Iterance: ({self.model_date} , {self.model_num})' , color = 'cyan' , vb = 1)
@@ -345,4 +343,8 @@ class TrainerStatus(BasePipeline):
     def on_fit_epoch_start(self):
         self.fitting_epochs.new_epoch()
         self.total_epochs += 1
+    def on_test_model_start(self): 
+        self.dataset = 'test'
+    def on_test_submodel_start(self):
+        self.deposition_loading_status : bool = True
      

@@ -3,7 +3,7 @@ name = "learndl"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dynamic = ["version"]  # 添加这一行，声明 version 是动态的
+dynamic = ["version"]  # dynamic version
 dependencies = [
     "baostock>=0.8.9",
     "catboost>=1.2.8",

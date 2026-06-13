@@ -1,0 +1,28 @@
+{
+    "r.lsp.promptToInstall": false,
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnboundVariable": "error",
+        "reportUndefinedVariable": "error",
+        "reportGeneralTypeIssues": "error"
+    },
+    "files.exclude": {
+        "**/*.egg-info/": true,
+        "**/__pycache__/": true,
+        "uv.lock": true,
+        "~/": true,
+        ".claude/": true,
+        ".ruff_cache/": true,
+        ".venv/": true,
+        ".cursor/": true,
+        ".vscode/": true,
+        ".streamlit/": true,
+        ".secret/": true,
+        ".logs/": true,
+        ".resources/": true,
+        ".local_resources/": true,
+        ".context/": true,
+        ".gitignore": true,
+        ".cursorignore": true,
+    },
+}

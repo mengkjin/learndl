@@ -9,6 +9,7 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime , timedelta
 from pathlib import Path
+from typing import Callable
 
 from src.proj import MACHINE , PATH , Logger , Base
 from src.call.basic import DirectCall
@@ -120,63 +121,60 @@ class CheckCodeIssues(DirectCall):
             return True
         return False
     @classmethod
-    def _check_lacking_future_annotations(cls ,path : Path) -> bool:
-        """Check if the future annotations are used in the project code."""
+    def _check_future_annotations_existence(cls ,path : Path) -> bool:
+        """Check future annotations existence."""
         if cls._skip_path(path , [] , ['__init__.py' , '__version__.py']):
-            return False
-        return 'from __future__ import annotations' not in path.read_text()
+            return True
+        return 'from __future__ import annotations' in path.read_text()
     @classmethod
-    def _check_py_file_has___all___(cls ,path : Path) -> bool:
-        """Check if the __all__ is used in the project code."""
+    def _check___all___existence(cls ,path : Path) -> bool:
+        """Check __all__ existence."""
         exempt_paths = [
             PATH.main.joinpath('src' , 'func') ,
             PATH.main.joinpath('src' , 'proj' , 'core' , 'types') ,
         ]
         if cls._skip_path(path , exempt_paths , ['__init__.py' , '__version__.py']):
-            return False
-        return '__all__' not in path.read_text()
+            return True
+        return '__all__' in path.read_text()
     @classmethod
-    def _check_py_file_has_no_module_docstring(cls , path : Path) -> bool:
-        """Check if the py file has no module docstring."""
+    def _check_module_docstring_existence(cls , path : Path) -> bool:
+        """Check module docstring existence."""
         if cls._skip_path(path , [] , ['__init__.py' , '__version__.py']):
-            return False
+            return True
         for line in path.read_text().split('\n'):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            if line.startswith('"""') or line.startswith("'''"):
-                return False
-            return True
-        return True
+            return line.startswith('"""') or line.startswith("'''")
+        return False
 
     @classmethod
-    def _run_check(cls ,check_name : str) -> None:
-        check_func = getattr(cls , f'_check_{check_name}')
-        assert callable(check_func) , f'{check_func} is not a callable'
-        Logger.note(f"Checking {check_name}...")
-        files = [file for file in PATH.main.joinpath('src').rglob('*.py') if check_func(file)]
-        if not files:
-            Logger.success(f'No files found with the issue {check_name}.')
-        else:
+    def _run_check(cls , checker : Callable[[Path], bool]) -> None:
+        Logger.note(f"{checker.__doc__}...")
+        files = [file for file in PATH.main.joinpath('src').rglob('*.py') if not checker(file)]
+        if files:
             [Logger.stdout(file , indent = 1) for file in files]
+        else:
+            Logger.success(f'No files found with the issue {checker.__doc__}.')
 
     def run(self) -> None:
         from src.proj.util.functional.ask import AskFor
-        file_check_list : list[str] = [name.removeprefix('_check_') for name in dir(self.__class__) if name.startswith('_check_')]
+        checkers : list[Callable[[Path], bool]] = [getattr(self.__class__, name) for name in dir(self.__class__) if name.startswith('_check_')]
         for loop_flag in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
-            options = ['All checks in one' , 'Run ruff pyright check' , *file_check_list]
+            options = ['All checks in one' , 'Run ruff pyright check' , *[checkers.__doc__ for checkers in checkers]]
             flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
             if not loop_flag.set_flag(flag):
                 continue
             selection = options.index(flag.result)
             if selection == 0:
-                for check_name in file_check_list:
-                    self._run_check(check_name)
+                for checker in checkers:
+                    self._run_check(checker)
                 RunRuffPyrightCheck.go()
             elif selection == 1:
                 RunRuffPyrightCheck.go()
             else:
-                self._run_check(flag.result)
+                checker = checkers[selection - 2]
+                self._run_check(checker)
             
          
 # %% model files related operations ------------------------------------------------------------
