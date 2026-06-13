@@ -238,6 +238,8 @@ class ClearOutdatedCatcherLogs(DirectCall):
     def run(self) -> None:
         root = PATH.logs.joinpath('catcher')
         cleared_counts : dict[str, int] = defaultdict(int)
+        if not root.exists():
+            return
         for sub_catcher in root.iterdir():
             if sub_catcher.name.startswith('.'):
                 continue

@@ -133,7 +133,6 @@ class PATH:
 
     class IndentedDumper(yaml.Dumper):
         """YAML Dumper that keeps block-style indentation for nested lists."""
-
         def increase_indent(self, flow=False, indentless=False):
             """Match parent indent behavior but never use ``indentless`` (lists stay indented)."""
             return super().increase_indent(flow, False)
@@ -260,7 +259,7 @@ class PATH:
         """Initialize the all paths under the main path"""
         for name in dir(cls):
             member = getattr(cls , name)
-            if isinstance(member , Path) and member.is_relative_to(cls.main) or member.is_relative_to(cls.production):
+            if isinstance(member , Path) and (member.is_relative_to(cls.main) or member.is_relative_to(cls.production)):
                 member.mkdir(parents=True , exist_ok=True)
 
 PATH.mkdir_path()
