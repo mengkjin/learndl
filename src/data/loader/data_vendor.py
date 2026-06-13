@@ -105,8 +105,9 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         self.blocks_cache.clear()
         self.day_quotes.clear()
         self.day_secids.clear()
-        self.__dict__.pop('all_stocks' , None)
-        self.__dict__.pop('st_stocks' , None)
+        for _attr in ('all_stocks' , 'st_stocks'):
+            if _attr in self.__dict__:
+                delattr(self , _attr)
 
         self.initiated = False
 
