@@ -145,7 +145,7 @@ def new_print_traceback_stack(color : str = 'yellow' , bold : bool = True) -> st
 
 class Logger:
     """
-    custom colored log , config at PATH.conf / 'preference' / 'logger.yaml'
+    custom colored logger
     method include:
         stdout level:
             - stdout: custom stdout (standard printing method) , can use indent , color , bg_color , bold , sep , end , file , flush kwargs

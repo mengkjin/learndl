@@ -58,7 +58,6 @@ class PortOptimProblem(StrEnum):
 
 class PortOptimEngine(StrEnum):
     MOSEK = 'mosek'
-    CVXOPT = 'cvxopt'
     CVXPY = 'cvxpy'
 
 class PortOptimCvxpySolver(StrEnum):
