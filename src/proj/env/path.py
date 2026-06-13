@@ -260,7 +260,7 @@ class PATH:
         """Initialize the all paths under the main path"""
         for name in dir(cls):
             member = getattr(cls , name)
-            if isinstance(member , Path) and member.is_relative_to(cls.main):
+            if isinstance(member , Path) and member.is_relative_to(cls.main) or member.is_relative_to(cls.production):
                 member.mkdir(parents=True , exist_ok=True)
 
 PATH.mkdir_path()
