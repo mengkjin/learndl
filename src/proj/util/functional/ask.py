@@ -156,6 +156,8 @@ class AskFor:
             if any(s < start or s > num + start - 1 for s in choices):
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
                 return AskFlag('abort')
+            if len(choices) == 1:
+                choices = choices[0]
         else:
             selection = input(f'Choose from {min} to {max}, q to quit: ')
             if selection.lower() == 'q':
